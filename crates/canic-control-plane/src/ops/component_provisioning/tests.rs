@@ -16,11 +16,15 @@ use canic_core::{
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetSubnetRootProvisioningBatch,
+            RootComponentPublicationRequest,
         },
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
         },
-        fleet_registry::FleetRegistryVersion,
+        fleet_registry::{
+            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
+            FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+        },
     },
     ids::{
         AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
@@ -462,6 +466,61 @@ fn finalize_single_provisioned_result(
     provisioned
 }
 
+fn single_provisioned_fixture() -> (Fixture, RootComponentProvisioningView) {
+    let fixture = fixture();
+    let (reservation_request, allocation, reserved) = reserve_single_member(&fixture);
+    let member =
+        RootComponentProvisioningOps::next_member_claim(&reserved).expect("single reserved member");
+    let claim_request = RootComponentProvisioningAdvanceRequest {
+        expected_reserved_component_count: 1,
+        ..reservation_request
+    };
+    let claimed_allocation = claimed_allocation(
+        allocation,
+        principal(31),
+        fixture.request.batch.root.fleet_subnet_root,
+    );
+    let _claimed =
+        RootComponentProvisioningOps::mark_member_claimed(claim_request, &claimed_allocation)
+            .expect("claim single member");
+    let install_request = RootComponentProvisioningAdvanceRequest {
+        expected_claimed_component_count: 1,
+        ..claim_request
+    };
+    let installed_allocation =
+        installed_allocation(claimed_allocation, &fixture.request.batch.root);
+    let installed =
+        RootComponentProvisioningOps::mark_member_installed(install_request, &installed_allocation)
+            .expect("install single member");
+    let (registered, evidence) =
+        commit_single_registry_member(&member, installed_allocation, &installed, install_request);
+    let complete = RootComponentProvisioningAdvanceRequest {
+        expected_installed_component_count: 1,
+        expected_registry_committed_component_count: 1,
+        ..install_request
+    };
+    let provisioned = finalize_single_provisioned_result(&fixture, &registered, evidence, complete);
+    (fixture, provisioned)
+}
+
+fn publication_directory(
+    fixture: &Fixture,
+    version: FleetRegistryVersion,
+) -> FleetDirectorySnapshot {
+    FleetDirectorySnapshot {
+        provenance: FleetDirectoryProvenance {
+            registry: version,
+            source_fleet_subnet_root: fixture.request.batch.root.fleet_subnet_root,
+        },
+        fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+            placement_subnet: fixture.request.batch.root.placement_subnet,
+            fleet_subnet_root: fixture.request.batch.root.fleet_subnet_root,
+            status: FleetSubnetRootStatus::Active,
+        }],
+        services: vec![],
+    }
+}
+
 fn assert_terminal_provisioning_corruption_rejects(fixture: &Fixture) {
     let exact = RootComponentProvisioningStore::export();
     let mut corrupted = exact.clone();
@@ -697,6 +756,116 @@ fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_termin
 
     assert_restart_retains_registered(request, &provisioned);
     assert_terminal_provisioning_corruption_rejects(&fixture);
+}
+
+#[test]
+fn directory_publication_journals_each_delivery_and_replays_terminal_receipt() {
+    let (fixture, provisioned) = single_provisioned_fixture();
+    let published_registry = FleetRegistryVersion {
+        authority: provisioned.fleet_registry.authority.clone(),
+        revision: provisioned.fleet_registry.revision + 1,
+        content_hash: [44; 32],
+    };
+    let directory = publication_directory(&fixture, published_registry.clone());
+    let first_request = RootComponentPublicationRequest {
+        operation_id: provisioned.operation_id,
+        plan_hash: provisioned.plan_hash,
+        published_fleet_registry: published_registry,
+        expected_published_component_count: 0,
+    };
+    let delivered = record_one_publication_delivery(&first_request, &directory);
+    assert_eq!(delivered.published_component_count, 1);
+    assert_eq!(
+        delivered
+            .publication
+            .as_ref()
+            .expect("publication evidence")
+            .component_directories
+            .len(),
+        1
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::begin_publication(&first_request, &directory, 999)
+            .expect("replay lost delivery response"),
+        delivered
+    );
+    let final_request = RootComponentPublicationRequest {
+        expected_published_component_count: 1,
+        ..first_request
+    };
+    let published = RootComponentProvisioningOps::finalize_published(&final_request, 500)
+        .expect("freeze terminal publication receipt");
+    assert_eq!(published.phase, RootComponentProvisioningPhase::Published);
+    assert_eq!(published.published_at_ns, Some(500));
+    assert_ne!(
+        published.receipt_content_hash,
+        provisioned.receipt_content_hash
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::begin_publication(&final_request, &directory, 999)
+            .expect("replay terminal publication"),
+        published
+    );
+    let mut conflicting = final_request;
+    conflicting.published_fleet_registry.content_hash[0] ^= 1;
+    assert!(
+        RootComponentProvisioningOps::begin_publication(&conflicting, &directory, 999).is_err()
+    );
+}
+
+fn record_one_publication_delivery(
+    request: &RootComponentPublicationRequest,
+    directory: &FleetDirectorySnapshot,
+) -> RootComponentProvisioningView {
+    let publishing = RootComponentProvisioningOps::begin_publication(request, directory, 400)
+        .expect("begin exact Directory publication");
+    assert_eq!(publishing.published_component_count, 0);
+    assert_eq!(
+        publishing
+            .publication
+            .as_ref()
+            .expect("publication evidence")
+            .component_group_directories
+            .len(),
+        1
+    );
+    let member = RootComponentProvisioningOps::next_publication_member(&publishing)
+        .expect("select publication member")
+        .expect("one publication member");
+    let authority_hash = [55; 32];
+    let intent = RootComponentProvisioningOps::begin_publication_delivery(
+        request,
+        &member,
+        authority_hash,
+        401,
+    )
+    .expect("persist Directory delivery intent");
+    assert_eq!(
+        intent
+            .publication_in_flight
+            .as_ref()
+            .expect("durable publication intent")
+            .canister_id,
+        member.binding.canister_id
+    );
+    let snapshot = RootComponentProvisioningStore::export();
+    RootComponentProvisioningStore::import(snapshot);
+    assert_eq!(
+        RootComponentProvisioningOps::begin_publication_delivery(
+            request,
+            &member,
+            authority_hash,
+            999,
+        )
+        .expect("reconcile response loss"),
+        intent
+    );
+    assert!(
+        RootComponentProvisioningOps::begin_publication_delivery(request, &member, [56; 32], 402,)
+            .is_err()
+    );
+    RootComponentProvisioningOps::record_publication_delivery(request, &member, authority_hash)
+        .expect("commit independently observed Directory delivery")
 }
 
 #[test]

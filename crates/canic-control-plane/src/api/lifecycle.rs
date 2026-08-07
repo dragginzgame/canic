@@ -338,9 +338,11 @@ impl LifecycleApi {
     pub async fn quiesce_component(
         request: RootComponentQuiescenceRequest,
     ) -> Result<RootComponentQuiescenceResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::quiesce_component(request)
-            .await
-            .map_err(Into::into)
+        Box::pin(crate::workflow::component_registry::quiesce_component(
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 
     pub fn component_quiescence_status(
@@ -452,7 +454,7 @@ impl LifecycleApi {
     pub async fn synchronize_component_subtree_leaf_directory(
         request: RootComponentSubtreeRemovalDirectorySynchronizationRequest,
     ) -> Result<RootComponentSubtreeRemovalResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::synchronize_subtree_leaf_directory(request)
+        Box::pin(crate::workflow::component_registry::synchronize_subtree_leaf_directory(request))
             .await
             .map_err(Into::into)
     }
@@ -574,7 +576,7 @@ impl LifecycleApi {
     pub async fn prepare_peer_component_directories(
         request: RootComponentDirectoryPreparationRequest,
     ) -> Result<RootComponentDirectoryPreparationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::prepare_peer_component_directories(request)
+        Box::pin(crate::workflow::component_registry::prepare_peer_component_directories(request))
             .await
             .map_err(Into::into)
     }
@@ -598,7 +600,7 @@ impl LifecycleApi {
     pub async fn activate_component_membership(
         request: RootComponentMembershipActivationRequest,
     ) -> Result<RootComponentMembershipActivationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::activate_component_membership(request)
+        Box::pin(crate::workflow::component_registry::activate_component_membership(request))
             .await
             .map_err(Into::into)
     }
@@ -606,7 +608,7 @@ impl LifecycleApi {
     pub async fn activate_peer_component_membership(
         request: RootComponentMembershipActivationRequest,
     ) -> Result<RootComponentMembershipActivationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::activate_peer_component_membership(request)
+        Box::pin(crate::workflow::component_registry::activate_peer_component_membership(request))
             .await
             .map_err(Into::into)
     }

@@ -7,6 +7,8 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
+        component_deployment::{ComponentDeploymentPurpose, ProtectedComponentDeployment},
+        component_provisioning::ComponentGroupDirectory,
         component_registry::{
             ComponentDirectoryProvenance, ComponentRuntimeActivationRequest,
             ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority,
@@ -14,7 +16,7 @@ use crate::{
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse,
         },
-        fleet_registry::{FleetDirectorySnapshot, FleetSubnetRootStatus},
+        fleet_registry::{FleetDirectorySnapshot, FleetServiceMode, FleetSubnetRootStatus},
     },
     ids::{ComponentBinding, FleetRegistryAuthority, ManagedCanisterBinding},
     ops::{
@@ -101,7 +103,7 @@ pub fn synchronize_directory(
         ));
     }
     validate_binding(&current.binding)?;
-    validate_authority(&current.binding, &request.authority)?;
+    validate_authority(&current.binding, &current.deployment, &request.authority)?;
     if current.phase != ComponentRuntimePhase::Active || current.activation.is_none() {
         return Err(InternalError::conflict(
             "current Component Directory synchronization requires an Active runtime",
@@ -167,7 +169,7 @@ pub fn status() -> Result<ComponentRuntimeStatusResponse, InternalError> {
     match (&status.authority, status.authority_hash) {
         (None, None) => {}
         (Some(authority), Some(authority_hash)) => {
-            validate_authority(&status.binding, authority)?;
+            validate_authority(&status.binding, &status.deployment, authority)?;
             if ComponentRuntimeOps::directory_authority_hash(authority)? != authority_hash {
                 return Err(InternalError::invariant(
                     InternalErrorOrigin::Storage,
@@ -229,7 +231,7 @@ fn validate_request(
         ));
     }
     validate_binding(&current.binding)?;
-    validate_authority(&current.binding, &request.authority)
+    validate_authority(&current.binding, &current.deployment, &request.authority)
 }
 
 fn validate_binding(binding: &ManagedCanisterBinding) -> Result<(), InternalError> {
@@ -248,6 +250,7 @@ fn validate_binding(binding: &ManagedCanisterBinding) -> Result<(), InternalErro
 
 fn validate_authority(
     binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
     authority: &ComponentRuntimeDirectoryAuthority,
 ) -> Result<(), InternalError> {
     let component = owning_component(binding);
@@ -266,7 +269,8 @@ fn validate_authority(
             "Component Directory does not match the protected Component-tree binding",
         ));
     }
-    validate_fleet_directory(component, &authority.fleet)
+    validate_fleet_directory(component, deployment, &authority.fleet)?;
+    validate_component_group_directory(component, deployment, authority.component_group.as_ref())
 }
 
 fn validate_directory_progression(
@@ -305,6 +309,7 @@ fn validate_directory_progression(
 
 fn validate_fleet_directory(
     component: &ComponentBinding,
+    deployment: &ProtectedComponentDeployment,
     directory: &FleetDirectorySnapshot,
 ) -> Result<(), InternalError> {
     let identity_matches = FleetDirectoryIdentity::from_directory(directory)
@@ -361,6 +366,269 @@ fn validate_fleet_directory(
             "Fleet Directory omits the Component's source root",
         ));
     }
+    validate_fleet_services(component, deployment, directory)
+}
+
+fn validate_fleet_services(
+    component: &ComponentBinding,
+    deployment: &ProtectedComponentDeployment,
+    directory: &FleetDirectorySnapshot,
+) -> Result<(), InternalError> {
+    let mut previous_service = None;
+    let mut matched_membership = None;
+    for service in &directory.services {
+        let service_is_valid = [
+            previous_service.is_none_or(|previous| previous < &service.service),
+            !service.members.is_empty(),
+            service.placement.maximum_members_per_root > 0,
+            service.placement.minimum_distinct_roots > 0,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !service_is_valid {
+            return Err(InternalError::invalid_input(
+                "Fleet Directory services are not canonical and bounded",
+            ));
+        }
+        previous_service = Some(&service.service);
+        let mut previous_member = None;
+        let mut authority_count = 0_u32;
+        for member in &service.members {
+            let key = fleet_service_member_key(member);
+            if previous_member.is_some_and(|previous| previous >= key) {
+                return Err(InternalError::invalid_input(
+                    "Fleet Directory service members are not canonical and unique",
+                ));
+            }
+            previous_member = Some(key);
+            if member.member_purpose == crate::config::FleetServiceMemberPurpose::Authority {
+                authority_count = authority_count.checked_add(1).ok_or_else(|| {
+                    InternalError::resource_exhausted(
+                        "Fleet Directory Authority member count overflowed",
+                    )
+                })?;
+            }
+            if member.component == component.component {
+                let protected_membership_is_exact = [
+                    matched_membership.is_none(),
+                    member.fleet_subnet_root == component.fleet_subnet_root,
+                    member.canister_id == component.canister_id,
+                    service.component_spec == component.component_spec,
+                ]
+                .into_iter()
+                .all(|valid| valid);
+                if !protected_membership_is_exact {
+                    return Err(InternalError::invalid_input(
+                        "Fleet Directory service membership differs from the protected Component",
+                    ));
+                }
+                matched_membership = Some((service, member));
+            }
+        }
+        let mode_is_valid = fleet_service_mode_is_valid(service, authority_count);
+        if !mode_is_valid {
+            return Err(InternalError::invalid_input(
+                "Fleet Directory service mode differs from its configured members",
+            ));
+        }
+    }
+    validate_component_service_membership(deployment, matched_membership)
+}
+
+fn fleet_service_mode_is_valid(
+    service: &crate::dto::fleet_registry::FleetDirectoryService,
+    authority_count: u32,
+) -> bool {
+    match service.mode {
+        FleetServiceMode::AuthorityReplica => {
+            authority_count == 1
+                && service.members.iter().all(|member| {
+                    member.member_purpose != crate::config::FleetServiceMemberPurpose::PoolMember
+                })
+        }
+        FleetServiceMode::ActivePool => {
+            authority_count == 0
+                && service.members.iter().all(|member| {
+                    member.member_purpose == crate::config::FleetServiceMemberPurpose::PoolMember
+                })
+        }
+    }
+}
+
+type FleetServiceMemberKey<'a> = (
+    u8,
+    &'a crate::ids::ComponentGroupPlacementId,
+    &'a crate::ids::ComponentGroupMemberPath,
+    &'a crate::ids::ComponentInstanceId,
+);
+
+const fn fleet_service_member_key(
+    member: &crate::dto::fleet_registry::FleetDirectoryServiceComponent,
+) -> FleetServiceMemberKey<'_> {
+    let purpose = match member.member_purpose {
+        crate::config::FleetServiceMemberPurpose::Authority => 0,
+        crate::config::FleetServiceMemberPurpose::Replica => 1,
+        crate::config::FleetServiceMemberPurpose::PoolMember => 2,
+    };
+    (
+        purpose,
+        &member.group_placement,
+        &member.member_path,
+        &member.component,
+    )
+}
+
+fn validate_component_service_membership(
+    deployment: &ProtectedComponentDeployment,
+    membership: Option<(
+        &crate::dto::fleet_registry::FleetDirectoryService,
+        &crate::dto::fleet_registry::FleetDirectoryServiceComponent,
+    )>,
+) -> Result<(), InternalError> {
+    let expected = match deployment {
+        ProtectedComponentDeployment::UngroupedOrdinary { .. }
+        | ProtectedComponentDeployment::GroupMember {
+            purpose: ComponentDeploymentPurpose::Ordinary,
+            ..
+        } => None,
+        ProtectedComponentDeployment::GroupMember {
+            group_placement,
+            member_path,
+            purpose:
+                ComponentDeploymentPurpose::FleetServiceMember {
+                    service,
+                    member_purpose,
+                },
+            ..
+        } => Some((service, member_purpose, group_placement, member_path)),
+    };
+    match (expected, membership) {
+        (None, None) => Ok(()),
+        (Some(expected), Some(actual)) if fleet_service_membership_matches(expected, actual) => {
+            Ok(())
+        }
+        _ => Err(InternalError::invalid_input(
+            "Fleet Directory service membership differs from protected deployment purpose",
+        )),
+    }
+}
+
+type ExpectedFleetServiceMembership<'a> = (
+    &'a crate::ids::FleetServiceId,
+    &'a crate::config::FleetServiceMemberPurpose,
+    &'a crate::ids::ComponentGroupPlacementId,
+    &'a crate::ids::ComponentGroupMemberPath,
+);
+
+type ActualFleetServiceMembership<'a> = (
+    &'a crate::dto::fleet_registry::FleetDirectoryService,
+    &'a crate::dto::fleet_registry::FleetDirectoryServiceComponent,
+);
+
+fn fleet_service_membership_matches(
+    expected: ExpectedFleetServiceMembership<'_>,
+    actual: ActualFleetServiceMembership<'_>,
+) -> bool {
+    let (service, purpose, placement, path) = expected;
+    let (actual_service, actual_member) = actual;
+    [
+        &actual_service.service == service,
+        &actual_member.member_purpose == purpose,
+        &actual_member.group_placement == placement,
+        &actual_member.member_path == path,
+    ]
+    .into_iter()
+    .all(|matches| matches)
+}
+
+fn validate_component_group_directory(
+    component: &ComponentBinding,
+    deployment: &ProtectedComponentDeployment,
+    directory: Option<&ComponentGroupDirectory>,
+) -> Result<(), InternalError> {
+    let ProtectedComponentDeployment::GroupMember {
+        group_placement,
+        component_group,
+        member_path,
+        purpose,
+        labels,
+        ..
+    } = deployment
+    else {
+        return if directory.is_none() {
+            Ok(())
+        } else {
+            Err(InternalError::invalid_input(
+                "ordinary Component runtime received a Component Group Directory",
+            ))
+        };
+    };
+    let directory = directory.ok_or_else(|| {
+        InternalError::invalid_input(
+            "grouped Component runtime lacks its Component Group Directory",
+        )
+    })?;
+    let provenance = &directory.provenance;
+    let provenance_is_exact = [
+        provenance.authority == component.authority,
+        provenance.fleet_subnet_root == component.fleet_subnet_root,
+        &provenance.group_placement == group_placement,
+        &provenance.component_group == component_group,
+        provenance.operation_id != [0; 32],
+        provenance.plan_hash != [0; 32],
+        provenance.placement_receipt_content_hash != [0; 32],
+        !directory.members.is_empty(),
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !provenance_is_exact {
+        return Err(InternalError::invalid_input(
+            "Component Group Directory provenance differs from protected deployment",
+        ));
+    }
+    let mut previous_path = None;
+    let mut own_member_found = false;
+    let mut principals = std::collections::BTreeSet::new();
+    let mut components = std::collections::BTreeSet::new();
+    for member in &directory.members {
+        let member_is_valid = [
+            previous_path.is_none_or(|previous| previous < &member.member_path),
+            principals.insert(member.binding.canister_id),
+            components.insert(member.binding.component),
+            member.binding.authority == component.authority,
+            member.binding.fleet_subnet_root == component.fleet_subnet_root,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !member_is_valid {
+            return Err(InternalError::invalid_input(
+                "Component Group Directory members are not canonical, unique and root-local",
+            ));
+        }
+        previous_path = Some(&member.member_path);
+        if &member.member_path == member_path {
+            let own_member_is_exact = [
+                !own_member_found,
+                member.component_spec == component.component_spec,
+                &member.purpose == purpose,
+                &member.labels == labels,
+                member.binding == *component,
+            ]
+            .into_iter()
+            .all(|matches| matches);
+            if !own_member_is_exact {
+                return Err(InternalError::invalid_input(
+                    "Component Group Directory own member differs from protected deployment",
+                ));
+            }
+            own_member_found = true;
+        }
+    }
+    if !own_member_found {
+        return Err(InternalError::invalid_input(
+            "Component Group Directory omits the protected Component member",
+        ));
+    }
     Ok(())
 }
 
@@ -379,15 +647,27 @@ const fn owning_component(binding: &ManagedCanisterBinding) -> &ComponentBinding
 mod tests {
     use super::*;
     use crate::{
+        config::{
+            ComponentDeploymentLimits, ComponentDeploymentPurpose, FleetServiceMemberPurpose,
+            FleetServicePlacementPolicy,
+        },
         dto::{
+            component_deployment::ProtectedComponentDeployment,
+            component_provisioning::{
+                ComponentGroupDirectory, ComponentGroupDirectoryMember,
+                ComponentGroupDirectoryProvenance,
+            },
             component_registry::{ComponentDirectoryHead, ComponentDirectoryProvenance},
             fleet_registry::{
-                FleetDirectoryProvenance, FleetRegistryVersion, FleetSubnetRootDirectoryEntry,
+                FleetDirectoryProvenance, FleetDirectoryService, FleetDirectoryServiceComponent,
+                FleetRegistryVersion, FleetServiceMode, FleetSubnetRootDirectoryEntry,
             },
         },
         ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentInstanceId, FleetBinding,
-            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+            AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
+            ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId, FleetBinding,
+            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetServiceId,
+            SubnetId,
         },
     };
     use candid::Principal;
@@ -416,15 +696,92 @@ mod tests {
     fn fleet_directory_accepts_draining_but_not_joining_or_removed_source() {
         let mut authority = directory_authority();
         let component = authority.component.provenance.component.clone();
+        let deployment = ProtectedComponentDeployment::UngroupedOrdinary {
+            binding: component.clone(),
+        };
         authority.fleet.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Draining;
-        validate_fleet_directory(&component, &authority.fleet)
+        validate_fleet_directory(&component, &deployment, &authority.fleet)
             .expect("Draining source remains current for admitted Component lifecycle");
 
         authority.fleet.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Joining;
-        assert!(validate_fleet_directory(&component, &authority.fleet).is_err());
+        assert!(validate_fleet_directory(&component, &deployment, &authority.fleet).is_err());
 
         authority.fleet.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Removed;
-        assert!(validate_fleet_directory(&component, &authority.fleet).is_err());
+        assert!(validate_fleet_directory(&component, &deployment, &authority.fleet).is_err());
+    }
+
+    #[test]
+    fn grouped_service_member_requires_exact_service_and_group_directories() {
+        let mut authority = directory_authority();
+        let component = authority.component.provenance.component.clone();
+        let placement = ComponentGroupPlacementId {
+            deployment: "projects".parse().expect("deployment ID"),
+            ordinal: 0,
+        };
+        let member_path =
+            ComponentGroupMemberPath::try_from(vec!["database".parse().expect("member ID")])
+                .expect("member path");
+        let service: FleetServiceId = "database".parse().expect("service ID");
+        let purpose = ComponentDeploymentPurpose::FleetServiceMember {
+            service: service.clone(),
+            member_purpose: FleetServiceMemberPurpose::Authority,
+        };
+        let deployment = ProtectedComponentDeployment::GroupMember {
+            binding: component.clone(),
+            configuration_digest: ComponentDeploymentConfigurationDigest::from_bytes([20; 32]),
+            group_placement: placement.clone(),
+            component_group: "project_cell".parse().expect("Component Group ID"),
+            member_path: member_path.clone(),
+            purpose: purpose.clone(),
+            labels: vec![],
+            limits: ComponentDeploymentLimits {
+                maximum_descendants: 20_000,
+                maximum_registry_bytes: 16_777_216,
+                spawn_grant_reductions: vec![],
+            },
+        };
+        authority.fleet.services = vec![FleetDirectoryService {
+            service,
+            role: component.role.clone(),
+            component_spec: component.component_spec.clone(),
+            mode: FleetServiceMode::AuthorityReplica,
+            placement: FleetServicePlacementPolicy {
+                maximum_members_per_root: 1,
+                minimum_distinct_roots: 1,
+            },
+            members: vec![FleetDirectoryServiceComponent {
+                member_purpose: FleetServiceMemberPurpose::Authority,
+                component: component.component,
+                fleet_subnet_root: component.fleet_subnet_root,
+                canister_id: component.canister_id,
+                group_placement: placement.clone(),
+                member_path: member_path.clone(),
+            }],
+        }];
+        authority.component_group = Some(ComponentGroupDirectory {
+            provenance: ComponentGroupDirectoryProvenance {
+                authority: component.authority.clone(),
+                fleet_subnet_root: component.fleet_subnet_root,
+                group_placement: placement,
+                component_group: "project_cell".parse().expect("Component Group ID"),
+                operation_id: [21; 32],
+                plan_hash: [22; 32],
+                placement_receipt_content_hash: [23; 32],
+            },
+            members: vec![ComponentGroupDirectoryMember {
+                member_path,
+                component_spec: component.component_spec.clone(),
+                purpose,
+                labels: vec![],
+                binding: component.clone(),
+            }],
+        });
+        let binding = ManagedCanisterBinding::Component(component);
+        validate_authority(&binding, &deployment, &authority)
+            .expect("exact service and group Directories");
+
+        authority.fleet.services[0].members[0].canister_id = Principal::from_slice(&[24; 29]);
+        assert!(validate_authority(&binding, &deployment, &authority).is_err());
     }
 
     fn directory_authority() -> ComponentRuntimeDirectoryAuthority {
@@ -469,6 +826,7 @@ mod tests {
                     fleet_subnet_root: root,
                     status: FleetSubnetRootStatus::Active,
                 }],
+                services: vec![],
             },
             component: ComponentDirectoryHead {
                 provenance: ComponentDirectoryProvenance {
@@ -480,6 +838,7 @@ mod tests {
                 },
                 descendant_count: 0,
             },
+            component_group: None,
         }
     }
 }

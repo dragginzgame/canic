@@ -34,7 +34,7 @@ use canic::{
     dto::cascade::StateSnapshotInput,
     dto::component_provisioning::{
         FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
-        FleetComponentProvisioningStatusResponse,
+        FleetComponentProvisioningStatusResponse, RootComponentPublicationRequest,
     },
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
@@ -687,6 +687,11 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
         "canic_fleet_component_provisioning_advance"
     );
+    assert_fleet_component_provisioning_endpoint_guards();
+    assert_fleet_component_provisioning_candid_surface();
+}
+
+fn assert_fleet_component_provisioning_endpoint_guards() {
     let source =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
     let prepare = preceding_attribute_context(
@@ -716,6 +721,14 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         root_acceptance_is_bounded_public_update(&root_accept),
         "root Component plan acceptance must remain an internal public and payload-bounded update"
     );
+    let root_publish = preceding_attribute_context(
+        &root_source,
+        "async fn canic_root_component_provisioning_publish(",
+    );
+    assert!(
+        root_publication_is_bounded_public_update(&root_publish),
+        "root Component Directory publication must remain an internal public and payload-bounded update"
+    );
     assert!(
         preceding_attribute_context(
             &source,
@@ -724,7 +737,9 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         .contains("canic_query(requires(caller::is_controller()))"),
         "Fleet Component plan status must remain a controller-guarded query"
     );
+}
 
+fn assert_fleet_component_provisioning_candid_surface() {
     let prepare_env = candid_type_env::<FleetComponentProvisioningPrepareRequest>();
     for field in [
         "operation_id",
@@ -740,9 +755,12 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
     let advance_env = candid_type_env::<FleetComponentProvisioningAdvanceRequest>();
     for field in [
         "expected_accepted_root_count",
+        "expected_phase",
         "expected_provisioned_root_count",
         "expected_current_root",
         "registry_committed_component_count",
+        "expected_directory_confirmed_root_count",
+        "expected_current_publication",
     ] {
         assert!(
             advance_env.contains(field),
@@ -765,10 +783,26 @@ fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded()
         "components_provisioned_at_ns",
         "published_fleet_registry",
         "service_topology_published_at_ns",
+        "directory_confirmed_root_count",
+        "current_publication",
+        "publication_in_flight_root",
+        "directories_confirmed_at_ns",
     ] {
         assert!(
             status_env.contains(field),
             "Fleet Component status Candid is missing {field}:\n{status_env}"
+        );
+    }
+    let publication_env = candid_type_env::<RootComponentPublicationRequest>();
+    for field in [
+        "operation_id",
+        "plan_hash",
+        "published_fleet_registry",
+        "expected_published_component_count",
+    ] {
+        assert!(
+            publication_env.contains(field),
+            "root Component publication Candid is missing {field}:\n{publication_env}"
         );
     }
 }
@@ -961,6 +995,11 @@ fn assert_component_registry_protocol_constants() {
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
             canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
             "canic_root_component_provisioning_advance",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
+            "canic_root_component_provisioning_publish",
         ),
         (
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
@@ -1331,9 +1370,23 @@ fn assert_root_component_provisioning_guards(root: &str) {
 }
 
 fn root_acceptance_is_bounded_public_update(attribute: &str) -> bool {
+    is_bounded_public_update(
+        attribute,
+        "MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES",
+    )
+}
+
+fn root_publication_is_bounded_public_update(attribute: &str) -> bool {
+    is_bounded_public_update(
+        attribute,
+        "MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES",
+    )
+}
+
+fn is_bounded_public_update(attribute: &str, exact_envelope: &str) -> bool {
     let is_internal_public = attribute.contains("internal") && attribute.contains("public");
-    let has_exact_envelope = attribute.contains("payload(max_bytes")
-        && attribute.contains("MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES");
+    let has_exact_envelope =
+        attribute.contains("payload(max_bytes") && attribute.contains(exact_envelope);
     attribute.contains("canic_update(") && is_internal_public && has_exact_envelope
 }
 

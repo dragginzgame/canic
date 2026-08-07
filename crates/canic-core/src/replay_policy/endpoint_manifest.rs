@@ -167,6 +167,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_root_component_provisioning_advance",
         command_kind("component_provisioning.advance_root_batch.v1"),
     ),
+    update_response_idempotent(
+        "canic_root_component_provisioning_publish",
+        command_kind("component_provisioning.publish_root_batch.v1"),
+    ),
     query_read_only("canic_root_component_provisioning_status"),
     query_read_only("canic_fleet_subnet_root_canister_summary"),
     update_response_idempotent(

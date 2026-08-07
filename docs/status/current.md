@@ -14,10 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.19`.
-- The latest published release is `v0.101.19` at
-  `cc16243c5d4b8449a04de87fc9091a76bd25a3eb`.
-- Open `0.101.20` derives the complete initial service set only from the
+- The workspace package version is `0.101.20`.
+- The latest published release is `v0.101.20` at
+  `b710f25fc02f5e99f7ce1825045f8dff39f2ddba`.
+- Open `0.101.21` durably publishes the exact service-aware Fleet, Component
+  and Component Group Directories through every selected root. Each root
+  independently re-queries its prepared Component runtimes before freezing a
+  terminal `Published` receipt; the Coordinator authenticates every receipt
+  before reaching `DirectoriesConfirmed`. Components remain
+  `DirectoryPrepared`, roots remain runtime `Prepared`, and activation stays a
+  separate fence.
+- Released `0.101.20` derives the complete initial service set only from the
   persisted plan and its canonical terminal root receipts, then atomically
   commits the Fleet Registry snapshot, exact publication receipt and
   `ServiceTopologyPublished` Coordinator state. A fresh command copied from
@@ -2426,14 +2433,15 @@ First primary results:
 
 ## Next Action
 
-The canonical provisioning journey through `ComponentsProvisioned` is
-published at immutable `v0.101.19`. Open `0.101.20` atomically commits its
-complete service topology, exact Registry publication receipt and
-`ServiceTopologyPublished` operation state. Continue Slice 3 with the
-root-confirmed publication barrier: synchronize the published Fleet Registry,
-derive the exact Fleet, Component and Component Group Directories and retain
-root publication evidence while Components remain `Prepared`. Runtime
-activation remains a separate later boundary.
+The canonical provisioning journey through `ServiceTopologyPublished` is
+published at immutable `v0.101.20`. Open `0.101.21` completes the
+root-confirmed publication barrier: every selected root synchronizes the
+published Fleet Registry, derives and independently verifies the exact Fleet,
+Component and Component Group Directories, freezes a terminal `Published`
+receipt and lets the Coordinator reach `DirectoriesConfirmed`. Continue Slice
+3 with runtime activation from those exact prepared Directory authorities,
+followed by Component Registry promotion, current-Directory convergence and
+root activation as separate monotonic boundaries.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for

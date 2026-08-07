@@ -7,10 +7,14 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    config::{ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose},
+    config::{
+        ComponentDeploymentLabel, ComponentDeploymentLimits, ComponentDeploymentPurpose,
+        FleetServiceMemberPurpose, FleetServicePlacementPolicy,
+    },
     ids::{
-        ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath,
-        ComponentGroupPlacementId, ComponentGroupSpecId, FleetBinding, FleetRegistryAuthority,
+        CanisterRole, ComponentBinding, ComponentDeploymentConfigurationDigest,
+        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId,
+        ComponentInstanceId, ComponentSpecId, FleetBinding, FleetRegistryAuthority, FleetServiceId,
         FleetSubnetRootBinding, FleetSubnetRootReleaseSet, ManagedCanisterBinding, ReleaseBuildId,
         SubnetId,
     },
@@ -221,6 +225,7 @@ pub struct ComponentRuntimeRecord {
 pub struct ComponentRuntimeDirectoryAuthorityRecord {
     pub fleet: FleetDirectorySnapshotRecord,
     pub component: ComponentDirectoryHeadRecord,
+    pub component_group: Option<ComponentGroupDirectoryRecord>,
 }
 
 ///
@@ -233,6 +238,58 @@ pub struct ComponentRuntimeDirectoryAuthorityRecord {
 pub struct FleetDirectorySnapshotRecord {
     pub provenance: FleetDirectoryProvenanceRecord,
     pub fleet_subnet_roots: Vec<FleetSubnetRootDirectoryEntryRecord>,
+    pub services: Vec<FleetDirectoryServiceRecord>,
+}
+
+/// Persisted configured Component member of one Fleet Directory service.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetDirectoryServiceComponentRecord {
+    pub member_purpose: FleetServiceMemberPurpose,
+    pub component: ComponentInstanceId,
+    pub fleet_subnet_root: Principal,
+    pub canister_id: Principal,
+    pub group_placement: ComponentGroupPlacementId,
+    pub member_path: ComponentGroupMemberPath,
+}
+
+/// Persisted complete service projection retained by one Component runtime.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetDirectoryServiceRecord {
+    pub service: FleetServiceId,
+    pub role: CanisterRole,
+    pub component_spec: ComponentSpecId,
+    pub mode: crate::dto::fleet_registry::FleetServiceMode,
+    pub placement: FleetServicePlacementPolicy,
+    pub members: Vec<FleetDirectoryServiceComponentRecord>,
+}
+
+/// Persisted protected origin of one Component Group Directory.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentGroupDirectoryProvenanceRecord {
+    pub authority: FleetRegistryAuthority,
+    pub fleet_subnet_root: Principal,
+    pub group_placement: ComponentGroupPlacementId,
+    pub component_group: ComponentGroupSpecId,
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub placement_receipt_content_hash: [u8; 32],
+}
+
+/// Persisted exact sibling entry in one Component Group Directory.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentGroupDirectoryMemberRecord {
+    pub member_path: ComponentGroupMemberPath,
+    pub component_spec: ComponentSpecId,
+    pub purpose: ComponentDeploymentPurpose,
+    pub labels: Vec<ComponentDeploymentLabel>,
+    pub binding: ComponentBinding,
+}
+
+/// Persisted complete Component Group Directory retained by one grouped runtime.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ComponentGroupDirectoryRecord {
+    pub provenance: ComponentGroupDirectoryProvenanceRecord,
+    pub members: Vec<ComponentGroupDirectoryMemberRecord>,
 }
 
 ///

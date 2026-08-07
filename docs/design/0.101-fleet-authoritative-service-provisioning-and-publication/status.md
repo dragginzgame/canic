@@ -68,10 +68,16 @@ Date: 2026-08-07
   `ComponentsProvisioned`. A new exact command then derives that service set
   only from durable authority and atomically commits the canonical Fleet
   Registry snapshot, exact publication receipt and
-  `ServiceTopologyPublished` operation state. Directory publication and
-  runtime activation remain unavailable.
+  `ServiceTopologyPublished` operation state. The Coordinator now journals one
+  exact selected-root publication call at a time. Each root synchronizes that
+  published Registry, derives service-aware Fleet, Component and Component
+  Group Directories, delivers and independently verifies every exact prepared
+  Component authority, then freezes one terminal `Published` receipt. The
+  Coordinator authenticates every receipt before reaching
+  `DirectoriesConfirmed`. Components remain `DirectoryPrepared`, roots remain
+  runtime `Prepared`, and runtime activation remains unavailable.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.19` is released and `0.101.20` is open.
+- Implementation started: yes; `0.101.20` is released and `0.101.21` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -193,8 +199,8 @@ Fleet policy writer.
   against the Component Group Directory and enforce its exact effective limits
   throughout root allocation and descendant lifecycle. Accepted-plan context
   derivation, compiled-configuration validation and exact retained-context
-  installation are complete; Component Group Directory confirmation and
-  descendant-limit enforcement remain.
+  installation plus exact Component Group Directory confirmation are complete;
+  descendant-limit enforcement remains.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
@@ -270,17 +276,19 @@ Fleet policy writer.
   records the boundary without inventing a Registry revision. Exact retry and
   restart reconstruct the committed result, while stale final-root commands
   cannot initiate publication.
-- [ ] Project exact service ID, mode and purpose-bearing member bindings
+- [x] Project exact service ID, mode and purpose-bearing member bindings
   through Fleet Directory.
-- [ ] Derive one root-local Component Group Directory per placement without
+- [x] Derive one root-local Component Group Directory per placement without
   introducing group parentage or lifecycle authority.
-- [ ] Send exact Fleet, Component and Group Directories before activation.
+- [x] Send exact Fleet, Component and Group Directories before activation.
 - [ ] Activate each Component runtime under its exact prepared Directory,
   then promote its Component Registry partition to `Active` and synchronize
   the resulting revision-bound current Directory before root activation.
 - [ ] Freeze the exact Directory-confirmation roots: all initial roots for
   fresh install, and selected plus every affected existing service-member root
-  for scale-out.
+  for scale-out. Fresh-install confirmation freezes and verifies every selected
+  root from the canonical plan; the wider affected-root scale-out barrier
+  remains.
 - [ ] Require Replica purpose to fail application database write-authority
   checks.
 - [ ] Require PoolMember purpose to grant no implicit leadership, health or

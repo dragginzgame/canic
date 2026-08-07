@@ -419,6 +419,30 @@ pub struct FleetSubnetRootDirectoryEntry {
     pub status: FleetSubnetRootStatus,
 }
 
+/// One exact configured Component projected into a Fleet Directory service.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetDirectoryServiceComponent {
+    pub member_purpose: FleetServiceMemberPurpose,
+    pub component: ComponentInstanceId,
+    pub fleet_subnet_root: Principal,
+    pub canister_id: Principal,
+    pub group_placement: ComponentGroupPlacementId,
+    pub member_path: ComponentGroupMemberPath,
+}
+
+/// One complete configured service projected from the canonical Fleet Registry.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetDirectoryService {
+    pub service: FleetServiceId,
+    pub role: CanisterRole,
+    pub component_spec: ComponentSpecId,
+    pub mode: FleetServiceMode,
+    pub placement: FleetServicePlacementPolicy,
+    pub members: Vec<FleetDirectoryServiceComponent>,
+}
+
 ///
 /// FleetDirectorySnapshot
 ///
@@ -429,6 +453,7 @@ pub struct FleetSubnetRootDirectoryEntry {
 pub struct FleetDirectorySnapshot {
     pub provenance: FleetDirectoryProvenance,
     pub fleet_subnet_roots: Vec<FleetSubnetRootDirectoryEntry>,
+    pub services: Vec<FleetDirectoryService>,
 }
 
 ///

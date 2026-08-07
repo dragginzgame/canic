@@ -600,6 +600,9 @@ fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
         FleetRegistryOps::compile_active(&authority, &topology, &joining).expect("active Registry");
     published.revision += 1;
     published.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Draining;
+    published.services = vec![active_pool_service()];
+    validation::validate(&authority, &topology, &published)
+        .expect("published Registry with one canonical service");
     let directory = directory_for_root(&authority, &topology, &published, principal(6))
         .expect("active Fleet Directory");
 
@@ -625,6 +628,13 @@ fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
             (subnet(7), principal(8), FleetSubnetRootStatus::Active)
         ]
     );
+    assert_eq!(directory.services.len(), 1);
+    assert_eq!(directory.services[0].service.as_str(), "workers");
+    assert_eq!(directory.services[0].members.len(), 1);
+    assert_eq!(
+        directory.services[0].members[0].member_purpose,
+        FleetServiceMemberPurpose::PoolMember
+    );
 
     std::assert_matches!(
         directory_for_root(&authority, &topology, &joining, principal(6)),
@@ -634,6 +644,7 @@ fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
         directory_for_root(&authority, &topology, &published, principal(9)),
         Err(FleetRegistryOpsError::FleetDirectorySourceMissing)
     );
+    published.services.clear();
     published.fleet_subnet_roots[0].status = FleetSubnetRootStatus::Removed;
     std::assert_matches!(
         directory_for_root(&authority, &topology, &published, principal(6)),

@@ -340,6 +340,55 @@ fn initial_service_publication_commits_registry_receipt_and_phase_atomically() {
     );
 }
 
+#[test]
+fn directory_confirmation_intent_preserves_service_publication_receipt() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    let provisioned = drive_components_provisioned(&config, plan_hash);
+    let service_request = root_provision_advance_request(&provisioned);
+    let (published, _) = commit_initial_service_publication(
+        &service_request,
+        provisioned.fleet_registry,
+        provisioned.components_provisioned_at_ns,
+    );
+    let request = root_provision_advance_request(&published);
+    let disposition = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_directory_confirmation(&request, 161)
+        .expect("persist first Directory confirmation intent");
+    assert!(matches!(
+        disposition,
+        FleetComponentDirectoryConfirmationDisposition::Invoke(_)
+    ));
+    let durable = FleetCoordinatorRegistryStore::export();
+    let current = durable.current.expect("Coordinator state");
+    assert!(current.service_publication_receipt.is_some());
+    assert!(matches!(
+        current
+            .component_provisioning
+            .expect("provisioning state")
+            .state,
+        FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
+    ));
+    let status =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: published.operation_id,
+                plan_hash,
+            },
+        )
+        .expect("read Directory confirmation status");
+    let request = root_provision_advance_request(&status);
+    let before_replay = FleetCoordinatorRegistryStore::export();
+    let replay = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_provisioning_root_acceptance_for_test(&config, request, 162)
+        .expect("completed root acceptance remains observational");
+    assert!(matches!(
+        replay,
+        FleetComponentProvisioningRootAcceptanceDisposition::Current(_)
+    ));
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before_replay);
+}
+
 fn assert_service_publication_cursor(
     config: &ConfigModel,
     provisioned: &FleetComponentProvisioningStatusResponse,
@@ -949,9 +998,12 @@ fn root_provision_advance_request(
     FleetComponentProvisioningAdvanceRequest {
         operation_id: status.operation_id,
         plan_hash: status.plan_hash,
+        expected_phase: status.phase,
         expected_accepted_root_count: status.accepted_root_count,
         expected_provisioned_root_count: status.provisioned_root_count,
         expected_current_root: status.current_root,
+        expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+        expected_current_publication: status.current_publication,
     }
 }
 
@@ -1081,9 +1133,12 @@ fn root_acceptance_advance_request(
     FleetComponentProvisioningAdvanceRequest {
         operation_id: [101; 32],
         plan_hash,
+        expected_phase: FleetComponentProvisioningPhase::Planned,
         expected_accepted_root_count,
         expected_provisioned_root_count: 0,
         expected_current_root: None,
+        expected_directory_confirmed_root_count: 0,
+        expected_current_publication: None,
     }
 }
 
@@ -1135,9 +1190,12 @@ fn accepted_root_response(
         claimed_component_count: 0,
         installed_component_count: 0,
         registry_committed_component_count: 0,
+        published_component_count: 0,
         result: None,
+        publication: None,
         accepted_at_ns,
         provisioned_at_ns: None,
+        published_at_ns: None,
         receipt_content_hash,
     }
 }
@@ -1210,7 +1268,9 @@ fn provisioning_acceptances(
         FleetComponentProvisioningStateRecord::RootsAccepted { acceptances, .. }
         | FleetComponentProvisioningStateRecord::ProvisioningRoots { acceptances, .. }
         | FleetComponentProvisioningStateRecord::ComponentsProvisioned { acceptances, .. }
-        | FleetComponentProvisioningStateRecord::ServiceTopologyPublished { acceptances, .. } => {
+        | FleetComponentProvisioningStateRecord::ServiceTopologyPublished { acceptances, .. }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories { acceptances, .. }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { acceptances, .. } => {
             acceptances
         }
         FleetComponentProvisioningStateRecord::Planned { .. }
@@ -1310,9 +1370,12 @@ fn provisioned_root_response(
         claimed_component_count: component_count,
         installed_component_count: component_count,
         registry_committed_component_count: component_count,
+        published_component_count: 0,
         result: Some(result),
+        publication: None,
         accepted_at_ns,
         provisioned_at_ns: Some(provisioned_at_ns),
+        published_at_ns: None,
         receipt_content_hash,
     }
 }

@@ -15,7 +15,8 @@ use crate::{
         FleetServicePlacementPolicy,
     },
     dto::fleet_registry::{
-        FleetComponentSpecEntry, FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
+        FleetComponentSpecEntry, FleetDirectoryProvenance, FleetDirectoryService,
+        FleetDirectoryServiceComponent, FleetDirectorySnapshot, FleetRegistry,
         FleetRegistryManifest, FleetRegistryVersion, FleetServiceBinding,
         FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootDirectoryEntry,
         FleetSubnetRootEntry, FleetSubnetRootStatus,
@@ -377,6 +378,29 @@ fn directory_for_root(
                 placement_subnet: entry.placement_subnet,
                 fleet_subnet_root: entry.fleet_subnet_root,
                 status: entry.status,
+            })
+            .collect(),
+        services: registry
+            .services
+            .iter()
+            .map(|service| FleetDirectoryService {
+                service: service.service.clone(),
+                role: service.role.clone(),
+                component_spec: service.component_spec.clone(),
+                mode: service.mode,
+                placement: service.placement,
+                members: service
+                    .members
+                    .iter()
+                    .map(|member| FleetDirectoryServiceComponent {
+                        member_purpose: member.member_purpose,
+                        component: member.component,
+                        fleet_subnet_root: member.fleet_subnet_root,
+                        canister_id: member.canister_id,
+                        group_placement: member.group_placement.clone(),
+                        member_path: member.member_path.clone(),
+                    })
+                    .collect(),
             })
             .collect(),
     })

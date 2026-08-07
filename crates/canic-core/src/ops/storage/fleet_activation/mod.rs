@@ -15,6 +15,10 @@ use crate::{
     },
     dto::{
         component_deployment::ProtectedComponentDeployment,
+        component_provisioning::{
+            ComponentGroupDirectory, ComponentGroupDirectoryMember,
+            ComponentGroupDirectoryProvenance,
+        },
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryProvenance,
             ComponentRuntimeActivationEvidence, ComponentRuntimeActivationRequest,
@@ -29,8 +33,9 @@ use crate::{
             FleetCredentialManifest,
         },
         fleet_registry::{
-            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
-            FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+            FleetDirectoryProvenance, FleetDirectoryService, FleetDirectoryServiceComponent,
+            FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootDirectoryEntry,
+            FleetSubnetRootStatus,
         },
     },
     ids::{
@@ -43,16 +48,19 @@ use crate::{
     },
     storage::stable::fleet_activation::{
         ComponentDirectoryHeadRecord, ComponentDirectoryProvenanceRecord,
-        ComponentRuntimeActivationRecord, ComponentRuntimeDirectoryAuthorityRecord,
-        ComponentRuntimeDirectoryRecord, ComponentRuntimeRecord, FleetActivation,
-        FleetActivationEvidenceRecord, FleetActivationIdentityRecord, FleetActivationRecord,
-        FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
-        FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
-        FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
-        FleetDirectoryProvenanceRecord, FleetDirectorySnapshotRecord, FleetRegistryVersionRecord,
-        FleetSubnetRootAuthorityRecord, FleetSubnetRootDirectoryEntryRecord,
-        FleetSubnetRootStatusRecord, FleetSubnetWasmStoreAuthorityRecord,
-        MAX_FLEET_ACTIVATION_RECORD_BYTES, ProtectedComponentDeploymentRecord,
+        ComponentGroupDirectoryMemberRecord, ComponentGroupDirectoryProvenanceRecord,
+        ComponentGroupDirectoryRecord, ComponentRuntimeActivationRecord,
+        ComponentRuntimeDirectoryAuthorityRecord, ComponentRuntimeDirectoryRecord,
+        ComponentRuntimeRecord, FleetActivation, FleetActivationEvidenceRecord,
+        FleetActivationIdentityRecord, FleetActivationRecord, FleetActivationStateRecord,
+        FleetCascadeActivationEvidenceRecord, FleetCascadeManifestEntryRecord,
+        FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
+        FleetCredentialManifestRecord, FleetDirectoryProvenanceRecord,
+        FleetDirectoryServiceComponentRecord, FleetDirectoryServiceRecord,
+        FleetDirectorySnapshotRecord, FleetRegistryVersionRecord, FleetSubnetRootAuthorityRecord,
+        FleetSubnetRootDirectoryEntryRecord, FleetSubnetRootStatusRecord,
+        FleetSubnetWasmStoreAuthorityRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        ProtectedComponentDeploymentRecord,
     },
     view::fleet_activation::{ComponentRuntimeActivationTransition, FleetActivationTransition},
 };
@@ -1087,10 +1095,15 @@ fn protected_component_deployment_record_to_dto(
 fn component_runtime_directory_dto_to_record(
     authority: ComponentRuntimeDirectoryAuthority,
 ) -> ComponentRuntimeDirectoryAuthorityRecord {
-    let ComponentRuntimeDirectoryAuthority { fleet, component } = authority;
+    let ComponentRuntimeDirectoryAuthority {
+        fleet,
+        component,
+        component_group,
+    } = authority;
     let FleetDirectorySnapshot {
         provenance: fleet_provenance,
         fleet_subnet_roots,
+        services,
     } = fleet;
     let FleetDirectoryProvenance {
         registry,
@@ -1126,6 +1139,28 @@ fn component_runtime_directory_dto_to_record(
                     status: fleet_subnet_root_status_dto_to_record(entry.status),
                 })
                 .collect(),
+            services: services
+                .into_iter()
+                .map(|service| FleetDirectoryServiceRecord {
+                    service: service.service,
+                    role: service.role,
+                    component_spec: service.component_spec,
+                    mode: service.mode,
+                    placement: service.placement,
+                    members: service
+                        .members
+                        .into_iter()
+                        .map(|member| FleetDirectoryServiceComponentRecord {
+                            member_purpose: member.member_purpose,
+                            component: member.component,
+                            fleet_subnet_root: member.fleet_subnet_root,
+                            canister_id: member.canister_id,
+                            group_placement: member.group_placement,
+                            member_path: member.member_path,
+                        })
+                        .collect(),
+                })
+                .collect(),
         },
         component: ComponentDirectoryHeadRecord {
             provenance: ComponentDirectoryProvenanceRecord {
@@ -1137,6 +1172,28 @@ fn component_runtime_directory_dto_to_record(
             },
             descendant_count,
         },
+        component_group: component_group.map(|directory| ComponentGroupDirectoryRecord {
+            provenance: ComponentGroupDirectoryProvenanceRecord {
+                authority: directory.provenance.authority,
+                fleet_subnet_root: directory.provenance.fleet_subnet_root,
+                group_placement: directory.provenance.group_placement,
+                component_group: directory.provenance.component_group,
+                operation_id: directory.provenance.operation_id,
+                plan_hash: directory.provenance.plan_hash,
+                placement_receipt_content_hash: directory.provenance.placement_receipt_content_hash,
+            },
+            members: directory
+                .members
+                .into_iter()
+                .map(|member| ComponentGroupDirectoryMemberRecord {
+                    member_path: member.member_path,
+                    component_spec: member.component_spec,
+                    purpose: member.purpose,
+                    labels: member.labels,
+                    binding: member.binding,
+                })
+                .collect(),
+        }),
     }
 }
 
@@ -1163,6 +1220,30 @@ fn component_runtime_directory_record_to_dto(
                     status: fleet_subnet_root_status_record_to_dto(entry.status),
                 })
                 .collect(),
+            services: authority
+                .fleet
+                .services
+                .iter()
+                .map(|service| FleetDirectoryService {
+                    service: service.service.clone(),
+                    role: service.role.clone(),
+                    component_spec: service.component_spec.clone(),
+                    mode: service.mode,
+                    placement: service.placement,
+                    members: service
+                        .members
+                        .iter()
+                        .map(|member| FleetDirectoryServiceComponent {
+                            member_purpose: member.member_purpose,
+                            component: member.component,
+                            fleet_subnet_root: member.fleet_subnet_root,
+                            canister_id: member.canister_id,
+                            group_placement: member.group_placement.clone(),
+                            member_path: member.member_path.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
         },
         component: ComponentDirectoryHead {
             provenance: ComponentDirectoryProvenance {
@@ -1180,6 +1261,32 @@ fn component_runtime_directory_record_to_dto(
             },
             descendant_count: authority.component.descendant_count,
         },
+        component_group: authority.component_group.as_ref().map(|directory| {
+            ComponentGroupDirectory {
+                provenance: ComponentGroupDirectoryProvenance {
+                    authority: directory.provenance.authority.clone(),
+                    fleet_subnet_root: directory.provenance.fleet_subnet_root,
+                    group_placement: directory.provenance.group_placement.clone(),
+                    component_group: directory.provenance.component_group.clone(),
+                    operation_id: directory.provenance.operation_id,
+                    plan_hash: directory.provenance.plan_hash,
+                    placement_receipt_content_hash: directory
+                        .provenance
+                        .placement_receipt_content_hash,
+                },
+                members: directory
+                    .members
+                    .iter()
+                    .map(|member| ComponentGroupDirectoryMember {
+                        member_path: member.member_path.clone(),
+                        component_spec: member.component_spec.clone(),
+                        purpose: member.purpose.clone(),
+                        labels: member.labels.clone(),
+                        binding: member.binding.clone(),
+                    })
+                    .collect(),
+            }
+        }),
     }
 }
 
@@ -1621,6 +1728,7 @@ mod tests {
                     fleet_subnet_root: root.fleet_subnet_root,
                     status: FleetSubnetRootStatus::Active,
                 }],
+                services: vec![],
             },
             component: ComponentDirectoryHead {
                 provenance: ComponentDirectoryProvenance {
@@ -1632,6 +1740,7 @@ mod tests {
                 },
                 descendant_count: 0,
             },
+            component_group: None,
         };
         let authority_hash =
             crate::ops::component_runtime::ComponentRuntimeOps::directory_authority_hash(
@@ -1767,6 +1876,7 @@ mod tests {
                     fleet_subnet_root: root.fleet_subnet_root,
                     status: FleetSubnetRootStatus::Active,
                 }],
+                services: vec![],
             },
             component: ComponentDirectoryHead {
                 provenance: ComponentDirectoryProvenance {
@@ -1778,6 +1888,7 @@ mod tests {
                 },
                 descendant_count: 0,
             },
+            component_group: None,
         };
         let authority_hash =
             crate::ops::component_runtime::ComponentRuntimeOps::directory_authority_hash(

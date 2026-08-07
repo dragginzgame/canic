@@ -379,9 +379,12 @@ fn receipts(
                 claimed_component_count: component_count,
                 installed_component_count: component_count,
                 registry_committed_component_count: component_count,
+                published_component_count: 0,
                 result: Some(result),
+                publication: None,
                 accepted_at_ns,
                 provisioned_at_ns: Some(provisioned_at_ns),
+                published_at_ns: None,
                 receipt_content_hash,
             }
         })

@@ -7,6 +7,7 @@
 use crate::{
     dto::fleet_coordinator::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
+        FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
         FleetComponentProvisioningRecord, FleetComponentProvisioningRootAcceptanceIntentRecord,
         FleetComponentProvisioningRootAcceptanceRecord,
         FleetComponentProvisioningRootProvisionIntentRecord,
@@ -17,6 +18,8 @@ use crate::{
         FleetSubnetRootJoinReceiptRecord, FleetSubnetRootRemovalPublicationReceiptRecord,
     },
     view::fleet_coordinator::{
+        FleetComponentDirectoryConfirmationCallView,
+        FleetComponentDirectoryConfirmationDisposition,
         FleetComponentProvisioningRootAcceptanceCallView,
         FleetComponentProvisioningRootAcceptanceDisposition,
         FleetComponentProvisioningRootProvisionCallView,
@@ -35,6 +38,7 @@ use canic_core::{
             },
             component_provisioning_receipt::{
                 RootComponentProvisioningAcceptanceReceiptAuthority,
+                RootComponentProvisioningPublishedReceiptAuthority,
                 RootComponentProvisioningReceiptOps,
             },
             fleet_registry::FleetRegistryOps,
@@ -48,9 +52,10 @@ use canic_core::{
             FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
             FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningRootProgress,
             FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
-            FleetSubnetRootProvisioningBatch, RootComponentProvisioningAcceptanceRequest,
-            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
-            RootComponentProvisioningStatusResponse,
+            FleetComponentPublicationRootProgress, FleetSubnetRootProvisioningBatch,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
+            RootComponentProvisioningPhase, RootComponentProvisioningStatusResponse,
+            RootComponentPublicationRequest,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -823,6 +828,173 @@ impl FleetCoordinatorOps {
         Ok(result)
     }
 
+    pub(crate) fn advance_component_directory_confirmation(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        started_at_ns: u64,
+    ) -> Result<FleetComponentDirectoryConfirmationDisposition, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, request)?;
+        let progress = component_directory_confirmation_progress(record)?;
+        match classify_directory_confirmation_advance(request, &progress)? {
+            DirectoryConfirmationAdvance::Current => {
+                return component_provisioning_status_response(record)
+                    .map(Box::new)
+                    .map(FleetComponentDirectoryConfirmationDisposition::Current);
+            }
+            DirectoryConfirmationAdvance::Reconcile => {
+                let intent = progress.in_flight.as_ref().ok_or_else(|| {
+                    receipt_invariant("Directory confirmation intent disappeared")
+                })?;
+                return Ok(FleetComponentDirectoryConfirmationDisposition::Reconcile(
+                    directory_confirmation_call_from_intent(intent),
+                ));
+            }
+            DirectoryConfirmationAdvance::Begin => {}
+        }
+        if started_at_ns == 0 || started_at_ns < progress.service_topology_published_at_ns {
+            return Err(InternalError::invalid_input(
+                "Directory confirmation start time is invalid",
+            ));
+        }
+        let root_index = progress.confirmed_root_count;
+        let previous = progress
+            .current
+            .as_ref()
+            .map(|record| record.response.clone())
+            .map_or_else(
+                || root_provisioned_response(&progress, root_index).cloned(),
+                Ok,
+            )?;
+        let root = confirmation_root(record, root_index)?;
+        if previous.fleet_subnet_root != root {
+            return Err(receipt_invariant(
+                "Directory confirmation cursor differs from canonical root order",
+            ));
+        }
+        let call = FleetComponentDirectoryConfirmationCallView {
+            fleet_subnet_root: root,
+            request: RootComponentPublicationRequest {
+                operation_id: record.operation_id,
+                plan_hash: record.plan_hash,
+                published_fleet_registry: progress.published_fleet_registry.clone(),
+                expected_published_component_count: previous.published_component_count,
+            },
+        };
+        let intent = FleetComponentDirectoryConfirmationIntentRecord {
+            root_index,
+            fleet_subnet_root: root,
+            request: call.request.clone(),
+            started_at_ns,
+        };
+        let mut next = current.clone();
+        component_provisioning_record_mut(&mut next)?.state =
+            FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                published_fleet_registry: progress.published_fleet_registry,
+                service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                confirmations: progress.confirmations,
+                current: progress.current.map(Box::new),
+                in_flight: Some(Box::new(intent)),
+            };
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(FleetComponentDirectoryConfirmationDisposition::Invoke(call))
+    }
+
+    pub(crate) fn record_component_directory_confirmation(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, request)?;
+        let mut progress = component_directory_confirmation_progress(record)?;
+        if classify_directory_confirmation_advance(request, &progress)?
+            != DirectoryConfirmationAdvance::Reconcile
+        {
+            return Err(InternalError::conflict(
+                "Directory confirmation response has no exact durable pre-call intent",
+            ));
+        }
+        let intent = progress
+            .in_flight
+            .take()
+            .ok_or_else(|| receipt_invariant("Directory confirmation intent disappeared"))?;
+        if recorded_at_ns < intent.started_at_ns {
+            return Err(InternalError::invalid_input(
+                "Directory confirmation observation time regressed",
+            ));
+        }
+        let previous = progress
+            .current
+            .as_ref()
+            .map(|record| &record.response)
+            .map_or_else(
+                || root_provisioned_response(&progress, intent.root_index),
+                Ok,
+            )?;
+        let fleet_directory_content_hash =
+            expected_fleet_directory_content_hash(&current, intent.fleet_subnet_root)?;
+        validate_directory_confirmation_response(
+            record,
+            &progress.published_fleet_registry,
+            intent.fleet_subnet_root,
+            fleet_directory_content_hash,
+            previous,
+            &response,
+            recorded_at_ns,
+        )?;
+        let observed = FleetComponentDirectoryConfirmationRecord {
+            started_at_ns: intent.started_at_ns,
+            response,
+            recorded_at_ns,
+        };
+        if observed.response.phase == RootComponentProvisioningPhase::Published {
+            progress.confirmations.push(observed);
+            progress.current = None;
+        } else {
+            progress.current = Some(observed);
+        }
+        let confirmed_root_count = u32::try_from(progress.confirmations.len())
+            .map_err(|_| receipt_invariant("Directory confirmation count does not fit u32"))?;
+        let mut next = current.clone();
+        component_provisioning_record_mut(&mut next)?.state =
+            if confirmed_root_count == progress.confirmation_root_count {
+                FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+                    planned_at_ns: progress.planned_at_ns,
+                    acceptances: progress.acceptances,
+                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                    provisions: progress.provisions,
+                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                    published_fleet_registry: progress.published_fleet_registry,
+                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                    confirmations: progress.confirmations,
+                    directories_confirmed_at_ns: recorded_at_ns,
+                }
+            } else {
+                FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+                    planned_at_ns: progress.planned_at_ns,
+                    acceptances: progress.acceptances,
+                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                    provisions: progress.provisions,
+                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                    published_fleet_registry: progress.published_fleet_registry,
+                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                    confirmations: progress.confirmations,
+                    current: progress.current.map(Box::new),
+                    in_flight: None,
+                }
+            };
+        let next = Self::validate_current(next)?;
+        let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
+        Self::commit_transition(&current, next)?;
+        Ok(result)
+    }
+
     pub(crate) fn publish_root_draining(
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
@@ -1409,7 +1581,174 @@ fn validate_component_provisioning_record(
         record,
     )?;
     validate_service_publication_authority(current, record)?;
+    validate_component_directory_confirmation_state(current, record)?;
     component_provisioning_plan_counts(&record.plan)?;
+    Ok(())
+}
+
+fn validate_component_directory_confirmation_state(
+    coordinator: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let progress = match record.state {
+        FleetComponentProvisioningStateRecord::ServiceTopologyPublished { .. }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. } => {
+            component_directory_confirmation_progress(record)?
+        }
+        _ => return Ok(()),
+    };
+    if progress.confirmation_root_count
+        != u32::try_from(record.plan.batches.len())
+            .map_err(|_| receipt_invariant("root batch count does not fit u32"))?
+        || progress.confirmed_root_count > progress.confirmation_root_count
+    {
+        return Err(receipt_invariant(
+            "fresh Directory confirmation roots differ from selected root batches",
+        ));
+    }
+    let mut previous_recorded_at_ns = validate_completed_directory_confirmations(
+        coordinator,
+        record,
+        &progress,
+        progress.service_topology_published_at_ns,
+    )?;
+    previous_recorded_at_ns = validate_current_directory_confirmation(
+        coordinator,
+        record,
+        &progress,
+        previous_recorded_at_ns,
+    )?;
+    validate_directory_confirmation_intent(record, &progress, previous_recorded_at_ns)?;
+    validate_terminal_directory_confirmation(record, &progress, previous_recorded_at_ns)
+}
+
+fn validate_completed_directory_confirmations(
+    coordinator: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    mut previous_recorded_at_ns: u64,
+) -> Result<u64, InternalError> {
+    for (index, confirmation) in progress.confirmations.iter().enumerate() {
+        let root_index = u32::try_from(index)
+            .map_err(|_| receipt_invariant("Directory confirmation index does not fit u32"))?;
+        let root = confirmation_root(record, root_index)?;
+        let previous = root_provisioned_response(progress, root_index)?;
+        let fleet_directory_content_hash =
+            expected_fleet_directory_content_hash(coordinator, root)?;
+        validate_directory_confirmation_response(
+            record,
+            &progress.published_fleet_registry,
+            root,
+            fleet_directory_content_hash,
+            previous,
+            &confirmation.response,
+            confirmation.recorded_at_ns,
+        )
+        .map_err(|_| receipt_invariant("stored Directory confirmation receipt is invalid"))?;
+        if confirmation.response.phase != RootComponentProvisioningPhase::Published
+            || confirmation.started_at_ns < previous_recorded_at_ns
+            || confirmation.recorded_at_ns < confirmation.started_at_ns
+        {
+            return Err(receipt_invariant(
+                "stored Directory confirmation time or terminal phase is invalid",
+            ));
+        }
+        previous_recorded_at_ns = confirmation.recorded_at_ns;
+    }
+    Ok(previous_recorded_at_ns)
+}
+
+fn validate_current_directory_confirmation(
+    coordinator: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    mut previous_recorded_at_ns: u64,
+) -> Result<u64, InternalError> {
+    if let Some(current) = &progress.current {
+        let root = confirmation_root(record, progress.confirmed_root_count)?;
+        let previous = root_provisioned_response(progress, progress.confirmed_root_count)?;
+        let fleet_directory_content_hash =
+            expected_fleet_directory_content_hash(coordinator, root)?;
+        validate_directory_confirmation_response(
+            record,
+            &progress.published_fleet_registry,
+            root,
+            fleet_directory_content_hash,
+            previous,
+            &current.response,
+            current.recorded_at_ns,
+        )
+        .map_err(|_| receipt_invariant("stored in-progress Directory confirmation is invalid"))?;
+        if current.response.phase != RootComponentProvisioningPhase::Provisioned
+            || current.started_at_ns < previous_recorded_at_ns
+            || current.recorded_at_ns < current.started_at_ns
+        {
+            return Err(receipt_invariant(
+                "in-progress Directory confirmation time or phase is invalid",
+            ));
+        }
+        previous_recorded_at_ns = current.recorded_at_ns;
+    }
+    Ok(previous_recorded_at_ns)
+}
+
+fn validate_directory_confirmation_intent(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    previous_recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    if let Some(intent) = &progress.in_flight {
+        let root = confirmation_root(record, progress.confirmed_root_count)?;
+        let previous = progress
+            .current
+            .as_ref()
+            .map(|current| &current.response)
+            .map_or_else(
+                || root_provisioned_response(progress, progress.confirmed_root_count),
+                Ok,
+            )?;
+        let intent_is_exact = [
+            intent.root_index == progress.confirmed_root_count,
+            intent.fleet_subnet_root == root,
+            intent.request.operation_id == record.operation_id,
+            intent.request.plan_hash == record.plan_hash,
+            intent.request.published_fleet_registry == progress.published_fleet_registry,
+            intent.request.expected_published_component_count == previous.published_component_count,
+            intent.started_at_ns >= previous_recorded_at_ns,
+        ]
+        .into_iter()
+        .all(|matches| matches);
+        if !intent_is_exact {
+            return Err(receipt_invariant(
+                "Directory confirmation pre-call intent is invalid",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_terminal_directory_confirmation(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    previous_recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    if progress.complete {
+        let FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            directories_confirmed_at_ns,
+            ..
+        } = record.state
+        else {
+            unreachable!("complete Directory progress has terminal state");
+        };
+        if progress.confirmed_root_count != progress.confirmation_root_count
+            || directories_confirmed_at_ns < previous_recorded_at_ns
+        {
+            return Err(receipt_invariant(
+                "terminal Directory confirmation evidence is incomplete",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -1419,6 +1758,11 @@ fn component_provisioning_status_response(
     let counts = component_provisioning_plan_counts(&record.plan)?;
     let acceptance = component_provisioning_root_acceptance_progress(record)?;
     let provisioning = component_provisioning_root_provision_progress(record)?;
+    let directory = if provisioning.published_fleet_registry.is_some() {
+        Some(component_directory_confirmation_progress(record)?)
+    } else {
+        None
+    };
     Ok(FleetComponentProvisioningStatusResponse {
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
@@ -1439,6 +1783,17 @@ fn component_provisioning_status_response(
             .in_flight
             .as_ref()
             .map(|intent| intent.fleet_subnet_root),
+        directory_confirmed_root_count: directory
+            .as_ref()
+            .map_or(0, |progress| progress.confirmed_root_count),
+        current_publication: directory
+            .as_ref()
+            .and_then(|progress| progress.current.as_ref())
+            .map(|record| root_publication_progress(&record.response)),
+        publication_in_flight_root: directory
+            .as_ref()
+            .and_then(|progress| progress.in_flight.as_ref())
+            .map(|intent| intent.fleet_subnet_root),
         group_placement_count: counts.group_placements,
         component_count: counts.components,
         planned_at_ns: acceptance.planned_at_ns,
@@ -1446,6 +1801,13 @@ fn component_provisioning_status_response(
         components_provisioned_at_ns: provisioning.components_provisioned_at_ns,
         published_fleet_registry: provisioning.published_fleet_registry,
         service_topology_published_at_ns: provisioning.service_topology_published_at_ns,
+        directories_confirmed_at_ns: match &record.state {
+            FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+                directories_confirmed_at_ns,
+                ..
+            } => Some(*directories_confirmed_at_ns),
+            _ => None,
+        },
     })
 }
 
@@ -1473,6 +1835,23 @@ struct FleetComponentProvisioningRootProvisionProgress {
     service_topology_published_at_ns: Option<u64>,
 }
 
+#[derive(Clone)]
+struct FleetComponentDirectoryConfirmationProgress {
+    planned_at_ns: u64,
+    acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+    roots_accepted_at_ns: u64,
+    provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+    components_provisioned_at_ns: u64,
+    published_fleet_registry: FleetRegistryVersion,
+    service_topology_published_at_ns: u64,
+    confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+    confirmed_root_count: u32,
+    confirmation_root_count: u32,
+    current: Option<FleetComponentDirectoryConfirmationRecord>,
+    in_flight: Option<FleetComponentDirectoryConfirmationIntentRecord>,
+    complete: bool,
+}
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum RootAcceptanceAdvance {
     Begin,
@@ -1486,6 +1865,13 @@ enum RootProvisionAdvance {
     Reconcile,
     Current,
     Publish,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DirectoryConfirmationAdvance {
+    Begin,
+    Reconcile,
+    Current,
 }
 
 #[derive(Clone, Copy)]
@@ -1527,36 +1913,7 @@ fn validate_service_publication_authority(
     current: &FleetCoordinatorRegistryRecord,
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
-    let publication = match &record.state {
-        FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
-            provisions,
-            components_provisioned_at_ns,
-            published_fleet_registry,
-            service_topology_published_at_ns,
-            ..
-        } => Some((
-            provisions,
-            *components_provisioned_at_ns,
-            published_fleet_registry,
-            *service_topology_published_at_ns,
-        )),
-        FleetComponentProvisioningStateRecord::Planned { .. }
-        | FleetComponentProvisioningStateRecord::AcceptingRoots { .. }
-        | FleetComponentProvisioningStateRecord::RootsAccepted { .. }
-        | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
-        | FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. } => None,
-    };
-    let receipt = current.service_publication_receipt.as_ref();
-    let (
-        Some((provisions, components_provisioned_at_ns, published_registry, published_at_ns)),
-        Some(receipt),
-    ) = (publication, receipt)
-    else {
-        if publication.is_some() || receipt.is_some() {
-            return Err(receipt_invariant(
-                "Fleet-service publication state and receipt must commit atomically",
-            ));
-        }
+    let Some((publication, receipt)) = paired_service_publication_evidence(current, record)? else {
         return Ok(());
     };
     if component_provisioning_authority(record) != service_publication_authority(receipt) {
@@ -1564,13 +1921,14 @@ fn validate_service_publication_authority(
             "Fleet-service publication receipt differs from its provisioning plan",
         ));
     }
-    if published_at_ns < components_provisioned_at_ns {
+    if publication.published_at_ns < publication.components_provisioned_at_ns {
         return Err(receipt_invariant(
             "Fleet-service publication time precedes complete root provisioning",
         ));
     }
     let source_registry = initial_active_registry(current)?;
-    let root_receipts = provisions
+    let root_receipts = publication
+        .provisions
         .iter()
         .map(|provision| provision.response.clone())
         .collect::<Vec<_>>();
@@ -1589,7 +1947,7 @@ fn validate_service_publication_authority(
         receipt_invariant("published root provisioning receipts do not compile canonical services")
     })?;
     if receipt.previous_version != record.plan.fleet_registry
-        || &receipt.version != published_registry
+        || receipt.version != *publication.published_registry
         || receipt.root_receipt_content_hashes != receipt_hashes
         || receipt.services != services
     {
@@ -1598,6 +1956,76 @@ fn validate_service_publication_authority(
         ));
     }
     Ok(())
+}
+
+struct FleetServicePublicationState<'a> {
+    provisions: &'a [FleetComponentProvisioningRootProvisionRecord],
+    components_provisioned_at_ns: u64,
+    published_registry: &'a FleetRegistryVersion,
+    published_at_ns: u64,
+}
+
+fn service_publication_state(
+    record: &FleetComponentProvisioningRecord,
+) -> Option<FleetServicePublicationState<'_>> {
+    match &record.state {
+        FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        } => Some(FleetServicePublicationState {
+            provisions,
+            components_provisioned_at_ns: *components_provisioned_at_ns,
+            published_registry: published_fleet_registry,
+            published_at_ns: *service_topology_published_at_ns,
+        }),
+        FleetComponentProvisioningStateRecord::Planned { .. }
+        | FleetComponentProvisioningStateRecord::AcceptingRoots { .. }
+        | FleetComponentProvisioningStateRecord::RootsAccepted { .. }
+        | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
+        | FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. } => None,
+    }
+}
+
+fn paired_service_publication_evidence<'a>(
+    current: &'a FleetCoordinatorRegistryRecord,
+    record: &'a FleetComponentProvisioningRecord,
+) -> Result<
+    Option<(
+        FleetServicePublicationState<'a>,
+        &'a FleetServicePublicationReceiptRecord,
+    )>,
+    InternalError,
+> {
+    match (
+        service_publication_state(record),
+        current.service_publication_receipt.as_ref(),
+    ) {
+        (Some(publication), Some(receipt)) => Ok(Some((publication, receipt))),
+        (None, None) => Ok(None),
+        (Some(_), None) => Err(receipt_invariant(
+            "Fleet-service publication state lacks its atomic receipt",
+        )),
+        (None, Some(_)) => Err(receipt_invariant(
+            "Fleet-service publication receipt lacks its atomic state",
+        )),
+    }
 }
 
 fn require_component_provisioning_record<'a>(
@@ -1748,79 +2176,116 @@ fn component_provisioning_root_acceptance_progress(
 ) -> Result<FleetComponentProvisioningRootAcceptanceProgress, InternalError> {
     let root_batch_count = u32::try_from(record.plan.batches.len())
         .map_err(|_| receipt_invariant("root batch count does not fit u32"))?;
-    let (planned_at_ns, phase, acceptances, in_flight, roots_accepted_at_ns) = match &record.state {
-        FleetComponentProvisioningStateRecord::Planned { planned_at_ns } => (
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::Planned,
-            Vec::new(),
-            None,
-            None,
-        ),
+    match &record.state {
+        FleetComponentProvisioningStateRecord::Planned { planned_at_ns } => {
+            planned_root_acceptance_progress(*planned_at_ns, root_batch_count)
+        }
         FleetComponentProvisioningStateRecord::AcceptingRoots {
             planned_at_ns,
             acceptances,
             in_flight,
-        } => (
+        } => root_acceptance_progress_from_parts(
             *planned_at_ns,
             FleetComponentProvisioningPhase::AcceptingRoots,
-            acceptances.clone(),
+            acceptances,
             *in_flight,
             None,
+            root_batch_count,
         ),
         FleetComponentProvisioningStateRecord::RootsAccepted {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
-        } => (
+        } => root_acceptance_progress_from_parts(
             *planned_at_ns,
             FleetComponentProvisioningPhase::RootsAccepted,
-            acceptances.clone(),
+            acceptances,
             None,
             Some(*roots_accepted_at_ns),
+            root_batch_count,
+        ),
+        FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            ..
+        } => root_acceptance_progress_from_parts(
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::ConfirmingDirectories,
+            acceptances,
+            None,
+            Some(*roots_accepted_at_ns),
+            root_batch_count,
+        ),
+        FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            ..
+        } => root_acceptance_progress_from_parts(
+            *planned_at_ns,
+            FleetComponentProvisioningPhase::DirectoriesConfirmed,
+            acceptances,
+            None,
+            Some(*roots_accepted_at_ns),
+            root_batch_count,
         ),
         FleetComponentProvisioningStateRecord::ProvisioningRoots {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => (
+        } => root_acceptance_progress_from_parts(
             *planned_at_ns,
             FleetComponentProvisioningPhase::ProvisioningRoots,
-            acceptances.clone(),
+            acceptances,
             None,
             Some(*roots_accepted_at_ns),
+            root_batch_count,
         ),
         FleetComponentProvisioningStateRecord::ComponentsProvisioned {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => (
+        } => root_acceptance_progress_from_parts(
             *planned_at_ns,
             FleetComponentProvisioningPhase::ComponentsProvisioned,
-            acceptances.clone(),
+            acceptances,
             None,
             Some(*roots_accepted_at_ns),
+            root_batch_count,
         ),
         FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => (
+        } => root_acceptance_progress_from_parts(
             *planned_at_ns,
             FleetComponentProvisioningPhase::ServiceTopologyPublished,
-            acceptances.clone(),
+            acceptances,
             None,
             Some(*roots_accepted_at_ns),
+            root_batch_count,
         ),
-    };
+    }
+}
+
+fn root_acceptance_progress_from_parts(
+    planned_at_ns: u64,
+    phase: FleetComponentProvisioningPhase,
+    acceptances: &[FleetComponentProvisioningRootAcceptanceRecord],
+    in_flight: Option<FleetComponentProvisioningRootAcceptanceIntentRecord>,
+    roots_accepted_at_ns: Option<u64>,
+    root_batch_count: u32,
+) -> Result<FleetComponentProvisioningRootAcceptanceProgress, InternalError> {
     let accepted_root_count = u32::try_from(acceptances.len())
         .map_err(|_| receipt_invariant("accepted root count does not fit u32"))?;
     Ok(FleetComponentProvisioningRootAcceptanceProgress {
         planned_at_ns,
         phase,
-        acceptances,
+        acceptances: acceptances.to_vec(),
         accepted_root_count,
         root_batch_count,
         in_flight,
@@ -1828,39 +2293,36 @@ fn component_provisioning_root_acceptance_progress(
     })
 }
 
+fn planned_root_acceptance_progress(
+    planned_at_ns: u64,
+    root_batch_count: u32,
+) -> Result<FleetComponentProvisioningRootAcceptanceProgress, InternalError> {
+    root_acceptance_progress_from_parts(
+        planned_at_ns,
+        FleetComponentProvisioningPhase::Planned,
+        &[],
+        None,
+        None,
+        root_batch_count,
+    )
+}
+
 fn component_provisioning_root_provision_progress(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<FleetComponentProvisioningRootProvisionProgress, InternalError> {
-    let progress = match &record.state {
+    match &record.state {
         FleetComponentProvisioningStateRecord::Planned { .. }
         | FleetComponentProvisioningStateRecord::AcceptingRoots { .. } => {
-            FleetComponentProvisioningRootProvisionProgress {
-                provisions: Vec::new(),
-                provisioned_root_count: 0,
-                current: None,
-                current_response: None,
-                in_flight: None,
-                roots_accepted_at_ns: None,
-                components_provisioned_at_ns: None,
-                published_fleet_registry: None,
-                service_topology_published_at_ns: None,
-            }
+            Ok(empty_root_provision_progress())
         }
         FleetComponentProvisioningStateRecord::RootsAccepted {
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => FleetComponentProvisioningRootProvisionProgress {
-            provisions: Vec::new(),
-            provisioned_root_count: 0,
-            current: None,
-            current_response: acceptances.first().map(|record| record.response.clone()),
-            in_flight: None,
-            roots_accepted_at_ns: Some(*roots_accepted_at_ns),
-            components_provisioned_at_ns: None,
-            published_fleet_registry: None,
-            service_topology_published_at_ns: None,
-        },
+        } => Ok(accepted_root_provision_progress(
+            acceptances,
+            *roots_accepted_at_ns,
+        )),
         FleetComponentProvisioningStateRecord::ProvisioningRoots {
             acceptances,
             roots_accepted_at_ns,
@@ -1868,46 +2330,24 @@ fn component_provisioning_root_provision_progress(
             current,
             in_flight,
             ..
-        } => {
-            let provisioned_root_count = u32::try_from(provisions.len())
-                .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?;
-            let current_response = current.as_deref().map_or_else(
-                || {
-                    acceptances
-                        .get(provisions.len())
-                        .map(|record| record.response.clone())
-                },
-                |record| Some(record.response.clone()),
-            );
-            FleetComponentProvisioningRootProvisionProgress {
-                provisions: provisions.clone(),
-                provisioned_root_count,
-                current: current.as_deref().cloned(),
-                current_response,
-                in_flight: in_flight.clone(),
-                roots_accepted_at_ns: Some(*roots_accepted_at_ns),
-                components_provisioned_at_ns: None,
-                published_fleet_registry: None,
-                service_topology_published_at_ns: None,
-            }
-        }
+        } => active_root_provision_progress(
+            acceptances,
+            *roots_accepted_at_ns,
+            provisions,
+            current.as_deref(),
+            in_flight.as_ref(),
+        ),
         FleetComponentProvisioningStateRecord::ComponentsProvisioned {
             roots_accepted_at_ns,
             provisions,
             components_provisioned_at_ns,
             ..
-        } => FleetComponentProvisioningRootProvisionProgress {
-            provisioned_root_count: u32::try_from(provisions.len())
-                .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?,
-            provisions: provisions.clone(),
-            current: None,
-            current_response: None,
-            in_flight: None,
-            roots_accepted_at_ns: Some(*roots_accepted_at_ns),
-            components_provisioned_at_ns: Some(*components_provisioned_at_ns),
-            published_fleet_registry: None,
-            service_topology_published_at_ns: None,
-        },
+        } => terminal_root_provision_progress(
+            provisions,
+            *roots_accepted_at_ns,
+            *components_provisioned_at_ns,
+            None,
+        ),
         FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
             roots_accepted_at_ns,
             provisions,
@@ -1915,20 +2355,293 @@ fn component_provisioning_root_provision_progress(
             published_fleet_registry,
             service_topology_published_at_ns,
             ..
-        } => FleetComponentProvisioningRootProvisionProgress {
-            provisioned_root_count: u32::try_from(provisions.len())
-                .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?,
-            provisions: provisions.clone(),
-            current: None,
-            current_response: None,
-            in_flight: None,
-            roots_accepted_at_ns: Some(*roots_accepted_at_ns),
-            components_provisioned_at_ns: Some(*components_provisioned_at_ns),
-            published_fleet_registry: Some(published_fleet_registry.clone()),
-            service_topology_published_at_ns: Some(*service_topology_published_at_ns),
+        }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        } => terminal_root_provision_progress(
+            provisions,
+            *roots_accepted_at_ns,
+            *components_provisioned_at_ns,
+            Some((published_fleet_registry, *service_topology_published_at_ns)),
+        ),
+    }
+}
+
+const fn empty_root_provision_progress() -> FleetComponentProvisioningRootProvisionProgress {
+    FleetComponentProvisioningRootProvisionProgress {
+        provisions: Vec::new(),
+        provisioned_root_count: 0,
+        current: None,
+        current_response: None,
+        in_flight: None,
+        roots_accepted_at_ns: None,
+        components_provisioned_at_ns: None,
+        published_fleet_registry: None,
+        service_topology_published_at_ns: None,
+    }
+}
+
+fn accepted_root_provision_progress(
+    acceptances: &[FleetComponentProvisioningRootAcceptanceRecord],
+    roots_accepted_at_ns: u64,
+) -> FleetComponentProvisioningRootProvisionProgress {
+    FleetComponentProvisioningRootProvisionProgress {
+        current_response: acceptances.first().map(|record| record.response.clone()),
+        roots_accepted_at_ns: Some(roots_accepted_at_ns),
+        ..empty_root_provision_progress()
+    }
+}
+
+fn active_root_provision_progress(
+    acceptances: &[FleetComponentProvisioningRootAcceptanceRecord],
+    roots_accepted_at_ns: u64,
+    provisions: &[FleetComponentProvisioningRootProvisionRecord],
+    current: Option<&FleetComponentProvisioningRootProvisionRecord>,
+    in_flight: Option<&FleetComponentProvisioningRootProvisionIntentRecord>,
+) -> Result<FleetComponentProvisioningRootProvisionProgress, InternalError> {
+    let provisioned_root_count = u32::try_from(provisions.len())
+        .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?;
+    let current_response = current.map_or_else(
+        || {
+            acceptances
+                .get(provisions.len())
+                .map(|record| record.response.clone())
         },
+        |record| Some(record.response.clone()),
+    );
+    Ok(FleetComponentProvisioningRootProvisionProgress {
+        provisions: provisions.to_vec(),
+        provisioned_root_count,
+        current: current.cloned(),
+        current_response,
+        in_flight: in_flight.cloned(),
+        roots_accepted_at_ns: Some(roots_accepted_at_ns),
+        components_provisioned_at_ns: None,
+        published_fleet_registry: None,
+        service_topology_published_at_ns: None,
+    })
+}
+
+fn terminal_root_provision_progress(
+    provisions: &[FleetComponentProvisioningRootProvisionRecord],
+    roots_accepted_at_ns: u64,
+    components_provisioned_at_ns: u64,
+    publication: Option<(&FleetRegistryVersion, u64)>,
+) -> Result<FleetComponentProvisioningRootProvisionProgress, InternalError> {
+    let provisioned_root_count = u32::try_from(provisions.len())
+        .map_err(|_| receipt_invariant("provisioned root count does not fit u32"))?;
+    Ok(FleetComponentProvisioningRootProvisionProgress {
+        provisions: provisions.to_vec(),
+        provisioned_root_count,
+        current: None,
+        current_response: None,
+        in_flight: None,
+        roots_accepted_at_ns: Some(roots_accepted_at_ns),
+        components_provisioned_at_ns: Some(components_provisioned_at_ns),
+        published_fleet_registry: publication.map(|(version, _)| version.clone()),
+        service_topology_published_at_ns: publication.map(|(_, published_at_ns)| published_at_ns),
+    })
+}
+
+fn component_directory_confirmation_progress(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<FleetComponentDirectoryConfirmationProgress, InternalError> {
+    let confirmation_root_count = u32::try_from(record.plan.directory_confirmation_roots.len())
+        .map_err(|_| receipt_invariant("Directory confirmation root count does not fit u32"))?;
+    let progress = match &record.state {
+        FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+        } => FleetComponentDirectoryConfirmationProgress {
+            planned_at_ns: *planned_at_ns,
+            acceptances: acceptances.clone(),
+            roots_accepted_at_ns: *roots_accepted_at_ns,
+            provisions: provisions.clone(),
+            components_provisioned_at_ns: *components_provisioned_at_ns,
+            published_fleet_registry: published_fleet_registry.clone(),
+            service_topology_published_at_ns: *service_topology_published_at_ns,
+            confirmations: vec![],
+            confirmed_root_count: 0,
+            confirmation_root_count,
+            current: None,
+            in_flight: None,
+            complete: false,
+        },
+        FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            current,
+            in_flight,
+        } => FleetComponentDirectoryConfirmationProgress {
+            planned_at_ns: *planned_at_ns,
+            acceptances: acceptances.clone(),
+            roots_accepted_at_ns: *roots_accepted_at_ns,
+            provisions: provisions.clone(),
+            components_provisioned_at_ns: *components_provisioned_at_ns,
+            published_fleet_registry: published_fleet_registry.clone(),
+            service_topology_published_at_ns: *service_topology_published_at_ns,
+            confirmations: confirmations.clone(),
+            confirmed_root_count: u32::try_from(confirmations.len())
+                .map_err(|_| receipt_invariant("Directory confirmation count does not fit u32"))?,
+            confirmation_root_count,
+            current: current.as_deref().cloned(),
+            in_flight: in_flight.as_deref().cloned(),
+            complete: false,
+        },
+        FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            ..
+        } => FleetComponentDirectoryConfirmationProgress {
+            planned_at_ns: *planned_at_ns,
+            acceptances: acceptances.clone(),
+            roots_accepted_at_ns: *roots_accepted_at_ns,
+            provisions: provisions.clone(),
+            components_provisioned_at_ns: *components_provisioned_at_ns,
+            published_fleet_registry: published_fleet_registry.clone(),
+            service_topology_published_at_ns: *service_topology_published_at_ns,
+            confirmations: confirmations.clone(),
+            confirmed_root_count: u32::try_from(confirmations.len())
+                .map_err(|_| receipt_invariant("Directory confirmation count does not fit u32"))?,
+            confirmation_root_count,
+            current: None,
+            in_flight: None,
+            complete: true,
+        },
+        _ => {
+            return Err(InternalError::conflict(
+                "Directory confirmation requires published Fleet-service topology",
+            ));
+        }
     };
     Ok(progress)
+}
+
+fn classify_directory_confirmation_advance(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+) -> Result<DirectoryConfirmationAdvance, InternalError> {
+    if progress.complete {
+        let current_is_exact = request.expected_directory_confirmed_root_count
+            == progress.confirmed_root_count
+            && request.expected_current_publication.is_none();
+        let replays_terminal_call = terminal_directory_confirmation_replay(request, progress)?;
+        return if current_is_exact || replays_terminal_call {
+            Ok(DirectoryConfirmationAdvance::Current)
+        } else {
+            Err(InternalError::conflict(
+                "Directory confirmation cursor differs from terminal progress",
+            ))
+        };
+    }
+    if request.expected_directory_confirmed_root_count < progress.confirmed_root_count {
+        return if request
+            .expected_directory_confirmed_root_count
+            .checked_add(1)
+            == Some(progress.confirmed_root_count)
+        {
+            Ok(DirectoryConfirmationAdvance::Current)
+        } else {
+            Err(InternalError::conflict(
+                "Directory confirmation root cursor differs from durable progress",
+            ))
+        };
+    }
+    if request.expected_directory_confirmed_root_count != progress.confirmed_root_count {
+        return Err(InternalError::conflict(
+            "Directory confirmation root cursor differs from durable progress",
+        ));
+    }
+    let actual_current = progress
+        .current
+        .as_ref()
+        .map(|record| root_publication_progress(&record.response));
+    if request.expected_current_publication != actual_current {
+        let replays_last = match (&request.expected_current_publication, &actual_current) {
+            (Some(expected), Some(actual)) => {
+                expected.fleet_subnet_root == actual.fleet_subnet_root
+                    && expected.component_count == actual.component_count
+                    && expected.published_component_count.checked_add(1)
+                        == Some(actual.published_component_count)
+            }
+            _ => false,
+        };
+        if replays_last {
+            return Ok(DirectoryConfirmationAdvance::Current);
+        }
+        return Err(InternalError::conflict(
+            "Directory confirmation Component cursor differs from durable progress",
+        ));
+    }
+    if progress.in_flight.is_some() {
+        Ok(DirectoryConfirmationAdvance::Reconcile)
+    } else {
+        Ok(DirectoryConfirmationAdvance::Begin)
+    }
+}
+
+fn terminal_directory_confirmation_replay(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+) -> Result<bool, InternalError> {
+    if request
+        .expected_directory_confirmed_root_count
+        .checked_add(1)
+        != Some(progress.confirmed_root_count)
+    {
+        return Ok(false);
+    }
+    let terminal = progress
+        .confirmations
+        .last()
+        .ok_or_else(|| receipt_invariant("terminal Directory confirmation lacks a root receipt"))?;
+    let terminal_progress = root_publication_progress(&terminal.response);
+    Ok(request
+        .expected_current_publication
+        .as_ref()
+        .map_or(terminal_progress.component_count == 0, |expected| {
+            expected == &terminal_progress
+        }))
+}
+
+const fn root_publication_progress(
+    response: &RootComponentProvisioningStatusResponse,
+) -> FleetComponentPublicationRootProgress {
+    FleetComponentPublicationRootProgress {
+        fleet_subnet_root: response.fleet_subnet_root,
+        component_count: response.component_count,
+        published_component_count: response.published_component_count,
+    }
 }
 
 const fn root_provisioning_progress(
@@ -2115,6 +2828,351 @@ const fn root_provision_call_from_intent(
     }
 }
 
+fn confirmation_root(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+) -> Result<Principal, InternalError> {
+    let index = usize::try_from(root_index)
+        .map_err(|_| receipt_invariant("Directory confirmation root index exceeds usize"))?;
+    let root = *record
+        .plan
+        .directory_confirmation_roots
+        .get(index)
+        .ok_or_else(|| receipt_invariant("Directory confirmation root index is out of bounds"))?;
+    let batch =
+        record.plan.batches.get(index).ok_or_else(|| {
+            receipt_invariant("Directory confirmation root has no selected batch")
+        })?;
+    if batch.root.fleet_subnet_root != root {
+        return Err(receipt_invariant(
+            "fresh Directory confirmation roots differ from selected batch order",
+        ));
+    }
+    Ok(root)
+}
+
+fn directory_confirmation_call_from_intent(
+    intent: &FleetComponentDirectoryConfirmationIntentRecord,
+) -> FleetComponentDirectoryConfirmationCallView {
+    FleetComponentDirectoryConfirmationCallView {
+        fleet_subnet_root: intent.fleet_subnet_root,
+        request: intent.request.clone(),
+    }
+}
+
+fn root_provisioned_response(
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    root_index: u32,
+) -> Result<&RootComponentProvisioningStatusResponse, InternalError> {
+    let index = usize::try_from(root_index)
+        .map_err(|_| receipt_invariant("Directory confirmation root index exceeds usize"))?;
+    progress
+        .provisions
+        .get(index)
+        .map(|record| &record.response)
+        .ok_or_else(|| receipt_invariant("Directory confirmation lacks root provisioning"))
+}
+
+fn expected_fleet_directory_content_hash(
+    current: &FleetCoordinatorRegistryRecord,
+    root: Principal,
+) -> Result<[u8; 32], InternalError> {
+    let directory = FleetRegistryOps::directory_for_root(
+        &current.registry.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &current.registry,
+        root,
+    )?;
+    RootComponentProvisioningReceiptOps::fleet_directory_content_hash(&directory)
+}
+
+fn validate_directory_confirmation_response(
+    record: &FleetComponentProvisioningRecord,
+    published_registry: &FleetRegistryVersion,
+    root: Principal,
+    expected_fleet_directory_content_hash: [u8; 32],
+    previous: &RootComponentProvisioningStatusResponse,
+    response: &RootComponentProvisioningStatusResponse,
+    recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    let batch = record
+        .plan
+        .batches
+        .iter()
+        .find(|batch| batch.root.fleet_subnet_root == root)
+        .ok_or_else(|| receipt_invariant("Directory confirmation root has no planned batch"))?;
+    let expected_authority = RootDirectoryConfirmationAuthority::expected(record, root, previous);
+    if RootDirectoryConfirmationAuthority::observed(response) != expected_authority {
+        return Err(InternalError::conflict(
+            "Directory confirmation response changed protected provisioning authority",
+        ));
+    }
+    let count_advances = response.published_component_count == previous.published_component_count
+        || previous.published_component_count.checked_add(1)
+            == Some(response.published_component_count);
+    if !count_advances || response.published_component_count > response.component_count {
+        return Err(InternalError::conflict(
+            "Directory confirmation response skipped its bounded Component cursor",
+        ));
+    }
+    let publication = response.publication.as_ref().ok_or_else(|| {
+        InternalError::conflict("Directory confirmation response lacks publication evidence")
+    })?;
+    if &publication.fleet_registry != published_registry
+        || publication.fleet_directory_content_hash != expected_fleet_directory_content_hash
+    {
+        return Err(InternalError::conflict(
+            "Directory confirmation response names different Fleet publication authority",
+        ));
+    }
+    validate_root_publication_evidence(record, batch, response, publication)?;
+    match response.phase {
+        RootComponentProvisioningPhase::Provisioned => {
+            if response.published_at_ns.is_some()
+                || response.receipt_content_hash != previous.receipt_content_hash
+            {
+                return Err(InternalError::conflict(
+                    "in-progress Directory confirmation changed terminal receipt evidence",
+                ));
+            }
+        }
+        RootComponentProvisioningPhase::Published => {
+            let result = response.result.as_ref().ok_or_else(|| {
+                receipt_invariant("Published Directory confirmation lacks provisioned result")
+            })?;
+            let provisioned_at_ns = response.provisioned_at_ns.ok_or_else(|| {
+                receipt_invariant("Published Directory confirmation lacks provisioning time")
+            })?;
+            let published_at_ns = response.published_at_ns.ok_or_else(|| {
+                receipt_invariant("Published Directory confirmation lacks publication time")
+            })?;
+            if response.published_component_count != response.component_count
+                || published_at_ns < provisioned_at_ns
+                || recorded_at_ns < published_at_ns
+            {
+                return Err(InternalError::conflict(
+                    "Published Directory confirmation has invalid terminal progress",
+                ));
+            }
+            let expected = RootComponentProvisioningReceiptOps::published_content_hash(
+                RootComponentProvisioningPublishedReceiptAuthority {
+                    operation_id: record.operation_id,
+                    plan_hash: record.plan_hash,
+                    configuration_digest: record.plan.configuration_digest,
+                    root: &batch.root,
+                    result,
+                    publication,
+                    accepted_at_ns: response.accepted_at_ns,
+                    provisioned_at_ns,
+                    published_at_ns,
+                },
+            )?;
+            if response.receipt_content_hash != expected {
+                return Err(InternalError::conflict(
+                    "Published Directory confirmation receipt hash is invalid",
+                ));
+            }
+        }
+        _ => {
+            return Err(InternalError::conflict(
+                "Directory confirmation response has an invalid root phase",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Eq, PartialEq)]
+struct RootDirectoryConfirmationCounts {
+    placements: u32,
+    components: u32,
+    reserved: u32,
+    claimed: u32,
+    installed: u32,
+    registry_committed: u32,
+}
+
+#[derive(Eq, PartialEq)]
+struct RootDirectoryConfirmationAuthority<'a> {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    configuration_digest: &'a ComponentDeploymentConfigurationDigest,
+    fleet_registry: &'a FleetRegistryVersion,
+    fleet_subnet_root: Principal,
+    counts: RootDirectoryConfirmationCounts,
+    result: &'a Option<canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
+    accepted_at_ns: u64,
+    provisioned_at_ns: Option<u64>,
+}
+
+impl<'a> RootDirectoryConfirmationAuthority<'a> {
+    const fn expected(
+        record: &'a FleetComponentProvisioningRecord,
+        root: Principal,
+        previous: &'a RootComponentProvisioningStatusResponse,
+    ) -> Self {
+        Self {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            configuration_digest: &record.plan.configuration_digest,
+            fleet_registry: &record.plan.fleet_registry,
+            fleet_subnet_root: root,
+            counts: RootDirectoryConfirmationCounts::from_response(previous),
+            result: &previous.result,
+            accepted_at_ns: previous.accepted_at_ns,
+            provisioned_at_ns: previous.provisioned_at_ns,
+        }
+    }
+
+    const fn observed(response: &'a RootComponentProvisioningStatusResponse) -> Self {
+        Self {
+            operation_id: response.operation_id,
+            plan_hash: response.plan_hash,
+            configuration_digest: &response.configuration_digest,
+            fleet_registry: &response.fleet_registry,
+            fleet_subnet_root: response.fleet_subnet_root,
+            counts: RootDirectoryConfirmationCounts::from_response(response),
+            result: &response.result,
+            accepted_at_ns: response.accepted_at_ns,
+            provisioned_at_ns: response.provisioned_at_ns,
+        }
+    }
+}
+
+impl RootDirectoryConfirmationCounts {
+    const fn from_response(response: &RootComponentProvisioningStatusResponse) -> Self {
+        Self {
+            placements: response.placement_count,
+            components: response.component_count,
+            reserved: response.reserved_component_count,
+            claimed: response.claimed_component_count,
+            installed: response.installed_component_count,
+            registry_committed: response.registry_committed_component_count,
+        }
+    }
+}
+
+fn validate_root_publication_evidence(
+    record: &FleetComponentProvisioningRecord,
+    batch: &FleetSubnetRootProvisioningBatch,
+    response: &RootComponentProvisioningStatusResponse,
+    publication: &canic_core::dto::component_provisioning::RootComponentPublicationEvidence,
+) -> Result<(), InternalError> {
+    let result = response
+        .result
+        .as_ref()
+        .ok_or_else(|| receipt_invariant("Directory confirmation lacks its provisioned result"))?;
+    if publication.component_directories.len()
+        != usize::try_from(response.published_component_count)
+            .map_err(|_| receipt_invariant("published Component count exceeds usize"))?
+        || publication.component_group_directories.len() != result.placements.len()
+    {
+        return Err(InternalError::conflict(
+            "Directory confirmation evidence count differs from root progress",
+        ));
+    }
+    for (member, evidence) in result
+        .placements
+        .iter()
+        .flat_map(|placement| &placement.members)
+        .zip(&publication.component_directories)
+    {
+        if evidence.component != member.binding.component
+            || evidence.content_hash != member.component_registry_content_hash
+        {
+            return Err(InternalError::conflict(
+                "Component Directory publication evidence differs from Registry authority",
+            ));
+        }
+    }
+    for (index, (planned, provisioned)) in
+        batch.placements.iter().zip(&result.placements).enumerate()
+    {
+        let evidence = &publication.component_group_directories[index];
+        let directory =
+            component_group_directory_from_receipt(record, batch, planned, provisioned)?;
+        let expected_hash =
+            RootComponentProvisioningReceiptOps::component_group_directory_content_hash(
+                &directory,
+            )?;
+        if evidence.group_placement != provisioned.group_placement
+            || evidence.content_hash != expected_hash
+        {
+            return Err(InternalError::conflict(
+                "Component Group Directory publication evidence is invalid",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn component_group_directory_from_receipt(
+    record: &FleetComponentProvisioningRecord,
+    batch: &FleetSubnetRootProvisioningBatch,
+    planned: &canic_core::dto::component_provisioning::ComponentGroupPlacementPlan,
+    provisioned: &canic_core::dto::component_provisioning::RootProvisionedGroupPlacement,
+) -> Result<canic_core::dto::component_provisioning::ComponentGroupDirectory, InternalError> {
+    let placement_matches = [
+        planned.group_placement == provisioned.group_placement,
+        planned.component_group == provisioned.component_group,
+        planned.entries.len() == provisioned.members.len(),
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !placement_matches {
+        return Err(receipt_invariant(
+            "Component Group Directory plan differs from provisioned placement",
+        ));
+    }
+    let members = planned
+        .entries
+        .iter()
+        .zip(&provisioned.members)
+        .map(|(entry, member)| {
+            if entry.member_path != member.member_path
+                || entry.component_spec != member.component_spec
+                || entry.purpose != member.purpose
+            {
+                return Err(receipt_invariant(
+                    "Component Group Directory member differs from planned occurrence",
+                ));
+            }
+            Ok(
+                canic_core::dto::component_provisioning::ComponentGroupDirectoryMember {
+                    member_path: member.member_path.clone(),
+                    component_spec: member.component_spec.clone(),
+                    purpose: member.purpose.clone(),
+                    labels: entry.labels.clone(),
+                    binding: member.binding.clone(),
+                },
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(
+        canic_core::dto::component_provisioning::ComponentGroupDirectory {
+            provenance:
+                canic_core::dto::component_provisioning::ComponentGroupDirectoryProvenance {
+                    authority: batch.root.authority.clone(),
+                    fleet_subnet_root: batch.root.fleet_subnet_root,
+                    group_placement: provisioned.group_placement.clone(),
+                    component_group: provisioned.component_group.clone(),
+                    operation_id: record.operation_id,
+                    plan_hash: record.plan_hash,
+                    placement_receipt_content_hash:
+                        RootComponentProvisioningReceiptOps::group_placement_content_hash(
+                            record.operation_id,
+                            record.plan_hash,
+                            &batch.root,
+                            provisioned,
+                        )?,
+                },
+            members,
+        },
+    )
+}
+
 fn root_provision_previous_observed_at(
     progress: &FleetComponentProvisioningRootProvisionProgress,
 ) -> Result<u64, InternalError> {
@@ -2190,13 +3248,7 @@ fn classify_root_acceptance_advance(
 ) -> Result<RootAcceptanceAdvance, InternalError> {
     if request.expected_accepted_root_count == progress.accepted_root_count {
         if progress.accepted_root_count == progress.root_batch_count
-            && matches!(
-                progress.phase,
-                FleetComponentProvisioningPhase::RootsAccepted
-                    | FleetComponentProvisioningPhase::ProvisioningRoots
-                    | FleetComponentProvisioningPhase::ComponentsProvisioned
-                    | FleetComponentProvisioningPhase::ServiceTopologyPublished
-            )
+            && progress.roots_accepted_at_ns.is_some()
         {
             return Ok(RootAcceptanceAdvance::Current);
         }
@@ -2368,7 +3420,9 @@ fn validate_root_acceptance_phase(
         }
         FleetComponentProvisioningPhase::ProvisioningRoots
         | FleetComponentProvisioningPhase::ComponentsProvisioned
-        | FleetComponentProvisioningPhase::ServiceTopologyPublished => {
+        | FleetComponentProvisioningPhase::ServiceTopologyPublished
+        | FleetComponentProvisioningPhase::ConfirmingDirectories
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {
             if progress.accepted_root_count != progress.root_batch_count {
                 return Err(receipt_invariant(
                     "Fleet Component post-acceptance state lacks complete root evidence",
@@ -2654,7 +3708,9 @@ fn validate_component_provisioning_root_provision_state(
         }
         FleetComponentProvisioningPhase::ProvisioningRoots
         | FleetComponentProvisioningPhase::ComponentsProvisioned
-        | FleetComponentProvisioningPhase::ServiceTopologyPublished => {}
+        | FleetComponentProvisioningPhase::ServiceTopologyPublished
+        | FleetComponentProvisioningPhase::ConfirmingDirectories
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {}
     }
     let roots_accepted_at_ns = progress.roots_accepted_at_ns.ok_or_else(|| {
         receipt_invariant("root provisioning state lacks RootsAccepted time authority")
@@ -2683,7 +3739,9 @@ fn validate_component_provisioning_root_provision_state(
             }
         }
         FleetComponentProvisioningPhase::ComponentsProvisioned
-        | FleetComponentProvisioningPhase::ServiceTopologyPublished => {
+        | FleetComponentProvisioningPhase::ServiceTopologyPublished
+        | FleetComponentProvisioningPhase::ConfirmingDirectories
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {
             validate_terminal_component_provisioning(
                 configuration,
                 source_registry,
@@ -2755,7 +3813,9 @@ fn validate_service_publication_progress(
                 ));
             }
         }
-        FleetComponentProvisioningPhase::ServiceTopologyPublished => {
+        FleetComponentProvisioningPhase::ServiceTopologyPublished
+        | FleetComponentProvisioningPhase::ConfirmingDirectories
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {
             let published_at_ns = progress.service_topology_published_at_ns.ok_or_else(|| {
                 receipt_invariant("ServiceTopologyPublished time evidence is absent")
             })?;
