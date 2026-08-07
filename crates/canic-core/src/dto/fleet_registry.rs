@@ -109,6 +109,7 @@ pub struct FleetRegistry {
     pub revision: u64,
     pub component_specs: Vec<FleetComponentSpecEntry>,
     pub fleet_subnet_roots: Vec<FleetSubnetRootEntry>,
+    pub services: Vec<FleetServiceBinding>,
 }
 
 ///

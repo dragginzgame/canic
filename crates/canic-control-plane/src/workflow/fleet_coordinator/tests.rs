@@ -8,12 +8,16 @@ use crate::storage::stable::fleet_coordinator::{
     FleetCoordinatorRegistryData, FleetCoordinatorRegistryStore,
 };
 use canic_core::{
-    bootstrap::parse_config_model,
+    bootstrap::{
+        compiled::{FleetServiceMemberPurpose, FleetServicePlacementPolicy},
+        parse_config_model,
+    },
     cdk::types::Cycles,
     dto::{
         error::ErrorCode,
         fleet_registry::{
-            FleetRegistryActivationRequest, FleetSubnetRootDeletionCompletionRequest,
+            FleetRegistryActivationRequest, FleetServiceBinding, FleetServiceComponentBinding,
+            FleetServiceMode, FleetSubnetRootDeletionCompletionRequest,
             FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionReadinessIntentRequest,
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionStatusRequest,
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootEntry,
@@ -26,8 +30,10 @@ use canic_core::{
         },
     },
     ids::{
-        AppId, CanonicalNetworkId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
+        AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
+        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId,
+        ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
@@ -211,6 +217,271 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
         .expect_err("reject corrupted historical receipt");
     assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+}
+
+#[test]
+fn initial_service_publication_commits_registry_and_receipt_atomically() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(40);
+    let (first, second, active_version) = activate_two_roots(coordinator);
+    let service = FleetServiceBinding {
+        service: "projects".parse().expect("service ID"),
+        role: "project".parse().expect("role"),
+        component_spec: "projects".parse().expect("Component Spec ID"),
+        mode: FleetServiceMode::AuthorityReplica,
+        placement: FleetServicePlacementPolicy {
+            maximum_members_per_root: 1,
+            minimum_distinct_roots: 2,
+        },
+        members: vec![
+            service_member(
+                FleetServiceMemberPurpose::Authority,
+                41,
+                first.fleet_subnet_root,
+                51,
+                "authority",
+            ),
+            service_member(
+                FleetServiceMemberPurpose::Replica,
+                42,
+                second.fleet_subnet_root,
+                52,
+                "replica",
+            ),
+        ],
+    };
+    let operation_id = [43; 32];
+    let plan_hash = [44; 32];
+    let configuration_digest = ComponentDeploymentConfigurationDigest::from_bytes([45; 32]);
+    let receipt_hashes = vec![[46; 32], [47; 32]];
+
+    let published =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::commit_compiled_initial_services_for_test(
+            active_version.clone(),
+            operation_id,
+            plan_hash,
+            configuration_digest,
+            receipt_hashes.clone(),
+            vec![service.clone()],
+        )
+        .expect("commit complete initial service set");
+    assert_eq!(published.revision, active_version.revision + 1);
+    let durable = FleetCoordinatorRegistryStore::export();
+    let current = durable.current.as_ref().expect("Coordinator state");
+    assert_eq!(current.registry.services, vec![service.clone()]);
+    assert_eq!(
+        current
+            .service_publication_receipt
+            .as_ref()
+            .expect("service publication receipt")
+            .version,
+        published
+    );
+
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::commit_compiled_initial_services_for_test(
+            active_version.clone(),
+            operation_id,
+            plan_hash,
+            configuration_digest,
+            receipt_hashes,
+            vec![service],
+        )
+        .expect("exact publication retry after restart"),
+        published
+    );
+    let conflict =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::commit_compiled_initial_services_for_test(
+            active_version,
+            operation_id,
+            plan_hash,
+            configuration_digest,
+            vec![[48; 32], [47; 32]],
+            current.registry.services.clone(),
+        )
+        .expect_err("conflicting root receipt evidence must not replay");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+
+    let mut corrupted = durable;
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .service_publication_receipt
+        .as_mut()
+        .expect("service receipt")
+        .version
+        .content_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
+        .expect_err("corrupted service publication history must fail closed");
+    assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+}
+
+#[test]
+fn service_publication_history_precedes_later_unrelated_root_draining() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (first, second, active_version) = activate_two_roots(principal(70));
+    let service = FleetServiceBinding {
+        service: "projects".parse().expect("service ID"),
+        role: "project".parse().expect("role"),
+        component_spec: "projects".parse().expect("Component Spec ID"),
+        mode: FleetServiceMode::AuthorityReplica,
+        placement: FleetServicePlacementPolicy {
+            maximum_members_per_root: 1,
+            minimum_distinct_roots: 1,
+        },
+        members: vec![service_member(
+            FleetServiceMemberPurpose::Authority,
+            71,
+            first.fleet_subnet_root,
+            72,
+            "authority",
+        )],
+    };
+    let published =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::commit_compiled_initial_services_for_test(
+            active_version,
+            [73; 32],
+            [74; 32],
+            ComponentDeploymentConfigurationDigest::from_bytes([75; 32]),
+            vec![[76; 32], [77; 32]],
+            vec![service.clone()],
+        )
+        .expect("publish service topology");
+    let draining = FleetCoordinatorWorkflow::publish_root_draining(
+        FleetSubnetRootDrainingPublicationRequest {
+            expected_registry: published.clone(),
+            root_draining: FleetSubnetRootDrainingResponse {
+                operation_id: [78; 32],
+                fleet_subnet_root: second.fleet_subnet_root,
+                placement_subnet: second.placement_subnet,
+                active_registry: published.clone(),
+                component_topology_digest: second.component_topology_digest,
+                active_release_set: second.active_release_set,
+                next_allocation_sequence: 1,
+                reserved_component_instances: 0,
+                committed_component_instances: 0,
+                managed_descendants: 0,
+                known_created_component_canisters: 0,
+                root_registry_encoded_bytes: 0,
+                started_at_ns: 79,
+            },
+        },
+    )
+    .expect("drain root outside the published service");
+    assert_eq!(draining.previous_version, published);
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable);
+    let registry = FleetCoordinatorWorkflow::registry().expect("reconstructed Registry history");
+    assert_eq!(registry.services, vec![service]);
+    assert_eq!(
+        registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|root| root.fleet_subnet_root == second.fleet_subnet_root)
+            .expect("unrelated root")
+            .status,
+        FleetSubnetRootStatus::Draining
+    );
+}
+
+#[test]
+fn ordinary_only_provisioning_records_publication_without_registry_mutation() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (_, _, active_version) = activate_two_roots(principal(80));
+
+    let observed =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::commit_compiled_initial_services_for_test(
+            active_version.clone(),
+            [81; 32],
+            [82; 32],
+            ComponentDeploymentConfigurationDigest::from_bytes([83; 32]),
+            vec![[84; 32], [85; 32]],
+            Vec::new(),
+        )
+        .expect("record service-free publication boundary");
+
+    assert_eq!(observed, active_version);
+    let current = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("Coordinator state");
+    assert!(current.registry.services.is_empty());
+    assert!(
+        current
+            .service_publication_receipt
+            .expect("publication receipt")
+            .services
+            .is_empty()
+    );
+}
+
+fn activate_two_roots(
+    coordinator: Principal,
+) -> (
+    FleetSubnetRootEntry,
+    FleetSubnetRootEntry,
+    FleetRegistryVersion,
+) {
+    let args = init_args(coordinator);
+    let topology = args.component_topology.clone();
+    FleetCoordinatorWorkflow::initialize(args, principal(60), true, coordinator)
+        .expect("commit genesis");
+    let first = joining_entry(&topology, 61, 62, 1);
+    let second = joining_entry(&topology, 63, 64, 1);
+    let first_join = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
+        expected_registry: FleetCoordinatorWorkflow::version().expect("genesis version"),
+        entry: first.clone(),
+    })
+    .expect("join first root");
+    let second_join = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
+        expected_registry: first_join.version,
+        entry: second.clone(),
+    })
+    .expect("join second root");
+    for root in [&first, &second] {
+        FleetCoordinatorWorkflow::acknowledge_root_snapshot(
+            root.fleet_subnet_root,
+            canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
+                version: second_join.version.clone(),
+            },
+        )
+        .expect("acknowledge joining snapshot");
+    }
+    let active = FleetCoordinatorWorkflow::activate_registry(FleetRegistryActivationRequest {
+        expected_registry: second_join.version,
+    })
+    .expect("activate roots");
+    (first, second, active.version)
+}
+
+fn service_member(
+    member_purpose: FleetServiceMemberPurpose,
+    component_byte: u8,
+    fleet_subnet_root: Principal,
+    canister_byte: u8,
+    deployment: &str,
+) -> FleetServiceComponentBinding {
+    FleetServiceComponentBinding {
+        member_purpose,
+        component: ComponentInstanceId::from_generated_bytes([component_byte; 32]),
+        fleet_subnet_root,
+        canister_id: principal(canister_byte),
+        group_placement: ComponentGroupPlacementId {
+            deployment: deployment.parse().expect("deployment ID"),
+            ordinal: 0,
+        },
+        member_path: ComponentGroupMemberPath::try_from(vec![
+            "project".parse().expect("member ID"),
+        ])
+        .expect("member path"),
+    }
 }
 
 fn assert_snapshot_acknowledgements(
