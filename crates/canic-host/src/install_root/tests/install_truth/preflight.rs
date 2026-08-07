@@ -20,6 +20,7 @@ maximum_instances = 1
         ),
     )
     .expect("write config");
+    write_wasm_gz_artifact(&root, "fleet_coordinator", b"fleet-coordinator-artifact");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
     write_wasm_gz_artifact(&root, "user_hub", b"user-hub-artifact");
@@ -39,9 +40,9 @@ maximum_instances = 1
             .iter()
             .map(|artifact| artifact.build_profile.as_str())
             .collect::<Vec<_>>(),
-        vec!["fast", "fast", "fast"]
+        vec!["fast", "fast", "fast", "fast"]
     );
-    assert_eq!(check.inventory.observed_artifacts.len(), 3);
+    assert_eq!(check.inventory.observed_artifacts.len(), 4);
     enforce_install_deployment_truth_gate(&check)
         .expect("complete local artifacts should pass gate");
     assert_eq!(execution_preflight.plan_id, check.plan.plan_id);

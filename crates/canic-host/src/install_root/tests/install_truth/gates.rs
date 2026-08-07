@@ -5,6 +5,7 @@ fn normal_named_environment_install_checks_fresh_local_build_artifacts() {
     let root = temp_dir("canic-install-truth-named-environment-artifacts");
     let config_path = root.join("apps/demo/canic.toml");
     write_demo_root_only_config(&config_path);
+    write_wasm_gz_artifact(&root, "fleet_coordinator", b"fleet-coordinator-artifact");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
     let mut options = local_demo_install_options(&root);
@@ -32,7 +33,7 @@ fn normal_named_environment_install_checks_fresh_local_build_artifacts() {
             .as_deref()
             .is_some_and(|path| path.contains(".icp/local/canisters"))
     }));
-    assert_eq!(check.inventory.observed_artifacts.len(), 2);
+    assert_eq!(check.inventory.observed_artifacts.len(), 3);
     assert!(
         check
             .report
@@ -65,7 +66,9 @@ fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
         ),
     )
     .expect("write config");
+    write_wasm_gz_artifact(&root, "fleet_coordinator", b"fleet-coordinator-artifact");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
 
     let options = local_demo_install_options(&root);
 
@@ -78,8 +81,13 @@ fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
         "2026-05-22T00:00:00Z".to_string(),
     )
     .expect("deployment truth check");
-    check.plan.role_artifacts[0].observed_wasm_gz_file_sha256 =
-        Some("different-observed-file-digest".to_string());
+    check
+        .plan
+        .role_artifacts
+        .iter_mut()
+        .find(|artifact| artifact.role == "root")
+        .expect("planned root artifact")
+        .observed_wasm_gz_file_sha256 = Some("different-observed-file-digest".to_string());
     check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
     check.report = safety_report_from_diff(
         "local:local:demo:report",
