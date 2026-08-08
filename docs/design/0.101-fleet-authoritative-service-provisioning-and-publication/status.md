@@ -110,9 +110,12 @@ Date: 2026-08-08
   journal. The root binds Active-runtime work to its exact sealed initial
   inventory. Once every identity is reserved, the same bounded journal may
   claim one exact prepaid Canister per canonical member through the existing
-  pool authority. Installation and all later scale-out effects remain fenced.
+  pool authority. Once every Canister is claimed, it may install one canonical
+  member at a time through the existing Store-backed lifecycle journal while
+  retaining the exact grouped runtime context. Registry commitment and all
+  later scale-out effects remain fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.27` is released and `0.101.28` is open.
+- Implementation started: yes; `0.101.28` is released and `0.101.29` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -358,7 +361,9 @@ Fleet policy writer.
   configuration and release set, Store artifacts, Component/group capacity
   and Ready pool capacity before accepting. The current accepted root may now
   reserve each planned Component identity and then claim one exact prepaid
-  Canister per canonical member. Installation and later effects remain fenced.
+  Canister per canonical member. Fully claimed members may then install through
+  the exact Store-backed journal. Registry commitment and later effects remain
+  fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -371,7 +376,9 @@ Fleet policy writer.
   member identity at a time, retaining the exact allocation across response
   loss and restart. Once every identity is reserved, the root uses its existing
   pool claim journal to retain the exact Canister principal across response
-  loss. Installation and later provisioning effects remain.
+  loss. Each fully claimed member may then install with its exact grouped
+  context and replay the same Store-backed operation after interruption.
+  Registry commitment and later provisioning effects remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.

@@ -318,7 +318,7 @@ fn validate_scale_out_record(
             "Fleet Component scale-out reuses the fresh operation identity",
         ));
     }
-    if !scale_out_prepaid_claim_boundary_is_valid(&scale_out.state) {
+    if !scale_out_install_boundary_is_valid(&scale_out.state) {
         return Err(receipt_invariant(
             "Fleet Component scale-out has crossed its implemented root-acceptance boundary",
         ));
@@ -344,7 +344,7 @@ fn validate_scale_out_record(
     Ok(())
 }
 
-const fn scale_out_prepaid_claim_boundary_is_valid(
+const fn scale_out_install_boundary_is_valid(
     state: &FleetComponentProvisioningStateRecord,
 ) -> bool {
     match state {
