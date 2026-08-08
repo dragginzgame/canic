@@ -14,10 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.28`.
-- The latest published release is `v0.101.28` at
-  `ee60d1944ff2409d925e08f48f7f3c13f32cb029`.
-- Open `0.101.29` advances the current accepted scale-out root one canonical
+- The workspace package version is `0.101.29`.
+- The latest published release is `v0.101.29` at
+  `e05c9c22c0c966339105c8095afcdf1cdf8c2802`.
+- Open `0.101.30` advances the current accepted scale-out root one canonical
+  member at a time through the existing Component Registry commitment journal
+  after every member is installed. The root binds the exact installed
+  allocation, `Prepared` partition, Store evidence, grouped byte ceiling and
+  current Fleet Directory authority, while Coordinator and root journals
+  preserve exact replay. The operation stops after the final Registry commit;
+  terminal root receipts, Fleet-service append, Directory confirmation and
+  runtime activation remain fenced.
+- Released `0.101.29` advances the current accepted scale-out root one canonical
   member at a time through the existing Store-backed Component installation
   journal after every prepaid Canister is claimed. The root revalidates Store
   authority, allocation identity and exact grouped runtime context across
@@ -2536,12 +2544,13 @@ First primary results:
 
 ## Next Action
 
-The response-loss-safe scale-out prepaid-Canister claim boundary is published
-at immutable `v0.101.28`. Open `0.101.29` installs one canonical Component at a
-time from the current fully claimed root batch and stops before Component
-Registry commitment. Continue Slice 4 by enabling only the Registry commitment
-cursor for that fully installed root. Keep atomic service append, Directory
-confirmation and runtime activation behind later explicit phases.
+The response-loss-safe scale-out Store-backed installation boundary is
+published at immutable `v0.101.29`. Open `0.101.30` commits one canonical
+Component Registry partition at a time for the current fully installed root
+batch and stops before its terminal `Provisioned` receipt. Continue Slice 4 by
+finalizing exact root receipts and advancing every selected root to
+`ComponentsProvisioned`. Keep atomic service append, Directory confirmation
+and runtime activation behind later explicit phases.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

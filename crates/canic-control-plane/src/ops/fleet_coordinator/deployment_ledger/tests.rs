@@ -174,12 +174,16 @@ fn planned_scale_out_reserves_the_exact_next_range_without_committing_placements
 }
 
 #[test]
-fn scale_out_ledger_allows_only_the_store_install_state_machine() {
+fn scale_out_ledger_allows_only_the_registry_commit_state_machine() {
     let (_, mut scale_out) = fixture();
-    assert!(!scale_out_install_boundary_is_valid(&scale_out.state));
+    assert!(!scale_out_registry_commit_boundary_is_valid(
+        &scale_out.state
+    ));
 
     scale_out.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 30 };
-    assert!(scale_out_install_boundary_is_valid(&scale_out.state));
+    assert!(scale_out_registry_commit_boundary_is_valid(
+        &scale_out.state
+    ));
 
     scale_out.state = FleetComponentProvisioningStateRecord::AcceptingRoots {
         planned_at_ns: 30,
@@ -190,14 +194,18 @@ fn scale_out_ledger_allows_only_the_store_install_state_machine() {
             started_at_ns: 31,
         }),
     };
-    assert!(scale_out_install_boundary_is_valid(&scale_out.state));
+    assert!(scale_out_registry_commit_boundary_is_valid(
+        &scale_out.state
+    ));
 
     scale_out.state = FleetComponentProvisioningStateRecord::RootsAccepted {
         planned_at_ns: 30,
         acceptances: vec![],
         roots_accepted_at_ns: 32,
     };
-    assert!(scale_out_install_boundary_is_valid(&scale_out.state));
+    assert!(scale_out_registry_commit_boundary_is_valid(
+        &scale_out.state
+    ));
 
     scale_out.state = FleetComponentProvisioningStateRecord::ProvisioningRoots {
         planned_at_ns: 30,
@@ -207,7 +215,9 @@ fn scale_out_ledger_allows_only_the_store_install_state_machine() {
         current: None,
         in_flight: None,
     };
-    assert!(scale_out_install_boundary_is_valid(&scale_out.state));
+    assert!(scale_out_registry_commit_boundary_is_valid(
+        &scale_out.state
+    ));
 }
 
 fn fixture() -> (
