@@ -15,7 +15,9 @@ use canic_core::{
     role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_REGISTRY_ID,
 };
 use canic_core::{
-    control_plane_support::config::ComponentDeploymentConfiguration,
+    control_plane_support::config::{
+        ComponentDeploymentConfiguration, ComponentGroupPlacementPolicy,
+    },
     dto::{
         component_provisioning::{
             FleetComponentActivationRootProgress, FleetComponentProvisioningPlan,
@@ -33,7 +35,10 @@ use canic_core::{
             FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
         },
     },
-    ids::{AppId, ComponentDeploymentConfigurationDigest, FleetRegistryAuthority},
+    ids::{
+        AppId, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+        ComponentGroupPlacementId, ComponentGroupSpecId, FleetRegistryAuthority,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +47,7 @@ use serde::{Deserialize, Serialize};
 // Registry snapshot, the root-entry portion of that Registry again as
 // immutable join receipts, the complete Component provisioning plan plus one
 // compact acceptance and one terminal provisioning receipt per planned root,
+// one compact placement record per committed Component Group deployment copy,
 // the complete service set again as one publication receipt, one exact
 // acknowledgement per current root, and at most one draining and one removal
 // receipt per root.
@@ -81,6 +87,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub root_snapshot_acknowledgements: Vec<FleetSubnetRootSnapshotAcknowledgement>,
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
     pub component_provisioning: Option<FleetComponentProvisioningRecord>,
+    pub component_group_deployments: Vec<FleetComponentGroupDeploymentRecord>,
     pub service_publication_receipt: Option<FleetServicePublicationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
@@ -121,6 +128,39 @@ pub struct FleetComponentProvisioningRecord {
     pub plan_hash: [u8; 32],
     pub plan: FleetComponentProvisioningPlan,
     pub state: FleetComponentProvisioningStateRecord,
+}
+
+///
+/// FleetComponentGroupDeploymentRecord
+///
+/// Coordinator-owned bounded placement authority for one configured deployment.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentGroupDeploymentRecord {
+    pub deployment: ComponentGroupDeploymentId,
+    pub component_group: ComponentGroupSpecId,
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub initial_placements: u32,
+    pub maximum_placements: u32,
+    pub placement_policy: ComponentGroupPlacementPolicy,
+    pub next_placement_ordinal: u32,
+    pub placements: Vec<FleetComponentGroupPlacementRecord>,
+}
+
+///
+/// FleetComponentGroupPlacementRecord
+///
+/// Exact root and terminal receipt authority for one committed group placement.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentGroupPlacementRecord {
+    pub placement: ComponentGroupPlacementId,
+    pub fleet_subnet_root: Principal,
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub root_receipt_content_hash: [u8; 32],
 }
 
 /// Monotonic durable Coordinator provisioning state implemented in this slice.

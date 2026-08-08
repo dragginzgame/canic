@@ -4,6 +4,8 @@
 //! Does not own: endpoint authorization, multi-step lifecycle orchestration, or root effects.
 //! Boundary: workflow supplies protected init facts and receives canonical Registry projections.
 
+mod deployment_ledger;
+
 use crate::{
     dto::fleet_coordinator::FleetCoordinatorInitArgs,
     storage::stable::fleet_coordinator::{
@@ -128,6 +130,7 @@ impl FleetCoordinatorOps {
             root_snapshot_acknowledgements: Vec::new(),
             registry_activation_receipt: None,
             component_provisioning: None,
+            component_group_deployments: Vec::new(),
             service_publication_receipt: None,
             root_draining_publication_receipts: Vec::new(),
             root_removal_publication_receipts: Vec::new(),
@@ -1132,38 +1135,44 @@ impl FleetCoordinatorOps {
         }
         let activated_root_count = u32::try_from(progress.activations.len())
             .map_err(|_| receipt_invariant("runtime-activated root count does not fit u32"))?;
+        let runtimes_are_terminal = activated_root_count == progress.activation_root_count;
         let mut next = current.clone();
-        component_provisioning_record_mut(&mut next)?.state =
-            if activated_root_count == progress.activation_root_count {
-                FleetComponentProvisioningStateRecord::RuntimesActivated {
-                    planned_at_ns: progress.planned_at_ns,
-                    acceptances: progress.acceptances,
-                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
-                    provisions: progress.provisions,
-                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
-                    published_fleet_registry: progress.published_fleet_registry,
-                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
-                    confirmations: progress.confirmations,
-                    directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
-                    activations: progress.activations,
-                    runtimes_activated_at_ns: recorded_at_ns,
-                }
-            } else {
-                FleetComponentProvisioningStateRecord::ActivatingRuntimes {
-                    planned_at_ns: progress.planned_at_ns,
-                    acceptances: progress.acceptances,
-                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
-                    provisions: progress.provisions,
-                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
-                    published_fleet_registry: progress.published_fleet_registry,
-                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
-                    confirmations: progress.confirmations,
-                    directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
-                    activations: progress.activations,
-                    current: progress.current.map(Box::new),
-                    in_flight: None,
-                }
-            };
+        component_provisioning_record_mut(&mut next)?.state = if runtimes_are_terminal {
+            FleetComponentProvisioningStateRecord::RuntimesActivated {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                published_fleet_registry: progress.published_fleet_registry,
+                service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                confirmations: progress.confirmations,
+                directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
+                activations: progress.activations,
+                runtimes_activated_at_ns: recorded_at_ns,
+            }
+        } else {
+            FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                published_fleet_registry: progress.published_fleet_registry,
+                service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                confirmations: progress.confirmations,
+                directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
+                activations: progress.activations,
+                current: progress.current.map(Box::new),
+                in_flight: None,
+            }
+        };
+        if runtimes_are_terminal {
+            next.component_group_deployments = deployment_ledger::compile_initial(
+                &next.component_deployment_configuration,
+                component_provisioning_record(&next)?,
+            )?;
+        }
         let next = Self::validate_current(next)?;
         let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
         Self::commit_transition(&current, next)?;
@@ -1627,6 +1636,11 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = Self::validate_current_registry(current)?;
         validate_component_provisioning_record(&current)?;
+        deployment_ledger::validate(
+            &current.component_deployment_configuration,
+            current.component_provisioning.as_ref(),
+            &current.component_group_deployments,
+        )?;
         Ok(current)
     }
 
