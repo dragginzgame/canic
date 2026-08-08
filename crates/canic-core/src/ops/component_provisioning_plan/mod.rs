@@ -5,8 +5,13 @@
 //! Boundary: checked-in deployment authority and one exact Fleet Registry version constrain every
 //! root, placement, member and protected limit before the plan can become durable intent.
 
+mod scale_out;
 #[cfg(test)]
 mod tests;
+
+pub use scale_out::{
+    ComponentProvisioningPlacementAuthority, ComponentProvisioningScaleOutAuthority,
+};
 
 use crate::{
     InternalError,
@@ -184,6 +189,39 @@ pub enum ComponentProvisioningPlanOpsError {
     #[error("scale-out validation requires the durable Coordinator placement ledger")]
     ScaleOutStateUnavailable,
 
+    #[error("scale-out committed placement authority is not strictly canonical")]
+    NonCanonicalCommittedPlacements,
+
+    #[error("scale-out eligible root authority is not strictly canonical")]
+    NonCanonicalEligibleRoots,
+
+    #[error("scale-out committed or selected root is outside the installed root set")]
+    ScaleOutRootIneligible,
+
+    #[error("scale-out desired counts do not form one bounded monotonic increase")]
+    ScaleOutCountMismatch,
+
+    #[error("scale-out placement IDs do not equal the next reserved ordinal range")]
+    ScaleOutPlacementSetMismatch,
+
+    #[error("scale-out plan contains a placement for a different deployment")]
+    ScaleOutDeploymentMismatch,
+
+    #[error("scale-out deployment contains an Authority occurrence")]
+    ScaleOutAuthorityDeployment,
+
+    #[error("scale-out placement assignment violates deployment density or spread")]
+    ScaleOutPlacementPolicyMismatch,
+
+    #[error("scale-out service assignment violates service density or spread")]
+    ScaleOutServicePlacementPolicyMismatch,
+
+    #[error("scale-out Directory confirmation roots differ from selected and affected roots")]
+    ScaleOutConfirmationRootSetMismatch,
+
+    #[error("scale-out root batch must contain at least one new placement")]
+    EmptyScaleOutBatch,
+
     #[error("provisioning plan count arithmetic overflowed")]
     CountOverflow,
 
@@ -217,6 +255,18 @@ impl ComponentProvisioningPlanOps {
         plan: &FleetComponentProvisioningPlan,
     ) -> Result<(), InternalError> {
         validate_compiled_configuration(configuration, registry, plan)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Validate one scale-out plan against its durable placement and installed-root authority.
+    pub fn validate_scale_out_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+        authority: ComponentProvisioningScaleOutAuthority<'_>,
+    ) -> Result<(), InternalError> {
+        validate_scale_out_compiled_configuration(configuration, registry, plan, authority)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -263,6 +313,25 @@ impl ComponentProvisioningPlanOps {
         plan: &FleetComponentProvisioningPlan,
     ) -> Result<[u8; 32], InternalError> {
         let bytes = Self::canonical_bytes_compiled(configuration, registry, plan)?;
+        Ok(Sha256::digest(bytes).into())
+    }
+
+    /// Hash one scale-out plan after validating its durable placement authority.
+    pub fn hash_scale_out_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+        authority: ComponentProvisioningScaleOutAuthority<'_>,
+    ) -> Result<[u8; 32], InternalError> {
+        validate_scale_out_compiled_configuration(configuration, registry, plan, authority)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        let mut encoder = CanonicalEncoder::new();
+        encode_plan(&mut encoder, plan);
+        let bytes = encoder
+            .finish()
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
         Ok(Sha256::digest(bytes).into())
     }
 
@@ -364,6 +433,24 @@ fn validate_compiled_configuration(
     registry: &FleetRegistry,
     plan: &FleetComponentProvisioningPlan,
 ) -> Result<(), ComponentProvisioningPlanOpsError> {
+    validate_compiled_configuration_with_scale_out(configuration, registry, plan, None)
+}
+
+fn validate_scale_out_compiled_configuration(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+    authority: ComponentProvisioningScaleOutAuthority<'_>,
+) -> Result<(), ComponentProvisioningPlanOpsError> {
+    validate_compiled_configuration_with_scale_out(configuration, registry, plan, Some(authority))
+}
+
+fn validate_compiled_configuration_with_scale_out(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+    scale_out: Option<ComponentProvisioningScaleOutAuthority<'_>>,
+) -> Result<(), ComponentProvisioningPlanOpsError> {
     let expected_digest = configuration
         .digest()
         .map_err(|error| ComponentProvisioningPlanOpsError::Configuration(error.to_string()))?;
@@ -376,6 +463,9 @@ fn validate_compiled_configuration(
     validate_bounds(plan)?;
 
     let mut ledger = PlanValidationLedger::new();
+    if let Some(authority) = scale_out {
+        scale_out::seed_authority(&mut ledger, &configuration.deployment_topology, authority)?;
+    }
     let mut previous_root = None;
     for batch in &plan.batches {
         let root = batch.root.fleet_subnet_root;
@@ -383,6 +473,9 @@ fn validate_compiled_configuration(
             return Err(ComponentProvisioningPlanOpsError::NonCanonicalBatchOrder);
         }
         previous_root = Some(root);
+        if scale_out.is_some() && batch.placements.is_empty() {
+            return Err(ComponentProvisioningPlanOpsError::EmptyScaleOutBatch);
+        }
         let _validation = validate_batch(
             registry,
             batch,
@@ -399,13 +492,27 @@ fn validate_compiled_configuration(
         }
     }
     validate_confirmation_roots(registry, plan)?;
-
-    validate_operation(
-        plan,
-        &configuration.deployment_topology,
-        &configuration.fleet_service_topology,
-        &ledger,
-    )
+    match (&plan.operation, scale_out) {
+        (FleetComponentProvisioningOperation::FreshInstall, None) => validate_fresh_install(
+            &configuration.deployment_topology,
+            &configuration.fleet_service_topology,
+            &ledger,
+        ),
+        (FleetComponentProvisioningOperation::ScaleOut { .. }, Some(authority)) => {
+            scale_out::validate(
+                registry,
+                plan,
+                &configuration.deployment_topology,
+                &configuration.fleet_service_topology,
+                &ledger,
+                authority,
+            )
+        }
+        (FleetComponentProvisioningOperation::ScaleOut { .. }, None)
+        | (FleetComponentProvisioningOperation::FreshInstall, Some(_)) => {
+            Err(ComponentProvisioningPlanOpsError::ScaleOutStateUnavailable)
+        }
+    }
 }
 
 fn validate_root_batch_compiled(
@@ -728,8 +835,7 @@ fn validate_placement(
     if !entries_match(&placement.entries, &deployment.members) {
         return Err(ComponentProvisioningPlanOpsError::PlacementEntriesMismatch);
     }
-    ledger.record(placement, root);
-    Ok(())
+    ledger.record(&placement.group_placement, deployment, root)
 }
 
 fn entries_match(
@@ -771,22 +877,6 @@ fn validate_spec_admissions(
         }
     }
     Ok(())
-}
-
-fn validate_operation(
-    plan: &FleetComponentProvisioningPlan,
-    topology: &ComponentGroupDeploymentTopology,
-    service_topology: &FleetServiceTopology,
-    ledger: &PlanValidationLedger,
-) -> Result<(), ComponentProvisioningPlanOpsError> {
-    match &plan.operation {
-        FleetComponentProvisioningOperation::FreshInstall => {
-            validate_fresh_install(topology, service_topology, ledger)
-        }
-        FleetComponentProvisioningOperation::ScaleOut { .. } => {
-            Err(ComponentProvisioningPlanOpsError::ScaleOutStateUnavailable)
-        }
-    }
 }
 
 fn validate_fresh_install(
@@ -919,6 +1009,8 @@ struct PlanValidationLedger {
     placements: BTreeSet<crate::ids::ComponentGroupPlacementId>,
     placement_roots: BTreeMap<crate::ids::ComponentGroupPlacementId, Principal>,
     service_roots: BTreeMap<FleetServiceId, BTreeMap<Principal, u32>>,
+    root_component_counts: BTreeMap<Principal, u32>,
+    root_spec_counts: BTreeMap<Principal, BTreeMap<ComponentSpecId, u32>>,
 }
 
 impl PlanValidationLedger {
@@ -927,22 +1019,47 @@ impl PlanValidationLedger {
             placements: BTreeSet::new(),
             placement_roots: BTreeMap::new(),
             service_roots: BTreeMap::new(),
+            root_component_counts: BTreeMap::new(),
+            root_spec_counts: BTreeMap::new(),
         }
     }
 
-    fn record(&mut self, placement: &ComponentGroupPlacementPlan, root: Principal) {
-        self.placement_roots
-            .insert(placement.group_placement.clone(), root);
-        for entry in &placement.entries {
-            if let ComponentDeploymentPurpose::FleetServiceMember { service, .. } = &entry.purpose {
-                *self
+    fn record(
+        &mut self,
+        placement: &crate::ids::ComponentGroupPlacementId,
+        deployment: &ComponentGroupDeploymentSpec,
+        root: Principal,
+    ) -> Result<(), ComponentProvisioningPlanOpsError> {
+        self.placement_roots.insert(placement.clone(), root);
+        let component_count = self.root_component_counts.entry(root).or_default();
+        *component_count = component_count
+            .checked_add(
+                u32::try_from(deployment.members.len())
+                    .map_err(|_| ComponentProvisioningPlanOpsError::CountOverflow)?,
+            )
+            .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)?;
+        let spec_counts = self.root_spec_counts.entry(root).or_default();
+        for member in &deployment.members {
+            let spec_count = spec_counts
+                .entry(member.component_spec.clone())
+                .or_default();
+            *spec_count = spec_count
+                .checked_add(1)
+                .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)?;
+            if let ComponentDeploymentPurpose::FleetServiceMember { service, .. } = &member.purpose
+            {
+                let service_count = self
                     .service_roots
                     .entry(service.clone())
                     .or_default()
                     .entry(root)
-                    .or_default() += 1;
+                    .or_default();
+                *service_count = service_count
+                    .checked_add(1)
+                    .ok_or(ComponentProvisioningPlanOpsError::CountOverflow)?;
             }
         }
+        Ok(())
     }
 
     fn for_deployment(

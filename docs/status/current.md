@@ -14,17 +14,30 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.23`.
-- The latest published release is `v0.101.23` at
-  `1fbb3c5852b499c9403938652fbcbe25d7ecda81`.
-- Open `0.101.24` atomically materializes the Coordinator's bounded deployment
-  placement ledger with the final `RuntimesActivated` commit. Each configured
+- The workspace package version is `0.101.24`.
+- The latest published release is `v0.101.24` at
+  `3344d061e0882298759864f977fd9b31961864d5`.
+- Open `0.101.25` adds the controller-authenticated monotonic group scale-out
+  reservation boundary to the existing provisioning prepare/status contract.
+  It requires terminal fresh installation, validates the exact current
+  Registry and protected configuration, combines every committed placement
+  with only the proposed additions, and enforces immutable desired-count,
+  ordinal, installed-root, active release-set, admission, aggregate Component,
+  deployment and Fleet-service placement policy. The Coordinator atomically
+  stores one exact retryable scale-out journal and advances the deployment's
+  never-reused next ordinal before root effects; committed placements remain
+  unchanged. Scale-down, Authority-group scaling, placement reuse, live-root
+  expansion and admission expansion fail before persistence. Root acceptance,
+  provisioning, service append, Directory confirmation and runtime activation
+  remain fenced.
+- Released `0.101.24` atomically materializes the Coordinator's bounded
+  deployment placement ledger with the final `RuntimesActivated` commit. Each configured
   deployment retains its protected group, configuration digest, initial and
   maximum placement counts, density/spread policy, canonical placement-to-root
   records and next never-reused ordinal. The placement vector is the sole
   current-count authority. Earlier provisioning phases require the ledger to
   remain absent; terminal missing, altered or receipt-unbound state fails
-  closed. Scale-out effects remain fenced.
+  closed.
 - Released `0.101.23` closes the fresh-install host transaction. Strict Fleet
   input now assigns every configured initial Component Group ordinal to one
   explicit root Subnet before effects; the host resolves the resulting real
@@ -2488,14 +2501,14 @@ First primary results:
 
 ## Next Action
 
-The complete fresh-install provisioning and host transaction is published at
-immutable `v0.101.23`. Open `0.101.24` establishes the durable Coordinator
-deployment-placement ledger from that terminal authority. Continue Slice 4 by
-adding the authenticated monotonic desired-count request and pre-effect
-ordinal/root-assignment reservation against this ledger. Keep root effects,
-service append and runtime activation behind later explicit journal phases;
-do not infer placement, reuse an ordinal or create a second current-count
-authority.
+The terminal fresh-install placement ledger is published at immutable
+`v0.101.24`. Open `0.101.25` adds the authenticated monotonic desired-count
+request and atomically reserves its exact ordinal/root assignments before
+effects. Continue Slice 4 with the first response-loss-safe Coordinator-to-root
+acceptance phase for only those reserved placements. Reuse the existing root
+batch protocol, retain the active scale-out journal as the sole reservation
+authority and keep root provisioning, atomic service append, Directory
+confirmation and runtime activation behind later explicit phases.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
