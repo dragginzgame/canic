@@ -16,7 +16,7 @@ use canic_core::{
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetSubnetRootProvisioningBatch,
-            RootComponentPublicationRequest,
+            RootComponentActivationRequest, RootComponentPublicationRequest,
         },
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
@@ -760,6 +760,83 @@ fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_termin
 
 #[test]
 fn directory_publication_journals_each_delivery_and_replays_terminal_receipt() {
+    let (fixture, published, directory, final_request) = single_published_fixture();
+    assert_eq!(published.phase, RootComponentProvisioningPhase::Published);
+    assert_eq!(published.published_at_ns, Some(500));
+    assert_eq!(published.published_component_count, 1);
+    assert_eq!(
+        published
+            .publication
+            .as_ref()
+            .expect("publication evidence")
+            .component_directories
+            .len(),
+        1
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::begin_publication(&final_request, &directory, 999)
+            .expect("replay terminal publication"),
+        published
+    );
+    let mut conflicting = final_request;
+    conflicting.published_fleet_registry.content_hash[0] ^= 1;
+    assert!(
+        RootComponentProvisioningOps::begin_publication(&conflicting, &directory, 999).is_err()
+    );
+    assert_eq!(fixture.request.operation_id, published.operation_id);
+}
+
+#[test]
+fn runtime_activation_begins_only_after_publication_and_replays_exactly() {
+    let (_fixture, published, _directory, _publication_request) = single_published_fixture();
+    let request = RootComponentActivationRequest {
+        operation_id: published.operation_id,
+        plan_hash: published.plan_hash,
+        expected_activated_component_count: 0,
+        expected_root_runtime_active: false,
+    };
+    let activating = RootComponentProvisioningOps::begin_activation(&request, 600)
+        .expect("begin runtime activation");
+    assert_eq!(activating.phase, RootComponentProvisioningPhase::Published);
+    assert_eq!(activating.activation_started_at_ns, Some(600));
+    assert_eq!(activating.activated_component_count, 0);
+    assert!(!activating.root_runtime_active);
+    assert!(
+        RootComponentProvisioningOps::next_activation_member(&activating)
+            .expect("select activation member")
+            .is_some()
+    );
+    assert!(
+        RootComponentProvisioningOps::finalize_runtimes_active(
+            &request,
+            RootComponentActivationEvidence {
+                fleet_activation_operation_id: [61; 32],
+                initial_inventory_hash: [62; 32],
+                component_count: 1,
+                root_activated_at_ns: 700,
+            },
+            700,
+        )
+        .is_err()
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::begin_activation(&request, 999)
+            .expect("replay runtime activation start"),
+        activating
+    );
+    let conflicting = RootComponentActivationRequest {
+        expected_root_runtime_active: true,
+        ..request
+    };
+    assert!(RootComponentProvisioningOps::begin_activation(&conflicting, 999).is_err());
+}
+
+fn single_published_fixture() -> (
+    Fixture,
+    RootComponentProvisioningView,
+    FleetDirectorySnapshot,
+    RootComponentPublicationRequest,
+) {
     let (fixture, provisioned) = single_provisioned_fixture();
     let published_registry = FleetRegistryVersion {
         authority: provisioned.fleet_registry.authority.clone(),
@@ -795,22 +872,11 @@ fn directory_publication_journals_each_delivery_and_replays_terminal_receipt() {
     };
     let published = RootComponentProvisioningOps::finalize_published(&final_request, 500)
         .expect("freeze terminal publication receipt");
-    assert_eq!(published.phase, RootComponentProvisioningPhase::Published);
-    assert_eq!(published.published_at_ns, Some(500));
     assert_ne!(
         published.receipt_content_hash,
         provisioned.receipt_content_hash
     );
-    assert_eq!(
-        RootComponentProvisioningOps::begin_publication(&final_request, &directory, 999)
-            .expect("replay terminal publication"),
-        published
-    );
-    let mut conflicting = final_request;
-    conflicting.published_fleet_registry.content_hash[0] ^= 1;
-    assert!(
-        RootComponentProvisioningOps::begin_publication(&conflicting, &directory, 999).is_err()
-    );
+    (fixture, published, directory, final_request)
 }
 
 fn record_one_publication_delivery(

@@ -815,12 +815,14 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_confirms_one_root_batch_directories_without_runtime_activation() {
+    fn coordinator_confirms_directories_before_activating_grouped_runtimes() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_prepared_grouped_provisioning();
         let prepared = prepare_coordinator_grouped_plan(&fixture);
         let confirmed = drive_coordinator_directory_confirmation(&fixture, prepared);
         assert_confirmed_grouped_directories(&fixture, &confirmed);
+        let activated = drive_coordinator_runtime_activation(&fixture, confirmed);
+        assert_activated_grouped_runtimes(&fixture, &activated);
     }
 
     #[cfg(test)]
@@ -879,6 +881,8 @@ mod tests {
                 expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
                 expected_current_root: status.current_root,
                 expected_current_publication: status.current_publication,
+                expected_runtime_activated_root_count: status.runtime_activated_root_count,
+                expected_current_activation: status.current_activation,
             };
             let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
                 .pic
@@ -903,6 +907,55 @@ mod tests {
                 )
                 .expect("replay Coordinator provisioning transport");
             assert_eq!(replayed.expect("replay Coordinator provisioning"), advanced);
+            status = advanced;
+        }
+        status
+    }
+
+    #[cfg(test)]
+    fn drive_coordinator_runtime_activation(
+        fixture: &PreparedGroupedProvisioningFixture,
+        mut status: FleetComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningStatusResponse {
+        while status.phase != FleetComponentProvisioningPhase::RuntimesActivated {
+            let request = FleetComponentProvisioningAdvanceRequest {
+                operation_id: status.operation_id,
+                plan_hash: status.plan_hash,
+                expected_phase: status.phase,
+                expected_accepted_root_count: status.accepted_root_count,
+                expected_provisioned_root_count: status.provisioned_root_count,
+                expected_current_root: status.current_root,
+                expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+                expected_current_publication: status.current_publication,
+                expected_runtime_activated_root_count: status.runtime_activated_root_count,
+                expected_current_activation: status.current_activation,
+            };
+            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+                .pic
+                .update_candid(
+                    fixture.coordinator,
+                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+                    (request,),
+                )
+                .expect("advance Coordinator runtime activation transport");
+            let advanced = advanced.unwrap_or_else(|error| {
+                panic!(
+                    "advance Coordinator runtime activation from root cursor {:?}: {error:?}",
+                    status.current_activation,
+                )
+            });
+            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+                .pic
+                .update_candid(
+                    fixture.coordinator,
+                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+                    (request,),
+                )
+                .expect("replay Coordinator runtime activation transport");
+            assert_eq!(
+                replayed.expect("replay Coordinator runtime activation"),
+                advanced
+            );
             status = advanced;
         }
         status
@@ -977,6 +1030,82 @@ mod tests {
             assert!(authority.component_group.is_some());
         }
         assert_prepared(&fixture.pic, fixture.root.root_id);
+    }
+
+    #[cfg(test)]
+    fn assert_activated_grouped_runtimes(
+        fixture: &PreparedGroupedProvisioningFixture,
+        status: &FleetComponentProvisioningStatusResponse,
+    ) {
+        assert_eq!(status.runtime_activated_root_count, 1);
+        assert_eq!(status.current_activation, None);
+        assert_eq!(status.activation_in_flight_root, None);
+        assert!(status.runtimes_activated_at_ns.is_some());
+        let root: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                fixture.root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+                (RootComponentProvisioningStatusRequest {
+                    operation_id: fixture.request.operation_id,
+                    plan_hash: fixture.request.plan_hash,
+                },),
+            )
+            .expect("query activated root provisioning status transport");
+        let root = root.expect("query activated root provisioning status");
+        assert_eq!(root.phase, RootComponentProvisioningPhase::RuntimesActive);
+        assert_eq!(root.activated_component_count, root.component_count);
+        assert!(root.root_runtime_active);
+        assert!(root.activation.is_some());
+        for member in root
+            .result
+            .as_ref()
+            .expect("active root retains provisioned result")
+            .placements
+            .iter()
+            .flat_map(|placement| &placement.members)
+        {
+            let runtime: Result<ComponentRuntimeStatusResponse, Error> = fixture
+                .pic
+                .query_candid_as(
+                    member.binding.canister_id,
+                    fixture.root.root_id,
+                    CANIC_COMPONENT_RUNTIME_STATUS,
+                    (),
+                )
+                .expect("query active grouped Component runtime transport");
+            assert_eq!(
+                runtime
+                    .expect("query active grouped Component runtime")
+                    .phase,
+                ComponentRuntimePhase::Active
+            );
+            let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
+                .pic
+                .query_candid(
+                    fixture.root.root_id,
+                    CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
+                    (ComponentRegistryPartitionRequest {
+                        component: member.binding.component,
+                    },),
+                )
+                .expect("query active grouped Component partition transport");
+            assert_eq!(
+                partition
+                    .expect("active grouped Component partition")
+                    .status,
+                ComponentLifecycleStatus::Active
+            );
+        }
+        let root_runtime: Result<FleetActivationStatusResponse, Error> = fixture
+            .pic
+            .query_candid(fixture.root.root_id, CANIC_FLEET_ACTIVATION_STATUS, ())
+            .expect("query active root runtime transport");
+        assert_eq!(
+            root_runtime.expect("active root runtime").phase,
+            FleetActivationPhase::Active
+        );
     }
 
     #[test]

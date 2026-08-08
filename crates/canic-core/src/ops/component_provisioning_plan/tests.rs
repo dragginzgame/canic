@@ -449,11 +449,16 @@ fn assert_root_batch_candid_contracts(
         installed_component_count: 0,
         registry_committed_component_count: 0,
         published_component_count: 0,
+        activated_component_count: 0,
+        root_runtime_active: false,
         result: None,
         publication: None,
+        activation: None,
         accepted_at_ns: 1,
         provisioned_at_ns: None,
         published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash: [15; 32],
     };
     assert_eq!(

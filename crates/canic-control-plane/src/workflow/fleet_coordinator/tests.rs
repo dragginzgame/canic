@@ -1004,6 +1004,8 @@ fn root_provision_advance_request(
         expected_current_root: status.current_root,
         expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
         expected_current_publication: status.current_publication,
+        expected_runtime_activated_root_count: status.runtime_activated_root_count,
+        expected_current_activation: status.current_activation,
     }
 }
 
@@ -1139,6 +1141,8 @@ fn root_acceptance_advance_request(
         expected_current_root: None,
         expected_directory_confirmed_root_count: 0,
         expected_current_publication: None,
+        expected_runtime_activated_root_count: 0,
+        expected_current_activation: None,
     }
 }
 
@@ -1191,11 +1195,16 @@ fn accepted_root_response(
         installed_component_count: 0,
         registry_committed_component_count: 0,
         published_component_count: 0,
+        activated_component_count: 0,
+        root_runtime_active: false,
         result: None,
         publication: None,
+        activation: None,
         accepted_at_ns,
         provisioned_at_ns: None,
         published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash,
     }
 }
@@ -1270,7 +1279,9 @@ fn provisioning_acceptances(
         | FleetComponentProvisioningStateRecord::ComponentsProvisioned { acceptances, .. }
         | FleetComponentProvisioningStateRecord::ServiceTopologyPublished { acceptances, .. }
         | FleetComponentProvisioningStateRecord::ConfirmingDirectories { acceptances, .. }
-        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { acceptances, .. } => {
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { acceptances, .. }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes { acceptances, .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { acceptances, .. } => {
             acceptances
         }
         FleetComponentProvisioningStateRecord::Planned { .. }
@@ -1371,11 +1382,16 @@ fn provisioned_root_response(
         installed_component_count: component_count,
         registry_committed_component_count: component_count,
         published_component_count: 0,
+        activated_component_count: 0,
+        root_runtime_active: false,
         result: Some(result),
         publication: None,
+        activation: None,
         accepted_at_ns,
         provisioned_at_ns: Some(provisioned_at_ns),
         published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash,
     }
 }

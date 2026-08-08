@@ -1,9 +1,9 @@
 //! Module: workflow::component_provisioning
 //!
 //! Responsibility: authenticate and advance one exact Coordinator-planned root batch.
-//! Does not own: stable records, pool state, service publication, or runtime activation.
-//! Boundary: acceptance and each bounded member step revalidate protected root, Registry, config,
-//! Store and aggregate progress before delegating to existing root-local lifecycle authority.
+//! Does not own: stable records, pool state, service publication, or target-local lifecycle state.
+//! Boundary: each bounded member step revalidates protected authority before delegating to the
+//! existing root-local lifecycle journals.
 
 use crate::{
     ops::{
@@ -17,7 +17,10 @@ use crate::{
         },
         component_registry::{RootComponentAllocationView, RootComponentRegistryView},
     },
-    workflow::{bootstrap::root_store, root_authority::validated_root_authority},
+    workflow::{
+        bootstrap::root_store, root_authority::validated_root_authority,
+        runtime::fleet_activation as root_fleet_activation,
+    },
 };
 use candid::Principal;
 use canic_core::{
@@ -35,16 +38,18 @@ use canic_core::{
     },
     dto::{
         component_provisioning::{
+            RootComponentActivationEvidence, RootComponentActivationRequest,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
-            RootComponentPublicationRequest,
+            RootComponentProvisioningPhase, RootComponentProvisioningStatusRequest,
+            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin,
             ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
-            RootComponentAllocationRequest,
+            RootComponentAllocationRequest, RootComponentMembershipActivationRequest,
+            RootComponentRuntimeActivationRequest,
         },
-        fleet_activation::FleetActivationPhase,
+        fleet_activation::{FleetActivationPhase, FleetActivationResumeRequest},
         fleet_registry::FleetSubnetRootStatus,
         fleet_subnet_root::FleetSubnetRootAuthority,
     },
@@ -218,6 +223,152 @@ pub async fn publish(
     publish_component_directory(&request, member, mirror.directory).await
 }
 
+/// Activate one exact grouped Component step or the root runtime after publication.
+pub async fn activate(
+    caller: Principal,
+    request: RootComponentActivationRequest,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let (authority, _root) = validated_root_authority()?;
+    require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
+    let current = RootComponentProvisioningOps::begin_activation(&request, IcOps::now_nanos())?;
+    if request.expected_activated_component_count < current.activated_component_count
+        || request.expected_root_runtime_active != current.root_runtime_active
+        || current.phase == RootComponentProvisioningPhase::RuntimesActive
+    {
+        return Ok(crate::ops::component_provisioning::status_response(current));
+    }
+    if let Some(member) = RootComponentProvisioningOps::next_activation_member(&current)? {
+        return Box::pin(activate_component_step(&request, member)).await;
+    }
+    activate_root_runtime(&request).await
+}
+
+async fn activate_component_step(
+    request: &RootComponentActivationRequest,
+    member: crate::view::component_provisioning::RootComponentPublicationMemberView,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let provisioning_origin = activation_member_origin(request, &member)?;
+    let allocation =
+        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
+            InternalError::unavailable("grouped Component activation allocation is absent")
+        })?;
+    let runtime_active = match &allocation.progress {
+        crate::view::component_registry::RootComponentAllocationProgressView::Committed {
+            commitment,
+            ..
+        } => commitment.runtime_activated,
+        _ => false,
+    };
+    if !runtime_active {
+        super::component_registry::activate_group_member_runtime(
+            RootComponentRuntimeActivationRequest {
+                operation_id: member.member_operation_id,
+            },
+            &provisioning_origin,
+            &member.deployment,
+            &member.component_group,
+        )
+        .await?;
+    }
+    Box::pin(super::component_registry::activate_group_member_membership(
+        RootComponentMembershipActivationRequest {
+            operation_id: member.member_operation_id,
+        },
+        &provisioning_origin,
+        &member.deployment,
+        &member.component_group,
+    ))
+    .await?;
+    RootComponentProvisioningOps::mark_member_activated(request, &member)
+        .map(crate::ops::component_provisioning::status_response)
+}
+
+fn activation_member_origin(
+    request: &RootComponentActivationRequest,
+    member: &crate::view::component_provisioning::RootComponentPublicationMemberView,
+) -> Result<ComponentProvisioningOrigin, InternalError> {
+    let canic_core::dto::component_deployment::ProtectedComponentDeployment::GroupMember {
+        group_placement,
+        member_path,
+        ..
+    } = &member.deployment
+    else {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
+            "root Component activation selected a non-group member",
+        ));
+    };
+    Ok(ComponentProvisioningOrigin::ComponentGroup {
+        operation_id: request.operation_id,
+        plan_hash: request.plan_hash,
+        group_placement: group_placement.clone(),
+        member_path: member_path.clone(),
+    })
+}
+
+async fn activate_root_runtime(
+    request: &RootComponentActivationRequest,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let observed = FleetActivationWorkflow::status()?;
+    let repairs_active_inventory = observed.phase == FleetActivationPhase::Active;
+    let prepares_new_credential =
+        observed.phase == FleetActivationPhase::Prepared && observed.credential.is_none();
+    let needs_preparation = [repairs_active_inventory, prepares_new_credential]
+        .into_iter()
+        .any(|needed| needed);
+    let prepared = if needs_preparation {
+        root_fleet_activation::prepare_root().await?
+    } else {
+        observed
+    };
+    let active = if prepared.phase == FleetActivationPhase::Prepared {
+        let credential = prepared.credential.ok_or_else(|| {
+            InternalError::unavailable("prepared root runtime has no activation credential")
+        })?;
+        root_fleet_activation::resume_root(FleetActivationResumeRequest {
+            operation_id: prepared.identity.operation_id,
+            credential,
+        })
+        .await?
+        .status
+    } else {
+        prepared
+    };
+    let activated_at_ns = active
+        .activated_at_ns
+        .ok_or_else(|| InternalError::unavailable("active root runtime has no activation time"))?;
+    let inventory = ComponentRegistryOps::initial_inventory(active.identity.operation_id)?;
+    let activation_is_terminal = [
+        active.phase == FleetActivationPhase::Active,
+        inventory.directories_converged,
+        inventory.root_runtime_activated,
+        inventory.component_count
+            == RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+                operation_id: request.operation_id,
+                plan_hash: request.plan_hash,
+            })?
+            .component_count,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !activation_is_terminal {
+        return Err(InternalError::conflict(
+            "root runtime and sealed Component inventory are not terminal",
+        ));
+    }
+    RootComponentProvisioningOps::finalize_runtimes_active(
+        request,
+        RootComponentActivationEvidence {
+            fleet_activation_operation_id: active.identity.operation_id,
+            initial_inventory_hash: inventory.inventory_hash,
+            component_count: inventory.component_count,
+            root_activated_at_ns: activated_at_ns,
+        },
+        activated_at_ns,
+    )
+    .map(crate::ops::component_provisioning::status_response)
+}
+
 async fn publish_component_directory(
     request: &RootComponentPublicationRequest,
     member: crate::view::component_provisioning::RootComponentPublicationMemberView,
@@ -231,6 +382,24 @@ async fn publish_component_directory(
             )
         })?;
     validate_publication_partition(&member, &partition)?;
+    let allocation =
+        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+                "published Component has no retained allocation authority",
+            )
+        })?;
+    let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
+    if retained.deployment != member.deployment
+        || retained.component_group != member.component_group
+    {
+        return Err(InternalError::conflict(
+            "published Component deployment or Group Directory differs from retained authority",
+        ));
+    }
+    let previous_directory_authority_hash =
+        super::component_registry::committed_directory_receipt(&allocation)?
+            .directory_authority_hash;
     let directory_request = ComponentRuntimeDirectoryPreparationRequest {
         operation_id: member.member_operation_id,
         authority: ComponentRuntimeDirectoryAuthority {
@@ -274,6 +443,18 @@ async fn publish_component_directory(
         directory_authority_hash,
     )
     .await?;
+    let allocation = ComponentRegistryOps::record_group_directory_prepared(
+        member.member_operation_id,
+        previous_directory_authority_hash,
+        directory_authority_hash,
+    )?;
+    let receipt = super::component_registry::committed_directory_receipt(&allocation)?;
+    if !receipt.directory_prepared || receipt.directory_authority_hash != directory_authority_hash {
+        return Err(InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
+            "Component Group Directory publication did not commit its exact root receipt",
+        ));
+    }
     RootComponentProvisioningOps::record_publication_delivery(
         request,
         &member,

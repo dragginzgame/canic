@@ -85,6 +85,7 @@ use canic_core::{
         },
     },
     dto::{
+        component_provisioning::ComponentGroupDirectory,
         component_registry::{
             ComponentDirectoryHead, ComponentDirectoryProvenance, ComponentLifecycleStatus,
             ComponentProvisioningOrigin, ComponentRegistryHead, ComponentRuntimeDirectoryAuthority,
@@ -2643,6 +2644,30 @@ impl ComponentRegistryOps {
 
     pub(crate) fn allocation(operation_id: [u8; 32]) -> Option<RootComponentAllocationView> {
         RootComponentRegistryStore::allocation(operation_id).map(allocation_record_to_view)
+    }
+
+    /// Reconstruct the immutable Registry partition established by active membership.
+    ///
+    /// The current partition may have advanced through later descendant work, so callers must
+    /// validate terminal activation against this receipt-bound historical authority instead of
+    /// comparing the current head with the earlier prepared head.
+    pub(crate) fn active_membership_partition(
+        operation_id: [u8; 32],
+    ) -> Result<ComponentRegistryPartitionView, InternalError> {
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component allocation is not committed for active membership validation",
+            ));
+        };
+        let membership = commitment.membership.as_ref().ok_or_else(|| {
+            InternalError::conflict("Component allocation has no active membership receipt")
+        })?;
+        let active = exact_active_partition(&record, commitment, membership)?;
+        Ok(partition_record_to_view(active))
     }
 
     pub(crate) fn component_spec_counts(
@@ -6394,6 +6419,99 @@ impl ComponentRegistryOps {
         Ok(allocation_record_to_view(next_record))
     }
 
+    pub(crate) fn record_group_directory_prepared(
+        operation_id: [u8; 32],
+        previous_authority_hash: [u8; 32],
+        expected_authority_hash: [u8; 32],
+    ) -> Result<RootComponentAllocationView, InternalError> {
+        if expected_authority_hash == [0; 32] {
+            return Err(InternalError::invalid_input(
+                "Component Group Directory authority transition is invalid",
+            ));
+        }
+        let current = RootComponentRegistryStore::current().ok_or_else(|| {
+            InternalError::unavailable("root Component Registry authority has not been prepared")
+        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
+            InternalError::unavailable("Component allocation operation has not been reserved")
+        })?;
+        if !matches!(
+            &record.provisioning_origin,
+            ComponentProvisioningOrigin::ComponentGroup { .. }
+        ) {
+            return Err(InternalError::conflict(
+                "Component Group Directory transition requires a grouped allocation",
+            ));
+        }
+        let RootComponentAllocationProgressRecord::Committed {
+            creation,
+            canister,
+            installation,
+            commitment,
+        } = &record.progress
+        else {
+            return Err(InternalError::conflict(
+                "Component Group allocation is not committed for Directory publication",
+            ));
+        };
+        let replay_is_exact = [
+            commitment.directory_authority_hash == expected_authority_hash,
+            commitment.directory_prepared,
+            !commitment.runtime_activated,
+            commitment.membership.is_none(),
+        ]
+        .into_iter()
+        .all(|exact| exact);
+        if replay_is_exact {
+            return Ok(allocation_record_to_view(record));
+        }
+        let previous_hash_is_valid = [
+            previous_authority_hash != [0; 32],
+            previous_authority_hash != expected_authority_hash,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !previous_hash_is_valid {
+            return Err(InternalError::invalid_input(
+                "Component Group Directory previous authority is invalid",
+            ));
+        }
+        let transition_is_open = [
+            commitment.directory_authority_hash == previous_authority_hash,
+            !commitment.directory_prepared,
+            !commitment.runtime_activated,
+            commitment.membership.is_none(),
+        ]
+        .into_iter()
+        .all(|open| open);
+        if !transition_is_open {
+            return Err(InternalError::conflict(
+                "Component Group Directory authority differs from its unpublished root receipt",
+            ));
+        }
+        let mut next_commitment = commitment.clone();
+        next_commitment.directory_authority_hash = expected_authority_hash;
+        next_commitment.directory_prepared = true;
+        let mut next_record = record.clone();
+        next_record.progress = RootComponentAllocationProgressRecord::Committed {
+            creation: creation.clone(),
+            canister: *canister,
+            installation: installation.clone(),
+            commitment: next_commitment,
+        };
+        validate_charged_record_size(&next_record, installation.charged_entry_bytes)?;
+        // The install intent already charged the maximum terminal record. Hash byte values can
+        // change the encoded record length, so the durable byte ledger retains that frozen charge.
+        RootComponentRegistryStore::replace_allocation(
+            &current,
+            current.clone(),
+            &record,
+            next_record.clone(),
+        )
+        .map_err(map_allocation_commit_error)?;
+        Ok(allocation_record_to_view(next_record))
+    }
+
     pub(crate) fn mark_runtime_activated(
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
@@ -6465,6 +6583,38 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
+        Self::activate_membership_with_group_directory(
+            operation_id,
+            directory_synchronized_at_ns,
+            maximum_component_registry_bytes,
+            fleet_directory,
+            None,
+        )
+    }
+
+    pub(crate) fn activate_group_membership(
+        operation_id: [u8; 32],
+        directory_synchronized_at_ns: u64,
+        maximum_component_registry_bytes: u64,
+        fleet_directory: FleetDirectorySnapshot,
+        component_group: &ComponentGroupDirectory,
+    ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
+        Self::activate_membership_with_group_directory(
+            operation_id,
+            directory_synchronized_at_ns,
+            maximum_component_registry_bytes,
+            fleet_directory,
+            Some(component_group),
+        )
+    }
+
+    fn activate_membership_with_group_directory(
+        operation_id: [u8; 32],
+        directory_synchronized_at_ns: u64,
+        maximum_component_registry_bytes: u64,
+        fleet_directory: FleetDirectorySnapshot,
+        component_group: Option<&ComponentGroupDirectory>,
+    ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
         })?;
@@ -6481,10 +6631,24 @@ impl ComponentRegistryOps {
                 "Component allocation is not committed for membership activation",
             ));
         };
+        let allocation_is_grouped = matches!(
+            &record.provisioning_origin,
+            ComponentProvisioningOrigin::ComponentGroup { .. }
+        );
+        if allocation_is_grouped != component_group.is_some() {
+            return Err(InternalError::conflict(
+                "Component membership activation mode differs from its provisioning origin",
+            ));
+        }
         let prepared = exact_committed_partition(&record, commitment)?;
         if let Some(membership) = &commitment.membership {
             let active = exact_active_partition(&record, commitment, membership)?;
-            validate_membership_directory_authority_hash(&active, &fleet_directory, membership)?;
+            validate_membership_directory_authority_hash(
+                &active,
+                &fleet_directory,
+                component_group,
+                membership,
+            )?;
             return Ok((
                 allocation_record_to_view(record),
                 partition_record_to_view(active),
@@ -6506,6 +6670,7 @@ impl ComponentRegistryOps {
             commitment,
             directory_synchronized_at_ns,
             &fleet_directory,
+            component_group,
         )?;
         if active.encoded_bytes > installation.charged_entry_bytes {
             return Err(InternalError::invariant(
@@ -10182,6 +10347,7 @@ fn active_membership_records(
     commitment: &RootComponentCommitmentRecord,
     directory_synchronized_at_ns: u64,
     fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
 ) -> Result<
     (
         RootComponentAllocationRecord,
@@ -10214,13 +10380,14 @@ fn active_membership_records(
         empty_component_descendant_content_hash(record.component),
         0,
     )?;
-    let directory_authority_hash = component_directory_authority_hash(
+    let directory_authority_hash = component_directory_authority_hash_with_group(
         &installation.binding,
         revision,
         content_hash,
         directory_synchronized_at_ns,
         0,
         fleet_directory,
+        component_group,
     )?;
     let mut next_record = record.clone();
     let mut active = ComponentRegistryPartitionRecord {
@@ -10302,6 +10469,26 @@ fn component_directory_authority_hash(
     descendant_count: u32,
     fleet_directory: &FleetDirectorySnapshot,
 ) -> Result<[u8; 32], InternalError> {
+    component_directory_authority_hash_with_group(
+        binding,
+        revision,
+        content_hash,
+        synchronized_at_ns,
+        descendant_count,
+        fleet_directory,
+        None,
+    )
+}
+
+fn component_directory_authority_hash_with_group(
+    binding: &ComponentBinding,
+    revision: u64,
+    content_hash: [u8; 32],
+    synchronized_at_ns: u64,
+    descendant_count: u32,
+    fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
+) -> Result<[u8; 32], InternalError> {
     ComponentRuntimeOps::directory_authority_hash(&ComponentRuntimeDirectoryAuthority {
         fleet: fleet_directory.clone(),
         component: ComponentDirectoryHead {
@@ -10314,7 +10501,7 @@ fn component_directory_authority_hash(
             },
             descendant_count,
         },
-        component_group: None,
+        component_group: component_group.cloned(),
     })
 }
 
@@ -10615,6 +10802,7 @@ fn validate_active_partition(
 fn validate_membership_directory_authority_hash(
     partition: &ComponentRegistryPartitionRecord,
     fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
     membership: &RootComponentMembershipRecord,
 ) -> Result<(), InternalError> {
     let authority = ComponentRuntimeDirectoryAuthority {
@@ -10629,7 +10817,7 @@ fn validate_membership_directory_authority_hash(
             },
             descendant_count: 0,
         },
-        component_group: None,
+        component_group: component_group.cloned(),
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
@@ -17161,6 +17349,11 @@ mod tests {
         assert_eq!(active_partition.status, ComponentLifecycleStatus::Active);
         assert_eq!(active_partition.revision, 2);
         assert_eq!(active_partition.directory_synchronized_at_ns, 33);
+        assert_eq!(
+            ComponentRegistryOps::active_membership_partition([12; 32])
+                .expect("reconstruct active membership partition"),
+            active_partition
+        );
         assert_ne!(
             active_partition.content_hash,
             prepared_partition.content_hash

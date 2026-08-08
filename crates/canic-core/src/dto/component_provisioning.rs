@@ -48,6 +48,8 @@ pub struct FleetComponentProvisioningAdvanceRequest {
     pub expected_current_root: Option<FleetComponentProvisioningRootProgress>,
     pub expected_directory_confirmed_root_count: u32,
     pub expected_current_publication: Option<FleetComponentPublicationRootProgress>,
+    pub expected_runtime_activated_root_count: u32,
+    pub expected_current_activation: Option<FleetComponentActivationRootProgress>,
 }
 
 /// Exact root-local cursor copied from passive Coordinator status before one advance.
@@ -71,6 +73,16 @@ pub struct FleetComponentPublicationRootProgress {
     pub published_component_count: u32,
 }
 
+/// Exact root-local runtime-activation cursor copied from passive Coordinator status.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentActivationRootProgress {
+    pub fleet_subnet_root: Principal,
+    pub component_count: u32,
+    pub activated_component_count: u32,
+    pub root_runtime_active: bool,
+}
+
 /// Exact passive lookup key for one Coordinator-owned provisioning operation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -90,6 +102,8 @@ pub enum FleetComponentProvisioningPhase {
     ServiceTopologyPublished,
     ConfirmingDirectories,
     DirectoriesConfirmed,
+    ActivatingRuntimes,
+    RuntimesActivated,
 }
 
 /// Compact exact status for one Coordinator-owned provisioning operation.
@@ -112,6 +126,9 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub directory_confirmed_root_count: u32,
     pub current_publication: Option<FleetComponentPublicationRootProgress>,
     pub publication_in_flight_root: Option<Principal>,
+    pub runtime_activated_root_count: u32,
+    pub current_activation: Option<FleetComponentActivationRootProgress>,
+    pub activation_in_flight_root: Option<Principal>,
     pub group_placement_count: u32,
     pub component_count: u32,
     pub planned_at_ns: u64,
@@ -120,6 +137,7 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub published_fleet_registry: Option<FleetRegistryVersion>,
     pub service_topology_published_at_ns: Option<u64>,
     pub directories_confirmed_at_ns: Option<u64>,
+    pub runtimes_activated_at_ns: Option<u64>,
 }
 
 /// Fresh-install or monotonic scale-out scope covered by one plan.
@@ -263,6 +281,26 @@ pub struct RootComponentPublicationRequest {
     pub expected_published_component_count: u32,
 }
 
+/// Coordinator-authenticated command advancing one bounded root activation step.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentActivationRequest {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub expected_activated_component_count: u32,
+    pub expected_root_runtime_active: bool,
+}
+
+/// Compact terminal evidence binding Component inventory and root runtime activation.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentActivationEvidence {
+    pub fleet_activation_operation_id: [u8; 32],
+    pub initial_inventory_hash: [u8; 32],
+    pub component_count: u32,
+    pub root_activated_at_ns: u64,
+}
+
 /// One exact provisioned Component occurrence and its committed Registry identity.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -318,10 +356,15 @@ pub struct RootComponentProvisioningStatusResponse {
     pub installed_component_count: u32,
     pub registry_committed_component_count: u32,
     pub published_component_count: u32,
+    pub activated_component_count: u32,
+    pub root_runtime_active: bool,
     pub result: Option<RootComponentProvisioningResult>,
     pub publication: Option<RootComponentPublicationEvidence>,
+    pub activation: Option<RootComponentActivationEvidence>,
     pub accepted_at_ns: u64,
     pub provisioned_at_ns: Option<u64>,
     pub published_at_ns: Option<u64>,
+    pub activation_started_at_ns: Option<u64>,
+    pub runtimes_activated_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
 }

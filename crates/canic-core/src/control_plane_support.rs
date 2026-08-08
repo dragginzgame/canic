@@ -58,6 +58,7 @@ pub mod ops {
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
+            MAX_FLEET_SUBNET_ROOT_COMPONENT_ACTIVATION_PAYLOAD_BYTES,
             MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES,
             MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES,
             MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES,
@@ -71,6 +72,7 @@ pub mod ops {
             RootComponentProvisioningProvisionedReceiptAuthority,
             RootComponentProvisioningPublishedReceiptAuthority,
             RootComponentProvisioningReceiptOps,
+            RootComponentProvisioningRuntimesActiveReceiptAuthority,
         };
     }
 

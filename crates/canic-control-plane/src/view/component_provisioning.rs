@@ -12,8 +12,9 @@ use canic_core::{
         },
         component_provisioning::FleetSubnetRootProvisioningBatch,
         component_provisioning::{
-            ComponentGroupDirectory, RootComponentProvisioningPhase,
-            RootComponentProvisioningResult, RootComponentPublicationEvidence,
+            ComponentGroupDirectory, RootComponentActivationEvidence,
+            RootComponentProvisioningPhase, RootComponentProvisioningResult,
+            RootComponentPublicationEvidence,
         },
         fleet_registry::FleetRegistryVersion,
     },
@@ -95,11 +96,16 @@ pub struct RootComponentProvisioningView {
     pub result: Option<RootComponentProvisioningResult>,
     pub publication: Option<RootComponentPublicationEvidence>,
     pub published_component_count: u32,
+    pub activated_component_count: u32,
+    pub root_runtime_active: bool,
     pub publication_in_flight: Option<RootComponentPublicationIntentView>,
+    pub activation: Option<RootComponentActivationEvidence>,
     pub accepted_at_ns: u64,
     pub provisioned_at_ns: Option<u64>,
     pub publication_started_at_ns: Option<u64>,
     pub published_at_ns: Option<u64>,
+    pub activation_started_at_ns: Option<u64>,
+    pub runtimes_activated_at_ns: Option<u64>,
     pub receipt_content_hash: [u8; 32],
 }
 
@@ -120,6 +126,13 @@ pub struct RootComponentPublicationMemberView {
     pub binding: ComponentBinding,
     pub component_registry_revision: u64,
     pub component_registry_content_hash: [u8; 32],
+    pub deployment: ProtectedComponentDeployment,
+    pub component_group: ComponentGroupDirectory,
+}
+
+/// Exact retained runtime authority for one provisioned Component Group member.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentGroupRuntimeAuthorityView {
     pub deployment: ProtectedComponentDeployment,
     pub component_group: ComponentGroupDirectory,
 }
