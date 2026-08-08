@@ -18,9 +18,9 @@ use canic_core::{
     bootstrap::compiled::ConfigModel,
     cdk::types::{Cycles, Principal},
     ids::{
-        ComponentSpecAdmission, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseSetDigest,
-        SubnetId,
+        ComponentGroupDeploymentId, ComponentSpecAdmission, ComponentTopologyDigest,
+        CyclesFundingBudget, FleetBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+        ReleaseBuildId, ReleaseSetDigest, SubnetId,
     },
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
@@ -51,6 +51,14 @@ pub struct PlannedFleetCoordinator {
     pub creation_funding: PlannedCanisterCreationFunding,
 }
 
+/// One explicit initial Component Group placement assigned to a planned root Subnet.
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlannedComponentGroupPlacementAssignment {
+    pub deployment: ComponentGroupDeploymentId,
+    pub ordinal: u32,
+}
+
 ///
 /// PlannedFleetSubnetRootInput
 ///
@@ -60,6 +68,7 @@ pub struct PlannedFleetCoordinator {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlannedFleetSubnetRootInput {
     pub placement_subnet: SubnetId,
+    pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
     pub canister_pool_imports: Vec<Principal>,
@@ -77,6 +86,7 @@ pub struct PlannedFleetSubnetRootInput {
 #[serde(deny_unknown_fields)]
 pub struct PlannedFleetSubnetRoot {
     pub placement_subnet: SubnetId,
+    pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,
     pub initial_release_set: FleetSubnetRootReleaseSet,
@@ -180,6 +190,9 @@ pub enum FleetInstallPlanError {
 
     #[error("Fleet Subnet Root plans are not in canonical placement order")]
     NonCanonicalRootOrder,
+
+    #[error("initial Component Group placement assignments are invalid: {reason}")]
+    InvalidComponentGroupPlacementAssignments { reason: String },
 
     #[error("root {placement_subnet} release build does not match the Fleet install plan")]
     RootReleaseBuildMismatch { placement_subnet: SubnetId },

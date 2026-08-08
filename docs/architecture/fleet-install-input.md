@@ -32,6 +32,10 @@ placement_subnet = "<workload-subnet-principal>"
 project_hub = 10
 database = 3
 
+# Exact initial deployment ordinals assigned to this root's Subnet.
+[fleet_subnet_roots.component_group_placements]
+project_cells = [0, 1]
+
 [fleet_subnet_roots.canister_pool]
 minimum_size = 3
 maximum_size = 10
@@ -63,11 +67,30 @@ value is that root's immutable top-level Component-instance ceiling. Every
 configured Spec must be admitted somewhere, and the sum of its root-local
 ceilings cannot exceed the Spec's Fleet-wide `maximum_instances`.
 
-An admission value is not an initial deployment count. Fresh 0.100
-installation activates each root with an empty sealed Component inventory;
-Components may then be created through the active-root lifecycle. Exact
-nonempty initial placement is a separate 0.101 Component Group deployment
-authority.
+An admission value is not an initial deployment count. For every checked-in
+Component Group deployment with nonzero `initial_placements`, the complete
+Fleet input must assign each ordinal from zero through
+`initial_placements - 1` exactly once under
+`component_group_placements`. The table key is the exact
+`ComponentGroupDeploymentId`; its array assigns those placement ordinals to
+this root's explicit `placement_subnet`. Root rows and deployment keys are
+canonicalized, ordinal arrays must already be strictly increasing, and the
+resulting assignments become immutable install-plan authority before any
+Canister effect.
+
+Assignments must satisfy the deployment and Fleet-service density/spread
+policies, root admissions, `maximum_component_instances` and
+`maximum_group_placements`. They never infer a root from labels, apparent
+capacity or iteration order. A deployment with `initial_placements = 0` has no
+initial assignment; ordinary post-install Component creation remains a
+separate lifecycle.
+
+Fresh installation accepts each root's complete initial Component batch
+before claiming its members. That batch must therefore fit the Ready-asset
+target established by immutable input: the greater of the pool
+`minimum_size` and imported asset count. This bounds the one atomic initial
+transaction; it is not a lifetime workload or physical-Subnet Canister
+ceiling.
 
 `maximum_group_placements` is the immutable aggregate ceiling for accepted or
 committed Component Group placements on that root. Ordinary Components do not
@@ -113,8 +136,8 @@ e8s = 100000000
 
 Zero funding, zero limits, invalid pool ranges, over-limit, duplicate or
 wrong-Subnet pool imports, unknown Specs, duplicate Subnets, incomplete
-admission coverage, or a root that cannot fit one admitted Component tree
-fails before Canister creation.
+admission or initial-placement coverage, or a root that cannot fit one
+admitted Component tree fails before Canister creation.
 
 ## Coordinator Subnet Selection
 

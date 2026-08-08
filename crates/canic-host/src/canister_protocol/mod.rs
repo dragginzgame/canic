@@ -78,17 +78,6 @@ impl CanisterProtocolError {
     }
 }
 
-pub fn call_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-) -> Result<O, CanisterProtocolError>
-where
-    O: CandidType + DeserializeOwned,
-{
-    invoke_no_arg(icp, canister, method, ProtocolCallMode::Update)
-}
-
 pub fn call_with_arg<I, O>(
     icp: &IcpCli,
     canister: Principal,

@@ -11,8 +11,9 @@ mod tests;
 
 pub use model::{
     FleetInstallPlan, FleetInstallPlanError, FleetInstallPlanRequest, PersistedFleetInstallPlan,
-    PersistedFleetSubnetRootReleaseSet, PlannedCanisterCreationFunding, PlannedFleetCoordinator,
-    PlannedFleetSubnetRoot, PlannedFleetSubnetRootInput,
+    PersistedFleetSubnetRootReleaseSet, PlannedCanisterCreationFunding,
+    PlannedComponentGroupPlacementAssignment, PlannedFleetCoordinator, PlannedFleetSubnetRoot,
+    PlannedFleetSubnetRootInput,
 };
 pub use persistence::{compile_and_persist_fleet_install_plan, load_persisted_fleet_install_plan};
 

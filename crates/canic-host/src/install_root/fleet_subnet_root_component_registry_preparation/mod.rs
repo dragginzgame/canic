@@ -118,28 +118,7 @@ fn drive_component_registry_preparation(
                 )?;
                 record_component_registry_preparation_verified(&current, response)?
             }
-            FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
-                let response = query_with_arg(
-                    &icp,
-                    root,
-                    protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                    &request,
-                )?;
-                if current
-                    .journal
-                    .component_registry_preparation_response
-                    .as_ref()
-                    != Some(&response)
-                {
-                    return Err(RootComponentRegistryPreparationError::LiveEvidenceMismatch.into());
-                }
-                return Ok(());
-            }
-            FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
-            | FleetSubnetRootInstallPhase::RootActivationPrepared
-            | FleetSubnetRootInstallPhase::RootActivationInFlight
-            | FleetSubnetRootInstallPhase::RootActivated
-            | FleetSubnetRootInstallPhase::RootActivationVerified => return Ok(()),
+            FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => return Ok(()),
             phase => {
                 return Err(RootComponentRegistryPreparationError::UnexpectedPhase(phase).into());
             }

@@ -4,6 +4,9 @@
 //! Does not own: final root mirror/Directory publication, root runtime activation, or Fleet catalog.
 //! Boundary: host recovery journals exact intent before the Coordinator mutation.
 
+#[cfg(test)]
+mod tests;
+
 use super::{
     fleet_registry_activation_journal::{
         FleetRegistryActivationPhase, PlanFleetRegistryActivationRequest,
@@ -21,16 +24,18 @@ use crate::{
     icp::{IcpCli, LocalReplicaTarget},
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
+use std::path::Path;
+
 use candid::Principal;
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::fleet_registry::{
-        FleetRegistry, FleetRegistryVersion, FleetSubnetRootSnapshotAcknowledgement,
+        FleetComponentSpecEntry, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
+        FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
     },
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
 };
-use std::path::Path;
 use thiserror::Error as ThisError;
 
 const MAX_ACTIVATION_TRANSITIONS: usize = 4;
@@ -115,11 +120,6 @@ pub(super) fn activate_and_verify_fleet_registry(
                 | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
                 | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
                 | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-                | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
-                | FleetSubnetRootInstallPhase::RootActivationPrepared
-                | FleetSubnetRootInstallPhase::RootActivationInFlight
-                | FleetSubnetRootInstallPhase::RootActivated
-                | FleetSubnetRootInstallPhase::RootActivationVerified
         ) {
             return Err(
                 FleetRegistryActivationError::RootNotSynchronized(current.journal.phase).into(),
@@ -162,15 +162,19 @@ pub(super) fn activate_and_verify_fleet_registry(
         planned,
     )?;
     let live = query_live_registry(&icp, request.coordinator)?;
-    require_exact_registry(
+    require_exact_or_service_successor_registry(
         &component_topology,
         &current.journal.active_registry,
         &live,
-        "verified all-Active",
+    )?;
+    let version = FleetRegistryOps::version(
+        &current.journal.active_registry.authority,
+        &component_topology,
+        &current.journal.active_registry,
     )?;
     Ok(VerifiedFleetRegistryActivation {
-        registry: live.registry,
-        version: live.version,
+        registry: current.journal.active_registry,
+        version,
     })
 }
 
@@ -236,15 +240,31 @@ fn require_exact_acknowledgements(
         protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
     )?;
     expected_roots.sort_by(|left, right| left.as_slice().cmp(right.as_slice()));
-    if live.len() != expected_roots.len()
-        || live
-            .iter()
-            .zip(expected_roots)
-            .any(|(ack, root)| ack.fleet_subnet_root != *root || &ack.version != version)
-    {
+    let cardinality_matches = live.len() == expected_roots.len();
+    let entries_match = live
+        .iter()
+        .zip(expected_roots)
+        .all(|(ack, root)| acknowledgement_matches(ack, *root, version));
+    let acknowledgement_set_is_exact = [cardinality_matches, entries_match]
+        .into_iter()
+        .all(std::convert::identity);
+    if !acknowledgement_set_is_exact {
         return Err(FleetRegistryActivationError::AcknowledgementSetMismatch.into());
     }
     Ok(())
+}
+
+fn acknowledgement_matches(
+    acknowledgement: &FleetSubnetRootSnapshotAcknowledgement,
+    root: Principal,
+    version: &FleetRegistryVersion,
+) -> bool {
+    let expected = AcknowledgementAuthority { root, version };
+    let observed = AcknowledgementAuthority {
+        root: acknowledgement.fleet_subnet_root,
+        version: &acknowledgement.version,
+    };
+    observed == expected
 }
 
 fn require_exact_registry(
@@ -255,8 +275,116 @@ fn require_exact_registry(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let manifest = FleetRegistryOps::manifest(&expected.authority, component_topology, expected)?;
     let version = FleetRegistryOps::version(&expected.authority, component_topology, expected)?;
-    if live.registry != *expected || live.manifest != manifest || live.version != version {
+    let expected_evidence = RegistryEvidence {
+        registry: expected,
+        manifest: &manifest,
+        version: &version,
+    };
+    if RegistryEvidence::from_live(live) != expected_evidence {
         return Err(FleetRegistryActivationError::LiveRegistryMismatch(stage).into());
     }
     Ok(())
+}
+
+fn require_exact_or_service_successor_registry(
+    component_topology: &ComponentTopology,
+    expected: &FleetRegistry,
+    live: &LiveRegistryEvidence,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let expected_manifest =
+        FleetRegistryOps::manifest(&expected.authority, component_topology, expected)?;
+    let expected_version =
+        FleetRegistryOps::version(&expected.authority, component_topology, expected)?;
+    let expected_evidence = RegistryEvidence {
+        registry: expected,
+        manifest: &expected_manifest,
+        version: &expected_version,
+    };
+    if RegistryEvidence::from_live(live) == expected_evidence {
+        return Ok(());
+    }
+
+    FleetRegistryOps::validate(&expected.authority, component_topology, &live.registry)?;
+    let live_manifest =
+        FleetRegistryOps::manifest(&live.registry.authority, component_topology, &live.registry)?;
+    let live_version =
+        FleetRegistryOps::version(&live.registry.authority, component_topology, &live.registry)?;
+    let expected_successor_revision = expected.revision.checked_add(1);
+    let immutable_authority_matches = RegistryImmutableAuthority::from_registry(&live.registry)
+        == RegistryImmutableAuthority::from_registry(expected);
+    let service_successor_facts = [
+        expected_successor_revision == Some(live.registry.revision),
+        expected.services.is_empty(),
+        !live.registry.services.is_empty(),
+    ];
+    let is_service_successor = service_successor_facts
+        .into_iter()
+        .all(std::convert::identity);
+    let evidence_is_exact = RegistryHead {
+        manifest: &live.manifest,
+        version: &live.version,
+    } == RegistryHead {
+        manifest: &live_manifest,
+        version: &live_version,
+    };
+    let successor_is_valid = [
+        immutable_authority_matches,
+        is_service_successor,
+        evidence_is_exact,
+    ]
+    .into_iter()
+    .all(std::convert::identity);
+    if !successor_is_valid {
+        return Err(FleetRegistryActivationError::LiveRegistryMismatch(
+            "verified all-Active or exact Fleet-service successor",
+        )
+        .into());
+    }
+    Ok(())
+}
+
+#[derive(Eq, PartialEq)]
+struct RegistryEvidence<'a> {
+    registry: &'a FleetRegistry,
+    manifest: &'a FleetRegistryManifest,
+    version: &'a FleetRegistryVersion,
+}
+
+#[derive(Eq, PartialEq)]
+struct AcknowledgementAuthority<'a> {
+    root: Principal,
+    version: &'a FleetRegistryVersion,
+}
+
+impl<'a> RegistryEvidence<'a> {
+    const fn from_live(live: &'a LiveRegistryEvidence) -> Self {
+        Self {
+            registry: &live.registry,
+            manifest: &live.manifest,
+            version: &live.version,
+        }
+    }
+}
+
+#[derive(Eq, PartialEq)]
+struct RegistryHead<'a> {
+    manifest: &'a FleetRegistryManifest,
+    version: &'a FleetRegistryVersion,
+}
+
+#[derive(Eq, PartialEq)]
+struct RegistryImmutableAuthority<'a> {
+    authority: &'a FleetRegistryAuthority,
+    component_specs: &'a [FleetComponentSpecEntry],
+    fleet_subnet_roots: &'a [FleetSubnetRootEntry],
+}
+
+impl<'a> RegistryImmutableAuthority<'a> {
+    fn from_registry(registry: &'a FleetRegistry) -> Self {
+        Self {
+            authority: &registry.authority,
+            component_specs: &registry.component_specs,
+            fleet_subnet_roots: &registry.fleet_subnet_roots,
+        }
+    }
 }

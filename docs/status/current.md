@@ -14,10 +14,31 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.21`.
-- The latest published release is `v0.101.21` at
-  `6e6ec5204125ed537f92d74997f33822357ebd9a`.
-- Open `0.101.22` activates one exact Directory-prepared grouped Component per
+- The workspace package version is `0.101.22`.
+- The latest published release is `v0.101.22` at
+  `0a4d6e111a9065fdb1987798aff75364852af023`.
+- Open `0.101.23` closes the fresh-install host transaction. Strict Fleet
+  input now assigns every configured initial Component Group ordinal to one
+  explicit root Subnet before effects; the host resolves the resulting real
+  root principals from the verified all-Active Registry, freezes the complete
+  plan and durably drives the Coordinator through `RuntimesActivated`. Passive
+  status reconciles uncertain updates, the complete terminal catalog row is
+  frozen before publication and must match the exact published service
+  Registry. Exact status cardinality and the sole one-revision service
+  successor are checked; atomic root batches must fit their immutable pool
+  minimum/import Ready target. Every initial root has one canonical batch,
+  including an empty batch when it owns no initial placement, so all roots
+  cross the same Coordinator-owned Directory/runtime transaction. Both
+  infrastructure Canisters are verified initially `Prepared`. The superseded
+  host-only empty-root activation path and journal states are hard-cut.
+  Scale-out and the remaining policy/runtime items stay open.
+- Open `0.101.23` also makes `make update-dev` resolve the latest stable
+  ICP CLI release in the currently supported major line, record the official
+  Linux/macOS checksums and install that exact pin. The current maintainer pin
+  is 1.3.0 while the supported operator range remains
+  `>=1.2.0,<2.0.0`. A future major release stops for explicit compatibility
+  review.
+- Released `0.101.22` activates one exact Directory-prepared grouped Component per
   bounded root command by composing the existing runtime and Registry
   membership journals. Each successful call advances the aggregate cursor
   only after the Component is `Active` under its converged current Directory.
@@ -383,6 +404,13 @@ Historical detail is archived at:
   recovery and Caffeine authority before implementation or the Canic hard cut.
   A qualified standalone release and real Canic fixture gate closeout; Toko and
   IcyDB production adoption remains an independent downstream release.
+- Proposed `0.107` makes the Fleet Coordinator the routine cycles treasury for
+  active roots. Each low-balance root pushes an exact self-request under
+  immutable per-root and Fleet-wide limits, and a replay-safe attached-cycles
+  grant targets only that authenticated caller. Optional root-held ICP refill
+  is a lower-threshold emergency fallback after a terminal no-grant result;
+  uncertain grants suppress fallback. Direct top-up remains break-glass, and
+  the attached-cycles recovery proof gates implementation.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -1240,6 +1268,13 @@ Historical detail is archived at:
   release precedes the reinstall-only Canic hard cut. A Canic fixture, rather
   than Toko/IcyDB's independent production release, proves the consumer
   contract for closeout.
+- Proposed 0.107 makes every active root push its low-balance request directly
+  to the exact Fleet Coordinator, which grants attached cycles under protected
+  per-root and Fleet-wide budgets plus an operating reserve. An optional lower-
+  threshold root ICP policy is emergency-only and may run only after a known
+  zero-effect Coordinator result; an uncertain grant blocks fallback. Direct
+  operator top-up remains independent recovery, and M0 must prove exact
+  acceptance, replay refund and interruption recovery before implementation.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence

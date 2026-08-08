@@ -11,7 +11,8 @@ use crate::{
     component_topology::RootComponentAdmissionInput,
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{
-        PlannedCanisterCreationFunding, PlannedFleetCoordinator, PlannedFleetSubnetRootInput,
+        PlannedCanisterCreationFunding, PlannedComponentGroupPlacementAssignment,
+        PlannedFleetCoordinator, PlannedFleetSubnetRootInput,
     },
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
     subnet_catalog::load_mainnet_subnet_catalog,
@@ -27,8 +28,8 @@ use candid::Principal;
 use canic_core::{
     cdk::types::Cycles,
     ids::{
-        BuildNetwork, ComponentSpecId, CyclesFundingBudget, FleetSubnetCanisterPoolConfig,
-        FleetSubnetRootLimits, SubnetId,
+        BuildNetwork, ComponentGroupDeploymentId, ComponentSpecId, CyclesFundingBudget,
+        FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, SubnetId,
     },
 };
 use ic_query::subnet_catalog::{
@@ -199,6 +200,8 @@ enum CreationFundingDocument {
 #[serde(deny_unknown_fields)]
 struct FleetSubnetRootInputDocument {
     placement_subnet: String,
+    #[serde(default)]
+    component_group_placements: BTreeMap<ComponentGroupDeploymentId, Vec<u32>>,
     component_admissions: BTreeMap<ComponentSpecId, u32>,
     limits: FleetSubnetRootLimitsDocument,
     canister_pool: CanisterPoolInputDocument,
@@ -331,84 +334,110 @@ fn resolve_document(
     let mut fleet_subnet_roots = Vec::with_capacity(document.fleet_subnet_roots.len());
     let mut imported_canisters = BTreeSet::new();
     for root in &document.fleet_subnet_roots {
-        let placement_subnet = parse_subnet(
-            "fleet_subnet_roots.placement_subnet",
-            &root.placement_subnet,
-        )?;
-        let root_creation_funding = resolve_funding(
-            &format!("Fleet Subnet Root {placement_subnet}"),
-            placement_subnet,
-            &root.root_creation_funding,
+        fleet_subnet_roots.push(resolve_root_document(
+            root,
             build_network,
             catalog,
-        )?;
-        let wasm_store_creation_funding = resolve_funding(
-            &format!("Wasm Store for Fleet Subnet Root {placement_subnet}"),
-            placement_subnet,
-            &root.wasm_store_creation_funding,
-            build_network,
-            catalog,
-        )?;
-        let component_admissions = root
-            .component_admissions
-            .iter()
-            .map(
-                |(component_spec, maximum_root_instances)| RootComponentAdmissionInput {
-                    component_spec: component_spec.clone(),
-                    maximum_root_instances: *maximum_root_instances,
-                },
-            )
-            .collect();
-        let canister_pool_imports = root
-            .canister_pool
-            .imports
-            .iter()
-            .map(|value| parse_canister("fleet_subnet_roots.canister_pool.imports", value))
-            .collect::<Result<Vec<_>, _>>()?;
-        validate_canister_pool(root, &canister_pool_imports)?;
-        validate_imported_canister_placements(
-            placement_subnet,
-            &canister_pool_imports,
-            build_network,
-            catalog,
-        )?;
-        if let Some(duplicate) = canister_pool_imports
-            .iter()
-            .find(|canister_id| !imported_canisters.insert(**canister_id))
-        {
-            return Err(FleetInstallInputError::InvalidCanisterPool {
-                reason: format!(
-                    "imported Canister {duplicate} is assigned to more than one Fleet Subnet Root"
-                ),
-            });
-        }
-        fleet_subnet_roots.push(PlannedFleetSubnetRootInput {
-            placement_subnet,
-            component_admissions,
-            limits: FleetSubnetRootLimits {
-                maximum_component_instances: root.limits.maximum_component_instances,
-                maximum_registry_bytes: root.limits.maximum_registry_bytes,
-                maximum_wasm_store_bytes: root.limits.maximum_wasm_store_bytes,
-                canister_pool: FleetSubnetCanisterPoolConfig {
-                    minimum_size: root.canister_pool.minimum_size,
-                    maximum_size: root.canister_pool.maximum_size,
-                    canister_cycles: root.canister_pool.canister_cycles.clone(),
-                },
-                cycles_funding: CyclesFundingBudget {
-                    window_secs: root.limits.cycles_funding.window_secs,
-                    maximum_cycles: root.limits.cycles_funding.maximum_cycles.clone(),
-                },
-                maximum_group_placements: root.limits.maximum_group_placements,
-            },
-            canister_pool_imports,
-            root_creation_funding,
-            wasm_store_creation_funding,
-        });
+            &mut imported_canisters,
+        )?);
     }
 
     Ok(ResolvedFleetInstallInput {
         coordinator,
         fleet_subnet_roots,
+    })
+}
+
+fn resolve_root_document(
+    root: &FleetSubnetRootInputDocument,
+    build_network: BuildNetwork,
+    catalog: Option<&ValidatedSubnetCatalog>,
+    imported_canisters: &mut BTreeSet<Principal>,
+) -> Result<PlannedFleetSubnetRootInput, FleetInstallInputError> {
+    let placement_subnet = parse_subnet(
+        "fleet_subnet_roots.placement_subnet",
+        &root.placement_subnet,
+    )?;
+    let root_creation_funding = resolve_funding(
+        &format!("Fleet Subnet Root {placement_subnet}"),
+        placement_subnet,
+        &root.root_creation_funding,
+        build_network,
+        catalog,
+    )?;
+    let wasm_store_creation_funding = resolve_funding(
+        &format!("Wasm Store for Fleet Subnet Root {placement_subnet}"),
+        placement_subnet,
+        &root.wasm_store_creation_funding,
+        build_network,
+        catalog,
+    )?;
+    let component_admissions = root
+        .component_admissions
+        .iter()
+        .map(
+            |(component_spec, maximum_root_instances)| RootComponentAdmissionInput {
+                component_spec: component_spec.clone(),
+                maximum_root_instances: *maximum_root_instances,
+            },
+        )
+        .collect();
+    let canister_pool_imports = root
+        .canister_pool
+        .imports
+        .iter()
+        .map(|value| parse_canister("fleet_subnet_roots.canister_pool.imports", value))
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_canister_pool(root, &canister_pool_imports)?;
+    validate_imported_canister_placements(
+        placement_subnet,
+        &canister_pool_imports,
+        build_network,
+        catalog,
+    )?;
+    if let Some(duplicate) = canister_pool_imports
+        .iter()
+        .find(|canister_id| !imported_canisters.insert(**canister_id))
+    {
+        return Err(FleetInstallInputError::InvalidCanisterPool {
+            reason: format!(
+                "imported Canister {duplicate} is assigned to more than one Fleet Subnet Root"
+            ),
+        });
+    }
+    Ok(PlannedFleetSubnetRootInput {
+        placement_subnet,
+        component_group_placements: root
+            .component_group_placements
+            .iter()
+            .flat_map(|(deployment, ordinals)| {
+                ordinals
+                    .iter()
+                    .map(|ordinal| PlannedComponentGroupPlacementAssignment {
+                        deployment: deployment.clone(),
+                        ordinal: *ordinal,
+                    })
+            })
+            .collect(),
+        component_admissions,
+        limits: FleetSubnetRootLimits {
+            maximum_component_instances: root.limits.maximum_component_instances,
+            maximum_registry_bytes: root.limits.maximum_registry_bytes,
+            maximum_wasm_store_bytes: root.limits.maximum_wasm_store_bytes,
+            canister_pool: FleetSubnetCanisterPoolConfig {
+                minimum_size: root.canister_pool.minimum_size,
+                maximum_size: root.canister_pool.maximum_size,
+                canister_cycles: root.canister_pool.canister_cycles.clone(),
+            },
+            cycles_funding: CyclesFundingBudget {
+                window_secs: root.limits.cycles_funding.window_secs,
+                maximum_cycles: root.limits.cycles_funding.maximum_cycles.clone(),
+            },
+            maximum_group_placements: root.limits.maximum_group_placements,
+        },
+        canister_pool_imports,
+        root_creation_funding,
+        wasm_store_creation_funding,
     })
 }
 

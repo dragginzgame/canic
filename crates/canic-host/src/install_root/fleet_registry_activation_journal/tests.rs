@@ -177,6 +177,7 @@ maximum_instances = 2
         .expect("topology digest");
     let root_plan = PlannedFleetSubnetRoot {
         placement_subnet: subnet(2),
+        component_group_placements: Vec::new(),
         component_admissions: vec![admission.clone()],
         component_topology_digest: topology_digest,
         initial_release_set: release_set,

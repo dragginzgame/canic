@@ -30,6 +30,9 @@ mod deployment_truth_gate;
 mod execution_preflight;
 mod fleet_catalog_closeout;
 mod fleet_catalog_publication;
+mod fleet_component_provisioning_install;
+mod fleet_component_provisioning_journal;
+mod fleet_component_provisioning_plan;
 mod fleet_install_session;
 mod fleet_registry_activation;
 mod fleet_registry_activation_journal;
@@ -39,7 +42,6 @@ mod fleet_subnet_root_install_journal;
 mod fleet_subnet_root_registry_join;
 mod fleet_subnet_root_registry_mirror_activation;
 mod fleet_subnet_root_registry_sync;
-mod fleet_subnet_root_runtime_activation;
 mod fleet_subnet_root_store_bootstrap;
 mod identity;
 mod operations;
@@ -61,8 +63,8 @@ pub use config_selection::{
     select_discovered_app_config_path, workspace_app_roots,
 };
 use coordinator_install::install_and_verify_fleet_coordinator;
-use fleet_catalog_closeout::{
-    PublishInstalledFleetCatalogRequest, publish_installed_fleet_catalog,
+use fleet_component_provisioning_install::{
+    InstallFleetComponentsRequest, install_fleet_components_and_publish_catalog,
 };
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_subnet_root_component_registry_preparation::{
@@ -77,9 +79,6 @@ use fleet_subnet_root_registry_mirror_activation::{
 };
 use fleet_subnet_root_registry_sync::{
     SynchronizeFleetSubnetRootsRequest, synchronize_and_verify_fleet_subnet_roots,
-};
-use fleet_subnet_root_runtime_activation::{
-    ActivateFleetSubnetRootRuntimesRequest, activate_and_verify_fleet_subnet_root_runtimes,
 };
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use identity::resolve_install_identity;
@@ -391,7 +390,7 @@ fn install_current_fleet_infrastructure(
         },
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    prepare_and_activate_current_fleet_subnet_roots(
+    prepare_current_fleet_subnet_root_component_registries(
         icp_root,
         environment,
         local_replica,
@@ -399,7 +398,7 @@ fn install_current_fleet_infrastructure(
         planned,
         coordinator.coordinator,
     )?;
-    publish_installed_fleet_catalog(PublishInstalledFleetCatalogRequest {
+    install_fleet_components_and_publish_catalog(InstallFleetComponentsRequest {
         icp_root,
         environment,
         local_replica,
@@ -407,12 +406,13 @@ fn install_current_fleet_infrastructure(
         fleet_name: planned.session.fleet_name.clone(),
         fleet_install_plan: &planned.plan,
         coordinator: coordinator.coordinator,
+        install_operation_id: planned.session.operation_id,
+        initial_active_registry: &active.registry,
     })
-    .map(|_| ())
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
 }
 
-fn prepare_and_activate_current_fleet_subnet_roots(
+fn prepare_current_fleet_subnet_root_component_registries(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&crate::icp::LocalReplicaTarget>,
@@ -431,16 +431,6 @@ fn prepare_and_activate_current_fleet_subnet_roots(
             install_operation_id: planned.session.operation_id,
         },
     )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    activate_and_verify_fleet_subnet_root_runtimes(ActivateFleetSubnetRootRuntimesRequest {
-        icp_root,
-        environment,
-        local_replica,
-        config_path,
-        fleet_install_plan: &planned.plan,
-        coordinator,
-        install_operation_id: planned.session.operation_id,
-    })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))
 }
 

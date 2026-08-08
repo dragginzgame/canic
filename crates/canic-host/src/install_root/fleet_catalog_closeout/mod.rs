@@ -16,6 +16,8 @@ use crate::{
     icp::{IcpCli, LocalReplicaTarget},
     release_set::AppConfigSnapshot,
 };
+use std::{path::Path, thread};
+
 use candid::Principal;
 use canic_core::{
     dto::{
@@ -27,11 +29,6 @@ use canic_core::{
     },
     ids::FleetName,
     protocol,
-};
-use std::{
-    path::Path,
-    thread,
-    time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -49,6 +46,8 @@ pub(super) struct PublishInstalledFleetCatalogRequest<'a> {
     pub fleet_name: FleetName,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub coordinator: Principal,
+    pub deployed_at_unix_secs: u64,
+    pub terminal_fleet_registry: &'a FleetRegistryVersion,
 }
 
 ///
@@ -65,8 +64,8 @@ enum FleetCatalogCloseoutError {
     #[error("terminal summary worker for Fleet Subnet Root {root} panicked")]
     SummaryWorkerPanicked { root: Principal },
 
-    #[error("system clock is earlier than the Unix epoch: {0}")]
-    SystemClock(#[source] SystemTimeError),
+    #[error("live Fleet Registry differs from terminal Component provisioning evidence")]
+    TerminalRegistryMismatch,
 }
 
 /// Re-read terminal Coordinator/root authority and publish one durable Fleet discovery row.
@@ -86,17 +85,16 @@ pub(super) fn publish_installed_fleet_catalog(
         request.coordinator,
         &registry,
     )?;
+    if &registry.version != request.terminal_fleet_registry {
+        return Err(FleetCatalogCloseoutError::TerminalRegistryMismatch.into());
+    }
     let root_summaries = query_root_summaries(&icp, &registry)?;
-    let deployed_at_unix_secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(FleetCatalogCloseoutError::SystemClock)?
-        .as_secs();
 
     publish_terminal_fleet_catalog(TerminalFleetCatalogPublicationRequest {
         workspace_root: request.icp_root,
         fleet_name: request.fleet_name,
         environment: request.environment,
-        deployed_at_unix_secs,
+        deployed_at_unix_secs: request.deployed_at_unix_secs,
         fleet_install_plan: &request.fleet_install_plan.plan,
         component_topology: &component_topology,
         coordinator: request.coordinator,

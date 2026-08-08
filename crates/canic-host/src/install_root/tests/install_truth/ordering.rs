@@ -110,22 +110,23 @@ fn assert_current_activation_order(install: &str) {
     assert_before(
         install,
         "activate_and_verify_fleet_subnet_root_registry_mirrors(",
-        "prepare_and_activate_current_fleet_subnet_roots(",
+        "prepare_current_fleet_subnet_root_component_registries(",
     );
     assert_before(
         install,
-        "prepare_and_activate_current_fleet_subnet_roots(",
-        "publish_installed_fleet_catalog(",
+        "prepare_current_fleet_subnet_root_component_registries(",
+        "install_fleet_components_and_publish_catalog(",
     );
-    let root_runtime = source_section(
-        install,
-        "fn prepare_and_activate_current_fleet_subnet_roots(",
-        "fn resolve_current_install_roots(",
-    );
+
+    let component_install = include_str!("../../fleet_component_provisioning_install/mod.rs");
     assert_before(
-        root_runtime,
-        "prepare_and_verify_fleet_subnet_root_component_registries(",
-        "activate_and_verify_fleet_subnet_root_runtimes(",
+        component_install,
+        "FleetComponentProvisioningInstallPhase::RuntimesActivated =>",
+        "FleetComponentProvisioningInstallPhase::CatalogPublicationInFlight =>",
+    );
+    assert!(
+        component_install.contains("begin_fleet_catalog_publication("),
+        "catalog publication intent must be durable after runtime activation"
     );
 
     let closeout = include_str!("../../fleet_catalog_closeout/mod.rs");

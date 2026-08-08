@@ -36,7 +36,7 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain"
-	@echo "  update-dev       Synchronize development tools to the repository pins"
+	@echo "  update-dev       Pin the latest stable ICP CLI and synchronize development tools"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -101,8 +101,9 @@ install:
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
-# Synchronize local development tools to the repository-owned versions.
+# Pin the latest stable ICP CLI, then synchronize local development tools.
 update-dev:
+	bash scripts/dev/update-icp-cli-pin.sh
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	cargo install --quiet \
 		"cargo-audit@$(CANIC_CARGO_AUDIT_VERSION)" \
