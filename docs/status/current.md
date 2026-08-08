@@ -14,10 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.22`.
-- The latest published release is `v0.101.22` at
-  `0a4d6e111a9065fdb1987798aff75364852af023`.
-- Open `0.101.23` closes the fresh-install host transaction. Strict Fleet
+- The workspace package version is `0.101.23`.
+- The latest published release is `v0.101.23` at
+  `1fbb3c5852b499c9403938652fbcbe25d7ecda81`.
+- Open `0.101.24` atomically materializes the Coordinator's bounded deployment
+  placement ledger with the final `RuntimesActivated` commit. Each configured
+  deployment retains its protected group, configuration digest, initial and
+  maximum placement counts, density/spread policy, canonical placement-to-root
+  records and next never-reused ordinal. The placement vector is the sole
+  current-count authority. Earlier provisioning phases require the ledger to
+  remain absent; terminal missing, altered or receipt-unbound state fails
+  closed. Scale-out effects remain fenced.
+- Released `0.101.23` closes the fresh-install host transaction. Strict Fleet
   input now assigns every configured initial Component Group ordinal to one
   explicit root Subnet before effects; the host resolves the resulting real
   root principals from the verified all-Active Registry, freezes the complete
@@ -36,7 +44,7 @@ Historical detail is archived at:
   policy ownership, narrow durable-I/O consolidation, complete stale-surface
   removal and a responsibility/size report; passing behavior alone is not a
   closeout verdict.
-- Open `0.101.23` also makes `make update-dev` resolve the latest stable
+- Released `0.101.23` also makes `make update-dev` resolve the latest stable
   ICP CLI release in the currently supported major line, record the official
   Linux/macOS checksums and install that exact pin. The current maintainer pin
   is 1.3.0 while the supported operator range remains
@@ -2480,17 +2488,14 @@ First primary results:
 
 ## Next Action
 
-The canonical provisioning journey through `DirectoriesConfirmed` is
-published at immutable `v0.101.21`. Open `0.101.22` activates every grouped
-Component from its exact prepared Directory authority, promotes and verifies
-its Active Registry/current-Directory state, seals the initial inventory and
-activates every selected root before the Coordinator reaches
-`RuntimesActivated`. Continue Slice 3 by making the host install transaction
-consume that exact terminal evidence, publish the Fleet catalog row only
-afterward and record terminal host completion. Do not collapse catalog
-publication into the Coordinator activation receipt.
-Do not enable scale-out until its durable Coordinator
-placement ledger can prove ordinal non-reuse and combined density/spread.
+The complete fresh-install provisioning and host transaction is published at
+immutable `v0.101.23`. Open `0.101.24` establishes the durable Coordinator
+deployment-placement ledger from that terminal authority. Continue Slice 4 by
+adding the authenticated monotonic desired-count request and pre-effect
+ordinal/root-assignment reservation against this ledger. Keep root effects,
+service append and runtime activation behind later explicit journal phases;
+do not infer placement, reuse an ordinal or create a second current-count
+authority.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

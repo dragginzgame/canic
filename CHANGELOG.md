@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.24` atomically materializes the Coordinator's canonical protected
+  deployment-placement ledger from terminal fresh-install root evidence,
+  establishing the durable count, root assignment and never-reused next
+  ordinal authority required before scale-out.
+
 - `0.101.23` persists explicit initial placement-to-Subnet authority and drives
   every initial root, including roots with an empty Component batch, through
   the complete response-loss-safe host transaction to terminal runtime

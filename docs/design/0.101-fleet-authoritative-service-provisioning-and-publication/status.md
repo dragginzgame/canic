@@ -97,8 +97,16 @@ Date: 2026-08-08
   verified `Prepared`. The former direct empty-root host activation path is
   removed; empty roots cross the same Coordinator-owned Directory and runtime
   transaction instead.
+  Once the final root reaches terminal runtime activation, the Coordinator
+  atomically materializes one canonical deployment ledger from the protected
+  configuration, fresh plan and exact terminal root receipts. Each deployment
+  retains its placement IDs and root assignments, protected maximum and
+  policy, and the next never-reused ordinal; the committed placement vector is
+  the sole current-count authority. Earlier phases require no ledger, and
+  terminal corrupt or incomplete ledger state fails closed. Scale-out
+  mutation remains fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.22` is released and `0.101.23` is open.
+- Implementation started: yes; `0.101.23` is released and `0.101.24` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -330,8 +338,11 @@ Fleet policy writer.
 
 ## Slice 4 — Explicit Group Scale-Out
 
-- [ ] Persist each deployment's placement IDs, exact root assignments, current
-  count, protected maximum and next ordinal.
+- [x] Persist each deployment's placement IDs, exact root assignments,
+  protected maximum and next ordinal. The canonical placement vector is the
+  sole current-count authority. It is materialized atomically with terminal
+  fresh-install runtime evidence and rederived during stable-state
+  validation; scale-out reservation and append remain separate later steps.
 - [ ] Accept only monotonic desired-count increases with exact unused
   placement IDs on active roots within density, spread and aggregate limits.
 - [ ] Require every eligible scale-out root to belong to the complete root set
