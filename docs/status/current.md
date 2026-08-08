@@ -14,10 +14,20 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.24`.
-- The latest published release is `v0.101.24` at
-  `3344d061e0882298759864f977fd9b31961864d5`.
-- Open `0.101.25` adds the controller-authenticated monotonic group scale-out
+- The workspace package version is `0.101.25`.
+- The latest published release is `v0.101.25` at
+  `73e78db691653df696558176efb94dfa828a5579`.
+- Open `0.101.26` advances only the durably reserved scale-out root batches
+  through the existing response-loss-safe acceptance protocol. The
+  Coordinator persists each canonical selected-root intent before calling,
+  reconciles uncertain responses against that same call and retains exact
+  authenticated receipts before reaching `RootsAccepted`. Terminal root
+  operations retain permanent placement and response authority while
+  atomically releasing only the active-operation fence, allowing a later
+  distinct batch without weakening capacity or root-draining fences.
+  Provisioning, service append, Directory confirmation and runtime activation
+  remain fenced.
+- Released `0.101.25` adds the controller-authenticated monotonic group scale-out
   reservation boundary to the existing provisioning prepare/status contract.
   It requires terminal fresh installation, validates the exact current
   Registry and protected configuration, combines every committed placement
@@ -2501,14 +2511,14 @@ First primary results:
 
 ## Next Action
 
-The terminal fresh-install placement ledger is published at immutable
-`v0.101.24`. Open `0.101.25` adds the authenticated monotonic desired-count
-request and atomically reserves its exact ordinal/root assignments before
-effects. Continue Slice 4 with the first response-loss-safe Coordinator-to-root
-acceptance phase for only those reserved placements. Reuse the existing root
-batch protocol, retain the active scale-out journal as the sole reservation
-authority and keep root provisioning, atomic service append, Directory
-confirmation and runtime activation behind later explicit phases.
+The monotonic scale-out reservation boundary is published at immutable
+`v0.101.25`. Open `0.101.26` advances only those reserved placements through
+the response-loss-safe Coordinator-to-root acceptance journal and stops at
+`RootsAccepted`. Continue Slice 4 by reserving each accepted placement's exact
+Component identities through the existing root-local aggregate cursor. Keep
+prepaid-Canister claims, installation, Registry commitment, atomic service
+append, Directory confirmation and runtime activation behind later explicit
+phases.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

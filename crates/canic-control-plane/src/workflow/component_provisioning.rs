@@ -69,11 +69,6 @@ pub async fn accept(
         ));
     }
     RootComponentProvisioningOps::require_acceptance_open(request.operation_id)?;
-    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
-        return Err(InternalError::conflict(
-            "fresh root Component provisioning acceptance requires runtime Prepared",
-        ));
-    }
 
     let mirror = FleetRegistryMirrorOps::validated_current(&authority, root)?;
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
@@ -780,11 +775,8 @@ fn current_registry_for_acceptance(
     request: &RootComponentProvisioningAcceptanceRequest,
     validation: &RootComponentProvisioningBatchValidation,
 ) -> Result<RootComponentRegistryView, InternalError> {
-    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
-        return Err(InternalError::conflict(
-            "fresh root Component provisioning acceptance requires runtime Prepared",
-        ));
-    }
+    // Fresh installation accepts while Prepared; later scale-out accepts while Active.
+    FleetActivationWorkflow::status()?;
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != request.fleet_registry

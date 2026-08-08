@@ -434,6 +434,32 @@ impl RootComponentProvisioningStore {
         Ok(())
     }
 
+    pub(crate) fn complete_operation(
+        current: &RootComponentProvisioningRecord,
+        next: RootComponentProvisioningRecord,
+    ) -> Result<(), RootComponentProvisioningCommitError> {
+        let key = RootComponentProvisioningOperationKey(current.operation_id);
+        let stored =
+            ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| operations.get(&key));
+        let state = Self::state();
+        if next.operation_id != current.operation_id
+            || stored.as_ref() != Some(current)
+            || state.active_operation_id != Some(current.operation_id)
+        {
+            return Err(RootComponentProvisioningCommitError::OperationChanged);
+        }
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
+            operations.insert(key, next);
+        });
+        ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
+            cell.set(RootComponentProvisioningStateRecord {
+                tracked_group_placements: state.tracked_group_placements,
+                active_operation_id: None,
+            });
+        });
+        Ok(())
+    }
+
     #[must_use]
     pub(crate) fn placement(
         key: &RootComponentProvisioningPlacementKey,

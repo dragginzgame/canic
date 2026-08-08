@@ -832,8 +832,13 @@ fn runtime_activation_begins_only_after_publication_and_replays_exactly() {
 }
 
 #[test]
-fn empty_initial_root_batch_crosses_the_same_terminal_protocol() {
+fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
     let mut fixture = fixture();
+    let mut next_request = fixture.request.clone();
+    let next_validation = fixture.validation.clone();
+    next_request.operation_id = [71; 32];
+    next_request.plan_hash = [72; 32];
+    next_request.batch.placements[0].group_placement.ordinal = 1;
     fixture.request.batch.placements.clear();
     fixture.validation = RootComponentProvisioningBatchValidation {
         placement_count: 0,
@@ -905,6 +910,33 @@ fn empty_initial_root_batch_crosses_the_same_terminal_protocol() {
     assert_eq!(active.phase, RootComponentProvisioningPhase::RuntimesActive);
     assert_eq!(active.component_count, 0);
     assert!(active.root_runtime_active);
+    assert_eq!(
+        RootComponentProvisioningStore::state(),
+        crate::storage::stable::component_provisioning::RootComponentProvisioningStateRecord {
+            tracked_group_placements: 0,
+            active_operation_id: None,
+        }
+    );
+
+    let accepted = RootComponentProvisioningOps::accept(next_request, &next_validation, 700)
+        .expect("accept later scale-out-shaped batch");
+    assert_eq!(accepted.phase, RootComponentProvisioningPhase::Accepted);
+    assert_eq!(accepted.batch.placements[0].group_placement.ordinal, 1);
+    assert_eq!(
+        RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id: active.operation_id,
+            plan_hash: active.plan_hash,
+        })
+        .expect("terminal historical receipt remains replayable"),
+        active
+    );
+    assert_eq!(
+        RootComponentProvisioningStore::state(),
+        crate::storage::stable::component_provisioning::RootComponentProvisioningStateRecord {
+            tracked_group_placements: 1,
+            active_operation_id: Some([71; 32]),
+        }
+    );
 }
 
 fn single_published_fixture() -> (

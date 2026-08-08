@@ -48,7 +48,8 @@ use serde::{Deserialize, Serialize};
 // immutable join receipts, the complete Component provisioning plan plus one
 // compact acceptance and one terminal provisioning receipt per planned root,
 // one compact placement record per committed Component Group deployment copy,
-// at most one in-progress scale-out plan,
+// at most one in-progress scale-out plan plus one compact acceptance per
+// selected root,
 // the complete service set again as one publication receipt, one exact
 // acknowledgement per current root, and at most one draining and one removal
 // receipt per root.

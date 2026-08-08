@@ -2,7 +2,8 @@
 
 use super::*;
 use crate::storage::stable::fleet_coordinator::{
-    FleetComponentProvisioningStateRecord, FleetComponentRuntimeActivationRecord,
+    FleetComponentProvisioningRootAcceptanceIntentRecord, FleetComponentProvisioningStateRecord,
+    FleetComponentRuntimeActivationRecord,
 };
 use candid::Principal;
 use canic_core::{
@@ -170,6 +171,33 @@ fn planned_scale_out_reserves_the_exact_next_range_without_committing_placements
     }
     deployments[0].next_placement_ordinal = 9;
     assert!(validate_terminal_ledger(&initial, Some(&skipped), &deployments).is_err());
+}
+
+#[test]
+fn scale_out_ledger_allows_only_the_root_acceptance_state_machine() {
+    let (_, mut scale_out) = fixture();
+    assert!(!scale_out_acceptance_boundary_is_valid(&scale_out.state));
+
+    scale_out.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 30 };
+    assert!(scale_out_acceptance_boundary_is_valid(&scale_out.state));
+
+    scale_out.state = FleetComponentProvisioningStateRecord::AcceptingRoots {
+        planned_at_ns: 30,
+        acceptances: vec![],
+        in_flight: Some(FleetComponentProvisioningRootAcceptanceIntentRecord {
+            root_index: 0,
+            fleet_subnet_root: principal(10),
+            started_at_ns: 31,
+        }),
+    };
+    assert!(scale_out_acceptance_boundary_is_valid(&scale_out.state));
+
+    scale_out.state = FleetComponentProvisioningStateRecord::RootsAccepted {
+        planned_at_ns: 30,
+        acceptances: vec![],
+        roots_accepted_at_ns: 32,
+    };
+    assert!(scale_out_acceptance_boundary_is_valid(&scale_out.state));
 }
 
 fn fixture() -> (

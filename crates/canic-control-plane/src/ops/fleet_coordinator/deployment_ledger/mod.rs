@@ -318,12 +318,9 @@ fn validate_scale_out_record(
             "Fleet Component scale-out reuses the fresh operation identity",
         ));
     }
-    if !matches!(
-        scale_out.state,
-        FleetComponentProvisioningStateRecord::Planned { planned_at_ns } if planned_at_ns > 0
-    ) {
+    if !scale_out_acceptance_boundary_is_valid(&scale_out.state) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out has crossed its implemented reservation boundary",
+            "Fleet Component scale-out has crossed its implemented root-acceptance boundary",
         ));
     }
     let plan_hash = hash_with_next_ordinal(
@@ -345,6 +342,25 @@ fn validate_scale_out_record(
         ));
     }
     Ok(())
+}
+
+const fn scale_out_acceptance_boundary_is_valid(
+    state: &FleetComponentProvisioningStateRecord,
+) -> bool {
+    match state {
+        FleetComponentProvisioningStateRecord::Planned { planned_at_ns }
+        | FleetComponentProvisioningStateRecord::AcceptingRoots { planned_at_ns, .. }
+        | FleetComponentProvisioningStateRecord::RootsAccepted { planned_at_ns, .. } => {
+            *planned_at_ns > 0
+        }
+        FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
+        | FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. }
+        | FleetComponentProvisioningStateRecord::ServiceTopologyPublished { .. }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => false,
+    }
 }
 
 fn validate_terminal_ledger(

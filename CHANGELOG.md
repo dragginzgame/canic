@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.26` advances only the durably reserved scale-out batches through the
+  existing response-loss-safe root-acceptance protocol, retaining historical
+  terminal receipts while keeping provisioning and publication fenced.
+
 - `0.101.25` adds the controller-authenticated monotonic scale-out reservation
   boundary, atomically freezing exact new placement IDs and installed-root
   assignments while advancing the never-reused ordinal before root effects.
