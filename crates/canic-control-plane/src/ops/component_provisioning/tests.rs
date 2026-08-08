@@ -918,7 +918,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         }
     );
 
-    reserve_later_operation_identity(next_request, &next_validation);
+    reserve_and_claim_later_operation_member(next_request, &next_validation);
     assert_eq!(
         RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
             operation_id: active.operation_id,
@@ -936,7 +936,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
     );
 }
 
-fn reserve_later_operation_identity(
+fn reserve_and_claim_later_operation_member(
     request: RootComponentProvisioningAcceptanceRequest,
     validation: &RootComponentProvisioningBatchValidation,
 ) {
@@ -978,6 +978,26 @@ fn reserve_later_operation_identity(
     assert_eq!(
         RootComponentProvisioningOps::advance_disposition(reservation_request, &reserved)
             .expect("lost reservation response replays"),
+        RootComponentProvisioningAdvanceDisposition::Replay
+    );
+
+    let claim_request = RootComponentProvisioningAdvanceRequest {
+        expected_reserved_component_count: 1,
+        ..reservation_request
+    };
+    let claimed_allocation = claimed_allocation(
+        allocation,
+        principal(74),
+        accepted.batch.root.fleet_subnet_root,
+    );
+    let claimed =
+        RootComponentProvisioningOps::mark_member_claimed(claim_request, &claimed_allocation)
+            .expect("claim scale-out prepaid Canister");
+    assert_eq!(claimed.claim_cursor.claimed_component_count, 1);
+    assert_eq!(claimed.install_cursor.installed_component_count, 0);
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(claim_request, &claimed)
+            .expect("lost claim response replays"),
         RootComponentProvisioningAdvanceDisposition::Replay
     );
 }

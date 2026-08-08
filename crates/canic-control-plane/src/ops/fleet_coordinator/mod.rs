@@ -1871,7 +1871,7 @@ fn validate_component_scale_out_progress(
             | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
     ) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out crossed its implemented identity-reservation boundary",
+            "Fleet Component scale-out crossed its implemented prepaid-Canister claim boundary",
         ));
     }
     validate_component_provisioning_root_acceptance_state(record)?;
@@ -1880,12 +1880,12 @@ fn validate_component_scale_out_progress(
         &current.registry,
         record,
     )?;
-    validate_scale_out_identity_reservation_fence(record)?;
+    validate_scale_out_prepaid_claim_fence(record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
 
-fn validate_scale_out_identity_reservation_fence(
+fn validate_scale_out_prepaid_claim_fence(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
     let progress = component_provisioning_root_provision_progress(record)?;
@@ -1899,16 +1899,16 @@ fn validate_scale_out_identity_reservation_fence(
     .any(|crossed| crossed);
     if crossed_later_boundary {
         return Err(receipt_invariant(
-            "Fleet Component scale-out contains evidence beyond identity reservation",
+            "Fleet Component scale-out contains evidence beyond prepaid-Canister claims",
         ));
     }
     if let Some(response) = &progress.current_response {
         let counts = RootProvisioningCounts::from_response(response);
         if response.phase != RootComponentProvisioningPhase::Accepted
-            || !counts.is_identity_reservation_only(response.component_count)
+            || !counts.is_prepaid_claim_boundary(response.component_count)
         {
             return Err(receipt_invariant(
-                "Fleet Component scale-out root progress crossed the identity-reservation fence",
+                "Fleet Component scale-out root progress crossed the prepaid-Canister claim fence",
             ));
         }
     }
@@ -1918,12 +1918,12 @@ fn validate_scale_out_identity_reservation_fence(
             .current_response
             .as_ref()
             .map(|response| response.component_count)
-            .ok_or_else(|| receipt_invariant("scale-out reservation intent lacks root progress"))?;
-        if !counts.is_identity_reservation_only(component_count)
-            || counts.reserved >= component_count
+            .ok_or_else(|| receipt_invariant("scale-out claim intent lacks root progress"))?;
+        if !counts.is_prepaid_claim_boundary(component_count)
+            || counts.prepaid_claims_are_complete(component_count)
         {
             return Err(receipt_invariant(
-                "Fleet Component scale-out intent crossed the identity-reservation fence",
+                "Fleet Component scale-out intent crossed the prepaid-Canister claim fence",
             ));
         }
     }
@@ -3771,15 +3771,23 @@ impl RootProvisioningCounts {
         }
     }
 
-    fn is_identity_reservation_only(self, component_count: u32) -> bool {
+    fn is_prepaid_claim_boundary(self, component_count: u32) -> bool {
+        let claim_has_reserved_identity = match self.claimed {
+            0 => self.reserved <= component_count,
+            _ => self.reserved == component_count,
+        };
         [
-            self.reserved <= component_count,
-            self.claimed == 0,
+            claim_has_reserved_identity,
+            self.claimed <= component_count,
             self.installed == 0,
             self.registry_committed == 0,
         ]
         .into_iter()
         .all(|matches| matches)
+    }
+
+    const fn prepaid_claims_are_complete(self, component_count: u32) -> bool {
+        self.reserved == component_count && self.claimed == component_count
     }
 
     const fn is_terminal(self, component_count: u32) -> bool {

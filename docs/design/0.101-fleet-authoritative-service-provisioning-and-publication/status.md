@@ -108,9 +108,11 @@ Date: 2026-08-08
   selected active-root batch and advance the current root one canonical member
   at a time through the existing response-loss-safe Component identity
   journal. The root binds Active-runtime work to its exact sealed initial
-  inventory. Prepaid claims and all later scale-out effects remain fenced.
+  inventory. Once every identity is reserved, the same bounded journal may
+  claim one exact prepaid Canister per canonical member through the existing
+  pool authority. Installation and all later scale-out effects remain fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.26` is released and `0.101.27` is open.
+- Implementation started: yes; `0.101.27` is released and `0.101.28` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -355,8 +357,8 @@ Fleet policy writer.
   journal. Each selected active root rechecks its exact Mirror, protected
   configuration and release set, Store artifacts, Component/group capacity
   and Ready pool capacity before accepting. The current accepted root may now
-  reserve each planned Component identity; prepaid claims and later effects
-  remain fenced.
+  reserve each planned Component identity and then claim one exact prepaid
+  Canister per canonical member. Installation and later effects remain fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -367,8 +369,9 @@ Fleet policy writer.
   authenticated receipts for only those placements. The Coordinator now
   journals each current-root advance and the root allocates one canonical
   member identity at a time, retaining the exact allocation across response
-  loss and restart. Prepaid claims, installation and later provisioning
-  effects remain.
+  loss and restart. Once every identity is reserved, the root uses its existing
+  pool claim journal to retain the exact Canister principal across response
+  loss. Installation and later provisioning effects remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.
