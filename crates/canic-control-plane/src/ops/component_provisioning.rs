@@ -22,9 +22,9 @@ use crate::{
     },
     view::{
         component_provisioning::{
-            RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningClaimCursorView,
-            RootComponentProvisioningInstallCursorView, RootComponentProvisioningMemberView,
-            RootComponentProvisioningRegistryCursorView,
+            RootComponentGroupRuntimeAuthorityView, RootComponentProvisioningAdvanceDisposition,
+            RootComponentProvisioningClaimCursorView, RootComponentProvisioningInstallCursorView,
+            RootComponentProvisioningMemberView, RootComponentProvisioningRegistryCursorView,
             RootComponentProvisioningReservationCursorView, RootComponentProvisioningView,
             RootComponentPublicationIntentView, RootComponentPublicationMemberView,
         },
@@ -44,6 +44,7 @@ use canic_core::{
             RootComponentProvisioningProvisionedReceiptAuthority,
             RootComponentProvisioningPublishedReceiptAuthority,
             RootComponentProvisioningReceiptOps,
+            RootComponentProvisioningRuntimesActiveReceiptAuthority,
         },
     },
     dto::{
@@ -53,7 +54,8 @@ use canic_core::{
         component_provisioning::{
             ComponentDirectoryPublicationEvidence, ComponentGroupDirectory,
             ComponentGroupDirectoryMember, ComponentGroupDirectoryProvenance,
-            ComponentGroupDirectoryPublicationEvidence, RootComponentProvisioningAcceptanceRequest,
+            ComponentGroupDirectoryPublicationEvidence, RootComponentActivationEvidence,
+            RootComponentActivationRequest, RootComponentProvisioningAcceptanceRequest,
             RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningResult, RootComponentProvisioningStatusRequest,
             RootComponentProvisioningStatusResponse, RootComponentPublicationEvidence,
@@ -811,62 +813,7 @@ impl RootComponentProvisioningOps {
         if view.published_component_count == view.component_count {
             return Ok(None);
         }
-        let result = view.result.as_ref().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component publication lacks its provisioned result",
-            )
-        })?;
-        let mut flat_index = 0_u32;
-        for (placement_index, (planned, provisioned)) in view
-            .batch
-            .placements
-            .iter()
-            .zip(&result.placements)
-            .enumerate()
-        {
-            for (entry, member) in planned.entries.iter().zip(&provisioned.members) {
-                if flat_index == view.published_component_count {
-                    return Ok(Some(RootComponentPublicationMemberView {
-                        component_index: flat_index,
-                        member_operation_id: member_operation_id(
-                            view.batch.root.fleet_subnet_root,
-                            view.operation_id,
-                            view.plan_hash,
-                            &planned.group_placement,
-                            &entry.member_path,
-                        )?,
-                        binding: member.binding.clone(),
-                        component_registry_revision: member.component_registry_revision,
-                        component_registry_content_hash: member.component_registry_content_hash,
-                        deployment: ProtectedComponentDeployment::GroupMember {
-                            binding: member.binding.clone(),
-                            configuration_digest: view.configuration_digest,
-                            group_placement: planned.group_placement.clone(),
-                            component_group: planned.component_group.clone(),
-                            member_path: entry.member_path.clone(),
-                            purpose: entry.purpose.clone(),
-                            labels: entry.labels.clone(),
-                            limits: entry.limits.clone(),
-                        },
-                        component_group: derive_component_group_directory_from_view(
-                            view,
-                            result,
-                            placement_index,
-                        )?,
-                    }));
-                }
-                flat_index = flat_index.checked_add(1).ok_or_else(|| {
-                    InternalError::resource_exhausted(
-                        "root Component publication cursor overflowed",
-                    )
-                })?;
-            }
-        }
-        Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication cursor is outside the provisioned result",
-        ))
+        member_at_index(view, view.published_component_count).map(Some)
     }
 
     /// Persist exact pre-call intent before one Component Directory delivery.
@@ -1024,6 +971,167 @@ impl RootComponentProvisioningOps {
         validated_record(next)
     }
 
+    /// Begin or replay activation after exact Directory publication is terminal.
+    pub(crate) fn begin_activation(
+        request: &RootComponentActivationRequest,
+        started_at_ns: u64,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = RootComponentProvisioningStore::operation(request.operation_id)
+            .ok_or_else(|| {
+                InternalError::unavailable("root Component provisioning operation is not accepted")
+            })?;
+        let current = validated_record(current_record.clone())?;
+        validate_activation_request(request, &current)?;
+        if current.phase == RootComponentProvisioningPhase::RuntimesActive
+            || current.activation_started_at_ns.is_some()
+        {
+            return Ok(current);
+        }
+        let RootComponentProvisioningStateRecordPhase::Published {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            receipt_content_hash,
+        } = current_record.state.clone()
+        else {
+            return Err(InternalError::conflict(
+                "root Component runtime activation requires terminal Directory publication",
+            ));
+        };
+        if started_at_ns < published_at_ns {
+            return Err(InternalError::invalid_input(
+                "root Component runtime activation start time precedes publication",
+            ));
+        }
+        let mut next = current_record.clone();
+        next.state = RootComponentProvisioningStateRecordPhase::Activating {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            activated_component_count: 0,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            activation_started_at_ns: started_at_ns,
+            published_receipt_content_hash: receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
+    /// Select the next exact Component whose runtime and membership must become active.
+    pub(crate) fn next_activation_member(
+        view: &RootComponentProvisioningView,
+    ) -> Result<Option<RootComponentPublicationMemberView>, InternalError> {
+        if view.activated_component_count == view.component_count {
+            return Ok(None);
+        }
+        member_at_index(view, view.activated_component_count).map(Some)
+    }
+
+    /// Commit one exact Component only after its runtime, membership and current Directory agree.
+    pub(crate) fn mark_member_activated(
+        request: &RootComponentActivationRequest,
+        member: &RootComponentPublicationMemberView,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = required_activating_record(request)?;
+        let current = validated_record(current_record.clone())?;
+        validate_activation_request(request, &current)?;
+        if member.component_index != current.activated_component_count {
+            return Err(InternalError::conflict(
+                "root Component runtime activation member differs from its durable cursor",
+            ));
+        }
+        let allocation =
+            ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
+                InternalError::unavailable("root Component runtime activation allocation is absent")
+            })?;
+        validate_activation_member_authority(&current, member, &allocation)?;
+        validate_terminal_component_activation(member, &allocation)?;
+        let mut next = current_record.clone();
+        let RootComponentProvisioningStateRecordPhase::Activating {
+            activated_component_count,
+            ..
+        } = &mut next.state
+        else {
+            unreachable!("required activating record changed before local mutation");
+        };
+        *activated_component_count = activated_component_count.checked_add(1).ok_or_else(|| {
+            InternalError::resource_exhausted("activated Component count overflowed")
+        })?;
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
+    /// Freeze one complete response-idempotent root runtime-activation receipt.
+    pub(crate) fn finalize_runtimes_active(
+        request: &RootComponentActivationRequest,
+        activation: RootComponentActivationEvidence,
+        runtimes_activated_at_ns: u64,
+    ) -> Result<RootComponentProvisioningView, InternalError> {
+        let current_record = required_activating_record(request)?;
+        let current = validated_record(current_record.clone())?;
+        validate_activation_request(request, &current)?;
+        if current.activated_component_count != current.component_count {
+            return Err(InternalError::conflict(
+                "root Component runtimes are not completely active",
+            ));
+        }
+        let RootComponentProvisioningStateRecordPhase::Activating {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            activation_started_at_ns,
+            published_receipt_content_hash,
+            ..
+        } = current_record.state.clone()
+        else {
+            unreachable!("required activating record changed before finalization");
+        };
+        let receipt_content_hash =
+            RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
+                RootComponentProvisioningRuntimesActiveReceiptAuthority {
+                    operation_id: current_record.operation_id,
+                    plan_hash: current_record.plan_hash,
+                    configuration_digest: current_record.configuration_digest,
+                    root: &current_record.batch.root,
+                    published_receipt_content_hash,
+                    activation,
+                    activation_started_at_ns,
+                    runtimes_activated_at_ns,
+                },
+            )?;
+        let mut next = current_record.clone();
+        next.state = RootComponentProvisioningStateRecordPhase::RuntimesActive {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            activation,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            activation_started_at_ns,
+            runtimes_activated_at_ns,
+            published_receipt_content_hash,
+            receipt_content_hash,
+        };
+        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+            .map_err(map_commit_error)?;
+        validated_record(next)
+    }
+
     /// Number of distinct accepted or committed placements occupying the root ceiling.
     pub(crate) fn tracked_group_placements() -> Result<u32, InternalError> {
         Ok(validated_aggregate_state()?.tracked_group_placements)
@@ -1072,6 +1180,61 @@ impl RootComponentProvisioningOps {
         component_spec: &ComponentSpecId,
         spec_hash: [u8; 32],
     ) -> Result<(), InternalError> {
+        Self::validated_member_origin(origin, component_spec, spec_hash).map(|_| ())
+    }
+
+    /// Reconstruct one retained group member's exact deployment and Directory authority.
+    pub(crate) fn component_group_runtime_authority(
+        allocation: &RootComponentAllocationView,
+    ) -> Result<RootComponentGroupRuntimeAuthorityView, InternalError> {
+        let (view, placement_index) = Self::validated_member_origin(
+            &allocation.provisioning_origin,
+            &allocation.component_spec,
+            allocation.spec_hash,
+        )?;
+        let ComponentProvisioningOrigin::ComponentGroup { member_path, .. } =
+            &allocation.provisioning_origin
+        else {
+            unreachable!("validated group origin changed before runtime reconstruction");
+        };
+        let member_index = view.batch.placements[placement_index]
+            .entries
+            .binary_search_by(|candidate| candidate.member_path.cmp(member_path))
+            .map_err(|_| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "stored Component Group origin has no accepted member",
+                )
+            })?;
+        let member = member_at_cursor(
+            &view,
+            u32::try_from(placement_index).map_err(|_| {
+                InternalError::resource_exhausted("Component Group placement index exceeds u32")
+            })?,
+            u32::try_from(member_index).map_err(|_| {
+                InternalError::resource_exhausted("Component Group member index exceeds u32")
+            })?,
+        )?;
+        let deployment = Self::member_deployment_context(&view, &member, allocation)?;
+        let result = view.result.as_ref().ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "stored Component Group origin has no provisioned result",
+            )
+        })?;
+        let component_group =
+            derive_component_group_directory_from_view(&view, result, placement_index)?;
+        Ok(RootComponentGroupRuntimeAuthorityView {
+            deployment,
+            component_group,
+        })
+    }
+
+    fn validated_member_origin(
+        origin: &ComponentProvisioningOrigin,
+        component_spec: &ComponentSpecId,
+        spec_hash: [u8; 32],
+    ) -> Result<(RootComponentProvisioningView, usize), InternalError> {
         let ComponentProvisioningOrigin::ComponentGroup {
             operation_id,
             plan_hash,
@@ -1095,7 +1258,17 @@ impl RootComponentProvisioningOps {
                 "stored Component Group origin differs from its accepted member authority",
             ));
         }
-        Ok(())
+        let placement_index = view
+            .batch
+            .placements
+            .binary_search_by(|candidate| candidate.group_placement.cmp(group_placement))
+            .map_err(|_| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "stored Component Group origin has no accepted placement",
+                )
+            })?;
+        Ok((view, placement_index))
     }
 }
 
@@ -1115,6 +1288,84 @@ fn required_publishing_record(
         ));
     }
     Ok(record)
+}
+
+fn required_activating_record(
+    request: &RootComponentActivationRequest,
+) -> Result<RootComponentProvisioningRecord, InternalError> {
+    let record =
+        RootComponentProvisioningStore::operation(request.operation_id).ok_or_else(|| {
+            InternalError::unavailable("root Component provisioning operation is not accepted")
+        })?;
+    if !matches!(
+        record.state,
+        RootComponentProvisioningStateRecordPhase::Activating { .. }
+    ) {
+        return Err(InternalError::conflict(
+            "root Component provisioning operation is not activating runtimes",
+        ));
+    }
+    Ok(record)
+}
+
+fn member_at_index(
+    view: &RootComponentProvisioningView,
+    target_index: u32,
+) -> Result<RootComponentPublicationMemberView, InternalError> {
+    let result = view.result.as_ref().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component operation lacks its provisioned result",
+        )
+    })?;
+    let mut flat_index = 0_u32;
+    for (placement_index, (planned, provisioned)) in view
+        .batch
+        .placements
+        .iter()
+        .zip(&result.placements)
+        .enumerate()
+    {
+        for (entry, member) in planned.entries.iter().zip(&provisioned.members) {
+            if flat_index == target_index {
+                return Ok(RootComponentPublicationMemberView {
+                    component_index: flat_index,
+                    member_operation_id: member_operation_id(
+                        view.batch.root.fleet_subnet_root,
+                        view.operation_id,
+                        view.plan_hash,
+                        &planned.group_placement,
+                        &entry.member_path,
+                    )?,
+                    binding: member.binding.clone(),
+                    component_registry_revision: member.component_registry_revision,
+                    component_registry_content_hash: member.component_registry_content_hash,
+                    deployment: ProtectedComponentDeployment::GroupMember {
+                        binding: member.binding.clone(),
+                        configuration_digest: view.configuration_digest,
+                        group_placement: planned.group_placement.clone(),
+                        component_group: planned.component_group.clone(),
+                        member_path: entry.member_path.clone(),
+                        purpose: entry.purpose.clone(),
+                        labels: entry.labels.clone(),
+                        limits: entry.limits.clone(),
+                    },
+                    component_group: derive_component_group_directory_from_view(
+                        view,
+                        result,
+                        placement_index,
+                    )?,
+                });
+            }
+            flat_index = flat_index.checked_add(1).ok_or_else(|| {
+                InternalError::resource_exhausted("root Component aggregate cursor overflowed")
+            })?;
+        }
+    }
+    Err(InternalError::invariant(
+        InternalErrorOrigin::Storage,
+        "root Component aggregate cursor is outside the provisioned result",
+    ))
 }
 
 fn validate_publication_request(
@@ -1153,6 +1404,117 @@ fn validate_publication_request(
     {
         return Err(InternalError::conflict(
             "root Component publication request names a different Registry",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_activation_request(
+    request: &RootComponentActivationRequest,
+    view: &RootComponentProvisioningView,
+) -> Result<(), InternalError> {
+    validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
+    let cursor_is_current = request.expected_activated_component_count
+        == view.activated_component_count
+        && request.expected_root_runtime_active == view.root_runtime_active;
+    let replays_component_activation = request.expected_activated_component_count.checked_add(1)
+        == Some(view.activated_component_count)
+        && !request.expected_root_runtime_active
+        && !view.root_runtime_active;
+    let replays_root_activation = request.expected_activated_component_count
+        == view.activated_component_count
+        && !request.expected_root_runtime_active
+        && view.root_runtime_active;
+    let progress_is_current_or_replayed = [
+        cursor_is_current,
+        replays_component_activation,
+        replays_root_activation,
+    ]
+    .into_iter()
+    .any(|matches| matches);
+    let request_is_exact = [
+        request.operation_id == view.operation_id,
+        request.plan_hash == view.plan_hash,
+        progress_is_current_or_replayed,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !request_is_exact {
+        return Err(InternalError::conflict(
+            "root Component activation request differs from durable authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_terminal_component_activation(
+    member: &RootComponentPublicationMemberView,
+    allocation: &RootComponentAllocationView,
+) -> Result<(), InternalError> {
+    let RootComponentAllocationProgressView::Committed { commitment, .. } = &allocation.progress
+    else {
+        return Err(InternalError::conflict(
+            "root Component activation member is not Registry committed",
+        ));
+    };
+    let membership = commitment.membership.as_ref().ok_or_else(|| {
+        InternalError::conflict("root Component activation member has no Active membership")
+    })?;
+    if !commitment.runtime_activated || !membership.directory_synchronized {
+        return Err(InternalError::conflict(
+            "root Component activation member lacks terminal runtime or Directory evidence",
+        ));
+    }
+    let partition = ComponentRegistryOps::active_membership_partition(member.member_operation_id)?;
+    let active_authority_is_exact = [
+        partition.binding == member.binding,
+        partition.status == ComponentLifecycleStatus::Active,
+        partition.directory_synchronized_at_ns == membership.directory_synchronized_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !active_authority_is_exact {
+        return Err(InternalError::conflict(
+            "root Component activation member differs from its Active Registry authority",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_activation_member_authority(
+    view: &RootComponentProvisioningView,
+    member: &RootComponentPublicationMemberView,
+    allocation: &RootComponentAllocationView,
+) -> Result<(), InternalError> {
+    let ProtectedComponentDeployment::GroupMember {
+        group_placement,
+        member_path,
+        ..
+    } = &member.deployment
+    else {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "root Component activation derived a non-group deployment",
+        ));
+    };
+    let expected_origin = ComponentProvisioningOrigin::ComponentGroup {
+        operation_id: view.operation_id,
+        plan_hash: view.plan_hash,
+        group_placement: group_placement.clone(),
+        member_path: member_path.clone(),
+    };
+    let authority_is_exact = [
+        allocation.operation_id == member.member_operation_id,
+        allocation.component_spec == member.binding.component_spec,
+        allocation.spec_hash == member.binding.spec_hash,
+        allocation.provisioning_origin == expected_origin,
+        allocation.release_set == view.batch.active_release_set,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !authority_is_exact {
+        return Err(InternalError::conflict(
+            "Component Group activation member differs from accepted authority",
         ));
     }
     Ok(())
@@ -1241,11 +1603,16 @@ struct ValidatedProvisioningState {
     result: Option<RootComponentProvisioningResult>,
     publication: Option<RootComponentPublicationEvidence>,
     published_component_count: u32,
+    activated_component_count: u32,
+    root_runtime_active: bool,
     publication_in_flight: Option<RootComponentPublicationIntentView>,
+    activation: Option<RootComponentActivationEvidence>,
     accepted_at_ns: u64,
     provisioned_at_ns: Option<u64>,
     publication_started_at_ns: Option<u64>,
     published_at_ns: Option<u64>,
+    activation_started_at_ns: Option<u64>,
+    runtimes_activated_at_ns: Option<u64>,
     receipt_content_hash: [u8; 32],
 }
 
@@ -1318,11 +1685,16 @@ fn validated_record(
         result: state.result,
         publication: state.publication,
         published_component_count: state.published_component_count,
+        activated_component_count: state.activated_component_count,
+        root_runtime_active: state.root_runtime_active,
         publication_in_flight: state.publication_in_flight,
+        activation: state.activation,
         accepted_at_ns: state.accepted_at_ns,
         provisioned_at_ns: state.provisioned_at_ns,
         publication_started_at_ns: state.publication_started_at_ns,
         published_at_ns: state.published_at_ns,
+        activation_started_at_ns: state.activation_started_at_ns,
+        runtimes_activated_at_ns: state.runtimes_activated_at_ns,
         receipt_content_hash: state.receipt_content_hash,
     })
 }
@@ -1413,6 +1785,75 @@ fn validated_record_state(
             published_at_ns,
             receipt_content_hash,
         ),
+        state @ (RootComponentProvisioningStateRecordPhase::Activating { .. }
+        | RootComponentProvisioningStateRecordPhase::RuntimesActive { .. }) => {
+            validated_runtime_record_state(record, state)
+        }
+    }
+}
+
+fn validated_runtime_record_state(
+    record: &RootComponentProvisioningRecord,
+    state: RootComponentProvisioningStateRecordPhase,
+) -> Result<ValidatedProvisioningState, InternalError> {
+    match state {
+        RootComponentProvisioningStateRecordPhase::Activating {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            activated_component_count,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            activation_started_at_ns,
+            published_receipt_content_hash,
+        } => validated_activating_state(
+            record,
+            ActivatingStateFields {
+                placement_count,
+                component_count,
+                result,
+                publication,
+                activated_component_count,
+                accepted_at_ns,
+                provisioned_at_ns,
+                published_at_ns,
+                activation_started_at_ns,
+                published_receipt_content_hash,
+            },
+        ),
+        RootComponentProvisioningStateRecordPhase::RuntimesActive {
+            placement_count,
+            component_count,
+            result,
+            publication,
+            activation,
+            accepted_at_ns,
+            provisioned_at_ns,
+            published_at_ns,
+            activation_started_at_ns,
+            runtimes_activated_at_ns,
+            published_receipt_content_hash,
+            receipt_content_hash,
+        } => validated_runtimes_active_state(
+            record,
+            RuntimesActiveStateFields {
+                placement_count,
+                component_count,
+                result,
+                publication,
+                activation,
+                accepted_at_ns,
+                provisioned_at_ns,
+                published_at_ns,
+                activation_started_at_ns,
+                runtimes_activated_at_ns,
+                published_receipt_content_hash,
+                receipt_content_hash,
+            },
+        ),
+        _ => unreachable!("only runtime activation states delegate here"),
     }
 }
 
@@ -1441,11 +1882,16 @@ fn validated_accepted_state(
         result: None,
         publication: None,
         published_component_count: 0,
+        activated_component_count: 0,
+        root_runtime_active: false,
         publication_in_flight: None,
+        activation: None,
         accepted_at_ns,
         provisioned_at_ns: None,
         publication_started_at_ns: None,
         published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash,
     })
 }
@@ -1496,11 +1942,16 @@ fn validated_provisioned_state(
         result: Some(result),
         publication: None,
         published_component_count: 0,
+        activated_component_count: 0,
+        root_runtime_active: false,
         publication_in_flight: None,
+        activation: None,
         accepted_at_ns,
         provisioned_at_ns: Some(provisioned_at_ns),
         publication_started_at_ns: None,
         published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash,
     })
 }
@@ -1559,11 +2010,16 @@ fn validated_publishing_state(
         result: Some(result.clone()),
         publication: Some(publication),
         published_component_count,
+        activated_component_count: 0,
+        root_runtime_active: false,
         publication_in_flight: in_flight.map(publication_intent_to_view),
+        activation: None,
         accepted_at_ns,
         provisioned_at_ns: Some(provisioned_at_ns),
         publication_started_at_ns: Some(publication_started_at_ns),
         published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash: provisioned_receipt_content_hash,
     })
 }
@@ -1626,12 +2082,161 @@ fn validated_published_state(
         result: Some(result),
         publication: Some(publication),
         published_component_count: component_count,
+        activated_component_count: 0,
+        root_runtime_active: false,
         publication_in_flight: None,
+        activation: None,
         accepted_at_ns,
         provisioned_at_ns: Some(provisioned_at_ns),
         publication_started_at_ns: Some(provisioned_at_ns),
         published_at_ns: Some(published_at_ns),
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
         receipt_content_hash,
+    })
+}
+
+struct ActivatingStateFields {
+    placement_count: u32,
+    component_count: u32,
+    result: RootComponentProvisioningResultRecord,
+    publication: RootComponentPublicationEvidence,
+    activated_component_count: u32,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+    published_at_ns: u64,
+    activation_started_at_ns: u64,
+    published_receipt_content_hash: [u8; 32],
+}
+
+fn validated_activating_state(
+    record: &RootComponentProvisioningRecord,
+    fields: ActivatingStateFields,
+) -> Result<ValidatedProvisioningState, InternalError> {
+    let published = validated_published_state(
+        record,
+        fields.placement_count,
+        fields.component_count,
+        fields.result,
+        fields.publication,
+        fields.accepted_at_ns,
+        fields.provisioned_at_ns,
+        fields.published_at_ns,
+        fields.published_receipt_content_hash,
+    )?;
+    if fields.activation_started_at_ns < fields.published_at_ns
+        || fields.activated_component_count > fields.component_count
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component runtime-activation cursor or start time is invalid",
+        ));
+    }
+    Ok(ValidatedProvisioningState {
+        phase: RootComponentProvisioningPhase::Published,
+        placement_count: published.placement_count,
+        component_count: published.component_count,
+        cursors: published.cursors,
+        result: published.result,
+        publication: published.publication,
+        published_component_count: published.published_component_count,
+        activated_component_count: fields.activated_component_count,
+        root_runtime_active: false,
+        publication_in_flight: None,
+        activation: None,
+        accepted_at_ns: published.accepted_at_ns,
+        provisioned_at_ns: published.provisioned_at_ns,
+        publication_started_at_ns: published.publication_started_at_ns,
+        published_at_ns: published.published_at_ns,
+        activation_started_at_ns: Some(fields.activation_started_at_ns),
+        runtimes_activated_at_ns: None,
+        receipt_content_hash: fields.published_receipt_content_hash,
+    })
+}
+
+struct RuntimesActiveStateFields {
+    placement_count: u32,
+    component_count: u32,
+    result: RootComponentProvisioningResultRecord,
+    publication: RootComponentPublicationEvidence,
+    activation: RootComponentActivationEvidence,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+    published_at_ns: u64,
+    activation_started_at_ns: u64,
+    runtimes_activated_at_ns: u64,
+    published_receipt_content_hash: [u8; 32],
+    receipt_content_hash: [u8; 32],
+}
+
+fn validated_runtimes_active_state(
+    record: &RootComponentProvisioningRecord,
+    fields: RuntimesActiveStateFields,
+) -> Result<ValidatedProvisioningState, InternalError> {
+    let published = validated_published_state(
+        record,
+        fields.placement_count,
+        fields.component_count,
+        fields.result,
+        fields.publication,
+        fields.accepted_at_ns,
+        fields.provisioned_at_ns,
+        fields.published_at_ns,
+        fields.published_receipt_content_hash,
+    )?;
+    let activation_is_exact = [
+        fields.activation_started_at_ns >= fields.published_at_ns,
+        fields.runtimes_activated_at_ns >= fields.activation_started_at_ns,
+        fields.activation.component_count == fields.component_count,
+        fields.activation.fleet_activation_operation_id != [0; 32],
+        fields.activation.initial_inventory_hash != [0; 32],
+        fields.activation.root_activated_at_ns == fields.runtimes_activated_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !activation_is_exact {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component runtime-activation evidence is invalid",
+        ));
+    }
+    let expected = RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
+        RootComponentProvisioningRuntimesActiveReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            configuration_digest: record.configuration_digest,
+            root: &record.batch.root,
+            published_receipt_content_hash: fields.published_receipt_content_hash,
+            activation: fields.activation,
+            activation_started_at_ns: fields.activation_started_at_ns,
+            runtimes_activated_at_ns: fields.runtimes_activated_at_ns,
+        },
+    )?;
+    if fields.receipt_content_hash != expected {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component runtime-activation receipt hash is invalid",
+        ));
+    }
+    Ok(ValidatedProvisioningState {
+        phase: RootComponentProvisioningPhase::RuntimesActive,
+        placement_count: published.placement_count,
+        component_count: published.component_count,
+        cursors: published.cursors,
+        result: published.result,
+        publication: published.publication,
+        published_component_count: published.published_component_count,
+        activated_component_count: published.component_count,
+        root_runtime_active: true,
+        publication_in_flight: None,
+        activation: Some(fields.activation),
+        accepted_at_ns: published.accepted_at_ns,
+        provisioned_at_ns: published.provisioned_at_ns,
+        publication_started_at_ns: published.publication_started_at_ns,
+        published_at_ns: published.published_at_ns,
+        activation_started_at_ns: Some(fields.activation_started_at_ns),
+        runtimes_activated_at_ns: Some(fields.runtimes_activated_at_ns),
+        receipt_content_hash: fields.receipt_content_hash,
     })
 }
 
@@ -3039,11 +3644,16 @@ pub fn status_response(
         installed_component_count: view.install_cursor.installed_component_count,
         registry_committed_component_count: view.registry_cursor.registry_committed_component_count,
         published_component_count: view.published_component_count,
+        activated_component_count: view.activated_component_count,
+        root_runtime_active: view.root_runtime_active,
         result: view.result,
         publication: view.publication,
+        activation: view.activation,
         accepted_at_ns: view.accepted_at_ns,
         provisioned_at_ns: view.provisioned_at_ns,
         published_at_ns: view.published_at_ns,
+        activation_started_at_ns: view.activation_started_at_ns,
+        runtimes_activated_at_ns: view.runtimes_activated_at_ns,
         receipt_content_hash: view.receipt_content_hash,
     }
 }

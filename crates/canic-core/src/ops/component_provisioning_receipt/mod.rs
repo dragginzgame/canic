@@ -9,8 +9,8 @@ use crate::{
     dto::{
         component_provisioning::{
             ComponentGroupDirectory, FleetSubnetRootProvisioningBatch,
-            RootComponentProvisioningResult, RootComponentPublicationEvidence,
-            RootProvisionedGroupPlacement,
+            RootComponentActivationEvidence, RootComponentProvisioningResult,
+            RootComponentPublicationEvidence, RootProvisionedGroupPlacement,
         },
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
     },
@@ -23,6 +23,8 @@ const ACCEPTANCE_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-acc
 const PROVISIONED_RECEIPT_DOMAIN: &[u8] =
     b"canic/root-component-provisioning-provisioned-receipt/v1";
 const PUBLISHED_RECEIPT_DOMAIN: &[u8] = b"canic/root-component-provisioning-published-receipt/v1";
+const RUNTIMES_ACTIVE_RECEIPT_DOMAIN: &[u8] =
+    b"canic/root-component-provisioning-runtimes-active-receipt/v1";
 const FLEET_DIRECTORY_DOMAIN: &[u8] = b"canic/fleet-directory/v1";
 const COMPONENT_GROUP_DIRECTORY_DOMAIN: &[u8] = b"canic/component-group-directory/v1";
 const GROUP_PLACEMENT_RECEIPT_DOMAIN: &[u8] =
@@ -68,6 +70,19 @@ pub struct RootComponentProvisioningPublishedReceiptAuthority<'a> {
     pub published_at_ns: u64,
 }
 
+/// Exact immutable fields covered by one root's terminal `RuntimesActive` receipt.
+#[derive(CandidType)]
+pub struct RootComponentProvisioningRuntimesActiveReceiptAuthority<'a> {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub root: &'a FleetSubnetRootBinding,
+    pub published_receipt_content_hash: [u8; 32],
+    pub activation: RootComponentActivationEvidence,
+    pub activation_started_at_ns: u64,
+    pub runtimes_activated_at_ns: u64,
+}
+
 #[derive(CandidType)]
 struct RootComponentGroupPlacementReceiptAuthority<'a> {
     operation_id: [u8; 32],
@@ -110,6 +125,17 @@ impl RootComponentProvisioningReceiptOps {
             PUBLISHED_RECEIPT_DOMAIN,
             authority,
             "root Component publication receipt",
+        )
+    }
+
+    /// Hash one exact terminal root runtime-activation receipt with its frozen domain.
+    pub fn runtimes_active_content_hash(
+        authority: RootComponentProvisioningRuntimesActiveReceiptAuthority<'_>,
+    ) -> Result<[u8; 32], InternalError> {
+        receipt_content_hash(
+            RUNTIMES_ACTIVE_RECEIPT_DOMAIN,
+            authority,
+            "root Component runtime-activation receipt",
         )
     }
 

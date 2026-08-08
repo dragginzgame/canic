@@ -568,7 +568,7 @@ impl LifecycleApi {
     pub async fn prepare_component_directories(
         request: RootComponentDirectoryPreparationRequest,
     ) -> Result<RootComponentDirectoryPreparationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::prepare_component_directories(request)
+        Box::pin(crate::workflow::component_registry::prepare_component_directories(request))
             .await
             .map_err(Into::into)
     }

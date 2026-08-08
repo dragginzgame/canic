@@ -7,6 +7,7 @@
 use crate::{
     ops::{
         canister_pool::{CanisterPoolClaimKey, CanisterPoolOps},
+        component_provisioning::RootComponentProvisioningOps,
         component_registry::{
             ComponentRegistryOps, RootComponentChildInstallPlan, RootComponentCreationPlan,
             RootComponentInstallPlan,
@@ -71,6 +72,7 @@ use canic_core::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         component_deployment::ProtectedComponentDeployment,
+        component_provisioning::ComponentGroupDirectory,
         component_registry::{
             ComponentDirectoryChildEntry, ComponentDirectoryHead, ComponentDirectoryHeadRequest,
             ComponentDirectoryPageCursor, ComponentDirectoryPageRequest,
@@ -366,9 +368,17 @@ struct PreparedComponentRuntimePlan {
     partition: ComponentRegistryPartitionView,
     target_canister: candid::Principal,
     target_binding: ManagedCanisterBinding,
+    deployment: ProtectedComponentDeployment,
     directory_request: ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
     maximum_component_registry_bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct GroupComponentRuntimeAuthority<'a> {
+    provisioning_origin: &'a ComponentProvisioningOrigin,
+    deployment: &'a ProtectedComponentDeployment,
+    component_group: &'a ComponentGroupDirectory,
 }
 
 struct PreparedChildRuntimePlan {
@@ -2994,7 +3004,7 @@ pub async fn prepare_peer_component_directories(
     request: RootComponentDirectoryPreparationRequest,
 ) -> Result<RootComponentDirectoryPreparationResponse, InternalError> {
     require_active_peer_allocation_caller(request.operation_id)?;
-    prepare_component_directories(request).await
+    Box::pin(prepare_component_directories(request)).await
 }
 
 /// Activate and independently verify one exact Directory-prepared Component runtime.
@@ -3002,15 +3012,42 @@ pub async fn activate_component_runtime(
     request: RootComponentRuntimeActivationRequest,
 ) -> Result<RootComponentRuntimeActivationResponse, InternalError> {
     let plan = prepared_component_runtime_plan(request.operation_id).await?;
+    activate_component_runtime_with_plan(request, plan).await
+}
+
+/// Activate one grouped Component only through its exact aggregate authority.
+pub(super) async fn activate_group_member_runtime(
+    request: RootComponentRuntimeActivationRequest,
+    provisioning_origin: &ComponentProvisioningOrigin,
+    deployment: &ProtectedComponentDeployment,
+    component_group: &ComponentGroupDirectory,
+) -> Result<RootComponentRuntimeActivationResponse, InternalError> {
+    let plan = prepared_group_component_runtime_plan(
+        request.operation_id,
+        GroupComponentRuntimeAuthority {
+            provisioning_origin,
+            deployment,
+            component_group,
+        },
+    )
+    .await?;
+    activate_component_runtime_with_plan(request, plan).await
+}
+
+async fn activate_component_runtime_with_plan(
+    request: RootComponentRuntimeActivationRequest,
+    plan: PreparedComponentRuntimePlan,
+) -> Result<RootComponentRuntimeActivationResponse, InternalError> {
     if !committed_directory_receipt(&plan.allocation)?.directory_prepared {
         return Err(InternalError::unavailable(
             "Component runtime activation requires its terminal Directory preparation receipt",
         ));
     }
 
-    let response_target = activate_directory_prepared_runtime(
+    let response_target = activate_directory_prepared_runtime_for_deployment(
         plan.target_canister,
         &plan.target_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )
@@ -3045,25 +3082,63 @@ pub async fn activate_component_membership(
     request: RootComponentMembershipActivationRequest,
 ) -> Result<RootComponentMembershipActivationResponse, InternalError> {
     let plan = prepared_component_runtime_plan(request.operation_id).await?;
+    Box::pin(activate_component_membership_with_plan(request, plan)).await
+}
+
+/// Activate one grouped Component membership only through its exact aggregate authority.
+pub(super) async fn activate_group_member_membership(
+    request: RootComponentMembershipActivationRequest,
+    provisioning_origin: &ComponentProvisioningOrigin,
+    deployment: &ProtectedComponentDeployment,
+    component_group: &ComponentGroupDirectory,
+) -> Result<RootComponentMembershipActivationResponse, InternalError> {
+    let plan = prepared_group_component_runtime_plan(
+        request.operation_id,
+        GroupComponentRuntimeAuthority {
+            provisioning_origin,
+            deployment,
+            component_group,
+        },
+    )
+    .await?;
+    Box::pin(activate_component_membership_with_plan(request, plan)).await
+}
+
+async fn activate_component_membership_with_plan(
+    request: RootComponentMembershipActivationRequest,
+    plan: PreparedComponentRuntimePlan,
+) -> Result<RootComponentMembershipActivationResponse, InternalError> {
     if !committed_directory_receipt(&plan.allocation)?.runtime_activated {
         return Err(InternalError::unavailable(
             "Component membership activation requires its terminal runtime receipt",
         ));
     }
     let observed = query_component_runtime_status(plan.target_canister).await?;
-    validate_active_target_runtime_status(
+    validate_active_target_runtime_status_for_deployment(
         &observed,
         &plan.target_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )?;
 
-    let (activated_allocation, active_partition) = ComponentRegistryOps::activate_membership(
-        request.operation_id,
-        IcOps::now_nanos(),
-        plan.maximum_component_registry_bytes,
-        plan.directory_request.authority.fleet.clone(),
-    )?;
+    let fleet_directory = plan.directory_request.authority.fleet.clone();
+    let activated = match &plan.directory_request.authority.component_group {
+        Some(component_group) => ComponentRegistryOps::activate_group_membership(
+            request.operation_id,
+            IcOps::now_nanos(),
+            plan.maximum_component_registry_bytes,
+            fleet_directory,
+            component_group,
+        ),
+        None => ComponentRegistryOps::activate_membership(
+            request.operation_id,
+            IcOps::now_nanos(),
+            plan.maximum_component_registry_bytes,
+            fleet_directory,
+        ),
+    }?;
+    let (activated_allocation, active_partition) = activated;
     validate_partition(
         &plan.root_binding,
         activated_allocation.release_set,
@@ -3126,9 +3201,10 @@ async fn synchronize_active_membership(
     synchronization_request: ComponentRuntimeDirectorySynchronizationRequest,
     active_authority_hash: [u8; 32],
 ) -> Result<RootComponentMembershipActivationResponse, InternalError> {
-    let target = converge_active_membership_directory(
+    let target = converge_active_membership_directory_for_deployment(
         plan.target_canister,
         &plan.target_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
         &synchronization_request,
@@ -3277,7 +3353,7 @@ pub fn active_component_member_authority(
 }
 
 async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<(), InternalError> {
-    let plan = prepared_component_runtime_plan(operation_id).await?;
+    let plan = prepared_initial_component_runtime_plan(operation_id).await?;
     let membership = committed_directory_receipt(&plan.allocation)?
         .membership
         .as_ref()
@@ -3324,9 +3400,10 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
         ));
     }
     let observed = query_component_runtime_status(plan.target_canister).await?;
-    if !validate_target_membership_status(
+    if !validate_target_membership_status_for_deployment(
         &observed,
         &plan.target_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
         &active_request,
@@ -3337,6 +3414,30 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
         ));
     }
     Ok(())
+}
+
+async fn prepared_initial_component_runtime_plan(
+    operation_id: [u8; 32],
+) -> Result<PreparedComponentRuntimePlan, InternalError> {
+    let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
+        InternalError::unavailable("initial Component allocation operation is absent")
+    })?;
+    if !matches!(
+        &allocation.provisioning_origin,
+        ComponentProvisioningOrigin::ComponentGroup { .. }
+    ) {
+        return prepared_component_runtime_plan(operation_id).await;
+    }
+    let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
+    prepared_group_component_runtime_plan(
+        operation_id,
+        GroupComponentRuntimeAuthority {
+            provisioning_origin: &allocation.provisioning_origin,
+            deployment: &retained.deployment,
+            component_group: &retained.component_group,
+        },
+    )
+    .await
 }
 
 /// Read one committed Component Registry partition without mutation.
@@ -4510,6 +4611,20 @@ async fn query_managed_binding(
 async fn prepared_component_runtime_plan(
     operation_id: [u8; 32],
 ) -> Result<PreparedComponentRuntimePlan, InternalError> {
+    prepared_component_runtime_plan_with_group_authority(operation_id, None).await
+}
+
+async fn prepared_group_component_runtime_plan(
+    operation_id: [u8; 32],
+    authority: GroupComponentRuntimeAuthority<'_>,
+) -> Result<PreparedComponentRuntimePlan, InternalError> {
+    prepared_component_runtime_plan_with_group_authority(operation_id, Some(authority)).await
+}
+
+async fn prepared_component_runtime_plan_with_group_authority(
+    operation_id: [u8; 32],
+    group_authority: Option<GroupComponentRuntimeAuthority<'_>>,
+) -> Result<PreparedComponentRuntimePlan, InternalError> {
     let (root_authority, root) = root_authority()?;
     let prepared = prepared_registry(&root_authority.binding, root_authority.initial_release_set)?;
     let preparation_request = RootComponentRegistryPreparationRequest {
@@ -4523,7 +4638,8 @@ async fn prepared_component_runtime_plan(
     let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
         InternalError::unavailable("Component allocation operation has not been reserved")
     })?;
-    validate_allocation_caller(&allocation)?;
+    let retained_group_authority =
+        validated_group_component_runtime_authority(&allocation, group_authority)?;
     validate_allocation_record(
         &root_authority.binding,
         root_authority.initial_release_set,
@@ -4531,7 +4647,15 @@ async fn prepared_component_runtime_plan(
         &allocation,
         operation_id,
     )?;
-    let install = component_install_plan(&root_authority.binding, &store, &allocation).await?;
+    let install = component_install_plan_with_deployment(
+        &root_authority.binding,
+        &store,
+        &allocation,
+        retained_group_authority
+            .as_ref()
+            .map(|authority| authority.deployment.clone()),
+    )
+    .await?;
     let installation = committed_installation(&allocation)?;
     validate_install_effect(installation, &install.durable)?;
     verify_installed_component(&install).await?;
@@ -4551,7 +4675,7 @@ async fn prepared_component_runtime_plan(
     let authority = ComponentRuntimeDirectoryAuthority {
         fleet: fleet_directory,
         component: component_directory_head(&partition),
-        component_group: None,
+        component_group: retained_group_authority.map(|authority| authority.component_group),
     };
     let directory_authority_hash = ComponentRuntimeOps::directory_authority_hash(&authority)?;
     if committed_directory_receipt(&allocation)?.directory_authority_hash
@@ -4568,6 +4692,7 @@ async fn prepared_component_runtime_plan(
         partition: partition.clone(),
         target_canister: install.canister,
         target_binding: ManagedCanisterBinding::Component(install.durable.binding),
+        deployment: install.deployment,
         directory_request: ComponentRuntimeDirectoryPreparationRequest {
             operation_id,
             authority,
@@ -4576,6 +4701,33 @@ async fn prepared_component_runtime_plan(
         directory_authority_hash,
         maximum_component_registry_bytes: install.durable.maximum_registry_bytes,
     })
+}
+
+fn validated_group_component_runtime_authority(
+    allocation: &RootComponentAllocationView,
+    group_authority: Option<GroupComponentRuntimeAuthority<'_>>,
+) -> Result<
+    Option<crate::view::component_provisioning::RootComponentGroupRuntimeAuthorityView>,
+    InternalError,
+> {
+    let Some(group_authority) = group_authority else {
+        validate_allocation_caller(allocation)?;
+        return Ok(None);
+    };
+    if &allocation.provisioning_origin != group_authority.provisioning_origin {
+        return Err(InternalError::conflict(
+            "grouped Component runtime origin differs from aggregate authority",
+        ));
+    }
+    let retained = RootComponentProvisioningOps::component_group_runtime_authority(allocation)?;
+    let authority_is_exact = retained.deployment == *group_authority.deployment
+        && retained.component_group == *group_authority.component_group;
+    if !authority_is_exact {
+        return Err(InternalError::conflict(
+            "grouped Component runtime deployment or Directory differs from aggregate authority",
+        ));
+    }
+    Ok(Some(retained))
 }
 
 async fn prepared_child_runtime_plan(
@@ -4839,10 +4991,29 @@ async fn activate_directory_prepared_runtime(
     directory_request: &ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let deployment = ungrouped_component_deployment(binding);
+    activate_directory_prepared_runtime_for_deployment(
+        canister,
+        binding,
+        &deployment,
+        directory_request,
+        directory_authority_hash,
+    )
+    .await
+}
+
+async fn activate_directory_prepared_runtime_for_deployment(
+    canister: candid::Principal,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    directory_request: &ComponentRuntimeDirectoryPreparationRequest,
+    directory_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     let observed = query_component_runtime_status(canister).await?;
-    let activated = match validate_target_directory_status(
+    let activated = match validate_target_directory_status_for_deployment(
         &observed,
         binding,
+        deployment,
         directory_request,
         directory_authority_hash,
     )? {
@@ -4860,9 +5031,10 @@ async fn activate_directory_prepared_runtime(
                 Ok(status) => status,
                 Err(call_error) => {
                     let reconciled = query_component_runtime_status(canister).await?;
-                    if validate_active_target_runtime_status(
+                    if validate_active_target_runtime_status_for_deployment(
                         &reconciled,
                         binding,
+                        deployment,
                         directory_request,
                         directory_authority_hash,
                     )
@@ -4877,17 +5049,19 @@ async fn activate_directory_prepared_runtime(
         }
         ComponentRuntimePhase::Active => observed,
     };
-    validate_active_target_runtime_status(
+    validate_active_target_runtime_status_for_deployment(
         &activated,
         binding,
+        deployment,
         directory_request,
         directory_authority_hash,
     )?;
 
     let independently_observed = query_component_runtime_status(canister).await?;
-    active_target_runtime_status(
+    active_target_runtime_status_for_deployment(
         &independently_observed,
         binding,
+        deployment,
         directory_request,
         directory_authority_hash,
     )
@@ -4901,10 +5075,33 @@ async fn converge_active_membership_directory(
     active_request: &ComponentRuntimeDirectorySynchronizationRequest,
     active_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let deployment = ungrouped_component_deployment(binding);
+    converge_active_membership_directory_for_deployment(
+        canister,
+        binding,
+        &deployment,
+        prepared_request,
+        prepared_authority_hash,
+        active_request,
+        active_authority_hash,
+    )
+    .await
+}
+
+async fn converge_active_membership_directory_for_deployment(
+    canister: candid::Principal,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
+    prepared_authority_hash: [u8; 32],
+    active_request: &ComponentRuntimeDirectorySynchronizationRequest,
+    active_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     let observed = query_component_runtime_status(canister).await?;
-    let synchronized = if validate_target_membership_status(
+    let synchronized = if validate_target_membership_status_for_deployment(
         &observed,
         binding,
+        deployment,
         prepared_request,
         prepared_authority_hash,
         active_request,
@@ -4917,9 +5114,10 @@ async fn converge_active_membership_directory(
             Err(call_error) => {
                 let reconciled = query_component_runtime_status(canister).await?;
                 if matches!(
-                    validate_target_membership_status(
+                    validate_target_membership_status_for_deployment(
                         &reconciled,
                         binding,
+                        deployment,
                         prepared_request,
                         prepared_authority_hash,
                         active_request,
@@ -4934,9 +5132,10 @@ async fn converge_active_membership_directory(
             }
         }
     };
-    if !validate_target_membership_status(
+    if !validate_target_membership_status_for_deployment(
         &synchronized,
         binding,
+        deployment,
         prepared_request,
         prepared_authority_hash,
         active_request,
@@ -4948,9 +5147,10 @@ async fn converge_active_membership_directory(
     }
 
     let independently_observed = query_component_runtime_status(canister).await?;
-    active_membership_target_status(
+    active_membership_target_status_for_deployment(
         &independently_observed,
         binding,
+        deployment,
         prepared_request,
         prepared_authority_hash,
         active_request,
@@ -5469,8 +5669,30 @@ fn validate_active_target_runtime_status(
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<(), InternalError> {
-    if validate_target_directory_status(status, binding, request, authority_hash)?
-        != ComponentRuntimePhase::Active
+    let deployment = ungrouped_component_deployment(binding);
+    validate_active_target_runtime_status_for_deployment(
+        status,
+        binding,
+        &deployment,
+        request,
+        authority_hash,
+    )
+}
+
+fn validate_active_target_runtime_status_for_deployment(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    request: &ComponentRuntimeDirectoryPreparationRequest,
+    authority_hash: [u8; 32],
+) -> Result<(), InternalError> {
+    if validate_target_directory_status_for_deployment(
+        status,
+        binding,
+        deployment,
+        request,
+        authority_hash,
+    )? != ComponentRuntimePhase::Active
     {
         return Err(InternalError::unavailable(
             "Component runtime has not completed exact Directory-bound activation",
@@ -5479,13 +5701,20 @@ fn validate_active_target_runtime_status(
     Ok(())
 }
 
-fn active_target_runtime_status(
+fn active_target_runtime_status_for_deployment(
     status: &ComponentRuntimeStatusResponse,
     binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
     request: &ComponentRuntimeDirectoryPreparationRequest,
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    validate_active_target_runtime_status(status, binding, request, authority_hash)?;
+    validate_active_target_runtime_status_for_deployment(
+        status,
+        binding,
+        deployment,
+        request,
+        authority_hash,
+    )?;
     let activation = status.activation.ok_or_else(|| {
         InternalError::invariant(
             InternalErrorOrigin::Storage,
@@ -5506,17 +5735,19 @@ fn active_target_runtime_status(
     })
 }
 
-fn validate_target_membership_status(
+fn validate_target_membership_status_for_deployment(
     status: &ComponentRuntimeStatusResponse,
     binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
     prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
     prepared_authority_hash: [u8; 32],
     active_request: &ComponentRuntimeDirectorySynchronizationRequest,
     active_authority_hash: [u8; 32],
 ) -> Result<bool, InternalError> {
-    validate_active_target_runtime_status(
+    validate_active_target_runtime_status_for_deployment(
         status,
         binding,
+        deployment,
         prepared_request,
         prepared_authority_hash,
     )?;
@@ -5529,17 +5760,19 @@ fn validate_target_membership_status(
     )
 }
 
-fn active_membership_target_status(
+fn active_membership_target_status_for_deployment(
     status: &ComponentRuntimeStatusResponse,
     binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
     prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
     prepared_authority_hash: [u8; 32],
     active_request: &ComponentRuntimeDirectorySynchronizationRequest,
     active_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    if !validate_target_membership_status(
+    if !validate_target_membership_status_for_deployment(
         status,
         binding,
+        deployment,
         prepared_request,
         prepared_authority_hash,
         active_request,
@@ -5702,7 +5935,7 @@ fn committed_child_installation(
     }
 }
 
-fn committed_directory_receipt(
+pub(super) fn committed_directory_receipt(
     allocation: &RootComponentAllocationView,
 ) -> Result<&crate::view::component_registry::RootComponentCommitmentView, InternalError> {
     match &allocation.progress {

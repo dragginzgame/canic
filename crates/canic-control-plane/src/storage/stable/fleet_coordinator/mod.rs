@@ -18,8 +18,10 @@ use canic_core::{
     control_plane_support::config::ComponentDeploymentConfiguration,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningPlan, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
+            FleetComponentActivationRootProgress, FleetComponentProvisioningPlan,
+            RootComponentActivationEvidence, RootComponentActivationRequest,
+            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningStatusResponse,
+            RootComponentPublicationRequest,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -184,6 +186,33 @@ pub enum FleetComponentProvisioningStateRecord {
         confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
         directories_confirmed_at_ns: u64,
     },
+    ActivatingRuntimes {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        components_provisioned_at_ns: u64,
+        published_fleet_registry: FleetRegistryVersion,
+        service_topology_published_at_ns: u64,
+        confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+        directories_confirmed_at_ns: u64,
+        activations: Vec<FleetComponentRuntimeActivationRecord>,
+        current: Option<Box<FleetComponentRuntimeActivationRecord>>,
+        in_flight: Option<FleetComponentRuntimeActivationIntentRecord>,
+    },
+    RuntimesActivated {
+        planned_at_ns: u64,
+        acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+        roots_accepted_at_ns: u64,
+        provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+        components_provisioned_at_ns: u64,
+        published_fleet_registry: FleetRegistryVersion,
+        service_topology_published_at_ns: u64,
+        confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+        directories_confirmed_at_ns: u64,
+        activations: Vec<FleetComponentRuntimeActivationRecord>,
+        runtimes_activated_at_ns: u64,
+    },
 }
 
 /// Durable pre-call intent for one exact canonical root batch.
@@ -233,6 +262,27 @@ pub struct FleetComponentDirectoryConfirmationIntentRecord {
 pub struct FleetComponentDirectoryConfirmationRecord {
     pub started_at_ns: u64,
     pub response: RootComponentProvisioningStatusResponse,
+    pub recorded_at_ns: u64,
+}
+
+/// Durable pre-call intent for one exact root runtime-activation cursor.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentRuntimeActivationIntentRecord {
+    pub root_index: u32,
+    pub fleet_subnet_root: Principal,
+    pub request: RootComponentActivationRequest,
+    pub started_at_ns: u64,
+}
+
+/// Compact authenticated root runtime-activation progress retained by the Coordinator.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentRuntimeActivationRecord {
+    pub started_at_ns: u64,
+    pub progress: FleetComponentActivationRootProgress,
+    pub activation: Option<RootComponentActivationEvidence>,
+    pub activation_started_at_ns: Option<u64>,
+    pub runtimes_activated_at_ns: Option<u64>,
+    pub receipt_content_hash: [u8; 32],
     pub recorded_at_ns: u64,
 }
 

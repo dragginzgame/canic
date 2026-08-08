@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-07
+Date: 2026-08-08
 
 ## Status
 
@@ -74,10 +74,19 @@ Date: 2026-08-07
   Group Directories, delivers and independently verifies every exact prepared
   Component authority, then freezes one terminal `Published` receipt. The
   Coordinator authenticates every receipt before reaching
-  `DirectoriesConfirmed`. Components remain `DirectoryPrepared`, roots remain
-  runtime `Prepared`, and runtime activation remains unavailable.
+  `DirectoriesConfirmed`. Each selected root now composes the existing
+  runtime-activation and Registry-membership journals to activate one exact
+  grouped Component per bounded command, verifies the resulting current
+  Directory, and advances only after that Component is `Active`. After every
+  planned Component is active, the root seals and revalidates initial
+  inventory, prepares or resumes its Fleet runtime and freezes a terminal
+  receipt chained to its prior `Published` receipt. The Coordinator persists
+  one exact root call intent at a time, validates compact activation evidence
+  in canonical root order and reaches `RuntimesActivated` only after every
+  selected root is active. Fleet catalog publication and terminal host
+  completion remain unavailable.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.20` is released and `0.101.21` is open.
+- Implementation started: yes; `0.101.21` is released and `0.101.22` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -281,9 +290,12 @@ Fleet policy writer.
 - [x] Derive one root-local Component Group Directory per placement without
   introducing group parentage or lifecycle authority.
 - [x] Send exact Fleet, Component and Group Directories before activation.
-- [ ] Activate each Component runtime under its exact prepared Directory,
+- [x] Activate each Component runtime under its exact prepared Directory,
   then promote its Component Registry partition to `Active` and synchronize
-  the resulting revision-bound current Directory before root activation.
+  the resulting revision-bound current Directory before sealing initial
+  inventory and activating the root. The Coordinator reaches
+  `RuntimesActivated` only after every selected root returns exact terminal
+  evidence.
 - [ ] Freeze the exact Directory-confirmation roots: all initial roots for
   fresh install, and selected plus every affected existing service-member root
   for scale-out. Fresh-install confirmation freezes and verifies every selected

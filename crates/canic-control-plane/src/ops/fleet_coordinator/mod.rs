@@ -12,6 +12,7 @@ use crate::{
         FleetComponentProvisioningRootAcceptanceRecord,
         FleetComponentProvisioningRootProvisionIntentRecord,
         FleetComponentProvisioningRootProvisionRecord, FleetComponentProvisioningStateRecord,
+        FleetComponentRuntimeActivationIntentRecord, FleetComponentRuntimeActivationRecord,
         FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
         FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
@@ -24,6 +25,7 @@ use crate::{
         FleetComponentProvisioningRootAcceptanceDisposition,
         FleetComponentProvisioningRootProvisionCallView,
         FleetComponentProvisioningRootProvisionDisposition,
+        FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
     },
 };
 use candid::{CandidType, Principal};
@@ -40,6 +42,7 @@ use canic_core::{
                 RootComponentProvisioningAcceptanceReceiptAuthority,
                 RootComponentProvisioningPublishedReceiptAuthority,
                 RootComponentProvisioningReceiptOps,
+                RootComponentProvisioningRuntimesActiveReceiptAuthority,
             },
             fleet_registry::FleetRegistryOps,
             fleet_service_binding::FleetServiceBindingOps,
@@ -48,11 +51,12 @@ use canic_core::{
     dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
-            FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
-            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningRootProgress,
-            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
-            FleetComponentPublicationRootProgress, FleetSubnetRootProvisioningBatch,
+            FleetComponentActivationRootProgress, FleetComponentProvisioningAdvanceRequest,
+            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
+            FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
+            FleetComponentProvisioningStatusResponse, FleetComponentPublicationRootProgress,
+            FleetSubnetRootProvisioningBatch, RootComponentActivationRequest,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningPhase, RootComponentProvisioningStatusResponse,
             RootComponentPublicationRequest,
@@ -995,6 +999,177 @@ impl FleetCoordinatorOps {
         Ok(result)
     }
 
+    pub(crate) fn advance_component_runtime_activation(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        started_at_ns: u64,
+    ) -> Result<FleetComponentRuntimeActivationDisposition, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, request)?;
+        let progress = component_runtime_activation_progress(record)?;
+        match classify_runtime_activation_advance(request, &progress)? {
+            RuntimeActivationAdvance::Current => {
+                return component_provisioning_status_response(record)
+                    .map(Box::new)
+                    .map(FleetComponentRuntimeActivationDisposition::Current);
+            }
+            RuntimeActivationAdvance::Reconcile => {
+                let intent = progress
+                    .in_flight
+                    .as_ref()
+                    .ok_or_else(|| receipt_invariant("runtime activation intent disappeared"))?;
+                return Ok(FleetComponentRuntimeActivationDisposition::Reconcile(
+                    runtime_activation_call_from_intent(intent),
+                ));
+            }
+            RuntimeActivationAdvance::Begin => {}
+        }
+        if started_at_ns == 0 || started_at_ns < progress.directories_confirmed_at_ns {
+            return Err(InternalError::invalid_input(
+                "runtime activation start time is invalid",
+            ));
+        }
+        let root_index = progress.activated_root_count;
+        let publication = root_publication_response(&progress, root_index)?;
+        let current_progress = progress.current.map_or_else(
+            || root_activation_progress(publication),
+            |record| record.progress,
+        );
+        let root = confirmation_root(record, root_index)?;
+        if current_progress.fleet_subnet_root != root {
+            return Err(receipt_invariant(
+                "runtime activation cursor differs from canonical root order",
+            ));
+        }
+        let call = FleetComponentRuntimeActivationCallView {
+            fleet_subnet_root: root,
+            request: RootComponentActivationRequest {
+                operation_id: record.operation_id,
+                plan_hash: record.plan_hash,
+                expected_activated_component_count: current_progress.activated_component_count,
+                expected_root_runtime_active: current_progress.root_runtime_active,
+            },
+        };
+        let intent = FleetComponentRuntimeActivationIntentRecord {
+            root_index,
+            fleet_subnet_root: root,
+            request: call.request,
+            started_at_ns,
+        };
+        let mut next = current.clone();
+        component_provisioning_record_mut(&mut next)?.state =
+            FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                published_fleet_registry: progress.published_fleet_registry,
+                service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                confirmations: progress.confirmations,
+                directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
+                activations: progress.activations,
+                current: progress.current.map(Box::new),
+                in_flight: Some(intent),
+            };
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(FleetComponentRuntimeActivationDisposition::Invoke(call))
+    }
+
+    pub(crate) fn record_component_runtime_activation(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: &RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_record(&current, request)?;
+        let mut progress = component_runtime_activation_progress(record)?;
+        if classify_runtime_activation_advance(request, &progress)?
+            != RuntimeActivationAdvance::Reconcile
+        {
+            return Err(InternalError::conflict(
+                "runtime activation response has no exact durable pre-call intent",
+            ));
+        }
+        let intent = progress
+            .in_flight
+            .take()
+            .ok_or_else(|| receipt_invariant("runtime activation intent disappeared"))?;
+        if recorded_at_ns < intent.started_at_ns {
+            return Err(InternalError::invalid_input(
+                "runtime activation observation time regressed",
+            ));
+        }
+        let publication = root_publication_response(&progress, intent.root_index)?;
+        let previous_record = progress.current;
+        let previous = previous_record.map_or_else(
+            || root_activation_progress(publication),
+            |record| record.progress,
+        );
+        validate_runtime_activation_response(
+            record,
+            intent.root_index,
+            publication,
+            previous,
+            previous_record.and_then(|record| record.activation_started_at_ns),
+            response,
+            recorded_at_ns,
+        )?;
+        let observed = FleetComponentRuntimeActivationRecord {
+            started_at_ns: intent.started_at_ns,
+            progress: root_activation_progress(response),
+            activation: response.activation,
+            activation_started_at_ns: response.activation_started_at_ns,
+            runtimes_activated_at_ns: response.runtimes_activated_at_ns,
+            receipt_content_hash: response.receipt_content_hash,
+            recorded_at_ns,
+        };
+        if response.phase == RootComponentProvisioningPhase::RuntimesActive {
+            progress.activations.push(observed);
+            progress.current = None;
+        } else {
+            progress.current = Some(observed);
+        }
+        let activated_root_count = u32::try_from(progress.activations.len())
+            .map_err(|_| receipt_invariant("runtime-activated root count does not fit u32"))?;
+        let mut next = current.clone();
+        component_provisioning_record_mut(&mut next)?.state =
+            if activated_root_count == progress.activation_root_count {
+                FleetComponentProvisioningStateRecord::RuntimesActivated {
+                    planned_at_ns: progress.planned_at_ns,
+                    acceptances: progress.acceptances,
+                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                    provisions: progress.provisions,
+                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                    published_fleet_registry: progress.published_fleet_registry,
+                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                    confirmations: progress.confirmations,
+                    directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
+                    activations: progress.activations,
+                    runtimes_activated_at_ns: recorded_at_ns,
+                }
+            } else {
+                FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+                    planned_at_ns: progress.planned_at_ns,
+                    acceptances: progress.acceptances,
+                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                    provisions: progress.provisions,
+                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                    published_fleet_registry: progress.published_fleet_registry,
+                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                    confirmations: progress.confirmations,
+                    directories_confirmed_at_ns: progress.directories_confirmed_at_ns,
+                    activations: progress.activations,
+                    current: progress.current.map(Box::new),
+                    in_flight: None,
+                }
+            };
+        let next = Self::validate_current(next)?;
+        let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
+        Self::commit_transition(&current, next)?;
+        Ok(result)
+    }
+
     pub(crate) fn publish_root_draining(
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
@@ -1582,6 +1757,7 @@ fn validate_component_provisioning_record(
     )?;
     validate_service_publication_authority(current, record)?;
     validate_component_directory_confirmation_state(current, record)?;
+    validate_component_runtime_activation_state(record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
@@ -1590,10 +1766,12 @@ fn validate_component_directory_confirmation_state(
     coordinator: &FleetCoordinatorRegistryRecord,
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
-    let progress = match record.state {
+    let progress = match &record.state {
         FleetComponentProvisioningStateRecord::ServiceTopologyPublished { .. }
         | FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
-        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. } => {
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => {
             component_directory_confirmation_progress(record)?
         }
         _ => return Ok(()),
@@ -1621,6 +1799,225 @@ fn validate_component_directory_confirmation_state(
     )?;
     validate_directory_confirmation_intent(record, &progress, previous_recorded_at_ns)?;
     validate_terminal_directory_confirmation(record, &progress, previous_recorded_at_ns)
+}
+
+fn validate_component_runtime_activation_state(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    let progress = match &record.state {
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => {
+            component_runtime_activation_progress(record)?
+        }
+        _ => return Ok(()),
+    };
+    if progress.activation_root_count
+        != u32::try_from(record.plan.batches.len())
+            .map_err(|_| receipt_invariant("runtime activation root count does not fit u32"))?
+        || progress.activated_root_count > progress.activation_root_count
+    {
+        return Err(receipt_invariant(
+            "runtime activation roots differ from selected root batches",
+        ));
+    }
+    let mut previous_recorded_at_ns = progress.directories_confirmed_at_ns;
+    for (index, activation) in progress.activations.iter().enumerate() {
+        let root_index = u32::try_from(index)
+            .map_err(|_| receipt_invariant("runtime activation root index does not fit u32"))?;
+        validate_stored_runtime_activation(record, &progress, root_index, activation, true)?;
+        if activation.started_at_ns < previous_recorded_at_ns
+            || activation.recorded_at_ns < activation.started_at_ns
+        {
+            return Err(receipt_invariant(
+                "runtime activation observation time evidence is invalid",
+            ));
+        }
+        previous_recorded_at_ns = activation.recorded_at_ns;
+    }
+    if let Some(current) = &progress.current {
+        validate_stored_runtime_activation(
+            record,
+            &progress,
+            progress.activated_root_count,
+            current,
+            false,
+        )?;
+        if current.started_at_ns < previous_recorded_at_ns
+            || current.recorded_at_ns < current.started_at_ns
+        {
+            return Err(receipt_invariant(
+                "current runtime activation observation time evidence is invalid",
+            ));
+        }
+        previous_recorded_at_ns = current.recorded_at_ns;
+    }
+    validate_runtime_activation_intent(record, &progress, previous_recorded_at_ns)?;
+    validate_terminal_runtime_activation_state(&progress, previous_recorded_at_ns)
+}
+
+fn validate_stored_runtime_activation(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentRuntimeActivationProgress,
+    root_index: u32,
+    activation: &FleetComponentRuntimeActivationRecord,
+    terminal: bool,
+) -> Result<(), InternalError> {
+    let publication = root_publication_response(progress, root_index)?;
+    let expected_progress = FleetComponentActivationRootProgress {
+        fleet_subnet_root: publication.fleet_subnet_root,
+        component_count: publication.component_count,
+        activated_component_count: if terminal {
+            publication.component_count
+        } else {
+            activation.progress.activated_component_count
+        },
+        root_runtime_active: terminal,
+    };
+    let activation_started_at_ns = activation
+        .activation_started_at_ns
+        .ok_or_else(|| receipt_invariant("stored runtime activation lacks its root start time"))?;
+    let published_at_ns = publication
+        .published_at_ns
+        .ok_or_else(|| receipt_invariant("stored root publication lacks completion time"))?;
+    let component_cursor_is_bounded = terminal
+        || (activation.progress.activated_component_count > 0
+            && activation.progress.activated_component_count <= publication.component_count);
+    if activation.progress != expected_progress
+        || !component_cursor_is_bounded
+        || activation_started_at_ns < published_at_ns
+        || activation.recorded_at_ns < activation_started_at_ns
+    {
+        return Err(receipt_invariant(
+            "stored runtime activation progress or time authority is invalid",
+        ));
+    }
+    if terminal {
+        validate_stored_terminal_runtime_activation(
+            record,
+            root_index,
+            publication,
+            activation,
+            activation_started_at_ns,
+        )
+    } else if activation.activation.is_some()
+        || activation.runtimes_activated_at_ns.is_some()
+        || activation.receipt_content_hash != publication.receipt_content_hash
+    {
+        Err(receipt_invariant(
+            "stored in-progress runtime activation changed publication authority",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_stored_terminal_runtime_activation(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+    publication: &RootComponentProvisioningStatusResponse,
+    stored: &FleetComponentRuntimeActivationRecord,
+    activation_started_at_ns: u64,
+) -> Result<(), InternalError> {
+    let activation = stored
+        .activation
+        .ok_or_else(|| receipt_invariant("stored terminal runtime activation lacks evidence"))?;
+    let runtimes_activated_at_ns = stored.runtimes_activated_at_ns.ok_or_else(|| {
+        receipt_invariant("stored terminal runtime activation lacks completion time")
+    })?;
+    let evidence_is_exact = [
+        activation.component_count == publication.component_count,
+        activation.fleet_activation_operation_id != [0; 32],
+        activation.initial_inventory_hash != [0; 32],
+        activation.root_activated_at_ns == runtimes_activated_at_ns,
+        runtimes_activated_at_ns >= activation_started_at_ns,
+        stored.recorded_at_ns >= runtimes_activated_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !evidence_is_exact {
+        return Err(receipt_invariant(
+            "stored terminal runtime activation evidence is invalid",
+        ));
+    }
+    let batch = root_batch(record, root_index)?;
+    let expected = RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
+        RootComponentProvisioningRuntimesActiveReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            configuration_digest: record.plan.configuration_digest,
+            root: &batch.root,
+            published_receipt_content_hash: publication.receipt_content_hash,
+            activation,
+            activation_started_at_ns,
+            runtimes_activated_at_ns,
+        },
+    )?;
+    if stored.receipt_content_hash != expected {
+        return Err(receipt_invariant(
+            "stored terminal runtime activation receipt hash is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_runtime_activation_intent(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentRuntimeActivationProgress,
+    previous_recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    let Some(intent) = &progress.in_flight else {
+        return Ok(());
+    };
+    let root = confirmation_root(record, progress.activated_root_count)?;
+    let current = progress.current.map_or_else(
+        || {
+            root_publication_response(progress, progress.activated_root_count)
+                .map(root_activation_progress)
+        },
+        |current| Ok(current.progress),
+    )?;
+    let intent_is_exact = [
+        intent.root_index == progress.activated_root_count,
+        intent.fleet_subnet_root == root,
+        intent.request.operation_id == record.operation_id,
+        intent.request.plan_hash == record.plan_hash,
+        intent.request.expected_activated_component_count == current.activated_component_count,
+        intent.request.expected_root_runtime_active == current.root_runtime_active,
+        intent.started_at_ns >= previous_recorded_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !intent_is_exact {
+        return Err(receipt_invariant(
+            "runtime activation pre-call intent is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_terminal_runtime_activation_state(
+    progress: &FleetComponentRuntimeActivationProgress,
+    previous_recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    if progress.complete {
+        let completed_at_ns = progress.runtimes_activated_at_ns.ok_or_else(|| {
+            receipt_invariant("terminal runtime activation lacks completion time")
+        })?;
+        if progress.activated_root_count != progress.activation_root_count
+            || progress.current.is_some()
+            || progress.in_flight.is_some()
+            || completed_at_ns < previous_recorded_at_ns
+        {
+            return Err(receipt_invariant(
+                "terminal runtime activation evidence is incomplete",
+            ));
+        }
+    } else if progress.activated_root_count >= progress.activation_root_count {
+        return Err(receipt_invariant(
+            "runtime activation remained nonterminal after every selected root",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_completed_directory_confirmations(
@@ -1734,12 +2131,20 @@ fn validate_terminal_directory_confirmation(
     previous_recorded_at_ns: u64,
 ) -> Result<(), InternalError> {
     if progress.complete {
-        let FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
-            directories_confirmed_at_ns,
-            ..
-        } = record.state
-        else {
-            unreachable!("complete Directory progress has terminal state");
+        let directories_confirmed_at_ns = match &record.state {
+            FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+                directories_confirmed_at_ns,
+                ..
+            }
+            | FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+                directories_confirmed_at_ns,
+                ..
+            }
+            | FleetComponentProvisioningStateRecord::RuntimesActivated {
+                directories_confirmed_at_ns,
+                ..
+            } => *directories_confirmed_at_ns,
+            _ => unreachable!("complete Directory progress has terminal state"),
         };
         if progress.confirmed_root_count != progress.confirmation_root_count
             || directories_confirmed_at_ns < previous_recorded_at_ns
@@ -1762,6 +2167,13 @@ fn component_provisioning_status_response(
         Some(component_directory_confirmation_progress(record)?)
     } else {
         None
+    };
+    let activation = match &record.state {
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => {
+            Some(component_runtime_activation_progress(record)?)
+        }
+        _ => None,
     };
     Ok(FleetComponentProvisioningStatusResponse {
         operation_id: record.operation_id,
@@ -1794,6 +2206,16 @@ fn component_provisioning_status_response(
             .as_ref()
             .and_then(|progress| progress.in_flight.as_ref())
             .map(|intent| intent.fleet_subnet_root),
+        runtime_activated_root_count: activation
+            .as_ref()
+            .map_or(0, |progress| progress.activated_root_count),
+        current_activation: activation
+            .as_ref()
+            .and_then(|progress| progress.current.map(|record| record.progress)),
+        activation_in_flight_root: activation
+            .as_ref()
+            .and_then(|progress| progress.in_flight)
+            .map(|intent| intent.fleet_subnet_root),
         group_placement_count: counts.group_placements,
         component_count: counts.components,
         planned_at_ns: acceptance.planned_at_ns,
@@ -1805,9 +2227,20 @@ fn component_provisioning_status_response(
             FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
                 directories_confirmed_at_ns,
                 ..
+            }
+            | FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+                directories_confirmed_at_ns,
+                ..
+            }
+            | FleetComponentProvisioningStateRecord::RuntimesActivated {
+                directories_confirmed_at_ns,
+                ..
             } => Some(*directories_confirmed_at_ns),
             _ => None,
         },
+        runtimes_activated_at_ns: activation
+            .as_ref()
+            .and_then(|progress| progress.runtimes_activated_at_ns),
     })
 }
 
@@ -1852,6 +2285,26 @@ struct FleetComponentDirectoryConfirmationProgress {
     complete: bool,
 }
 
+#[derive(Clone)]
+struct FleetComponentRuntimeActivationProgress {
+    planned_at_ns: u64,
+    acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+    roots_accepted_at_ns: u64,
+    provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+    components_provisioned_at_ns: u64,
+    published_fleet_registry: FleetRegistryVersion,
+    service_topology_published_at_ns: u64,
+    confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+    directories_confirmed_at_ns: u64,
+    activations: Vec<FleetComponentRuntimeActivationRecord>,
+    activated_root_count: u32,
+    activation_root_count: u32,
+    current: Option<FleetComponentRuntimeActivationRecord>,
+    in_flight: Option<FleetComponentRuntimeActivationIntentRecord>,
+    runtimes_activated_at_ns: Option<u64>,
+    complete: bool,
+}
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum RootAcceptanceAdvance {
     Begin,
@@ -1869,6 +2322,13 @@ enum RootProvisionAdvance {
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum DirectoryConfirmationAdvance {
+    Begin,
+    Reconcile,
+    Current,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum RuntimeActivationAdvance {
     Begin,
     Reconcile,
     Current,
@@ -1984,6 +2444,20 @@ fn service_publication_state(
             ..
         }
         | FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated {
             provisions,
             components_provisioned_at_ns,
             published_fleet_registry,
@@ -2192,83 +2666,116 @@ fn component_provisioning_root_acceptance_progress(
             None,
             root_batch_count,
         ),
+        state => {
+            let authority = post_acceptance_authority(state);
+            root_acceptance_progress_from_parts(
+                authority.planned_at_ns,
+                authority.phase,
+                authority.acceptances,
+                None,
+                Some(authority.roots_accepted_at_ns),
+                root_batch_count,
+            )
+        }
+    }
+}
+
+struct PostAcceptanceAuthority<'a> {
+    planned_at_ns: u64,
+    phase: FleetComponentProvisioningPhase,
+    acceptances: &'a [FleetComponentProvisioningRootAcceptanceRecord],
+    roots_accepted_at_ns: u64,
+}
+
+fn post_acceptance_authority(
+    state: &FleetComponentProvisioningStateRecord,
+) -> PostAcceptanceAuthority<'_> {
+    let (planned_at_ns, acceptances, roots_accepted_at_ns) = match state {
         FleetComponentProvisioningStateRecord::RootsAccepted {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
-        } => root_acceptance_progress_from_parts(
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::RootsAccepted,
-            acceptances,
-            None,
-            Some(*roots_accepted_at_ns),
-            root_batch_count,
-        ),
-        FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+        }
+        | FleetComponentProvisioningStateRecord::ProvisioningRoots {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => root_acceptance_progress_from_parts(
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::ConfirmingDirectories,
-            acceptances,
-            None,
-            Some(*roots_accepted_at_ns),
-            root_batch_count,
-        ),
-        FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+        }
+        | FleetComponentProvisioningStateRecord::ComponentsProvisioned {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => root_acceptance_progress_from_parts(
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::DirectoriesConfirmed,
-            acceptances,
-            None,
-            Some(*roots_accepted_at_ns),
-            root_batch_count,
-        ),
-        FleetComponentProvisioningStateRecord::ProvisioningRoots {
+        }
+        | FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => root_acceptance_progress_from_parts(
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::ProvisioningRoots,
-            acceptances,
-            None,
-            Some(*roots_accepted_at_ns),
-            root_batch_count,
-        ),
-        FleetComponentProvisioningStateRecord::ComponentsProvisioned {
+        }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => root_acceptance_progress_from_parts(
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::ComponentsProvisioned,
-            acceptances,
-            None,
-            Some(*roots_accepted_at_ns),
-            root_batch_count,
-        ),
-        FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
+        }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
             planned_at_ns,
             acceptances,
             roots_accepted_at_ns,
             ..
-        } => root_acceptance_progress_from_parts(
-            *planned_at_ns,
-            FleetComponentProvisioningPhase::ServiceTopologyPublished,
+        }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            planned_at_ns,
             acceptances,
-            None,
-            Some(*roots_accepted_at_ns),
-            root_batch_count,
+            roots_accepted_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            ..
+        } => (
+            *planned_at_ns,
+            acceptances.as_slice(),
+            *roots_accepted_at_ns,
         ),
+        _ => unreachable!("pre-acceptance states are handled by the caller"),
+    };
+    let phase = match state {
+        FleetComponentProvisioningStateRecord::RootsAccepted { .. } => {
+            FleetComponentProvisioningPhase::RootsAccepted
+        }
+        FleetComponentProvisioningStateRecord::ProvisioningRoots { .. } => {
+            FleetComponentProvisioningPhase::ProvisioningRoots
+        }
+        FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. } => {
+            FleetComponentProvisioningPhase::ComponentsProvisioned
+        }
+        FleetComponentProvisioningStateRecord::ServiceTopologyPublished { .. } => {
+            FleetComponentProvisioningPhase::ServiceTopologyPublished
+        }
+        FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. } => {
+            FleetComponentProvisioningPhase::ConfirmingDirectories
+        }
+        FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. } => {
+            FleetComponentProvisioningPhase::DirectoriesConfirmed
+        }
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. } => {
+            FleetComponentProvisioningPhase::ActivatingRuntimes
+        }
+        FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => {
+            FleetComponentProvisioningPhase::RuntimesActivated
+        }
+        _ => unreachable!("pre-acceptance states are handled by the caller"),
+    };
+    PostAcceptanceAuthority {
+        planned_at_ns,
+        phase,
+        acceptances,
+        roots_accepted_at_ns,
     }
 }
 
@@ -2365,6 +2872,22 @@ fn component_provisioning_root_provision_progress(
             ..
         }
         | FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated {
             roots_accepted_at_ns,
             provisions,
             components_provisioned_at_ns,
@@ -2538,6 +3061,10 @@ fn component_directory_confirmation_progress(
             in_flight: None,
             complete: true,
         },
+        state @ (FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { .. }) => {
+            terminal_downstream_directory_progress(state, confirmation_root_count)?
+        }
         _ => {
             return Err(InternalError::conflict(
                 "Directory confirmation requires published Fleet-service topology",
@@ -2545,6 +3072,316 @@ fn component_directory_confirmation_progress(
         }
     };
     Ok(progress)
+}
+
+fn terminal_downstream_directory_progress(
+    state: &FleetComponentProvisioningStateRecord,
+    confirmation_root_count: u32,
+) -> Result<FleetComponentDirectoryConfirmationProgress, InternalError> {
+    let (
+        planned_at_ns,
+        acceptances,
+        roots_accepted_at_ns,
+        provisions,
+        components_provisioned_at_ns,
+        published_fleet_registry,
+        service_topology_published_at_ns,
+        confirmations,
+    ) = match state {
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            ..
+        } => (
+            *planned_at_ns,
+            acceptances,
+            *roots_accepted_at_ns,
+            provisions,
+            *components_provisioned_at_ns,
+            published_fleet_registry,
+            *service_topology_published_at_ns,
+            confirmations,
+        ),
+        _ => unreachable!("only downstream Directory states delegate here"),
+    };
+    Ok(FleetComponentDirectoryConfirmationProgress {
+        planned_at_ns,
+        acceptances: acceptances.clone(),
+        roots_accepted_at_ns,
+        provisions: provisions.clone(),
+        components_provisioned_at_ns,
+        published_fleet_registry: published_fleet_registry.clone(),
+        service_topology_published_at_ns,
+        confirmations: confirmations.clone(),
+        confirmed_root_count: u32::try_from(confirmations.len())
+            .map_err(|_| receipt_invariant("Directory confirmation count does not fit u32"))?,
+        confirmation_root_count,
+        current: None,
+        in_flight: None,
+        complete: true,
+    })
+}
+
+struct RuntimeActivationAuthority {
+    planned_at_ns: u64,
+    acceptances: Vec<FleetComponentProvisioningRootAcceptanceRecord>,
+    roots_accepted_at_ns: u64,
+    provisions: Vec<FleetComponentProvisioningRootProvisionRecord>,
+    components_provisioned_at_ns: u64,
+    published_fleet_registry: FleetRegistryVersion,
+    service_topology_published_at_ns: u64,
+    confirmations: Vec<FleetComponentDirectoryConfirmationRecord>,
+    directories_confirmed_at_ns: u64,
+}
+
+fn runtime_activation_authority(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<RuntimeActivationAuthority, InternalError> {
+    let (
+        planned_at_ns,
+        acceptances,
+        roots_accepted_at_ns,
+        provisions,
+        components_provisioned_at_ns,
+        published_fleet_registry,
+        service_topology_published_at_ns,
+        confirmations,
+        directories_confirmed_at_ns,
+    ) = match &record.state {
+        FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            directories_confirmed_at_ns,
+        }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            directories_confirmed_at_ns,
+            ..
+        }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated {
+            planned_at_ns,
+            acceptances,
+            roots_accepted_at_ns,
+            provisions,
+            components_provisioned_at_ns,
+            published_fleet_registry,
+            service_topology_published_at_ns,
+            confirmations,
+            directories_confirmed_at_ns,
+            ..
+        } => (
+            *planned_at_ns,
+            acceptances.clone(),
+            *roots_accepted_at_ns,
+            provisions.clone(),
+            *components_provisioned_at_ns,
+            published_fleet_registry.clone(),
+            *service_topology_published_at_ns,
+            confirmations.clone(),
+            *directories_confirmed_at_ns,
+        ),
+        _ => {
+            return Err(InternalError::conflict(
+                "runtime activation requires confirmed Directories",
+            ));
+        }
+    };
+    Ok(RuntimeActivationAuthority {
+        planned_at_ns,
+        acceptances,
+        roots_accepted_at_ns,
+        provisions,
+        components_provisioned_at_ns,
+        published_fleet_registry,
+        service_topology_published_at_ns,
+        confirmations,
+        directories_confirmed_at_ns,
+    })
+}
+
+fn component_runtime_activation_progress(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<FleetComponentRuntimeActivationProgress, InternalError> {
+    let authority = runtime_activation_authority(record)?;
+    let activation_root_count = u32::try_from(record.plan.batches.len())
+        .map_err(|_| receipt_invariant("runtime activation root count does not fit u32"))?;
+    let (activations, current, in_flight, runtimes_activated_at_ns, complete) = match &record.state
+    {
+        FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. } => {
+            (vec![], None, None, None, false)
+        }
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+            activations,
+            current,
+            in_flight,
+            ..
+        } => (
+            activations.clone(),
+            current.as_deref().copied(),
+            *in_flight,
+            None,
+            false,
+        ),
+        FleetComponentProvisioningStateRecord::RuntimesActivated {
+            activations,
+            runtimes_activated_at_ns,
+            ..
+        } => (
+            activations.clone(),
+            None,
+            None,
+            Some(*runtimes_activated_at_ns),
+            true,
+        ),
+        _ => unreachable!("runtime activation authority rejected earlier phases"),
+    };
+    let activated_root_count = u32::try_from(activations.len())
+        .map_err(|_| receipt_invariant("runtime-activated root count does not fit u32"))?;
+    Ok(FleetComponentRuntimeActivationProgress {
+        planned_at_ns: authority.planned_at_ns,
+        acceptances: authority.acceptances,
+        roots_accepted_at_ns: authority.roots_accepted_at_ns,
+        provisions: authority.provisions,
+        components_provisioned_at_ns: authority.components_provisioned_at_ns,
+        published_fleet_registry: authority.published_fleet_registry,
+        service_topology_published_at_ns: authority.service_topology_published_at_ns,
+        confirmations: authority.confirmations,
+        directories_confirmed_at_ns: authority.directories_confirmed_at_ns,
+        activations,
+        activated_root_count,
+        activation_root_count,
+        current,
+        in_flight,
+        runtimes_activated_at_ns,
+        complete,
+    })
+}
+
+fn classify_runtime_activation_advance(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentRuntimeActivationProgress,
+) -> Result<RuntimeActivationAdvance, InternalError> {
+    if progress.complete {
+        return if runtime_activation_request_is_current(request, progress)
+            || terminal_runtime_activation_replay(request, progress)?
+        {
+            Ok(RuntimeActivationAdvance::Current)
+        } else {
+            Err(InternalError::conflict(
+                "runtime activation cursor differs from terminal progress",
+            ))
+        };
+    }
+    if request.expected_runtime_activated_root_count < progress.activated_root_count {
+        return if terminal_runtime_activation_replay(request, progress)? {
+            Ok(RuntimeActivationAdvance::Current)
+        } else {
+            Err(InternalError::conflict(
+                "runtime-activated root cursor differs from durable progress",
+            ))
+        };
+    }
+    if request.expected_runtime_activated_root_count != progress.activated_root_count {
+        return Err(InternalError::conflict(
+            "runtime-activated root cursor differs from durable progress",
+        ));
+    }
+    let actual = progress.current.map(|record| record.progress);
+    if request.expected_current_activation != actual {
+        let replays_last = request
+            .expected_current_activation
+            .zip(actual)
+            .is_some_and(|(expected, actual)| activation_progress_advances(expected, actual));
+        return if replays_last {
+            Ok(RuntimeActivationAdvance::Current)
+        } else {
+            Err(InternalError::conflict(
+                "runtime activation Component cursor differs from durable progress",
+            ))
+        };
+    }
+    if progress.in_flight.is_some() {
+        Ok(RuntimeActivationAdvance::Reconcile)
+    } else {
+        Ok(RuntimeActivationAdvance::Begin)
+    }
+}
+
+const fn runtime_activation_request_is_current(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentRuntimeActivationProgress,
+) -> bool {
+    request.expected_runtime_activated_root_count == progress.activated_root_count
+        && request.expected_current_activation.is_none()
+}
+
+fn terminal_runtime_activation_replay(
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: &FleetComponentRuntimeActivationProgress,
+) -> Result<bool, InternalError> {
+    if request.expected_runtime_activated_root_count.checked_add(1)
+        != Some(progress.activated_root_count)
+    {
+        return Ok(false);
+    }
+    let terminal = progress
+        .activations
+        .last()
+        .ok_or_else(|| receipt_invariant("terminal runtime activation lacks a root receipt"))?;
+    Ok(request
+        .expected_current_activation
+        .map_or(terminal.progress.component_count == 0, |expected| {
+            activation_progress_advances(expected, terminal.progress)
+        }))
+}
+
+fn activation_progress_advances(
+    expected: FleetComponentActivationRootProgress,
+    actual: FleetComponentActivationRootProgress,
+) -> bool {
+    if expected.fleet_subnet_root != actual.fleet_subnet_root
+        || expected.component_count != actual.component_count
+    {
+        return false;
+    }
+    let component_advances = !expected.root_runtime_active
+        && !actual.root_runtime_active
+        && expected.activated_component_count.checked_add(1)
+            == Some(actual.activated_component_count);
+    let root_advances = !expected.root_runtime_active
+        && actual.root_runtime_active
+        && expected.activated_component_count == actual.activated_component_count;
+    component_advances || root_advances
 }
 
 fn classify_directory_confirmation_advance(
@@ -2860,6 +3697,15 @@ fn directory_confirmation_call_from_intent(
     }
 }
 
+const fn runtime_activation_call_from_intent(
+    intent: &FleetComponentRuntimeActivationIntentRecord,
+) -> FleetComponentRuntimeActivationCallView {
+    FleetComponentRuntimeActivationCallView {
+        fleet_subnet_root: intent.fleet_subnet_root,
+        request: intent.request,
+    }
+}
+
 fn root_provisioned_response(
     progress: &FleetComponentDirectoryConfirmationProgress,
     root_index: u32,
@@ -2871,6 +3717,226 @@ fn root_provisioned_response(
         .get(index)
         .map(|record| &record.response)
         .ok_or_else(|| receipt_invariant("Directory confirmation lacks root provisioning"))
+}
+
+fn root_publication_response(
+    progress: &FleetComponentRuntimeActivationProgress,
+    root_index: u32,
+) -> Result<&RootComponentProvisioningStatusResponse, InternalError> {
+    let index = usize::try_from(root_index)
+        .map_err(|_| receipt_invariant("runtime activation root index exceeds usize"))?;
+    progress
+        .confirmations
+        .get(index)
+        .map(|record| &record.response)
+        .ok_or_else(|| receipt_invariant("runtime activation lacks root publication evidence"))
+}
+
+const fn root_activation_progress(
+    response: &RootComponentProvisioningStatusResponse,
+) -> FleetComponentActivationRootProgress {
+    FleetComponentActivationRootProgress {
+        fleet_subnet_root: response.fleet_subnet_root,
+        component_count: response.component_count,
+        activated_component_count: response.activated_component_count,
+        root_runtime_active: response.root_runtime_active,
+    }
+}
+
+fn validate_runtime_activation_response(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+    publication: &RootComponentProvisioningStatusResponse,
+    previous: FleetComponentActivationRootProgress,
+    previous_activation_started_at_ns: Option<u64>,
+    response: &RootComponentProvisioningStatusResponse,
+    recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    validate_runtime_activation_authority(publication, response)?;
+    let actual = root_activation_progress(response);
+    if !activation_progress_advances(previous, actual) {
+        return Err(InternalError::conflict(
+            "runtime activation response did not advance exactly one bounded cursor",
+        ));
+    }
+    let activation_started_at_ns = response.activation_started_at_ns.ok_or_else(|| {
+        InternalError::conflict("runtime activation response lacks its durable start time")
+    })?;
+    if previous_activation_started_at_ns
+        .is_some_and(|expected| expected != activation_started_at_ns)
+    {
+        return Err(InternalError::conflict(
+            "runtime activation response changed its durable start time",
+        ));
+    }
+    let published_at_ns = response.published_at_ns.ok_or_else(|| {
+        receipt_invariant("runtime activation publication lacks its completion time")
+    })?;
+    if activation_started_at_ns < published_at_ns || recorded_at_ns < activation_started_at_ns {
+        return Err(InternalError::conflict(
+            "runtime activation response has invalid time evidence",
+        ));
+    }
+    match response.phase {
+        RootComponentProvisioningPhase::Published => {
+            let progress_is_exact = [
+                !response.root_runtime_active,
+                response.activated_component_count <= response.component_count,
+                response.activation.is_none(),
+                response.runtimes_activated_at_ns.is_none(),
+                response.receipt_content_hash == publication.receipt_content_hash,
+            ]
+            .into_iter()
+            .all(|matches| matches);
+            if !progress_is_exact {
+                return Err(InternalError::conflict(
+                    "in-progress runtime activation changed terminal publication authority",
+                ));
+            }
+        }
+        RootComponentProvisioningPhase::RuntimesActive => {
+            validate_terminal_runtime_activation(
+                record,
+                root_index,
+                publication,
+                response,
+                activation_started_at_ns,
+                recorded_at_ns,
+            )?;
+        }
+        _ => {
+            return Err(InternalError::conflict(
+                "runtime activation response has an invalid root phase",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_runtime_activation_authority(
+    publication: &RootComponentProvisioningStatusResponse,
+    response: &RootComponentProvisioningStatusResponse,
+) -> Result<(), InternalError> {
+    let published = publication.phase == RootComponentProvisioningPhase::Published;
+    let authority_is_exact = RootRuntimeActivationAuthority::from_response(response)
+        == RootRuntimeActivationAuthority::from_response(publication);
+    if !published || !authority_is_exact {
+        return Err(InternalError::conflict(
+            "runtime activation response changed protected publication authority",
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Eq, PartialEq)]
+struct RootRuntimeActivationAuthority<'a> {
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    fleet_registry: &'a FleetRegistryVersion,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+    fleet_subnet_root: Principal,
+    counts: RootRuntimeActivationCounts,
+    result: &'a Option<canic_core::dto::component_provisioning::RootComponentProvisioningResult>,
+    publication:
+        &'a Option<canic_core::dto::component_provisioning::RootComponentPublicationEvidence>,
+    accepted_at_ns: u64,
+    provisioned_at_ns: Option<u64>,
+    published_at_ns: Option<u64>,
+}
+
+impl<'a> RootRuntimeActivationAuthority<'a> {
+    const fn from_response(response: &'a RootComponentProvisioningStatusResponse) -> Self {
+        Self {
+            operation_id: response.operation_id,
+            plan_hash: response.plan_hash,
+            fleet_registry: &response.fleet_registry,
+            configuration_digest: response.configuration_digest,
+            fleet_subnet_root: response.fleet_subnet_root,
+            counts: RootRuntimeActivationCounts::from_response(response),
+            result: &response.result,
+            publication: &response.publication,
+            accepted_at_ns: response.accepted_at_ns,
+            provisioned_at_ns: response.provisioned_at_ns,
+            published_at_ns: response.published_at_ns,
+        }
+    }
+}
+
+#[derive(Eq, PartialEq)]
+struct RootRuntimeActivationCounts {
+    placements: u32,
+    components: u32,
+    reserved: u32,
+    claimed: u32,
+    installed: u32,
+    registry_committed: u32,
+    published: u32,
+}
+
+impl RootRuntimeActivationCounts {
+    const fn from_response(response: &RootComponentProvisioningStatusResponse) -> Self {
+        Self {
+            placements: response.placement_count,
+            components: response.component_count,
+            reserved: response.reserved_component_count,
+            claimed: response.claimed_component_count,
+            installed: response.installed_component_count,
+            registry_committed: response.registry_committed_component_count,
+            published: response.published_component_count,
+        }
+    }
+}
+
+fn validate_terminal_runtime_activation(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+    publication: &RootComponentProvisioningStatusResponse,
+    response: &RootComponentProvisioningStatusResponse,
+    activation_started_at_ns: u64,
+    recorded_at_ns: u64,
+) -> Result<(), InternalError> {
+    let activation = response.activation.ok_or_else(|| {
+        InternalError::conflict("terminal runtime activation lacks activation evidence")
+    })?;
+    let runtimes_activated_at_ns = response.runtimes_activated_at_ns.ok_or_else(|| {
+        InternalError::conflict("terminal runtime activation lacks completion time")
+    })?;
+    let evidence_is_exact = [
+        response.root_runtime_active,
+        response.activated_component_count == response.component_count,
+        activation.component_count == response.component_count,
+        activation.fleet_activation_operation_id != [0; 32],
+        activation.initial_inventory_hash != [0; 32],
+        activation.root_activated_at_ns == runtimes_activated_at_ns,
+        runtimes_activated_at_ns >= activation_started_at_ns,
+        recorded_at_ns >= runtimes_activated_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !evidence_is_exact {
+        return Err(InternalError::conflict(
+            "terminal runtime activation evidence is invalid",
+        ));
+    }
+    let batch = root_batch(record, root_index)?;
+    let expected = RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
+        RootComponentProvisioningRuntimesActiveReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            configuration_digest: record.plan.configuration_digest,
+            root: &batch.root,
+            published_receipt_content_hash: publication.receipt_content_hash,
+            activation,
+            activation_started_at_ns,
+            runtimes_activated_at_ns,
+        },
+    )?;
+    if response.receipt_content_hash != expected {
+        return Err(InternalError::conflict(
+            "terminal runtime activation receipt hash is invalid",
+        ));
+    }
+    Ok(())
 }
 
 fn expected_fleet_directory_content_hash(
@@ -3422,7 +4488,9 @@ fn validate_root_acceptance_phase(
         | FleetComponentProvisioningPhase::ComponentsProvisioned
         | FleetComponentProvisioningPhase::ServiceTopologyPublished
         | FleetComponentProvisioningPhase::ConfirmingDirectories
-        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed
+        | FleetComponentProvisioningPhase::ActivatingRuntimes
+        | FleetComponentProvisioningPhase::RuntimesActivated => {
             if progress.accepted_root_count != progress.root_batch_count {
                 return Err(receipt_invariant(
                     "Fleet Component post-acceptance state lacks complete root evidence",
@@ -3710,7 +4778,9 @@ fn validate_component_provisioning_root_provision_state(
         | FleetComponentProvisioningPhase::ComponentsProvisioned
         | FleetComponentProvisioningPhase::ServiceTopologyPublished
         | FleetComponentProvisioningPhase::ConfirmingDirectories
-        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {}
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed
+        | FleetComponentProvisioningPhase::ActivatingRuntimes
+        | FleetComponentProvisioningPhase::RuntimesActivated => {}
     }
     let roots_accepted_at_ns = progress.roots_accepted_at_ns.ok_or_else(|| {
         receipt_invariant("root provisioning state lacks RootsAccepted time authority")
@@ -3741,7 +4811,9 @@ fn validate_component_provisioning_root_provision_state(
         FleetComponentProvisioningPhase::ComponentsProvisioned
         | FleetComponentProvisioningPhase::ServiceTopologyPublished
         | FleetComponentProvisioningPhase::ConfirmingDirectories
-        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed
+        | FleetComponentProvisioningPhase::ActivatingRuntimes
+        | FleetComponentProvisioningPhase::RuntimesActivated => {
             validate_terminal_component_provisioning(
                 configuration,
                 source_registry,
@@ -3815,7 +4887,9 @@ fn validate_service_publication_progress(
         }
         FleetComponentProvisioningPhase::ServiceTopologyPublished
         | FleetComponentProvisioningPhase::ConfirmingDirectories
-        | FleetComponentProvisioningPhase::DirectoriesConfirmed => {
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed
+        | FleetComponentProvisioningPhase::ActivatingRuntimes
+        | FleetComponentProvisioningPhase::RuntimesActivated => {
             let published_at_ns = progress.service_topology_published_at_ns.ok_or_else(|| {
                 receipt_invariant("ServiceTopologyPublished time evidence is absent")
             })?;

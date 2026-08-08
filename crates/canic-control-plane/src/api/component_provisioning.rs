@@ -9,9 +9,9 @@ use canic_core::{
     control_plane_support::ops::ic::IcOps,
     dto::{
         component_provisioning::{
-            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
-            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
-            RootComponentPublicationRequest,
+            RootComponentActivationRequest, RootComponentProvisioningAcceptanceRequest,
+            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningStatusRequest,
+            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
         error::Error,
     },
@@ -50,6 +50,17 @@ impl RootComponentProvisioningApi {
         request: RootComponentPublicationRequest,
     ) -> Result<RootComponentProvisioningStatusResponse, Error> {
         Box::pin(component_provisioning::publish(
+            IcOps::msg_caller(),
+            request,
+        ))
+        .await
+        .map_err(Into::into)
+    }
+
+    pub async fn activate(
+        request: RootComponentActivationRequest,
+    ) -> Result<RootComponentProvisioningStatusResponse, Error> {
+        Box::pin(component_provisioning::activate(
             IcOps::msg_caller(),
             request,
         ))

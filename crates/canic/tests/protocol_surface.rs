@@ -34,7 +34,8 @@ use canic::{
     dto::cascade::StateSnapshotInput,
     dto::component_provisioning::{
         FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
-        FleetComponentProvisioningStatusResponse, RootComponentPublicationRequest,
+        FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
+        RootComponentPublicationRequest,
     },
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
@@ -729,6 +730,14 @@ fn assert_fleet_component_provisioning_endpoint_guards() {
         root_publication_is_bounded_public_update(&root_publish),
         "root Component Directory publication must remain an internal public and payload-bounded update"
     );
+    let root_activation = preceding_attribute_context(
+        &root_source,
+        "async fn canic_root_component_provisioning_activate(",
+    );
+    assert!(
+        root_activation_is_bounded_public_update(&root_activation),
+        "root Component runtime activation must remain an internal public and payload-bounded update"
+    );
     assert!(
         preceding_attribute_context(
             &source,
@@ -761,6 +770,8 @@ fn assert_fleet_component_provisioning_candid_surface() {
         "registry_committed_component_count",
         "expected_directory_confirmed_root_count",
         "expected_current_publication",
+        "expected_runtime_activated_root_count",
+        "expected_current_activation",
     ] {
         assert!(
             advance_env.contains(field),
@@ -787,6 +798,10 @@ fn assert_fleet_component_provisioning_candid_surface() {
         "current_publication",
         "publication_in_flight_root",
         "directories_confirmed_at_ns",
+        "runtime_activated_root_count",
+        "current_activation",
+        "activation_in_flight_root",
+        "runtimes_activated_at_ns",
     ] {
         assert!(
             status_env.contains(field),
@@ -803,6 +818,18 @@ fn assert_fleet_component_provisioning_candid_surface() {
         assert!(
             publication_env.contains(field),
             "root Component publication Candid is missing {field}:\n{publication_env}"
+        );
+    }
+    let activation_env = candid_type_env::<RootComponentActivationRequest>();
+    for field in [
+        "operation_id",
+        "plan_hash",
+        "expected_activated_component_count",
+        "expected_root_runtime_active",
+    ] {
+        assert!(
+            activation_env.contains(field),
+            "root Component activation Candid is missing {field}:\n{activation_env}"
         );
     }
 }
@@ -1000,6 +1027,11 @@ fn assert_component_registry_protocol_constants() {
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
             canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
             "canic_root_component_provisioning_publish",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
+            "canic_root_component_provisioning_activate",
         ),
         (
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
@@ -1362,6 +1394,12 @@ fn assert_root_component_provisioning_guards(root: &str) {
             .contains("canic_update(internal, public)"),
         "root Component provisioning advance must remain a public update authenticated by workflow"
     );
+    let activation =
+        preceding_attribute_context(root, "async fn canic_root_component_provisioning_activate(");
+    assert!(
+        root_activation_is_bounded_public_update(&activation),
+        "root Component provisioning activation must remain a bounded public update authenticated by workflow"
+    );
     assert!(
         preceding_attribute_context(root, "async fn canic_root_component_provisioning_status(")
             .contains("canic_query(internal, public)"),
@@ -1380,6 +1418,13 @@ fn root_publication_is_bounded_public_update(attribute: &str) -> bool {
     is_bounded_public_update(
         attribute,
         "MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES",
+    )
+}
+
+fn root_activation_is_bounded_public_update(attribute: &str) -> bool {
+    is_bounded_public_update(
+        attribute,
+        "MAX_FLEET_SUBNET_ROOT_COMPONENT_ACTIVATION_PAYLOAD_BYTES",
     )
 }
 

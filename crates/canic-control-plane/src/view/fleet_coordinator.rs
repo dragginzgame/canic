@@ -6,8 +6,9 @@
 
 use candid::Principal;
 use canic_core::dto::component_provisioning::{
-    FleetComponentProvisioningStatusResponse, RootComponentProvisioningAcceptanceRequest,
-    RootComponentProvisioningAdvanceRequest, RootComponentPublicationRequest,
+    FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
+    RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
+    RootComponentPublicationRequest,
 };
 
 /// One exact root acceptance call derived only from the durable Coordinator plan.
@@ -48,4 +49,17 @@ pub enum FleetComponentDirectoryConfirmationDisposition {
     Current(Box<FleetComponentProvisioningStatusResponse>),
     Invoke(FleetComponentDirectoryConfirmationCallView),
     Reconcile(FleetComponentDirectoryConfirmationCallView),
+}
+
+/// One exact root runtime-activation call derived only from durable Coordinator state.
+pub struct FleetComponentRuntimeActivationCallView {
+    pub fleet_subnet_root: Principal,
+    pub request: RootComponentActivationRequest,
+}
+
+/// Coordinator decision for one expected root runtime-activation cursor.
+pub enum FleetComponentRuntimeActivationDisposition {
+    Current(Box<FleetComponentProvisioningStatusResponse>),
+    Invoke(FleetComponentRuntimeActivationCallView),
+    Reconcile(FleetComponentRuntimeActivationCallView),
 }

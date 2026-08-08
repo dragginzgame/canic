@@ -380,11 +380,16 @@ fn receipts(
                 installed_component_count: component_count,
                 registry_committed_component_count: component_count,
                 published_component_count: 0,
+                activated_component_count: 0,
+                root_runtime_active: false,
                 result: Some(result),
                 publication: None,
+                activation: None,
                 accepted_at_ns,
                 provisioned_at_ns: Some(provisioned_at_ns),
                 published_at_ns: None,
+                activation_started_at_ns: None,
+                runtimes_activated_at_ns: None,
                 receipt_content_hash,
             }
         })

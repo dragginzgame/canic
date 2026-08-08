@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.22` activates every Directory-prepared grouped Component, promotes
+  its Registry membership and current Directory, seals initial inventory and
+  activates every selected root before the Coordinator reaches
+  `RuntimesActivated` under exact retry.
+
 - `0.101.21` durably publishes and independently verifies every selected
   root's exact Fleet, Component and Component Group Directories before the
   Coordinator reaches `DirectoriesConfirmed`, while runtime activation stays

@@ -17,6 +17,7 @@ use crate::{
         FleetComponentProvisioningRootAcceptanceDisposition,
         FleetComponentProvisioningRootProvisionCallView,
         FleetComponentProvisioningRootProvisionDisposition,
+        FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
     },
 };
 use candid::Principal;
@@ -170,55 +171,28 @@ impl FleetCoordinatorWorkflow {
                     | FleetComponentProvisioningPhase::ServiceTopologyPublished
                     | FleetComponentProvisioningPhase::ConfirmingDirectories
                     | FleetComponentProvisioningPhase::DirectoriesConfirmed
+                    | FleetComponentProvisioningPhase::ActivatingRuntimes
+                    | FleetComponentProvisioningPhase::RuntimesActivated
             )
         {
             return Ok(acceptance_status);
         }
         if matches!(
             acceptance_status.phase,
+            FleetComponentProvisioningPhase::DirectoriesConfirmed
+                | FleetComponentProvisioningPhase::ActivatingRuntimes
+                | FleetComponentProvisioningPhase::RuntimesActivated
+        ) {
+            return advance_component_runtime_activation(request).await;
+        }
+        if matches!(
+            acceptance_status.phase,
             FleetComponentProvisioningPhase::ServiceTopologyPublished
                 | FleetComponentProvisioningPhase::ConfirmingDirectories
-                | FleetComponentProvisioningPhase::DirectoriesConfirmed
         ) {
-            let disposition = FleetCoordinatorOps::advance_component_directory_confirmation(
-                &request,
-                IcOps::now_nanos(),
-            )?;
-            let call = match disposition {
-                FleetComponentDirectoryConfirmationDisposition::Current(status) => {
-                    return Ok(*status);
-                }
-                FleetComponentDirectoryConfirmationDisposition::Invoke(call)
-                | FleetComponentDirectoryConfirmationDisposition::Reconcile(call) => call,
-            };
-            let response = publish_root_component_directories(call).await?;
-            return FleetCoordinatorOps::record_component_directory_confirmation(
-                &request,
-                response,
-                IcOps::now_nanos(),
-            );
+            return advance_component_directory_confirmation(request).await;
         }
-        let disposition =
-            FleetCoordinatorOps::advance_component_provisioning_root(&request, IcOps::now_nanos())?;
-        let call = match disposition {
-            FleetComponentProvisioningRootProvisionDisposition::Current(status) => {
-                return Ok(*status);
-            }
-            FleetComponentProvisioningRootProvisionDisposition::Invoke(call)
-            | FleetComponentProvisioningRootProvisionDisposition::Reconcile(call) => call,
-            FleetComponentProvisioningRootProvisionDisposition::Publish => {
-                return FleetCoordinatorOps::publish_component_provisioning_services(
-                    &request,
-                    IcOps::now_nanos(),
-                );
-            }
-        };
-        let response = advance_root_component_provisioning(call).await?;
-        FleetCoordinatorOps::record_component_provisioning_root(
-            &request,
-            response,
-            IcOps::now_nanos(),
-        )
+        advance_component_root_provisioning(request).await
     }
 
     pub(crate) fn publish_root_draining(
@@ -303,6 +277,64 @@ impl FleetCoordinatorWorkflow {
     }
 }
 
+async fn advance_component_runtime_activation(
+    request: FleetComponentProvisioningAdvanceRequest,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    let disposition =
+        FleetCoordinatorOps::advance_component_runtime_activation(&request, IcOps::now_nanos())?;
+    let call = match disposition {
+        FleetComponentRuntimeActivationDisposition::Current(status) => return Ok(*status),
+        FleetComponentRuntimeActivationDisposition::Invoke(call)
+        | FleetComponentRuntimeActivationDisposition::Reconcile(call) => call,
+    };
+    let response = activate_root_component_runtimes(call).await?;
+    FleetCoordinatorOps::record_component_runtime_activation(
+        &request,
+        &response,
+        IcOps::now_nanos(),
+    )
+}
+
+async fn advance_component_directory_confirmation(
+    request: FleetComponentProvisioningAdvanceRequest,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    let disposition = FleetCoordinatorOps::advance_component_directory_confirmation(
+        &request,
+        IcOps::now_nanos(),
+    )?;
+    let call = match disposition {
+        FleetComponentDirectoryConfirmationDisposition::Current(status) => return Ok(*status),
+        FleetComponentDirectoryConfirmationDisposition::Invoke(call)
+        | FleetComponentDirectoryConfirmationDisposition::Reconcile(call) => call,
+    };
+    let response = publish_root_component_directories(call).await?;
+    FleetCoordinatorOps::record_component_directory_confirmation(
+        &request,
+        response,
+        IcOps::now_nanos(),
+    )
+}
+
+async fn advance_component_root_provisioning(
+    request: FleetComponentProvisioningAdvanceRequest,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    let disposition =
+        FleetCoordinatorOps::advance_component_provisioning_root(&request, IcOps::now_nanos())?;
+    let call = match disposition {
+        FleetComponentProvisioningRootProvisionDisposition::Current(status) => return Ok(*status),
+        FleetComponentProvisioningRootProvisionDisposition::Invoke(call)
+        | FleetComponentProvisioningRootProvisionDisposition::Reconcile(call) => call,
+        FleetComponentProvisioningRootProvisionDisposition::Publish => {
+            return FleetCoordinatorOps::publish_component_provisioning_services(
+                &request,
+                IcOps::now_nanos(),
+            );
+        }
+    };
+    let response = advance_root_component_provisioning(call).await?;
+    FleetCoordinatorOps::record_component_provisioning_root(&request, response, IcOps::now_nanos())
+}
+
 const fn component_provisioning_phase_rank(phase: FleetComponentProvisioningPhase) -> u8 {
     match phase {
         FleetComponentProvisioningPhase::Planned => 0,
@@ -313,6 +345,8 @@ const fn component_provisioning_phase_rank(phase: FleetComponentProvisioningPhas
         FleetComponentProvisioningPhase::ServiceTopologyPublished => 5,
         FleetComponentProvisioningPhase::ConfirmingDirectories => 6,
         FleetComponentProvisioningPhase::DirectoriesConfirmed => 7,
+        FleetComponentProvisioningPhase::ActivatingRuntimes => 8,
+        FleetComponentProvisioningPhase::RuntimesActivated => 9,
     }
 }
 
@@ -350,6 +384,20 @@ async fn publish_root_component_directories(
     let result = CallOps::unbounded_wait(
         call.fleet_subnet_root,
         protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
+    )
+    .with_arg(call.request)?
+    .execute()
+    .await?;
+    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
+    response.map_err(InternalError::public)
+}
+
+async fn activate_root_component_runtimes(
+    call: FleetComponentRuntimeActivationCallView,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let result = CallOps::unbounded_wait(
+        call.fleet_subnet_root,
+        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
     )
     .with_arg(call.request)?
     .execute()

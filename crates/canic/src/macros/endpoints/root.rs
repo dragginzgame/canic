@@ -203,6 +203,17 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::publish(request).await
         }
 
+        #[$crate::canic_update(
+            internal,
+            public,
+            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_COMPONENT_ACTIVATION_PAYLOAD_BYTES)
+        )]
+        async fn canic_root_component_provisioning_activate(
+            request: ::canic::dto::component_provisioning::RootComponentActivationRequest,
+        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::activate(request).await
+        }
+
         #[$crate::canic_query(internal, public)]
         async fn canic_root_component_provisioning_status(
             request: ::canic::dto::component_provisioning::RootComponentProvisioningStatusRequest,

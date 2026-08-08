@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Purpose
 
@@ -14,16 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.20`.
-- The latest published release is `v0.101.20` at
-  `b710f25fc02f5e99f7ce1825045f8dff39f2ddba`.
-- Open `0.101.21` durably publishes the exact service-aware Fleet, Component
-  and Component Group Directories through every selected root. Each root
-  independently re-queries its prepared Component runtimes before freezing a
-  terminal `Published` receipt; the Coordinator authenticates every receipt
-  before reaching `DirectoriesConfirmed`. Components remain
-  `DirectoryPrepared`, roots remain runtime `Prepared`, and activation stays a
-  separate fence.
+- The workspace package version is `0.101.21`.
+- The latest published release is `v0.101.21` at
+  `6e6ec5204125ed537f92d74997f33822357ebd9a`.
+- Open `0.101.22` activates one exact Directory-prepared grouped Component per
+  bounded root command by composing the existing runtime and Registry
+  membership journals. Each successful call advances the aggregate cursor
+  only after the Component is `Active` under its converged current Directory.
+  Once every planned Component is active, the root seals initial inventory,
+  prepares or resumes its Fleet runtime and freezes an exact terminal receipt
+  chained to its prior `Published` receipt. The Coordinator journals each
+  canonical root call, verifies the compact terminal evidence and reaches
+  `RuntimesActivated` only after every selected root is active. Fleet catalog
+  publication and terminal host completion remain separately fenced.
+- Released `0.101.21` durably publishes the exact service-aware Fleet,
+  Component and Component Group Directories through every selected root. Each
+  root independently re-queries its prepared Component runtimes before
+  freezing a terminal `Published` receipt; the Coordinator authenticates every
+  receipt before reaching `DirectoriesConfirmed`.
 - Released `0.101.20` derives the complete initial service set only from the
   persisted plan and its canonical terminal root receipts, then atomically
   commits the Fleet Registry snapshot, exact publication receipt and
@@ -2433,15 +2441,15 @@ First primary results:
 
 ## Next Action
 
-The canonical provisioning journey through `ServiceTopologyPublished` is
-published at immutable `v0.101.20`. Open `0.101.21` completes the
-root-confirmed publication barrier: every selected root synchronizes the
-published Fleet Registry, derives and independently verifies the exact Fleet,
-Component and Component Group Directories, freezes a terminal `Published`
-receipt and lets the Coordinator reach `DirectoriesConfirmed`. Continue Slice
-3 with runtime activation from those exact prepared Directory authorities,
-followed by Component Registry promotion, current-Directory convergence and
-root activation as separate monotonic boundaries.
+The canonical provisioning journey through `DirectoriesConfirmed` is
+published at immutable `v0.101.21`. Open `0.101.22` activates every grouped
+Component from its exact prepared Directory authority, promotes and verifies
+its Active Registry/current-Directory state, seals the initial inventory and
+activates every selected root before the Coordinator reaches
+`RuntimesActivated`. Continue Slice 3 by making the host install transaction
+consume that exact terminal evidence, publish the Fleet catalog row only
+afterward and record terminal host completion. Do not collapse catalog
+publication into the Coordinator activation receipt.
 Do not enable scale-out until its durable Coordinator
 placement ledger can prove ordinal non-reuse and combined density/spread.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
