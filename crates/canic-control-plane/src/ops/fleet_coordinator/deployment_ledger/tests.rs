@@ -174,14 +174,14 @@ fn planned_scale_out_reserves_the_exact_next_range_without_committing_placements
 }
 
 #[test]
-fn scale_out_ledger_allows_only_the_registry_commit_state_machine() {
+fn scale_out_ledger_allows_only_the_root_provisioning_state_machine() {
     let (_, mut scale_out) = fixture();
-    assert!(!scale_out_registry_commit_boundary_is_valid(
+    assert!(!scale_out_root_provisioning_boundary_is_valid(
         &scale_out.state
     ));
 
     scale_out.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 30 };
-    assert!(scale_out_registry_commit_boundary_is_valid(
+    assert!(scale_out_root_provisioning_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -194,7 +194,7 @@ fn scale_out_ledger_allows_only_the_registry_commit_state_machine() {
             started_at_ns: 31,
         }),
     };
-    assert!(scale_out_registry_commit_boundary_is_valid(
+    assert!(scale_out_root_provisioning_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -203,7 +203,7 @@ fn scale_out_ledger_allows_only_the_registry_commit_state_machine() {
         acceptances: vec![],
         roots_accepted_at_ns: 32,
     };
-    assert!(scale_out_registry_commit_boundary_is_valid(
+    assert!(scale_out_root_provisioning_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -215,7 +215,18 @@ fn scale_out_ledger_allows_only_the_registry_commit_state_machine() {
         current: None,
         in_flight: None,
     };
-    assert!(scale_out_registry_commit_boundary_is_valid(
+    assert!(scale_out_root_provisioning_boundary_is_valid(
+        &scale_out.state
+    ));
+
+    scale_out.state = FleetComponentProvisioningStateRecord::ComponentsProvisioned {
+        planned_at_ns: 30,
+        acceptances: vec![],
+        roots_accepted_at_ns: 32,
+        provisions: vec![],
+        components_provisioned_at_ns: 33,
+    };
+    assert!(scale_out_root_provisioning_boundary_is_valid(
         &scale_out.state
     ));
 }

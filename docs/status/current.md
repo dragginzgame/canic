@@ -14,10 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.29`.
-- The latest published release is `v0.101.29` at
-  `e05c9c22c0c966339105c8095afcdf1cdf8c2802`.
-- Open `0.101.30` advances the current accepted scale-out root one canonical
+- The workspace package version is `0.101.30`.
+- The latest published release is `v0.101.30` at
+  `8f0c03fd77cf136e6d9a8eb4dba978e460ad616a`.
+- Open `0.101.31` freezes one exact group-partitioned terminal receipt for each
+  fully Registry-committed scale-out root. The Coordinator retains durable
+  pre-call intent, reconciles uncertain responses, authenticates each terminal
+  receipt in canonical selected-root order and advances the next accepted root
+  through the same bounded pipeline. It reaches `ComponentsProvisioned` only
+  after every selected root is terminal. Root aggregate fences remain active;
+  Fleet-service publication, Directory confirmation and runtime activation
+  remain fenced.
+- Released `0.101.30` advances the current accepted scale-out root one canonical
   member at a time through the existing Component Registry commitment journal
   after every member is installed. The root binds the exact installed
   allocation, `Prepared` partition, Store evidence, grouped byte ceiling and
@@ -2544,13 +2552,12 @@ First primary results:
 
 ## Next Action
 
-The response-loss-safe scale-out Store-backed installation boundary is
-published at immutable `v0.101.29`. Open `0.101.30` commits one canonical
-Component Registry partition at a time for the current fully installed root
-batch and stops before its terminal `Provisioned` receipt. Continue Slice 4 by
-finalizing exact root receipts and advancing every selected root to
-`ComponentsProvisioned`. Keep atomic service append, Directory confirmation
-and runtime activation behind later explicit phases.
+The response-loss-safe scale-out Component Registry commitment boundary is
+published at immutable `v0.101.30`. Open `0.101.31` freezes each selected
+root's exact terminal receipt and advances the Coordinator to
+`ComponentsProvisioned`. Continue Slice 4 by atomically appending only the new
+Replica and PoolMember service bindings to the current Fleet Registry. Keep
+Directory confirmation and runtime activation behind later explicit phases.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

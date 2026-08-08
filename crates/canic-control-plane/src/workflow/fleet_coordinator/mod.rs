@@ -182,8 +182,7 @@ impl FleetCoordinatorWorkflow {
             acceptance_status.operation,
             FleetComponentProvisioningOperation::ScaleOut { .. }
         ) {
-            return advance_component_scale_out_registry_commitment(request, acceptance_status)
-                .await;
+            return advance_component_scale_out_root_provisioning(request, acceptance_status).await;
         }
         if matches!(
             acceptance_status.phase,
@@ -323,23 +322,59 @@ async fn advance_component_directory_confirmation(
     )
 }
 
-async fn advance_component_scale_out_registry_commitment(
+async fn advance_component_scale_out_root_provisioning(
     request: FleetComponentProvisioningAdvanceRequest,
     status: FleetComponentProvisioningStatusResponse,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-    if scale_out_registry_commitment_is_complete(status.current_root)? {
+    if scale_out_root_provisioning_is_complete(&status)? {
         return Ok(status);
     }
     advance_component_root_provisioning(request).await
 }
 
-fn scale_out_registry_commitment_is_complete(
-    progress: Option<FleetComponentProvisioningRootProgress>,
+fn scale_out_root_provisioning_is_complete(
+    status: &FleetComponentProvisioningStatusResponse,
 ) -> Result<bool, InternalError> {
+    match status.phase {
+        FleetComponentProvisioningPhase::ComponentsProvisioned => {
+            let terminal_facts = [
+                status.current_root.is_none(),
+                status.provisioning_in_flight_root.is_none(),
+                status.provisioned_root_count == status.root_batch_count,
+                status.components_provisioned_at_ns.is_some(),
+                status.published_fleet_registry.is_none(),
+                status.service_topology_published_at_ns.is_none(),
+            ];
+            if terminal_facts.into_iter().all(|fact| fact) {
+                return Ok(true);
+            }
+        }
+        FleetComponentProvisioningPhase::RootsAccepted
+        | FleetComponentProvisioningPhase::ProvisioningRoots => {
+            validate_scale_out_current_root_progress(status.current_root)?;
+            return Ok(false);
+        }
+        FleetComponentProvisioningPhase::Planned
+        | FleetComponentProvisioningPhase::AcceptingRoots
+        | FleetComponentProvisioningPhase::ServiceTopologyPublished
+        | FleetComponentProvisioningPhase::ConfirmingDirectories
+        | FleetComponentProvisioningPhase::DirectoriesConfirmed
+        | FleetComponentProvisioningPhase::ActivatingRuntimes
+        | FleetComponentProvisioningPhase::RuntimesActivated => {}
+    }
+    Err(InternalError::invariant(
+        canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
+        "scale-out operation crossed its terminal root-provisioning fence",
+    ))
+}
+
+fn validate_scale_out_current_root_progress(
+    progress: Option<FleetComponentProvisioningRootProgress>,
+) -> Result<(), InternalError> {
     let Some(progress) = progress else {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out Registry commitment has no current root cursor",
+            "scale-out root provisioning has no current root cursor",
         ));
     };
     let claim_has_reserved_identity = match progress.claimed_component_count {
@@ -367,10 +402,10 @@ fn scale_out_registry_commitment_is_complete(
     if !remains_before_terminal_receipt {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out operation crossed its Component Registry commitment fence",
+            "scale-out current-root provisioning progress is not canonical",
         ));
     }
-    Ok(progress.registry_committed_component_count == progress.component_count)
+    Ok(())
 }
 
 async fn advance_component_root_provisioning(

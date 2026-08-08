@@ -1869,9 +1869,10 @@ fn validate_component_scale_out_progress(
             | FleetComponentProvisioningStateRecord::AcceptingRoots { .. }
             | FleetComponentProvisioningStateRecord::RootsAccepted { .. }
             | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
+            | FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. }
     ) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out crossed its implemented Component Registry commitment boundary",
+            "Fleet Component scale-out crossed its implemented root-provisioning boundary",
         ));
     }
     validate_component_provisioning_root_acceptance_state(record)?;
@@ -1880,18 +1881,16 @@ fn validate_component_scale_out_progress(
         &current.registry,
         record,
     )?;
-    validate_scale_out_registry_commitment_fence(record)?;
+    validate_scale_out_root_provisioning_fence(record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
 
-fn validate_scale_out_registry_commitment_fence(
+fn validate_scale_out_root_provisioning_fence(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
     let progress = component_provisioning_root_provision_progress(record)?;
     let crossed_later_boundary = [
-        progress.provisioned_root_count != 0,
-        progress.components_provisioned_at_ns.is_some(),
         progress.published_fleet_registry.is_some(),
         progress.service_topology_published_at_ns.is_some(),
     ]
@@ -1899,33 +1898,17 @@ fn validate_scale_out_registry_commitment_fence(
     .any(|crossed| crossed);
     if crossed_later_boundary {
         return Err(receipt_invariant(
-            "Fleet Component scale-out contains evidence beyond Component Registry commitment",
+            "Fleet Component scale-out contains evidence beyond terminal root provisioning",
         ));
     }
-    if let Some(response) = &progress.current_response {
-        let counts = RootProvisioningCounts::from_response(response);
-        if response.phase != RootComponentProvisioningPhase::Accepted
-            || !counts.is_registry_commit_boundary(response.component_count)
-        {
-            return Err(receipt_invariant(
-                "Fleet Component scale-out root progress crossed the Component Registry commitment fence",
-            ));
-        }
-    }
-    if let Some(intent) = &progress.in_flight {
-        let counts = RootProvisioningCounts::from_request(intent.request);
-        let component_count = progress
-            .current_response
-            .as_ref()
-            .map(|response| response.component_count)
-            .ok_or_else(|| receipt_invariant("scale-out Registry intent lacks root progress"))?;
-        if !counts.is_registry_commit_boundary(component_count)
-            || counts.registry_commitment_is_complete(component_count)
-        {
-            return Err(receipt_invariant(
-                "Fleet Component scale-out intent crossed the Component Registry commitment fence",
-            ));
-        }
+    let current_root_crossed_terminal_fence = progress
+        .current_response
+        .as_ref()
+        .is_some_and(|response| response.phase != RootComponentProvisioningPhase::Accepted);
+    if current_root_crossed_terminal_fence {
+        return Err(receipt_invariant(
+            "Fleet Component scale-out current root crossed its terminal provisioning fence",
+        ));
     }
     Ok(())
 }
@@ -3760,44 +3743,6 @@ impl RootProvisioningCounts {
             installed: progress.installed_component_count,
             registry_committed: progress.registry_committed_component_count,
         }
-    }
-
-    const fn from_request(request: RootComponentProvisioningAdvanceRequest) -> Self {
-        Self {
-            reserved: request.expected_reserved_component_count,
-            claimed: request.expected_claimed_component_count,
-            installed: request.expected_installed_component_count,
-            registry_committed: request.expected_registry_committed_component_count,
-        }
-    }
-
-    fn is_registry_commit_boundary(self, component_count: u32) -> bool {
-        let claim_has_reserved_identity = match self.claimed {
-            0 => self.reserved <= component_count,
-            _ => self.reserved == component_count,
-        };
-        let install_has_claimed_canister = match self.installed {
-            0 => self.claimed <= component_count,
-            _ => self.claimed == component_count,
-        };
-        let registry_commit_has_install = match self.registry_committed {
-            0 => self.installed <= component_count,
-            _ => self.installed == component_count,
-        };
-        [
-            claim_has_reserved_identity,
-            install_has_claimed_canister,
-            registry_commit_has_install,
-            self.claimed <= component_count,
-            self.installed <= component_count,
-            self.registry_committed <= component_count,
-        ]
-        .into_iter()
-        .all(|matches| matches)
-    }
-
-    const fn registry_commitment_is_complete(self, component_count: u32) -> bool {
-        self.registry_committed == component_count
     }
 
     const fn is_terminal(self, component_count: u32) -> bool {

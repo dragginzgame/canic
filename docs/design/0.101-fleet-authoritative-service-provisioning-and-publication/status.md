@@ -114,10 +114,13 @@ Date: 2026-08-08
   member at a time through the existing Store-backed lifecycle journal while
   retaining the exact grouped runtime context. Once every member is installed,
   it may commit one exact `Prepared` partition at a time through the existing
-  Component Registry journal. Terminal root receipts and all later scale-out
+  Component Registry journal. A fully committed root may now freeze its exact
+  group-partitioned terminal receipt; the Coordinator retains every selected
+  root receipt in canonical order and reaches `ComponentsProvisioned` only
+  after all are terminal. Fleet-service publication and all later scale-out
   effects remain fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.29` is released and `0.101.30` is open.
+- Implementation started: yes; `0.101.30` is released and `0.101.31` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -365,8 +368,10 @@ Fleet policy writer.
   reserve each planned Component identity and then claim one exact prepaid
   Canister per canonical member. Fully claimed members may then install through
   the exact Store-backed journal, then commit one canonical `Prepared`
-  partition through the root-local Component Registry. Terminal root receipts
-  and later effects remain fenced.
+  partition through the root-local Component Registry. Every selected root may
+  now freeze its exact terminal receipt, and the Coordinator advances only
+  after retaining those receipts in canonical order. Service append and later
+  effects remain fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -382,8 +387,10 @@ Fleet policy writer.
   loss. Each fully claimed member may then install with its exact grouped
   context and replay the same Store-backed operation after interruption.
   Fully installed members may then commit their exact Registry partition with
-  response-loss replay. Terminal root receipts and later provisioning effects
-  remain.
+  response-loss replay. Each fully committed root now freezes a terminal result
+  without releasing its aggregate runtime fence, and the Coordinator reaches
+  `ComponentsProvisioned` only after every selected root is terminal. Service
+  append and later provisioning effects remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.
