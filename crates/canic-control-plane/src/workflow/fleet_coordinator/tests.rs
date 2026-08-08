@@ -68,7 +68,7 @@ fn principal(byte: u8) -> Principal {
 }
 
 #[test]
-fn scale_out_stops_after_the_final_component_registry_commit() {
+fn scale_out_current_root_progress_remains_canonical_through_registry_commitment() {
     let reserving = FleetComponentProvisioningRootProgress {
         fleet_subnet_root: principal(9),
         component_count: 3,
@@ -77,86 +77,64 @@ fn scale_out_stops_after_the_final_component_registry_commit() {
         installed_component_count: 0,
         registry_committed_component_count: 0,
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(reserving))
-            .expect("partial reservation remains open")
-    );
-
     let reserved = FleetComponentProvisioningRootProgress {
         reserved_component_count: 3,
         ..reserving
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(reserved))
-            .expect("prepaid claims remain open")
-    );
-
     let claimed = FleetComponentProvisioningRootProgress {
         claimed_component_count: 1,
         ..reserved
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(claimed))
-            .expect("partial claims remain open")
-    );
-
     let completely_claimed = FleetComponentProvisioningRootProgress {
         claimed_component_count: 3,
         ..reserved
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(completely_claimed))
-            .expect("Store-backed installs remain open")
-    );
     let installing = FleetComponentProvisioningRootProgress {
         installed_component_count: 2,
         ..completely_claimed
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(installing))
-            .expect("partial Store-backed installs remain open")
-    );
     let installed = FleetComponentProvisioningRootProgress {
         installed_component_count: 3,
         ..completely_claimed
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(installed))
-            .expect("Component Registry commitments remain open")
-    );
     let committing = FleetComponentProvisioningRootProgress {
         registry_committed_component_count: 2,
         ..installed
     };
-    assert!(
-        !scale_out_registry_commitment_is_complete(Some(committing))
-            .expect("partial Component Registry commitments remain open")
-    );
     let committed = FleetComponentProvisioningRootProgress {
         registry_committed_component_count: 3,
         ..installed
     };
-    assert!(
-        scale_out_registry_commitment_is_complete(Some(committed))
-            .expect("complete Component Registry commitments are fenced")
-    );
+    for progress in [
+        reserving,
+        reserved,
+        claimed,
+        completely_claimed,
+        installing,
+        installed,
+        committing,
+        committed,
+    ] {
+        validate_scale_out_current_root_progress(Some(progress))
+            .expect("canonical current-root progress");
+    }
 
     let claim_without_identity = FleetComponentProvisioningRootProgress {
         claimed_component_count: 1,
         ..reserving
     };
-    assert!(scale_out_registry_commitment_is_complete(Some(claim_without_identity)).is_err());
+    assert!(validate_scale_out_current_root_progress(Some(claim_without_identity)).is_err());
     let install_without_claim = FleetComponentProvisioningRootProgress {
         installed_component_count: 1,
         ..reserved
     };
-    assert!(scale_out_registry_commitment_is_complete(Some(install_without_claim)).is_err());
+    assert!(validate_scale_out_current_root_progress(Some(install_without_claim)).is_err());
     let commit_without_install = FleetComponentProvisioningRootProgress {
         registry_committed_component_count: 1,
         ..completely_claimed
     };
-    assert!(scale_out_registry_commitment_is_complete(Some(commit_without_install)).is_err());
-    assert!(scale_out_registry_commitment_is_complete(None).is_err());
+    assert!(validate_scale_out_current_root_progress(Some(commit_without_install)).is_err());
+    assert!(validate_scale_out_current_root_progress(None).is_err());
 }
 
 const COORDINATOR_CONFIG: &str = r#"
@@ -958,10 +936,7 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
         now += 3;
     }
 
-    assert_eq!(status.provisioned_root_count, status.root_batch_count);
-    assert_eq!(status.current_root, None);
-    assert_eq!(status.provisioning_in_flight_root, None);
-    assert_eq!(status.components_provisioned_at_ns, Some(now - 1));
+    assert_terminal_root_provisioning_status(&status, now);
     let durable = FleetCoordinatorRegistryStore::export();
     FleetCoordinatorRegistryStore::import(durable.clone());
     assert_eq!(component_provisioning_status(&config, plan_hash), status);
@@ -991,6 +966,28 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
         )
         .expect_err("corrupt terminal root receipt must fail closed");
     assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+}
+
+fn assert_terminal_root_provisioning_status(
+    status: &FleetComponentProvisioningStatusResponse,
+    now: u64,
+) {
+    assert_eq!(status.provisioned_root_count, status.root_batch_count);
+    assert_eq!(status.current_root, None);
+    assert_eq!(status.provisioning_in_flight_root, None);
+    assert_eq!(status.components_provisioned_at_ns, Some(now - 1));
+    let mut terminal_scale_out = status.clone();
+    terminal_scale_out.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "project_cells".parse().expect("deployment ID"),
+        previous_placements: 1,
+        requested_placements: 2,
+    };
+    assert!(
+        scale_out_root_provisioning_is_complete(&terminal_scale_out)
+            .expect("terminal scale-out root provisioning")
+    );
+    terminal_scale_out.phase = FleetComponentProvisioningPhase::ServiceTopologyPublished;
+    assert!(scale_out_root_provisioning_is_complete(&terminal_scale_out).is_err());
 }
 
 fn accept_every_planned_root(config: &ConfigModel, plan_hash: [u8; 32]) {

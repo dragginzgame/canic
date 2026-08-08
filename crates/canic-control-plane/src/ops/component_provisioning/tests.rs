@@ -1055,6 +1055,30 @@ fn commit_later_operation_registry_member(
             .expect("lost Registry commit response replays"),
         RootComponentProvisioningAdvanceDisposition::Replay
     );
+
+    let evidence = ProvisionedMemberEvidence {
+        member: RootComponentProvisioningOps::next_member_registry_commit(installed)
+            .expect("scale-out Registry member"),
+        allocation: committed_allocation,
+        partition,
+    };
+    let result = provisioned_result_record(&registered, &[evidence])
+        .expect("complete scale-out provisioned result");
+    let terminal_request = RootComponentProvisioningAdvanceRequest {
+        expected_registry_committed_component_count: 1,
+        ..registry_request
+    };
+    let provisioned = commit_provisioned_result(terminal_request, 800, result)
+        .expect("commit terminal scale-out root receipt");
+    assert_eq!(
+        provisioned.phase,
+        RootComponentProvisioningPhase::Provisioned
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(terminal_request, &provisioned)
+            .expect("terminal scale-out receipt replays"),
+        RootComponentProvisioningAdvanceDisposition::Complete
+    );
 }
 
 fn single_published_fixture() -> (

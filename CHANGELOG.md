@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.31` freezes exact terminal scale-out receipts for every selected root
+  and advances the Coordinator to `ComponentsProvisioned` while keeping
+  Fleet-service publication fenced.
+
 - `0.101.30` commits each installed scale-out Component through the existing
   response-loss-safe root-local Registry journal while keeping terminal root
   receipts and Fleet-service publication fenced.
