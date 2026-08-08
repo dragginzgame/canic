@@ -182,7 +182,8 @@ impl FleetCoordinatorWorkflow {
             acceptance_status.operation,
             FleetComponentProvisioningOperation::ScaleOut { .. }
         ) {
-            return advance_component_scale_out_installation(request, acceptance_status).await;
+            return advance_component_scale_out_registry_commitment(request, acceptance_status)
+                .await;
         }
         if matches!(
             acceptance_status.phase,
@@ -322,23 +323,23 @@ async fn advance_component_directory_confirmation(
     )
 }
 
-async fn advance_component_scale_out_installation(
+async fn advance_component_scale_out_registry_commitment(
     request: FleetComponentProvisioningAdvanceRequest,
     status: FleetComponentProvisioningStatusResponse,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-    if scale_out_installation_is_complete(status.current_root)? {
+    if scale_out_registry_commitment_is_complete(status.current_root)? {
         return Ok(status);
     }
     advance_component_root_provisioning(request).await
 }
 
-fn scale_out_installation_is_complete(
+fn scale_out_registry_commitment_is_complete(
     progress: Option<FleetComponentProvisioningRootProgress>,
 ) -> Result<bool, InternalError> {
     let Some(progress) = progress else {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out installation has no current root cursor",
+            "scale-out Registry commitment has no current root cursor",
         ));
     };
     let claim_has_reserved_identity = match progress.claimed_component_count {
@@ -349,22 +350,27 @@ fn scale_out_installation_is_complete(
         0 => progress.claimed_component_count <= progress.component_count,
         _ => progress.claimed_component_count == progress.component_count,
     };
-    let remains_before_registry_commit = [
+    let registry_commit_has_install = match progress.registry_committed_component_count {
+        0 => progress.installed_component_count <= progress.component_count,
+        _ => progress.installed_component_count == progress.component_count,
+    };
+    let remains_before_terminal_receipt = [
         claim_has_reserved_identity,
         install_has_claimed_canister,
+        registry_commit_has_install,
         progress.claimed_component_count <= progress.component_count,
         progress.installed_component_count <= progress.component_count,
-        progress.registry_committed_component_count == 0,
+        progress.registry_committed_component_count <= progress.component_count,
     ]
     .into_iter()
     .all(|matches| matches);
-    if !remains_before_registry_commit {
+    if !remains_before_terminal_receipt {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out operation crossed its Store-backed installation fence",
+            "scale-out operation crossed its Component Registry commitment fence",
         ));
     }
-    Ok(progress.installed_component_count == progress.component_count)
+    Ok(progress.registry_committed_component_count == progress.component_count)
 }
 
 async fn advance_component_root_provisioning(

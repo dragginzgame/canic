@@ -1871,7 +1871,7 @@ fn validate_component_scale_out_progress(
             | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
     ) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out crossed its implemented Store-backed installation boundary",
+            "Fleet Component scale-out crossed its implemented Component Registry commitment boundary",
         ));
     }
     validate_component_provisioning_root_acceptance_state(record)?;
@@ -1880,12 +1880,12 @@ fn validate_component_scale_out_progress(
         &current.registry,
         record,
     )?;
-    validate_scale_out_installation_fence(record)?;
+    validate_scale_out_registry_commitment_fence(record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
 
-fn validate_scale_out_installation_fence(
+fn validate_scale_out_registry_commitment_fence(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
     let progress = component_provisioning_root_provision_progress(record)?;
@@ -1899,16 +1899,16 @@ fn validate_scale_out_installation_fence(
     .any(|crossed| crossed);
     if crossed_later_boundary {
         return Err(receipt_invariant(
-            "Fleet Component scale-out contains evidence beyond Store-backed installation",
+            "Fleet Component scale-out contains evidence beyond Component Registry commitment",
         ));
     }
     if let Some(response) = &progress.current_response {
         let counts = RootProvisioningCounts::from_response(response);
         if response.phase != RootComponentProvisioningPhase::Accepted
-            || !counts.is_store_install_boundary(response.component_count)
+            || !counts.is_registry_commit_boundary(response.component_count)
         {
             return Err(receipt_invariant(
-                "Fleet Component scale-out root progress crossed the Store-backed installation fence",
+                "Fleet Component scale-out root progress crossed the Component Registry commitment fence",
             ));
         }
     }
@@ -1918,12 +1918,12 @@ fn validate_scale_out_installation_fence(
             .current_response
             .as_ref()
             .map(|response| response.component_count)
-            .ok_or_else(|| receipt_invariant("scale-out install intent lacks root progress"))?;
-        if !counts.is_store_install_boundary(component_count)
-            || counts.store_installation_is_complete(component_count)
+            .ok_or_else(|| receipt_invariant("scale-out Registry intent lacks root progress"))?;
+        if !counts.is_registry_commit_boundary(component_count)
+            || counts.registry_commitment_is_complete(component_count)
         {
             return Err(receipt_invariant(
-                "Fleet Component scale-out intent crossed the Store-backed installation fence",
+                "Fleet Component scale-out intent crossed the Component Registry commitment fence",
             ));
         }
     }
@@ -3771,7 +3771,7 @@ impl RootProvisioningCounts {
         }
     }
 
-    fn is_store_install_boundary(self, component_count: u32) -> bool {
+    fn is_registry_commit_boundary(self, component_count: u32) -> bool {
         let claim_has_reserved_identity = match self.claimed {
             0 => self.reserved <= component_count,
             _ => self.reserved == component_count,
@@ -3780,19 +3780,24 @@ impl RootProvisioningCounts {
             0 => self.claimed <= component_count,
             _ => self.claimed == component_count,
         };
+        let registry_commit_has_install = match self.registry_committed {
+            0 => self.installed <= component_count,
+            _ => self.installed == component_count,
+        };
         [
             claim_has_reserved_identity,
             install_has_claimed_canister,
+            registry_commit_has_install,
             self.claimed <= component_count,
             self.installed <= component_count,
-            self.registry_committed == 0,
+            self.registry_committed <= component_count,
         ]
         .into_iter()
         .all(|matches| matches)
     }
 
-    const fn store_installation_is_complete(self, component_count: u32) -> bool {
-        self.installed == component_count
+    const fn registry_commitment_is_complete(self, component_count: u32) -> bool {
+        self.registry_committed == component_count
     }
 
     const fn is_terminal(self, component_count: u32) -> bool {

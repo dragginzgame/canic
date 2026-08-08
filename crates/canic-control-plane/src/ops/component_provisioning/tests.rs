@@ -918,7 +918,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         }
     );
 
-    reserve_claim_and_install_later_operation_member(next_request, &next_validation);
+    reserve_claim_install_and_commit_later_operation_member(next_request, &next_validation);
     assert_eq!(
         RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
             operation_id: active.operation_id,
@@ -936,7 +936,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
     );
 }
 
-fn reserve_claim_and_install_later_operation_member(
+fn reserve_claim_install_and_commit_later_operation_member(
     request: RootComponentProvisioningAcceptanceRequest,
     validation: &RootComponentProvisioningBatchValidation,
 ) {
@@ -1017,6 +1017,42 @@ fn reserve_claim_and_install_later_operation_member(
     assert_eq!(
         RootComponentProvisioningOps::advance_disposition(install_request, &installed)
             .expect("lost install response replays"),
+        RootComponentProvisioningAdvanceDisposition::Replay
+    );
+    commit_later_operation_registry_member(install_request, installed_allocation, &installed);
+}
+
+fn commit_later_operation_registry_member(
+    install_request: RootComponentProvisioningAdvanceRequest,
+    installed_allocation: RootComponentAllocationView,
+    installed: &RootComponentProvisioningView,
+) {
+    let registry_request = RootComponentProvisioningAdvanceRequest {
+        expected_installed_component_count: 1,
+        ..install_request
+    };
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(registry_request, installed)
+            .expect("Registry commit disposition"),
+        RootComponentProvisioningAdvanceDisposition::Advance
+    );
+    let (committed_allocation, partition) = committed_allocation(installed_allocation);
+    let registered = RootComponentProvisioningOps::mark_member_registry_committed(
+        registry_request,
+        &committed_allocation,
+        &partition,
+    )
+    .expect("commit scale-out Component Registry member");
+    assert_eq!(
+        registered
+            .registry_cursor
+            .registry_committed_component_count,
+        1
+    );
+    assert_eq!(registered.phase, RootComponentProvisioningPhase::Accepted);
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(registry_request, &registered)
+            .expect("lost Registry commit response replays"),
         RootComponentProvisioningAdvanceDisposition::Replay
     );
 }

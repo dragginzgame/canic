@@ -112,10 +112,12 @@ Date: 2026-08-08
   claim one exact prepaid Canister per canonical member through the existing
   pool authority. Once every Canister is claimed, it may install one canonical
   member at a time through the existing Store-backed lifecycle journal while
-  retaining the exact grouped runtime context. Registry commitment and all
-  later scale-out effects remain fenced.
+  retaining the exact grouped runtime context. Once every member is installed,
+  it may commit one exact `Prepared` partition at a time through the existing
+  Component Registry journal. Terminal root receipts and all later scale-out
+  effects remain fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.28` is released and `0.101.29` is open.
+- Implementation started: yes; `0.101.29` is released and `0.101.30` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -362,8 +364,9 @@ Fleet policy writer.
   and Ready pool capacity before accepting. The current accepted root may now
   reserve each planned Component identity and then claim one exact prepaid
   Canister per canonical member. Fully claimed members may then install through
-  the exact Store-backed journal. Registry commitment and later effects remain
-  fenced.
+  the exact Store-backed journal, then commit one canonical `Prepared`
+  partition through the root-local Component Registry. Terminal root receipts
+  and later effects remain fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -378,7 +381,9 @@ Fleet policy writer.
   pool claim journal to retain the exact Canister principal across response
   loss. Each fully claimed member may then install with its exact grouped
   context and replay the same Store-backed operation after interruption.
-  Registry commitment and later provisioning effects remain.
+  Fully installed members may then commit their exact Registry partition with
+  response-loss replay. Terminal root receipts and later provisioning effects
+  remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.

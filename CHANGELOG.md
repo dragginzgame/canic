@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.30` commits each installed scale-out Component through the existing
+  response-loss-safe root-local Registry journal while keeping terminal root
+  receipts and Fleet-service publication fenced.
+
 - `0.101.29` installs each claimed Component on the current scale-out root
   through the existing response-loss-safe Store-backed journal while keeping
   Registry commitment and later publication fenced.
