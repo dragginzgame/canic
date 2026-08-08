@@ -31,7 +31,11 @@ Historical detail is archived at:
   cross the same Coordinator-owned Directory/runtime transaction. Both
   infrastructure Canisters are verified initially `Prepared`. The superseded
   host-only empty-root activation path and journal states are hard-cut.
-  Scale-out and the remaining policy/runtime items stay open.
+  Scale-out and the remaining policy/runtime items stay open. Final 0.101
+  closeout now explicitly requires journal decomposition, focused placement-
+  policy ownership, narrow durable-I/O consolidation, complete stale-surface
+  removal and a responsibility/size report; passing behavior alone is not a
+  closeout verdict.
 - Open `0.101.23` also makes `make update-dev` resolve the latest stable
   ICP CLI release in the currently supported major line, record the official
   Linux/macOS checksums and install that exact pin. The current maintainer pin

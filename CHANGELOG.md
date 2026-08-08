@@ -17,7 +17,9 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
   the complete response-loss-safe host transaction to terminal runtime
   activation and exact Fleet catalog publication. It also makes
   `make update-dev` discover, checksum-pin and install the latest stable ICP
-  CLI 1.x release while retaining the independent 1.2 compatibility floor.
+  CLI 1.x release while retaining the independent 1.2 compatibility floor,
+  and makes structural cleanup plus sediment removal a mandatory 0.101
+  closeout gate.
 
 - `0.101.22` activates every Directory-prepared grouped Component, promotes
   its Registry membership and current Directory, seals initial inventory and

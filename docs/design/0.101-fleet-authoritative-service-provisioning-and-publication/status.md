@@ -375,7 +375,29 @@ Fleet policy writer.
   provisioning, exact immediate-parent bindings and Coordinator-free retry.
 - [ ] Prove two deployments reuse one Project Hub group with distinct
   reduction-only 10,000/2,000 Hub-to-Instance ceilings on different roots.
-- [ ] Complete stale-path and design closeout checks.
+- [ ] Decompose the fresh-install Component provisioning journal into
+  separately readable typed transition/schema, authority validation and
+  durable-document persistence owners without changing canonical bytes or
+  retry behavior.
+- [ ] Move initial Component Group placement compilation and semantic policy
+  out of generic Fleet-install-plan persistence into one focused pure owner.
+- [ ] Inventory every host installation journal and consolidate mechanically
+  identical no-follow read, lock, canonical encode, atomic publication and
+  exact-retry plumbing behind a narrow durable-I/O owner while retaining
+  distinct typed domain state machines.
+- [ ] Audit every 0.101-touched module for mixed layer ownership, long or mixed
+  authority predicates, forwarding namespaces, dead re-exports, unused
+  dependencies and completed implementation scaffolding; split or delete each
+  confirmed concentration.
+- [ ] Hard-cut every obsolete phase, field, endpoint, protocol adapter, stable
+  record/index, feature edge, fixture, example and active-document reference;
+  do not retain aliases, fallback decoders, migration or compatibility paths.
+- [ ] Recheck Candid, generated surfaces, CLI/configuration guidance, stable-
+  memory ownership and Wasm dependency isolation after removal.
+- [ ] Publish the final stale-occurrence inventory and responsibility/size
+  diff, with an evidence-backed explanation for every remaining large module
+  or mechanically duplicated path that cannot safely be reduced.
+- [ ] Complete all mandatory sediment-removal and design closeout checks.
 
 ## Completion
 
@@ -399,4 +421,7 @@ Fleet policy writer.
   Component Child group/service target, delegated lifecycle authority,
   singleton-Spec restriction, adoption, prior-release transition or
   compatibility path survives.
+- [ ] The mandatory cleanup report accounts for production growth, deleted
+  authority paths, module ownership, durable-I/O consolidation, generated
+  surfaces, stable allocations and every permitted historical-only residue.
 - [ ] Current status and changelog record the final evidence.
