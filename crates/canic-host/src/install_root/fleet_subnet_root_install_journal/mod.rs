@@ -26,12 +26,7 @@ use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
         component_registry::{
-            RootComponentInitialInventoryStatus, RootComponentRegistryPreparationRequest,
-            RootComponentRegistryStatusResponse,
-        },
-        fleet_activation::{
-            FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
-            FleetCascadeActivationEvidence, FleetCredentialManifest,
+            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
         },
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
@@ -97,11 +92,6 @@ pub(super) enum FleetSubnetRootInstallPhase {
     ComponentRegistryPreparationInFlight,
     ComponentRegistryPrepared,
     ComponentRegistryPreparationVerified,
-    RootActivationPreparationInFlight,
-    RootActivationPrepared,
-    RootActivationInFlight,
-    RootActivated,
-    RootActivationVerified,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -139,9 +129,6 @@ pub(super) struct FleetSubnetRootInstallJournal {
         Option<FleetSubnetRootRegistryMirrorActivationResponse>,
     pub component_registry_preparation_request: Option<RootComponentRegistryPreparationRequest>,
     pub component_registry_preparation_response: Option<RootComponentRegistryStatusResponse>,
-    pub root_activation_preparation_response: Option<FleetActivationStatusResponse>,
-    pub root_activation_response: Option<FleetActivationStatusResponse>,
-    pub component_registry_activation_response: Option<RootComponentRegistryStatusResponse>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -712,136 +699,6 @@ pub(super) fn record_component_registry_preparation_verified(
     )
 }
 
-pub(super) fn begin_root_activation_preparation(
-    current: &ResolvedFleetSubnetRootInstall,
-) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    advance_without_evidence(
-        current,
-        FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified,
-        FleetSubnetRootInstallPhase::RootActivationPreparationInFlight,
-    )
-}
-
-pub(super) fn record_root_activation_prepared(
-    current: &ResolvedFleetSubnetRootInstall,
-    response: FleetActivationStatusResponse,
-) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    validate_root_activation_preparation_response(&current.path, &current.journal, &response)?;
-    transition(
-        current,
-        FleetSubnetRootInstallPhase::RootActivationPreparationInFlight,
-        FleetSubnetRootInstallPhase::RootActivationPrepared,
-        |next| next.root_activation_preparation_response = Some(response),
-    )
-}
-
-pub(super) fn begin_root_activation(
-    current: &ResolvedFleetSubnetRootInstall,
-) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    advance_without_evidence(
-        current,
-        FleetSubnetRootInstallPhase::RootActivationPrepared,
-        FleetSubnetRootInstallPhase::RootActivationInFlight,
-    )
-}
-
-pub(super) fn record_root_activated(
-    current: &ResolvedFleetSubnetRootInstall,
-    response: FleetActivationStatusResponse,
-) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    validate_root_activation_response(&current.path, &current.journal, &response)?;
-    transition(
-        current,
-        FleetSubnetRootInstallPhase::RootActivationInFlight,
-        FleetSubnetRootInstallPhase::RootActivated,
-        |next| next.root_activation_response = Some(response),
-    )
-}
-
-pub(super) fn record_root_activation_verified(
-    current: &ResolvedFleetSubnetRootInstall,
-    response: FleetActivationStatusResponse,
-    component_registry: RootComponentRegistryStatusResponse,
-) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
-    validate_root_activation_response(&current.path, &current.journal, &response)?;
-    if current.journal.root_activation_response.as_ref() != Some(&response) {
-        return Err(invalid(
-            &current.path,
-            "verified root activation differs from its durable result",
-        ));
-    }
-    validate_component_registry_activation_response(
-        &current.path,
-        &current.journal,
-        &component_registry,
-    )?;
-    transition(
-        current,
-        FleetSubnetRootInstallPhase::RootActivated,
-        FleetSubnetRootInstallPhase::RootActivationVerified,
-        |next| next.component_registry_activation_response = Some(component_registry),
-    )
-}
-
-pub(super) fn validate_live_root_activation_status(
-    path: &Path,
-    journal: &FleetSubnetRootInstallJournal,
-    response: &FleetActivationStatusResponse,
-) -> Result<(), FleetSubnetRootInstallJournalError> {
-    match journal.phase {
-        FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => {
-            if matches_initial_prepared_activation(journal, response)
-                || validate_root_activation_preparation_response(path, journal, response).is_ok()
-            {
-                Ok(())
-            } else {
-                Err(invalid(
-                    path,
-                    "live root activation does not match its preparation intent",
-                ))
-            }
-        }
-        FleetSubnetRootInstallPhase::RootActivationPrepared => {
-            if journal.root_activation_preparation_response.as_ref() == Some(response) {
-                Ok(())
-            } else {
-                Err(invalid(
-                    path,
-                    "live root activation differs from prepared journal evidence",
-                ))
-            }
-        }
-        FleetSubnetRootInstallPhase::RootActivationInFlight => {
-            if journal.root_activation_preparation_response.as_ref() == Some(response)
-                || validate_root_activation_response(path, journal, response).is_ok()
-            {
-                Ok(())
-            } else {
-                Err(invalid(
-                    path,
-                    "live root activation does not match its activation intent",
-                ))
-            }
-        }
-        FleetSubnetRootInstallPhase::RootActivated
-        | FleetSubnetRootInstallPhase::RootActivationVerified => {
-            if journal.root_activation_response.as_ref() == Some(response) {
-                Ok(())
-            } else {
-                Err(invalid(
-                    path,
-                    "live root activation differs from active journal evidence",
-                ))
-            }
-        }
-        _ if matches_initial_prepared_activation(journal, response) => Ok(()),
-        _ => Err(invalid(
-            path,
-            "live root activation differs from its current journal phase",
-        )),
-    }
-}
-
 #[must_use]
 pub(super) fn create_result_path(journal_path: &Path) -> PathBuf {
     journal_path
@@ -1004,9 +861,6 @@ fn planned_journal(
         registry_mirror_activation_response: None,
         component_registry_preparation_request: None,
         component_registry_preparation_response: None,
-        root_activation_preparation_response: None,
-        root_activation_response: None,
-        component_registry_activation_response: None,
     };
     validate_journal(&path, &journal)?;
     Ok(journal)
@@ -1242,9 +1096,6 @@ fn validate_phase_evidence(
         journal.registry_mirror_activation_response.is_some(),
         journal.component_registry_preparation_request.is_some(),
         journal.component_registry_preparation_response.is_some(),
-        journal.root_activation_preparation_response.is_some(),
-        journal.root_activation_response.is_some(),
-        journal.component_registry_activation_response.is_some(),
     ];
     let expected_count = phase_evidence_count(journal.phase);
     if retained
@@ -1304,11 +1155,6 @@ const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
         FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 26,
         FleetSubnetRootInstallPhase::ComponentRegistryPrepared => 27,
         FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => 28,
-        FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => 29,
-        FleetSubnetRootInstallPhase::RootActivationPrepared => 30,
-        FleetSubnetRootInstallPhase::RootActivationInFlight => 31,
-        FleetSubnetRootInstallPhase::RootActivated => 32,
-        FleetSubnetRootInstallPhase::RootActivationVerified => 33,
     }
 }
 
@@ -1342,12 +1188,7 @@ const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
         | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => 15,
         FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => 16,
         FleetSubnetRootInstallPhase::ComponentRegistryPrepared
-        | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-        | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight => 17,
-        FleetSubnetRootInstallPhase::RootActivationPrepared
-        | FleetSubnetRootInstallPhase::RootActivationInFlight => 18,
-        FleetSubnetRootInstallPhase::RootActivated => 19,
-        FleetSubnetRootInstallPhase::RootActivationVerified => 20,
+        | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => 17,
     }
 }
 
@@ -1420,11 +1261,6 @@ fn validate_root_evidence(
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-            | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
-            | FleetSubnetRootInstallPhase::RootActivationPrepared
-            | FleetSubnetRootInstallPhase::RootActivationInFlight
-            | FleetSubnetRootInstallPhase::RootActivated
-            | FleetSubnetRootInstallPhase::RootActivationVerified
     ) {
         let expected_store = &expected.wasm_store_authority;
         let root_matches = journal.verified_binding.as_ref() == Some(&expected.binding);
@@ -1473,15 +1309,6 @@ fn validate_root_dependent_evidence(
     }
     if let Some(response) = &journal.component_registry_preparation_response {
         validate_component_registry_preparation_response(path, journal, response)?;
-    }
-    if let Some(response) = &journal.root_activation_preparation_response {
-        validate_root_activation_preparation_response(path, journal, response)?;
-    }
-    if let Some(response) = &journal.root_activation_response {
-        validate_root_activation_response(path, journal, response)?;
-    }
-    if let Some(response) = &journal.component_registry_activation_response {
-        validate_component_registry_activation_response(path, journal, response)?;
     }
     Ok(())
 }
@@ -1808,188 +1635,6 @@ fn validate_component_registry_preparation_response(
         return Err(invalid(
             path,
             "Component Registry preparation response differs from immutable root authority",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_root_activation_preparation_response(
-    path: &Path,
-    journal: &FleetSubnetRootInstallJournal,
-    response: &FleetActivationStatusResponse,
-) -> Result<(), FleetSubnetRootInstallJournalError> {
-    let store = journal
-        .store_bootstrap
-        .as_ref()
-        .ok_or_else(|| invalid(path, "root activation preparation requires Store evidence"))?;
-    let credential = response.credential.ok_or_else(|| {
-        invalid(
-            path,
-            "prepared root activation has no credential generation",
-        )
-    })?;
-    let credential_manifest = response
-        .credential_manifest
-        .as_ref()
-        .ok_or_else(|| invalid(path, "prepared root activation has no credential manifest"))?;
-    let cascade_manifest = response
-        .cascade_manifest
-        .as_ref()
-        .ok_or_else(|| invalid(path, "prepared root activation has no cascade manifest"))?;
-    let [cascade_entry] = cascade_manifest.as_slice() else {
-        return Err(invalid(
-            path,
-            "prepared root activation has a non-canonical cascade manifest",
-        ));
-    };
-    let FleetCascadeActivationEvidence::Source {
-        cascade_manifest_hash,
-    } = response
-        .cascade
-        .as_ref()
-        .ok_or_else(|| invalid(path, "prepared root activation has no cascade authority"))?
-    else {
-        return Err(invalid(
-            path,
-            "prepared root activation retains applied cascade evidence",
-        ));
-    };
-    let observed_cascade_hash =
-        canic_core::api::fleet_activation::FleetActivationApi::cascade_manifest_hash(
-            cascade_manifest,
-        )
-        .map_err(|error| invalid(path, error.to_string()))?;
-    let observed_credential_hash =
-        canic_core::api::fleet_activation::FleetActivationApi::credential_manifest_hash(
-            credential_manifest,
-        )
-        .map_err(|error| invalid(path, error.to_string()))?;
-    let expected_policy_hash =
-        canic_core::api::fleet_activation::FleetActivationApi::empty_root_policy_set_hash()
-            .map_err(|error| invalid(path, error.to_string()))?;
-    let expected_renewal_hash =
-        canic_core::api::fleet_activation::FleetActivationApi::empty_renewal_template_set_hash()
-            .map_err(|error| invalid(path, error.to_string()))?;
-    let expected_identity = FleetActivationIdentity {
-        fleet: journal.authority.binding.fleet.clone(),
-        operation_id: journal.install_operation_id,
-        release_build_id: journal.release_build_id,
-    };
-    let expected_credential_manifest = FleetCredentialManifest {
-        fleet: journal.authority.binding.fleet.fleet,
-        activation_id: journal.install_operation_id,
-        generation: credential.generation,
-        root_policy_set_hash: expected_policy_hash,
-        renewal_template_set_hash: expected_renewal_hash,
-        entries: Vec::new(),
-    };
-    let activation_is_prepared = response.phase == FleetActivationPhase::Prepared
-        && response.identity == expected_identity
-        && response.activated_at_ns.is_none();
-    let cascade_targets_store = cascade_entry.principal == store.wasm_store;
-    let cascade_snapshots_are_bound = cascade_entry.state_snapshot_hash != [0; 32]
-        && cascade_entry.topology_snapshot_hash != [0; 32]
-        && observed_cascade_hash == *cascade_manifest_hash;
-    let credential_authority_matches = credential_manifest == &expected_credential_manifest
-        && observed_credential_hash == credential.manifest_hash;
-    if !activation_is_prepared
-        || !cascade_targets_store
-        || !cascade_snapshots_are_bound
-        || !credential_authority_matches
-    {
-        return Err(invalid(
-            path,
-            "prepared root activation differs from durable Fleet authority",
-        ));
-    }
-    Ok(())
-}
-
-fn matches_initial_prepared_activation(
-    journal: &FleetSubnetRootInstallJournal,
-    response: &FleetActivationStatusResponse,
-) -> bool {
-    response
-        == &FleetActivationStatusResponse {
-            phase: FleetActivationPhase::Prepared,
-            identity: FleetActivationIdentity {
-                fleet: journal.authority.binding.fleet.clone(),
-                operation_id: journal.install_operation_id,
-                release_build_id: journal.release_build_id,
-            },
-            cascade: None,
-            cascade_manifest: None,
-            credential: None,
-            credential_manifest: None,
-            activated_at_ns: None,
-        }
-}
-
-fn validate_root_activation_response(
-    path: &Path,
-    journal: &FleetSubnetRootInstallJournal,
-    response: &FleetActivationStatusResponse,
-) -> Result<(), FleetSubnetRootInstallJournalError> {
-    let prepared = journal
-        .root_activation_preparation_response
-        .as_ref()
-        .ok_or_else(|| {
-            invalid(
-                path,
-                "root activation requires durable preparation evidence",
-            )
-        })?;
-    let activated_at_ns = response
-        .activated_at_ns
-        .filter(|time| *time > 0)
-        .ok_or_else(|| invalid(path, "active root response has no activation time"))?;
-    let mut expected = prepared.clone();
-    expected.phase = FleetActivationPhase::Active;
-    expected.activated_at_ns = Some(activated_at_ns);
-    if response != &expected {
-        return Err(invalid(
-            path,
-            "active root response differs from durable preparation authority",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_component_registry_activation_response(
-    path: &Path,
-    journal: &FleetSubnetRootInstallJournal,
-    response: &RootComponentRegistryStatusResponse,
-) -> Result<(), FleetSubnetRootInstallJournalError> {
-    let prepared = journal
-        .component_registry_preparation_response
-        .as_ref()
-        .ok_or_else(|| invalid(path, "root activation requires prepared Registry evidence"))?;
-    let inventory = response.initial_inventory.ok_or_else(|| {
-        invalid(
-            path,
-            "active root has no sealed initial Component inventory",
-        )
-    })?;
-    if inventory.inventory_hash == [0; 32] || inventory.sealed_at_ns == 0 {
-        return Err(invalid(
-            path,
-            "active root has invalid initial Component inventory evidence",
-        ));
-    }
-    let expected_inventory = RootComponentInitialInventoryStatus {
-        fleet_activation_operation_id: journal.install_operation_id,
-        component_count: 0,
-        inventory_hash: inventory.inventory_hash,
-        sealed_at_ns: inventory.sealed_at_ns,
-        directories_converged: true,
-        root_runtime_activated: true,
-    };
-    let mut expected = prepared.clone();
-    expected.initial_inventory = Some(expected_inventory);
-    if response != &expected {
-        return Err(invalid(
-            path,
-            "active root Component Registry differs from its empty initial inventory authority",
         ));
     }
     Ok(())

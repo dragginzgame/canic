@@ -14,7 +14,7 @@ use super::{
         create_result_path, expected_root_authority, expected_wasm_store_authority,
         plan_fleet_subnet_root_install, record_infrastructure_verified, record_root_created,
         record_root_installed, record_wasm_store_created, record_wasm_store_installed,
-        validate_live_root_activation_status, wasm_store_create_result_path,
+        wasm_store_create_result_path,
     },
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
@@ -25,16 +25,20 @@ use super::{
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::LocalReplicaTarget,
+    icp::{IcpCli, LocalReplicaTarget},
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
         load_persisted_canic_infrastructure_artifact_manifest,
     },
 };
+use std::path::{Path, PathBuf};
+
 use candid::Principal;
 use canic_core::{
     dto::{
-        fleet_activation::FleetActivationStatusResponse,
+        fleet_activation::{
+            FleetActivationIdentity, FleetActivationPhase, FleetActivationStatusResponse,
+        },
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
         },
@@ -42,7 +46,6 @@ use canic_core::{
     ids::FleetSubnetWasmStoreAuthority,
     protocol,
 };
-use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
 const MAX_ROOT_TRANSITIONS: usize = 12;
@@ -71,8 +74,8 @@ struct WasmStoreCreationOutcomeUnknownError {
 
 #[derive(Debug, ThisError)]
 enum RootInstallStateError {
-    #[error("Fleet Subnet Root activation status differs from exact Prepared install authority")]
-    ActivationStatusMismatch,
+    #[error("{subject} did not initialize with the exact Prepared Fleet runtime identity")]
+    ActivationStatusMismatch { subject: &'static str },
 
     #[error("Fleet Subnet Root protected authority query differs from exact planned binding")]
     AuthorityMismatch,
@@ -210,17 +213,11 @@ fn drive_root_install(
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
-            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-            | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
-            | FleetSubnetRootInstallPhase::RootActivationPrepared
-            | FleetSubnetRootInstallPhase::RootActivationInFlight
-            | FleetSubnetRootInstallPhase::RootActivated
-            | FleetSubnetRootInstallPhase::RootActivationVerified => {
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
                 let (authority, _) = verify_live_infrastructure(
                     icp_root,
                     environment,
                     local_replica,
-                    &current.path,
                     &current.journal,
                 )?;
                 return Ok(authority);
@@ -379,13 +376,8 @@ fn verify_and_record_infrastructure(
     local_replica: Option<&LocalReplicaTarget>,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
-    let (root_authority, wasm_store_authority) = verify_live_infrastructure(
-        icp_root,
-        environment,
-        local_replica,
-        &current.path,
-        &current.journal,
-    )?;
+    let (root_authority, wasm_store_authority) =
+        verify_live_infrastructure(icp_root, environment, local_replica, &current.journal)?;
     record_infrastructure_verified(current, root_authority, wasm_store_authority)
         .map_err(Into::into)
 }
@@ -394,7 +386,6 @@ fn verify_live_infrastructure(
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
-    journal_path: &Path,
     journal: &FleetSubnetRootInstallJournal,
 ) -> Result<(FleetSubnetRootAuthority, FleetSubnetWasmStoreAuthority), Box<dyn std::error::Error>> {
     let fleet_subnet_root = journal
@@ -419,13 +410,6 @@ fn verify_live_infrastructure(
     )?;
 
     let expected = expected_root_authority(journal)?;
-    let status = query_no_arg::<FleetActivationStatusResponse>(
-        &icp,
-        fleet_subnet_root,
-        protocol::CANIC_FLEET_ACTIVATION_STATUS,
-    )?;
-    validate_live_root_activation_status(journal_path, journal, &status)
-        .map_err(|_| RootInstallStateError::ActivationStatusMismatch)?;
     let observed = query_no_arg::<FleetSubnetRootAuthority>(
         &icp,
         fleet_subnet_root,
@@ -433,6 +417,9 @@ fn verify_live_infrastructure(
     )?;
     if observed != expected {
         return Err(RootInstallStateError::AuthorityMismatch.into());
+    }
+    if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
+        require_initial_prepared_runtime(&icp, fleet_subnet_root, journal, "Fleet Subnet Root")?;
     }
     let direct_store_verification_required = matches!(
         journal.phase,
@@ -451,13 +438,6 @@ fn verify_live_infrastructure(
         journal.expected_wasm_store_module_hash,
         "Wasm Store",
     )?;
-    let store_status = query_no_arg::<FleetActivationStatusResponse>(
-        &icp,
-        wasm_store,
-        protocol::CANIC_FLEET_ACTIVATION_STATUS,
-    )?;
-    validate_live_root_activation_status(journal_path, journal, &store_status)
-        .map_err(|_| RootInstallStateError::ActivationStatusMismatch)?;
     let expected_store = expected_wasm_store_authority(journal)?;
     require_expected_controllers(
         &icp,
@@ -473,7 +453,40 @@ fn verify_live_infrastructure(
     if observed_store != expected_store {
         return Err(RootInstallStateError::WasmStoreAuthorityMismatch.into());
     }
+    if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
+        require_initial_prepared_runtime(&icp, wasm_store, journal, "Wasm Store")?;
+    }
     Ok((expected, expected_store))
+}
+
+fn require_initial_prepared_runtime(
+    icp: &IcpCli,
+    canister: Principal,
+    journal: &FleetSubnetRootInstallJournal,
+    subject: &'static str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let observed = query_no_arg::<FleetActivationStatusResponse>(
+        icp,
+        canister,
+        protocol::CANIC_FLEET_ACTIVATION_STATUS,
+    )?;
+    let expected = FleetActivationStatusResponse {
+        phase: FleetActivationPhase::Prepared,
+        identity: FleetActivationIdentity {
+            fleet: journal.authority.binding.fleet.clone(),
+            operation_id: journal.install_operation_id,
+            release_build_id: journal.release_build_id,
+        },
+        cascade: None,
+        cascade_manifest: None,
+        credential: None,
+        credential_manifest: None,
+        activated_at_ns: None,
+    };
+    if observed != expected {
+        return Err(RootInstallStateError::ActivationStatusMismatch { subject }.into());
+    }
+    Ok(())
 }
 
 fn root_install_args(

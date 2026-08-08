@@ -12,6 +12,7 @@ ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
 ICP_MODEL="$ROOT/crates/canic-host/src/icp/model.rs"
 ICP_PROOF="$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
 DEV_INSTALL="$ROOT/scripts/dev/install_dev.sh"
+ICP_UPDATE="$ROOT/scripts/dev/update-icp-cli-pin.sh"
 INSTALLING="$ROOT/INSTALLING.md"
 README="$ROOT/README.md"
 SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
@@ -41,7 +42,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -171,15 +172,29 @@ rg -F "internal%20rust-$rust_toolchain-orange.svg" "$README" >/dev/null ||
 rg -F 'pins internal Rust `'"$rust_toolchain"'`' "$README" >/dev/null ||
     fail "README internal Rust text does not match rust-toolchain.toml"
 
-icp_cli_minor_floor="${CANIC_ICP_CLI_VERSION%.*}.0"
-rg -F "REQUIRED_ICP_CLI_VERSION: &str = \"$icp_cli_minor_floor\"" "$ICP_MODEL" >/dev/null ||
-    fail "host ICP CLI minimum does not match the pinned minor line"
-rg -F "ICP_CLI_SUPPORTED_VERSION_RANGE: &str = \">=$icp_cli_minor_floor, <2.0.0\"" "$ICP_MODEL" >/dev/null ||
-    fail "host ICP CLI range does not match the pinned minor line"
-rg -F "echo \"icp-cli $CANIC_ICP_CLI_VERSION\"" "$ICP_PROOF" >/dev/null ||
-    fail "CLI proof fixture does not report the pinned ICP CLI version"
+icp_cli_required="$({
+    sed -n 's/^pub(super) const REQUIRED_ICP_CLI_VERSION: &str = "\([^"]*\)";$/\1/p' "$ICP_MODEL"
+} || true)"
+[[ "$icp_cli_required" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    fail "host ICP CLI minimum is not one exact semantic version"
+IFS=. read -r required_icp_major required_icp_minor required_icp_patch <<<"$icp_cli_required"
+IFS=. read -r pinned_icp_major pinned_icp_minor pinned_icp_patch <<<"$CANIC_ICP_CLI_VERSION"
+[ "$pinned_icp_major" -eq "$required_icp_major" ] ||
+    fail "pinned ICP CLI major does not match the supported host major"
+if [ "$pinned_icp_minor" -lt "$required_icp_minor" ] ||
+    { [ "$pinned_icp_minor" -eq "$required_icp_minor" ] &&
+        [ "$pinned_icp_patch" -lt "$required_icp_patch" ]; }; then
+    fail "pinned ICP CLI is older than the supported host minimum"
+fi
+next_icp_major=$((required_icp_major + 1))
+rg -F "ICP_CLI_SUPPORTED_VERSION_RANGE: &str = \">=$icp_cli_required, <$next_icp_major.0.0\"" "$ICP_MODEL" >/dev/null ||
+    fail "host ICP CLI range does not match its independent minimum"
+rg -F "echo \"icp-cli $icp_cli_required\"" "$ICP_PROOF" >/dev/null ||
+    fail "CLI proof fixture does not report the supported ICP CLI floor"
 rg -F 'maintainer toolchain currently pins `'"$CANIC_ICP_CLI_VERSION"'`' "$INSTALLING" >/dev/null ||
     fail "installation guidance does not report the pinned ICP CLI version"
+rg -F 'bash scripts/dev/update-icp-cli-pin.sh' "$MAKEFILE" >/dev/null ||
+    fail "make update-dev does not refresh the ICP CLI pin"
 
 mapfile -t version_vars < <(
     sed -n 's/^export \(CANIC_[A-Z0-9_]*_VERSION\)=.*/\1/p' "$TOOLS"
@@ -447,7 +462,7 @@ fi
 [[ "$shallow_history_output" == *"complete repository history is unavailable in a shallow clone"* ]] ||
     fail "the secret scan did not preserve its shallow-history cause"
 
-if rg -n 'curl[^|]*\|' "${installers[@]}" "$ROOT/scripts/dev/install_dev.sh" >/dev/null; then
+if rg -n 'curl[^|]*\|' "${installers[@]}" "$DEV_INSTALL" "$ICP_UPDATE" >/dev/null; then
     fail "active installer pipes an unverified download into execution"
 fi
 
@@ -474,7 +489,7 @@ fi
 rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
     fail "checksum mismatch did not preserve its deterministic cause"
 
-bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$ROOT/scripts/dev/install_dev.sh"
+bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$DEV_INSTALL" "$ICP_UPDATE"
 bash "$POCKET_IC_ALIGNMENT" >/dev/null
 
 echo "release integrity contract guard passed ($external_action_count immutable Actions)"

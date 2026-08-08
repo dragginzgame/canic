@@ -196,6 +196,7 @@ fn fixture(name: &str) -> Fixture {
         },
         fleet_subnet_roots: vec![PlannedFleetSubnetRoot {
             placement_subnet: subnet(2),
+            component_group_placements: Vec::new(),
             component_admissions: vec![admission.clone()],
             component_topology_digest: topology_digest,
             initial_release_set: release_set,

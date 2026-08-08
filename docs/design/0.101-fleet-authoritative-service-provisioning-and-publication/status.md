@@ -83,10 +83,22 @@ Date: 2026-08-08
   receipt chained to its prior `Published` receipt. The Coordinator persists
   one exact root call intent at a time, validates compact activation evidence
   in canonical root order and reaches `RuntimesActivated` only after every
-  selected root is active. Fleet catalog publication and terminal host
-  completion remain unavailable.
+  initial root is active. The host now persists every explicit initial
+  placement-to-root-Subnet assignment before effects, resolves real root
+  principals from the exact all-Active Registry and journals Coordinator
+  preparation, every exact advance, terminal runtime evidence and catalog
+  publication as one response-loss-safe transaction. Catalog publication is
+  unreachable before `RuntimesActivated` and must match the exact published
+  service Registry. Status cardinality is exact, replay accepts only the sole
+  canonical one-revision service successor, initial atomic root batches fit
+  their immutable pool minimum/import Ready target and every initial root has
+  one canonical batch, including an empty batch when it owns no initial group
+  placement. Newly installed root and Store runtimes are independently
+  verified `Prepared`. The former direct empty-root host activation path is
+  removed; empty roots cross the same Coordinator-owned Directory and runtime
+  transaction instead.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.21` is released and `0.101.22` is open.
+- Implementation started: yes; `0.101.22` is released and `0.101.23` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -221,6 +233,9 @@ Fleet policy writer.
 ## Slice 2 — Root Plans and Provisioning
 
 - [x] Freeze one canonical root/group-placement/member plan shape.
+- [x] Require strict Fleet input to assign every initial placement ordinal to
+  one explicit root Subnet, persist the complete canonical assignment before
+  effects and resolve only the exact live Registry root principal/binding.
 - [ ] Carry every member's canonical effective limits through plan hashing,
   root acceptance, protected runtime context and durable receipts. Plan
   hashing, root acceptance, the acceptance receipt and grouped runtime-context
@@ -296,9 +311,13 @@ Fleet policy writer.
   inventory and activating the root. The Coordinator reaches
   `RuntimesActivated` only after every selected root returns exact terminal
   evidence.
+- [x] Drive fresh installation from the host through one durable
+  prepare/advance transaction, reconcile uncertain updates through passive
+  status, and publish the terminal Fleet catalog only after exact
+  `RuntimesActivated` and published-Registry evidence.
 - [ ] Freeze the exact Directory-confirmation roots: all initial roots for
   fresh install, and selected plus every affected existing service-member root
-  for scale-out. Fresh-install confirmation freezes and verifies every selected
+  for scale-out. Fresh-install confirmation freezes and verifies every initial
   root from the canonical plan; the wider affected-root scale-out barrier
   remains.
 - [ ] Require Replica purpose to fail application database write-authority

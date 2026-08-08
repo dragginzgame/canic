@@ -4,7 +4,7 @@
 //! Does not own: network metadata, Canister creation, installation, or Registry mutation.
 //! Boundary: exercises finalized-build, Fleet, topology, funding, path, and retry identity.
 
-use std::{fs, io::Write, path::Path};
+use std::{collections::BTreeSet, fs, io::Write, path::Path};
 
 use candid::Principal;
 use canic_core::{
@@ -64,8 +64,50 @@ component_role = "beta"
 maximum_instances = 1
 "#;
 
+const GROUP_CONFIG: &str = r#"
+[app]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.alpha]
+kind = "canister"
+package = "alpha"
+
+[roles.beta]
+kind = "canister"
+package = "beta"
+
+[component_specs.alpha]
+component_role = "alpha"
+maximum_instances = 4
+
+[component_specs.beta]
+component_role = "beta"
+maximum_instances = 4
+
+[component_groups.cell.components.alpha]
+component_spec = "alpha"
+
+[component_groups.cell.components.beta]
+component_spec = "beta"
+
+[component_group_deployments.cells]
+component_group = "cell"
+initial_placements = 2
+maximum_placements = 4
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 2
+"#;
+
 fn config() -> ConfigModel {
     parse_config_model(CONFIG).expect("valid Fleet config")
+}
+
+fn group_config() -> ConfigModel {
+    parse_config_model(GROUP_CONFIG).expect("valid Component Group config")
 }
 
 fn fleet_binding(byte: u8) -> FleetBinding {
@@ -89,7 +131,7 @@ fn limits() -> FleetSubnetRootLimits {
         maximum_wasm_store_bytes: 40_000_000,
         maximum_group_placements: 16,
         canister_pool: canic_core::ids::FleetSubnetCanisterPoolConfig {
-            minimum_size: 1,
+            minimum_size: 2,
             maximum_size: 10,
             canister_cycles: Cycles::new(5_000_000_000_000),
         },
@@ -113,6 +155,7 @@ fn root_input(
 ) -> PlannedFleetSubnetRootInput {
     PlannedFleetSubnetRootInput {
         placement_subnet: subnet(subnet_byte),
+        component_group_placements: Vec::new(),
         component_admissions: admissions,
         limits: limits(),
         canister_pool_imports: Vec::new(),
@@ -122,6 +165,13 @@ fn root_input(
         wasm_store_creation_funding: PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
         },
+    }
+}
+
+fn group_assignment(ordinal: u32) -> PlannedComponentGroupPlacementAssignment {
+    PlannedComponentGroupPlacementAssignment {
+        deployment: "cells".parse().expect("deployment ID"),
+        ordinal,
     }
 }
 
@@ -242,6 +292,67 @@ fn exact_multi_root_plan_and_manifests_are_immutable_and_idempotent() {
         persisted
     );
 
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn initial_group_placements_are_explicit_complete_and_durable() {
+    let root = temp_dir("fleet-install-component-group-placement");
+    let config = group_config();
+    let release_build_id = prepare_finalized_release(&root, &config);
+    let fleet = fleet_binding(13);
+    let mut incomplete = request(&root, &config, fleet.clone(), release_build_id);
+    incomplete.fleet_subnet_roots[0].component_admissions =
+        vec![admission("alpha", 1), admission("beta", 1)];
+    incomplete.fleet_subnet_roots[1].component_admissions =
+        vec![admission("alpha", 1), admission("beta", 1)];
+    incomplete.fleet_subnet_roots[0].component_group_placements = vec![group_assignment(0)];
+
+    assert!(matches!(
+        compile_and_persist_fleet_install_plan(incomplete),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+
+    let mut undersupplied = request(&root, &config, fleet.clone(), release_build_id);
+    for (root, ordinal) in undersupplied.fleet_subnet_roots.iter_mut().zip([0, 1]) {
+        root.component_admissions = vec![admission("alpha", 1), admission("beta", 1)];
+        root.component_group_placements = vec![group_assignment(ordinal)];
+        root.limits.canister_pool.minimum_size = 1;
+    }
+    assert!(matches!(
+        compile_and_persist_fleet_install_plan(undersupplied),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+
+    let mut complete = request(&root, &config, fleet, release_build_id);
+    complete.fleet_subnet_roots[0].component_admissions =
+        vec![admission("alpha", 1), admission("beta", 1)];
+    complete.fleet_subnet_roots[1].component_admissions =
+        vec![admission("alpha", 1), admission("beta", 1)];
+    complete.fleet_subnet_roots[0].component_group_placements = vec![group_assignment(0)];
+    complete.fleet_subnet_roots[1].component_group_placements = vec![group_assignment(1)];
+    let persisted =
+        compile_and_persist_fleet_install_plan(complete).expect("persist complete assignment set");
+
+    assert_eq!(
+        persisted
+            .plan
+            .fleet_subnet_roots
+            .iter()
+            .map(|root| {
+                (
+                    root.placement_subnet,
+                    root.component_group_placements[0].ordinal,
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![(subnet(6), 1), (subnet(7), 0)]
+    );
+    assert!(
+        fs::read_to_string(&persisted.path)
+            .expect("read persisted plan")
+            .contains("component_group_placements")
+    );
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -487,10 +598,22 @@ fn prepare_finalized_release(root: &Path, config: &ConfigModel) -> ReleaseBuildI
     let topology = config
         .compile_component_topology()
         .expect("Component Topology");
-    let targets = ["shared", "beta", "alpha"].map(target).to_vec();
-    let outputs = ["shared", "beta", "alpha"]
-        .map(|role| build_output(root, release_build_id, role))
-        .to_vec();
+    let roles = topology
+        .component_specs
+        .iter()
+        .flat_map(|spec| {
+            std::iter::once(&spec.component_role)
+                .chain(spec.children.iter().map(|child| &child.role))
+        })
+        .collect::<BTreeSet<_>>();
+    let targets = roles
+        .iter()
+        .map(|role| target(role.as_str()))
+        .collect::<Vec<_>>();
+    let outputs = roles
+        .iter()
+        .map(|role| build_output(root, release_build_id, role.as_str()))
+        .collect::<Vec<_>>();
     compile_and_persist_application_artifact_union(
         root,
         &topology,

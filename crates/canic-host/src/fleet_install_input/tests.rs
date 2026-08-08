@@ -181,6 +181,28 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
 }
 
 #[test]
+fn local_document_preserves_explicit_component_group_placement_ordinals() {
+    let application_subnet = subnet_text(7);
+    let mut document = document(CoordinatorSubnetSelector::Explicit {
+        subnet: application_subnet,
+    });
+    document.fleet_subnet_roots[0]
+        .component_group_placements
+        .insert("project_cells".parse().expect("deployment ID"), vec![0, 2]);
+
+    let resolved = resolve_document(&document, BuildNetwork::Local, None)
+        .expect("resolve explicit placement assignments");
+    assert_eq!(
+        resolved.fleet_subnet_roots[0]
+            .component_group_placements
+            .iter()
+            .map(|assignment| (assignment.deployment.as_str(), assignment.ordinal))
+            .collect::<Vec<_>>(),
+        vec![("project_cells", 0), ("project_cells", 2)]
+    );
+}
+
+#[test]
 fn group_placement_ceiling_is_required_and_zero_remains_an_explicit_fence() {
     let missing = input_toml().replace("maximum_group_placements = 16\n", "");
     assert!(toml::from_slice::<FleetInstallInputDocument>(missing.as_bytes()).is_err());
@@ -603,6 +625,7 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
         },
         fleet_subnet_roots: vec![FleetSubnetRootInputDocument {
             placement_subnet: application_subnet,
+            component_group_placements: BTreeMap::new(),
             component_admissions: BTreeMap::from([(
                 "users".parse().expect("valid Component Spec ID"),
                 8,

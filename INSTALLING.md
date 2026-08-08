@@ -25,7 +25,7 @@ make install-dev
 
 Canic shells out to the installed `icp` binary for local replica and canister
 operations. Canic releases that support the ICP CLI stable line require
-`icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.2.0`.
+`icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.3.0`.
 
 ICP CLI requires custom connected-network definitions to declare an
 explicit `root-key`. Canic's maintained project configuration uses the managed
@@ -49,6 +49,17 @@ bash scripts/ci/install-icp-cli.sh
 The installer selects the declared Linux/macOS archive, verifies its
 repository-owned SHA-256 identity before extraction, installs `icp` under the
 Cargo binary directory, and rejects a mismatched reported version.
+
+Maintainers can discover the latest stable release in the currently supported
+ICP CLI major line, record its official archive checksums and install the
+resulting repository pin together with the other development tools:
+
+```bash
+make update-dev
+```
+
+The update stops for explicit compatibility review instead of automatically
+crossing an ICP CLI major-version boundary.
 
 `icp network update` updates the local network launcher, such as
 `icp-cli-network-launcher`, and does not replace the `icp` CLI binary itself.

@@ -831,6 +831,82 @@ fn runtime_activation_begins_only_after_publication_and_replays_exactly() {
     assert!(RootComponentProvisioningOps::begin_activation(&conflicting, 999).is_err());
 }
 
+#[test]
+fn empty_initial_root_batch_crosses_the_same_terminal_protocol() {
+    let mut fixture = fixture();
+    fixture.request.batch.placements.clear();
+    fixture.validation = RootComponentProvisioningBatchValidation {
+        placement_count: 0,
+        component_count: 0,
+        component_spec_counts: BTreeMap::new(),
+        component_roles: BTreeSet::new(),
+    };
+    let accepted =
+        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
+            .expect("accept empty root batch");
+    let advance = RootComponentProvisioningAdvanceRequest {
+        operation_id: accepted.operation_id,
+        plan_hash: accepted.plan_hash,
+        expected_reserved_component_count: 0,
+        expected_claimed_component_count: 0,
+        expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
+    };
+    let provisioned = RootComponentProvisioningOps::finalize_provisioned(advance, 200)
+        .expect("finalize empty root batch");
+
+    let published_registry = FleetRegistryVersion {
+        authority: provisioned.fleet_registry.authority.clone(),
+        revision: provisioned.fleet_registry.revision + 1,
+        content_hash: [44; 32],
+    };
+    let directory = publication_directory(&fixture, published_registry.clone());
+    let publication = RootComponentPublicationRequest {
+        operation_id: provisioned.operation_id,
+        plan_hash: provisioned.plan_hash,
+        published_fleet_registry: published_registry,
+        expected_published_component_count: 0,
+    };
+    let publishing = RootComponentProvisioningOps::begin_publication(&publication, &directory, 300)
+        .expect("begin empty root publication");
+    assert!(
+        RootComponentProvisioningOps::next_publication_member(&publishing)
+            .expect("inspect empty root publication")
+            .is_none()
+    );
+    let published = RootComponentProvisioningOps::finalize_published(&publication, 400)
+        .expect("finalize empty root publication");
+
+    let activation = RootComponentActivationRequest {
+        operation_id: published.operation_id,
+        plan_hash: published.plan_hash,
+        expected_activated_component_count: 0,
+        expected_root_runtime_active: false,
+    };
+    let activating = RootComponentProvisioningOps::begin_activation(&activation, 500)
+        .expect("begin empty root activation");
+    assert!(
+        RootComponentProvisioningOps::next_activation_member(&activating)
+            .expect("inspect empty root activation")
+            .is_none()
+    );
+    let active = RootComponentProvisioningOps::finalize_runtimes_active(
+        &activation,
+        RootComponentActivationEvidence {
+            fleet_activation_operation_id: [61; 32],
+            initial_inventory_hash: [62; 32],
+            component_count: 0,
+            root_activated_at_ns: 600,
+        },
+        600,
+    )
+    .expect("finalize empty root activation");
+
+    assert_eq!(active.phase, RootComponentProvisioningPhase::RuntimesActive);
+    assert_eq!(active.component_count, 0);
+    assert!(active.root_runtime_active);
+}
+
 fn single_published_fixture() -> (
     Fixture,
     RootComponentProvisioningView,

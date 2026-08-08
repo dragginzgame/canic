@@ -327,11 +327,18 @@ fn canonical_plan_rejects_reordering_substitution_and_wrong_initial_ordinals() {
         Err(ComponentProvisioningPlanOpsError::PlacementEntriesMismatch)
     );
 
-    let mut skipped = plan;
+    let mut skipped = plan.clone();
     skipped.batches[1].placements[0].group_placement.ordinal = 3;
     crate::assert_err_variant!(
         validate(&config, &registry, &skipped),
         Err(ComponentProvisioningPlanOpsError::FreshInstallPlacementSetMismatch)
+    );
+
+    let mut missing_root = plan;
+    missing_root.batches.pop();
+    crate::assert_err_variant!(
+        validate(&config, &registry, &missing_root),
+        Err(ComponentProvisioningPlanOpsError::FreshInstallBatchRootSetMismatch)
     );
 }
 
@@ -395,6 +402,28 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
         validation.placement_count,
         validation.component_count,
     );
+}
+
+#[test]
+fn initial_root_without_a_placement_has_one_exact_empty_batch() {
+    let (config, registry, plan) = fixture(1);
+    let mut batch = plan.batches[0].clone();
+    batch.placements.clear();
+
+    let validation = validate_root_batch(
+        &config,
+        &registry,
+        &plan.fleet_registry,
+        plan.configuration_digest,
+        &batch.root,
+        &batch,
+    )
+    .expect("valid empty initial root batch");
+
+    assert_eq!(validation.placement_count, 0);
+    assert_eq!(validation.component_count, 0);
+    assert!(validation.component_spec_counts.is_empty());
+    assert!(validation.component_roles.is_empty());
 }
 
 fn assert_root_batch_candid_contracts(
@@ -496,8 +525,8 @@ fn deployment_placements_may_share_one_root_within_density_and_capacity() {
         "placement.maximum_per_root = 2\nplacement.minimum_distinct_roots = 1",
     );
     let (config, registry, mut plan) = fixture_from(&source, 2);
-    let second = plan.batches.remove(1);
-    plan.batches[0].placements.extend(second.placements);
+    let second = std::mem::take(&mut plan.batches[1].placements);
+    plan.batches[0].placements.extend(second);
 
     validate(&config, &registry, &plan).expect("valid packed deployment plan");
     validate_root_batch(
@@ -517,8 +546,8 @@ fn service_density_and_spread_are_independent_from_deployment_policy() {
     validate(&config, &registry, &plan).expect("distributed service plan");
 
     let mut concentrated = plan.clone();
-    let second = concentrated.batches.remove(1);
-    concentrated.batches[0].placements.extend(second.placements);
+    let second = std::mem::take(&mut concentrated.batches[1].placements);
+    concentrated.batches[0].placements.extend(second);
     crate::assert_err_variant!(
         validate(&config, &registry, &concentrated),
         Err(ComponentProvisioningPlanOpsError::FreshInstallServicePlacementPolicyMismatch)

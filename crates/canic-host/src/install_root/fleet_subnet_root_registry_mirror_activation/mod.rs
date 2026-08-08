@@ -166,23 +166,7 @@ fn drive_root_mirror_activation(
             FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
-            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-            | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
-            | FleetSubnetRootInstallPhase::RootActivationPrepared
-            | FleetSubnetRootInstallPhase::RootActivationInFlight
-            | FleetSubnetRootInstallPhase::RootActivated
-            | FleetSubnetRootInstallPhase::RootActivationVerified => {
-                let response = query_with_arg(
-                    &icp,
-                    root,
-                    protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                    &request,
-                )?;
-                if current.journal.registry_mirror_activation_response.as_ref() != Some(&response) {
-                    return Err(RootRegistryMirrorActivationError::LiveEvidenceMismatch.into());
-                }
-                return Ok(());
-            }
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => return Ok(()),
             phase => {
                 return Err(RootRegistryMirrorActivationError::UnexpectedPhase(phase).into());
             }

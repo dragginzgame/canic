@@ -112,9 +112,6 @@ pub enum ComponentProvisioningPlanOpsError {
     #[error("provisioning plan root batches are not in canonical principal order")]
     NonCanonicalBatchOrder,
 
-    #[error("provisioning plan contains an empty root batch")]
-    EmptyRootBatch,
-
     #[error("provisioning plan root batch does not match one exact active Fleet Registry root")]
     RootBindingMismatch,
 
@@ -126,6 +123,9 @@ pub enum ComponentProvisioningPlanOpsError {
 
     #[error("fresh-install Directory confirmation roots are not the complete active root set")]
     FreshInstallConfirmationRootSetMismatch,
+
+    #[error("fresh-install root batches are not the complete active root set")]
+    FreshInstallBatchRootSetMismatch,
 
     #[error("provisioning plan Directory confirmation root is not an active Registry root")]
     ConfirmationRootNotActive,
@@ -374,7 +374,6 @@ fn validate_compiled_configuration(
         expected_digest,
     )?;
     validate_bounds(plan)?;
-    validate_confirmation_roots(registry, plan)?;
 
     let mut ledger = PlanValidationLedger::new();
     let mut previous_root = None;
@@ -399,6 +398,7 @@ fn validate_compiled_configuration(
             return Err(ComponentProvisioningPlanOpsError::SelectedRootNotConfirmed);
         }
     }
+    validate_confirmation_roots(registry, plan)?;
 
     validate_operation(
         plan,
@@ -585,6 +585,14 @@ fn validate_confirmation_roots(
         if plan.directory_confirmation_roots != expected {
             return Err(ComponentProvisioningPlanOpsError::FreshInstallConfirmationRootSetMismatch);
         }
+        let batch_roots = plan
+            .batches
+            .iter()
+            .map(|batch| batch.root.fleet_subnet_root)
+            .collect::<Vec<_>>();
+        if batch_roots != expected {
+            return Err(ComponentProvisioningPlanOpsError::FreshInstallBatchRootSetMismatch);
+        }
     }
     Ok(())
 }
@@ -596,9 +604,6 @@ fn validate_batch(
     deployment_topology: &ComponentGroupDeploymentTopology,
     ledger: &mut PlanValidationLedger,
 ) -> Result<RootComponentProvisioningBatchValidation, ComponentProvisioningPlanOpsError> {
-    if batch.placements.is_empty() {
-        return Err(ComponentProvisioningPlanOpsError::EmptyRootBatch);
-    }
     let registry_root = registry
         .fleet_subnet_roots
         .iter()

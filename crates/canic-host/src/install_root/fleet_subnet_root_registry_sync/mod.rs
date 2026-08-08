@@ -208,12 +208,7 @@ fn drive_root_sync(
             | FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
-            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified
-            | FleetSubnetRootInstallPhase::RootActivationPreparationInFlight
-            | FleetSubnetRootInstallPhase::RootActivationPrepared
-            | FleetSubnetRootInstallPhase::RootActivationInFlight
-            | FleetSubnetRootInstallPhase::RootActivated
-            | FleetSubnetRootInstallPhase::RootActivationVerified => return Ok(()),
+            | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => return Ok(()),
             phase => return Err(RootRegistrySyncError::UnexpectedPhase(phase).into()),
         };
     }
