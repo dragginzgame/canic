@@ -103,10 +103,14 @@ Date: 2026-08-08
   retains its placement IDs and root assignments, protected maximum and
   policy, and the next never-reused ordinal; the committed placement vector is
   the sole current-count authority. Earlier phases require no ledger, and
-  terminal corrupt or incomplete ledger state fails closed. Scale-out
-  mutation remains fenced.
+  terminal corrupt or incomplete ledger state fails closed. One monotonic
+  scale-out plan may now reserve exact new placement ordinals, accept every
+  selected active-root batch and advance the current root one canonical member
+  at a time through the existing response-loss-safe Component identity
+  journal. The root binds Active-runtime work to its exact sealed initial
+  inventory. Prepaid claims and all later scale-out effects remain fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.23` is released and `0.101.24` is open.
+- Implementation started: yes; `0.101.26` is released and `0.101.27` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -350,7 +354,9 @@ Fleet policy writer.
   reserved batches through its existing response-loss-safe root-acceptance
   journal. Each selected active root rechecks its exact Mirror, protected
   configuration and release set, Store artifacts, Component/group capacity
-  and Ready pool capacity before accepting. Provisioning remains fenced.
+  and Ready pool capacity before accepting. The current accepted root may now
+  reserve each planned Component identity; prepaid claims and later effects
+  remain fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -358,8 +364,11 @@ Fleet policy writer.
 - [ ] Provision only new placements and retain exact retry identity.
   The protected plan contains only the new placements and exact preparation
   retry is durable. Root acceptance now retains exact pre-call intents and
-  authenticated receipts for only those placements; Component identity and
-  later provisioning effects remain.
+  authenticated receipts for only those placements. The Coordinator now
+  journals each current-root advance and the root allocates one canonical
+  member identity at a time, retaining the exact allocation across response
+  loss and restart. Prepaid claims, installation and later provisioning
+  effects remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.

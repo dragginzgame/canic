@@ -67,6 +67,38 @@ fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
 }
 
+#[test]
+fn scale_out_stops_before_the_first_prepaid_canister_claim() {
+    let reserving = FleetComponentProvisioningRootProgress {
+        fleet_subnet_root: principal(9),
+        component_count: 3,
+        reserved_component_count: 2,
+        claimed_component_count: 0,
+        installed_component_count: 0,
+        registry_committed_component_count: 0,
+    };
+    assert!(
+        !scale_out_identity_reservation_is_complete(Some(reserving))
+            .expect("partial reservation remains open")
+    );
+
+    let reserved = FleetComponentProvisioningRootProgress {
+        reserved_component_count: 3,
+        ..reserving
+    };
+    assert!(
+        scale_out_identity_reservation_is_complete(Some(reserved))
+            .expect("complete reservation is fenced")
+    );
+
+    let claimed = FleetComponentProvisioningRootProgress {
+        claimed_component_count: 1,
+        ..reserved
+    };
+    assert!(scale_out_identity_reservation_is_complete(Some(claimed)).is_err());
+    assert!(scale_out_identity_reservation_is_complete(None).is_err());
+}
+
 const COORDINATOR_CONFIG: &str = r#"
 [app]
 name = "demo"

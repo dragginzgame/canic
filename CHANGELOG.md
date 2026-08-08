@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.27` reserves each canonical Component identity on the current
+  scale-out root through the response-loss-safe root journal while keeping
+  prepaid claims and later lifecycle effects fenced.
+
 - `0.101.26` advances only the durably reserved scale-out batches through the
   existing response-loss-safe root-acceptance protocol, retaining historical
   terminal receipts while keeping provisioning and publication fenced.
