@@ -28,9 +28,10 @@ use canic_core::{
     },
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPhase,
-            FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse, RootComponentProvisioningStatusResponse,
+            FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
+            FleetComponentProvisioningPhase, FleetComponentProvisioningPrepareRequest,
+            FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
+            RootComponentProvisioningStatusResponse,
         },
         error::Error,
         fleet_registry::{
@@ -175,6 +176,12 @@ impl FleetCoordinatorWorkflow {
                     | FleetComponentProvisioningPhase::RuntimesActivated
             )
         {
+            return Ok(acceptance_status);
+        }
+        if matches!(
+            acceptance_status.operation,
+            FleetComponentProvisioningOperation::ScaleOut { .. }
+        ) {
             return Ok(acceptance_status);
         }
         if matches!(

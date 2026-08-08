@@ -511,7 +511,7 @@ impl FleetCoordinatorOps {
         started_at_ns: u64,
     ) -> Result<FleetComponentProvisioningRootAcceptanceDisposition, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_record(&current, &request)?;
+        let record = require_component_provisioning_acceptance_record(&current, &request)?;
         let progress = component_provisioning_root_acceptance_progress(record)?;
         match classify_root_acceptance_advance(&request, &progress)? {
             RootAcceptanceAdvance::Current => {
@@ -531,15 +531,17 @@ impl FleetCoordinatorOps {
         }
         if progress.accepted_root_count == progress.root_batch_count {
             let mut next = current.clone();
-            let next_record = component_provisioning_record_mut(&mut next)?;
+            let next_record =
+                component_provisioning_acceptance_record_mut(&mut next, request.operation_id)?;
             next_record.state = FleetComponentProvisioningStateRecord::RootsAccepted {
                 planned_at_ns: progress.planned_at_ns,
                 acceptances: progress.acceptances,
                 roots_accepted_at_ns: started_at_ns,
             };
             let next = Self::validate_current(next)?;
-            let response =
-                component_provisioning_status_response(component_provisioning_record(&next)?)?;
+            let response = component_provisioning_status_response(
+                component_provisioning_acceptance_record(&next, request.operation_id)?,
+            )?;
             Self::commit_transition(&current, next)?;
             return Ok(FleetComponentProvisioningRootAcceptanceDisposition::Current(response));
         }
@@ -550,7 +552,7 @@ impl FleetCoordinatorOps {
             started_at_ns,
         };
         let mut next = current.clone();
-        component_provisioning_record_mut(&mut next)?.state =
+        component_provisioning_acceptance_record_mut(&mut next, request.operation_id)?.state =
             FleetComponentProvisioningStateRecord::AcceptingRoots {
                 planned_at_ns: progress.planned_at_ns,
                 acceptances: progress.acceptances,
@@ -569,7 +571,7 @@ impl FleetCoordinatorOps {
         recorded_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_record(&current, &request)?;
+        let record = require_component_provisioning_acceptance_record(&current, &request)?;
         let mut progress = component_provisioning_root_acceptance_progress(record)?;
         if progress.accepted_root_count > request.expected_accepted_root_count {
             return replay_recorded_root_acceptance(record, &request, &response, &progress);
@@ -598,7 +600,8 @@ impl FleetCoordinatorOps {
             InternalError::resource_exhausted("Fleet Component root acceptance count exceeds u32")
         })?;
         let mut next = current.clone();
-        let next_record = component_provisioning_record_mut(&mut next)?;
+        let next_record =
+            component_provisioning_acceptance_record_mut(&mut next, request.operation_id)?;
         next_record.state = if accepted_root_count == progress.root_batch_count {
             FleetComponentProvisioningStateRecord::RootsAccepted {
                 planned_at_ns: progress.planned_at_ns,
@@ -613,7 +616,9 @@ impl FleetCoordinatorOps {
             }
         };
         let next = Self::validate_current(next)?;
-        let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
+        let result = component_provisioning_status_response(
+            component_provisioning_acceptance_record(&next, request.operation_id)?,
+        )?;
         Self::commit_transition(&current, next)?;
         Ok(result)
     }
@@ -1696,6 +1701,7 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = Self::validate_current_registry(current)?;
         validate_component_provisioning_record(&current)?;
+        validate_component_scale_out_acceptance_record(&current)?;
         deployment_ledger::validate(
             &current.component_deployment_configuration,
             &current.registry,
@@ -1834,6 +1840,35 @@ fn validate_component_provisioning_record(
     validate_service_publication_authority(current, record)?;
     validate_component_directory_confirmation_state(current, record)?;
     validate_component_runtime_activation_state(record)?;
+    component_provisioning_plan_counts(&record.plan)?;
+    Ok(())
+}
+
+fn validate_component_scale_out_acceptance_record(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    let Some(record) = &current.component_scale_out else {
+        return Ok(());
+    };
+    if !matches!(
+        record.plan.operation,
+        FleetComponentProvisioningOperation::ScaleOut { .. }
+    ) {
+        return Err(receipt_invariant(
+            "Fleet Component scale-out record contains a different operation kind",
+        ));
+    }
+    if !matches!(
+        record.state,
+        FleetComponentProvisioningStateRecord::Planned { .. }
+            | FleetComponentProvisioningStateRecord::AcceptingRoots { .. }
+            | FleetComponentProvisioningStateRecord::RootsAccepted { .. }
+    ) {
+        return Err(receipt_invariant(
+            "Fleet Component scale-out crossed its implemented root-acceptance boundary",
+        ));
+    }
+    validate_component_provisioning_root_acceptance_state(record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
@@ -2598,6 +2633,19 @@ fn require_component_provisioning_record<'a>(
     Ok(record)
 }
 
+fn require_component_provisioning_acceptance_record<'a>(
+    current: &'a FleetCoordinatorRegistryRecord,
+    request: &FleetComponentProvisioningAdvanceRequest,
+) -> Result<&'a FleetComponentProvisioningRecord, InternalError> {
+    provisioning_record_for_status(
+        current,
+        &FleetComponentProvisioningStatusRequest {
+            operation_id: request.operation_id,
+            plan_hash: request.plan_hash,
+        },
+    )
+}
+
 fn provisioning_record_for_status<'a>(
     current: &'a FleetCoordinatorRegistryRecord,
     request: &FleetComponentProvisioningStatusRequest,
@@ -2639,6 +2687,41 @@ fn component_provisioning_record_mut(
         .component_provisioning
         .as_mut()
         .ok_or_else(|| receipt_invariant("Fleet Component provisioning record disappeared"))
+}
+
+fn component_provisioning_acceptance_record(
+    current: &FleetCoordinatorRegistryRecord,
+    operation_id: [u8; 32],
+) -> Result<&FleetComponentProvisioningRecord, InternalError> {
+    [
+        current.component_provisioning.as_ref(),
+        current.component_scale_out.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|record| record.operation_id == operation_id)
+    .ok_or_else(|| receipt_invariant("Fleet Component acceptance record disappeared"))
+}
+
+fn component_provisioning_acceptance_record_mut(
+    current: &mut FleetCoordinatorRegistryRecord,
+    operation_id: [u8; 32],
+) -> Result<&mut FleetComponentProvisioningRecord, InternalError> {
+    if current
+        .component_provisioning
+        .as_ref()
+        .is_some_and(|record| record.operation_id == operation_id)
+    {
+        return current
+            .component_provisioning
+            .as_mut()
+            .ok_or_else(|| receipt_invariant("Fleet Component acceptance record disappeared"));
+    }
+    current
+        .component_scale_out
+        .as_mut()
+        .filter(|record| record.operation_id == operation_id)
+        .ok_or_else(|| receipt_invariant("Fleet Component acceptance record disappeared"))
 }
 
 #[derive(Clone)]

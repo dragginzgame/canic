@@ -346,15 +346,20 @@ Fleet policy writer.
 - [ ] Accept only monotonic desired-count increases with exact unused
   placement IDs on active roots within density, spread and aggregate limits.
   The Coordinator now freezes and atomically reserves the exact increase,
-  checks all configuration-derived root capacity and keeps root-local dynamic
-  capacity checks behind the still-fenced acceptance effect.
+  checks all configuration-derived root capacity and advances only those
+  reserved batches through its existing response-loss-safe root-acceptance
+  journal. Each selected active root rechecks its exact Mirror, protected
+  configuration and release set, Store artifacts, Component/group capacity
+  and Ready pool capacity before accepting. Provisioning remains fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
   after every addition.
 - [ ] Provision only new placements and retain exact retry identity.
   The protected plan contains only the new placements and exact preparation
-  retry is durable; root effects and terminal receipts remain.
+  retry is durable. Root acceptance now retains exact pre-call intents and
+  authenticated receipts for only those placements; Component identity and
+  later provisioning effects remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.

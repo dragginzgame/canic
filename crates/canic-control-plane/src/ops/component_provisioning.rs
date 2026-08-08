@@ -1127,7 +1127,7 @@ impl RootComponentProvisioningOps {
             published_receipt_content_hash,
             receipt_content_hash,
         };
-        RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
+        RootComponentProvisioningStore::complete_operation(&current_record, next.clone())
             .map_err(map_commit_error)?;
         validated_record(next)
     }
@@ -1643,13 +1643,7 @@ fn validated_record(
         state.cursors,
     )?;
     validate_record_placement_index(record.operation_id, record.plan_hash, &record.batch)?;
-    let aggregate = validated_aggregate_state()?;
-    if aggregate.active_operation_id != Some(record.operation_id) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning aggregate state is inconsistent",
-        ));
-    }
+    validate_aggregate_operation(&record, state.phase, validated_aggregate_state()?)?;
     Ok(RootComponentProvisioningView {
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
@@ -1697,6 +1691,27 @@ fn validated_record(
         runtimes_activated_at_ns: state.runtimes_activated_at_ns,
         receipt_content_hash: state.receipt_content_hash,
     })
+}
+
+fn validate_aggregate_operation(
+    record: &RootComponentProvisioningRecord,
+    phase: RootComponentProvisioningPhase,
+    aggregate: crate::storage::stable::component_provisioning::RootComponentProvisioningStateRecord,
+) -> Result<(), InternalError> {
+    let active_operation_is_exact = aggregate.active_operation_id == Some(record.operation_id);
+    let aggregate_is_exact = match phase {
+        RootComponentProvisioningPhase::Accepted
+        | RootComponentProvisioningPhase::Provisioned
+        | RootComponentProvisioningPhase::Published => active_operation_is_exact,
+        RootComponentProvisioningPhase::RuntimesActive => !active_operation_is_exact,
+    };
+    if !aggregate_is_exact {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "root Component provisioning aggregate state is inconsistent",
+        ));
+    }
+    Ok(())
 }
 
 fn validated_record_state(
