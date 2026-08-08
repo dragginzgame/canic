@@ -182,8 +182,7 @@ impl FleetCoordinatorWorkflow {
             acceptance_status.operation,
             FleetComponentProvisioningOperation::ScaleOut { .. }
         ) {
-            return advance_component_scale_out_identity_reservation(request, acceptance_status)
-                .await;
+            return advance_component_scale_out_prepaid_claims(request, acceptance_status).await;
         }
         if matches!(
             acceptance_status.phase,
@@ -323,40 +322,47 @@ async fn advance_component_directory_confirmation(
     )
 }
 
-async fn advance_component_scale_out_identity_reservation(
+async fn advance_component_scale_out_prepaid_claims(
     request: FleetComponentProvisioningAdvanceRequest,
     status: FleetComponentProvisioningStatusResponse,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-    if scale_out_identity_reservation_is_complete(status.current_root)? {
+    if scale_out_prepaid_claims_are_complete(status.current_root)? {
         return Ok(status);
     }
     advance_component_root_provisioning(request).await
 }
 
-fn scale_out_identity_reservation_is_complete(
+fn scale_out_prepaid_claims_are_complete(
     progress: Option<FleetComponentProvisioningRootProgress>,
 ) -> Result<bool, InternalError> {
     let Some(progress) = progress else {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out identity reservation has no current root cursor",
+            "scale-out prepaid-Canister claim has no current root cursor",
         ));
     };
-    let remains_before_claim = [
-        progress.claimed_component_count == 0,
+    let claim_has_reserved_identity = match progress.claimed_component_count {
+        0 => progress.reserved_component_count <= progress.component_count,
+        _ => progress.reserved_component_count == progress.component_count,
+    };
+    let remains_before_install = [
+        claim_has_reserved_identity,
+        progress.claimed_component_count <= progress.component_count,
         progress.installed_component_count == 0,
         progress.registry_committed_component_count == 0,
-        progress.reserved_component_count <= progress.component_count,
     ]
     .into_iter()
     .all(|matches| matches);
-    if !remains_before_claim {
+    if !remains_before_install {
         return Err(InternalError::invariant(
             canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out operation crossed its Component identity-reservation fence",
+            "scale-out operation crossed its prepaid-Canister claim fence",
         ));
     }
-    Ok(progress.reserved_component_count == progress.component_count)
+    Ok((
+        progress.reserved_component_count,
+        progress.claimed_component_count,
+    ) == (progress.component_count, progress.component_count))
 }
 
 async fn advance_component_root_provisioning(

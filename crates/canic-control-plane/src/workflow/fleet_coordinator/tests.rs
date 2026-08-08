@@ -68,7 +68,7 @@ fn principal(byte: u8) -> Principal {
 }
 
 #[test]
-fn scale_out_stops_before_the_first_prepaid_canister_claim() {
+fn scale_out_stops_after_the_final_prepaid_canister_claim() {
     let reserving = FleetComponentProvisioningRootProgress {
         fleet_subnet_root: principal(9),
         component_count: 3,
@@ -78,7 +78,7 @@ fn scale_out_stops_before_the_first_prepaid_canister_claim() {
         registry_committed_component_count: 0,
     };
     assert!(
-        !scale_out_identity_reservation_is_complete(Some(reserving))
+        !scale_out_prepaid_claims_are_complete(Some(reserving))
             .expect("partial reservation remains open")
     );
 
@@ -87,16 +87,37 @@ fn scale_out_stops_before_the_first_prepaid_canister_claim() {
         ..reserving
     };
     assert!(
-        scale_out_identity_reservation_is_complete(Some(reserved))
-            .expect("complete reservation is fenced")
+        !scale_out_prepaid_claims_are_complete(Some(reserved)).expect("prepaid claims remain open")
     );
 
     let claimed = FleetComponentProvisioningRootProgress {
         claimed_component_count: 1,
         ..reserved
     };
-    assert!(scale_out_identity_reservation_is_complete(Some(claimed)).is_err());
-    assert!(scale_out_identity_reservation_is_complete(None).is_err());
+    assert!(
+        !scale_out_prepaid_claims_are_complete(Some(claimed)).expect("partial claims remain open")
+    );
+
+    let completely_claimed = FleetComponentProvisioningRootProgress {
+        claimed_component_count: 3,
+        ..reserved
+    };
+    assert!(
+        scale_out_prepaid_claims_are_complete(Some(completely_claimed))
+            .expect("complete prepaid claims are fenced")
+    );
+
+    let claim_without_identity = FleetComponentProvisioningRootProgress {
+        claimed_component_count: 1,
+        ..reserving
+    };
+    assert!(scale_out_prepaid_claims_are_complete(Some(claim_without_identity)).is_err());
+    let installed = FleetComponentProvisioningRootProgress {
+        installed_component_count: 1,
+        ..completely_claimed
+    };
+    assert!(scale_out_prepaid_claims_are_complete(Some(installed)).is_err());
+    assert!(scale_out_prepaid_claims_are_complete(None).is_err());
 }
 
 const COORDINATOR_CONFIG: &str = r#"
