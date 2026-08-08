@@ -918,10 +918,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         }
     );
 
-    let accepted = RootComponentProvisioningOps::accept(next_request, &next_validation, 700)
-        .expect("accept later scale-out-shaped batch");
-    assert_eq!(accepted.phase, RootComponentProvisioningPhase::Accepted);
-    assert_eq!(accepted.batch.placements[0].group_placement.ordinal, 1);
+    reserve_later_operation_identity(next_request, &next_validation);
     assert_eq!(
         RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
             operation_id: active.operation_id,
@@ -936,6 +933,52 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
             tracked_group_placements: 1,
             active_operation_id: Some([71; 32]),
         }
+    );
+}
+
+fn reserve_later_operation_identity(
+    request: RootComponentProvisioningAcceptanceRequest,
+    validation: &RootComponentProvisioningBatchValidation,
+) {
+    let accepted = RootComponentProvisioningOps::accept(request, validation, 700)
+        .expect("accept later scale-out-shaped batch");
+    assert_eq!(accepted.phase, RootComponentProvisioningPhase::Accepted);
+    assert_eq!(accepted.batch.placements[0].group_placement.ordinal, 1);
+    let reservation_request = RootComponentProvisioningAdvanceRequest {
+        operation_id: accepted.operation_id,
+        plan_hash: accepted.plan_hash,
+        expected_reserved_component_count: 0,
+        expected_claimed_component_count: 0,
+        expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
+    };
+    let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
+        .expect("next scale-out member reservation");
+    let allocation = RootComponentAllocationView {
+        operation_id: member.member_operation_id,
+        allocation_sequence: 2,
+        component: ComponentInstanceId::from_generated_bytes([73; 32]),
+        component_spec: member.component_spec.clone(),
+        spec_hash: member.spec_hash,
+        role: CanisterRole::new("alpha"),
+        provisioning_origin: ComponentProvisioningOrigin::ComponentGroup {
+            operation_id: accepted.operation_id,
+            plan_hash: accepted.plan_hash,
+            group_placement: member.group_placement,
+            member_path: member.member_path,
+        },
+        release_set: accepted.batch.active_release_set,
+        progress: RootComponentAllocationProgressView::Reserved,
+    };
+    let reserved =
+        RootComponentProvisioningOps::mark_member_reserved(reservation_request, &allocation)
+            .expect("reserve scale-out member identity");
+    assert_eq!(reserved.reservation_cursor.reserved_component_count, 1);
+    assert_eq!(reserved.claim_cursor.claimed_component_count, 0);
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(reservation_request, &reserved)
+            .expect("lost reservation response replays"),
+        RootComponentProvisioningAdvanceDisposition::Replay
     );
 }
 

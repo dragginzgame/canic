@@ -14,10 +14,19 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.25`.
-- The latest published release is `v0.101.25` at
-  `73e78db691653df696558176efb94dfa828a5579`.
-- Open `0.101.26` advances only the durably reserved scale-out root batches
+- The workspace package version is `0.101.26`.
+- The latest published release is `v0.101.26` at
+  `c54c6aaa46f44095117d3409f85b6a1fedceff0d`.
+- Open `0.101.27` advances the current accepted scale-out root one canonical
+  member at a time through the existing root-local Component identity journal.
+  The Coordinator persists each exact call before dispatch, selects the fresh
+  or scale-out operation only by its protected identity and retains the exact
+  root response before advancing. Active-root reservations require sealed
+  initial inventory bound to the exact runtime-activation operation. The
+  operation stops before the first prepaid-Canister claim; installation,
+  Registry commitment, Fleet-service append, Directory confirmation and
+  runtime activation remain fenced.
+- Released `0.101.26` advances only the durably reserved scale-out root batches
   through the existing response-loss-safe acceptance protocol. The
   Coordinator persists each canonical selected-root intent before calling,
   reconciles uncertain responses against that same call and retains exact
@@ -2511,14 +2520,13 @@ First primary results:
 
 ## Next Action
 
-The monotonic scale-out reservation boundary is published at immutable
-`v0.101.25`. Open `0.101.26` advances only those reserved placements through
-the response-loss-safe Coordinator-to-root acceptance journal and stops at
-`RootsAccepted`. Continue Slice 4 by reserving each accepted placement's exact
-Component identities through the existing root-local aggregate cursor. Keep
-prepaid-Canister claims, installation, Registry commitment, atomic service
-append, Directory confirmation and runtime activation behind later explicit
-phases.
+The response-loss-safe scale-out root-acceptance boundary is published at
+immutable `v0.101.26`. Open `0.101.27` reserves each canonical Component
+identity in the current accepted root batch through the existing root-local
+aggregate cursor and stops before the first prepaid-Canister claim. Continue
+Slice 4 by enabling only the exact claim cursor for that fully reserved root.
+Keep installation, Registry commitment, atomic service append, Directory
+confirmation and runtime activation behind later explicit phases.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

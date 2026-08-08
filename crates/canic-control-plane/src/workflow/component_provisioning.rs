@@ -15,7 +15,10 @@ use crate::{
             RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningMemberView,
             RootComponentProvisioningView,
         },
-        component_registry::{RootComponentAllocationView, RootComponentRegistryView},
+        component_registry::{
+            RootComponentAllocationView, RootComponentInitialInventoryView,
+            RootComponentRegistryView,
+        },
     },
     workflow::{
         bootstrap::root_store, root_authority::validated_root_authority,
@@ -171,7 +174,8 @@ pub async fn publish(
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let (authority, root) = validated_root_authority()?;
     require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
-    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
+    let runtime = FleetActivationWorkflow::status()?;
+    if runtime.phase != FleetActivationPhase::Prepared {
         return Err(InternalError::conflict(
             "root Component Directory publication requires runtime Prepared",
         ));
@@ -188,6 +192,8 @@ pub async fn publish(
         &authority.binding,
         authority.initial_release_set,
         &request.published_fleet_registry,
+        runtime.phase,
+        runtime.identity.operation_id,
     )?;
     let mirror = super::fleet_registry_mirror::advance_for_component_publication(
         before.fleet_registry.clone(),
@@ -775,8 +781,7 @@ fn current_registry_for_acceptance(
     request: &RootComponentProvisioningAcceptanceRequest,
     validation: &RootComponentProvisioningBatchValidation,
 ) -> Result<RootComponentRegistryView, InternalError> {
-    // Fresh installation accepts while Prepared; later scale-out accepts while Active.
-    FleetActivationWorkflow::status()?;
+    let runtime = FleetActivationWorkflow::status()?;
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != request.fleet_registry
@@ -793,6 +798,8 @@ fn current_registry_for_acceptance(
         &authority.binding,
         authority.initial_release_set,
         &request.fleet_registry,
+        runtime.phase,
+        runtime.identity.operation_id,
     )?;
     validate_component_capacity(&current, validation)?;
     validate_group_placement_capacity(
@@ -809,11 +816,7 @@ fn current_registry_for_progress(
     root: Principal,
     provisioning: &RootComponentProvisioningView,
 ) -> Result<RootComponentRegistryView, InternalError> {
-    if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Prepared {
-        return Err(InternalError::conflict(
-            "fresh root Component provisioning requires runtime Prepared",
-        ));
-    }
+    let runtime = FleetActivationWorkflow::status()?;
     let mirror = FleetRegistryMirrorOps::validated_current(authority, root)?;
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != provisioning.fleet_registry
@@ -839,6 +842,8 @@ fn current_registry_for_progress(
         &authority.binding,
         authority.initial_release_set,
         &provisioning.fleet_registry,
+        runtime.phase,
+        runtime.identity.operation_id,
     )?;
     Ok(current)
 }
@@ -962,7 +967,12 @@ fn reserve_group_member(
         group_placement: member.group_placement.clone(),
         member_path: member.member_path.clone(),
     };
-    ComponentRegistryOps::reserve_allocation(decision, member.member_operation_id, origin, false)
+    ComponentRegistryOps::reserve_allocation(
+        decision,
+        member.member_operation_id,
+        origin,
+        registry.initial_inventory.is_some(),
+    )
 }
 
 fn validate_component_registry_authority(
@@ -970,21 +980,49 @@ fn validate_component_registry_authority(
     root: &canic_core::ids::FleetSubnetRootBinding,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
     fleet_registry: &canic_core::dto::fleet_registry::FleetRegistryVersion,
+    runtime_phase: FleetActivationPhase,
+    runtime_operation_id: [u8; 32],
 ) -> Result<(), InternalError> {
-    if &current.root != root
-        || current.release_set != release_set
-        || current.initial_inventory.is_some()
-        || current.root_draining.is_some()
-        || !ComponentRegistryOps::registry_covers_preparation(
+    let runtime_matches_inventory = component_inventory_matches_runtime(
+        current.initial_inventory,
+        runtime_phase,
+        runtime_operation_id,
+    );
+    let registry_authority_facts = [
+        &current.root == root,
+        current.release_set == release_set,
+        current.root_draining.is_none(),
+        ComponentRegistryOps::registry_covers_preparation(
             &current.prepared_against_registry,
             fleet_registry,
-        )
-    {
+        ),
+    ];
+    let registry_authority_is_exact = registry_authority_facts.into_iter().all(|fact| fact);
+    if !runtime_matches_inventory || !registry_authority_is_exact {
         return Err(InternalError::conflict(
-            "root Component provisioning authority differs from the open prepared Component Registry",
+            "root Component provisioning authority differs from the current runtime and Component Registry",
         ));
     }
     ComponentRegistryOps::require_top_level_allocation_open()
+}
+
+fn component_inventory_matches_runtime(
+    inventory: Option<RootComponentInitialInventoryView>,
+    runtime_phase: FleetActivationPhase,
+    runtime_operation_id: [u8; 32],
+) -> bool {
+    match (runtime_phase, inventory) {
+        (FleetActivationPhase::Prepared, None) => true,
+        (FleetActivationPhase::Prepared, Some(_)) | (FleetActivationPhase::Active, None) => false,
+        (FleetActivationPhase::Active, Some(inventory)) => {
+            let runtime_inventory_facts = [
+                inventory.fleet_activation_operation_id == runtime_operation_id,
+                inventory.directories_converged,
+                inventory.root_runtime_activated,
+            ];
+            runtime_inventory_facts.into_iter().all(|fact| fact)
+        }
+    }
 }
 
 fn validate_component_capacity(
@@ -1118,5 +1156,52 @@ mod tests {
         assert!(validate_registry_commit_progress(2, 3, 0, false).is_err());
         assert!(validate_registry_commit_progress(3, 3, 0, true).is_err());
         assert!(validate_registry_commit_progress(1, 3, 1, true).is_ok());
+    }
+
+    #[test]
+    fn active_registry_inventory_binds_the_exact_runtime_activation() {
+        let inventory = RootComponentInitialInventoryView {
+            fleet_activation_operation_id: [7; 32],
+            component_count: 1,
+            inventory_hash: [8; 32],
+            sealed_at_ns: 9,
+            directories_converged: true,
+            root_runtime_activated: true,
+        };
+        assert!(component_inventory_matches_runtime(
+            None,
+            FleetActivationPhase::Prepared,
+            [7; 32],
+        ));
+        assert!(!component_inventory_matches_runtime(
+            Some(inventory),
+            FleetActivationPhase::Prepared,
+            [7; 32],
+        ));
+        assert!(component_inventory_matches_runtime(
+            Some(inventory),
+            FleetActivationPhase::Active,
+            [7; 32],
+        ));
+        assert!(!component_inventory_matches_runtime(
+            Some(inventory),
+            FleetActivationPhase::Active,
+            [6; 32],
+        ));
+        assert!(!component_inventory_matches_runtime(
+            None,
+            FleetActivationPhase::Active,
+            [7; 32],
+        ));
+
+        let unconverged = RootComponentInitialInventoryView {
+            directories_converged: false,
+            ..inventory
+        };
+        assert!(!component_inventory_matches_runtime(
+            Some(unconverged),
+            FleetActivationPhase::Active,
+            [7; 32],
+        ));
     }
 }
