@@ -48,6 +48,7 @@ use serde::{Deserialize, Serialize};
 // immutable join receipts, the complete Component provisioning plan plus one
 // compact acceptance and one terminal provisioning receipt per planned root,
 // one compact placement record per committed Component Group deployment copy,
+// at most one in-progress scale-out plan,
 // the complete service set again as one publication receipt, one exact
 // acknowledgement per current root, and at most one draining and one removal
 // receipt per root.
@@ -88,6 +89,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
     pub component_provisioning: Option<FleetComponentProvisioningRecord>,
     pub component_group_deployments: Vec<FleetComponentGroupDeploymentRecord>,
+    pub component_scale_out: Option<FleetComponentProvisioningRecord>,
     pub service_publication_receipt: Option<FleetServicePublicationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,

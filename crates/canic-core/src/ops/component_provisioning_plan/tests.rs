@@ -581,6 +581,143 @@ fn scale_out_stays_fenced_until_durable_placement_state_is_authoritative() {
 }
 
 #[test]
+fn scale_out_validates_combined_placement_authority_and_next_ordinals() {
+    let source = CONFIG.replace(
+        "placement.maximum_per_root = 1\nplacement.minimum_distinct_roots = 2",
+        "placement.maximum_per_root = 2\nplacement.minimum_distinct_roots = 2",
+    );
+    let (config, registry, initial) = fixture_from(&source, 4);
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .expect("compiled configuration");
+    let committed = initial
+        .batches
+        .iter()
+        .flat_map(|batch| {
+            batch
+                .placements
+                .iter()
+                .map(|placement| ComponentProvisioningPlacementAuthority {
+                    placement: placement.group_placement.clone(),
+                    fleet_subnet_root: batch.root.fleet_subnet_root,
+                })
+        })
+        .collect::<Vec<_>>();
+    let eligible_roots = initial
+        .batches
+        .iter()
+        .map(|batch| batch.root.fleet_subnet_root)
+        .collect::<Vec<_>>();
+    let mut scale_out = initial;
+    scale_out.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "cells".parse().expect("deployment ID"),
+        previous_placements: 2,
+        requested_placements: 4,
+    };
+    for batch in &mut scale_out.batches {
+        for placement in &mut batch.placements {
+            placement.group_placement.ordinal += 2;
+        }
+    }
+    let authority = ComponentProvisioningScaleOutAuthority {
+        committed_placements: &committed,
+        eligible_roots: &eligible_roots,
+        next_placement_ordinal: 2,
+    };
+
+    validate_scale_out_compiled_configuration(&configuration, &registry, &scale_out, authority)
+        .expect("valid combined scale-out");
+    assert_ne!(
+        ComponentProvisioningPlanOps::hash_scale_out_compiled(
+            &configuration,
+            &registry,
+            &scale_out,
+            authority,
+        )
+        .expect("scale-out hash"),
+        [0; 32]
+    );
+
+    let wrong_next = ComponentProvisioningScaleOutAuthority {
+        next_placement_ordinal: 3,
+        ..authority
+    };
+    crate::assert_err_variant!(
+        validate_scale_out_compiled_configuration(
+            &configuration,
+            &registry,
+            &scale_out,
+            wrong_next,
+        ),
+        Err(ComponentProvisioningPlanOpsError::ScaleOutPlacementSetMismatch)
+    );
+
+    let mut missing_confirmation = scale_out;
+    missing_confirmation.directory_confirmation_roots.pop();
+    crate::assert_err_variant!(
+        validate_scale_out_compiled_configuration(
+            &configuration,
+            &registry,
+            &missing_confirmation,
+            authority,
+        ),
+        Err(ComponentProvisioningPlanOpsError::SelectedRootNotConfirmed)
+    );
+}
+
+#[test]
+fn scale_out_confirms_existing_roots_of_every_affected_service() {
+    let source = SERVICE_CONFIG.replace(
+        "placement.maximum_members_per_root = 1",
+        "placement.maximum_members_per_root = 2",
+    );
+    let (config, registry, initial) = fixture_from(&source, 4);
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .expect("compiled configuration");
+    let committed = initial
+        .batches
+        .iter()
+        .flat_map(|batch| {
+            batch
+                .placements
+                .iter()
+                .map(|placement| ComponentProvisioningPlacementAuthority {
+                    placement: placement.group_placement.clone(),
+                    fleet_subnet_root: batch.root.fleet_subnet_root,
+                })
+        })
+        .collect::<Vec<_>>();
+    let eligible_roots = initial
+        .batches
+        .iter()
+        .map(|batch| batch.root.fleet_subnet_root)
+        .collect::<Vec<_>>();
+    let mut scale_out = initial;
+    scale_out.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "cells".parse().expect("deployment ID"),
+        previous_placements: 2,
+        requested_placements: 3,
+    };
+    scale_out.batches.truncate(1);
+    scale_out.batches[0].placements[0].group_placement.ordinal = 2;
+    let authority = ComponentProvisioningScaleOutAuthority {
+        committed_placements: &committed,
+        eligible_roots: &eligible_roots,
+        next_placement_ordinal: 2,
+    };
+
+    validate_scale_out_compiled_configuration(&configuration, &registry, &scale_out, authority)
+        .expect("selected and existing service roots form the complete barrier");
+
+    scale_out.directory_confirmation_roots.pop();
+    crate::assert_err_variant!(
+        validate_scale_out_compiled_configuration(&configuration, &registry, &scale_out, authority,),
+        Err(ComponentProvisioningPlanOpsError::ScaleOutConfirmationRootSetMismatch)
+    );
+}
+
+#[test]
 fn plan_count_bounds_reject_the_first_excess_before_identity_validation() {
     let (config, registry, plan) = fixture(1);
 

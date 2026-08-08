@@ -131,6 +131,7 @@ impl FleetCoordinatorOps {
             registry_activation_receipt: None,
             component_provisioning: None,
             component_group_deployments: Vec::new(),
+            component_scale_out: None,
             service_publication_receipt: None,
             root_draining_publication_receipts: Vec::new(),
             root_removal_publication_receipts: Vec::new(),
@@ -374,14 +375,6 @@ impl FleetCoordinatorOps {
         planned_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        if let Some(existing) = &current.component_provisioning {
-            if existing.operation_id == request.operation_id && existing.plan == request.plan {
-                return component_provisioning_status_response(existing);
-            }
-            return Err(InternalError::conflict(
-                "Fleet Component provisioning already contains different protected plan authority",
-            ));
-        }
         if request.operation_id == [0; 32] {
             return Err(InternalError::invalid_input(
                 "Fleet Component provisioning operation ID must be nonzero",
@@ -392,9 +385,27 @@ impl FleetCoordinatorOps {
                 "Fleet Component provisioning planned time must be nonzero",
             ));
         }
-        if request.plan.operation != FleetComponentProvisioningOperation::FreshInstall {
-            return Err(InternalError::invalid_input(
-                "Fleet Component provisioning preparation currently accepts only fresh installation",
+        match request.plan.operation {
+            FleetComponentProvisioningOperation::FreshInstall => {
+                Self::prepare_fresh_component_provisioning(current, request, planned_at_ns)
+            }
+            FleetComponentProvisioningOperation::ScaleOut { .. } => {
+                Self::prepare_component_scale_out(current, request, planned_at_ns)
+            }
+        }
+    }
+
+    fn prepare_fresh_component_provisioning(
+        current: FleetCoordinatorRegistryRecord,
+        request: FleetComponentProvisioningPrepareRequest,
+        planned_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        if let Some(existing) = &current.component_provisioning {
+            if existing.operation_id == request.operation_id && existing.plan == request.plan {
+                return component_provisioning_status_response(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Component provisioning already contains different protected plan authority",
             ));
         }
         if current.service_publication_receipt.is_some() {
@@ -431,18 +442,67 @@ impl FleetCoordinatorOps {
         component_provisioning_status_response(&record)
     }
 
+    fn prepare_component_scale_out(
+        current: FleetCoordinatorRegistryRecord,
+        request: FleetComponentProvisioningPrepareRequest,
+        planned_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        if let Some(existing) = &current.component_scale_out {
+            if existing.operation_id == request.operation_id && existing.plan == request.plan {
+                return component_provisioning_status_response(existing);
+            }
+            return Err(InternalError::conflict(
+                "Fleet Component scale-out already contains different protected plan authority",
+            ));
+        }
+        let fresh = current.component_provisioning.as_ref().ok_or_else(|| {
+            InternalError::unavailable(
+                "Fleet Component scale-out requires terminal fresh provisioning",
+            )
+        })?;
+        if fresh.operation_id == request.operation_id {
+            return Err(InternalError::conflict(
+                "Fleet Component scale-out operation ID is already used by fresh provisioning",
+            ));
+        }
+        if !matches!(
+            fresh.state,
+            FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
+        ) {
+            return Err(InternalError::unavailable(
+                "Fleet Component scale-out requires terminal fresh provisioning",
+            ));
+        }
+        let plan_hash = deployment_ledger::scale_out_plan_hash(
+            &current.component_deployment_configuration,
+            &current.registry,
+            fresh,
+            &current.component_group_deployments,
+            &request.plan,
+        )?;
+        let reserved_deployments = deployment_ledger::reserve_scale_out(
+            &current.component_group_deployments,
+            &request.plan,
+        )?;
+        let record = FleetComponentProvisioningRecord {
+            operation_id: request.operation_id,
+            plan_hash,
+            plan: request.plan,
+            state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
+        };
+        let mut next = current.clone();
+        next.component_group_deployments = reserved_deployments;
+        next.component_scale_out = Some(record.clone());
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        component_provisioning_status_response(&record)
+    }
+
     pub(crate) fn component_provisioning_status(
         request: FleetComponentProvisioningStatusRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        let record = current.component_provisioning.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Component provisioning plan is not prepared")
-        })?;
-        if record.operation_id != request.operation_id || record.plan_hash != request.plan_hash {
-            return Err(InternalError::conflict(
-                "Fleet Component provisioning status names different protected plan authority",
-            ));
-        }
+        let record = provisioning_record_for_status(&current, &request)?;
         component_provisioning_status_response(record)
     }
 
@@ -1638,7 +1698,9 @@ impl FleetCoordinatorOps {
         validate_component_provisioning_record(&current)?;
         deployment_ledger::validate(
             &current.component_deployment_configuration,
+            &current.registry,
             current.component_provisioning.as_ref(),
+            current.component_scale_out.as_ref(),
             &current.component_group_deployments,
         )?;
         Ok(current)
@@ -2534,6 +2596,31 @@ fn require_component_provisioning_record<'a>(
         ));
     }
     Ok(record)
+}
+
+fn provisioning_record_for_status<'a>(
+    current: &'a FleetCoordinatorRegistryRecord,
+    request: &FleetComponentProvisioningStatusRequest,
+) -> Result<&'a FleetComponentProvisioningRecord, InternalError> {
+    let records = [
+        current.component_provisioning.as_ref(),
+        current.component_scale_out.as_ref(),
+    ];
+    if let Some(record) = records
+        .into_iter()
+        .flatten()
+        .find(|record| record.operation_id == request.operation_id)
+    {
+        if record.plan_hash == request.plan_hash {
+            return Ok(record);
+        }
+        return Err(InternalError::conflict(
+            "Fleet Component provisioning status names a reused operation with a different plan hash",
+        ));
+    }
+    Err(InternalError::unavailable(
+        "Fleet Component provisioning operation is not prepared",
+    ))
 }
 
 fn component_provisioning_record(

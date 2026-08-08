@@ -14,7 +14,7 @@ use canic_core::{
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
             FleetSubnetRootProvisioningBatch,
         },
-        fleet_registry::FleetRegistryVersion,
+        fleet_registry::{FleetRegistry, FleetRegistryVersion},
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentGroupPlacementId, ComponentTopologyDigest,
@@ -82,7 +82,14 @@ fn terminal_fresh_plan_compiles_one_canonical_protected_deployment_ledger() {
     assert_eq!(deployment.placements[1].fleet_subnet_root, principal(11));
     assert_eq!(deployment.placements[0].root_receipt_content_hash, [40; 32]);
     assert_eq!(deployment.placements[1].root_receipt_content_hash, [41; 32]);
-    validate(&configuration, Some(&provisioning), &deployments).expect("exact ledger validates");
+    validate(
+        &configuration,
+        &registry(),
+        Some(&provisioning),
+        None,
+        &deployments,
+    )
+    .expect("exact ledger validates");
 }
 
 #[test]
@@ -92,12 +99,30 @@ fn deployment_ledger_rejects_premature_corrupt_and_unbound_receipt_state() {
 
     let terminal = provisioning.state.clone();
     provisioning.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 1 };
-    assert!(validate(&configuration, Some(&provisioning), &deployments).is_err());
+    assert!(
+        validate(
+            &configuration,
+            &registry(),
+            Some(&provisioning),
+            None,
+            &deployments,
+        )
+        .is_err()
+    );
     provisioning.state = terminal;
 
     let mut corrupted = deployments;
     corrupted[0].next_placement_ordinal = 1;
-    assert!(validate(&configuration, Some(&provisioning), &corrupted).is_err());
+    assert!(
+        validate(
+            &configuration,
+            &registry(),
+            Some(&provisioning),
+            None,
+            &corrupted,
+        )
+        .is_err()
+    );
 
     let FleetComponentProvisioningStateRecord::RuntimesActivated { activations, .. } =
         &mut provisioning.state
@@ -106,6 +131,45 @@ fn deployment_ledger_rejects_premature_corrupt_and_unbound_receipt_state() {
     };
     activations[0].receipt_content_hash = [0; 32];
     assert!(compile_initial(&configuration, &provisioning).is_err());
+}
+
+#[test]
+fn planned_scale_out_reserves_the_exact_next_range_without_committing_placements() {
+    let (configuration, provisioning) = fixture();
+    let mut deployments =
+        compile_initial(&configuration, &provisioning).expect("deployment ledger");
+    let mut scale_out = provisioning.clone();
+    scale_out.operation_id = [50; 32];
+    scale_out.plan_hash = [51; 32];
+    scale_out.plan.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "cells".parse().expect("deployment ID"),
+        previous_placements: 2,
+        requested_placements: 4,
+    };
+    for batch in &mut scale_out.plan.batches {
+        for placement in &mut batch.placements {
+            placement.group_placement.ordinal += 2;
+        }
+    }
+    scale_out.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 30 };
+    deployments = reserve_scale_out(&deployments, &scale_out.plan).expect("reserve exact range");
+
+    let initial = compile_initial(&configuration, &provisioning).expect("initial ledger");
+    validate_terminal_ledger(&initial, Some(&scale_out), &deployments)
+        .expect("exact reservation validates");
+    assert_eq!(deployments[0].placements.len(), 2);
+
+    deployments[0].next_placement_ordinal = 3;
+    assert!(validate_terminal_ledger(&initial, Some(&scale_out), &deployments).is_err());
+
+    let mut skipped = scale_out;
+    for batch in &mut skipped.plan.batches {
+        for placement in &mut batch.placements {
+            placement.group_placement.ordinal += 5;
+        }
+    }
+    deployments[0].next_placement_ordinal = 9;
+    assert!(validate_terminal_ledger(&initial, Some(&skipped), &deployments).is_err());
 }
 
 fn fixture() -> (
@@ -203,6 +267,16 @@ fn authority() -> FleetRegistryAuthority {
             coordinator: principal(3),
         },
         epoch: 1,
+    }
+}
+
+fn registry() -> FleetRegistry {
+    FleetRegistry {
+        authority: authority(),
+        revision: 1,
+        component_specs: vec![],
+        fleet_subnet_roots: vec![],
+        services: vec![],
     }
 }
 

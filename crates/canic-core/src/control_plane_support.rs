@@ -54,7 +54,8 @@ pub mod ops {
 
     pub mod component_provisioning_plan {
         pub use crate::ops::component_provisioning_plan::{
-            ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+            ComponentProvisioningPlacementAuthority, ComponentProvisioningPlanOps,
+            ComponentProvisioningScaleOutAuthority, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
             MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,

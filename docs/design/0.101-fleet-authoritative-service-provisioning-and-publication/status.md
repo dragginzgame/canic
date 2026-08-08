@@ -345,17 +345,22 @@ Fleet policy writer.
   validation; scale-out reservation and append remain separate later steps.
 - [ ] Accept only monotonic desired-count increases with exact unused
   placement IDs on active roots within density, spread and aggregate limits.
-- [ ] Require every eligible scale-out root to belong to the complete root set
+  The Coordinator now freezes and atomically reserves the exact increase,
+  checks all configuration-derived root capacity and keeps root-local dynamic
+  capacity checks behind the still-fenced acceptance effect.
+- [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
-- [ ] Enforce each affected service's complete member density/spread policy
+- [x] Enforce each affected service's complete member density/spread policy
   after every addition.
 - [ ] Provision only new placements and retain exact retry identity.
+  The protected plan contains only the new placements and exact preparation
+  retry is durable; root effects and terminal receipts remain.
 - [ ] Append all Replica and PoolMember bindings from one scale operation
   atomically.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.
   Accepted placement authority, retained grouped origins and grouped Components
   are fenced; the aggregate grouped removal protocol remains unimplemented.
-- [ ] Reject scale-down, placement reuse, Authority-group scaling, live root
+- [x] Reject scale-down, placement reuse, Authority-group scaling, live root
   creation and admission expansion.
 
 ## Slice 5 — Recovery and Qualification
