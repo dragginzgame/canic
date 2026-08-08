@@ -68,7 +68,7 @@ fn principal(byte: u8) -> Principal {
 }
 
 #[test]
-fn scale_out_stops_after_the_final_prepaid_canister_claim() {
+fn scale_out_stops_after_the_final_store_backed_install() {
     let reserving = FleetComponentProvisioningRootProgress {
         fleet_subnet_root: principal(9),
         component_count: 3,
@@ -78,7 +78,7 @@ fn scale_out_stops_after_the_final_prepaid_canister_claim() {
         registry_committed_component_count: 0,
     };
     assert!(
-        !scale_out_prepaid_claims_are_complete(Some(reserving))
+        !scale_out_installation_is_complete(Some(reserving))
             .expect("partial reservation remains open")
     );
 
@@ -87,7 +87,7 @@ fn scale_out_stops_after_the_final_prepaid_canister_claim() {
         ..reserving
     };
     assert!(
-        !scale_out_prepaid_claims_are_complete(Some(reserved)).expect("prepaid claims remain open")
+        !scale_out_installation_is_complete(Some(reserved)).expect("prepaid claims remain open")
     );
 
     let claimed = FleetComponentProvisioningRootProgress {
@@ -95,7 +95,7 @@ fn scale_out_stops_after_the_final_prepaid_canister_claim() {
         ..reserved
     };
     assert!(
-        !scale_out_prepaid_claims_are_complete(Some(claimed)).expect("partial claims remain open")
+        !scale_out_installation_is_complete(Some(claimed)).expect("partial claims remain open")
     );
 
     let completely_claimed = FleetComponentProvisioningRootProgress {
@@ -103,21 +103,42 @@ fn scale_out_stops_after_the_final_prepaid_canister_claim() {
         ..reserved
     };
     assert!(
-        scale_out_prepaid_claims_are_complete(Some(completely_claimed))
-            .expect("complete prepaid claims are fenced")
+        !scale_out_installation_is_complete(Some(completely_claimed))
+            .expect("Store-backed installs remain open")
+    );
+    let installing = FleetComponentProvisioningRootProgress {
+        installed_component_count: 2,
+        ..completely_claimed
+    };
+    assert!(
+        !scale_out_installation_is_complete(Some(installing))
+            .expect("partial Store-backed installs remain open")
+    );
+    let installed = FleetComponentProvisioningRootProgress {
+        installed_component_count: 3,
+        ..completely_claimed
+    };
+    assert!(
+        scale_out_installation_is_complete(Some(installed))
+            .expect("complete Store-backed installs are fenced")
     );
 
     let claim_without_identity = FleetComponentProvisioningRootProgress {
         claimed_component_count: 1,
         ..reserving
     };
-    assert!(scale_out_prepaid_claims_are_complete(Some(claim_without_identity)).is_err());
-    let installed = FleetComponentProvisioningRootProgress {
+    assert!(scale_out_installation_is_complete(Some(claim_without_identity)).is_err());
+    let install_without_claim = FleetComponentProvisioningRootProgress {
         installed_component_count: 1,
-        ..completely_claimed
+        ..reserved
     };
-    assert!(scale_out_prepaid_claims_are_complete(Some(installed)).is_err());
-    assert!(scale_out_prepaid_claims_are_complete(None).is_err());
+    assert!(scale_out_installation_is_complete(Some(install_without_claim)).is_err());
+    let registry_committed = FleetComponentProvisioningRootProgress {
+        registry_committed_component_count: 1,
+        ..installed
+    };
+    assert!(scale_out_installation_is_complete(Some(registry_committed)).is_err());
+    assert!(scale_out_installation_is_complete(None).is_err());
 }
 
 const COORDINATOR_CONFIG: &str = r#"

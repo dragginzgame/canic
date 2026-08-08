@@ -918,7 +918,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         }
     );
 
-    reserve_and_claim_later_operation_member(next_request, &next_validation);
+    reserve_claim_and_install_later_operation_member(next_request, &next_validation);
     assert_eq!(
         RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
             operation_id: active.operation_id,
@@ -936,7 +936,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
     );
 }
 
-fn reserve_and_claim_later_operation_member(
+fn reserve_claim_and_install_later_operation_member(
     request: RootComponentProvisioningAcceptanceRequest,
     validation: &RootComponentProvisioningBatchValidation,
 ) {
@@ -998,6 +998,25 @@ fn reserve_and_claim_later_operation_member(
     assert_eq!(
         RootComponentProvisioningOps::advance_disposition(claim_request, &claimed)
             .expect("lost claim response replays"),
+        RootComponentProvisioningAdvanceDisposition::Replay
+    );
+
+    let install_request = RootComponentProvisioningAdvanceRequest {
+        expected_claimed_component_count: 1,
+        ..claim_request
+    };
+    let installed_allocation = installed_allocation(claimed_allocation, &accepted.batch.root);
+    let installed =
+        RootComponentProvisioningOps::mark_member_installed(install_request, &installed_allocation)
+            .expect("install scale-out Component");
+    assert_eq!(installed.install_cursor.installed_component_count, 1);
+    assert_eq!(
+        installed.registry_cursor.registry_committed_component_count,
+        0
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(install_request, &installed)
+            .expect("lost install response replays"),
         RootComponentProvisioningAdvanceDisposition::Replay
     );
 }

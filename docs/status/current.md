@@ -14,10 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.27`.
-- The latest published release is `v0.101.27` at
-  `760ab0339a4c1185af3e87d5f797cdc7b4d77c5f`.
-- Open `0.101.28` advances the current accepted scale-out root one canonical
+- The workspace package version is `0.101.28`.
+- The latest published release is `v0.101.28` at
+  `ee60d1944ff2409d925e08f48f7f3c13f32cb029`.
+- Open `0.101.29` advances the current accepted scale-out root one canonical
+  member at a time through the existing Store-backed Component installation
+  journal after every prepaid Canister is claimed. The root revalidates Store
+  authority, allocation identity and exact grouped runtime context across
+  asynchronous observation, while the Coordinator retains its exact pre-call
+  intent and response. The operation stops after the final install; Component
+  Registry commitment, Fleet-service append, Directory confirmation and
+  runtime activation remain fenced.
+- Released `0.101.28` advances the current accepted scale-out root one canonical
   member at a time through the existing prepaid-Canister claim journal after
   every Component identity is reserved. Coordinator intent is durable before
   dispatch, while the root's exact operation-bound pool claim and grouped
@@ -2528,13 +2536,12 @@ First primary results:
 
 ## Next Action
 
-The response-loss-safe scale-out Component identity boundary is published at
-immutable `v0.101.27`. Open `0.101.28` claims one exact prepaid Canister per
-canonical member of the current fully reserved root batch and stops before
-installation. Continue Slice 4 by enabling only the Store-backed installation
-cursor for that fully claimed root. Keep Registry commitment, atomic service
-append, Directory confirmation and runtime activation behind later explicit
-phases.
+The response-loss-safe scale-out prepaid-Canister claim boundary is published
+at immutable `v0.101.28`. Open `0.101.29` installs one canonical Component at a
+time from the current fully claimed root batch and stops before Component
+Registry commitment. Continue Slice 4 by enabling only the Registry commitment
+cursor for that fully installed root. Keep atomic service append, Directory
+confirmation and runtime activation behind later explicit phases.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
