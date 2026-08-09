@@ -1,7 +1,7 @@
 use super::*;
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
-use super::supported::{FileCommitStep, commit_with_hook};
+use super::supported::{FileCommitStep, commit_with_hook, publish_create_new_after_error};
 
 use std::{
     fs,
@@ -207,6 +207,61 @@ fn create_new_publication_race_cannot_replace_the_winner() {
     );
     assert_no_temporary_files(&root);
 
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+#[test]
+fn unsupported_no_replace_rename_uses_atomic_link_publication() {
+    let unsupported = [
+        ("invalid", rustix::io::Errno::INVAL),
+        ("no-syscall", rustix::io::Errno::NOSYS),
+        ("not-supported", rustix::io::Errno::OPNOTSUPP),
+    ];
+
+    for (label, error) in unsupported {
+        let root = temp_root(&format!("create-new-link-{label}"));
+        fs::create_dir_all(&root).expect("create temp root");
+        let temp_name = std::ffi::OsStr::new(".report.json.canic-tmp-test");
+        let file_name = std::ffi::OsStr::new("report.json");
+        let temp_path = root.join(temp_name);
+        let path = root.join(file_name);
+        fs::write(&temp_path, b"complete contents").expect("write staged contents");
+
+        publish_create_new_after_error(&root, temp_name, file_name, error)
+            .expect("publish through hard-link fallback");
+
+        assert_eq!(fs::read(&path).expect("read target"), b"complete contents");
+        assert!(!temp_path.exists());
+        fs::remove_dir_all(root).expect("remove temp root");
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+#[test]
+fn link_publication_fallback_cannot_replace_an_existing_file() {
+    let root = temp_root("create-new-link-race");
+    fs::create_dir_all(&root).expect("create temp root");
+    let temp_name = std::ffi::OsStr::new(".report.json.canic-tmp-test");
+    let file_name = std::ffi::OsStr::new("report.json");
+    let temp_path = root.join(temp_name);
+    let path = root.join(file_name);
+    fs::write(&temp_path, b"our complete contents").expect("write staged contents");
+    fs::write(&path, b"raced complete contents").expect("write winning target");
+
+    let error =
+        publish_create_new_after_error(&root, temp_name, file_name, rustix::io::Errno::INVAL)
+            .expect_err("link fallback must reject an existing destination");
+
+    assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(
+        fs::read(&path).expect("read winning target"),
+        b"raced complete contents"
+    );
+    assert_eq!(
+        fs::read(&temp_path).expect("read preserved staging"),
+        b"our complete contents"
+    );
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
