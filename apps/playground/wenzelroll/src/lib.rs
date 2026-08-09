@@ -6,30 +6,59 @@ use ic_cdk::api::canister_self;
 
 const IMAGE: &[u8] = include_bytes!("../assets/wenzelroll.png");
 const IMAGE_PATH: &str = "/wenzelroll.png";
+const PREVIEW_CRAWLER_MARKERS: &[&str] = &[
+    "discordbot",
+    "facebookexternalhit",
+    "facebot",
+    "linkedinbot",
+    "microsoftpreview",
+    "skypeuripreview",
+    "slackbot",
+    "telegrambot",
+    "twitterbot",
+    "whatsapp",
+];
+const PREVIEW_HTML_TEMPLATE: &str = r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canic Playground</title>
+__PREVIEW_METADATA__
+</head>
+<body></body>
+</html>"#;
+const PREVIEW_IMAGE: &[u8] = include_bytes!("../assets/canic-playground-preview.png");
+const PREVIEW_IMAGE_PATH: &str = "/canic-playground-preview.png";
+const PREVIEW_METADATA_TEMPLATE: &str = r#"  <meta name="description" content="A small Internet Computer experiment.">
+  <meta property="og:title" content="Canic Playground">
+  <meta property="og:type" content="website">
+  <meta property="og:description" content="A small Internet Computer experiment.">
+  <meta property="og:url" content="__CANONICAL_URL__">
+  <meta property="og:image" content="__PREVIEW_IMAGE_URL__">
+  <meta property="og:image:secure_url" content="__PREVIEW_IMAGE_URL__">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1729">
+  <meta property="og:image:height" content="910">
+  <meta property="og:image:alt" content="An abstract network of connected glowing nodes">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Canic Playground">
+  <meta name="twitter:description" content="A small Internet Computer experiment.">
+  <meta name="twitter:image" content="__PREVIEW_IMAGE_URL__">"#;
 const VIDEO_ID: &str = "dQw4w9WgXcQ";
 const HTML_TEMPLATE: &str = r#"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Definitely not a rickroll</title>
+  <title>Canic Playground</title>
+__PREVIEW_METADATA__
   <style>
     :root { color-scheme: dark; font-family: ui-rounded, system-ui, sans-serif; }
     * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
     body { min-height: 100vh; margin: 0; overflow: hidden; background: #08050d; color: white; }
     main, main img { width: 100%; height: 100vh; }
     main img { display: block; object-fit: cover; }
-    .gate { position: fixed; z-index: 2; inset: 0; display: grid; place-items: center;
-      padding: 1.5rem; text-align: center; background: #08050d; }
-    .gate-card { width: min(34rem, 100%); padding: 2rem; border: 1px solid #ffffff24;
-      border-radius: 1.5rem; background: #160f20; box-shadow: 0 1.5rem 5rem #000a; }
-    .gate h1 { margin: 0 0 .75rem; font-size: clamp(2rem, 8vw, 4rem); }
-    .gate p { margin: 0 0 1.25rem; color: #dbcfe4; }
-    .gate button { width: 100%; padding: 1rem 1.25rem; border: 0; border-radius: 999px;
-      background: #ff3e9d; color: #16000b; font: inherit; font-weight: 800; cursor: pointer; }
-    .gate button:disabled { cursor: wait; opacity: .55; }
-    .gate a { display: inline-block; margin-top: 1rem; color: #ff9bd5; }
     .identity { position: fixed; right: 1rem; bottom: 1rem; max-width: calc(100% - 2rem);
       padding: .65rem .9rem; border-radius: 999px; background: #000b; font-size: .75rem; }
     .player-shell { position: fixed; top: 0; left: -10000px; width: 200px; height: 200px;
@@ -39,17 +68,7 @@ const HTML_TEMPLATE: &str = r#"<!doctype html>
   </style>
 </head>
 <body>
-  <section id="gate" class="gate" aria-live="polite">
-    <div class="gate-card">
-      <h1>One moment…</h1>
-      <p id="gate-status">Starting the essential background music.</p>
-      <button id="enter" type="button" disabled>Start the rickroll</button>
-      <a href="https://www.youtube.com/watch?v=__VIDEO_ID__" target="_blank" rel="noreferrer">
-        Open the official video if the player is unavailable
-      </a>
-    </div>
-  </section>
-  <main id="experience" hidden>
+  <main id="experience">
     <img src="__IMAGE_PATH__" alt="A surprise from Wenzelroll">
     <div class="identity">Served by <code>__CANISTER_ID__</code></div>
   </main>
@@ -60,53 +79,39 @@ const HTML_TEMPLATE: &str = r#"<!doctype html>
   </div>
   <script>
     "use strict";
-    const gate = document.getElementById("gate");
-    const gateStatus = document.getElementById("gate-status");
-    const enter = document.getElementById("enter");
-    const experience = document.getElementById("experience");
     let player;
-    let entered = false;
+    let mutedFallbackStarted = false;
 
-    function revealWhenAudible() {
-      if (entered || !player || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
-      if (player.isMuted() || player.getVolume() === 0) return;
-      entered = true;
-      gate.hidden = true;
-      experience.hidden = false;
-    }
-
-    function startMusic() {
+    function startAudiblePlayback() {
       if (!player) return;
       player.setVolume(100);
       player.unMute();
       player.playVideo();
-      window.setTimeout(revealWhenAudible, 250);
     }
 
-    function playbackBlocked() {
-      gateStatus.textContent = "Your browser blocked audible autoplay. Start it to enter.";
-      enter.disabled = false;
+    function startMutedFallback() {
+      if (!player || mutedFallbackStarted) return;
+      mutedFallbackStarted = true;
+      player.mute();
+      player.playVideo();
     }
 
-    function playbackFailed() {
-      gateStatus.textContent = "The background player could not load.";
-      enter.disabled = true;
+    function startFromGesture(event) {
+      if (event.type === "keydown" &&
+          (event.repeat || (event.key !== "Enter" && event.key !== " "))) return;
+      startAudiblePlayback();
     }
 
     window.onYouTubeIframeAPIReady = function () {
       player = new YT.Player("player", {
         events: {
-          onReady: function () {
-            enter.disabled = false;
-            startMusic();
-          },
-          onStateChange: revealWhenAudible,
-          onAutoplayBlocked: playbackBlocked,
-          onError: playbackFailed
+          onReady: startAudiblePlayback,
+          onAutoplayBlocked: startMutedFallback
         }
       });
     };
-    enter.addEventListener("click", startMusic);
+    document.addEventListener("click", startFromGesture);
+    document.addEventListener("keydown", startFromGesture);
   </script>
   <script src="https://www.youtube.com/iframe_api"></script>
 </body>
@@ -143,21 +148,52 @@ fn response_for(request: HttpRequest, canister_id: &str) -> HttpResponse {
         return response(405, "text/plain; charset=utf-8", b"method not allowed");
     }
 
+    let head = request.method == "HEAD";
     let path = request.url.split('?').next().unwrap_or("/");
     if path == IMAGE_PATH {
-        return response_with_head(request.method == "HEAD", "image/png", IMAGE);
+        return response_with_head(head, "image/png", IMAGE);
+    }
+    if path == PREVIEW_IMAGE_PATH {
+        return response_with_head(head, "image/png", PREVIEW_IMAGE);
     }
 
-    let body = HTML_TEMPLATE
+    let template = if is_preview_crawler(&request.headers) {
+        PREVIEW_HTML_TEMPLATE
+    } else {
+        HTML_TEMPLATE
+    };
+    let body = render_html(template, canister_id);
+    let _ = request.body;
+    response_with_head(head, "text/html; charset=utf-8", body.as_bytes())
+}
+
+fn is_preview_crawler(headers: &[(String, String)]) -> bool {
+    headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("user-agent"))
+        .is_some_and(|(_, value)| {
+            let value = value.to_ascii_lowercase();
+            PREVIEW_CRAWLER_MARKERS
+                .iter()
+                .any(|marker| value.contains(marker))
+        })
+}
+
+fn render_html(template: &str, canister_id: &str) -> String {
+    let canonical_url = format!("https://{canister_id}.icp0.io/");
+    let preview_image_url = format!(
+        "{canonical_url}{}",
+        PREVIEW_IMAGE_PATH.trim_start_matches('/')
+    );
+    let preview_metadata = PREVIEW_METADATA_TEMPLATE
+        .replace("__CANONICAL_URL__", &canonical_url)
+        .replace("__PREVIEW_IMAGE_URL__", &preview_image_url);
+
+    template
+        .replace("__PREVIEW_METADATA__", &preview_metadata)
         .replace("__IMAGE_PATH__", IMAGE_PATH)
         .replace("__VIDEO_ID__", VIDEO_ID)
-        .replace("__CANISTER_ID__", canister_id);
-    let _ = (request.headers, request.body);
-    response_with_head(
-        request.method == "HEAD",
-        "text/html; charset=utf-8",
-        body.as_bytes(),
-    )
+        .replace("__CANISTER_ID__", canister_id)
 }
 
 fn response(status_code: u16, content_type: &str, body: &[u8]) -> HttpResponse {
@@ -206,6 +242,14 @@ mod tests {
         }
     }
 
+    fn preview_request(user_agent: &str) -> HttpRequest {
+        let mut request = request("GET", "/");
+        request
+            .headers
+            .push(("User-Agent".to_string(), user_agent.to_string()));
+        request
+    }
+
     #[test]
     fn child_serves_the_embedded_image() {
         let response = response_for(request("GET", IMAGE_PATH), "aaaaa-aa");
@@ -220,7 +264,20 @@ mod tests {
     }
 
     #[test]
-    fn child_page_embeds_the_image_and_official_player() {
+    fn child_serves_the_neutral_preview_image() {
+        let response = response_for(request("GET", PREVIEW_IMAGE_PATH), "aaaaa-aa");
+
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.body, PREVIEW_IMAGE);
+        assert!(
+            response
+                .headers
+                .contains(&("Content-Type".to_string(), "image/png".to_string()))
+        );
+    }
+
+    #[test]
+    fn normal_page_immediately_shows_wenzelroll_with_silent_sound_recovery() {
         let response = response_for(request("GET", "/"), "aaaaa-aa");
         let body = String::from_utf8(response.body).expect("HTML is UTF-8");
 
@@ -228,7 +285,25 @@ mod tests {
         assert!(body.contains(VIDEO_ID));
         assert!(body.contains("aaaaa-aa"));
         assert!(body.contains("onAutoplayBlocked"));
-        assert!(body.contains("revealWhenAudible"));
-        assert!(body.contains("experience\" hidden"));
+        assert!(body.contains("startMutedFallback"));
+        assert!(body.contains("document.addEventListener(\"click\""));
+        assert!(body.contains("document.addEventListener(\"keydown\""));
+        assert!(body.contains("<main id=\"experience\">"));
+        assert!(!body.contains("id=\"gate\""));
+        assert!(!body.contains("One moment"));
+    }
+
+    #[test]
+    fn preview_crawler_receives_only_neutral_metadata() {
+        let response = response_for(preview_request("Slackbot-LinkExpanding 1.0"), "aaaaa-aa");
+        let body = String::from_utf8(response.body).expect("HTML is UTF-8");
+
+        assert!(body.contains("Canic Playground"));
+        assert!(body.contains("A small Internet Computer experiment."));
+        assert!(body.contains("https://aaaaa-aa.icp0.io/"));
+        assert!(body.contains("https://aaaaa-aa.icp0.io/canic-playground-preview.png"));
+        assert!(!body.contains(IMAGE_PATH));
+        assert!(!body.contains(VIDEO_ID));
+        assert!(!body.contains("onYouTubeIframeAPIReady"));
     }
 }
