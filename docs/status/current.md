@@ -14,18 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.32`.
-- The latest published release is `v0.101.32` at
-  `cbb457424f976ad13c6caac73463ccd7f9bb0917`.
-- Open `0.101.33` derives the complete next Fleet-service set from the exact
+- The workspace package version is `0.101.33`.
+- The latest published release is `v0.101.33` at
+  `5f45a525bddf10f0edb2ded6d88f32ce94d70fef`.
+- Open `0.101.34` freezes the exact selected plus affected-existing-root
+  Directory barrier after scale-out service publication. Every barrier root
+  durably synchronizes the published Fleet Registry and each existing affected
+  service Component; selected roots then publish their exact prepared batch
+  Directories. Later valid Component heads may cover an in-flight required
+  head only under the exact published Fleet Directory and independently
+  revalidated local Registry state. The Coordinator stops at
+  `DirectoriesConfirmed`; scale-out runtime activation remains fenced. The
+  same patch restores strict layering by giving stable Fleet-activation storage
+  an internal service-mode record instead of retaining a boundary DTO.
+- Released `0.101.33` derives the complete next Fleet-service set from the exact
   source Registry, protected scale-out plan and every terminal selected-root
-  receipt. It appends all new Replica or PoolMember bindings atomically in one
-  Registry revision, rejects Authority additions and changes to published
-  members, and retains one durable receipt per publication operation so exact
-  history and retry evidence are never overwritten. Ordinary-only scale-out
-  records the same `ServiceTopologyPublished` boundary without a Registry
-  mutation. Both paths stop before Directory confirmation and runtime
-  activation.
+  receipt. It atomically appends all new Replica or PoolMember bindings, or
+  records an ordinary-only no-mutation publication boundary, while retaining
+  independent exact publication history.
 - Released `0.101.32` synchronizes package, lockfile and development-install
   release metadata only; runtime behavior remains the `0.101.31`
   implementation.
@@ -499,6 +505,12 @@ Historical detail is archived at:
   is a lower-threshold emergency fallback after a terminal no-grant result;
   uncertain grants suppress fallback. Direct top-up remains break-glass, and
   the attached-cycles recovery proof gates implementation.
+- Tentative `0.108` adds an optional encrypted off-machine archive tier only
+  after a complete local Canic backup exists. It keeps local backup and restore
+  canonical, requires client-side authenticated encryption, independently
+  discoverable recovery capsules and enforceable cost bounds for unattended
+  operations, and reaches the standalone 0.106 blob service only through an
+  external provider-neutral adapter. No 0.108 implementation is approved.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -1363,6 +1375,12 @@ Historical detail is archived at:
   zero-effect Coordinator result; an uncertain grant blocks fallback. Direct
   operator top-up remains independent recovery, and M0 must prove exact
   acceptance, replay refund and interruption recovery before implementation.
+- Tentative 0.108 keeps completed local backups as the sole capture and restore
+  format while optionally archiving authenticated ciphertext plus a small
+  independently discoverable recovery capsule. Host-owned keys, separate
+  archive journals and enforceable unattended cost bounds keep Canisters and
+  Canic's production dependency graph outside the provider data path; an
+  external adapter may use the standalone 0.106 service as one repository.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
@@ -2564,14 +2582,13 @@ First primary results:
 
 ## Next Action
 
-The terminal selected-root receipt boundary is published at immutable
-`v0.101.31`; `v0.101.32` contains release metadata only. Open `0.101.33`
-atomically appends the complete new Replica or PoolMember set, or records the
-ordinary-only no-mutation publication boundary, and stops at
-`ServiceTopologyPublished`. Continue Slice 4 by freezing the exact selected
-plus affected-existing-root Directory barrier and driving those roots through
-Directory confirmation. Keep runtime activation behind its later explicit
-phase.
+The atomic scale-out service-publication boundary is published at immutable
+`v0.101.33`. Open `0.101.34` drives the exact selected plus affected-existing-
+root Directory barrier to `DirectoriesConfirmed`, including restart/lost-
+response replay and verified later-head coverage for concurrent Component
+Directory progress. Continue Slice 4 with the separately journalled scale-out
+runtime-activation phase; do not collapse activation into Directory
+confirmation.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

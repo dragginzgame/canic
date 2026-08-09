@@ -12,7 +12,7 @@ use canic_core::{
     dto::{
         component_registry::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
-            ComponentRuntimeActivationEvidence,
+            ComponentRuntimeActivationEvidence, ComponentRuntimeDirectoryAuthority,
         },
         fleet_registry::FleetRegistryVersion,
         root_store::RootStoreBootstrapRequest,
@@ -34,6 +34,17 @@ use canic_core::{
 pub struct ActiveComponentMemberView {
     pub binding: ManagedCanisterBinding,
     pub registry: ComponentRegistryHead,
+}
+
+/// Exact partition transition and target request for one Fleet Directory refresh.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentDirectoryRefreshPlanView {
+    pub allocation_operation_id: [u8; 32],
+    pub previous_registry: ComponentRegistryHead,
+    pub registry: ComponentRegistryHead,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub authority: ComponentRuntimeDirectoryAuthority,
 }
 
 ///

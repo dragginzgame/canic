@@ -174,14 +174,14 @@ fn planned_scale_out_reserves_the_exact_next_range_without_committing_placements
 }
 
 #[test]
-fn scale_out_ledger_allows_only_the_service_publication_state_machine() {
+fn scale_out_ledger_allows_only_the_directory_confirmation_state_machine() {
     let (_, mut scale_out) = fixture();
-    assert!(!scale_out_service_publication_boundary_is_valid(
+    assert!(!scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 
     scale_out.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 30 };
-    assert!(scale_out_service_publication_boundary_is_valid(
+    assert!(scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -194,7 +194,7 @@ fn scale_out_ledger_allows_only_the_service_publication_state_machine() {
             started_at_ns: 31,
         }),
     };
-    assert!(scale_out_service_publication_boundary_is_valid(
+    assert!(scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -203,7 +203,7 @@ fn scale_out_ledger_allows_only_the_service_publication_state_machine() {
         acceptances: vec![],
         roots_accepted_at_ns: 32,
     };
-    assert!(scale_out_service_publication_boundary_is_valid(
+    assert!(scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -215,7 +215,7 @@ fn scale_out_ledger_allows_only_the_service_publication_state_machine() {
         current: None,
         in_flight: None,
     };
-    assert!(scale_out_service_publication_boundary_is_valid(
+    assert!(scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -226,7 +226,7 @@ fn scale_out_ledger_allows_only_the_service_publication_state_machine() {
         provisions: vec![],
         components_provisioned_at_ns: 33,
     };
-    assert!(scale_out_service_publication_boundary_is_valid(
+    assert!(scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 
@@ -239,7 +239,7 @@ fn scale_out_ledger_allows_only_the_service_publication_state_machine() {
         published_fleet_registry: scale_out.plan.fleet_registry.clone(),
         service_topology_published_at_ns: 34,
     };
-    assert!(scale_out_service_publication_boundary_is_valid(
+    assert!(scale_out_directory_confirmation_boundary_is_valid(
         &scale_out.state
     ));
 }

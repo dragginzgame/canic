@@ -13,8 +13,8 @@ use crate::storage::stable::canister_pool::{
 };
 #[cfg(feature = "root-control-plane")]
 use crate::storage::stable::component_provisioning::{
-    RootComponentProvisioningData, RootComponentProvisioningPlacementRecord,
-    RootComponentProvisioningRecord, RootComponentProvisioningStateRecord,
+    RootComponentOperationRecord, RootComponentProvisioningData,
+    RootComponentProvisioningPlacementRecord, RootComponentProvisioningStateRecord,
 };
 use crate::storage::stable::{
     component_registry::{
@@ -329,7 +329,7 @@ fn root_component_provisioning_descriptor() -> StateAllocationDescriptor {
                 storage: StateStorage::StableMemory,
                 memory_id: Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID),
                 owner: AllocationOwner::CanicControlPlane.as_str().to_string(),
-                record: RootComponentProvisioningRecord::STATE_CONTRACT_NAME.to_string(),
+                record: RootComponentOperationRecord::STATE_CONTRACT_NAME.to_string(),
                 snapshot: RootComponentProvisioningData::STATE_CONTRACT_NAME.to_string(),
                 min_supported_version: 1,
                 migration_policy: MigrationPolicy::NewDomain,
@@ -460,7 +460,7 @@ mod tests {
             ),
             (
                 StateAllocationKey::RootComponentProvisioning,
-                RootComponentProvisioningRecord::STATE_CONTRACT_NAME,
+                RootComponentOperationRecord::STATE_CONTRACT_NAME,
                 RootComponentProvisioningData::STATE_CONTRACT_NAME,
             ),
             (
@@ -591,7 +591,7 @@ mod tests {
                 (
                     "root_component_provisioning_operations",
                     Some(ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID),
-                    RootComponentProvisioningRecord::STATE_CONTRACT_NAME,
+                    RootComponentOperationRecord::STATE_CONTRACT_NAME,
                     Some(205),
                 ),
                 (

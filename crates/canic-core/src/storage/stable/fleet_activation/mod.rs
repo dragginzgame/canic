@@ -258,9 +258,16 @@ pub struct FleetDirectoryServiceRecord {
     pub service: FleetServiceId,
     pub role: CanisterRole,
     pub component_spec: ComponentSpecId,
-    pub mode: crate::dto::fleet_registry::FleetServiceMode,
+    pub mode: FleetServiceModeRecord,
     pub placement: FleetServicePlacementPolicy,
     pub members: Vec<FleetDirectoryServiceComponentRecord>,
+}
+
+/// Persisted Fleet-service topology mode independent of its boundary DTO.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetServiceModeRecord {
+    AuthorityReplica,
+    ActivePool,
 }
 
 /// Persisted protected origin of one Component Group Directory.

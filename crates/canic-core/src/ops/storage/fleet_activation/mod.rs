@@ -34,8 +34,8 @@ use crate::{
         },
         fleet_registry::{
             FleetDirectoryProvenance, FleetDirectoryService, FleetDirectoryServiceComponent,
-            FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootDirectoryEntry,
-            FleetSubnetRootStatus,
+            FleetDirectorySnapshot, FleetRegistryVersion, FleetServiceMode,
+            FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
         },
     },
     ids::{
@@ -57,10 +57,10 @@ use crate::{
         FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
         FleetCredentialManifestRecord, FleetDirectoryProvenanceRecord,
         FleetDirectoryServiceComponentRecord, FleetDirectoryServiceRecord,
-        FleetDirectorySnapshotRecord, FleetRegistryVersionRecord, FleetSubnetRootAuthorityRecord,
-        FleetSubnetRootDirectoryEntryRecord, FleetSubnetRootStatusRecord,
-        FleetSubnetWasmStoreAuthorityRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
-        ProtectedComponentDeploymentRecord,
+        FleetDirectorySnapshotRecord, FleetRegistryVersionRecord, FleetServiceModeRecord,
+        FleetSubnetRootAuthorityRecord, FleetSubnetRootDirectoryEntryRecord,
+        FleetSubnetRootStatusRecord, FleetSubnetWasmStoreAuthorityRecord,
+        MAX_FLEET_ACTIVATION_RECORD_BYTES, ProtectedComponentDeploymentRecord,
     },
     view::fleet_activation::{ComponentRuntimeActivationTransition, FleetActivationTransition},
 };
@@ -1145,7 +1145,7 @@ fn component_runtime_directory_dto_to_record(
                     service: service.service,
                     role: service.role,
                     component_spec: service.component_spec,
-                    mode: service.mode,
+                    mode: fleet_service_mode_dto_to_record(service.mode),
                     placement: service.placement,
                     members: service
                         .members
@@ -1228,7 +1228,7 @@ fn component_runtime_directory_record_to_dto(
                     service: service.service.clone(),
                     role: service.role.clone(),
                     component_spec: service.component_spec.clone(),
-                    mode: service.mode,
+                    mode: fleet_service_mode_record_to_dto(service.mode),
                     placement: service.placement,
                     members: service
                         .members
@@ -1298,6 +1298,20 @@ const fn fleet_subnet_root_status_dto_to_record(
         FleetSubnetRootStatus::Active => FleetSubnetRootStatusRecord::Active,
         FleetSubnetRootStatus::Draining => FleetSubnetRootStatusRecord::Draining,
         FleetSubnetRootStatus::Removed => FleetSubnetRootStatusRecord::Removed,
+    }
+}
+
+const fn fleet_service_mode_dto_to_record(mode: FleetServiceMode) -> FleetServiceModeRecord {
+    match mode {
+        FleetServiceMode::AuthorityReplica => FleetServiceModeRecord::AuthorityReplica,
+        FleetServiceMode::ActivePool => FleetServiceModeRecord::ActivePool,
+    }
+}
+
+const fn fleet_service_mode_record_to_dto(mode: FleetServiceModeRecord) -> FleetServiceMode {
+    match mode {
+        FleetServiceModeRecord::AuthorityReplica => FleetServiceMode::AuthorityReplica,
+        FleetServiceModeRecord::ActivePool => FleetServiceMode::ActivePool,
     }
 }
 
@@ -1408,6 +1422,19 @@ mod tests {
         },
     };
     use candid::Principal;
+
+    #[test]
+    fn fleet_service_modes_round_trip_through_internal_storage_records() {
+        for mode in [
+            FleetServiceMode::AuthorityReplica,
+            FleetServiceMode::ActivePool,
+        ] {
+            assert_eq!(
+                fleet_service_mode_record_to_dto(fleet_service_mode_dto_to_record(mode)),
+                mode
+            );
+        }
+    }
 
     fn release_build(byte: u8) -> ReleaseBuildId {
         ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([byte; 32]))

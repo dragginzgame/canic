@@ -22,8 +22,9 @@ use canic_core::{
         component_provisioning::{
             FleetComponentActivationRootProgress, FleetComponentProvisioningPlan,
             RootComponentActivationEvidence, RootComponentActivationRequest,
-            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningStatusResponse,
-            RootComponentPublicationRequest,
+            RootComponentDirectorySynchronizationRequest,
+            RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAdvanceRequest,
+            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -293,19 +294,41 @@ pub struct FleetComponentProvisioningRootProvisionRecord {
 
 /// Durable pre-call intent for one exact root Directory publication cursor.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetComponentDirectoryConfirmationIntentRecord {
-    pub root_index: u32,
-    pub fleet_subnet_root: Principal,
-    pub request: RootComponentPublicationRequest,
-    pub started_at_ns: u64,
+pub enum FleetComponentDirectoryConfirmationIntentRecord {
+    FreshPublication {
+        root_index: u32,
+        fleet_subnet_root: Principal,
+        request: RootComponentPublicationRequest,
+        started_at_ns: u64,
+    },
+    ScaleOutSynchronization {
+        root_index: u32,
+        fleet_subnet_root: Principal,
+        request: RootComponentDirectorySynchronizationRequest,
+        started_at_ns: u64,
+    },
+    ScaleOutPublication {
+        root_index: u32,
+        fleet_subnet_root: Principal,
+        request: RootComponentPublicationRequest,
+        started_at_ns: u64,
+    },
 }
 
 /// Latest authenticated root Directory publication response and observation time.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetComponentDirectoryConfirmationRecord {
-    pub started_at_ns: u64,
-    pub response: RootComponentProvisioningStatusResponse,
-    pub recorded_at_ns: u64,
+pub enum FleetComponentDirectoryConfirmationRecord {
+    FreshPublication {
+        started_at_ns: u64,
+        response: Box<RootComponentProvisioningStatusResponse>,
+        recorded_at_ns: u64,
+    },
+    ScaleOut {
+        started_at_ns: u64,
+        synchronization: Box<RootComponentDirectorySynchronizationResponse>,
+        publication: Option<Box<RootComponentProvisioningStatusResponse>>,
+        recorded_at_ns: u64,
+    },
 }
 
 /// Durable pre-call intent for one exact root runtime-activation cursor.

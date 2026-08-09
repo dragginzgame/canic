@@ -9,9 +9,11 @@ use canic_core::{
     control_plane_support::ops::ic::IcOps,
     dto::{
         component_provisioning::{
-            RootComponentActivationRequest, RootComponentProvisioningAcceptanceRequest,
-            RootComponentProvisioningAdvanceRequest, RootComponentProvisioningStatusRequest,
-            RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
+            RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
+            RootComponentDirectorySynchronizationResponse,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
+            RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
+            RootComponentPublicationRequest,
         },
         error::Error,
     },
@@ -53,6 +55,19 @@ impl RootComponentProvisioningApi {
             IcOps::msg_caller(),
             request,
         ))
+        .await
+        .map_err(Into::into)
+    }
+
+    pub async fn synchronize_directories(
+        request: RootComponentDirectorySynchronizationRequest,
+    ) -> Result<RootComponentDirectorySynchronizationResponse, Error> {
+        Box::pin(
+            crate::workflow::component_directory_synchronization::synchronize(
+                IcOps::msg_caller(),
+                request,
+            ),
+        )
         .await
         .map_err(Into::into)
     }

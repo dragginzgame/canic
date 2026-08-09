@@ -172,6 +172,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         command_kind("component_provisioning.publish_root_batch.v1"),
     ),
     update_response_idempotent(
+        "canic_root_component_directories_synchronize",
+        command_kind("component_provisioning.synchronize_affected_directories.v1"),
+    ),
+    update_response_idempotent(
         "canic_root_component_provisioning_activate",
         command_kind("component_provisioning.activate_root_batch.v1"),
     ),

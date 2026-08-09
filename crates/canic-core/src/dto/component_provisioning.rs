@@ -281,6 +281,44 @@ pub struct RootComponentPublicationRequest {
     pub expected_published_component_count: u32,
 }
 
+///
+/// RootComponentDirectorySynchronizationRequest
+///
+/// Coordinator-authenticated command advancing one affected-root scale-out Directory step.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentDirectorySynchronizationRequest {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub source_fleet_registry: FleetRegistryVersion,
+    pub published_fleet_registry: FleetRegistryVersion,
+    pub expected_synchronized_component_count: u32,
+}
+
+///
+/// RootComponentDirectorySynchronizationResponse
+///
+/// Compact exact progress for one root's affected existing service members.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootComponentDirectorySynchronizationResponse {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub source_fleet_registry: FleetRegistryVersion,
+    pub published_fleet_registry: FleetRegistryVersion,
+    pub fleet_subnet_root: Principal,
+    pub affected_component_count: u32,
+    pub synchronized_component_count: u32,
+    pub fleet_directory_content_hash: [u8; 32],
+    pub complete: bool,
+    pub synchronized_at_ns: Option<u64>,
+    pub receipt_content_hash: [u8; 32],
+}
+
 /// Coordinator-authenticated command advancing one bounded root activation step.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

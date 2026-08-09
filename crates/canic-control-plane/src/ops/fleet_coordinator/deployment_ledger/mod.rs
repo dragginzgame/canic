@@ -318,9 +318,9 @@ fn validate_scale_out_record(
             "Fleet Component scale-out reuses the fresh operation identity",
         ));
     }
-    if !scale_out_service_publication_boundary_is_valid(&scale_out.state) {
+    if !scale_out_directory_confirmation_boundary_is_valid(&scale_out.state) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out has crossed its implemented service-publication boundary",
+            "Fleet Component scale-out has crossed its implemented Directory-confirmation boundary",
         ));
     }
     let plan_hash = hash_with_next_ordinal(
@@ -344,7 +344,7 @@ fn validate_scale_out_record(
     Ok(())
 }
 
-const fn scale_out_service_publication_boundary_is_valid(
+const fn scale_out_directory_confirmation_boundary_is_valid(
     state: &FleetComponentProvisioningStateRecord,
 ) -> bool {
     match state {
@@ -355,10 +355,12 @@ const fn scale_out_service_publication_boundary_is_valid(
         | FleetComponentProvisioningStateRecord::ComponentsProvisioned { planned_at_ns, .. }
         | FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
             planned_at_ns, ..
-        } => *planned_at_ns > 0,
-        FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
-        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. }
-        | FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+        }
+        | FleetComponentProvisioningStateRecord::ConfirmingDirectories { planned_at_ns, .. }
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { planned_at_ns, .. } => {
+            *planned_at_ns > 0
+        }
+        FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
         | FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => false,
     }
 }

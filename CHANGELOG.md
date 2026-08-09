@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.34` confirms scale-out Directories across every exact selected and
+  affected existing service-member root with durable affected-Component
+  synchronization, selected-root batch publication and later-head coverage,
+  while keeping runtime activation separately fenced, and removes the stable
+  Fleet-activation store's dependency on a boundary DTO.
+
 - `0.101.33` atomically appends every Replica or PoolMember introduced by one
   scale-out operation in a single Fleet Registry revision, while ordinary-only
   scale-out records the same durable boundary without mutating the Registry,

@@ -267,6 +267,37 @@ impl FleetRegistryOps {
             .map_err(InternalError::from)
     }
 
+    /// Derive existing local members whose service gained scale-out members.
+    pub fn affected_existing_service_components(
+        current: &FleetRegistry,
+        next: &FleetRegistry,
+        fleet_subnet_root: Principal,
+    ) -> Result<Vec<crate::ids::ComponentInstanceId>, InternalError> {
+        if current.authority != next.authority {
+            return Err(InternalError::from(OpsError::from(
+                FleetRegistryOpsError::AuthorityMismatch,
+            )));
+        }
+        if current.services == next.services {
+            return Ok(Vec::new());
+        }
+        validate_service_additions(&current.services, &next.services)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)?;
+        let mut components = current
+            .services
+            .iter()
+            .zip(&next.services)
+            .filter(|(current, next)| current.members != next.members)
+            .flat_map(|(service, _)| &service.members)
+            .filter(|member| member.fleet_subnet_root == fleet_subnet_root)
+            .map(|member| member.component)
+            .collect::<Vec<_>>();
+        components.sort();
+        components.dedup();
+        Ok(components)
+    }
+
     /// Construct the next canonical snapshot with one exact active root marked `Draining`.
     pub fn compile_draining(
         expected_authority: &FleetRegistryAuthority,

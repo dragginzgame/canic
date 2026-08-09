@@ -14,12 +14,14 @@ use canic_core::{
             FleetSubnetRootProvisioningBatch, RootComponentActivationEvidence,
             RootComponentPublicationEvidence,
         },
+        component_registry::ComponentRegistryHead,
         fleet_registry::FleetRegistryVersion,
     },
     eager_static,
     ids::{
         ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId, ComponentSpecId,
+        ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId,
+        ComponentInstanceId, ComponentSpecId,
     },
     impl_storable_bounded,
     role_contract::allocation::memory::control_plane::{
@@ -33,7 +35,7 @@ use std::cell::RefCell;
 const ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES: u32 = 8_650_000;
 // CBOR encodes a 32-byte `[u8; 32]` key as a two-byte array header followed by
 // at most two bytes per element.
-const ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES: u32 = 66;
+const ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES: u32 = 96;
 // The placement owner adds one CBOR map header and the exact two field names to
 // two maximum-width operation keys.
 const ROOT_COMPONENT_PROVISIONING_PLACEMENT_RECORD_MAX_BYTES: u32 = 156;
@@ -45,8 +47,8 @@ struct RootComponentProvisioningState;
 eager_static! {
     static ROOT_COMPONENT_PROVISIONING_OPERATIONS: RefCell<
         StableBtreeMap<
-            RootComponentProvisioningOperationKey,
-            RootComponentProvisioningRecord,
+            RootComponentOperationKey,
+            RootComponentOperationRecord,
             VirtualMemory<DefaultMemoryImpl>,
         >,
     > = RefCell::new(StableBtreeMap::init(
@@ -90,13 +92,33 @@ eager_static! {
     ));
 }
 
-/// Stable operation-map key.
+/// Stable operation-map key separating batch and Directory-confirmation authority.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct RootComponentProvisioningOperationKey(pub [u8; 32]);
+pub enum RootComponentOperationKey {
+    Provisioning([u8; 32]),
+    DirectorySynchronization([u8; 32]),
+}
 
 impl_storable_bounded!(
-    RootComponentProvisioningOperationKey,
+    RootComponentOperationKey,
     ROOT_COMPONENT_PROVISIONING_OPERATION_KEY_MAX_BYTES,
+    false
+);
+
+/// Stable operation-map value sharing one grouped control-plane allocation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentOperationRecord {
+    Provisioning(Box<RootComponentProvisioningRecord>),
+    DirectorySynchronization(Box<RootComponentDirectorySynchronizationRecord>),
+}
+
+impl RootComponentOperationRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "RootComponentOperationRecord";
+}
+
+impl_storable_bounded!(
+    RootComponentOperationRecord,
+    ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES,
     false
 );
 
@@ -129,15 +151,59 @@ pub struct RootComponentProvisioningRecord {
     pub state: RootComponentProvisioningStateRecordPhase,
 }
 
-impl RootComponentProvisioningRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "RootComponentProvisioningRecord";
+/// Durable root-local scale-out Directory synchronization authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDirectorySynchronizationRecord {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub source_fleet_registry: FleetRegistryVersion,
+    pub published_fleet_registry: FleetRegistryVersion,
+    pub fleet_subnet_root: candid::Principal,
+    pub fleet_directory_content_hash: [u8; 32],
+    pub targets: Vec<RootComponentDirectorySynchronizationTargetRecord>,
+    pub state: RootComponentDirectorySynchronizationStateRecord,
 }
 
-impl_storable_bounded!(
-    RootComponentProvisioningRecord,
-    ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES,
-    false
-);
+/// Immutable existing service member selected before the root mirror advances.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDirectorySynchronizationTargetRecord {
+    pub component: ComponentInstanceId,
+    pub canister_id: candid::Principal,
+    pub allocation_operation_id: [u8; 32],
+    pub source_registry: ComponentRegistryHead,
+}
+
+/// Monotonic root-local progress over affected existing Components.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentDirectorySynchronizationStateRecord {
+    Planned {
+        planned_at_ns: u64,
+    },
+    Synchronizing {
+        planned_at_ns: u64,
+        synchronized_component_count: u32,
+        in_flight: Option<Box<RootComponentDirectorySynchronizationIntentRecord>>,
+    },
+    Synchronized {
+        planned_at_ns: u64,
+        synchronized_at_ns: u64,
+        receipt_content_hash: [u8; 32],
+    },
+}
+
+/// Durable pre-call intent for one exact active Component Directory replacement.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentDirectorySynchronizationIntentRecord {
+    pub component_index: u32,
+    pub component: ComponentInstanceId,
+    pub canister_id: candid::Principal,
+    pub allocation_operation_id: [u8; 32],
+    pub previous_registry: ComponentRegistryHead,
+    pub registry: ComponentRegistryHead,
+    pub directory_synchronized_at_ns: u64,
+    pub directory_authority_hash: [u8; 32],
+    pub started_at_ns: u64,
+}
 
 /// Durable root-local aggregate phase.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -303,19 +369,21 @@ impl_storable_bounded!(
 pub struct RootComponentProvisioningStateRecord {
     pub tracked_group_placements: u32,
     pub active_operation_id: Option<[u8; 32]>,
+    pub active_directory_synchronization_operation_id: Option<[u8; 32]>,
 }
 
 impl RootComponentProvisioningStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "RootComponentProvisioningStateRecord";
 }
 
-impl_storable_bounded!(RootComponentProvisioningStateRecord, 128, false);
+impl_storable_bounded!(RootComponentProvisioningStateRecord, 256, false);
 
 /// Complete typed snapshot used by backup qualification and focused tests.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RootComponentProvisioningData {
     pub state: RootComponentProvisioningStateRecord,
     pub operations: Vec<RootComponentProvisioningRecord>,
+    pub directory_synchronizations: Vec<RootComponentDirectorySynchronizationRecord>,
     pub placements: Vec<(
         RootComponentProvisioningPlacementKey,
         RootComponentProvisioningPlacementRecord,
@@ -350,7 +418,7 @@ impl RootComponentProvisioningStore {
     pub(crate) fn accept(
         record: RootComponentProvisioningRecord,
     ) -> Result<RootComponentProvisioningCommitOutcome, RootComponentProvisioningCommitError> {
-        let operation_key = RootComponentProvisioningOperationKey(record.operation_id);
+        let operation_key = RootComponentOperationKey::Provisioning(record.operation_id);
         if let Some(existing) = Self::operation(record.operation_id) {
             return if existing == record {
                 Ok(RootComponentProvisioningCommitOutcome::Existing)
@@ -388,7 +456,14 @@ impl RootComponentProvisioningStore {
         }
 
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
-            assert!(operations.insert(operation_key, record.clone()).is_none());
+            assert!(
+                operations
+                    .insert(
+                        operation_key,
+                        RootComponentOperationRecord::Provisioning(Box::new(record.clone())),
+                    )
+                    .is_none()
+            );
         });
         let placement_record = RootComponentProvisioningPlacementRecord {
             operation_id: record.operation_id,
@@ -403,6 +478,8 @@ impl RootComponentProvisioningStore {
             cell.set(RootComponentProvisioningStateRecord {
                 tracked_group_placements,
                 active_operation_id: Some(record.operation_id),
+                active_directory_synchronization_operation_id: state
+                    .active_directory_synchronization_operation_id,
             });
         });
         Ok(RootComponentProvisioningCommitOutcome::Committed)
@@ -411,7 +488,12 @@ impl RootComponentProvisioningStore {
     #[must_use]
     pub(crate) fn operation(operation_id: [u8; 32]) -> Option<RootComponentProvisioningRecord> {
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| {
-            operations.get(&RootComponentProvisioningOperationKey(operation_id))
+            operations
+                .get(&RootComponentOperationKey::Provisioning(operation_id))
+                .and_then(|record| match record {
+                    RootComponentOperationRecord::Provisioning(record) => Some(*record),
+                    RootComponentOperationRecord::DirectorySynchronization(_) => None,
+                })
         })
     }
 
@@ -419,17 +501,21 @@ impl RootComponentProvisioningStore {
         current: &RootComponentProvisioningRecord,
         next: RootComponentProvisioningRecord,
     ) -> Result<(), RootComponentProvisioningCommitError> {
-        let key = RootComponentProvisioningOperationKey(current.operation_id);
+        let key = RootComponentOperationKey::Provisioning(current.operation_id);
+        let expected = RootComponentOperationRecord::Provisioning(Box::new(current.clone()));
         if next.operation_id != current.operation_id
             || ROOT_COMPONENT_PROVISIONING_OPERATIONS
                 .with_borrow(|operations| operations.get(&key))
                 .as_ref()
-                != Some(current)
+                != Some(&expected)
         {
             return Err(RootComponentProvisioningCommitError::OperationChanged);
         }
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
-            operations.insert(key, next);
+            operations.insert(
+                key,
+                RootComponentOperationRecord::Provisioning(Box::new(next)),
+            );
         });
         Ok(())
     }
@@ -438,25 +524,120 @@ impl RootComponentProvisioningStore {
         current: &RootComponentProvisioningRecord,
         next: RootComponentProvisioningRecord,
     ) -> Result<(), RootComponentProvisioningCommitError> {
-        let key = RootComponentProvisioningOperationKey(current.operation_id);
+        let key = RootComponentOperationKey::Provisioning(current.operation_id);
+        let expected = RootComponentOperationRecord::Provisioning(Box::new(current.clone()));
         let stored =
             ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| operations.get(&key));
         let state = Self::state();
         if next.operation_id != current.operation_id
-            || stored.as_ref() != Some(current)
+            || stored.as_ref() != Some(&expected)
             || state.active_operation_id != Some(current.operation_id)
         {
             return Err(RootComponentProvisioningCommitError::OperationChanged);
         }
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
-            operations.insert(key, next);
+            operations.insert(
+                key,
+                RootComponentOperationRecord::Provisioning(Box::new(next)),
+            );
         });
         ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
             cell.set(RootComponentProvisioningStateRecord {
                 tracked_group_placements: state.tracked_group_placements,
                 active_operation_id: None,
+                active_directory_synchronization_operation_id: state
+                    .active_directory_synchronization_operation_id,
             });
         });
+        Ok(())
+    }
+
+    pub(crate) fn accept_directory_synchronization(
+        record: RootComponentDirectorySynchronizationRecord,
+    ) -> Result<RootComponentProvisioningCommitOutcome, RootComponentProvisioningCommitError> {
+        let key = RootComponentOperationKey::DirectorySynchronization(record.operation_id);
+        if let Some(existing) = Self::directory_synchronization(record.operation_id) {
+            return if existing == record {
+                Ok(RootComponentProvisioningCommitOutcome::Existing)
+            } else {
+                Err(RootComponentProvisioningCommitError::ConflictingOperation)
+            };
+        }
+        let state = Self::state();
+        if state
+            .active_directory_synchronization_operation_id
+            .is_some_and(|operation| operation != record.operation_id)
+        {
+            return Err(RootComponentProvisioningCommitError::ActiveOperationConflict);
+        }
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
+            assert!(
+                operations
+                    .insert(
+                        key,
+                        RootComponentOperationRecord::DirectorySynchronization(Box::new(
+                            record.clone(),
+                        )),
+                    )
+                    .is_none()
+            );
+        });
+        ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
+            cell.set(RootComponentProvisioningStateRecord {
+                active_directory_synchronization_operation_id: Some(record.operation_id),
+                ..state
+            });
+        });
+        Ok(RootComponentProvisioningCommitOutcome::Committed)
+    }
+
+    #[must_use]
+    pub(crate) fn directory_synchronization(
+        operation_id: [u8; 32],
+    ) -> Option<RootComponentDirectorySynchronizationRecord> {
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| {
+            operations
+                .get(&RootComponentOperationKey::DirectorySynchronization(
+                    operation_id,
+                ))
+                .and_then(|record| match record {
+                    RootComponentOperationRecord::DirectorySynchronization(record) => Some(*record),
+                    RootComponentOperationRecord::Provisioning(_) => None,
+                })
+        })
+    }
+
+    pub(crate) fn replace_directory_synchronization(
+        current: &RootComponentDirectorySynchronizationRecord,
+        next: RootComponentDirectorySynchronizationRecord,
+        complete: bool,
+    ) -> Result<(), RootComponentProvisioningCommitError> {
+        let key = RootComponentOperationKey::DirectorySynchronization(current.operation_id);
+        let expected =
+            RootComponentOperationRecord::DirectorySynchronization(Box::new(current.clone()));
+        let stored =
+            ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| operations.get(&key));
+        let state = Self::state();
+        if next.operation_id != current.operation_id
+            || stored.as_ref() != Some(&expected)
+            || state.active_directory_synchronization_operation_id != Some(current.operation_id)
+        {
+            return Err(RootComponentProvisioningCommitError::OperationChanged);
+        }
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
+            operations.insert(
+                key,
+                RootComponentOperationRecord::DirectorySynchronization(Box::new(next)),
+            );
+        });
+        if complete {
+            ROOT_COMPONENT_PROVISIONING_STATE.with_borrow_mut(|cell| {
+                cell.set(RootComponentProvisioningStateRecord {
+                    active_directory_synchronization_operation_id: None,
+                    ..state
+                });
+            });
+        }
         Ok(())
     }
 
@@ -482,8 +663,28 @@ impl RootComponentProvisioningStore {
     pub(crate) fn export() -> RootComponentProvisioningData {
         RootComponentProvisioningData {
             state: Self::state(),
-            operations: ROOT_COMPONENT_PROVISIONING_OPERATIONS
-                .with_borrow(|operations| operations.iter().map(|entry| entry.value()).collect()),
+            operations: ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|operations| {
+                operations
+                    .iter()
+                    .filter_map(|entry| match entry.value() {
+                        RootComponentOperationRecord::Provisioning(record) => Some(*record),
+                        RootComponentOperationRecord::DirectorySynchronization(_) => None,
+                    })
+                    .collect()
+            }),
+            directory_synchronizations: ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(
+                |operations| {
+                    operations
+                        .iter()
+                        .filter_map(|entry| match entry.value() {
+                            RootComponentOperationRecord::DirectorySynchronization(record) => {
+                                Some(*record)
+                            }
+                            RootComponentOperationRecord::Provisioning(_) => None,
+                        })
+                        .collect()
+                },
+            ),
             placements: ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow(|placements| {
                 placements
                     .iter()
@@ -500,8 +701,14 @@ impl RootComponentProvisioningStore {
         ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow_mut(|operations| {
             for record in data.operations {
                 operations.insert(
-                    RootComponentProvisioningOperationKey(record.operation_id),
-                    record,
+                    RootComponentOperationKey::Provisioning(record.operation_id),
+                    RootComponentOperationRecord::Provisioning(Box::new(record)),
+                );
+            }
+            for record in data.directory_synchronizations {
+                operations.insert(
+                    RootComponentOperationKey::DirectorySynchronization(record.operation_id),
+                    RootComponentOperationRecord::DirectorySynchronization(Box::new(record)),
                 );
             }
         });

@@ -7,6 +7,8 @@ pub mod canister_pool;
 #[cfg(feature = "root-control-plane")]
 pub mod component_auth;
 #[cfg(feature = "root-control-plane")]
+pub mod component_directory_synchronization;
+#[cfg(feature = "root-control-plane")]
 pub mod component_provisioning;
 #[cfg(feature = "root-control-plane")]
 pub mod component_registry;

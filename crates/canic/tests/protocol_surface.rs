@@ -730,6 +730,14 @@ fn assert_fleet_component_provisioning_endpoint_guards() {
         root_publication_is_bounded_public_update(&root_publish),
         "root Component Directory publication must remain an internal public and payload-bounded update"
     );
+    let root_synchronization = preceding_attribute_context(
+        &root_source,
+        "async fn canic_root_component_directories_synchronize(",
+    );
+    assert!(
+        root_publication_is_bounded_public_update(&root_synchronization),
+        "root scale-out Directory synchronization must remain an internal public and payload-bounded update"
+    );
     let root_activation = preceding_attribute_context(
         &root_source,
         "async fn canic_root_component_provisioning_activate(",
@@ -1027,6 +1035,11 @@ fn assert_component_registry_protocol_constants() {
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
             canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
             "canic_root_component_provisioning_publish",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE,
+            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE,
+            "canic_root_component_directories_synchronize",
         ),
         (
             canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,

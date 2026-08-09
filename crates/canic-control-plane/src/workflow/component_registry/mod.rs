@@ -2999,6 +2999,75 @@ pub(super) async fn prepare_grouped_component_directories(
     Ok(independently_prepared)
 }
 
+/// Synchronize one already-Active grouped Component to a current Directory covering the request.
+pub(super) async fn synchronize_grouped_component_directory(
+    canister: candid::Principal,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    request: &ComponentRuntimeDirectorySynchronizationRequest,
+    directory_authority_hash: [u8; 32],
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let observed = query_component_runtime_status(canister).await?;
+    let activation = validate_active_directory_refresh_identity(
+        &observed,
+        binding,
+        deployment,
+        request.operation_id,
+    )?;
+    let synchronized =
+        if active_directory_refresh_covers(&observed, request, directory_authority_hash)? {
+            observed
+        } else {
+            match synchronize_target_component_directory(canister, request.clone()).await {
+                Ok(status) => status,
+                Err(call_error) => {
+                    let reconciled = query_component_runtime_status(canister).await?;
+                    if active_directory_refresh_covers(
+                        &reconciled,
+                        request,
+                        directory_authority_hash,
+                    )? {
+                        reconciled
+                    } else {
+                        return Err(call_error);
+                    }
+                }
+            }
+        };
+    let synchronized_activation = validate_active_directory_refresh_identity(
+        &synchronized,
+        binding,
+        deployment,
+        request.operation_id,
+    )?;
+    if synchronized_activation != activation
+        || !active_directory_refresh_covers(&synchronized, request, directory_authority_hash)?
+    {
+        return Err(InternalError::conflict(
+            "active Component changed immutable activation authority during Directory refresh",
+        ));
+    }
+    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_observed_activation = validate_active_directory_refresh_identity(
+        &independently_observed,
+        binding,
+        deployment,
+        request.operation_id,
+    )?;
+    if independently_observed_activation != activation
+        || !active_directory_refresh_covers(
+            &independently_observed,
+            request,
+            directory_authority_hash,
+        )?
+    {
+        return Err(InternalError::unavailable(
+            "active Component did not retain a current Directory covering the refresh",
+        ));
+    }
+    Ok(independently_observed)
+}
+
 /// Prepare one peer Component's Directories for its exact active requester caller.
 pub async fn prepare_peer_component_directories(
     request: RootComponentDirectoryPreparationRequest,
@@ -5614,6 +5683,86 @@ fn target_activation_matches(
     activation.activated_at_ns != 0
 }
 
+fn validate_active_directory_refresh_identity(
+    status: &ComponentRuntimeStatusResponse,
+    binding: &ManagedCanisterBinding,
+    deployment: &ProtectedComponentDeployment,
+    operation_id: [u8; 32],
+) -> Result<ComponentRuntimeActivationEvidence, InternalError> {
+    let identity_is_exact = [
+        status.operation_id == operation_id,
+        status.binding == *binding,
+        status.deployment.as_ref() == deployment,
+        status.phase == ComponentRuntimePhase::Active,
+        status.authority.is_some(),
+        status.authority_hash.is_some(),
+        status.direct_children_hash.is_some(),
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !identity_is_exact {
+        return Err(InternalError::conflict(
+            "active Component Directory refresh target changed protected runtime identity",
+        ));
+    }
+    status.activation.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "active Component Directory refresh target lacks activation evidence",
+        )
+    })
+}
+
+fn active_directory_refresh_covers(
+    status: &ComponentRuntimeStatusResponse,
+    request: &ComponentRuntimeDirectorySynchronizationRequest,
+    directory_authority_hash: [u8; 32],
+) -> Result<bool, InternalError> {
+    let Some(current) = status.authority.as_ref() else {
+        return Ok(false);
+    };
+    let Some(current_authority_hash) = status.authority_hash else {
+        return Ok(false);
+    };
+    if ComponentRuntimeOps::directory_authority_hash(current)? != current_authority_hash {
+        return Ok(false);
+    }
+    if current == &request.authority {
+        return Ok([
+            current_authority_hash == directory_authority_hash,
+            status.direct_children_hash
+                == Some(ComponentRuntimeOps::direct_children_hash(
+                    &request.direct_children,
+                )?),
+        ]
+        .into_iter()
+        .all(|matches| matches));
+    }
+
+    let current_component = &current.component.provenance;
+    let required_component = &request.authority.component.provenance;
+    let later_component_authority = [
+        current_component.component == required_component.component,
+        current_component.source_fleet_subnet_root == required_component.source_fleet_subnet_root,
+        current_component.component_registry_revision
+            > required_component.component_registry_revision,
+        current_component.component_registry_content_hash
+            != required_component.component_registry_content_hash,
+        current_component.synchronized_at_ns > required_component.synchronized_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    Ok([
+        current.fleet == request.authority.fleet,
+        current.component_group == request.authority.component_group,
+        later_component_authority,
+        current_authority_hash != directory_authority_hash,
+        status.direct_children_hash.is_some(),
+    ]
+    .into_iter()
+    .all(|matches| matches))
+}
+
 fn prepared_target_directory_status(
     status: &ComponentRuntimeStatusResponse,
     binding: &ManagedCanisterBinding,
@@ -8146,6 +8295,95 @@ mod tests {
         );
         validate_installed_component_status(&status, operation_id, &managed, &deployment)
             .expect("advanced runtime retains exact installed identity");
+    }
+
+    #[test]
+    fn active_directory_refresh_accepts_only_valid_later_component_coverage() {
+        let binding = component_binding();
+        let fleet = FleetDirectorySnapshot {
+            provenance: canic_core::dto::fleet_registry::FleetDirectoryProvenance {
+                registry: FleetRegistryVersion {
+                    authority: binding.authority.clone(),
+                    revision: 7,
+                    content_hash: [21; 32],
+                },
+                source_fleet_subnet_root: binding.fleet_subnet_root,
+            },
+            fleet_subnet_roots: Vec::new(),
+            services: Vec::new(),
+        };
+        let operation_id = [22; 32];
+        let required_authority = ComponentRuntimeDirectoryAuthority {
+            fleet,
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: binding.clone(),
+                    source_fleet_subnet_root: binding.fleet_subnet_root,
+                    component_registry_revision: 3,
+                    component_registry_content_hash: [23; 32],
+                    synchronized_at_ns: 24,
+                },
+                descendant_count: 0,
+            },
+            component_group: None,
+        };
+        let required_hash = ComponentRuntimeOps::directory_authority_hash(&required_authority)
+            .expect("required Directory authority hash");
+        let request = ComponentRuntimeDirectorySynchronizationRequest {
+            operation_id,
+            authority: required_authority.clone(),
+            direct_children: Vec::new(),
+        };
+        let mut current_authority = required_authority;
+        current_authority
+            .component
+            .provenance
+            .component_registry_revision = 4;
+        current_authority
+            .component
+            .provenance
+            .component_registry_content_hash = [25; 32];
+        current_authority.component.provenance.synchronized_at_ns = 26;
+        let current_hash = ComponentRuntimeOps::directory_authority_hash(&current_authority)
+            .expect("current Directory authority hash");
+        let direct_children_hash =
+            ComponentRuntimeOps::direct_children_hash(&[]).expect("empty direct-child hash");
+        let mut status = ComponentRuntimeStatusResponse {
+            operation_id,
+            binding: ManagedCanisterBinding::Component(binding.clone()),
+            deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary { binding }),
+            phase: ComponentRuntimePhase::Active,
+            authority: Some(current_authority),
+            authority_hash: Some(current_hash),
+            direct_children_hash: Some(direct_children_hash),
+            activation: Some(ComponentRuntimeActivationEvidence {
+                directory_authority_hash: required_hash,
+                activated_at_ns: 27,
+            }),
+        };
+
+        assert!(
+            active_directory_refresh_covers(&status, &request, required_hash)
+                .expect("later coverage")
+        );
+        status
+            .authority
+            .as_mut()
+            .expect("current authority")
+            .fleet
+            .provenance
+            .registry
+            .revision = 8;
+        status.authority_hash = Some(
+            ComponentRuntimeOps::directory_authority_hash(
+                status.authority.as_ref().expect("current authority"),
+            )
+            .expect("changed authority hash"),
+        );
+        assert!(
+            !active_directory_refresh_covers(&status, &request, required_hash)
+                .expect("foreign Fleet coverage rejects")
+        );
     }
 
     #[test]
