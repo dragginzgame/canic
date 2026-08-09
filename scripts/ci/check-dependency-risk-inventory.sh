@@ -13,6 +13,7 @@ fail() {
 [ -f "$INVENTORY" ] || fail "missing inventory: $INVENTORY"
 [ -f "$TOOLS" ] || fail "missing tool-version authority: $TOOLS"
 command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable"
+command -v git >/dev/null 2>&1 || fail "git is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 
 # shellcheck source=/dev/null
@@ -25,6 +26,7 @@ audit_version="$(cargo audit --version 2>/dev/null | awk '{print $2}')" ||
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 audit_json="$tmp_dir/audit.json"
+audit_db="$tmp_dir/advisory-db"
 
 case "$#" in
 0)
@@ -35,9 +37,15 @@ case "$#" in
         cd "$ROOT"
         cargo fetch --locked
     )
-    audit_args=(--json)
+    audit_args=(--db "$audit_db" --json)
     if [ "${CANIC_CARGO_AUDIT_NO_FETCH:-0}" = "1" ]; then
-        audit_args=(--no-fetch --json)
+        cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+        source_db="${CANIC_CARGO_AUDIT_DB:-$cargo_home/advisory-db}"
+        [ -d "$source_db/.git" ] ||
+            fail "offline advisory database is unavailable: $source_db"
+        git clone --quiet --local --no-hardlinks "$source_db" "$audit_db" ||
+            fail "offline advisory database could not be isolated: $source_db"
+        audit_args=(--no-fetch --db "$audit_db" --json)
     fi
     (
         cd "$ROOT"

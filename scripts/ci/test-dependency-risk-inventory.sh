@@ -9,17 +9,30 @@ fail() {
     exit 1
 }
 
+command -v git >/dev/null 2>&1 || fail "git is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 base="$tmp_dir/base.json"
+audit_db="$tmp_dir/advisory-db"
 
 (
     cd "$ROOT"
-    cargo audit --no-fetch --json
+    cargo audit --db "$audit_db" --json
 ) >"$base"
 
 bash "$GATE" --audit-json "$base" >/dev/null
+
+# A shared cache may retain an untracked copy after an upstream advisory is
+# renamed or moved. Offline isolation must copy only the selected tracked
+# database revision so the stale file cannot create a duplicate advisory ID.
+tracked_advisory="$(git -C "$audit_db" ls-files 'crates/*/RUSTSEC-*.md' | sed -n '1p')"
+[ -n "$tracked_advisory" ] || fail "fresh advisory database has no tracked advisory"
+mkdir -p "$audit_db/crates/canic-stale-duplicate"
+cp "$audit_db/$tracked_advisory" \
+    "$audit_db/crates/canic-stale-duplicate/${tracked_advisory##*/}"
+CANIC_CARGO_AUDIT_NO_FETCH=1 CANIC_CARGO_AUDIT_DB="$audit_db" \
+    bash "$GATE" >/dev/null
 
 vulnerability="$tmp_dir/vulnerability.json"
 jq '.vulnerabilities.found = true | .vulnerabilities.count = 1 | .vulnerabilities.list = [{}]' \

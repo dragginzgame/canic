@@ -27,7 +27,9 @@ Historical detail is archived at:
   sealed initial inventory and root-activation evidence. Exact terminal root
   receipts advance the operation to `RuntimesActivated` and atomically append
   the new placements to the canonical deployment ledger. Repeated scale-out
-  journal rollover remains the next Slice 4 boundary.
+  journal rollover remains the next Slice 4 boundary. The release dependency
+  audit now uses isolated RustSec data so stale untracked files in the shared
+  Cargo cache cannot break advisory parsing.
 - Released `0.101.33` derives the complete next Fleet-service set from the exact
   source Registry, protected scale-out plan and every terminal selected-root
   receipt. It atomically appends all new Replica or PoolMember bindings, or
