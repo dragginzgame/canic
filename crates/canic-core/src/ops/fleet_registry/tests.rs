@@ -317,6 +317,114 @@ fn initial_services_publish_as_one_canonical_registry_revision() {
 }
 
 #[test]
+fn scale_out_appends_complete_replica_set_in_one_registry_revision() {
+    let topology = topology();
+    let active = active_registry(&topology);
+    let mut initial_service = authority_replica_service();
+    initial_service.placement.maximum_members_per_root = 2;
+    let published = FleetRegistryOps::compile_initial_services(
+        &active.authority,
+        &topology,
+        &active,
+        vec![initial_service],
+    )
+    .expect("publish initial service");
+    let mut next_services = published.services.clone();
+    next_services[0].members.push(member(
+        FleetServiceMemberPurpose::Replica,
+        23,
+        8,
+        33,
+        "replica",
+        2,
+        &["database"],
+    ));
+
+    let appended = FleetRegistryOps::compile_service_additions(
+        &published.authority,
+        &topology,
+        &published,
+        next_services.clone(),
+    )
+    .expect("append complete scale-out member set");
+
+    assert_eq!(appended.revision, published.revision + 1);
+    assert_eq!(appended.services, next_services);
+    assert_eq!(appended.services[0].members.len(), 3);
+    std::assert_matches!(
+        FleetRegistryOps::compile_service_additions(
+            &appended.authority,
+            &topology,
+            &appended,
+            appended.services.clone(),
+        ),
+        Err(_)
+    );
+}
+
+#[test]
+fn scale_out_service_append_rejects_authority_replacement_and_removal() {
+    let topology = topology();
+    let active = active_registry(&topology);
+    let mut initial_service = authority_replica_service();
+    initial_service.placement.maximum_members_per_root = 2;
+    let published = FleetRegistryOps::compile_initial_services(
+        &active.authority,
+        &topology,
+        &active,
+        vec![initial_service],
+    )
+    .expect("publish initial service");
+
+    let mut changed_member = published.services.clone();
+    changed_member[0].members[0].canister_id = principal(99);
+    std::assert_matches!(
+        FleetRegistryOps::compile_service_additions(
+            &published.authority,
+            &topology,
+            &published,
+            changed_member,
+        ),
+        Err(_)
+    );
+
+    let mut removed_member = published.services.clone();
+    removed_member[0].members.pop();
+    std::assert_matches!(
+        FleetRegistryOps::compile_service_additions(
+            &published.authority,
+            &topology,
+            &published,
+            removed_member,
+        ),
+        Err(_)
+    );
+
+    let mut added_authority = published.services.clone();
+    added_authority[0].members.insert(
+        1,
+        member(
+            FleetServiceMemberPurpose::Authority,
+            24,
+            8,
+            34,
+            "primary",
+            2,
+            &["database"],
+        ),
+    );
+    std::assert_matches!(
+        FleetRegistryOps::compile_service_additions(
+            &published.authority,
+            &topology,
+            &published,
+            added_authority,
+        ),
+        Err(_)
+    );
+}
+
+#[test]
 fn service_registry_validation_rejects_nearest_authority_substitutions() {
     let topology = topology();
     let active = active_registry(&topology);

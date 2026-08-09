@@ -132,7 +132,7 @@ impl FleetCoordinatorOps {
             component_provisioning: None,
             component_group_deployments: Vec::new(),
             component_scale_out: None,
-            service_publication_receipt: None,
+            service_publication_receipts: Vec::new(),
             root_draining_publication_receipts: Vec::new(),
             root_removal_publication_receipts: Vec::new(),
             root_deletion_readiness_intents: Vec::new(),
@@ -408,7 +408,7 @@ impl FleetCoordinatorOps {
                 "Fleet Component provisioning already contains different protected plan authority",
             ));
         }
-        if current.service_publication_receipt.is_some() {
+        if !current.service_publication_receipts.is_empty() {
             return Err(InternalError::conflict(
                 "Fleet Component provisioning plan must precede Fleet-service publication",
             ));
@@ -859,7 +859,7 @@ impl FleetCoordinatorOps {
         published_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_record(&current, request)?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
         let progress = component_provisioning_root_provision_progress(record)?;
         match classify_root_provision_advance(request, &progress)? {
             RootProvisionAdvance::Current => {
@@ -883,11 +883,12 @@ impl FleetCoordinatorOps {
                 "Fleet-service publication time precedes complete root provisioning",
             ));
         }
-        let publication = compile_initial_service_publication(&current, record, &provisioned)?;
+        let publication = compile_service_publication(&current, record, &provisioned)?;
         let mut next = current.clone();
         next.registry = publication.registry;
-        next.service_publication_receipt = Some(publication.receipt.clone());
-        component_provisioning_record_mut(&mut next)?.state =
+        next.service_publication_receipts
+            .push(publication.receipt.clone());
+        component_provisioning_operation_record_mut(&mut next, request.operation_id)?.state =
             FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
                 planned_at_ns: provisioned.planned_at_ns,
                 acceptances: provisioned.acceptances,
@@ -1014,8 +1015,11 @@ impl FleetCoordinatorOps {
                 || root_provisioned_response(&progress, intent.root_index),
                 Ok,
             )?;
-        let fleet_directory_content_hash =
-            expected_fleet_directory_content_hash(&current, intent.fleet_subnet_root)?;
+        let fleet_directory_content_hash = expected_fleet_directory_content_hash(
+            &current,
+            &progress.published_fleet_registry,
+            intent.fleet_subnet_root,
+        )?;
         validate_directory_confirmation_response(
             record,
             &progress.published_fleet_registry,
@@ -1707,9 +1711,16 @@ impl FleetCoordinatorOps {
         let current = Self::validate_current_registry(current)?;
         validate_component_provisioning_record(&current)?;
         validate_component_scale_out_progress(&current)?;
+        validate_service_publication_receipt_owners(&current)?;
+        let deployment_registry = current
+            .component_scale_out
+            .as_ref()
+            .map(|record| component_operation_source_registry(&current, record))
+            .transpose()?
+            .unwrap_or_else(|| current.registry.clone());
         deployment_ledger::validate(
             &current.component_deployment_configuration,
-            &current.registry,
+            &deployment_registry,
             current.component_provisioning.as_ref(),
             current.component_scale_out.as_ref(),
             &current.component_group_deployments,
@@ -1792,7 +1803,7 @@ fn validate_component_provisioning_record(
     current: &FleetCoordinatorRegistryRecord,
 ) -> Result<(), InternalError> {
     let Some(record) = &current.component_provisioning else {
-        if current.service_publication_receipt.is_some() {
+        if !current.service_publication_receipts.is_empty() {
             return Err(receipt_invariant(
                 "Fleet-service publication receipt lacks its provisioning operation",
             ));
@@ -1814,7 +1825,7 @@ fn validate_component_provisioning_record(
             "Fleet Component provisioning record contains an unavailable operation kind",
         ));
     }
-    let source_registry = initial_active_registry(current)?;
+    let source_registry = component_operation_source_registry(current, record)?;
     ComponentProvisioningPlanOps::validate_compiled(
         &current.component_deployment_configuration,
         &source_registry,
@@ -1870,37 +1881,56 @@ fn validate_component_scale_out_progress(
             | FleetComponentProvisioningStateRecord::RootsAccepted { .. }
             | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
             | FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. }
+            | FleetComponentProvisioningStateRecord::ServiceTopologyPublished { .. }
     ) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out crossed its implemented root-provisioning boundary",
+            "Fleet Component scale-out crossed its implemented service-publication boundary",
         ));
     }
+    let source_registry = component_operation_source_registry(current, record)?;
     validate_component_provisioning_root_acceptance_state(record)?;
     validate_component_provisioning_root_provision_state(
         &current.component_deployment_configuration,
-        &current.registry,
+        &source_registry,
         record,
     )?;
-    validate_scale_out_root_provisioning_fence(record)?;
+    validate_service_publication_authority(current, record)?;
+    validate_scale_out_service_publication_fence(record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
 
-fn validate_scale_out_root_provisioning_fence(
+fn validate_service_publication_receipt_owners(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    let fresh_operation = current
+        .component_provisioning
+        .as_ref()
+        .map(|record| record.operation_id);
+    let scale_out_operation = current
+        .component_scale_out
+        .as_ref()
+        .map(|record| record.operation_id);
+    for receipt in &current.service_publication_receipts {
+        let has_known_owner = [
+            fresh_operation == Some(receipt.operation_id),
+            scale_out_operation == Some(receipt.operation_id),
+        ]
+        .into_iter()
+        .any(|matches| matches);
+        if !has_known_owner {
+            return Err(receipt_invariant(
+                "Fleet-service publication receipt lacks its provisioning operation",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_scale_out_service_publication_fence(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
     let progress = component_provisioning_root_provision_progress(record)?;
-    let crossed_later_boundary = [
-        progress.published_fleet_registry.is_some(),
-        progress.service_topology_published_at_ns.is_some(),
-    ]
-    .into_iter()
-    .any(|crossed| crossed);
-    if crossed_later_boundary {
-        return Err(receipt_invariant(
-            "Fleet Component scale-out contains evidence beyond terminal root provisioning",
-        ));
-    }
     let current_root_crossed_terminal_fence = progress
         .current_response
         .as_ref()
@@ -2182,8 +2212,11 @@ fn validate_completed_directory_confirmations(
             .map_err(|_| receipt_invariant("Directory confirmation index does not fit u32"))?;
         let root = confirmation_root(record, root_index)?;
         let previous = root_provisioned_response(progress, root_index)?;
-        let fleet_directory_content_hash =
-            expected_fleet_directory_content_hash(coordinator, root)?;
+        let fleet_directory_content_hash = expected_fleet_directory_content_hash(
+            coordinator,
+            &progress.published_fleet_registry,
+            root,
+        )?;
         validate_directory_confirmation_response(
             record,
             &progress.published_fleet_registry,
@@ -2216,8 +2249,11 @@ fn validate_current_directory_confirmation(
     if let Some(current) = &progress.current {
         let root = confirmation_root(record, progress.confirmed_root_count)?;
         let previous = root_provisioned_response(progress, progress.confirmed_root_count)?;
-        let fleet_directory_content_hash =
-            expected_fleet_directory_content_hash(coordinator, root)?;
+        let fleet_directory_content_hash = expected_fleet_directory_content_hash(
+            coordinator,
+            &progress.published_fleet_registry,
+            root,
+        )?;
         validate_directory_confirmation_response(
             record,
             &progress.published_fleet_registry,
@@ -2537,7 +2573,7 @@ fn validate_service_publication_authority(
             "Fleet-service publication time precedes complete root provisioning",
         ));
     }
-    let source_registry = initial_active_registry(current)?;
+    let source_registry = component_operation_source_registry(current, record)?;
     let root_receipts = publication
         .provisions
         .iter()
@@ -2547,21 +2583,24 @@ fn validate_service_publication_authority(
         .iter()
         .map(|root_receipt| root_receipt.receipt_content_hash)
         .collect::<Vec<_>>();
-    let services = FleetServiceBindingOps::compile_initial_compiled(
+    let services = compile_component_operation_services(
         &current.component_deployment_configuration,
         &source_registry,
-        &record.plan,
-        record.operation_id,
+        record,
         &root_receipts,
     )
     .map_err(|_| {
         receipt_invariant("published root provisioning receipts do not compile canonical services")
     })?;
-    if receipt.previous_version != record.plan.fleet_registry
-        || receipt.version != *publication.published_registry
-        || receipt.root_receipt_content_hashes != receipt_hashes
-        || receipt.services != services
-    {
+    let receipt_is_exact = [
+        receipt.previous_version == record.plan.fleet_registry,
+        receipt.version == *publication.published_registry,
+        receipt.root_receipt_content_hashes == receipt_hashes,
+        receipt.services == services,
+    ]
+    .into_iter()
+    .all(|fact| fact);
+    if !receipt_is_exact {
         return Err(receipt_invariant(
             "Fleet-service publication receipt differs from its exact terminal evidence",
         ));
@@ -2638,10 +2677,8 @@ fn paired_service_publication_evidence<'a>(
     )>,
     InternalError,
 > {
-    match (
-        service_publication_state(record),
-        current.service_publication_receipt.as_ref(),
-    ) {
+    let receipt = service_publication_receipt_for_operation(current, record.operation_id)?;
+    match (service_publication_state(record), receipt) {
         (Some(publication), Some(receipt)) => Ok(Some((publication, receipt))),
         (None, None) => Ok(None),
         (Some(_), None) => Err(receipt_invariant(
@@ -2651,6 +2688,23 @@ fn paired_service_publication_evidence<'a>(
             "Fleet-service publication receipt lacks its atomic state",
         )),
     }
+}
+
+fn service_publication_receipt_for_operation(
+    current: &FleetCoordinatorRegistryRecord,
+    operation_id: [u8; 32],
+) -> Result<Option<&FleetServicePublicationReceiptRecord>, InternalError> {
+    let mut matches = current
+        .service_publication_receipts
+        .iter()
+        .filter(|receipt| receipt.operation_id == operation_id);
+    let receipt = matches.next();
+    if matches.next().is_some() {
+        return Err(receipt_invariant(
+            "Fleet-service publication operation has duplicate receipts",
+        ));
+    }
+    Ok(receipt)
 }
 
 fn require_component_provisioning_record<'a>(
@@ -2773,7 +2827,7 @@ struct ComponentsProvisionedState {
     components_provisioned_at_ns: u64,
 }
 
-struct InitialServicePublication {
+struct ServicePublication {
     registry: FleetRegistry,
     receipt: FleetServicePublicationReceiptRecord,
 }
@@ -2802,18 +2856,18 @@ fn components_provisioned_state(
     })
 }
 
-fn compile_initial_service_publication(
+fn compile_service_publication(
     current: &FleetCoordinatorRegistryRecord,
     record: &FleetComponentProvisioningRecord,
     provisioned: &ComponentsProvisionedState,
-) -> Result<InitialServicePublication, InternalError> {
-    let source_registry = initial_active_registry(current)?;
+) -> Result<ServicePublication, InternalError> {
+    let source_registry = component_operation_source_registry(current, record)?;
     if current.registry != source_registry {
         return Err(InternalError::conflict(
-            "initial Fleet-service publication must precede later Registry transitions",
+            "Fleet-service publication source Registry is no longer current",
         ));
     }
-    if current.service_publication_receipt.is_some() {
+    if service_publication_receipt_for_operation(current, record.operation_id)?.is_some() {
         return Err(receipt_invariant(
             "ComponentsProvisioned state already contains Fleet-service publication evidence",
         ));
@@ -2823,11 +2877,10 @@ fn compile_initial_service_publication(
         .iter()
         .map(|provision| provision.response.clone())
         .collect::<Vec<_>>();
-    let services = FleetServiceBindingOps::compile_initial_compiled(
+    let services = compile_component_operation_services(
         &current.component_deployment_configuration,
         &source_registry,
-        &record.plan,
-        record.operation_id,
+        record,
         &root_receipts,
     )?;
     let topology = &current
@@ -2837,25 +2890,37 @@ fn compile_initial_service_publication(
         FleetRegistryOps::version(&current.authority, topology, &current.registry)?;
     if previous_version != record.plan.fleet_registry {
         return Err(InternalError::conflict(
-            "initial Fleet-service publication expected Registry version is stale",
+            "Fleet-service publication expected Registry version is stale",
         ));
     }
-    let registry = if services.is_empty() {
+    let registry = if services == current.registry.services {
         current.registry.clone()
     } else {
-        FleetRegistryOps::compile_initial_services(
-            &current.authority,
-            topology,
-            &current.registry,
-            services.clone(),
-        )?
+        match record.plan.operation {
+            FleetComponentProvisioningOperation::FreshInstall => {
+                FleetRegistryOps::compile_initial_services(
+                    &current.authority,
+                    topology,
+                    &current.registry,
+                    services.clone(),
+                )?
+            }
+            FleetComponentProvisioningOperation::ScaleOut { .. } => {
+                FleetRegistryOps::compile_service_additions(
+                    &current.authority,
+                    topology,
+                    &current.registry,
+                    services.clone(),
+                )?
+            }
+        }
     };
     let version = FleetRegistryOps::version(&current.authority, topology, &registry)?;
     let root_receipt_content_hashes = root_receipts
         .iter()
         .map(|receipt| receipt.receipt_content_hash)
         .collect();
-    Ok(InitialServicePublication {
+    Ok(ServicePublication {
         registry,
         receipt: FleetServicePublicationReceiptRecord {
             operation_id: record.operation_id,
@@ -2867,6 +2932,35 @@ fn compile_initial_service_publication(
             version,
         },
     })
+}
+
+fn compile_component_operation_services(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    source_registry: &FleetRegistry,
+    record: &FleetComponentProvisioningRecord,
+    root_receipts: &[RootComponentProvisioningStatusResponse],
+) -> Result<Vec<canic_core::dto::fleet_registry::FleetServiceBinding>, InternalError> {
+    match record.plan.operation {
+        FleetComponentProvisioningOperation::FreshInstall => {
+            FleetServiceBindingOps::compile_initial_compiled(
+                configuration,
+                source_registry,
+                &record.plan,
+                record.operation_id,
+                root_receipts,
+            )
+        }
+        FleetComponentProvisioningOperation::ScaleOut { .. } => {
+            FleetServiceBindingOps::compile_scale_out_compiled(
+                configuration,
+                source_registry,
+                &record.plan,
+                record.operation_id,
+                record.plan_hash,
+                root_receipts,
+            )
+        }
+    }
 }
 
 fn component_provisioning_root_acceptance_progress(
@@ -3752,44 +3846,94 @@ impl RootProvisioningCounts {
             && self.registry_committed == component_count
     }
 
-    const fn is_canonical(self, component_count: u32) -> bool {
-        self.reserved <= component_count
-            && self.claimed <= component_count
-            && self.installed <= component_count
-            && self.registry_committed <= component_count
-            && (self.claimed == 0 || self.reserved == component_count)
-            && (self.installed == 0 || self.claimed == component_count)
-            && (self.registry_committed == 0 || self.installed == component_count)
+    fn is_canonical(self, component_count: u32) -> bool {
+        let counts_are_bounded = [
+            self.reserved <= component_count,
+            self.claimed <= component_count,
+            self.installed <= component_count,
+            self.registry_committed <= component_count,
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        let phases_are_ordered = [
+            stage_follows_complete_predecessor(self.claimed, self.reserved, component_count),
+            stage_follows_complete_predecessor(self.installed, self.claimed, component_count),
+            stage_follows_complete_predecessor(
+                self.registry_committed,
+                self.installed,
+                component_count,
+            ),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        counts_are_bounded && phases_are_ordered
     }
 
     fn advances_one_step_to(self, next: Self, component_count: u32) -> bool {
-        if !self.is_canonical(component_count) || !next.is_canonical(component_count) {
+        let states_are_canonical = [
+            self.is_canonical(component_count),
+            next.is_canonical(component_count),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        if !states_are_canonical {
             return false;
         }
-        let reservation = self.claimed == 0
-            && self.installed == 0
-            && self.registry_committed == 0
-            && next.claimed == 0
-            && next.installed == 0
-            && next.registry_committed == 0
-            && self.reserved.checked_add(1) == Some(next.reserved);
-        let claim = self.reserved == next.reserved
-            && self.installed == 0
-            && self.registry_committed == 0
-            && next.installed == 0
-            && next.registry_committed == 0
-            && self.claimed.checked_add(1) == Some(next.claimed);
-        let install = self.reserved == next.reserved
-            && self.claimed == next.claimed
-            && self.registry_committed == 0
-            && next.registry_committed == 0
-            && self.installed.checked_add(1) == Some(next.installed);
-        let registry = self.reserved == next.reserved
-            && self.claimed == next.claimed
-            && self.installed == next.installed
-            && self.registry_committed.checked_add(1) == Some(next.registry_committed);
-        reservation || claim || install || registry
+        let reservation_advances = [
+            self.claimed == 0,
+            self.installed == 0,
+            self.registry_committed == 0,
+            next.claimed == 0,
+            next.installed == 0,
+            next.registry_committed == 0,
+            self.reserved.checked_add(1) == Some(next.reserved),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        let claim_advances = [
+            self.reserved == next.reserved,
+            self.installed == 0,
+            self.registry_committed == 0,
+            next.installed == 0,
+            next.registry_committed == 0,
+            self.claimed.checked_add(1) == Some(next.claimed),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        let install_advances = [
+            self.reserved == next.reserved,
+            self.claimed == next.claimed,
+            self.registry_committed == 0,
+            next.registry_committed == 0,
+            self.installed.checked_add(1) == Some(next.installed),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        let registry_advances = [
+            self.reserved == next.reserved,
+            self.claimed == next.claimed,
+            self.installed == next.installed,
+            self.registry_committed.checked_add(1) == Some(next.registry_committed),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        [
+            reservation_advances,
+            claim_advances,
+            install_advances,
+            registry_advances,
+        ]
+        .into_iter()
+        .any(|advances| advances)
     }
+}
+
+const fn stage_follows_complete_predecessor(
+    stage: u32,
+    predecessor: u32,
+    component_count: u32,
+) -> bool {
+    stage == 0 || predecessor == component_count
 }
 
 fn classify_root_provision_advance(
@@ -4165,14 +4309,16 @@ fn validate_terminal_runtime_activation(
 
 fn expected_fleet_directory_content_hash(
     current: &FleetCoordinatorRegistryRecord,
+    published_registry: &FleetRegistryVersion,
     root: Principal,
 ) -> Result<[u8; 32], InternalError> {
+    let registry = registry_snapshot_at_version(current, published_registry)?;
     let directory = FleetRegistryOps::directory_for_root(
-        &current.registry.authority,
+        &registry.authority,
         &current
             .component_deployment_configuration
             .component_topology,
-        &current.registry,
+        &registry,
         root,
     )?;
     RootComponentProvisioningReceiptOps::fleet_directory_content_hash(&directory)
@@ -5081,16 +5227,12 @@ fn validate_terminal_component_provisioning(
         .iter()
         .map(|provision| provision.response.clone())
         .collect::<Vec<_>>();
-    FleetServiceBindingOps::compile_initial_compiled(
-        configuration,
-        source_registry,
-        &record.plan,
-        record.operation_id,
-        &receipts,
-    )
-    .map_err(|_| {
-        receipt_invariant("complete root provisioning receipts do not compile canonical services")
-    })?;
+    compile_component_operation_services(configuration, source_registry, record, &receipts)
+        .map_err(|_| {
+            receipt_invariant(
+                "complete root provisioning receipts do not compile canonical services",
+            )
+        })?;
     validate_service_publication_progress(acceptance.phase, progress, completed_at_ns)
 }
 
@@ -5432,7 +5574,7 @@ fn canonical_registry_lifecycle_history(
 ) -> Result<Vec<FleetRegistryHistoryPoint>, InternalError> {
     let joining = historical_joining_registry(current)?;
     let (mut historical_registry, mut history) = initial_lifecycle_history(current, joining)?;
-    apply_service_publication_receipt(current, &mut historical_registry, &mut history)?;
+    apply_service_publication_receipts(current, &mut historical_registry, &mut history)?;
     for lifecycle in canonical_lifecycle_receipts(current)? {
         apply_lifecycle_receipt(current, lifecycle, &mut historical_registry, &mut history)?;
     }
@@ -5444,7 +5586,7 @@ fn initial_lifecycle_history(
     joining: FleetRegistry,
 ) -> Result<(FleetRegistry, Vec<FleetRegistryHistoryPoint>), InternalError> {
     let Some(receipt) = &current.registry_activation_receipt else {
-        let has_lifecycle_receipts = current.service_publication_receipt.is_some()
+        let has_lifecycle_receipts = !current.service_publication_receipts.is_empty()
             || !current.root_draining_publication_receipts.is_empty()
             || !current.root_removal_publication_receipts.is_empty();
         if has_lifecycle_receipts || current.registry != joining {
@@ -5524,17 +5666,51 @@ fn initial_active_registry(
     Ok(active)
 }
 
-fn apply_service_publication_receipt(
+fn component_operation_source_registry(
+    current: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+) -> Result<FleetRegistry, InternalError> {
+    match record.plan.operation {
+        FleetComponentProvisioningOperation::FreshInstall => initial_active_registry(current),
+        FleetComponentProvisioningOperation::ScaleOut { .. } => {
+            registry_snapshot_at_version(current, &record.plan.fleet_registry)
+        }
+    }
+}
+
+fn registry_snapshot_at_version(
+    current: &FleetCoordinatorRegistryRecord,
+    version: &FleetRegistryVersion,
+) -> Result<FleetRegistry, InternalError> {
+    canonical_registry_lifecycle_history(current)?
+        .into_iter()
+        .find(|point| &point.version == version)
+        .map(|point| point.registry)
+        .ok_or_else(|| {
+            receipt_invariant("Fleet Component operation source Registry is absent from history")
+        })
+}
+
+fn apply_service_publication_receipts(
     current: &FleetCoordinatorRegistryRecord,
     historical_registry: &mut FleetRegistry,
     history: &mut Vec<FleetRegistryHistoryPoint>,
 ) -> Result<(), InternalError> {
-    let Some(receipt) = &current.service_publication_receipt else {
-        return Ok(());
-    };
+    for receipt in &current.service_publication_receipts {
+        apply_service_publication_receipt(current, receipt, historical_registry, history)?;
+    }
+    Ok(())
+}
+
+fn apply_service_publication_receipt(
+    current: &FleetCoordinatorRegistryRecord,
+    receipt: &FleetServicePublicationReceiptRecord,
+    historical_registry: &mut FleetRegistry,
+    history: &mut Vec<FleetRegistryHistoryPoint>,
+) -> Result<(), InternalError> {
     if !FleetServicePublicationAuthority::from_receipt(receipt).is_complete() {
         return Err(receipt_invariant(
-            "initial Fleet-service publication receipt authority is incomplete",
+            "Fleet-service publication receipt authority is incomplete",
         ));
     }
     let previous_version = FleetRegistryOps::version(
@@ -5546,12 +5722,12 @@ fn apply_service_publication_receipt(
     )?;
     if receipt.previous_version != previous_version {
         return Err(receipt_invariant(
-            "initial Fleet-service publication source differs from canonical history",
+            "Fleet-service publication source differs from canonical history",
         ));
     }
-    let next_registry = if receipt.services.is_empty() {
+    let next_registry = if receipt.services == historical_registry.services {
         historical_registry.clone()
-    } else {
+    } else if historical_registry.services.is_empty() {
         FleetRegistryOps::compile_initial_services(
             &current.authority,
             &current
@@ -5561,7 +5737,19 @@ fn apply_service_publication_receipt(
             receipt.services.clone(),
         )
         .map_err(|_| {
-            receipt_invariant("initial Fleet-service publication target Registry cannot be derived")
+            receipt_invariant("initial Fleet-service publication target cannot be rederived")
+        })?
+    } else {
+        FleetRegistryOps::compile_service_additions(
+            &current.authority,
+            &current
+                .component_deployment_configuration
+                .component_topology,
+            historical_registry,
+            receipt.services.clone(),
+        )
+        .map_err(|_| {
+            receipt_invariant("scale-out Fleet-service publication target cannot be rederived")
         })?
     };
     let version = FleetRegistryOps::version(
@@ -5573,7 +5761,7 @@ fn apply_service_publication_receipt(
     )?;
     if receipt.version != version {
         return Err(receipt_invariant(
-            "initial Fleet-service publication response differs from canonical history",
+            "Fleet-service publication response differs from canonical history",
         ));
     }
     *historical_registry = next_registry.clone();
@@ -5610,19 +5798,23 @@ impl<'a> FleetServicePublicationAuthority<'a> {
     }
 
     fn is_complete(&self) -> bool {
-        if self.operation_id == [0; 32]
-            || self.plan_hash == [0; 32]
-            || self.configuration_digest.as_bytes() == &[0; 32]
-        {
-            return false;
-        }
-        !self.root_receipt_content_hashes.is_empty()
-            && self.root_receipt_content_hashes.len()
-                <= MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES
-            && self
-                .root_receipt_content_hashes
+        let identity_is_complete = [
+            self.operation_id != [0; 32],
+            self.plan_hash != [0; 32],
+            self.configuration_digest.as_bytes() != &[0; 32],
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        let receipt_hashes_are_complete = [
+            !self.root_receipt_content_hashes.is_empty(),
+            self.root_receipt_content_hashes.len() <= MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+            self.root_receipt_content_hashes
                 .iter()
-                .all(|hash| hash != &[0; 32])
+                .all(|hash| hash != &[0; 32]),
+        ]
+        .into_iter()
+        .all(|fact| fact);
+        identity_is_complete && receipt_hashes_are_complete
     }
 }
 

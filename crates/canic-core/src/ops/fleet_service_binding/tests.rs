@@ -22,7 +22,10 @@ use crate::{
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
     ops::{
-        component_provisioning_plan::ComponentProvisioningPlanOps,
+        component_provisioning_plan::{
+            ComponentProvisioningPlacementAuthority, ComponentProvisioningPlanOps,
+            ComponentProvisioningScaleOutAuthority,
+        },
         component_provisioning_receipt::{
             RootComponentProvisioningProvisionedReceiptAuthority,
             RootComponentProvisioningReceiptOps,
@@ -295,11 +298,21 @@ fn receipts(
     plan: &FleetComponentProvisioningPlan,
     operation_id: [u8; 32],
 ) -> Vec<RootComponentProvisioningStatusResponse> {
+    let plan_hash = ComponentProvisioningPlanOps::hash(config, registry, plan).expect("plan hash");
+    provisioned_receipts(config, plan, operation_id, plan_hash, 20)
+}
+
+fn provisioned_receipts(
+    config: &ConfigModel,
+    plan: &FleetComponentProvisioningPlan,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    first_component: u8,
+) -> Vec<RootComponentProvisioningStatusResponse> {
     let topology = config
         .compile_component_topology()
         .expect("Component Topology");
-    let plan_hash = ComponentProvisioningPlanOps::hash(config, registry, plan).expect("plan hash");
-    let mut next_component = 20_u8;
+    let mut next_component = first_component;
     plan.batches
         .iter()
         .enumerate()
@@ -396,6 +409,102 @@ fn receipts(
         .collect()
 }
 
+fn scale_out_plan(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    fresh_plan: &FleetComponentProvisioningPlan,
+) -> (FleetComponentProvisioningPlan, [u8; 32]) {
+    let deployment_topology = config
+        .compile_component_group_deployment_topology()
+        .expect("deployment topology");
+    let deployment = deployment_topology
+        .get(&"api".parse().expect("deployment ID"))
+        .expect("API deployment");
+    let entries = deployment
+        .members
+        .iter()
+        .map(|member| ComponentGroupPlanEntry {
+            member_path: member.member_path.clone(),
+            component_spec: member.component_spec.clone(),
+            spec_hash: member.component_spec_hash,
+            purpose: member.purpose.clone(),
+            labels: member.labels.clone(),
+            limits: member.limits.clone(),
+        })
+        .collect();
+    let selected_root = &registry.fleet_subnet_roots[0];
+    let plan = FleetComponentProvisioningPlan {
+        fleet: registry.authority.binding.fleet.clone(),
+        fleet_registry: FleetRegistryOps::version(
+            &registry.authority,
+            &config
+                .compile_component_topology()
+                .expect("Component Topology"),
+            registry,
+        )
+        .expect("published Registry version"),
+        configuration_digest: config
+            .compile_component_deployment_configuration_digest()
+            .expect("configuration digest"),
+        operation: FleetComponentProvisioningOperation::ScaleOut {
+            deployment: deployment.deployment.clone(),
+            previous_placements: 2,
+            requested_placements: 3,
+        },
+        directory_confirmation_roots: registry
+            .fleet_subnet_roots
+            .iter()
+            .map(|root| root.fleet_subnet_root)
+            .collect(),
+        batches: vec![FleetSubnetRootProvisioningBatch {
+            root: root_binding(registry, selected_root),
+            active_release_set: selected_root.active_release_set,
+            placements: vec![ComponentGroupPlacementPlan {
+                group_placement: ComponentGroupPlacementId {
+                    deployment: deployment.deployment.clone(),
+                    ordinal: 2,
+                },
+                component_group: deployment.component_group.clone(),
+                entries,
+            }],
+        }],
+    };
+    let mut committed_placements = fresh_plan
+        .batches
+        .iter()
+        .flat_map(|batch| {
+            batch
+                .placements
+                .iter()
+                .map(|placement| ComponentProvisioningPlacementAuthority {
+                    placement: placement.group_placement.clone(),
+                    fleet_subnet_root: batch.root.fleet_subnet_root,
+                })
+        })
+        .collect::<Vec<_>>();
+    committed_placements.sort_unstable_by(|left, right| left.placement.cmp(&right.placement));
+    let mut eligible_roots = fresh_plan
+        .batches
+        .iter()
+        .map(|batch| batch.root.fleet_subnet_root)
+        .collect::<Vec<_>>();
+    eligible_roots.sort_unstable();
+    let plan_hash = ComponentProvisioningPlanOps::hash_scale_out_compiled(
+        &config
+            .compile_component_deployment_configuration()
+            .expect("deployment configuration"),
+        registry,
+        &plan,
+        ComponentProvisioningScaleOutAuthority {
+            committed_placements: &committed_placements,
+            eligible_roots: &eligible_roots,
+            next_placement_ordinal: 2,
+        },
+    )
+    .expect("scale-out plan hash");
+    (plan, plan_hash)
+}
+
 fn rehash(
     receipt: &mut RootComponentProvisioningStatusResponse,
     batch: &FleetSubnetRootProvisioningBatch,
@@ -474,6 +583,104 @@ fn compiles_complete_mode_compatible_initial_services_in_canonical_order() {
         )
         .expect("decode service bindings"),
         services
+    );
+}
+
+#[test]
+fn compiles_one_complete_atomic_pool_member_scale_out() {
+    let (config, active, fresh_plan, fresh_receipts) = fixture();
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .expect("deployment configuration");
+    let initial_services =
+        compile_initial(&config, &active, &fresh_plan, [10; 32], &fresh_receipts)
+            .expect("initial services");
+    let published = FleetRegistryOps::compile_initial_services(
+        &active.authority,
+        &configuration.component_topology,
+        &active,
+        initial_services,
+    )
+    .expect("publish initial services");
+    let (scale_out, plan_hash) = scale_out_plan(&config, &published, &fresh_plan);
+    let receipts = provisioned_receipts(&config, &scale_out, [40; 32], plan_hash, 50);
+
+    let services = FleetServiceBindingOps::compile_scale_out_compiled(
+        &configuration,
+        &published,
+        &scale_out,
+        [40; 32],
+        plan_hash,
+        &receipts,
+    )
+    .expect("compile complete post-scale-out services");
+
+    assert_eq!(services[0].service.as_str(), "api");
+    assert_eq!(services[0].members.len(), 3);
+    assert_eq!(services[1], published.services[1]);
+    let appended = FleetRegistryOps::compile_service_additions(
+        &published.authority,
+        &configuration.component_topology,
+        &published,
+        services,
+    )
+    .expect("append all new PoolMembers atomically");
+    assert_eq!(appended.revision, published.revision + 1);
+}
+
+#[test]
+fn scale_out_rejects_existing_identity_reuse_and_authority_addition() {
+    let (config, active, fresh_plan, fresh_receipts) = fixture();
+    let configuration = config
+        .compile_component_deployment_configuration()
+        .expect("deployment configuration");
+    let initial_services =
+        compile_initial(&config, &active, &fresh_plan, [10; 32], &fresh_receipts)
+            .expect("initial services");
+    let published = FleetRegistryOps::compile_initial_services(
+        &active.authority,
+        &configuration.component_topology,
+        &active,
+        initial_services,
+    )
+    .expect("publish initial services");
+    let (scale_out, plan_hash) = scale_out_plan(&config, &published, &fresh_plan);
+    let mut receipts = provisioned_receipts(&config, &scale_out, [40; 32], plan_hash, 50);
+    receipts[0].result.as_mut().expect("result").placements[0].members[0]
+        .binding
+        .component = published.services[0].members[0].component;
+    rehash(&mut receipts[0], &scale_out.batches[0]);
+    crate::assert_err_variant!(
+        compile_scale_out_compiled_configuration(
+            &configuration,
+            &published,
+            &scale_out,
+            [40; 32],
+            plan_hash,
+            &receipts,
+        ),
+        Err(FleetServiceBindingOpsError::DuplicateComponentIdentity { .. })
+    );
+
+    let mut authority_plan = scale_out;
+    authority_plan.batches[0].placements[0].entries[0].purpose =
+        ComponentDeploymentPurpose::FleetServiceMember {
+            service: "api".parse().expect("service ID"),
+            member_purpose: FleetServiceMemberPurpose::Authority,
+        };
+    let mut authority_receipts =
+        provisioned_receipts(&config, &authority_plan, [41; 32], [42; 32], 60);
+    rehash(&mut authority_receipts[0], &authority_plan.batches[0]);
+    crate::assert_err_variant!(
+        compile_scale_out_compiled_configuration(
+            &configuration,
+            &published,
+            &authority_plan,
+            [41; 32],
+            [42; 32],
+            &authority_receipts,
+        ),
+        Err(FleetServiceBindingOpsError::InvalidScaleOutMemberPurpose)
     );
 }
 

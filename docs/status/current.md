@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Purpose
 
@@ -14,10 +14,22 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.30`.
-- The latest published release is `v0.101.30` at
-  `8f0c03fd77cf136e6d9a8eb4dba978e460ad616a`.
-- Open `0.101.31` freezes one exact group-partitioned terminal receipt for each
+- The workspace package version is `0.101.32`.
+- The latest published release is `v0.101.32` at
+  `cbb457424f976ad13c6caac73463ccd7f9bb0917`.
+- Open `0.101.33` derives the complete next Fleet-service set from the exact
+  source Registry, protected scale-out plan and every terminal selected-root
+  receipt. It appends all new Replica or PoolMember bindings atomically in one
+  Registry revision, rejects Authority additions and changes to published
+  members, and retains one durable receipt per publication operation so exact
+  history and retry evidence are never overwritten. Ordinary-only scale-out
+  records the same `ServiceTopologyPublished` boundary without a Registry
+  mutation. Both paths stop before Directory confirmation and runtime
+  activation.
+- Released `0.101.32` synchronizes package, lockfile and development-install
+  release metadata only; runtime behavior remains the `0.101.31`
+  implementation.
+- Released `0.101.31` freezes one exact group-partitioned terminal receipt for each
   fully Registry-committed scale-out root. The Coordinator retains durable
   pre-call intent, reconciles uncertain responses, authenticates each terminal
   receipt in canonical selected-root order and advances the next accepted root
@@ -2552,12 +2564,14 @@ First primary results:
 
 ## Next Action
 
-The response-loss-safe scale-out Component Registry commitment boundary is
-published at immutable `v0.101.30`. Open `0.101.31` freezes each selected
-root's exact terminal receipt and advances the Coordinator to
-`ComponentsProvisioned`. Continue Slice 4 by atomically appending only the new
-Replica and PoolMember service bindings to the current Fleet Registry. Keep
-Directory confirmation and runtime activation behind later explicit phases.
+The terminal selected-root receipt boundary is published at immutable
+`v0.101.31`; `v0.101.32` contains release metadata only. Open `0.101.33`
+atomically appends the complete new Replica or PoolMember set, or records the
+ordinary-only no-mutation publication boundary, and stops at
+`ServiceTopologyPublished`. Continue Slice 4 by freezing the exact selected
+plus affected-existing-root Directory barrier and driving those roots through
+Directory confirmation. Keep runtime activation behind its later explicit
+phase.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

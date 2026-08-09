@@ -1,6 +1,6 @@
 //! Module: ops::fleet_service_binding
 //!
-//! Responsibility: derive the complete initial Fleet-service member set from exact root receipts.
+//! Responsibility: derive exact Fleet-service member sets from terminal root receipts.
 //! Does not own: Coordinator persistence, Fleet Registry mutation, or Directory publication.
 //! Boundary: Coordinator workflow supplies one validated plan and every authenticated root receipt.
 
@@ -15,10 +15,10 @@ use crate::{
     },
     dto::{
         component_provisioning::{
-            ComponentGroupPlanEntry, FleetComponentProvisioningPlan,
-            FleetSubnetRootProvisioningBatch, RootComponentProvisioningPhase,
-            RootComponentProvisioningResult, RootComponentProvisioningStatusResponse,
-            RootProvisionedGroupMember,
+            ComponentGroupPlanEntry, FleetComponentProvisioningOperation,
+            FleetComponentProvisioningPlan, FleetSubnetRootProvisioningBatch,
+            RootComponentProvisioningPhase, RootComponentProvisioningResult,
+            RootComponentProvisioningStatusResponse, RootProvisionedGroupMember,
         },
         fleet_registry::{
             FleetRegistry, FleetServiceBinding, FleetServiceComponentBinding, FleetServiceMode,
@@ -32,6 +32,7 @@ use crate::{
             RootComponentProvisioningProvisionedReceiptAuthority,
             RootComponentProvisioningReceiptOps,
         },
+        fleet_registry::FleetRegistryOps,
     },
 };
 use std::{
@@ -68,6 +69,12 @@ pub enum FleetServiceBindingOpsError {
 
     #[error("Fleet service '{service}' has a member incompatible with its configured mode")]
     InvalidServiceMemberPurpose { service: FleetServiceId },
+
+    #[error("Fleet-service scale-out may add only Replica or PoolMember bindings")]
+    InvalidScaleOutMemberPurpose,
+
+    #[error("Fleet-service scale-out requires a ScaleOut provisioning plan")]
+    InvalidScaleOutOperation,
 
     #[error("Fleet service '{service}' violates its configured density or spread policy")]
     InvalidServicePlacement { service: FleetServiceId },
@@ -106,9 +113,15 @@ pub enum FleetServiceBindingOpsError {
 
     #[error("Fleet-service binding compilation produced undeclared service '{service}'")]
     UnexpectedService { service: FleetServiceId },
+
+    #[error("published Fleet service '{service}' differs from compiled configuration authority")]
+    PublishedServiceMismatch { service: FleetServiceId },
+
+    #[error("published Fleet services are not the complete compiled target set")]
+    PublishedServiceSetMismatch,
 }
 
-/// Pure compiler for the complete configured initial Fleet-service binding set.
+/// Pure compiler for complete configured Fleet-service binding sets.
 pub struct FleetServiceBindingOps;
 
 impl FleetServiceBindingOps {
@@ -141,6 +154,27 @@ impl FleetServiceBindingOps {
             registry,
             plan,
             operation_id,
+            root_receipts,
+        )
+        .map_err(OpsError::from)
+        .map_err(InternalError::from)
+    }
+
+    /// Compile the complete next service set from one validated scale-out plan.
+    pub fn compile_scale_out_compiled(
+        configuration: &ComponentDeploymentConfiguration,
+        registry: &FleetRegistry,
+        plan: &FleetComponentProvisioningPlan,
+        operation_id: [u8; 32],
+        plan_hash: [u8; 32],
+        root_receipts: &[RootComponentProvisioningStatusResponse],
+    ) -> Result<Vec<FleetServiceBinding>, InternalError> {
+        compile_scale_out_compiled_configuration(
+            configuration,
+            registry,
+            plan,
+            operation_id,
+            plan_hash,
             root_receipts,
         )
         .map_err(OpsError::from)
@@ -282,6 +316,159 @@ fn compile_initial_compiled_configuration(
         return Err(FleetServiceBindingOpsError::UnexpectedService { service });
     }
     Ok(services)
+}
+
+fn compile_scale_out_compiled_configuration(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+    root_receipts: &[RootComponentProvisioningStatusResponse],
+) -> Result<Vec<FleetServiceBinding>, FleetServiceBindingOpsError> {
+    validate_scale_out_compilation_authority(
+        configuration,
+        registry,
+        plan,
+        operation_id,
+        plan_hash,
+    )?;
+    if root_receipts.len() != plan.batches.len() {
+        return Err(FleetServiceBindingOpsError::RootReceiptCountMismatch {
+            actual: root_receipts.len(),
+            expected: plan.batches.len(),
+        });
+    }
+    let authority = BindingCompilationAuthority {
+        operation_id,
+        plan_hash,
+        plan,
+        component_topology: &configuration.component_topology,
+    };
+    let mut ledger = BindingCompilationLedger::from_published_services(&registry.services)?;
+    for (batch, receipt) in plan.batches.iter().zip(root_receipts) {
+        validate_root_receipt(batch, receipt, &authority, &mut ledger)?;
+    }
+    compile_scale_out_services(configuration, registry, ledger.candidates)
+}
+
+fn validate_scale_out_compilation_authority(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    plan: &FleetComponentProvisioningPlan,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+) -> Result<(), FleetServiceBindingOpsError> {
+    if operation_id == [0; 32] {
+        return Err(FleetServiceBindingOpsError::EmptyOperationId);
+    }
+    let operation_authority_is_valid = [
+        plan_hash != [0; 32],
+        matches!(
+            plan.operation,
+            FleetComponentProvisioningOperation::ScaleOut { .. }
+        ),
+    ]
+    .into_iter()
+    .all(|fact| fact);
+    if !operation_authority_is_valid {
+        return Err(FleetServiceBindingOpsError::InvalidScaleOutOperation);
+    }
+    let configuration_digest = configuration
+        .digest()
+        .map_err(|error| FleetServiceBindingOpsError::Configuration(error.to_string()))?;
+    let registry_version = FleetRegistryOps::version(
+        &registry.authority,
+        &configuration.component_topology,
+        registry,
+    )
+    .map_err(|error| FleetServiceBindingOpsError::Plan(error.to_string()))?;
+    let authority_facts = [
+        plan.fleet == registry.authority.binding.fleet,
+        plan.fleet_registry == registry_version,
+        plan.configuration_digest == configuration_digest,
+    ];
+    if !authority_facts.into_iter().all(|fact| fact) {
+        return Err(FleetServiceBindingOpsError::InvalidScaleOutOperation);
+    }
+    Ok(())
+}
+
+fn compile_scale_out_services(
+    configuration: &ComponentDeploymentConfiguration,
+    registry: &FleetRegistry,
+    mut additions: BTreeMap<FleetServiceId, Vec<FleetServiceComponentBinding>>,
+) -> Result<Vec<FleetServiceBinding>, FleetServiceBindingOpsError> {
+    let targets = &configuration.fleet_service_topology.targets;
+    if targets.len() != registry.services.len() {
+        return Err(FleetServiceBindingOpsError::PublishedServiceSetMismatch);
+    }
+    let mut services = Vec::with_capacity(registry.services.len());
+    for (target, published) in targets.iter().zip(&registry.services) {
+        validate_published_service(target, published)?;
+        let mut new_members = additions.remove(&target.service).unwrap_or_default();
+        if new_members
+            .iter()
+            .any(|member| member.member_purpose == FleetServiceMemberPurpose::Authority)
+        {
+            return Err(FleetServiceBindingOpsError::InvalidScaleOutMemberPurpose);
+        }
+        if new_members.is_empty() {
+            services.push(published.clone());
+            continue;
+        }
+        new_members.extend(published.members.iter().cloned());
+        let mut candidates = BTreeMap::from([(target.service.clone(), new_members)]);
+        services.push(compile_service(target, &mut candidates)?);
+    }
+    if let Some(service) = additions.into_keys().next() {
+        return Err(FleetServiceBindingOpsError::UnexpectedService { service });
+    }
+    Ok(services)
+}
+
+fn validate_published_service(
+    target: &FleetServiceTarget,
+    published: &FleetServiceBinding,
+) -> Result<(), FleetServiceBindingOpsError> {
+    let expected_mode = validate_service_mode(target, &published.members)?;
+    validate_service_placement(target, &published.members)?;
+    let authority_matches = [
+        published.service == target.service,
+        published.role == target.role,
+        published.component_spec == target.component_spec,
+        published.mode == expected_mode,
+        published.placement == target.placement,
+    ]
+    .into_iter()
+    .all(|fact| fact);
+    if !authority_matches {
+        return Err(FleetServiceBindingOpsError::PublishedServiceMismatch {
+            service: target.service.clone(),
+        });
+    }
+    Ok(())
+}
+
+impl BindingCompilationLedger {
+    fn from_published_services(
+        services: &[FleetServiceBinding],
+    ) -> Result<Self, FleetServiceBindingOpsError> {
+        let mut ledger = Self::default();
+        for member in services.iter().flat_map(|service| &service.members) {
+            if !ledger.components.insert(member.component) {
+                return Err(FleetServiceBindingOpsError::DuplicateComponentIdentity {
+                    component: member.component,
+                });
+            }
+            if !ledger.principals.insert(member.canister_id) {
+                return Err(FleetServiceBindingOpsError::DuplicateComponentPrincipal {
+                    canister_id: member.canister_id,
+                });
+            }
+        }
+        Ok(ledger)
+    }
 }
 
 #[cfg(test)]
