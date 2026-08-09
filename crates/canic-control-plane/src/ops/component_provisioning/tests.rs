@@ -915,6 +915,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         crate::storage::stable::component_provisioning::RootComponentProvisioningStateRecord {
             tracked_group_placements: 0,
             active_operation_id: None,
+            active_directory_synchronization_operation_id: None,
         }
     );
 
@@ -932,6 +933,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         crate::storage::stable::component_provisioning::RootComponentProvisioningStateRecord {
             tracked_group_placements: 1,
             active_operation_id: Some([71; 32]),
+            active_directory_synchronization_operation_id: None,
         }
     );
 }

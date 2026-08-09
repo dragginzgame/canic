@@ -59,6 +59,8 @@ use canic_core::{
             FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
             FleetComponentProvisioningStatusResponse, FleetComponentPublicationRootProgress,
             FleetSubnetRootProvisioningBatch, RootComponentActivationRequest,
+            RootComponentDirectorySynchronizationRequest,
+            RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningPhase, RootComponentProvisioningStatusResponse,
             RootComponentPublicationRequest,
@@ -911,8 +913,20 @@ impl FleetCoordinatorOps {
         started_at_ns: u64,
     ) -> Result<FleetComponentDirectoryConfirmationDisposition, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_record(&current, request)?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
         let progress = component_directory_confirmation_progress(record)?;
+        if matches!(
+            record.plan.operation,
+            FleetComponentProvisioningOperation::ScaleOut { .. }
+        ) {
+            return advance_scale_out_directory_confirmation(
+                &current,
+                record,
+                request,
+                progress,
+                started_at_ns,
+            );
+        }
         match classify_directory_confirmation_advance(request, &progress)? {
             DirectoryConfirmationAdvance::Current => {
                 return component_provisioning_status_response(record)
@@ -938,7 +952,9 @@ impl FleetCoordinatorOps {
         let previous = progress
             .current
             .as_ref()
-            .map(|record| record.response.clone())
+            .map(fresh_confirmation_response)
+            .transpose()?
+            .cloned()
             .map_or_else(
                 || root_provisioned_response(&progress, root_index).cloned(),
                 Ok,
@@ -949,7 +965,7 @@ impl FleetCoordinatorOps {
                 "Directory confirmation cursor differs from canonical root order",
             ));
         }
-        let call = FleetComponentDirectoryConfirmationCallView {
+        let call = FleetComponentDirectoryConfirmationCallView::FreshPublication {
             fleet_subnet_root: root,
             request: RootComponentPublicationRequest {
                 operation_id: record.operation_id,
@@ -958,10 +974,10 @@ impl FleetCoordinatorOps {
                 expected_published_component_count: previous.published_component_count,
             },
         };
-        let intent = FleetComponentDirectoryConfirmationIntentRecord {
+        let intent = FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
             root_index,
             fleet_subnet_root: root,
-            request: call.request.clone(),
+            request: confirmation_call_publication_request(&call)?.clone(),
             started_at_ns,
         };
         let mut next = current.clone();
@@ -989,7 +1005,15 @@ impl FleetCoordinatorOps {
         recorded_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_record(&current, request)?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
+        if matches!(
+            record.plan.operation,
+            FleetComponentProvisioningOperation::ScaleOut { .. }
+        ) {
+            return Err(InternalError::conflict(
+                "scale-out Directory confirmation requires its typed synchronization response",
+            ));
+        }
         let mut progress = component_directory_confirmation_progress(record)?;
         if classify_directory_confirmation_advance(request, &progress)?
             != DirectoryConfirmationAdvance::Reconcile
@@ -1002,7 +1026,9 @@ impl FleetCoordinatorOps {
             .in_flight
             .take()
             .ok_or_else(|| receipt_invariant("Directory confirmation intent disappeared"))?;
-        if recorded_at_ns < intent.started_at_ns {
+        let (intent_root_index, intent_root, intent_request, intent_started_at_ns) =
+            fresh_confirmation_intent(&intent)?;
+        if recorded_at_ns < intent_started_at_ns {
             return Err(InternalError::invalid_input(
                 "Directory confirmation observation time regressed",
             ));
@@ -1010,70 +1036,186 @@ impl FleetCoordinatorOps {
         let previous = progress
             .current
             .as_ref()
-            .map(|record| &record.response)
+            .map(fresh_confirmation_response)
+            .transpose()?
             .map_or_else(
-                || root_provisioned_response(&progress, intent.root_index),
+                || root_provisioned_response(&progress, intent_root_index),
                 Ok,
             )?;
         let fleet_directory_content_hash = expected_fleet_directory_content_hash(
             &current,
             &progress.published_fleet_registry,
-            intent.fleet_subnet_root,
+            intent_root,
         )?;
         validate_directory_confirmation_response(
-            record,
-            &progress.published_fleet_registry,
-            intent.fleet_subnet_root,
-            fleet_directory_content_hash,
+            RootDirectoryConfirmationValidationContext::new(
+                record,
+                &progress.published_fleet_registry,
+                intent_root,
+                fleet_directory_content_hash,
+            ),
             previous,
             &response,
             recorded_at_ns,
+            true,
         )?;
-        let observed = FleetComponentDirectoryConfirmationRecord {
-            started_at_ns: intent.started_at_ns,
-            response,
+        if intent_request.operation_id != request.operation_id {
+            return Err(InternalError::conflict(
+                "Directory confirmation intent changed its operation authority",
+            ));
+        }
+        let observed = FleetComponentDirectoryConfirmationRecord::FreshPublication {
+            started_at_ns: intent_started_at_ns,
+            response: Box::new(response),
             recorded_at_ns,
         };
-        if observed.response.phase == RootComponentProvisioningPhase::Published {
+        if fresh_confirmation_response(&observed)?.phase
+            == RootComponentProvisioningPhase::Published
+        {
             progress.confirmations.push(observed);
             progress.current = None;
         } else {
             progress.current = Some(observed);
         }
-        let confirmed_root_count = u32::try_from(progress.confirmations.len())
-            .map_err(|_| receipt_invariant("Directory confirmation count does not fit u32"))?;
-        let mut next = current.clone();
-        component_provisioning_record_mut(&mut next)?.state =
-            if confirmed_root_count == progress.confirmation_root_count {
-                FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
-                    planned_at_ns: progress.planned_at_ns,
-                    acceptances: progress.acceptances,
-                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
-                    provisions: progress.provisions,
-                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
-                    published_fleet_registry: progress.published_fleet_registry,
-                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
-                    confirmations: progress.confirmations,
-                    directories_confirmed_at_ns: recorded_at_ns,
-                }
-            } else {
-                FleetComponentProvisioningStateRecord::ConfirmingDirectories {
-                    planned_at_ns: progress.planned_at_ns,
-                    acceptances: progress.acceptances,
-                    roots_accepted_at_ns: progress.roots_accepted_at_ns,
-                    provisions: progress.provisions,
-                    components_provisioned_at_ns: progress.components_provisioned_at_ns,
-                    published_fleet_registry: progress.published_fleet_registry,
-                    service_topology_published_at_ns: progress.service_topology_published_at_ns,
-                    confirmations: progress.confirmations,
-                    current: progress.current.map(Box::new),
-                    in_flight: None,
-                }
-            };
-        let next = Self::validate_current(next)?;
-        let result = component_provisioning_status_response(component_provisioning_record(&next)?)?;
-        Self::commit_transition(&current, next)?;
-        Ok(result)
+        commit_directory_confirmation_progress(&current, request, progress, recorded_at_ns)
+    }
+
+    pub(crate) fn record_component_scale_out_directory_synchronization(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentDirectorySynchronizationResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
+        require_scale_out_operation(record)?;
+        let mut progress = component_directory_confirmation_progress(record)?;
+        if classify_directory_confirmation_advance(request, &progress)?
+            != DirectoryConfirmationAdvance::Reconcile
+        {
+            return Err(InternalError::conflict(
+                "scale-out Directory synchronization response has no durable pre-call intent",
+            ));
+        }
+        let intent = progress
+            .in_flight
+            .take()
+            .ok_or_else(|| receipt_invariant("Directory synchronization intent disappeared"))?;
+        let (root_index, root, sync_request, started_at_ns) =
+            scale_out_synchronization_intent(&intent)?;
+        validate_scale_out_synchronization_response(
+            &ScaleOutSynchronizationValidationContext {
+                coordinator: &current,
+                operation: record,
+                progress: &progress,
+                root_index,
+                root,
+                request: sync_request,
+                started_at_ns,
+                recorded_at_ns,
+            },
+            &response,
+        )?;
+        let observed = FleetComponentDirectoryConfirmationRecord::ScaleOut {
+            started_at_ns,
+            synchronization: Box::new(response),
+            publication: None,
+            recorded_at_ns,
+        };
+        if scale_out_confirmation_is_terminal(record, root, &observed)? {
+            progress.confirmations.push(observed);
+            progress.current = None;
+        } else {
+            progress.current = Some(observed);
+        }
+        commit_directory_confirmation_progress(&current, request, progress, recorded_at_ns)
+    }
+
+    pub(crate) fn record_component_scale_out_directory_publication(
+        request: &FleetComponentProvisioningAdvanceRequest,
+        response: RootComponentProvisioningStatusResponse,
+        recorded_at_ns: u64,
+    ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        let current = Self::current()?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
+        require_scale_out_operation(record)?;
+        let mut progress = component_directory_confirmation_progress(record)?;
+        if classify_directory_confirmation_advance(request, &progress)?
+            != DirectoryConfirmationAdvance::Reconcile
+        {
+            return Err(InternalError::conflict(
+                "scale-out Directory publication response has no durable pre-call intent",
+            ));
+        }
+        let intent = progress
+            .in_flight
+            .take()
+            .ok_or_else(|| receipt_invariant("Directory publication intent disappeared"))?;
+        let (root_index, root, publication_request, started_at_ns) =
+            scale_out_publication_intent(&intent)?;
+        let current_confirmation = progress.current.as_ref().ok_or_else(|| {
+            receipt_invariant("scale-out publication lacks terminal synchronization evidence")
+        })?;
+        let (synchronization, previous_publication) =
+            scale_out_confirmation_progress(current_confirmation)?;
+        if !synchronization.complete {
+            return Err(receipt_invariant(
+                "scale-out publication preceded terminal Directory synchronization",
+            ));
+        }
+        let previous = previous_publication.map_or_else(
+            || selected_root_provisioned_response(record, &progress, root),
+            Ok,
+        )?;
+        let intent_is_exact = [
+            root_index == progress.confirmed_root_count,
+            confirmation_root(record, root_index)? == root,
+            publication_request.operation_id == record.operation_id,
+            publication_request.plan_hash == record.plan_hash,
+            publication_request.published_fleet_registry == progress.published_fleet_registry,
+            publication_request.expected_published_component_count
+                == previous.published_component_count,
+            started_at_ns >= confirmation_recorded_at_ns(current_confirmation),
+            recorded_at_ns >= started_at_ns,
+        ]
+        .into_iter()
+        .all(|matches| matches);
+        if !intent_is_exact {
+            return Err(InternalError::conflict(
+                "scale-out Directory publication response changed durable intent authority",
+            ));
+        }
+        let fleet_directory_content_hash = expected_fleet_directory_content_hash(
+            &current,
+            &progress.published_fleet_registry,
+            root,
+        )?;
+        validate_directory_confirmation_response(
+            RootDirectoryConfirmationValidationContext::new(
+                record,
+                &progress.published_fleet_registry,
+                root,
+                fleet_directory_content_hash,
+            ),
+            previous,
+            &response,
+            recorded_at_ns,
+            true,
+        )?;
+        let observed = FleetComponentDirectoryConfirmationRecord::ScaleOut {
+            started_at_ns: confirmation_started_at_ns(current_confirmation),
+            synchronization: Box::new(synchronization.clone()),
+            publication: Some(Box::new(response)),
+            recorded_at_ns,
+        };
+        if confirmation_publication_response(&observed)
+            .is_some_and(|response| response.phase == RootComponentProvisioningPhase::Published)
+        {
+            progress.confirmations.push(observed);
+            progress.current = None;
+        } else {
+            progress.current = Some(observed);
+        }
+        commit_directory_confirmation_progress(&current, request, progress, recorded_at_ns)
     }
 
     pub(crate) fn advance_component_runtime_activation(
@@ -1106,12 +1248,12 @@ impl FleetCoordinatorOps {
             ));
         }
         let root_index = progress.activated_root_count;
-        let publication = root_publication_response(&progress, root_index)?;
+        let publication = root_publication_response(record, &progress, root_index)?;
         let current_progress = progress.current.map_or_else(
             || root_activation_progress(publication),
             |record| record.progress,
         );
-        let root = confirmation_root(record, root_index)?;
+        let root = activation_root(record, root_index)?;
         if current_progress.fleet_subnet_root != root {
             return Err(receipt_invariant(
                 "runtime activation cursor differs from canonical root order",
@@ -1177,7 +1319,7 @@ impl FleetCoordinatorOps {
                 "runtime activation observation time regressed",
             ));
         }
-        let publication = root_publication_response(&progress, intent.root_index)?;
+        let publication = root_publication_response(record, &progress, intent.root_index)?;
         let previous_record = progress.current;
         let previous = previous_record.map_or_else(
             || root_activation_progress(publication),
@@ -1882,9 +2024,11 @@ fn validate_component_scale_out_progress(
             | FleetComponentProvisioningStateRecord::ProvisioningRoots { .. }
             | FleetComponentProvisioningStateRecord::ComponentsProvisioned { .. }
             | FleetComponentProvisioningStateRecord::ServiceTopologyPublished { .. }
+            | FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
+            | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { .. }
     ) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out crossed its implemented service-publication boundary",
+            "Fleet Component scale-out crossed its implemented Directory-confirmation boundary",
         ));
     }
     let source_registry = component_operation_source_registry(current, record)?;
@@ -1896,6 +2040,7 @@ fn validate_component_scale_out_progress(
     )?;
     validate_service_publication_authority(current, record)?;
     validate_scale_out_service_publication_fence(record)?;
+    validate_component_directory_confirmation_state(current, record)?;
     component_provisioning_plan_counts(&record.plan)?;
     Ok(())
 }
@@ -1957,13 +2102,26 @@ fn validate_component_directory_confirmation_state(
         }
         _ => return Ok(()),
     };
-    if progress.confirmation_root_count
-        != u32::try_from(record.plan.batches.len())
-            .map_err(|_| receipt_invariant("root batch count does not fit u32"))?
-        || progress.confirmed_root_count > progress.confirmation_root_count
-    {
+    let selected_root_count = u32::try_from(record.plan.batches.len())
+        .map_err(|_| receipt_invariant("root batch count does not fit u32"))?;
+    let scale_out = matches!(
+        record.plan.operation,
+        FleetComponentProvisioningOperation::ScaleOut { .. }
+    );
+    let root_count_is_valid = if scale_out {
+        selected_root_count <= progress.confirmation_root_count
+            && record.plan.batches.iter().all(|batch| {
+                record
+                    .plan
+                    .directory_confirmation_roots
+                    .contains(&batch.root.fleet_subnet_root)
+            })
+    } else {
+        selected_root_count == progress.confirmation_root_count
+    };
+    if !root_count_is_valid || progress.confirmed_root_count > progress.confirmation_root_count {
         return Err(receipt_invariant(
-            "fresh Directory confirmation roots differ from selected root batches",
+            "Directory confirmation roots differ from the protected barrier",
         ));
     }
     let mut previous_recorded_at_ns = validate_completed_directory_confirmations(
@@ -2043,7 +2201,7 @@ fn validate_stored_runtime_activation(
     activation: &FleetComponentRuntimeActivationRecord,
     terminal: bool,
 ) -> Result<(), InternalError> {
-    let publication = root_publication_response(progress, root_index)?;
+    let publication = root_publication_response(record, progress, root_index)?;
     let expected_progress = FleetComponentActivationRootProgress {
         fleet_subnet_root: publication.fleet_subnet_root,
         component_count: publication.component_count,
@@ -2149,10 +2307,10 @@ fn validate_runtime_activation_intent(
     let Some(intent) = &progress.in_flight else {
         return Ok(());
     };
-    let root = confirmation_root(record, progress.activated_root_count)?;
+    let root = activation_root(record, progress.activated_root_count)?;
     let current = progress.current.map_or_else(
         || {
-            root_publication_response(progress, progress.activated_root_count)
+            root_publication_response(record, progress, progress.activated_root_count)
                 .map(root_activation_progress)
         },
         |current| Ok(current.progress),
@@ -2211,31 +2369,53 @@ fn validate_completed_directory_confirmations(
         let root_index = u32::try_from(index)
             .map_err(|_| receipt_invariant("Directory confirmation index does not fit u32"))?;
         let root = confirmation_root(record, root_index)?;
-        let previous = root_provisioned_response(progress, root_index)?;
-        let fleet_directory_content_hash = expected_fleet_directory_content_hash(
-            coordinator,
-            &progress.published_fleet_registry,
-            root,
-        )?;
-        validate_directory_confirmation_response(
-            record,
-            &progress.published_fleet_registry,
-            root,
-            fleet_directory_content_hash,
-            previous,
-            &confirmation.response,
-            confirmation.recorded_at_ns,
-        )
-        .map_err(|_| receipt_invariant("stored Directory confirmation receipt is invalid"))?;
-        if confirmation.response.phase != RootComponentProvisioningPhase::Published
-            || confirmation.started_at_ns < previous_recorded_at_ns
-            || confirmation.recorded_at_ns < confirmation.started_at_ns
-        {
+        if matches!(
+            record.plan.operation,
+            FleetComponentProvisioningOperation::ScaleOut { .. }
+        ) {
+            validate_stored_scale_out_confirmation(
+                coordinator,
+                record,
+                progress,
+                root,
+                confirmation,
+                true,
+            )?;
+        } else {
+            let response = fresh_confirmation_response(confirmation)?;
+            let previous = root_provisioned_response(progress, root_index)?;
+            let fleet_directory_content_hash = expected_fleet_directory_content_hash(
+                coordinator,
+                &progress.published_fleet_registry,
+                root,
+            )?;
+            validate_directory_confirmation_response(
+                RootDirectoryConfirmationValidationContext::new(
+                    record,
+                    &progress.published_fleet_registry,
+                    root,
+                    fleet_directory_content_hash,
+                ),
+                previous,
+                response,
+                confirmation_recorded_at_ns(confirmation),
+                false,
+            )
+            .map_err(|_| receipt_invariant("stored Directory confirmation receipt is invalid"))?;
+            if response.phase != RootComponentProvisioningPhase::Published {
+                return Err(receipt_invariant(
+                    "stored fresh Directory confirmation is not terminal",
+                ));
+            }
+        }
+        let started_at_ns = confirmation_started_at_ns(confirmation);
+        let recorded_at_ns = confirmation_recorded_at_ns(confirmation);
+        if started_at_ns < previous_recorded_at_ns || recorded_at_ns < started_at_ns {
             return Err(receipt_invariant(
                 "stored Directory confirmation time or terminal phase is invalid",
             ));
         }
-        previous_recorded_at_ns = confirmation.recorded_at_ns;
+        previous_recorded_at_ns = recorded_at_ns;
     }
     Ok(previous_recorded_at_ns)
 }
@@ -2248,33 +2428,159 @@ fn validate_current_directory_confirmation(
 ) -> Result<u64, InternalError> {
     if let Some(current) = &progress.current {
         let root = confirmation_root(record, progress.confirmed_root_count)?;
-        let previous = root_provisioned_response(progress, progress.confirmed_root_count)?;
-        let fleet_directory_content_hash = expected_fleet_directory_content_hash(
-            coordinator,
-            &progress.published_fleet_registry,
-            root,
-        )?;
-        validate_directory_confirmation_response(
-            record,
-            &progress.published_fleet_registry,
-            root,
-            fleet_directory_content_hash,
-            previous,
-            &current.response,
-            current.recorded_at_ns,
-        )
-        .map_err(|_| receipt_invariant("stored in-progress Directory confirmation is invalid"))?;
-        if current.response.phase != RootComponentProvisioningPhase::Provisioned
-            || current.started_at_ns < previous_recorded_at_ns
-            || current.recorded_at_ns < current.started_at_ns
-        {
+        if matches!(
+            record.plan.operation,
+            FleetComponentProvisioningOperation::ScaleOut { .. }
+        ) {
+            validate_stored_scale_out_confirmation(
+                coordinator,
+                record,
+                progress,
+                root,
+                current,
+                false,
+            )?;
+        } else {
+            let response = fresh_confirmation_response(current)?;
+            let previous = root_provisioned_response(progress, progress.confirmed_root_count)?;
+            let fleet_directory_content_hash = expected_fleet_directory_content_hash(
+                coordinator,
+                &progress.published_fleet_registry,
+                root,
+            )?;
+            validate_directory_confirmation_response(
+                RootDirectoryConfirmationValidationContext::new(
+                    record,
+                    &progress.published_fleet_registry,
+                    root,
+                    fleet_directory_content_hash,
+                ),
+                previous,
+                response,
+                confirmation_recorded_at_ns(current),
+                false,
+            )
+            .map_err(|_| {
+                receipt_invariant("stored in-progress Directory confirmation is invalid")
+            })?;
+            if response.phase != RootComponentProvisioningPhase::Provisioned {
+                return Err(receipt_invariant(
+                    "stored fresh Directory confirmation crossed its terminal boundary",
+                ));
+            }
+        }
+        let started_at_ns = confirmation_started_at_ns(current);
+        let recorded_at_ns = confirmation_recorded_at_ns(current);
+        if started_at_ns < previous_recorded_at_ns || recorded_at_ns < started_at_ns {
             return Err(receipt_invariant(
                 "in-progress Directory confirmation time or phase is invalid",
             ));
         }
-        previous_recorded_at_ns = current.recorded_at_ns;
+        previous_recorded_at_ns = recorded_at_ns;
     }
     Ok(previous_recorded_at_ns)
+}
+
+fn validate_stored_scale_out_confirmation(
+    coordinator: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    root: Principal,
+    confirmation: &FleetComponentDirectoryConfirmationRecord,
+    terminal: bool,
+) -> Result<(), InternalError> {
+    let (synchronization, publication) = scale_out_confirmation_progress(confirmation)?;
+    let expected_directory_hash = expected_fleet_directory_content_hash(
+        coordinator,
+        &progress.published_fleet_registry,
+        root,
+    )?;
+    let synchronization_authority_is_exact = [
+        synchronization.operation_id == record.operation_id,
+        synchronization.plan_hash == record.plan_hash,
+        synchronization.source_fleet_registry == record.plan.fleet_registry,
+        synchronization.published_fleet_registry == progress.published_fleet_registry,
+        synchronization.fleet_subnet_root == root,
+        synchronization.fleet_directory_content_hash == expected_directory_hash,
+        synchronization.synchronized_component_count <= synchronization.affected_component_count,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !synchronization_authority_is_exact {
+        return Err(receipt_invariant(
+            "stored scale-out Directory synchronization authority is invalid",
+        ));
+    }
+    let synchronization_evidence_is_exact = if synchronization.complete {
+        [
+            synchronization.synchronized_component_count
+                == synchronization.affected_component_count,
+            synchronization.synchronized_at_ns.is_some_and(|time| {
+                time >= confirmation_started_at_ns(confirmation)
+                    && confirmation_recorded_at_ns(confirmation) >= time
+            }),
+            synchronization.receipt_content_hash
+                == RootComponentProvisioningReceiptOps::directory_synchronization_content_hash(
+                    synchronization,
+                )?,
+        ]
+        .into_iter()
+        .all(|matches| matches)
+    } else {
+        [
+            synchronization.synchronized_component_count < synchronization.affected_component_count,
+            synchronization.synchronized_at_ns.is_none(),
+            synchronization.receipt_content_hash == [0; 32],
+        ]
+        .into_iter()
+        .all(|matches| matches)
+    };
+    if !synchronization_evidence_is_exact {
+        return Err(receipt_invariant(
+            "stored scale-out Directory synchronization evidence is invalid",
+        ));
+    }
+    let selected_batch = record
+        .plan
+        .batches
+        .iter()
+        .find(|batch| batch.root.fleet_subnet_root == root);
+    match (selected_batch, publication, terminal) {
+        (None, None, true) if synchronization.complete => Ok(()),
+        (None, None, false) if !synchronization.complete => Ok(()),
+        (Some(_), None, false) => Ok(()),
+        (Some(_), Some(response), expected_terminal) => {
+            if !synchronization.complete {
+                return Err(receipt_invariant(
+                    "stored scale-out publication preceded Directory synchronization",
+                ));
+            }
+            let previous = selected_root_provisioned_response(record, progress, root)?;
+            validate_directory_confirmation_response(
+                RootDirectoryConfirmationValidationContext::new(
+                    record,
+                    &progress.published_fleet_registry,
+                    root,
+                    expected_directory_hash,
+                ),
+                previous,
+                response,
+                confirmation_recorded_at_ns(confirmation),
+                false,
+            )
+            .map_err(|_| receipt_invariant("stored scale-out Directory publication is invalid"))?;
+            let is_terminal = response.phase == RootComponentProvisioningPhase::Published;
+            if is_terminal != expected_terminal {
+                return Err(receipt_invariant(
+                    "stored scale-out Directory publication phase is invalid",
+                ));
+            }
+            Ok(())
+        }
+        _ => Err(receipt_invariant(
+            "stored scale-out Directory confirmation has invalid root evidence",
+        )),
+    }
 }
 
 fn validate_directory_confirmation_intent(
@@ -2282,32 +2588,97 @@ fn validate_directory_confirmation_intent(
     progress: &FleetComponentDirectoryConfirmationProgress,
     previous_recorded_at_ns: u64,
 ) -> Result<(), InternalError> {
-    if let Some(intent) = &progress.in_flight {
-        let root = confirmation_root(record, progress.confirmed_root_count)?;
-        let previous = progress
-            .current
-            .as_ref()
-            .map(|current| &current.response)
-            .map_or_else(
-                || root_provisioned_response(progress, progress.confirmed_root_count),
+    let Some(intent) = &progress.in_flight else {
+        return Ok(());
+    };
+    let root = confirmation_root(record, progress.confirmed_root_count)?;
+    let intent_is_exact = match intent {
+        FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
+            root_index,
+            fleet_subnet_root,
+            request,
+            started_at_ns,
+        } => {
+            let previous = progress
+                .current
+                .as_ref()
+                .map(fresh_confirmation_response)
+                .transpose()?
+                .map_or_else(
+                    || root_provisioned_response(progress, progress.confirmed_root_count),
+                    Ok,
+                )?;
+            [
+                *root_index == progress.confirmed_root_count,
+                *fleet_subnet_root == root,
+                request.operation_id == record.operation_id,
+                request.plan_hash == record.plan_hash,
+                request.published_fleet_registry == progress.published_fleet_registry,
+                request.expected_published_component_count == previous.published_component_count,
+                *started_at_ns >= previous_recorded_at_ns,
+            ]
+            .into_iter()
+            .all(|matches| matches)
+        }
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
+            root_index,
+            fleet_subnet_root,
+            request,
+            started_at_ns,
+        } => {
+            let expected_count = progress
+                .current
+                .as_ref()
+                .map(scale_out_confirmation_progress)
+                .transpose()?
+                .map_or(0, |(synchronization, _)| {
+                    synchronization.synchronized_component_count
+                });
+            [
+                *root_index == progress.confirmed_root_count,
+                *fleet_subnet_root == root,
+                request.operation_id == record.operation_id,
+                request.plan_hash == record.plan_hash,
+                request.source_fleet_registry == record.plan.fleet_registry,
+                request.published_fleet_registry == progress.published_fleet_registry,
+                request.expected_synchronized_component_count == expected_count,
+                *started_at_ns >= previous_recorded_at_ns,
+            ]
+            .into_iter()
+            .all(|matches| matches)
+        }
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+            root_index,
+            fleet_subnet_root,
+            request,
+            started_at_ns,
+        } => {
+            let current = progress.current.as_ref().ok_or_else(|| {
+                receipt_invariant("scale-out publication intent lacks synchronization evidence")
+            })?;
+            let (synchronization, publication) = scale_out_confirmation_progress(current)?;
+            let previous = publication.map_or_else(
+                || selected_root_provisioned_response(record, progress, root),
                 Ok,
             )?;
-        let intent_is_exact = [
-            intent.root_index == progress.confirmed_root_count,
-            intent.fleet_subnet_root == root,
-            intent.request.operation_id == record.operation_id,
-            intent.request.plan_hash == record.plan_hash,
-            intent.request.published_fleet_registry == progress.published_fleet_registry,
-            intent.request.expected_published_component_count == previous.published_component_count,
-            intent.started_at_ns >= previous_recorded_at_ns,
-        ]
-        .into_iter()
-        .all(|matches| matches);
-        if !intent_is_exact {
-            return Err(receipt_invariant(
-                "Directory confirmation pre-call intent is invalid",
-            ));
+            [
+                synchronization.complete,
+                *root_index == progress.confirmed_root_count,
+                *fleet_subnet_root == root,
+                request.operation_id == record.operation_id,
+                request.plan_hash == record.plan_hash,
+                request.published_fleet_registry == progress.published_fleet_registry,
+                request.expected_published_component_count == previous.published_component_count,
+                *started_at_ns >= previous_recorded_at_ns,
+            ]
+            .into_iter()
+            .all(|matches| matches)
         }
+    };
+    if !intent_is_exact {
+        return Err(receipt_invariant(
+            "Directory confirmation pre-call intent is invalid",
+        ));
     }
     Ok(())
 }
@@ -2388,11 +2759,12 @@ fn component_provisioning_status_response(
         current_publication: directory
             .as_ref()
             .and_then(|progress| progress.current.as_ref())
-            .map(|record| root_publication_progress(&record.response)),
+            .and_then(confirmation_publication_response)
+            .map(root_publication_progress),
         publication_in_flight_root: directory
             .as_ref()
             .and_then(|progress| progress.in_flight.as_ref())
-            .map(|intent| intent.fleet_subnet_root),
+            .map(confirmation_intent_root),
         runtime_activated_root_count: activation
             .as_ref()
             .map_or(0, |progress| progress.activated_root_count),
@@ -3740,7 +4112,8 @@ fn classify_directory_confirmation_advance(
     let actual_current = progress
         .current
         .as_ref()
-        .map(|record| root_publication_progress(&record.response));
+        .and_then(confirmation_publication_response)
+        .map(root_publication_progress);
     if request.expected_current_publication != actual_current {
         let replays_last = match (&request.expected_current_publication, &actual_current) {
             (Some(expected), Some(actual)) => {
@@ -3780,13 +4153,9 @@ fn terminal_directory_confirmation_replay(
         .confirmations
         .last()
         .ok_or_else(|| receipt_invariant("terminal Directory confirmation lacks a root receipt"))?;
-    let terminal_progress = root_publication_progress(&terminal.response);
-    Ok(request
-        .expected_current_publication
-        .as_ref()
-        .map_or(terminal_progress.component_count == 0, |expected| {
-            expected == &terminal_progress
-        }))
+    let terminal_progress =
+        confirmation_publication_response(terminal).map(root_publication_progress);
+    Ok(request.expected_current_publication == terminal_progress)
 }
 
 const fn root_publication_progress(
@@ -4033,6 +4402,154 @@ const fn root_provision_call_from_intent(
     }
 }
 
+fn advance_scale_out_directory_confirmation(
+    current: &FleetCoordinatorRegistryRecord,
+    record: &FleetComponentProvisioningRecord,
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: FleetComponentDirectoryConfirmationProgress,
+    started_at_ns: u64,
+) -> Result<FleetComponentDirectoryConfirmationDisposition, InternalError> {
+    match classify_directory_confirmation_advance(request, &progress)? {
+        DirectoryConfirmationAdvance::Current => {
+            return component_provisioning_status_response(record)
+                .map(Box::new)
+                .map(FleetComponentDirectoryConfirmationDisposition::Current);
+        }
+        DirectoryConfirmationAdvance::Reconcile => {
+            let intent = progress.in_flight.as_ref().ok_or_else(|| {
+                receipt_invariant("scale-out Directory confirmation intent disappeared")
+            })?;
+            return Ok(FleetComponentDirectoryConfirmationDisposition::Reconcile(
+                directory_confirmation_call_from_intent(intent),
+            ));
+        }
+        DirectoryConfirmationAdvance::Begin => {}
+    }
+    if started_at_ns == 0 || started_at_ns < progress.service_topology_published_at_ns {
+        return Err(InternalError::invalid_input(
+            "scale-out Directory confirmation start time is invalid",
+        ));
+    }
+    let root_index = progress.confirmed_root_count;
+    let root = confirmation_root(record, root_index)?;
+    let (call, intent) = match progress.current.as_ref() {
+        None => {
+            scale_out_synchronization_call(record, &progress, root_index, root, 0, started_at_ns)
+        }
+        Some(current_confirmation) => {
+            let (synchronization, publication) =
+                scale_out_confirmation_progress(current_confirmation)?;
+            if synchronization.complete {
+                let previous = publication.map_or_else(
+                    || selected_root_provisioned_response(record, &progress, root),
+                    Ok,
+                )?;
+                scale_out_publication_call(
+                    record,
+                    &progress,
+                    root_index,
+                    root,
+                    previous.published_component_count,
+                    started_at_ns,
+                )?
+            } else {
+                scale_out_synchronization_call(
+                    record,
+                    &progress,
+                    root_index,
+                    root,
+                    synchronization.synchronized_component_count,
+                    started_at_ns,
+                )
+            }
+        }
+    };
+    let mut next = current.clone();
+    component_provisioning_operation_record_mut(&mut next, record.operation_id)?.state =
+        FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+            planned_at_ns: progress.planned_at_ns,
+            acceptances: progress.acceptances,
+            roots_accepted_at_ns: progress.roots_accepted_at_ns,
+            provisions: progress.provisions,
+            components_provisioned_at_ns: progress.components_provisioned_at_ns,
+            published_fleet_registry: progress.published_fleet_registry,
+            service_topology_published_at_ns: progress.service_topology_published_at_ns,
+            confirmations: progress.confirmations,
+            current: progress.current.map(Box::new),
+            in_flight: Some(Box::new(intent)),
+        };
+    let next = FleetCoordinatorOps::validate_current(next)?;
+    FleetCoordinatorOps::commit_transition(current, next)?;
+    Ok(FleetComponentDirectoryConfirmationDisposition::Invoke(call))
+}
+
+fn scale_out_synchronization_call(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    root_index: u32,
+    root: Principal,
+    expected_synchronized_component_count: u32,
+    started_at_ns: u64,
+) -> (
+    FleetComponentDirectoryConfirmationCallView,
+    FleetComponentDirectoryConfirmationIntentRecord,
+) {
+    let request = RootComponentDirectorySynchronizationRequest {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        source_fleet_registry: record.plan.fleet_registry.clone(),
+        published_fleet_registry: progress.published_fleet_registry.clone(),
+        expected_synchronized_component_count,
+    };
+    (
+        FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
+            fleet_subnet_root: root,
+            request: request.clone(),
+        },
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
+            root_index,
+            fleet_subnet_root: root,
+            request,
+            started_at_ns,
+        },
+    )
+}
+
+fn scale_out_publication_call(
+    record: &FleetComponentProvisioningRecord,
+    progress: &FleetComponentDirectoryConfirmationProgress,
+    root_index: u32,
+    root: Principal,
+    expected_published_component_count: u32,
+    started_at_ns: u64,
+) -> Result<
+    (
+        FleetComponentDirectoryConfirmationCallView,
+        FleetComponentDirectoryConfirmationIntentRecord,
+    ),
+    InternalError,
+> {
+    selected_root_batch(record, root)?;
+    let request = RootComponentPublicationRequest {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        published_fleet_registry: progress.published_fleet_registry.clone(),
+        expected_published_component_count,
+    };
+    Ok((
+        FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+            fleet_subnet_root: root,
+            request: request.clone(),
+        },
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+            root_index,
+            fleet_subnet_root: root,
+            request,
+            started_at_ns,
+        },
+    ))
+}
+
 fn confirmation_root(
     record: &FleetComponentProvisioningRecord,
     root_index: u32,
@@ -4044,6 +4561,12 @@ fn confirmation_root(
         .directory_confirmation_roots
         .get(index)
         .ok_or_else(|| receipt_invariant("Directory confirmation root index is out of bounds"))?;
+    if matches!(
+        record.plan.operation,
+        FleetComponentProvisioningOperation::ScaleOut { .. }
+    ) {
+        return Ok(root);
+    }
     let batch =
         record.plan.batches.get(index).ok_or_else(|| {
             receipt_invariant("Directory confirmation root has no selected batch")
@@ -4059,10 +4582,414 @@ fn confirmation_root(
 fn directory_confirmation_call_from_intent(
     intent: &FleetComponentDirectoryConfirmationIntentRecord,
 ) -> FleetComponentDirectoryConfirmationCallView {
-    FleetComponentDirectoryConfirmationCallView {
-        fleet_subnet_root: intent.fleet_subnet_root,
-        request: intent.request.clone(),
+    match intent {
+        FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
+            fleet_subnet_root,
+            request,
+            ..
+        } => FleetComponentDirectoryConfirmationCallView::FreshPublication {
+            fleet_subnet_root: *fleet_subnet_root,
+            request: request.clone(),
+        },
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
+            fleet_subnet_root,
+            request,
+            ..
+        } => FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
+            fleet_subnet_root: *fleet_subnet_root,
+            request: request.clone(),
+        },
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+            fleet_subnet_root,
+            request,
+            ..
+        } => FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+            fleet_subnet_root: *fleet_subnet_root,
+            request: request.clone(),
+        },
     }
+}
+
+const fn confirmation_intent_root(
+    intent: &FleetComponentDirectoryConfirmationIntentRecord,
+) -> Principal {
+    match intent {
+        FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
+            fleet_subnet_root,
+            ..
+        }
+        | FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
+            fleet_subnet_root,
+            ..
+        }
+        | FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+            fleet_subnet_root,
+            ..
+        } => *fleet_subnet_root,
+    }
+}
+
+fn confirmation_call_publication_request(
+    call: &FleetComponentDirectoryConfirmationCallView,
+) -> Result<&RootComponentPublicationRequest, InternalError> {
+    match call {
+        FleetComponentDirectoryConfirmationCallView::FreshPublication { request, .. }
+        | FleetComponentDirectoryConfirmationCallView::ScaleOutPublication { request, .. } => {
+            Ok(request)
+        }
+        FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization { .. } => Err(
+            receipt_invariant("Directory publication call contains synchronization authority"),
+        ),
+    }
+}
+
+fn fresh_confirmation_intent(
+    intent: &FleetComponentDirectoryConfirmationIntentRecord,
+) -> Result<(u32, Principal, &RootComponentPublicationRequest, u64), InternalError> {
+    let FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
+        root_index,
+        fleet_subnet_root,
+        request,
+        started_at_ns,
+    } = intent
+    else {
+        return Err(receipt_invariant(
+            "fresh Directory confirmation contains scale-out intent",
+        ));
+    };
+    Ok((*root_index, *fleet_subnet_root, request, *started_at_ns))
+}
+
+fn scale_out_synchronization_intent(
+    intent: &FleetComponentDirectoryConfirmationIntentRecord,
+) -> Result<
+    (
+        u32,
+        Principal,
+        &RootComponentDirectorySynchronizationRequest,
+        u64,
+    ),
+    InternalError,
+> {
+    let FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
+        root_index,
+        fleet_subnet_root,
+        request,
+        started_at_ns,
+    } = intent
+    else {
+        return Err(receipt_invariant(
+            "scale-out Directory synchronization contains different intent",
+        ));
+    };
+    Ok((*root_index, *fleet_subnet_root, request, *started_at_ns))
+}
+
+fn scale_out_publication_intent(
+    intent: &FleetComponentDirectoryConfirmationIntentRecord,
+) -> Result<(u32, Principal, &RootComponentPublicationRequest, u64), InternalError> {
+    let FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+        root_index,
+        fleet_subnet_root,
+        request,
+        started_at_ns,
+    } = intent
+    else {
+        return Err(receipt_invariant(
+            "scale-out Directory publication contains different intent",
+        ));
+    };
+    Ok((*root_index, *fleet_subnet_root, request, *started_at_ns))
+}
+
+fn confirmation_publication_response(
+    record: &FleetComponentDirectoryConfirmationRecord,
+) -> Option<&RootComponentProvisioningStatusResponse> {
+    match record {
+        FleetComponentDirectoryConfirmationRecord::FreshPublication { response, .. } => {
+            Some(response.as_ref())
+        }
+        FleetComponentDirectoryConfirmationRecord::ScaleOut { publication, .. } => {
+            publication.as_deref()
+        }
+    }
+}
+
+fn fresh_confirmation_response(
+    record: &FleetComponentDirectoryConfirmationRecord,
+) -> Result<&RootComponentProvisioningStatusResponse, InternalError> {
+    let FleetComponentDirectoryConfirmationRecord::FreshPublication { response, .. } = record
+    else {
+        return Err(receipt_invariant(
+            "fresh Directory confirmation contains scale-out evidence",
+        ));
+    };
+    Ok(response.as_ref())
+}
+
+const fn confirmation_started_at_ns(record: &FleetComponentDirectoryConfirmationRecord) -> u64 {
+    match record {
+        FleetComponentDirectoryConfirmationRecord::FreshPublication { started_at_ns, .. }
+        | FleetComponentDirectoryConfirmationRecord::ScaleOut { started_at_ns, .. } => {
+            *started_at_ns
+        }
+    }
+}
+
+const fn confirmation_recorded_at_ns(record: &FleetComponentDirectoryConfirmationRecord) -> u64 {
+    match record {
+        FleetComponentDirectoryConfirmationRecord::FreshPublication { recorded_at_ns, .. }
+        | FleetComponentDirectoryConfirmationRecord::ScaleOut { recorded_at_ns, .. } => {
+            *recorded_at_ns
+        }
+    }
+}
+
+fn scale_out_confirmation_progress(
+    record: &FleetComponentDirectoryConfirmationRecord,
+) -> Result<
+    (
+        &RootComponentDirectorySynchronizationResponse,
+        Option<&RootComponentProvisioningStatusResponse>,
+    ),
+    InternalError,
+> {
+    let FleetComponentDirectoryConfirmationRecord::ScaleOut {
+        synchronization,
+        publication,
+        ..
+    } = record
+    else {
+        return Err(receipt_invariant(
+            "scale-out Directory confirmation contains fresh evidence",
+        ));
+    };
+    Ok((synchronization.as_ref(), publication.as_deref()))
+}
+
+fn require_scale_out_operation(
+    record: &FleetComponentProvisioningRecord,
+) -> Result<(), InternalError> {
+    if matches!(
+        record.plan.operation,
+        FleetComponentProvisioningOperation::ScaleOut { .. }
+    ) {
+        return Ok(());
+    }
+    Err(InternalError::conflict(
+        "Directory synchronization is reserved for scale-out operations",
+    ))
+}
+
+fn selected_root_batch(
+    record: &FleetComponentProvisioningRecord,
+    root: Principal,
+) -> Result<&FleetSubnetRootProvisioningBatch, InternalError> {
+    record
+        .plan
+        .batches
+        .iter()
+        .find(|batch| batch.root.fleet_subnet_root == root)
+        .ok_or_else(|| receipt_invariant("Directory publication root has no selected batch"))
+}
+
+fn selected_root_provisioned_response<'a>(
+    record: &FleetComponentProvisioningRecord,
+    progress: &'a FleetComponentDirectoryConfirmationProgress,
+    root: Principal,
+) -> Result<&'a RootComponentProvisioningStatusResponse, InternalError> {
+    let index = record
+        .plan
+        .batches
+        .iter()
+        .position(|batch| batch.root.fleet_subnet_root == root)
+        .ok_or_else(|| receipt_invariant("Directory publication root has no selected batch"))?;
+    let response = progress
+        .provisions
+        .get(index)
+        .map(|record| &record.response)
+        .ok_or_else(|| receipt_invariant("selected Directory root lacks provisioning evidence"))?;
+    if response.fleet_subnet_root != root {
+        return Err(receipt_invariant(
+            "selected Directory root provisioning evidence changed root",
+        ));
+    }
+    Ok(response)
+}
+
+fn scale_out_confirmation_is_terminal(
+    record: &FleetComponentProvisioningRecord,
+    root: Principal,
+    confirmation: &FleetComponentDirectoryConfirmationRecord,
+) -> Result<bool, InternalError> {
+    let (synchronization, publication) = scale_out_confirmation_progress(confirmation)?;
+    if !synchronization.complete {
+        return Ok(false);
+    }
+    let selected = record
+        .plan
+        .batches
+        .iter()
+        .any(|batch| batch.root.fleet_subnet_root == root);
+    Ok(if selected {
+        publication
+            .is_some_and(|response| response.phase == RootComponentProvisioningPhase::Published)
+    } else {
+        publication.is_none()
+    })
+}
+
+struct ScaleOutSynchronizationValidationContext<'a> {
+    coordinator: &'a FleetCoordinatorRegistryRecord,
+    operation: &'a FleetComponentProvisioningRecord,
+    progress: &'a FleetComponentDirectoryConfirmationProgress,
+    root_index: u32,
+    root: Principal,
+    request: &'a RootComponentDirectorySynchronizationRequest,
+    started_at_ns: u64,
+    recorded_at_ns: u64,
+}
+
+fn validate_scale_out_synchronization_response(
+    context: &ScaleOutSynchronizationValidationContext<'_>,
+    response: &RootComponentDirectorySynchronizationResponse,
+) -> Result<(), InternalError> {
+    if context.root_index != context.progress.confirmed_root_count
+        || confirmation_root(context.operation, context.root_index)? != context.root
+    {
+        return Err(receipt_invariant(
+            "scale-out Directory synchronization cursor changed canonical root",
+        ));
+    }
+    let previous = context
+        .progress
+        .current
+        .as_ref()
+        .map(scale_out_confirmation_progress)
+        .transpose()?
+        .map_or(0, |(response, _)| response.synchronized_component_count);
+    let count_advances = response.synchronized_component_count == previous
+        || previous.checked_add(1) == Some(response.synchronized_component_count);
+    let authority_is_exact = [
+        context.request.operation_id == context.operation.operation_id,
+        context.request.plan_hash == context.operation.plan_hash,
+        context.request.source_fleet_registry == context.operation.plan.fleet_registry,
+        context.request.published_fleet_registry == context.progress.published_fleet_registry,
+        context.request.expected_synchronized_component_count == previous,
+        response.operation_id == context.operation.operation_id,
+        response.plan_hash == context.operation.plan_hash,
+        response.source_fleet_registry == context.operation.plan.fleet_registry,
+        response.published_fleet_registry == context.progress.published_fleet_registry,
+        response.fleet_subnet_root == context.root,
+        response.synchronized_component_count <= response.affected_component_count,
+        count_advances,
+        context.recorded_at_ns >= context.started_at_ns,
+    ]
+    .into_iter()
+    .all(|matches| matches);
+    if !authority_is_exact {
+        return Err(InternalError::conflict(
+            "scale-out Directory synchronization response changed protected authority",
+        ));
+    }
+    if let Some(current) = &context.progress.current {
+        let (previous_response, publication) = scale_out_confirmation_progress(current)?;
+        let retained_authority_changed = [
+            previous_response.affected_component_count != response.affected_component_count,
+            previous_response.fleet_directory_content_hash != response.fleet_directory_content_hash,
+            publication.is_some(),
+        ]
+        .into_iter()
+        .any(|changed| changed);
+        if retained_authority_changed {
+            return Err(InternalError::conflict(
+                "scale-out Directory synchronization changed its retained target authority",
+            ));
+        }
+    }
+    let expected_directory_hash = expected_fleet_directory_content_hash(
+        context.coordinator,
+        &context.progress.published_fleet_registry,
+        context.root,
+    )?;
+    if response.fleet_directory_content_hash != expected_directory_hash {
+        return Err(InternalError::conflict(
+            "scale-out Directory synchronization names different Fleet Directory authority",
+        ));
+    }
+    let terminal_evidence_is_exact = if response.complete {
+        [
+            response.synchronized_component_count == response.affected_component_count,
+            response
+                .synchronized_at_ns
+                .is_some_and(|time| time >= context.started_at_ns),
+            response.receipt_content_hash
+                == RootComponentProvisioningReceiptOps::directory_synchronization_content_hash(
+                    response,
+                )?,
+        ]
+        .into_iter()
+        .all(|matches| matches)
+    } else {
+        [
+            response.synchronized_component_count < response.affected_component_count,
+            response.synchronized_at_ns.is_none(),
+            response.receipt_content_hash == [0; 32],
+        ]
+        .into_iter()
+        .all(|matches| matches)
+    };
+    if !terminal_evidence_is_exact {
+        return Err(InternalError::conflict(
+            "scale-out Directory synchronization has invalid terminal evidence",
+        ));
+    }
+    Ok(())
+}
+
+fn commit_directory_confirmation_progress(
+    current: &FleetCoordinatorRegistryRecord,
+    request: &FleetComponentProvisioningAdvanceRequest,
+    progress: FleetComponentDirectoryConfirmationProgress,
+    recorded_at_ns: u64,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    let confirmed_root_count = u32::try_from(progress.confirmations.len())
+        .map_err(|_| receipt_invariant("Directory confirmation count does not fit u32"))?;
+    let mut next = current.clone();
+    component_provisioning_operation_record_mut(&mut next, request.operation_id)?.state =
+        if confirmed_root_count == progress.confirmation_root_count {
+            FleetComponentProvisioningStateRecord::DirectoriesConfirmed {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                published_fleet_registry: progress.published_fleet_registry,
+                service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                confirmations: progress.confirmations,
+                directories_confirmed_at_ns: recorded_at_ns,
+            }
+        } else {
+            FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+                planned_at_ns: progress.planned_at_ns,
+                acceptances: progress.acceptances,
+                roots_accepted_at_ns: progress.roots_accepted_at_ns,
+                provisions: progress.provisions,
+                components_provisioned_at_ns: progress.components_provisioned_at_ns,
+                published_fleet_registry: progress.published_fleet_registry,
+                service_topology_published_at_ns: progress.service_topology_published_at_ns,
+                confirmations: progress.confirmations,
+                current: progress.current.map(Box::new),
+                in_flight: None,
+            }
+        };
+    let next = FleetCoordinatorOps::validate_current(next)?;
+    let result = component_provisioning_status_response(component_provisioning_operation_record(
+        &next,
+        request.operation_id,
+    )?)?;
+    FleetCoordinatorOps::commit_transition(current, next)?;
+    Ok(result)
 }
 
 const fn runtime_activation_call_from_intent(
@@ -4087,17 +5014,27 @@ fn root_provisioned_response(
         .ok_or_else(|| receipt_invariant("Directory confirmation lacks root provisioning"))
 }
 
-fn root_publication_response(
-    progress: &FleetComponentRuntimeActivationProgress,
+fn root_publication_response<'a>(
+    operation: &FleetComponentProvisioningRecord,
+    progress: &'a FleetComponentRuntimeActivationProgress,
     root_index: u32,
-) -> Result<&RootComponentProvisioningStatusResponse, InternalError> {
-    let index = usize::try_from(root_index)
-        .map_err(|_| receipt_invariant("runtime activation root index exceeds usize"))?;
+) -> Result<&'a RootComponentProvisioningStatusResponse, InternalError> {
+    let root = activation_root(operation, root_index)?;
     progress
         .confirmations
-        .get(index)
-        .map(|record| &record.response)
+        .iter()
+        .find_map(|confirmation| {
+            confirmation_publication_response(confirmation)
+                .filter(|response| response.fleet_subnet_root == root)
+        })
         .ok_or_else(|| receipt_invariant("runtime activation lacks root publication evidence"))
+}
+
+fn activation_root(
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+) -> Result<Principal, InternalError> {
+    Ok(root_batch(record, root_index)?.root.fleet_subnet_root)
 }
 
 const fn root_activation_progress(
@@ -4324,22 +5261,45 @@ fn expected_fleet_directory_content_hash(
     RootComponentProvisioningReceiptOps::fleet_directory_content_hash(&directory)
 }
 
-fn validate_directory_confirmation_response(
-    record: &FleetComponentProvisioningRecord,
-    published_registry: &FleetRegistryVersion,
+struct RootDirectoryConfirmationValidationContext<'a> {
+    operation: &'a FleetComponentProvisioningRecord,
+    published_registry: &'a FleetRegistryVersion,
     root: Principal,
-    expected_fleet_directory_content_hash: [u8; 32],
+    fleet_directory_content_hash: [u8; 32],
+}
+
+impl<'a> RootDirectoryConfirmationValidationContext<'a> {
+    const fn new(
+        operation: &'a FleetComponentProvisioningRecord,
+        published_registry: &'a FleetRegistryVersion,
+        root: Principal,
+        fleet_directory_content_hash: [u8; 32],
+    ) -> Self {
+        Self {
+            operation,
+            published_registry,
+            root,
+            fleet_directory_content_hash,
+        }
+    }
+}
+
+fn validate_directory_confirmation_response(
+    context: RootDirectoryConfirmationValidationContext<'_>,
     previous: &RootComponentProvisioningStatusResponse,
     response: &RootComponentProvisioningStatusResponse,
     recorded_at_ns: u64,
+    require_bounded_advance: bool,
 ) -> Result<(), InternalError> {
-    let batch = record
+    let batch = context
+        .operation
         .plan
         .batches
         .iter()
-        .find(|batch| batch.root.fleet_subnet_root == root)
+        .find(|batch| batch.root.fleet_subnet_root == context.root)
         .ok_or_else(|| receipt_invariant("Directory confirmation root has no planned batch"))?;
-    let expected_authority = RootDirectoryConfirmationAuthority::expected(record, root, previous);
+    let expected_authority =
+        RootDirectoryConfirmationAuthority::expected(context.operation, context.root, previous);
     if RootDirectoryConfirmationAuthority::observed(response) != expected_authority {
         return Err(InternalError::conflict(
             "Directory confirmation response changed protected provisioning authority",
@@ -4348,7 +5308,9 @@ fn validate_directory_confirmation_response(
     let count_advances = response.published_component_count == previous.published_component_count
         || previous.published_component_count.checked_add(1)
             == Some(response.published_component_count);
-    if !count_advances || response.published_component_count > response.component_count {
+    if (require_bounded_advance && !count_advances)
+        || response.published_component_count > response.component_count
+    {
         return Err(InternalError::conflict(
             "Directory confirmation response skipped its bounded Component cursor",
         ));
@@ -4356,14 +5318,14 @@ fn validate_directory_confirmation_response(
     let publication = response.publication.as_ref().ok_or_else(|| {
         InternalError::conflict("Directory confirmation response lacks publication evidence")
     })?;
-    if &publication.fleet_registry != published_registry
-        || publication.fleet_directory_content_hash != expected_fleet_directory_content_hash
+    if &publication.fleet_registry != context.published_registry
+        || publication.fleet_directory_content_hash != context.fleet_directory_content_hash
     {
         return Err(InternalError::conflict(
             "Directory confirmation response names different Fleet publication authority",
         ));
     }
-    validate_root_publication_evidence(record, batch, response, publication)?;
+    validate_root_publication_evidence(context.operation, batch, response, publication)?;
     match response.phase {
         RootComponentProvisioningPhase::Provisioned => {
             if response.published_at_ns.is_some()
@@ -4394,9 +5356,9 @@ fn validate_directory_confirmation_response(
             }
             let expected = RootComponentProvisioningReceiptOps::published_content_hash(
                 RootComponentProvisioningPublishedReceiptAuthority {
-                    operation_id: record.operation_id,
-                    plan_hash: record.plan_hash,
-                    configuration_digest: record.plan.configuration_digest,
+                    operation_id: context.operation.operation_id,
+                    plan_hash: context.operation.plan_hash,
+                    configuration_digest: context.operation.plan.configuration_digest,
                     root: &batch.root,
                     result,
                     publication,

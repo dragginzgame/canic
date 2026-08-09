@@ -124,10 +124,18 @@ Date: 2026-08-09
   members. Each publication retains an independent exact receipt, so initial
   and scale-out Registry history remains reconstructible across restart.
   Ordinary-only scale-out records the same `ServiceTopologyPublished` boundary
-  without a Registry mutation. Directory confirmation and runtime activation
-  remain fenced.
+  without a Registry mutation. The Coordinator now drives the plan's exact
+  selected plus affected-existing-root confirmation set in canonical order.
+  Every root durably synchronizes the published Fleet Registry and its exact
+  existing affected service Components before selected roots publish their
+  prepared batch Directories. Root-local intent precedes each Component call,
+  uncertain responses reconcile against independently observed runtime and
+  Registry evidence, and a later Component head covers an in-flight required
+  head only under the exact published Fleet Directory. The Coordinator reaches
+  `DirectoriesConfirmed` only after every barrier root is terminal. Runtime
+  activation remains separately fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.32` is released and `0.101.33` is open.
+- Implementation started: yes; `0.101.33` is released and `0.101.34` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -344,11 +352,13 @@ Fleet policy writer.
   prepare/advance transaction, reconcile uncertain updates through passive
   status, and publish the terminal Fleet catalog only after exact
   `RuntimesActivated` and published-Registry evidence.
-- [ ] Freeze the exact Directory-confirmation roots: all initial roots for
+- [x] Freeze the exact Directory-confirmation roots: all initial roots for
   fresh install, and selected plus every affected existing service-member root
-  for scale-out. Fresh-install confirmation freezes and verifies every initial
-  root from the canonical plan; the wider affected-root scale-out barrier
-  remains.
+  for scale-out. Fresh-install confirmation verifies every initial root from
+  the canonical plan. Scale-out now synchronizes the published Fleet Registry
+  and every existing affected service Component on each exact barrier root,
+  then publishes the prepared batch on selected roots before the Coordinator
+  reaches `DirectoriesConfirmed`.
 - [ ] Require Replica purpose to fail application database write-authority
   checks.
 - [ ] Require PoolMember purpose to grant no implicit leadership, health or
@@ -400,7 +410,8 @@ Fleet policy writer.
   `ComponentsProvisioned` only after every selected root is terminal. All
   Replica or PoolMember additions then publish in one exact Registry revision;
   ordinary-only operations retain the same receipt boundary without a Registry
-  mutation. Directory publication and activation remain.
+  mutation. The exact selected plus affected-existing-root Directory barrier
+  now reaches `DirectoriesConfirmed`; activation remains.
 - [x] Append all Replica and PoolMember bindings from one scale operation
   atomically. The complete target set is compiled from the exact source
   Registry and terminal selected-root receipts, existing authority and members

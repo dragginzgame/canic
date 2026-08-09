@@ -5,11 +5,12 @@
 
 use super::*;
 use crate::storage::stable::fleet_coordinator::{
+    FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
     FleetComponentProvisioningStateRecord, FleetCoordinatorRegistryData,
     FleetCoordinatorRegistryStore,
 };
 use crate::view::fleet_coordinator::{
-    FleetComponentDirectoryConfirmationDisposition,
+    FleetComponentDirectoryConfirmationCallView, FleetComponentDirectoryConfirmationDisposition,
     FleetComponentProvisioningRootAcceptanceDisposition,
     FleetComponentProvisioningRootProvisionCallView,
     FleetComponentProvisioningRootProvisionDisposition, FleetComponentRuntimeActivationDisposition,
@@ -43,6 +44,7 @@ use canic_core::{
             FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
             FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
             FleetSubnetRootProvisioningBatch, RootComponentActivationEvidence,
+            RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningResult, RootComponentProvisioningStatusResponse,
             RootComponentPublicationEvidence, RootProvisionedGroupMember,
@@ -844,6 +846,93 @@ fn scale_out_publishes_all_new_pool_members_in_one_atomic_registry_append() {
 }
 
 #[test]
+fn scale_out_confirms_affected_and_selected_roots_before_runtime_activation() {
+    let config = scale_out_coordinator_config();
+    drive_terminal_fresh_install(&config);
+    let source_registry = FleetCoordinatorWorkflow::registry().expect("published Registry");
+    let plan = one_placement_scale_out_plan(&config, &source_registry);
+    assert_eq!(plan.batches.len(), 1);
+    assert_eq!(plan.directory_confirmation_roots.len(), 2);
+    let selected_root = plan.batches[0].root.fleet_subnet_root;
+    let affected_only_root = plan
+        .directory_confirmation_roots
+        .iter()
+        .copied()
+        .find(|root| *root != selected_root)
+        .expect("affected existing service-member root");
+
+    let mut status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(
+            &config,
+            FleetComponentProvisioningPrepareRequest {
+                operation_id: [202; 32],
+                plan,
+            },
+            1_000,
+        )
+        .expect("prepare exact scale-out plan");
+    status = drive_root_acceptance(&config, status, 1_010);
+    status = drive_root_provisioning(&config, status, 1_020);
+    status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        publish_component_provisioning_services(
+            &root_provision_advance_request(&status),
+            1_100,
+        )
+        .expect("publish scale-out service topology");
+
+    let first_request = root_provision_advance_request(&status);
+    let first_call = expect_scale_out_synchronization_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&first_request, 1_110)
+            .expect("persist affected-root synchronization intent"),
+    );
+    assert_eq!(first_call.0, affected_only_root);
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let replay = expect_scale_out_synchronization_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&first_request, 9_999)
+            .expect("reconcile affected-root synchronization intent"),
+    );
+    assert_eq!(replay, first_call);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let first_response = terminal_scale_out_synchronization_response(&first_call, 1, 1_111);
+    status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_scale_out_directory_synchronization(
+            &first_request,
+            first_response,
+            1_112,
+        )
+        .expect("record affected-root synchronization");
+    assert_eq!(status.directory_confirmed_root_count, 1);
+    assert!(status.current_publication.is_none());
+
+    status = confirm_selected_scale_out_root(status, selected_root, 1_120);
+
+    assert_eq!(
+        status.phase,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed
+    );
+    assert_eq!(status.directory_confirmed_root_count, 2);
+    assert_eq!(status.runtime_activated_root_count, 0);
+    assert!(status.current_activation.is_none());
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: status.operation_id,
+                plan_hash: status.plan_hash,
+            },
+        )
+        .expect("replay terminal Directory barrier after restart"),
+        status
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+}
+
+#[test]
 fn ordinary_scale_out_records_publication_without_registry_mutation() {
     let config = ordinary_scale_out_coordinator_config();
     drive_terminal_fresh_install(&config);
@@ -852,6 +941,8 @@ fn ordinary_scale_out_records_publication_without_registry_mutation() {
     assert!(source_registry.services.is_empty());
 
     let plan = one_placement_scale_out_plan(&config, &source_registry);
+    let selected_root = plan.batches[0].root.fleet_subnet_root;
+    assert_eq!(plan.directory_confirmation_roots, vec![selected_root]);
     let mut status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         prepare_component_provisioning_for_test(
             &config,
@@ -865,7 +956,7 @@ fn ordinary_scale_out_records_publication_without_registry_mutation() {
     status = drive_root_acceptance(&config, status, 1_010);
     status = drive_root_provisioning(&config, status, 1_020);
     let request = root_provision_advance_request(&status);
-    let published = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+    let mut published = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         publish_component_provisioning_services(&request, 1_100)
         .expect("record ordinary scale-out publication boundary");
 
@@ -895,6 +986,13 @@ fn ordinary_scale_out_records_publication_without_registry_mutation() {
         published
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+
+    published = confirm_selected_scale_out_root(published, selected_root, 1_110);
+    assert_eq!(
+        published.phase,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed
+    );
+    assert_eq!(published.directory_confirmed_root_count, 1);
 }
 
 fn drive_terminal_fresh_install(config: &ConfigModel) -> FleetComponentProvisioningStatusResponse {
@@ -982,7 +1080,13 @@ fn drive_directory_confirmation(
         else {
             panic!("Directory confirmation must invoke the next root");
         };
-        let response = terminal_directory_response(call.fleet_subnet_root, now + 1);
+        let FleetComponentDirectoryConfirmationCallView::FreshPublication {
+            fleet_subnet_root, ..
+        } = call
+        else {
+            panic!("fresh Directory confirmation must publish the root batch");
+        };
+        let response = terminal_directory_response(fleet_subnet_root, now + 1);
         status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
             record_component_directory_confirmation(&request, response, now + 2)
             .expect("record terminal Directory response");
@@ -1873,6 +1977,125 @@ fn provisioned_root_response(
     }
 }
 
+fn expect_scale_out_synchronization_call(
+    disposition: FleetComponentDirectoryConfirmationDisposition,
+) -> (
+    Principal,
+    canic_core::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
+) {
+    match disposition {
+        FleetComponentDirectoryConfirmationDisposition::Invoke(
+            FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
+                fleet_subnet_root,
+                request,
+            },
+        )
+        | FleetComponentDirectoryConfirmationDisposition::Reconcile(
+            FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
+                fleet_subnet_root,
+                request,
+            },
+        ) => (fleet_subnet_root, request),
+        _ => panic!("scale-out Directory barrier must synchronize the current root"),
+    }
+}
+
+fn confirm_selected_scale_out_root(
+    mut status: FleetComponentProvisioningStatusResponse,
+    selected_root: Principal,
+    started_at_ns: u64,
+) -> FleetComponentProvisioningStatusResponse {
+    let confirmed_before = status.directory_confirmed_root_count;
+    let synchronization_request = root_provision_advance_request(&status);
+    let synchronization_call = expect_scale_out_synchronization_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(
+                &synchronization_request,
+                started_at_ns,
+            )
+            .expect("persist selected-root synchronization"),
+    );
+    assert_eq!(synchronization_call.0, selected_root);
+    let synchronization_response =
+        terminal_scale_out_synchronization_response(&synchronization_call, 0, started_at_ns + 1);
+    status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_scale_out_directory_synchronization(
+            &synchronization_request,
+            synchronization_response,
+            started_at_ns + 2,
+        )
+        .expect("record selected-root synchronization");
+    assert_eq!(status.directory_confirmed_root_count, confirmed_before);
+    assert!(status.current_publication.is_none());
+
+    let publication_request = root_provision_advance_request(&status);
+    let FleetComponentDirectoryConfirmationDisposition::Invoke(
+        FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+            fleet_subnet_root: publication_root,
+            ..
+        },
+    ) = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_directory_confirmation(&publication_request, started_at_ns + 10)
+        .expect("persist selected-root publication")
+    else {
+        panic!("selected root must publish its prepared batch");
+    };
+    assert_eq!(publication_root, selected_root);
+    let publication_response = terminal_directory_response(selected_root, started_at_ns + 11);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_scale_out_directory_publication(
+            &publication_request,
+            publication_response,
+            started_at_ns + 12,
+        )
+        .expect("record selected-root publication")
+}
+
+fn terminal_scale_out_synchronization_response(
+    call: &(
+        Principal,
+        canic_core::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
+    ),
+    affected_component_count: u32,
+    synchronized_at_ns: u64,
+) -> RootComponentDirectorySynchronizationResponse {
+    let current = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("Coordinator state");
+    let directory = FleetRegistryOps::directory_for_root(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &current.registry,
+        call.0,
+    )
+    .expect("root Fleet Directory");
+    assert_eq!(
+        directory.provenance.registry,
+        call.1.published_fleet_registry
+    );
+    let mut response = RootComponentDirectorySynchronizationResponse {
+        operation_id: call.1.operation_id,
+        plan_hash: call.1.plan_hash,
+        source_fleet_registry: call.1.source_fleet_registry.clone(),
+        published_fleet_registry: call.1.published_fleet_registry.clone(),
+        fleet_subnet_root: call.0,
+        affected_component_count,
+        synchronized_component_count: affected_component_count,
+        fleet_directory_content_hash:
+            RootComponentProvisioningReceiptOps::fleet_directory_content_hash(&directory)
+                .expect("Fleet Directory hash"),
+        complete: true,
+        synchronized_at_ns: Some(synchronized_at_ns),
+        receipt_content_hash: [0; 32],
+    };
+    response.receipt_content_hash =
+        RootComponentProvisioningReceiptOps::directory_synchronization_content_hash(&response)
+            .expect("Directory synchronization receipt hash");
+    response
+}
+
 fn terminal_directory_response(
     fleet_subnet_root: Principal,
     published_at_ns: u64,
@@ -1880,31 +2103,20 @@ fn terminal_directory_response(
     let durable = FleetCoordinatorRegistryStore::export();
     let current = durable.current.as_ref().expect("Coordinator state");
     let record = current
-        .component_provisioning
+        .component_scale_out
         .as_ref()
-        .expect("fresh provisioning record");
-    let (root_index, previous, published_registry) = match &record.state {
-        FleetComponentProvisioningStateRecord::ConfirmingDirectories {
-            provisions,
-            published_fleet_registry,
-            confirmations,
-            current,
-            in_flight: Some(intent),
-            ..
-        } => {
-            let root_index = usize::try_from(intent.root_index).expect("root index");
-            assert_eq!(confirmations.len(), root_index);
-            let previous = current.as_ref().map_or_else(
-                || provisions[root_index].response.clone(),
-                |record| record.response.clone(),
-            );
-            (root_index, previous, published_fleet_registry)
-        }
-        _ => panic!("Directory response requires an in-flight confirmation"),
-    };
-    let batch = &record.plan.batches[root_index];
+        .filter(|record| {
+            matches!(
+                record.state,
+                FleetComponentProvisioningStateRecord::ConfirmingDirectories { .. }
+            )
+        })
+        .or(current.component_provisioning.as_ref())
+        .expect("Directory provisioning record");
+    let context = directory_publication_context(record);
+    let batch = &record.plan.batches[context.root_index];
     assert_eq!(batch.root.fleet_subnet_root, fleet_subnet_root);
-    let result = previous.result.clone().expect("provisioned result");
+    let result = context.previous.result.clone().expect("provisioned result");
     let component_directories = result
         .placements
         .iter()
@@ -1939,9 +2151,12 @@ fn terminal_directory_response(
         fleet_subnet_root,
     )
     .expect("Fleet Directory");
-    assert_eq!(fleet_directory.provenance.registry, *published_registry);
+    assert_eq!(
+        fleet_directory.provenance.registry,
+        context.published_registry
+    );
     let publication = RootComponentPublicationEvidence {
-        fleet_registry: published_registry.clone(),
+        fleet_registry: context.published_registry,
         fleet_directory_content_hash:
             RootComponentProvisioningReceiptOps::fleet_directory_content_hash(&fleet_directory)
                 .expect("Fleet Directory hash"),
@@ -1956,19 +2171,101 @@ fn terminal_directory_response(
             root: &batch.root,
             result: &result,
             publication: &publication,
-            accepted_at_ns: previous.accepted_at_ns,
-            provisioned_at_ns: previous.provisioned_at_ns.expect("provisioned time"),
+            accepted_at_ns: context.previous.accepted_at_ns,
+            provisioned_at_ns: context
+                .previous
+                .provisioned_at_ns
+                .expect("provisioned time"),
             published_at_ns,
         },
     )
     .expect("published receipt hash");
-    let mut response = previous;
+    let mut response = context.previous;
     response.phase = RootComponentProvisioningPhase::Published;
     response.published_component_count = response.component_count;
     response.publication = Some(publication);
     response.published_at_ns = Some(published_at_ns);
     response.receipt_content_hash = receipt_content_hash;
     response
+}
+
+struct DirectoryPublicationTestContext {
+    root_index: usize,
+    previous: RootComponentProvisioningStatusResponse,
+    published_registry: canic_core::dto::fleet_registry::FleetRegistryVersion,
+}
+
+fn directory_publication_context(
+    record: &crate::storage::stable::fleet_coordinator::FleetComponentProvisioningRecord,
+) -> DirectoryPublicationTestContext {
+    let FleetComponentProvisioningStateRecord::ConfirmingDirectories {
+        provisions,
+        published_fleet_registry,
+        confirmations,
+        current,
+        in_flight: Some(intent),
+        ..
+    } = &record.state
+    else {
+        panic!("Directory response requires an in-flight confirmation");
+    };
+    let (root_index, previous) = match intent.as_ref() {
+        FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
+            root_index, ..
+        } => {
+            let root_index = usize::try_from(*root_index).expect("root index");
+            assert_eq!(confirmations.len(), root_index);
+            let previous = current.as_ref().map_or_else(
+                || provisions[root_index].response.clone(),
+                |record| match record.as_ref() {
+                    FleetComponentDirectoryConfirmationRecord::FreshPublication {
+                        response,
+                        ..
+                    } => response.as_ref().clone(),
+                    FleetComponentDirectoryConfirmationRecord::ScaleOut { .. } => {
+                        panic!("fresh Directory response retained scale-out evidence");
+                    }
+                },
+            );
+            (root_index, previous)
+        }
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
+            fleet_subnet_root,
+            ..
+        } => {
+            let root_index = record
+                .plan
+                .batches
+                .iter()
+                .position(|batch| batch.root.fleet_subnet_root == *fleet_subnet_root)
+                .expect("selected scale-out root batch");
+            let previous = current.as_ref().map_or_else(
+                || provisions[root_index].response.clone(),
+                |record| match record.as_ref() {
+                    FleetComponentDirectoryConfirmationRecord::ScaleOut {
+                        publication: Some(response),
+                        ..
+                    } => response.as_ref().clone(),
+                    FleetComponentDirectoryConfirmationRecord::ScaleOut {
+                        publication: None,
+                        ..
+                    } => provisions[root_index].response.clone(),
+                    FleetComponentDirectoryConfirmationRecord::FreshPublication { .. } => {
+                        panic!("scale-out Directory retained fresh evidence");
+                    }
+                },
+            );
+            (root_index, previous)
+        }
+        FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization { .. } => {
+            panic!("Directory publication response requires publication intent");
+        }
+    };
+    DirectoryPublicationTestContext {
+        root_index,
+        previous,
+        published_registry: published_fleet_registry.clone(),
+    }
 }
 
 fn component_group_directory(
@@ -2048,7 +2345,14 @@ fn next_runtime_activation_response(
                 usize::try_from(intent.root_index).expect("root index"),
                 root_index
             );
-            let publication = confirmations[root_index].response.clone();
+            let publication = match &confirmations[root_index] {
+                FleetComponentDirectoryConfirmationRecord::FreshPublication {
+                    response, ..
+                } => response.as_ref().clone(),
+                FleetComponentDirectoryConfirmationRecord::ScaleOut { .. } => {
+                    panic!("fresh runtime activation retained scale-out evidence");
+                }
+            };
             let activated_component_count = current
                 .as_ref()
                 .map_or(publication.activated_component_count, |record| {

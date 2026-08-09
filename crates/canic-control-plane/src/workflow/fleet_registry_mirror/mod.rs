@@ -30,6 +30,14 @@ use canic_core::{
     protocol,
 };
 
+/// Validated source and target authority retained before one mirror commit.
+pub(super) struct PreparedComponentPublicationTransition {
+    pub source: FleetRegistrySnapshotResponse,
+    pub target: FleetRegistrySnapshotResponse,
+    pub directory: FleetDirectorySnapshot,
+    previous_registry: FleetRegistryVersion,
+}
+
 /// Fetch and acknowledge the current all-Joining snapshot.
 pub async fn synchronize(
     request: FleetSubnetRootRegistrySyncRequest,
@@ -224,6 +232,73 @@ pub async fn advance_for_component_publication(
             Ok(active_response(root, &active))
         }
     }
+}
+
+/// Fetch and validate one exact publication target without mutating the local mirror.
+pub(super) async fn prepare_component_publication_transition(
+    previous_registry: FleetRegistryVersion,
+    expected_registry: FleetRegistryVersion,
+    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+) -> Result<PreparedComponentPublicationTransition, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    root_store::status(store_bootstrap.clone()).await?;
+    let current = validated_active(&authority, root)?;
+    if current.snapshot.version != previous_registry {
+        return Err(InternalError::conflict(
+            "root Fleet Registry mirror differs from the Directory synchronization source",
+        ));
+    }
+    let target = if previous_registry == expected_registry {
+        current.snapshot.clone()
+    } else {
+        fetch_snapshot(authority.binding.authority.binding.coordinator).await?
+    };
+    let directory = FleetRegistryOps::directory_for_root(
+        &authority.binding.authority,
+        &ConfigOps::component_topology()?,
+        &target.registry,
+        root,
+    )?;
+    let request = FleetSubnetRootRegistryMirrorActivationRequest {
+        previous_registry: previous_registry.clone(),
+        expected_registry,
+        expected_directory: directory,
+        store_bootstrap,
+    };
+    validate_transition_request(&authority, &request)?;
+    let directory = validate_target(&authority, root, &request, &target)?;
+    Ok(PreparedComponentPublicationTransition {
+        source: current.snapshot,
+        target,
+        directory,
+        previous_registry,
+    })
+}
+
+/// Commit one previously validated exact publication target without another await.
+pub(super) fn commit_component_publication_transition(
+    prepared: &PreparedComponentPublicationTransition,
+) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    let current = validated_active(&authority, root)?;
+    let snapshot_is_target = current.snapshot == prepared.target;
+    let directory_is_target = current.directory == prepared.directory;
+    if snapshot_is_target && directory_is_target {
+        return Ok(active_response(root, &current));
+    }
+    if current.snapshot != prepared.source || current.snapshot.version != prepared.previous_registry
+    {
+        return Err(InternalError::conflict(
+            "root Fleet Registry mirror changed before its prepared Directory commit",
+        ));
+    }
+    FleetRegistryMirrorOps::commit_active(
+        prepared.previous_registry.clone(),
+        prepared.target.clone(),
+        prepared.directory.clone(),
+    );
+    let active = validated_active(&authority, root)?;
+    Ok(active_response(root, &active))
 }
 
 async fn fetch_snapshot(

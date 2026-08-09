@@ -175,11 +175,6 @@ pub async fn publish(
     let (authority, root) = validated_root_authority()?;
     require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
     let runtime = FleetActivationWorkflow::status()?;
-    if runtime.phase != FleetActivationPhase::Prepared {
-        return Err(InternalError::conflict(
-            "root Component Directory publication requires runtime Prepared",
-        ));
-    }
     let before = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,

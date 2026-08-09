@@ -31,7 +31,8 @@ use canic_core::{
             FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
             FleetComponentProvisioningPhase, FleetComponentProvisioningPrepareRequest,
             FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse, RootComponentProvisioningStatusResponse,
+            FleetComponentProvisioningStatusResponse,
+            RootComponentDirectorySynchronizationResponse, RootComponentProvisioningStatusResponse,
         },
         error::Error,
         fleet_registry::{
@@ -182,6 +183,16 @@ impl FleetCoordinatorWorkflow {
             acceptance_status.operation,
             FleetComponentProvisioningOperation::ScaleOut { .. }
         ) {
+            if matches!(
+                acceptance_status.phase,
+                FleetComponentProvisioningPhase::ServiceTopologyPublished
+                    | FleetComponentProvisioningPhase::ConfirmingDirectories
+            ) {
+                return advance_component_directory_confirmation(request).await;
+            }
+            if acceptance_status.phase == FleetComponentProvisioningPhase::DirectoriesConfirmed {
+                return Ok(acceptance_status);
+            }
             return advance_component_scale_out_service_publication(request, acceptance_status)
                 .await;
         }
@@ -315,12 +326,29 @@ async fn advance_component_directory_confirmation(
         FleetComponentDirectoryConfirmationDisposition::Invoke(call)
         | FleetComponentDirectoryConfirmationDisposition::Reconcile(call) => call,
     };
-    let response = publish_root_component_directories(call).await?;
-    FleetCoordinatorOps::record_component_directory_confirmation(
-        &request,
-        response,
-        IcOps::now_nanos(),
-    )
+    match advance_root_component_directories(call).await? {
+        RootComponentDirectoryAdvanceResponse::FreshPublication(response) => {
+            FleetCoordinatorOps::record_component_directory_confirmation(
+                &request,
+                response,
+                IcOps::now_nanos(),
+            )
+        }
+        RootComponentDirectoryAdvanceResponse::ScaleOutPublication(response) => {
+            FleetCoordinatorOps::record_component_scale_out_directory_publication(
+                &request,
+                response,
+                IcOps::now_nanos(),
+            )
+        }
+        RootComponentDirectoryAdvanceResponse::Synchronization(response) => {
+            FleetCoordinatorOps::record_component_scale_out_directory_synchronization(
+                &request,
+                response,
+                IcOps::now_nanos(),
+            )
+        }
+    }
 }
 
 async fn advance_component_scale_out_service_publication(
@@ -488,18 +516,68 @@ async fn advance_root_component_provisioning(
     response.map_err(InternalError::public)
 }
 
-async fn publish_root_component_directories(
+enum RootComponentDirectoryAdvanceResponse {
+    FreshPublication(RootComponentProvisioningStatusResponse),
+    ScaleOutPublication(RootComponentProvisioningStatusResponse),
+    Synchronization(RootComponentDirectorySynchronizationResponse),
+}
+
+async fn advance_root_component_directories(
     call: FleetComponentDirectoryConfirmationCallView,
-) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(
-        call.fleet_subnet_root,
-        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-    )
-    .with_arg(call.request)?
-    .execute()
-    .await?;
-    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::public)
+) -> Result<RootComponentDirectoryAdvanceResponse, InternalError> {
+    match call {
+        FleetComponentDirectoryConfirmationCallView::FreshPublication {
+            fleet_subnet_root,
+            request,
+        } => {
+            let result = CallOps::unbounded_wait(
+                fleet_subnet_root,
+                protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
+            )
+            .with_arg(request)?
+            .execute()
+            .await?;
+            let response: Result<RootComponentProvisioningStatusResponse, Error> =
+                result.candid()?;
+            response
+                .map(RootComponentDirectoryAdvanceResponse::FreshPublication)
+                .map_err(InternalError::public)
+        }
+        FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+            fleet_subnet_root,
+            request,
+        } => {
+            let result = CallOps::unbounded_wait(
+                fleet_subnet_root,
+                protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
+            )
+            .with_arg(request)?
+            .execute()
+            .await?;
+            let response: Result<RootComponentProvisioningStatusResponse, Error> =
+                result.candid()?;
+            response
+                .map(RootComponentDirectoryAdvanceResponse::ScaleOutPublication)
+                .map_err(InternalError::public)
+        }
+        FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
+            fleet_subnet_root,
+            request,
+        } => {
+            let result = CallOps::unbounded_wait(
+                fleet_subnet_root,
+                protocol::CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE,
+            )
+            .with_arg(request)?
+            .execute()
+            .await?;
+            let response: Result<RootComponentDirectorySynchronizationResponse, Error> =
+                result.candid()?;
+            response
+                .map(RootComponentDirectoryAdvanceResponse::Synchronization)
+                .map_err(InternalError::public)
+        }
+    }
 }
 
 async fn activate_root_component_runtimes(

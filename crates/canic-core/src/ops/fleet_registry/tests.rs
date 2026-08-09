@@ -351,6 +351,33 @@ fn scale_out_appends_complete_replica_set_in_one_registry_revision() {
     assert_eq!(appended.revision, published.revision + 1);
     assert_eq!(appended.services, next_services);
     assert_eq!(appended.services[0].members.len(), 3);
+    assert_eq!(
+        FleetRegistryOps::affected_existing_service_components(
+            &published,
+            &appended,
+            principal(6),
+        )
+        .expect("derive existing Authority root member"),
+        vec![ComponentInstanceId::from_generated_bytes([20; 32])]
+    );
+    assert_eq!(
+        FleetRegistryOps::affected_existing_service_components(
+            &published,
+            &appended,
+            principal(8),
+        )
+        .expect("derive existing Replica root member"),
+        vec![ComponentInstanceId::from_generated_bytes([21; 32])]
+    );
+    assert!(
+        FleetRegistryOps::affected_existing_service_components(
+            &published,
+            &appended,
+            principal(10),
+        )
+        .expect("unrelated root has no affected members")
+        .is_empty()
+    );
     std::assert_matches!(
         FleetRegistryOps::compile_service_additions(
             &appended.authority,

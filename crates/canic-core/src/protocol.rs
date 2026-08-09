@@ -78,6 +78,8 @@ pub const CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE: &str =
     "canic_root_component_provisioning_advance";
 pub const CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH: &str =
     "canic_root_component_provisioning_publish";
+pub const CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE: &str =
+    "canic_root_component_directories_synchronize";
 pub const CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE: &str =
     "canic_root_component_provisioning_activate";
 pub const CANIC_ROOT_COMPONENT_PROVISIONING_STATUS: &str =

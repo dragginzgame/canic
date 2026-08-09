@@ -9,8 +9,9 @@ use crate::{
     dto::{
         component_provisioning::{
             ComponentGroupDirectory, FleetSubnetRootProvisioningBatch,
-            RootComponentActivationEvidence, RootComponentProvisioningResult,
-            RootComponentPublicationEvidence, RootProvisionedGroupPlacement,
+            RootComponentActivationEvidence, RootComponentDirectorySynchronizationResponse,
+            RootComponentProvisioningResult, RootComponentPublicationEvidence,
+            RootProvisionedGroupPlacement,
         },
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
     },
@@ -29,6 +30,8 @@ const FLEET_DIRECTORY_DOMAIN: &[u8] = b"canic/fleet-directory/v1";
 const COMPONENT_GROUP_DIRECTORY_DOMAIN: &[u8] = b"canic/component-group-directory/v1";
 const GROUP_PLACEMENT_RECEIPT_DOMAIN: &[u8] =
     b"canic/root-component-provisioning-group-placement-receipt/v1";
+const DIRECTORY_SYNCHRONIZATION_RECEIPT_DOMAIN: &[u8] =
+    b"canic/root-component-directory-synchronization/v1";
 
 /// Exact immutable fields covered by one root's initial `Accepted` receipt.
 #[derive(CandidType)]
@@ -144,6 +147,19 @@ impl RootComponentProvisioningReceiptOps {
         directory: &FleetDirectorySnapshot,
     ) -> Result<[u8; 32], InternalError> {
         receipt_content_hash(FLEET_DIRECTORY_DOMAIN, directory, "Fleet Directory")
+    }
+
+    /// Hash one terminal affected-root Directory synchronization response.
+    pub fn directory_synchronization_content_hash(
+        response: &RootComponentDirectorySynchronizationResponse,
+    ) -> Result<[u8; 32], InternalError> {
+        let mut authority = response.clone();
+        authority.receipt_content_hash = [0; 32];
+        receipt_content_hash(
+            DIRECTORY_SYNCHRONIZATION_RECEIPT_DOMAIN,
+            authority,
+            "root Component Directory synchronization receipt",
+        )
     }
 
     /// Hash one exact Component Group Directory projection.
