@@ -190,8 +190,13 @@ impl FleetCoordinatorWorkflow {
             ) {
                 return advance_component_directory_confirmation(request).await;
             }
-            if acceptance_status.phase == FleetComponentProvisioningPhase::DirectoriesConfirmed {
-                return Ok(acceptance_status);
+            if matches!(
+                acceptance_status.phase,
+                FleetComponentProvisioningPhase::DirectoriesConfirmed
+                    | FleetComponentProvisioningPhase::ActivatingRuntimes
+                    | FleetComponentProvisioningPhase::RuntimesActivated
+            ) {
+                return advance_component_runtime_activation(request).await;
             }
             return advance_component_scale_out_service_publication(request, acceptance_status)
                 .await;

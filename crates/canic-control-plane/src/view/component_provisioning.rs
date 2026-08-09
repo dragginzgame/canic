@@ -78,6 +78,13 @@ pub struct RootComponentProvisioningMemberView {
     pub limits: ComponentDeploymentLimits,
 }
 
+/// Protected root runtime state observed before one batch was accepted.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootComponentProvisioningRuntimeMode {
+    FreshRoot,
+    ActiveRoot,
+}
+
 /// Read-only accepted root batch and its exact replay receipt.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentProvisioningView {
@@ -86,6 +93,7 @@ pub struct RootComponentProvisioningView {
     pub fleet_registry: FleetRegistryVersion,
     pub configuration_digest: ComponentDeploymentConfigurationDigest,
     pub batch: FleetSubnetRootProvisioningBatch,
+    pub runtime_mode: RootComponentProvisioningRuntimeMode,
     pub placement_count: u32,
     pub component_count: u32,
     pub reservation_cursor: RootComponentProvisioningReservationCursorView,

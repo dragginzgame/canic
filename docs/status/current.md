@@ -14,19 +14,20 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.33`.
-- The latest published release is `v0.101.33` at
-  `5f45a525bddf10f0edb2ded6d88f32ce94d70fef`.
-- Open `0.101.34` freezes the exact selected plus affected-existing-root
+- The workspace package version is `0.101.34`.
+- The latest published release is `v0.101.34` at
+  `cfdadc7807639a897cc25ffaabb94f5e669e3bbb`.
+- Open `0.101.35` continues past the exact selected plus affected-existing-root
   Directory barrier after scale-out service publication. Every barrier root
   durably synchronizes the published Fleet Registry and each existing affected
   service Component; selected roots then publish their exact prepared batch
-  Directories. Later valid Component heads may cover an in-flight required
-  head only under the exact published Fleet Directory and independently
-  revalidated local Registry state. The Coordinator stops at
-  `DirectoriesConfirmed`; scale-out runtime activation remains fenced. The
-  same patch restores strict layering by giving stable Fleet-activation storage
-  an internal service-mode record instead of retaining a boundary DTO.
+  Directories. The Coordinator then journals activation only on selected roots.
+  Each root freezes whether its batch began `Prepared` or already `Active`;
+  active roots activate only the new Components and retain their original
+  sealed initial inventory and root-activation evidence. Exact terminal root
+  receipts advance the operation to `RuntimesActivated` and atomically append
+  the new placements to the canonical deployment ledger. Repeated scale-out
+  journal rollover remains the next Slice 4 boundary.
 - Released `0.101.33` derives the complete next Fleet-service set from the exact
   source Registry, protected scale-out plan and every terminal selected-root
   receipt. It atomically appends all new Replica or PoolMember bindings, or
@@ -2584,13 +2585,14 @@ First primary results:
 
 ## Next Action
 
-The atomic scale-out service-publication boundary is published at immutable
-`v0.101.33`. Open `0.101.34` drives the exact selected plus affected-existing-
-root Directory barrier to `DirectoriesConfirmed`, including restart/lost-
-response replay and verified later-head coverage for concurrent Component
-Directory progress. Continue Slice 4 with the separately journalled scale-out
-runtime-activation phase; do not collapse activation into Directory
-confirmation.
+The exact scale-out Directory barrier is published at immutable `v0.101.34`.
+Open `0.101.35` separately journals selected-root runtime activation, preserves
+already-active root and initial-inventory authority, and commits new deployment
+placements only with terminal root receipts. Continue Slice 4 by retiring or
+archiving the terminal scale-out journal so another monotonic desired-count
+increase can start from the newly committed placement ledger without reusing
+an operation or ordinal. Do not weaken exact terminal status replay while
+opening the next operation.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

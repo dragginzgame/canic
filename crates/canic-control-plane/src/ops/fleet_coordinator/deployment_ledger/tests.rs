@@ -13,7 +13,7 @@ use canic_core::{
         component_provisioning::{
             ComponentGroupPlacementPlan, FleetComponentActivationRootProgress,
             FleetComponentProvisioningOperation, FleetComponentProvisioningPlan,
-            FleetSubnetRootProvisioningBatch,
+            FleetSubnetRootProvisioningBatch, RootComponentActivationEvidence,
         },
         fleet_registry::{FleetRegistry, FleetRegistryVersion},
     },
@@ -174,16 +174,12 @@ fn planned_scale_out_reserves_the_exact_next_range_without_committing_placements
 }
 
 #[test]
-fn scale_out_ledger_allows_only_the_directory_confirmation_state_machine() {
+fn scale_out_ledger_allows_the_complete_runtime_activation_state_machine() {
     let (_, mut scale_out) = fixture();
-    assert!(!scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
 
     scale_out.state = FleetComponentProvisioningStateRecord::Planned { planned_at_ns: 30 };
-    assert!(scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
 
     scale_out.state = FleetComponentProvisioningStateRecord::AcceptingRoots {
         planned_at_ns: 30,
@@ -194,18 +190,14 @@ fn scale_out_ledger_allows_only_the_directory_confirmation_state_machine() {
             started_at_ns: 31,
         }),
     };
-    assert!(scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
 
     scale_out.state = FleetComponentProvisioningStateRecord::RootsAccepted {
         planned_at_ns: 30,
         acceptances: vec![],
         roots_accepted_at_ns: 32,
     };
-    assert!(scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
 
     scale_out.state = FleetComponentProvisioningStateRecord::ProvisioningRoots {
         planned_at_ns: 30,
@@ -215,9 +207,7 @@ fn scale_out_ledger_allows_only_the_directory_confirmation_state_machine() {
         current: None,
         in_flight: None,
     };
-    assert!(scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
 
     scale_out.state = FleetComponentProvisioningStateRecord::ComponentsProvisioned {
         planned_at_ns: 30,
@@ -226,9 +216,7 @@ fn scale_out_ledger_allows_only_the_directory_confirmation_state_machine() {
         provisions: vec![],
         components_provisioned_at_ns: 33,
     };
-    assert!(scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
 
     scale_out.state = FleetComponentProvisioningStateRecord::ServiceTopologyPublished {
         planned_at_ns: 30,
@@ -239,9 +227,79 @@ fn scale_out_ledger_allows_only_the_directory_confirmation_state_machine() {
         published_fleet_registry: scale_out.plan.fleet_registry.clone(),
         service_topology_published_at_ns: 34,
     };
-    assert!(scale_out_directory_confirmation_boundary_is_valid(
-        &scale_out.state
-    ));
+    assert!(scale_out_runtime_boundary_is_valid(&scale_out.state));
+}
+
+#[test]
+fn terminal_scale_out_commits_exact_new_placements_under_selected_root_receipts() {
+    let (configuration, provisioning) = fixture();
+    let initial = compile_initial(&configuration, &provisioning).expect("initial ledger");
+    let mut scale_out = provisioning;
+    scale_out.operation_id = [50; 32];
+    scale_out.plan_hash = [51; 32];
+    scale_out.plan.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "cells".parse().expect("deployment ID"),
+        previous_placements: 2,
+        requested_placements: 4,
+    };
+    for batch in &mut scale_out.plan.batches {
+        for placement in &mut batch.placements {
+            placement.group_placement.ordinal += 2;
+        }
+    }
+    let reserved = reserve_scale_out(&initial, &scale_out.plan).expect("reserved ledger");
+    let FleetComponentProvisioningStateRecord::RuntimesActivated { activations, .. } =
+        &mut scale_out.state
+    else {
+        panic!("terminal fixture state")
+    };
+    for (index, activation) in activations.iter_mut().enumerate() {
+        activation.receipt_content_hash =
+            [70 + u8::try_from(index).expect("bounded receipt index"); 32];
+        activation.activation = Some(RootComponentActivationEvidence {
+            fleet_activation_operation_id: [60; 32],
+            initial_inventory_hash: [61; 32],
+            component_count: 0,
+            root_activated_at_ns: 10,
+        });
+    }
+
+    let committed = commit_scale_out(&reserved, &scale_out).expect("commit scale-out ledger");
+    assert_eq!(committed[0].next_placement_ordinal, 4);
+    assert_eq!(committed[0].placements.len(), 4);
+    assert_eq!(
+        committed[0]
+            .placements
+            .iter()
+            .map(|placement| placement.placement.ordinal)
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2, 3]
+    );
+    assert!(
+        committed[0].placements[2..]
+            .iter()
+            .all(|placement| placement.operation_id == scale_out.operation_id)
+    );
+    validate_terminal_ledger(&initial, Some(&scale_out), &committed)
+        .expect("terminal scale-out ledger validates");
+
+    let mut conflicting = scale_out.clone();
+    let FleetComponentProvisioningStateRecord::RuntimesActivated { activations, .. } =
+        &mut conflicting.state
+    else {
+        panic!("terminal fixture state")
+    };
+    activations[0].receipt_content_hash = [99; 32];
+    assert!(validate_terminal_ledger(&initial, Some(&conflicting), &committed).is_err());
+
+    let mut wrong_root = scale_out;
+    let FleetComponentProvisioningStateRecord::RuntimesActivated { activations, .. } =
+        &mut wrong_root.state
+    else {
+        panic!("terminal fixture state")
+    };
+    activations[0].progress.fleet_subnet_root = principal(99);
+    assert!(commit_scale_out(&reserved, &wrong_root).is_err());
 }
 
 fn fixture() -> (
