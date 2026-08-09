@@ -7,7 +7,7 @@
 #[cfg(feature = "fleet-coordinator-canister")]
 use std::cell::RefCell;
 
-use candid::Principal;
+use candid::{CandidType, Principal};
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
@@ -20,9 +20,9 @@ use canic_core::{
     },
     dto::{
         component_provisioning::{
-            FleetComponentActivationRootProgress, FleetComponentProvisioningPlan,
-            RootComponentActivationEvidence, RootComponentActivationRequest,
-            RootComponentDirectorySynchronizationRequest,
+            FleetComponentActivationRootProgress, FleetComponentProvisioningOperation,
+            FleetComponentProvisioningPlan, RootComponentActivationEvidence,
+            RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
             RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
@@ -49,8 +49,9 @@ use serde::{Deserialize, Serialize};
 // immutable join receipts, the complete Component provisioning plan plus one
 // compact acceptance and one terminal provisioning receipt per planned root,
 // one compact placement record per committed Component Group deployment copy,
-// at most one in-progress scale-out plan plus one compact acceptance per
-// selected root,
+// one compact terminal receipt per completed scale-out placement range, at
+// most one in-progress scale-out plan plus one compact acceptance per selected
+// root,
 // the complete service set again in at most one fresh and one scale-out
 // publication receipt, one exact acknowledgement per current root, and at most
 // one draining and one removal receipt per root.
@@ -91,6 +92,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub registry_activation_receipt: Option<FleetRegistryActivationReceiptRecord>,
     pub component_provisioning: Option<FleetComponentProvisioningRecord>,
     pub component_group_deployments: Vec<FleetComponentGroupDeploymentRecord>,
+    pub component_scale_out_receipts: Vec<FleetComponentScaleOutReceiptRecord>,
     pub component_scale_out: Option<FleetComponentProvisioningRecord>,
     pub service_publication_receipts: Vec<FleetServicePublicationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
@@ -158,13 +160,40 @@ pub struct FleetComponentGroupDeploymentRecord {
 /// Exact root and terminal receipt authority for one committed group placement.
 ///
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetComponentGroupPlacementRecord {
     pub placement: ComponentGroupPlacementId,
     pub fleet_subnet_root: Principal,
     pub operation_id: [u8; 32],
     pub plan_hash: [u8; 32],
     pub root_receipt_content_hash: [u8; 32],
+}
+
+///
+/// FleetComponentScaleOutReceiptRecord
+///
+/// Compact terminal replay and committed-placement authority for one retired scale-out journal.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetComponentScaleOutReceiptRecord {
+    pub operation_id: [u8; 32],
+    pub plan_hash: [u8; 32],
+    pub fleet_registry: FleetRegistryVersion,
+    pub configuration_digest: ComponentDeploymentConfigurationDigest,
+    pub operation: FleetComponentProvisioningOperation,
+    pub directory_confirmation_root_count: u32,
+    pub root_batch_count: u32,
+    pub component_count: u32,
+    pub planned_at_ns: u64,
+    pub roots_accepted_at_ns: u64,
+    pub components_provisioned_at_ns: u64,
+    pub published_fleet_registry: FleetRegistryVersion,
+    pub service_topology_published_at_ns: u64,
+    pub directories_confirmed_at_ns: u64,
+    pub runtimes_activated_at_ns: u64,
+    pub placements: Vec<FleetComponentGroupPlacementRecord>,
+    pub receipt_content_hash: [u8; 32],
 }
 
 /// Monotonic durable Coordinator provisioning state implemented in this slice.

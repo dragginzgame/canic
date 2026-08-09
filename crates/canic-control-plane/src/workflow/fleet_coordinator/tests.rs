@@ -15,6 +15,11 @@ use crate::view::fleet_coordinator::{
     FleetComponentProvisioningRootProvisionCallView,
     FleetComponentProvisioningRootProvisionDisposition, FleetComponentRuntimeActivationDisposition,
 };
+use std::{
+    future::Future,
+    task::{Context, Poll, Waker},
+};
+
 use canic_core::{
     bootstrap::parse_config_model,
     cdk::types::Cycles,
@@ -75,6 +80,15 @@ use canic_core::{
 
 fn principal(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
+}
+
+fn poll_ready<F: Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = Context::from_waker(Waker::noop());
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(output) => output,
+        Poll::Pending => panic!("future unexpectedly awaited an external effect"),
+    }
 }
 
 #[test]
@@ -288,6 +302,23 @@ fn scale_out_coordinator_config() -> ConfigModel {
 fn ordinary_scale_out_coordinator_config() -> ConfigModel {
     parse_config_model(ORDINARY_SCALE_OUT_COORDINATOR_CONFIG)
         .expect("valid ordinary scale-out Coordinator config")
+}
+
+fn repeated_scale_out_coordinator_config() -> ConfigModel {
+    parse_config_model(
+        &SCALE_OUT_COORDINATOR_CONFIG
+            .replace("maximum_instances = 3", "maximum_instances = 6")
+            .replace("maximum_placements = 2", "maximum_placements = 4")
+            .replace(
+                "placement.maximum_per_root = 1",
+                "placement.maximum_per_root = 3",
+            )
+            .replace(
+                "placement.maximum_members_per_root = 1",
+                "placement.maximum_members_per_root = 3",
+            ),
+    )
+    .expect("valid repeated scale-out Coordinator config")
 }
 
 fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
@@ -1016,9 +1047,342 @@ fn ordinary_scale_out_records_publication_without_registry_mutation() {
     assert_eq!(current.component_group_deployments[0].placements.len(), 2);
 }
 
+#[test]
+fn terminal_scale_out_rolls_into_compact_history_before_the_next_increase() {
+    let scenario = prepare_repeated_scale_out();
+    assert_retired_scale_out_replays(&scenario);
+    complete_repeated_scale_out(scenario);
+}
+
+struct RepeatedScaleOutScenario {
+    config: ConfigModel,
+    first_request: FleetComponentProvisioningPrepareRequest,
+    first: FleetComponentProvisioningStatusResponse,
+    second: FleetComponentProvisioningStatusResponse,
+    rolled: FleetCoordinatorRegistryData,
+}
+
+fn prepare_repeated_scale_out() -> RepeatedScaleOutScenario {
+    let config = repeated_scale_out_coordinator_config();
+    drive_terminal_fresh_install_with_admission(&config, 3);
+    let registry = FleetCoordinatorWorkflow::registry().expect("published Registry");
+    let first_request = FleetComponentProvisioningPrepareRequest {
+        operation_id: [201; 32],
+        plan: scale_out_plan(&config, &registry, 1, 2),
+    };
+    let first = drive_terminal_scale_out(&config, first_request.clone(), 1_000);
+    assert_eq!(
+        first.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    assert_current_terminal_operation_rejects_conflicting_plan(&config, &first_request);
+
+    let second_registry = FleetCoordinatorWorkflow::registry().expect("first scale-out Registry");
+    assert_eq!(second_registry.services[0].members.len(), 2);
+    let second_request = FleetComponentProvisioningPrepareRequest {
+        operation_id: [203; 32],
+        plan: scale_out_plan(&config, &second_registry, 2, 3),
+    };
+    assert_next_scale_out_rejects_time_regression(&config, &second_request, &first);
+    let second = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(&config, second_request, 2_000)
+        .expect("retire first terminal journal and prepare second increase");
+    assert_eq!(second.phase, FleetComponentProvisioningPhase::Planned);
+    let rolled = FleetCoordinatorRegistryStore::export();
+    let current = rolled.current.as_ref().expect("Coordinator state");
+    assert_eq!(current.component_scale_out_receipts.len(), 1);
+    assert_eq!(current.registry.services[0].members.len(), 2);
+    assert_eq!(
+        current.component_scale_out_receipts[0].operation_id,
+        first.operation_id
+    );
+    assert_eq!(
+        current
+            .component_scale_out
+            .as_ref()
+            .expect("second active scale-out")
+            .operation_id,
+        second.operation_id
+    );
+    assert_eq!(current.component_group_deployments[0].placements.len(), 2);
+    assert_eq!(
+        current.component_group_deployments[0].next_placement_ordinal,
+        3
+    );
+    RepeatedScaleOutScenario {
+        config,
+        first_request,
+        first,
+        second,
+        rolled,
+    }
+}
+
+fn assert_retired_scale_out_replays(scenario: &RepeatedScaleOutScenario) {
+    let RepeatedScaleOutScenario {
+        config,
+        first_request,
+        first,
+        rolled,
+        ..
+    } = scenario;
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: first.operation_id,
+                plan_hash: first.plan_hash,
+            },
+        )
+        .expect("retired operation status replay"),
+        first.clone()
+    );
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            prepare_component_provisioning_for_test(config, first_request.clone(), 9_999)
+            .expect("retired exact preparation replay"),
+        *first
+    );
+    assert_eq!(
+        poll_ready(FleetCoordinatorWorkflow::advance_component_provisioning(
+            root_provision_advance_request(first),
+        ))
+        .expect("retired terminal advance replay"),
+        *first
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), *rolled);
+
+    let mut conflicting_retry = first_request.clone();
+    conflicting_retry.plan.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "project_cells".parse().expect("deployment ID"),
+        previous_placements: 1,
+        requested_placements: 3,
+    };
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(config, conflicting_retry, 10_000)
+        .expect_err("retired operation cannot select different plan authority");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), *rolled);
+}
+
+fn complete_repeated_scale_out(scenario: RepeatedScaleOutScenario) {
+    let RepeatedScaleOutScenario {
+        config,
+        second,
+        rolled,
+        ..
+    } = scenario;
+    FleetCoordinatorRegistryStore::import(rolled);
+    let second = drive_prepared_scale_out(&config, second, 2_010);
+    assert_eq!(
+        second.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    let terminal = FleetCoordinatorRegistryStore::export();
+    let current = terminal.current.as_ref().expect("Coordinator state");
+    assert_eq!(current.component_scale_out_receipts.len(), 1);
+    assert_eq!(current.registry.services[0].members.len(), 3);
+    let placements = &current.component_group_deployments[0].placements;
+    assert_eq!(
+        placements
+            .iter()
+            .map(|placement| (placement.placement.ordinal, placement.operation_id))
+            .collect::<Vec<_>>(),
+        vec![(0, [101; 32]), (1, [201; 32]), (2, [203; 32])]
+    );
+
+    let mut corrupted = terminal.clone();
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_scale_out_receipts[0]
+        .placements[0]
+        .root_receipt_content_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid = FleetCoordinatorWorkflow::registry()
+        .expect_err("corrupted retired placement authority must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    FleetCoordinatorRegistryStore::import(terminal.clone());
+
+    let mut corrupted = FleetCoordinatorRegistryStore::export();
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_scale_out_receipts[0]
+        .component_count += 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid = FleetCoordinatorWorkflow::registry()
+        .expect_err("corrupted retired replay-only count must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    FleetCoordinatorRegistryStore::import(terminal);
+    assert_second_rollover_retains_ordered_history(&config, &second);
+}
+
+fn assert_second_rollover_retains_ordered_history(
+    config: &ConfigModel,
+    second: &FleetComponentProvisioningStatusResponse,
+) {
+    let registry = FleetCoordinatorWorkflow::registry().expect("second scale-out Registry");
+    let third_request = FleetComponentProvisioningPrepareRequest {
+        operation_id: [205; 32],
+        plan: scale_out_plan(config, &registry, 3, 4),
+    };
+    let third = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(config, third_request, 3_000)
+        .expect("retire second terminal journal and prepare third increase");
+    assert_eq!(third.phase, FleetComponentProvisioningPhase::Planned);
+    let rolled_twice = FleetCoordinatorRegistryStore::export();
+    let current = rolled_twice.current.as_ref().expect("Coordinator state");
+    assert_eq!(
+        current
+            .component_scale_out_receipts
+            .iter()
+            .map(|receipt| receipt.operation_id)
+            .collect::<Vec<_>>(),
+        vec![[201; 32], [203; 32]]
+    );
+    assert_eq!(current.component_group_deployments[0].placements.len(), 3);
+    assert_eq!(
+        current.component_group_deployments[0].next_placement_ordinal,
+        4
+    );
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: second.operation_id,
+                plan_hash: second.plan_hash,
+            },
+        )
+        .expect("second retired operation status replay"),
+        *second
+    );
+}
+
+fn assert_current_terminal_operation_rejects_conflicting_plan(
+    config: &ConfigModel,
+    request: &FleetComponentProvisioningPrepareRequest,
+) {
+    let before = FleetCoordinatorRegistryStore::export();
+    let mut conflicting = request.clone();
+    conflicting.plan.operation = FleetComponentProvisioningOperation::ScaleOut {
+        deployment: "project_cells".parse().expect("deployment ID"),
+        previous_placements: 1,
+        requested_placements: 3,
+    };
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(config, conflicting, 1_999)
+        .expect_err("active terminal operation cannot select different plan authority");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
+}
+
+fn assert_next_scale_out_rejects_time_regression(
+    config: &ConfigModel,
+    request: &FleetComponentProvisioningPrepareRequest,
+    previous: &FleetComponentProvisioningStatusResponse,
+) {
+    let before = FleetCoordinatorRegistryStore::export();
+    let regressed_at_ns = previous
+        .runtimes_activated_at_ns
+        .expect("terminal activation time")
+        .checked_sub(1)
+        .expect("positive terminal activation time");
+    let invalid = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(config, request.clone(), regressed_at_ns)
+        .expect_err("next scale-out cannot predate retired terminal history");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
+}
+
+fn drive_terminal_scale_out(
+    config: &ConfigModel,
+    request: FleetComponentProvisioningPrepareRequest,
+    started_at_ns: u64,
+) -> FleetComponentProvisioningStatusResponse {
+    let status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(config, request, started_at_ns)
+        .expect("prepare scale-out");
+    drive_prepared_scale_out(config, status, started_at_ns + 10)
+}
+
+fn drive_prepared_scale_out(
+    config: &ConfigModel,
+    mut status: FleetComponentProvisioningStatusResponse,
+    started_at_ns: u64,
+) -> FleetComponentProvisioningStatusResponse {
+    status = drive_root_acceptance(config, status, started_at_ns);
+    status = drive_root_provisioning(config, status, started_at_ns + 10);
+    status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        publish_component_provisioning_services(
+            &root_provision_advance_request(&status),
+            started_at_ns + 100,
+        )
+        .expect("publish scale-out topology");
+    let selected_root = FleetCoordinatorRegistryStore::export()
+        .current
+        .as_ref()
+        .and_then(|current| current.component_scale_out.as_ref())
+        .and_then(|record| record.plan.batches.first())
+        .map(|batch| batch.root.fleet_subnet_root)
+        .expect("selected scale-out root");
+    let affected_roots = FleetCoordinatorRegistryStore::export()
+        .current
+        .as_ref()
+        .and_then(|current| current.component_scale_out.as_ref())
+        .map(|record| {
+            record
+                .plan
+                .directory_confirmation_roots
+                .iter()
+                .copied()
+                .filter(|root| *root != selected_root)
+                .collect::<Vec<_>>()
+        })
+        .expect("scale-out Directory roots");
+    for affected_root in affected_roots {
+        let request = root_provision_advance_request(&status);
+        let call = expect_scale_out_synchronization_call(
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_directory_confirmation(&request, started_at_ns + 101)
+                .expect("persist affected-root synchronization"),
+        );
+        assert_eq!(call.0, affected_root);
+        let response = terminal_scale_out_synchronization_response(&call, 1, started_at_ns + 102);
+        status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_scale_out_directory_synchronization(
+                &request,
+                response,
+                started_at_ns + 103,
+            )
+            .expect("record affected-root synchronization");
+    }
+    status = confirm_selected_scale_out_root(status, selected_root, started_at_ns + 110);
+    drive_runtime_activation(status, started_at_ns + 200)
+}
+
 fn drive_terminal_fresh_install(config: &ConfigModel) -> FleetComponentProvisioningStatusResponse {
+    drive_terminal_fresh_install_with_admission(config, 1)
+}
+
+fn drive_terminal_fresh_install_with_admission(
+    config: &ConfigModel,
+    maximum_root_instances: u32,
+) -> FleetComponentProvisioningStatusResponse {
     FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
-    let (_, _, _) = activate_two_roots_with_config(principal(200), config);
+    let (_, _, _) = activate_two_roots_with_config_and_admission(
+        principal(200),
+        config,
+        maximum_root_instances,
+    );
     let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
     let plan = initial_scale_out_component_plan(config, &registry);
     let mut status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -2660,6 +3024,18 @@ fn activate_two_roots_with_config(
     FleetSubnetRootEntry,
     FleetRegistryVersion,
 ) {
+    activate_two_roots_with_config_and_admission(coordinator, config, 1)
+}
+
+fn activate_two_roots_with_config_and_admission(
+    coordinator: Principal,
+    config: &ConfigModel,
+    maximum_root_instances: u32,
+) -> (
+    FleetSubnetRootEntry,
+    FleetSubnetRootEntry,
+    FleetRegistryVersion,
+) {
     let args = init_args_with_config(coordinator, config);
     let topology = args
         .component_deployment_configuration
@@ -2667,8 +3043,8 @@ fn activate_two_roots_with_config(
         .clone();
     FleetCoordinatorWorkflow::initialize(args, principal(60), true, coordinator)
         .expect("commit genesis");
-    let first = joining_entry(&topology, 61, 62, 1);
-    let second = joining_entry(&topology, 63, 64, 1);
+    let first = joining_entry(&topology, 61, 62, maximum_root_instances);
+    let second = joining_entry(&topology, 63, 64, maximum_root_instances);
     let first_join = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
         expected_registry: FleetCoordinatorWorkflow::version().expect("genesis version"),
         entry: first.clone(),
@@ -2804,6 +3180,15 @@ fn one_placement_scale_out_plan(
     config: &ConfigModel,
     registry: &FleetRegistry,
 ) -> FleetComponentProvisioningPlan {
+    scale_out_plan(config, registry, 1, 2)
+}
+
+fn scale_out_plan(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    previous_placements: u32,
+    requested_placements: u32,
+) -> FleetComponentProvisioningPlan {
     let (deployment, component_group, entries) = project_cell_plan_entries(config);
     let root = &registry.fleet_subnet_roots[1];
     let mut plan = component_plan(
@@ -2811,20 +3196,22 @@ fn one_placement_scale_out_plan(
         registry,
         FleetComponentProvisioningOperation::ScaleOut {
             deployment: deployment.clone(),
-            previous_placements: 1,
-            requested_placements: 2,
+            previous_placements,
+            requested_placements,
         },
         vec![FleetSubnetRootProvisioningBatch {
             root: fleet_subnet_root_binding(registry, root),
             active_release_set: root.active_release_set,
-            placements: vec![ComponentGroupPlacementPlan {
-                group_placement: ComponentGroupPlacementId {
-                    deployment,
-                    ordinal: 1,
-                },
-                component_group,
-                entries,
-            }],
+            placements: (previous_placements..requested_placements)
+                .map(|ordinal| ComponentGroupPlacementPlan {
+                    group_placement: ComponentGroupPlacementId {
+                        deployment: deployment.clone(),
+                        ordinal,
+                    },
+                    component_group: component_group.clone(),
+                    entries: entries.clone(),
+                })
+                .collect(),
         }],
     );
     if registry.services.is_empty() {

@@ -12,6 +12,7 @@ use crate::{
     storage::stable::fleet_coordinator::{
         FleetComponentGroupDeploymentRecord, FleetComponentGroupPlacementRecord,
         FleetComponentProvisioningRecord, FleetComponentProvisioningStateRecord,
+        FleetComponentScaleOutReceiptRecord,
     },
 };
 use std::collections::BTreeMap;
@@ -341,11 +342,12 @@ pub(super) fn validate(
     configuration: &ComponentDeploymentConfiguration,
     registry: &FleetRegistry,
     provisioning: Option<&FleetComponentProvisioningRecord>,
+    scale_out_receipts: &[FleetComponentScaleOutReceiptRecord],
     scale_out: Option<&FleetComponentProvisioningRecord>,
     deployments: &[FleetComponentGroupDeploymentRecord],
 ) -> Result<(), InternalError> {
     let Some(provisioning) = provisioning else {
-        if deployments.is_empty() && scale_out.is_none() {
+        if deployments.is_empty() && scale_out_receipts.is_empty() && scale_out.is_none() {
             return Ok(());
         }
         return Err(receipt_invariant(
@@ -356,17 +358,34 @@ pub(super) fn validate(
         provisioning.state,
         FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
     ) {
-        validate_scale_out_record(
+        let mut expected = compile_initial(configuration, provisioning)?;
+        for receipt in scale_out_receipts {
+            commit_scale_out_receipt(&mut expected, receipt)?;
+        }
+        validate_active_scale_out_record(
             configuration,
             registry,
             provisioning,
             scale_out,
-            deployments,
+            &expected,
         )?;
-        let expected = compile_initial(configuration, provisioning)?;
-        return validate_terminal_ledger(&expected, scale_out, deployments);
+        if let Some(scale_out) = scale_out {
+            expected = reserve_scale_out(&expected, &scale_out.plan)?;
+            if matches!(
+                scale_out.state,
+                FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
+            ) {
+                expected = commit_scale_out(&expected, scale_out)?;
+            }
+        }
+        if deployments == expected {
+            return Ok(());
+        }
+        return Err(receipt_invariant(
+            "deployment ledger differs from exact scale-out history and active authority",
+        ));
     }
-    if deployments.is_empty() && scale_out.is_none() {
+    if deployments.is_empty() && scale_out_receipts.is_empty() && scale_out.is_none() {
         Ok(())
     } else {
         Err(receipt_invariant(
@@ -375,12 +394,12 @@ pub(super) fn validate(
     }
 }
 
-fn validate_scale_out_record(
+fn validate_active_scale_out_record(
     configuration: &ComponentDeploymentConfiguration,
     registry: &FleetRegistry,
     fresh: &FleetComponentProvisioningRecord,
     scale_out: Option<&FleetComponentProvisioningRecord>,
-    deployments: &[FleetComponentGroupDeploymentRecord],
+    committed_deployments: &[FleetComponentGroupDeploymentRecord],
 ) -> Result<(), InternalError> {
     let Some(scale_out) = scale_out else {
         return Ok(());
@@ -400,21 +419,11 @@ fn validate_scale_out_record(
             "Fleet Component scale-out has an invalid runtime-activation boundary",
         ));
     }
-    let initial_deployments;
-    let plan_deployments = if matches!(
-        scale_out.state,
-        FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
-    ) {
-        initial_deployments = compile_initial(configuration, fresh)?;
-        &initial_deployments
-    } else {
-        deployments
-    };
     let plan_hash = hash_with_next_ordinal(
         configuration,
         registry,
         fresh,
-        plan_deployments,
+        committed_deployments,
         &scale_out.plan,
         scale_out_plan_reserved_start(&scale_out.plan)?,
     )
@@ -428,6 +437,62 @@ fn validate_scale_out_record(
             "Fleet Component scale-out plan hash differs from canonical bytes",
         ));
     }
+    Ok(())
+}
+
+fn commit_scale_out_receipt(
+    deployments: &mut [FleetComponentGroupDeploymentRecord],
+    receipt: &FleetComponentScaleOutReceiptRecord,
+) -> Result<(), InternalError> {
+    let FleetComponentProvisioningOperation::ScaleOut {
+        deployment,
+        previous_placements,
+        requested_placements,
+    } = &receipt.operation
+    else {
+        return Err(receipt_invariant(
+            "deployment receipt contains a different operation kind",
+        ));
+    };
+    let target_index = deployments
+        .binary_search_by(|candidate| candidate.deployment.cmp(deployment))
+        .map_err(|_| receipt_invariant("retired scale-out deployment ledger is absent"))?;
+    let target = &mut deployments[target_index];
+    let committed_count = u32::try_from(target.placements.len())
+        .map_err(|_| receipt_invariant("committed placement count does not fit u32"))?;
+    if committed_count != *previous_placements
+        || target.next_placement_ordinal != *previous_placements
+        || *requested_placements > target.maximum_placements
+    {
+        return Err(receipt_invariant(
+            "retired scale-out receipt differs from prior deployment authority",
+        ));
+    }
+    let expected_count = requested_placements
+        .checked_sub(*previous_placements)
+        .and_then(|count| usize::try_from(count).ok())
+        .ok_or_else(|| receipt_invariant("retired scale-out count does not fit usize"))?;
+    if receipt.placements.len() != expected_count {
+        return Err(receipt_invariant(
+            "retired scale-out receipt lacks its exact placement range",
+        ));
+    }
+    for (offset, placement) in receipt.placements.iter().enumerate() {
+        let offset = u32::try_from(offset)
+            .map_err(|_| receipt_invariant("retired placement offset does not fit u32"))?;
+        let expected_ordinal = previous_placements
+            .checked_add(offset)
+            .ok_or_else(|| receipt_invariant("retired placement ordinal overflowed"))?;
+        if &placement.placement.deployment != deployment
+            || placement.placement.ordinal != expected_ordinal
+        {
+            return Err(receipt_invariant(
+                "retired scale-out receipt placement range is noncanonical",
+            ));
+        }
+    }
+    target.next_placement_ordinal = *requested_placements;
+    target.placements.extend(receipt.placements.iter().cloned());
     Ok(())
 }
 
@@ -452,43 +517,29 @@ const fn scale_out_runtime_boundary_is_valid(
     }
 }
 
+#[cfg(test)]
 fn validate_terminal_ledger(
     expected: &[FleetComponentGroupDeploymentRecord],
     scale_out: Option<&FleetComponentProvisioningRecord>,
     deployments: &[FleetComponentGroupDeploymentRecord],
 ) -> Result<(), InternalError> {
     let Some(scale_out) = scale_out else {
-        if deployments == expected {
-            return Ok(());
-        }
-        return Err(receipt_invariant(
-            "deployment ledger differs from terminal fresh-install authority",
-        ));
+        return (deployments == expected)
+            .then_some(())
+            .ok_or_else(|| receipt_invariant("deployment ledger differs from expected authority"));
     };
-    if !matches!(
-        scale_out.plan.operation,
-        FleetComponentProvisioningOperation::ScaleOut { .. }
-    ) {
-        return Err(receipt_invariant(
-            "deployment scale-out journal contains a different operation kind",
-        ));
-    }
     let reserved = reserve_scale_out(expected, &scale_out.plan)?;
-    let terminal = matches!(
+    let authoritative = if matches!(
         scale_out.state,
         FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
-    );
-    let authoritative = if terminal {
+    ) {
         commit_scale_out(&reserved, scale_out)?
     } else {
         reserved
     };
-    if deployments != authoritative {
-        return Err(receipt_invariant(
-            "deployment ledger differs from exact scale-out authority",
-        ));
-    }
-    Ok(())
+    (deployments == authoritative).then_some(()).ok_or_else(|| {
+        receipt_invariant("deployment ledger differs from exact scale-out authority")
+    })
 }
 
 fn scale_out_plan_reserved_end(

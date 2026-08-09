@@ -326,6 +326,16 @@ impl ComponentProvisioningPlanOps {
         validate_scale_out_compiled_configuration(configuration, registry, plan, authority)
             .map_err(OpsError::from)
             .map_err(InternalError::from)?;
+        Self::hash_for_exact_retry(plan)
+    }
+
+    /// Hash one bounded canonical plan solely for comparison with prior validated authority.
+    ///
+    /// This function does not validate or authorize a new plan. Callers may use it only to
+    /// identify an exact retry after the original validation context has advanced.
+    pub fn hash_for_exact_retry(
+        plan: &FleetComponentProvisioningPlan,
+    ) -> Result<[u8; 32], InternalError> {
         let mut encoder = CanonicalEncoder::new();
         encode_plan(&mut encoder, plan);
         let bytes = encoder

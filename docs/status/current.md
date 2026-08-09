@@ -14,22 +14,25 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.34`.
-- The latest published release is `v0.101.34` at
-  `cfdadc7807639a897cc25ffaabb94f5e669e3bbb`.
-- Open `0.101.35` continues past the exact selected plus affected-existing-root
-  Directory barrier after scale-out service publication. Every barrier root
-  durably synchronizes the published Fleet Registry and each existing affected
-  service Component; selected roots then publish their exact prepared batch
-  Directories. The Coordinator then journals activation only on selected roots.
-  Each root freezes whether its batch began `Prepared` or already `Active`;
-  active roots activate only the new Components and retain their original
-  sealed initial inventory and root-activation evidence. Exact terminal root
-  receipts advance the operation to `RuntimesActivated` and atomically append
-  the new placements to the canonical deployment ledger. Repeated scale-out
-  journal rollover remains the next Slice 4 boundary. The release dependency
-  audit now uses isolated RustSec data so stale untracked files in the shared
-  Cargo cache cannot break advisory parsing.
+- The workspace package version is `0.101.35`.
+- The latest published release is `v0.101.35` at
+  `6f20fa06d35f82e34b65da3e0f8c94c54009768e`.
+- Open `0.101.36` allows a terminal scale-out to be followed by another
+  monotonic increase. The Coordinator atomically retires the completed active
+  journal into bounded compact exact-replay history, validates and installs the
+  next plan and preserves the committed placement ledger. Stable validation
+  reconstructs every placement from fresh-install authority, retired receipts
+  and the one current journal. Historical exact prepare, status and terminal
+  advance retry survive restart, while conflicting operation reuse and corrupt
+  receipt, placement or publication evidence fail closed. Grouped removal
+  fencing and the remaining Slice 1/2 application-policy work are next. The
+  same open patch also carries Wenzelroll's maintained preview and Fleet-
+  diagnostics work.
+- Released `0.101.35` completes the exact selected plus
+  affected-existing-root Directory barrier after scale-out service publication,
+  activates only new Components on selected roots and atomically appends the
+  new placements under exact terminal root receipts. The release dependency
+  audit also isolates RustSec data from shared-cache sediment.
 - Released `0.101.33` derives the complete next Fleet-service set from the exact
   source Registry, protected scale-out plan and every terminal selected-root
   receipt. It atomically appends all new Replica or PoolMember bindings, or
@@ -2587,14 +2590,13 @@ First primary results:
 
 ## Next Action
 
-The exact scale-out Directory barrier is published at immutable `v0.101.34`.
-Open `0.101.35` separately journals selected-root runtime activation, preserves
-already-active root and initial-inventory authority, and commits new deployment
-placements only with terminal root receipts. Continue Slice 4 by retiring or
-archiving the terminal scale-out journal so another monotonic desired-count
-increase can start from the newly committed placement ledger without reusing
-an operation or ordinal. Do not weaken exact terminal status replay while
-opening the next operation.
+Selected-root scale-out runtime activation is published at immutable
+`v0.101.35`. Open `0.101.36` atomically retires each completed scale-out journal
+into compact content-hashed exact-replay history before a later monotonic
+increase reserves its next never-reused ordinal range. Continue Slice 4 by
+closing the grouped lifecycle fence: ordinary Component and root drain/removal
+must reject every committed or in-progress placement and Fleet-service binding
+without introducing a scale-in, replacement or cleanup exception.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

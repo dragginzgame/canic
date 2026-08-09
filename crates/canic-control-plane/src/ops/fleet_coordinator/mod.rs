@@ -16,7 +16,8 @@ use crate::{
         FleetComponentProvisioningRootProvisionIntentRecord,
         FleetComponentProvisioningRootProvisionRecord, FleetComponentProvisioningStateRecord,
         FleetComponentRuntimeActivationIntentRecord, FleetComponentRuntimeActivationRecord,
-        FleetCoordinatorCommitError, FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
+        FleetComponentScaleOutReceiptRecord, FleetCoordinatorCommitError,
+        FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
         FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
         FleetSubnetRootJoinReceiptRecord, FleetSubnetRootRemovalPublicationReceiptRecord,
@@ -31,6 +32,8 @@ use crate::{
         FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
     },
 };
+use std::collections::BTreeSet;
+
 use candid::{CandidType, Principal};
 #[cfg(test)]
 use canic_core::control_plane_support::config::ConfigModel;
@@ -40,6 +43,9 @@ use canic_core::{
         ops::{
             component_provisioning_plan::{
                 ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
+                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
+                MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS,
             },
             component_provisioning_receipt::{
                 RootComponentProvisioningAcceptanceReceiptAuthority,
@@ -83,12 +89,15 @@ use canic_core::{
         },
     },
     ids::{
-        ComponentDeploymentConfigurationDigest, ComponentTopologyDigest, FleetSubnetRootReleaseSet,
-        SubnetId,
+        ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
+        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet, SubnetId,
     },
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+
+const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
+    b"canic/fleet-component-scale-out-terminal-receipt/v1";
 
 const ROOT_DELETION_READINESS_INTENT_HASH_DOMAIN: &[u8] =
     b"canic.fleet-subnet-root.deletion-readiness-intent.v1";
@@ -134,6 +143,7 @@ impl FleetCoordinatorOps {
             registry_activation_receipt: None,
             component_provisioning: None,
             component_group_deployments: Vec::new(),
+            component_scale_out_receipts: Vec::new(),
             component_scale_out: None,
             service_publication_receipts: Vec::new(),
             root_draining_publication_receipts: Vec::new(),
@@ -450,14 +460,45 @@ impl FleetCoordinatorOps {
         request: FleetComponentProvisioningPrepareRequest,
         planned_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-        if let Some(existing) = &current.component_scale_out {
-            if existing.operation_id == request.operation_id && existing.plan == request.plan {
-                return component_provisioning_status_response(existing);
+        if let Some(receipt) = component_scale_out_receipt_for_operation(
+            &current.component_scale_out_receipts,
+            request.operation_id,
+        )? {
+            let retry_hash = ComponentProvisioningPlanOps::hash_for_exact_retry(&request.plan)?;
+            if receipt.plan_hash == retry_hash {
+                return component_scale_out_receipt_response(receipt);
             }
             return Err(InternalError::conflict(
-                "Fleet Component scale-out already contains different protected plan authority",
+                "Fleet Component scale-out operation is already retired with different plan authority",
             ));
         }
+        let terminal_receipt = match &current.component_scale_out {
+            Some(existing) if existing.operation_id == request.operation_id => {
+                if existing.plan == request.plan {
+                    return component_provisioning_status_response(existing);
+                }
+                return Err(InternalError::conflict(
+                    "Fleet Component scale-out operation already contains different protected plan authority",
+                ));
+            }
+            Some(existing)
+                if matches!(
+                    existing.state,
+                    FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
+                ) =>
+            {
+                Some(component_scale_out_terminal_receipt(
+                    existing,
+                    &current.component_group_deployments,
+                )?)
+            }
+            Some(_) => {
+                return Err(InternalError::conflict(
+                    "Fleet Component scale-out already contains different protected plan authority",
+                ));
+            }
+            None => None,
+        };
         let fresh = current.component_provisioning.as_ref().ok_or_else(|| {
             InternalError::unavailable(
                 "Fleet Component scale-out requires terminal fresh provisioning",
@@ -494,6 +535,9 @@ impl FleetCoordinatorOps {
             state: FleetComponentProvisioningStateRecord::Planned { planned_at_ns },
         };
         let mut next = current.clone();
+        if let Some(receipt) = terminal_receipt {
+            next.component_scale_out_receipts.push(receipt);
+        }
         next.component_group_deployments = reserved_deployments;
         next.component_scale_out = Some(record.clone());
         let next = Self::validate_current(next)?;
@@ -505,8 +549,22 @@ impl FleetCoordinatorOps {
         request: FleetComponentProvisioningStatusRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        let record = provisioning_record_for_status(&current, &request)?;
-        component_provisioning_status_response(record)
+        if let Some(record) = active_provisioning_record_for_status(&current, &request)? {
+            return component_provisioning_status_response(record);
+        }
+        let receipt = component_scale_out_receipt_for_operation(
+            &current.component_scale_out_receipts,
+            request.operation_id,
+        )?
+        .ok_or_else(|| {
+            InternalError::unavailable("Fleet Component provisioning operation is not prepared")
+        })?;
+        if receipt.plan_hash != request.plan_hash {
+            return Err(InternalError::conflict(
+                "Fleet Component provisioning status names a reused operation with a different plan hash",
+            ));
+        }
+        component_scale_out_receipt_response(receipt)
     }
 
     pub(crate) fn advance_component_provisioning_root_acceptance(
@@ -1802,6 +1860,7 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = Self::validate_current_registry(current)?;
         validate_component_provisioning_record(&current)?;
+        validate_component_scale_out_receipts(&current)?;
         validate_component_scale_out_progress(&current)?;
         validate_service_publication_receipt_owners(&current)?;
         let deployment_registry = current
@@ -1814,6 +1873,7 @@ impl FleetCoordinatorOps {
             &current.component_deployment_configuration,
             &deployment_registry,
             current.component_provisioning.as_ref(),
+            &current.component_scale_out_receipts,
             current.component_scale_out.as_ref(),
             &current.component_group_deployments,
         )?;
@@ -1998,25 +2058,287 @@ fn validate_component_scale_out_progress(
     Ok(())
 }
 
-fn validate_service_publication_receipt_owners(
+fn validate_component_scale_out_receipts(
     current: &FleetCoordinatorRegistryRecord,
 ) -> Result<(), InternalError> {
+    if current.component_scale_out_receipts.len() > MAX_FLEET_COMPONENT_PROVISIONING_PLAN_PLACEMENTS
+    {
+        return Err(receipt_invariant(
+            "retired scale-out receipt count exceeds the placement bound",
+        ));
+    }
     let fresh_operation = current
         .component_provisioning
         .as_ref()
         .map(|record| record.operation_id);
-    let scale_out_operation = current
+    let active_operation = current
         .component_scale_out
         .as_ref()
         .map(|record| record.operation_id);
-    for receipt in &current.service_publication_receipts {
-        let has_known_owner = [
-            fresh_operation == Some(receipt.operation_id),
-            scale_out_operation == Some(receipt.operation_id),
+    let configuration_digest = current
+        .component_deployment_configuration
+        .digest()
+        .map_err(|_| receipt_invariant("deployment configuration digest cannot be rederived"))?;
+    let mut operation_ids = BTreeSet::new();
+    let mut previous_completed_at_ns = 0_u64;
+    for receipt in &current.component_scale_out_receipts {
+        validate_retired_scale_out_identity(
+            receipt,
+            configuration_digest,
+            fresh_operation,
+            active_operation,
+            operation_ids.insert(receipt.operation_id),
+        )?;
+        validate_retired_scale_out_content_hash(receipt)?;
+        let authority = retired_scale_out_authority(receipt)?;
+        validate_retired_scale_out_counts(receipt, authority.placement_count)?;
+        validate_retired_scale_out_times(receipt, previous_completed_at_ns)?;
+        validate_retired_scale_out_registry(receipt, &current.authority)?;
+        validate_retired_scale_out_placements(receipt, &authority)?;
+        validate_retired_scale_out_publication(current, receipt)?;
+        component_scale_out_receipt_response(receipt)?;
+        previous_completed_at_ns = receipt.runtimes_activated_at_ns;
+    }
+    if let Some(active) = &current.component_scale_out {
+        let active = component_provisioning_status_response(active)?;
+        if active.planned_at_ns < previous_completed_at_ns {
+            return Err(receipt_invariant(
+                "active scale-out journal predates retired terminal history",
+            ));
+        }
+    }
+    Ok(())
+}
+
+struct RetiredScaleOutAuthority<'a> {
+    deployment: &'a ComponentGroupDeploymentId,
+    previous_placements: u32,
+    placement_count: usize,
+}
+
+fn retired_scale_out_authority(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+) -> Result<RetiredScaleOutAuthority<'_>, InternalError> {
+    let FleetComponentProvisioningOperation::ScaleOut {
+        deployment,
+        previous_placements,
+        requested_placements,
+    } = &receipt.operation
+    else {
+        return Err(receipt_invariant(
+            "retired Component operation is not scale-out",
+        ));
+    };
+    let placement_count = requested_placements
+        .checked_sub(*previous_placements)
+        .filter(|count| *count > 0)
+        .ok_or_else(|| receipt_invariant("retired scale-out count is not monotonic"))?;
+    Ok(RetiredScaleOutAuthority {
+        deployment,
+        previous_placements: *previous_placements,
+        placement_count: usize::try_from(placement_count)
+            .map_err(|_| receipt_invariant("retired scale-out count does not fit usize"))?,
+    })
+}
+
+fn validate_retired_scale_out_identity(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+    configuration_digest: ComponentDeploymentConfigurationDigest,
+    fresh_operation: Option<[u8; 32]>,
+    active_operation: Option<[u8; 32]>,
+    operation_is_unique: bool,
+) -> Result<(), InternalError> {
+    let identity_facts = [
+        receipt.operation_id != [0; 32],
+        receipt.plan_hash != [0; 32],
+        fresh_operation != Some(receipt.operation_id),
+        active_operation != Some(receipt.operation_id),
+        operation_is_unique,
+        receipt.configuration_digest == configuration_digest,
+    ];
+    if identity_facts.into_iter().all(|fact| fact) {
+        Ok(())
+    } else {
+        Err(receipt_invariant(
+            "retired scale-out receipt has invalid or reused operation authority",
+        ))
+    }
+}
+
+fn validate_retired_scale_out_content_hash(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+) -> Result<(), InternalError> {
+    if receipt.receipt_content_hash == [0; 32]
+        || receipt.receipt_content_hash != component_scale_out_receipt_content_hash(receipt)?
+    {
+        return Err(receipt_invariant(
+            "retired scale-out receipt content hash is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_retired_scale_out_counts(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+    placement_count: usize,
+) -> Result<(), InternalError> {
+    let root_batch_count = usize::try_from(receipt.root_batch_count)
+        .map_err(|_| receipt_invariant("retired root count does not fit usize"))?;
+    let confirmation_root_count = usize::try_from(receipt.directory_confirmation_root_count)
+        .map_err(|_| receipt_invariant("retired confirmation count does not fit usize"))?;
+    let component_count = usize::try_from(receipt.component_count)
+        .map_err(|_| receipt_invariant("retired Component count does not fit usize"))?;
+    let count_facts = [
+        receipt.placements.len() == placement_count,
+        root_batch_count > 0,
+        root_batch_count <= MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
+        confirmation_root_count >= root_batch_count,
+        confirmation_root_count <= MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS,
+        component_count >= placement_count,
+        component_count <= MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
+    ];
+    if count_facts.into_iter().all(|fact| fact) {
+        Ok(())
+    } else {
+        Err(receipt_invariant(
+            "retired scale-out receipt has invalid bounded counts",
+        ))
+    }
+}
+
+fn validate_retired_scale_out_times(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+    previous_completed_at_ns: u64,
+) -> Result<(), InternalError> {
+    let times = [
+        receipt.planned_at_ns,
+        receipt.roots_accepted_at_ns,
+        receipt.components_provisioned_at_ns,
+        receipt.service_topology_published_at_ns,
+        receipt.directories_confirmed_at_ns,
+        receipt.runtimes_activated_at_ns,
+    ];
+    let time_facts = [
+        receipt.planned_at_ns >= previous_completed_at_ns,
+        times[0] > 0,
+        times.windows(2).all(|pair| pair[0] <= pair[1]),
+    ];
+    if time_facts.into_iter().all(|fact| fact) {
+        Ok(())
+    } else {
+        Err(receipt_invariant(
+            "retired scale-out receipt has invalid terminal ordering",
+        ))
+    }
+}
+
+fn validate_retired_scale_out_registry(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+    authority: &FleetRegistryAuthority,
+) -> Result<(), InternalError> {
+    let registry_facts = [
+        &receipt.fleet_registry.authority == authority,
+        &receipt.published_fleet_registry.authority == authority,
+        receipt.published_fleet_registry.revision >= receipt.fleet_registry.revision,
+    ];
+    if registry_facts.into_iter().all(|fact| fact) {
+        Ok(())
+    } else {
+        Err(receipt_invariant(
+            "retired scale-out receipt has invalid Fleet Registry authority",
+        ))
+    }
+}
+
+fn validate_retired_scale_out_placements(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+    authority: &RetiredScaleOutAuthority<'_>,
+) -> Result<(), InternalError> {
+    let mut selected_root_receipts = BTreeSet::new();
+    for (offset, placement) in receipt.placements.iter().enumerate() {
+        let offset = u32::try_from(offset)
+            .map_err(|_| receipt_invariant("retired placement offset does not fit u32"))?;
+        let ordinal = authority
+            .previous_placements
+            .checked_add(offset)
+            .ok_or_else(|| receipt_invariant("retired placement ordinal overflowed"))?;
+        let placement_facts = [
+            &placement.placement.deployment == authority.deployment,
+            placement.placement.ordinal == ordinal,
+            placement.operation_id == receipt.operation_id,
+            placement.plan_hash == receipt.plan_hash,
+            placement.root_receipt_content_hash != [0; 32],
+        ];
+        if !placement_facts.into_iter().all(|fact| fact) {
+            return Err(receipt_invariant(
+                "retired scale-out placement authority is invalid",
+            ));
+        }
+        selected_root_receipts.insert((
+            placement.fleet_subnet_root,
+            placement.root_receipt_content_hash,
+        ));
+    }
+    if selected_root_receipts.len()
+        == usize::try_from(receipt.root_batch_count)
+            .map_err(|_| receipt_invariant("retired root count does not fit usize"))?
+    {
+        Ok(())
+    } else {
+        Err(receipt_invariant(
+            "retired scale-out receipt lacks exact selected-root evidence",
+        ))
+    }
+}
+
+fn validate_retired_scale_out_publication(
+    current: &FleetCoordinatorRegistryRecord,
+    receipt: &FleetComponentScaleOutReceiptRecord,
+) -> Result<(), InternalError> {
+    let publication = service_publication_receipt_for_operation(current, receipt.operation_id)?
+        .ok_or_else(|| receipt_invariant("retired scale-out lacks publication authority"))?;
+    let actual = (
+        publication.operation_id,
+        publication.plan_hash,
+        publication.configuration_digest,
+        &publication.previous_version,
+        &publication.version,
+    );
+    let expected = (
+        receipt.operation_id,
+        receipt.plan_hash,
+        receipt.configuration_digest,
+        &receipt.fleet_registry,
+        &receipt.published_fleet_registry,
+    );
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(receipt_invariant(
+            "retired scale-out publication authority is invalid",
+        ))
+    }
+}
+
+fn validate_service_publication_receipt_owners(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    let mut operation_ids = current
+        .component_scale_out_receipts
+        .iter()
+        .map(|receipt| receipt.operation_id)
+        .collect::<BTreeSet<_>>();
+    operation_ids.extend(
+        [
+            current.component_provisioning.as_ref(),
+            current.component_scale_out.as_ref(),
         ]
         .into_iter()
-        .any(|matches| matches);
-        if !has_known_owner {
+        .flatten()
+        .map(|record| record.operation_id),
+    );
+    for receipt in &current.service_publication_receipts {
+        if !operation_ids.contains(&receipt.operation_id) {
             return Err(receipt_invariant(
                 "Fleet-service publication receipt lacks its provisioning operation",
             ));
@@ -2758,6 +3080,146 @@ fn component_provisioning_status_response(
     })
 }
 
+fn component_scale_out_terminal_receipt(
+    record: &FleetComponentProvisioningRecord,
+    deployments: &[FleetComponentGroupDeploymentRecord],
+) -> Result<FleetComponentScaleOutReceiptRecord, InternalError> {
+    let FleetComponentProvisioningStateRecord::RuntimesActivated {
+        planned_at_ns,
+        roots_accepted_at_ns,
+        components_provisioned_at_ns,
+        published_fleet_registry,
+        service_topology_published_at_ns,
+        directories_confirmed_at_ns,
+        runtimes_activated_at_ns,
+        ..
+    } = &record.state
+    else {
+        return Err(receipt_invariant(
+            "only terminal scale-out authority may be retired",
+        ));
+    };
+    if !matches!(
+        record.plan.operation,
+        FleetComponentProvisioningOperation::ScaleOut { .. }
+    ) {
+        return Err(receipt_invariant(
+            "retired Component operation is not scale-out",
+        ));
+    }
+    let counts = component_provisioning_plan_counts(&record.plan)?;
+    let mut placements = deployments
+        .iter()
+        .flat_map(|deployment| &deployment.placements)
+        .filter(|placement| placement.operation_id == record.operation_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    placements.sort_unstable_by(|left, right| left.placement.cmp(&right.placement));
+    let mut receipt = FleetComponentScaleOutReceiptRecord {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        fleet_registry: record.plan.fleet_registry.clone(),
+        configuration_digest: record.plan.configuration_digest,
+        operation: record.plan.operation.clone(),
+        directory_confirmation_root_count: counts.directory_confirmation_roots,
+        root_batch_count: counts.root_batches,
+        component_count: counts.components,
+        planned_at_ns: *planned_at_ns,
+        roots_accepted_at_ns: *roots_accepted_at_ns,
+        components_provisioned_at_ns: *components_provisioned_at_ns,
+        published_fleet_registry: published_fleet_registry.clone(),
+        service_topology_published_at_ns: *service_topology_published_at_ns,
+        directories_confirmed_at_ns: *directories_confirmed_at_ns,
+        runtimes_activated_at_ns: *runtimes_activated_at_ns,
+        placements,
+        receipt_content_hash: [0; 32],
+    };
+    receipt.receipt_content_hash = component_scale_out_receipt_content_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn component_scale_out_receipt_content_hash(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+) -> Result<[u8; 32], InternalError> {
+    let mut authority = receipt.clone();
+    authority.receipt_content_hash = [0; 32];
+    let payload = candid::encode_one(authority).map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            format!("retired scale-out receipt cannot be encoded: {error}"),
+        )
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN);
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
+}
+
+fn component_scale_out_receipt_response(
+    receipt: &FleetComponentScaleOutReceiptRecord,
+) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+    let FleetComponentProvisioningOperation::ScaleOut {
+        previous_placements,
+        requested_placements,
+        ..
+    } = receipt.operation
+    else {
+        return Err(receipt_invariant(
+            "retired Component operation is not scale-out",
+        ));
+    };
+    let group_placement_count = requested_placements
+        .checked_sub(previous_placements)
+        .filter(|count| *count > 0)
+        .ok_or_else(|| receipt_invariant("retired scale-out count is not monotonic"))?;
+    Ok(FleetComponentProvisioningStatusResponse {
+        operation_id: receipt.operation_id,
+        plan_hash: receipt.plan_hash,
+        fleet_registry: receipt.fleet_registry.clone(),
+        configuration_digest: receipt.configuration_digest,
+        operation: receipt.operation.clone(),
+        phase: FleetComponentProvisioningPhase::RuntimesActivated,
+        directory_confirmation_root_count: receipt.directory_confirmation_root_count,
+        root_batch_count: receipt.root_batch_count,
+        accepted_root_count: receipt.root_batch_count,
+        acceptance_in_flight_root: None,
+        provisioned_root_count: receipt.root_batch_count,
+        current_root: None,
+        provisioning_in_flight_root: None,
+        directory_confirmed_root_count: receipt.directory_confirmation_root_count,
+        current_publication: None,
+        publication_in_flight_root: None,
+        runtime_activated_root_count: receipt.root_batch_count,
+        current_activation: None,
+        activation_in_flight_root: None,
+        group_placement_count,
+        component_count: receipt.component_count,
+        planned_at_ns: receipt.planned_at_ns,
+        roots_accepted_at_ns: Some(receipt.roots_accepted_at_ns),
+        components_provisioned_at_ns: Some(receipt.components_provisioned_at_ns),
+        published_fleet_registry: Some(receipt.published_fleet_registry.clone()),
+        service_topology_published_at_ns: Some(receipt.service_topology_published_at_ns),
+        directories_confirmed_at_ns: Some(receipt.directories_confirmed_at_ns),
+        runtimes_activated_at_ns: Some(receipt.runtimes_activated_at_ns),
+    })
+}
+
+fn component_scale_out_receipt_for_operation(
+    receipts: &[FleetComponentScaleOutReceiptRecord],
+    operation_id: [u8; 32],
+) -> Result<Option<&FleetComponentScaleOutReceiptRecord>, InternalError> {
+    let mut matches = receipts
+        .iter()
+        .filter(|receipt| receipt.operation_id == operation_id);
+    let receipt = matches.next();
+    if matches.next().is_some() {
+        return Err(receipt_invariant(
+            "retired scale-out operation has duplicate receipts",
+        ));
+    }
+    Ok(receipt)
+}
+
 #[derive(Clone)]
 struct FleetComponentProvisioningRootAcceptanceProgress {
     planned_at_ns: u64,
@@ -3038,19 +3500,20 @@ fn require_component_provisioning_operation_record<'a>(
     current: &'a FleetCoordinatorRegistryRecord,
     request: &FleetComponentProvisioningAdvanceRequest,
 ) -> Result<&'a FleetComponentProvisioningRecord, InternalError> {
-    provisioning_record_for_status(
+    active_provisioning_record_for_status(
         current,
         &FleetComponentProvisioningStatusRequest {
             operation_id: request.operation_id,
             plan_hash: request.plan_hash,
         },
-    )
+    )?
+    .ok_or_else(|| receipt_invariant("active Fleet Component operation record disappeared"))
 }
 
-fn provisioning_record_for_status<'a>(
+fn active_provisioning_record_for_status<'a>(
     current: &'a FleetCoordinatorRegistryRecord,
     request: &FleetComponentProvisioningStatusRequest,
-) -> Result<&'a FleetComponentProvisioningRecord, InternalError> {
+) -> Result<Option<&'a FleetComponentProvisioningRecord>, InternalError> {
     let records = [
         current.component_provisioning.as_ref(),
         current.component_scale_out.as_ref(),
@@ -3061,15 +3524,13 @@ fn provisioning_record_for_status<'a>(
         .find(|record| record.operation_id == request.operation_id)
     {
         if record.plan_hash == request.plan_hash {
-            return Ok(record);
+            return Ok(Some(record));
         }
         return Err(InternalError::conflict(
             "Fleet Component provisioning status names a reused operation with a different plan hash",
         ));
     }
-    Err(InternalError::unavailable(
-        "Fleet Component provisioning operation is not prepared",
-    ))
+    Ok(None)
 }
 
 fn component_provisioning_record_mut(

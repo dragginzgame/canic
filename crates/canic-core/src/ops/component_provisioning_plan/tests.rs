@@ -299,6 +299,11 @@ fn canonical_plan_binds_exact_roots_placements_members_and_limits() {
         hash
     );
     assert_eq!(
+        ComponentProvisioningPlanOps::hash_for_exact_retry(&plan)
+            .expect("already-authorized retry identity"),
+        hash
+    );
+    assert_eq!(
         candid::decode_one::<FleetComponentProvisioningPlan>(
             &candid::encode_one(&plan).expect("encode plan")
         )
