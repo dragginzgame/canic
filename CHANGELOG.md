@@ -14,7 +14,9 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
 - `0.101.33` atomically appends every Replica or PoolMember introduced by one
   scale-out operation in a single Fleet Registry revision, while ordinary-only
-  scale-out records the same durable boundary without mutating the Registry.
+  scale-out records the same durable boundary without mutating the Registry,
+  and lets durable host file creation use hard-link publication when Linux or
+  macOS filesystems reject atomic no-replace renames.
 
 - `0.101.32` synchronizes release metadata only; runtime behavior remains the
   `0.101.31` implementation.

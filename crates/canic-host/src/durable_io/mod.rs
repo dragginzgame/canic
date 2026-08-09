@@ -242,13 +242,7 @@ mod supported {
                 unix_fs::renameat(&parent_fd, &temp_name, &parent_fd, file_name)
             }
             FileCommitMode::CreateNew | FileCommitMode::CreateNewWithParents => {
-                unix_fs::renameat_with(
-                    &parent_fd,
-                    &temp_name,
-                    &parent_fd,
-                    file_name,
-                    RenameFlags::NOREPLACE,
-                )
+                publish_create_new(&parent_fd, &temp_name, file_name)
             }
         };
         if let Err(error) = published {
@@ -258,6 +252,52 @@ mod supported {
 
         before(FileCommitStep::FinalParentSync, parent)?;
         unix_fs::fsync(&parent_fd).map_err(errno_to_io)
+    }
+
+    fn publish_create_new(
+        parent_fd: &OwnedFd,
+        temp_name: &OsStr,
+        file_name: &OsStr,
+    ) -> rustix::io::Result<()> {
+        let renamed = unix_fs::renameat_with(
+            parent_fd,
+            temp_name,
+            parent_fd,
+            file_name,
+            RenameFlags::NOREPLACE,
+        );
+        finish_create_new_publication(parent_fd, temp_name, file_name, renamed)
+    }
+
+    fn finish_create_new_publication(
+        parent_fd: &OwnedFd,
+        temp_name: &OsStr,
+        file_name: &OsStr,
+        renamed: rustix::io::Result<()>,
+    ) -> rustix::io::Result<()> {
+        match renamed {
+            Ok(()) => Ok(()),
+            Err(
+                rustix::io::Errno::INVAL | rustix::io::Errno::NOSYS | rustix::io::Errno::OPNOTSUPP,
+            ) => {
+                unix_fs::linkat(parent_fd, temp_name, parent_fd, file_name, AtFlags::empty())?;
+                remove_temp(parent_fd, temp_name);
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn publish_create_new_after_error(
+        parent: &Path,
+        temp_name: &OsStr,
+        file_name: &OsStr,
+        error: rustix::io::Errno,
+    ) -> io::Result<()> {
+        let parent_fd = open_directory(parent)?;
+        finish_create_new_publication(&parent_fd, temp_name, file_name, Err(error))
+            .map_err(errno_to_io)
     }
 
     fn split_target(path: &Path) -> io::Result<(&Path, &OsStr)> {
