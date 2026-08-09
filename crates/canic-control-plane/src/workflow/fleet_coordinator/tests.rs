@@ -930,6 +930,16 @@ fn scale_out_confirms_affected_and_selected_roots_before_runtime_activation() {
         status
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+
+    status = activate_selected_scale_out_root(status, selected_root, affected_only_root, 1_140);
+    assert_eq!(
+        status.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    assert_eq!(status.runtime_activated_root_count, 1);
+    assert!(status.current_activation.is_none());
+
+    assert_terminal_scale_out_placement(&status, selected_root);
 }
 
 #[test]
@@ -993,6 +1003,17 @@ fn ordinary_scale_out_records_publication_without_registry_mutation() {
         FleetComponentProvisioningPhase::DirectoriesConfirmed
     );
     assert_eq!(published.directory_confirmed_root_count, 1);
+
+    published = drive_runtime_activation(published, 1_200);
+    assert_eq!(
+        published.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+    assert_eq!(published.runtime_activated_root_count, 1);
+    let terminal = FleetCoordinatorRegistryStore::export();
+    let current = terminal.current.as_ref().expect("Coordinator state");
+    assert_eq!(current.registry, source_registry);
+    assert_eq!(current.component_group_deployments[0].placements.len(), 2);
 }
 
 fn drive_terminal_fresh_install(config: &ConfigModel) -> FleetComponentProvisioningStatusResponse {
@@ -2051,6 +2072,93 @@ fn confirm_selected_scale_out_root(
         .expect("record selected-root publication")
 }
 
+fn activate_selected_scale_out_root(
+    mut status: FleetComponentProvisioningStatusResponse,
+    selected_root: Principal,
+    affected_only_root: Principal,
+    started_at_ns: u64,
+) -> FleetComponentProvisioningStatusResponse {
+    let request = root_provision_advance_request(&status);
+    let FleetComponentRuntimeActivationDisposition::Invoke(call) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_runtime_activation(
+            &request,
+            started_at_ns,
+        )
+        .expect("persist selected-root runtime activation intent")
+    else {
+        panic!("scale-out runtime activation must invoke its selected root");
+    };
+    assert_eq!(call.fleet_subnet_root, selected_root);
+    assert_ne!(call.fleet_subnet_root, affected_only_root);
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let FleetComponentRuntimeActivationDisposition::Reconcile(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_runtime_activation(
+            &request, 9_999,
+        )
+        .expect("reconcile selected-root runtime activation intent")
+    else {
+        panic!("lost scale-out activation response must reconcile");
+    };
+    assert_eq!(replayed.fleet_subnet_root, call.fleet_subnet_root);
+    assert_eq!(replayed.request, call.request);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let response =
+        next_runtime_activation_response(selected_root, started_at_ns, started_at_ns + 1);
+    status =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::record_component_runtime_activation(
+            &request,
+            &response,
+            started_at_ns + 2,
+        )
+        .expect("record selected-root runtime activation progress");
+    status = drive_runtime_activation(status, started_at_ns + 10);
+
+    let terminal = FleetCoordinatorRegistryStore::export();
+    let replay =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_runtime_activation(
+            &root_provision_advance_request(&status),
+            10_000,
+        )
+        .expect("replay terminal scale-out activation");
+    assert!(matches!(
+        replay,
+        FleetComponentRuntimeActivationDisposition::Current(_)
+    ));
+    assert_eq!(FleetCoordinatorRegistryStore::export(), terminal);
+    status
+}
+
+fn assert_terminal_scale_out_placement(
+    status: &FleetComponentProvisioningStatusResponse,
+    selected_root: Principal,
+) {
+    let terminal = FleetCoordinatorRegistryStore::export();
+    let current = terminal.current.as_ref().expect("Coordinator state");
+    let scale_out = current
+        .component_scale_out
+        .as_ref()
+        .expect("terminal scale-out operation");
+    let FleetComponentProvisioningStateRecord::RuntimesActivated { activations, .. } =
+        &scale_out.state
+    else {
+        panic!("scale-out runtime activation must be terminal")
+    };
+    assert_eq!(activations.len(), 1);
+    assert_eq!(activations[0].progress.fleet_subnet_root, selected_root);
+    let committed = current
+        .component_group_deployments
+        .iter()
+        .flat_map(|deployment| &deployment.placements)
+        .find(|placement| placement.operation_id == status.operation_id)
+        .expect("scale-out placement committed to deployment ledger");
+    assert_eq!(committed.fleet_subnet_root, selected_root);
+    assert_eq!(
+        committed.root_receipt_content_hash,
+        activations[0].receipt_content_hash
+    );
+}
+
 fn terminal_scale_out_synchronization_response(
     call: &(
         Principal,
@@ -2323,60 +2431,24 @@ fn next_runtime_activation_response(
     let durable = FleetCoordinatorRegistryStore::export();
     let current = durable.current.as_ref().expect("Coordinator state");
     let record = current
-        .component_provisioning
+        .component_scale_out
         .as_ref()
-        .expect("fresh provisioning record");
-    let (
+        .filter(|record| {
+            matches!(
+                record.state,
+                FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
+            )
+        })
+        .or(current.component_provisioning.as_ref())
+        .expect("runtime-activation provisioning record");
+    let context = runtime_activation_test_context(record, activation_started_at_ns);
+    let RuntimeActivationTestContext {
         root_index,
         publication,
         activated_component_count,
         component_count,
-        durable_started_at_ns,
-    ) = match &record.state {
-        FleetComponentProvisioningStateRecord::ActivatingRuntimes {
-            confirmations,
-            activations,
-            current,
-            in_flight: Some(intent),
-            ..
-        } => {
-            let root_index = activations.len();
-            assert_eq!(
-                usize::try_from(intent.root_index).expect("root index"),
-                root_index
-            );
-            let publication = match &confirmations[root_index] {
-                FleetComponentDirectoryConfirmationRecord::FreshPublication {
-                    response, ..
-                } => response.as_ref().clone(),
-                FleetComponentDirectoryConfirmationRecord::ScaleOut { .. } => {
-                    panic!("fresh runtime activation retained scale-out evidence");
-                }
-            };
-            let activated_component_count = current
-                .as_ref()
-                .map_or(publication.activated_component_count, |record| {
-                    record.progress.activated_component_count
-                });
-            let component_count = current
-                .as_ref()
-                .map_or(publication.component_count, |record| {
-                    record.progress.component_count
-                });
-            let durable_started_at_ns = current
-                .as_ref()
-                .and_then(|record| record.activation_started_at_ns)
-                .unwrap_or(activation_started_at_ns);
-            (
-                root_index,
-                publication,
-                activated_component_count,
-                component_count,
-                durable_started_at_ns,
-            )
-        }
-        _ => panic!("runtime response requires an in-flight activation"),
-    };
+        activation_started_at_ns: durable_started_at_ns,
+    } = context;
     assert_eq!(publication.fleet_subnet_root, fleet_subnet_root);
     if activated_component_count < component_count {
         let mut response = publication;
@@ -2386,11 +2458,18 @@ fn next_runtime_activation_response(
     }
 
     let batch = &record.plan.batches[root_index];
+    let root_activated_at_ns = match &record.plan.operation {
+        FleetComponentProvisioningOperation::FreshInstall => observed_at_ns,
+        FleetComponentProvisioningOperation::ScaleOut { .. } => publication
+            .accepted_at_ns
+            .checked_sub(1)
+            .expect("active root predates scale-out acceptance"),
+    };
     let activation = RootComponentActivationEvidence {
         fleet_activation_operation_id: [fleet_subnet_root.as_slice()[0]; 32],
         initial_inventory_hash: [fleet_subnet_root.as_slice()[1]; 32],
         component_count,
-        root_activated_at_ns: observed_at_ns,
+        root_activated_at_ns,
     };
     let receipt_content_hash = RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
         RootComponentProvisioningRuntimesActiveReceiptAuthority {
@@ -2414,6 +2493,76 @@ fn next_runtime_activation_response(
     response.runtimes_activated_at_ns = Some(observed_at_ns);
     response.receipt_content_hash = receipt_content_hash;
     response
+}
+
+struct RuntimeActivationTestContext {
+    root_index: usize,
+    publication: RootComponentProvisioningStatusResponse,
+    activated_component_count: u32,
+    component_count: u32,
+    activation_started_at_ns: u64,
+}
+
+fn runtime_activation_test_context(
+    record: &crate::storage::stable::fleet_coordinator::FleetComponentProvisioningRecord,
+    default_started_at_ns: u64,
+) -> RuntimeActivationTestContext {
+    let FleetComponentProvisioningStateRecord::ActivatingRuntimes {
+        confirmations,
+        activations,
+        current,
+        in_flight: Some(intent),
+        ..
+    } = &record.state
+    else {
+        panic!("runtime response requires an in-flight activation")
+    };
+    let root_index = activations.len();
+    assert_eq!(
+        usize::try_from(intent.root_index).expect("root index"),
+        root_index
+    );
+    let activation_root = record.plan.batches[root_index].root.fleet_subnet_root;
+    let publication = confirmations
+        .iter()
+        .filter_map(confirmation_publication_response_for_test)
+        .find(|response| response.fleet_subnet_root == activation_root)
+        .cloned()
+        .expect("selected root publication response");
+    let activated_component_count = current
+        .as_ref()
+        .map_or(publication.activated_component_count, |record| {
+            record.progress.activated_component_count
+        });
+    let component_count = current
+        .as_ref()
+        .map_or(publication.component_count, |record| {
+            record.progress.component_count
+        });
+    let activation_started_at_ns = current
+        .as_ref()
+        .and_then(|record| record.activation_started_at_ns)
+        .unwrap_or(default_started_at_ns);
+    RuntimeActivationTestContext {
+        root_index,
+        publication,
+        activated_component_count,
+        component_count,
+        activation_started_at_ns,
+    }
+}
+
+fn confirmation_publication_response_for_test(
+    confirmation: &FleetComponentDirectoryConfirmationRecord,
+) -> Option<&RootComponentProvisioningStatusResponse> {
+    match confirmation {
+        FleetComponentDirectoryConfirmationRecord::FreshPublication { response, .. } => {
+            Some(response.as_ref())
+        }
+        FleetComponentDirectoryConfirmationRecord::ScaleOut { publication, .. } => {
+            publication.as_deref()
+        }
+    }
 }
 
 fn assert_root_acceptance_status(

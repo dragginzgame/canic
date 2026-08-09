@@ -236,7 +236,7 @@ pub(super) fn compile_initial(
             .remove(&configured.deployment)
             .unwrap_or_default();
         placements.sort_unstable_by(|left, right| left.placement.cmp(&right.placement));
-        validate_initial_placement_set(
+        validate_contiguous_placement_set(
             &configured.deployment,
             configured.initial_placements,
             &placements,
@@ -258,6 +258,83 @@ pub(super) fn compile_initial(
         ));
     }
     Ok(deployments)
+}
+
+pub(super) fn commit_scale_out(
+    deployments: &[FleetComponentGroupDeploymentRecord],
+    scale_out: &FleetComponentProvisioningRecord,
+) -> Result<Vec<FleetComponentGroupDeploymentRecord>, InternalError> {
+    let FleetComponentProvisioningOperation::ScaleOut {
+        deployment,
+        previous_placements,
+        requested_placements,
+    } = &scale_out.plan.operation
+    else {
+        return Err(receipt_invariant(
+            "deployment commit requires a scale-out operation",
+        ));
+    };
+    let FleetComponentProvisioningStateRecord::RuntimesActivated { activations, .. } =
+        &scale_out.state
+    else {
+        return Err(receipt_invariant(
+            "deployment commit requires terminal runtime evidence",
+        ));
+    };
+    if activations.len() != scale_out.plan.batches.len() {
+        return Err(receipt_invariant(
+            "scale-out deployment commit lacks one terminal receipt per selected root",
+        ));
+    }
+
+    let mut next = deployments.to_vec();
+    let target = next
+        .iter_mut()
+        .find(|candidate| &candidate.deployment == deployment)
+        .ok_or_else(|| receipt_invariant("scale-out deployment ledger is absent"))?;
+    let committed_count = u32::try_from(target.placements.len())
+        .map_err(|_| receipt_invariant("committed placement count does not fit u32"))?;
+    let reservation_is_exact = committed_count == *previous_placements
+        && target.next_placement_ordinal == *requested_placements
+        && *requested_placements <= target.maximum_placements;
+    if !reservation_is_exact {
+        return Err(receipt_invariant(
+            "scale-out deployment commit differs from its durable reservation",
+        ));
+    }
+
+    for (batch, activation) in scale_out.plan.batches.iter().zip(activations) {
+        let root_is_exact = activation.progress.fleet_subnet_root == batch.root.fleet_subnet_root;
+        let progress_is_terminal = activation.progress.root_runtime_active
+            && activation.progress.activated_component_count == activation.progress.component_count;
+        let receipt_is_terminal = activation.activation.is_some()
+            && activation.runtimes_activated_at_ns.is_some()
+            && activation.receipt_content_hash != [0; 32];
+        if !root_is_exact || !progress_is_terminal || !receipt_is_terminal {
+            return Err(receipt_invariant(
+                "scale-out deployment commit has invalid selected-root evidence",
+            ));
+        }
+        for planned in &batch.placements {
+            if &planned.group_placement.deployment != deployment {
+                return Err(receipt_invariant(
+                    "scale-out deployment commit contains an unrelated placement",
+                ));
+            }
+            target.placements.push(FleetComponentGroupPlacementRecord {
+                placement: planned.group_placement.clone(),
+                fleet_subnet_root: batch.root.fleet_subnet_root,
+                operation_id: scale_out.operation_id,
+                plan_hash: scale_out.plan_hash,
+                root_receipt_content_hash: activation.receipt_content_hash,
+            });
+        }
+    }
+    target
+        .placements
+        .sort_unstable_by(|left, right| left.placement.cmp(&right.placement));
+    validate_contiguous_placement_set(deployment, *requested_placements, &target.placements)?;
+    Ok(next)
 }
 
 pub(super) fn validate(
@@ -318,16 +395,26 @@ fn validate_scale_out_record(
             "Fleet Component scale-out reuses the fresh operation identity",
         ));
     }
-    if !scale_out_directory_confirmation_boundary_is_valid(&scale_out.state) {
+    if !scale_out_runtime_boundary_is_valid(&scale_out.state) {
         return Err(receipt_invariant(
-            "Fleet Component scale-out has crossed its implemented Directory-confirmation boundary",
+            "Fleet Component scale-out has an invalid runtime-activation boundary",
         ));
     }
+    let initial_deployments;
+    let plan_deployments = if matches!(
+        scale_out.state,
+        FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
+    ) {
+        initial_deployments = compile_initial(configuration, fresh)?;
+        &initial_deployments
+    } else {
+        deployments
+    };
     let plan_hash = hash_with_next_ordinal(
         configuration,
         registry,
         fresh,
-        deployments,
+        plan_deployments,
         &scale_out.plan,
         scale_out_plan_reserved_start(&scale_out.plan)?,
     )
@@ -344,7 +431,7 @@ fn validate_scale_out_record(
     Ok(())
 }
 
-const fn scale_out_directory_confirmation_boundary_is_valid(
+const fn scale_out_runtime_boundary_is_valid(
     state: &FleetComponentProvisioningStateRecord,
 ) -> bool {
     match state {
@@ -357,11 +444,11 @@ const fn scale_out_directory_confirmation_boundary_is_valid(
             planned_at_ns, ..
         }
         | FleetComponentProvisioningStateRecord::ConfirmingDirectories { planned_at_ns, .. }
-        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { planned_at_ns, .. } => {
+        | FleetComponentProvisioningStateRecord::DirectoriesConfirmed { planned_at_ns, .. }
+        | FleetComponentProvisioningStateRecord::ActivatingRuntimes { planned_at_ns, .. }
+        | FleetComponentProvisioningStateRecord::RuntimesActivated { planned_at_ns, .. } => {
             *planned_at_ns > 0
         }
-        FleetComponentProvisioningStateRecord::ActivatingRuntimes { .. }
-        | FleetComponentProvisioningStateRecord::RuntimesActivated { .. } => false,
     }
 }
 
@@ -378,44 +465,27 @@ fn validate_terminal_ledger(
             "deployment ledger differs from terminal fresh-install authority",
         ));
     };
-    let FleetComponentProvisioningOperation::ScaleOut { deployment, .. } =
-        &scale_out.plan.operation
-    else {
+    if !matches!(
+        scale_out.plan.operation,
+        FleetComponentProvisioningOperation::ScaleOut { .. }
+    ) {
         return Err(receipt_invariant(
             "deployment scale-out journal contains a different operation kind",
         ));
+    }
+    let reserved = reserve_scale_out(expected, &scale_out.plan)?;
+    let terminal = matches!(
+        scale_out.state,
+        FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
+    );
+    let authoritative = if terminal {
+        commit_scale_out(&reserved, scale_out)?
+    } else {
+        reserved
     };
-    if deployments.len() != expected.len() {
+    if deployments != authoritative {
         return Err(receipt_invariant(
-            "reserved deployment ledger cardinality differs from fresh authority",
-        ));
-    }
-    let reserved_end = scale_out_plan_reserved_end(&scale_out.plan)?;
-    let mut found_target = false;
-    for (actual, initial) in deployments.iter().zip(expected) {
-        if &actual.deployment == deployment {
-            found_target = true;
-            if scale_out_plan_reserved_start(&scale_out.plan)? != initial.next_placement_ordinal {
-                return Err(receipt_invariant(
-                    "scale-out journal skips or reuses the next durable placement ordinal",
-                ));
-            }
-            let mut reserved = initial.clone();
-            reserved.next_placement_ordinal = reserved_end;
-            if actual != &reserved {
-                return Err(receipt_invariant(
-                    "scale-out reservation changed deployment authority beyond its next ordinal",
-                ));
-            }
-        } else if actual != initial {
-            return Err(receipt_invariant(
-                "scale-out reservation changed an unrelated deployment ledger",
-            ));
-        }
-    }
-    if !found_target {
-        return Err(receipt_invariant(
-            "scale-out journal names an unknown deployment ledger",
+            "deployment ledger differs from exact scale-out authority",
         ));
     }
     Ok(())
@@ -444,7 +514,7 @@ fn scale_out_plan_reserved_start(
         .ok_or_else(|| receipt_invariant("scale-out journal has no bounded reservation"))
 }
 
-fn validate_initial_placement_set(
+fn validate_contiguous_placement_set(
     deployment: &ComponentGroupDeploymentId,
     initial_placements: u32,
     placements: &[FleetComponentGroupPlacementRecord],

@@ -132,10 +132,16 @@ Date: 2026-08-09
   uncertain responses reconcile against independently observed runtime and
   Registry evidence, and a later Component head covers an in-flight required
   head only under the exact published Fleet Directory. The Coordinator reaches
-  `DirectoriesConfirmed` only after every barrier root is terminal. Runtime
-  activation remains separately fenced.
+  `DirectoriesConfirmed` only after every barrier root is terminal. It then
+  journals activation only for selected roots. Each root persists whether the
+  batch began on a fresh or already-active runtime; an active root activates
+  only the new Components and reuses its sealed initial-inventory evidence
+  without preparing or rewriting the root runtime. Exact terminal receipts
+  reach `RuntimesActivated` and atomically append the new placements to the
+  canonical deployment ledger. Terminal journal rollover for a later scale-out
+  operation remains open.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.33` is released and `0.101.34` is open.
+- Implementation started: yes; `0.101.34` is released and `0.101.35` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -388,8 +394,10 @@ Fleet policy writer.
   partition through the root-local Component Registry. Every selected root may
   now freeze its exact terminal receipt, and the Coordinator advances only
   after retaining those receipts in canonical order. The Coordinator now
-  publishes the complete service additions atomically; Directory and runtime
-  completion remain fenced.
+  publishes the complete service additions atomically, completes the exact
+  selected-plus-affected Directory barrier, activates only the selected new
+  batches and appends their placements under terminal root receipts. Retiring
+  the completed scale-out journal before a later increase remains open.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -411,7 +419,10 @@ Fleet policy writer.
   Replica or PoolMember additions then publish in one exact Registry revision;
   ordinary-only operations retain the same receipt boundary without a Registry
   mutation. The exact selected plus affected-existing-root Directory barrier
-  now reaches `DirectoriesConfirmed`; activation remains.
+  now reaches `DirectoriesConfirmed`. Selected roots then activate only their
+  new batch while retaining pre-existing root activation and sealed inventory;
+  terminal receipts atomically commit the new placement vector. Repeated
+  scale-out journal rollover remains open.
 - [x] Append all Replica and PoolMember bindings from one scale operation
   atomically. The complete target set is compiled from the exact source
   Registry and terminal selected-root receipts, existing authority and members

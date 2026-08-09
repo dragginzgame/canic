@@ -148,7 +148,15 @@ pub struct RootComponentProvisioningRecord {
     pub fleet_registry: FleetRegistryVersion,
     pub configuration_digest: ComponentDeploymentConfigurationDigest,
     pub batch: FleetSubnetRootProvisioningBatch,
+    pub runtime_mode: RootComponentProvisioningRuntimeModeRecord,
     pub state: RootComponentProvisioningStateRecordPhase,
+}
+
+/// Protected root runtime state observed before one batch was accepted.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootComponentProvisioningRuntimeModeRecord {
+    FreshRoot,
+    ActiveRoot,
 }
 
 /// Durable root-local scale-out Directory synchronization authority.

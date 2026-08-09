@@ -198,6 +198,28 @@ fn fixture() -> Fixture {
     }
 }
 
+fn accept_fixture(
+    fixture: &Fixture,
+    runtime_mode: RootComponentProvisioningRuntimeMode,
+    accepted_at_ns: u64,
+) -> RootComponentProvisioningView {
+    RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        runtime_mode,
+        accepted_at_ns,
+    )
+    .expect("accept fixture batch")
+}
+
+fn accept_fresh_fixture(fixture: &Fixture, accepted_at_ns: u64) -> RootComponentProvisioningView {
+    accept_fixture(
+        fixture,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        accepted_at_ns,
+    )
+}
+
 fn claimed_allocation(
     mut allocation: RootComponentAllocationView,
     canister: Principal,
@@ -325,9 +347,13 @@ fn reserve_single_member(
     RootComponentAllocationView,
     RootComponentProvisioningView,
 ) {
-    let accepted =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept batch");
+    let accepted = RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
     let request = RootComponentProvisioningAdvanceRequest {
         operation_id: fixture.request.operation_id,
         plan_hash: fixture.request.plan_hash,
@@ -564,9 +590,13 @@ fn exact_acceptance_replays_across_restart_without_mutating_capacity() {
     let fixture = fixture();
     assert!(RootComponentProvisioningOps::require_ordinary_allocation_open().is_ok());
     assert!(RootComponentProvisioningOps::require_root_draining_open().is_ok());
-    let accepted =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept batch");
+    let accepted = RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
     let replay = RootComponentProvisioningOps::acceptance_replay(&fixture.request)
         .expect("replay lookup")
         .expect("accepted replay");
@@ -581,9 +611,23 @@ fn exact_acceptance_replays_across_restart_without_mutating_capacity() {
     let snapshot = RootComponentProvisioningStore::export();
     RootComponentProvisioningStore::import(snapshot.clone());
     assert_eq!(RootComponentProvisioningStore::export(), snapshot);
+    assert!(
+        RootComponentProvisioningOps::accept(
+            fixture.request.clone(),
+            &fixture.validation,
+            RootComponentProvisioningRuntimeMode::ActiveRoot,
+            999,
+        )
+        .is_err()
+    );
     assert_eq!(
-        RootComponentProvisioningOps::accept(fixture.request, &fixture.validation, 999,)
-            .expect("exact acceptance retry"),
+        RootComponentProvisioningOps::accept(
+            fixture.request,
+            &fixture.validation,
+            RootComponentProvisioningRuntimeMode::FreshRoot,
+            999,
+        )
+        .expect("exact acceptance retry"),
         accepted
     );
     assert_eq!(
@@ -598,9 +642,13 @@ fn acceptance_persists_maximum_encoded_operation_and_placement_authority() {
     fixture.request.operation_id = [u8::MAX; 32];
     fixture.request.plan_hash = [u8::MAX; 32];
 
-    let accepted =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept maximum encoded placement authority");
+    let accepted = RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept maximum encoded placement authority");
 
     assert_eq!(accepted.operation_id, fixture.request.operation_id);
     assert_eq!(
@@ -614,9 +662,13 @@ fn acceptance_persists_maximum_encoded_operation_and_placement_authority() {
 #[test]
 fn reservation_advance_is_cursor_bound_and_response_loss_safe() {
     let fixture = fixture();
-    let accepted =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept batch");
+    let accepted = RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
     let request = RootComponentProvisioningAdvanceRequest {
         operation_id: fixture.request.operation_id,
         plan_hash: fixture.request.plan_hash,
@@ -832,6 +884,91 @@ fn runtime_activation_begins_only_after_publication_and_replays_exactly() {
 }
 
 #[test]
+fn active_root_batch_retains_preexisting_runtime_evidence_and_completes_later() {
+    let mut fixture = fixture();
+    fixture.request.batch.placements.clear();
+    fixture.validation = RootComponentProvisioningBatchValidation {
+        placement_count: 0,
+        component_count: 0,
+        component_spec_counts: BTreeMap::new(),
+        component_roles: BTreeSet::new(),
+    };
+    let accepted = accept_fixture(
+        &fixture,
+        RootComponentProvisioningRuntimeMode::ActiveRoot,
+        100,
+    );
+    let advance = RootComponentProvisioningAdvanceRequest {
+        operation_id: accepted.operation_id,
+        plan_hash: accepted.plan_hash,
+        expected_reserved_component_count: 0,
+        expected_claimed_component_count: 0,
+        expected_installed_component_count: 0,
+        expected_registry_committed_component_count: 0,
+    };
+    let provisioned = RootComponentProvisioningOps::finalize_provisioned(advance, 200)
+        .expect("finalize empty active-root batch");
+    let published_registry = FleetRegistryVersion {
+        authority: provisioned.fleet_registry.authority.clone(),
+        revision: provisioned.fleet_registry.revision + 1,
+        content_hash: [44; 32],
+    };
+    let publication = RootComponentPublicationRequest {
+        operation_id: provisioned.operation_id,
+        plan_hash: provisioned.plan_hash,
+        published_fleet_registry: published_registry.clone(),
+        expected_published_component_count: 0,
+    };
+    let directory = publication_directory(&fixture, published_registry);
+    RootComponentProvisioningOps::begin_publication(&publication, &directory, 300)
+        .expect("begin empty active-root publication");
+    let published = RootComponentProvisioningOps::finalize_published(&publication, 400)
+        .expect("finalize empty active-root publication");
+    let activation = RootComponentActivationRequest {
+        operation_id: published.operation_id,
+        plan_hash: published.plan_hash,
+        expected_activated_component_count: 0,
+        expected_root_runtime_active: false,
+    };
+    RootComponentProvisioningOps::begin_activation(&activation, 500)
+        .expect("begin active-root batch activation");
+    let evidence = RootComponentActivationEvidence {
+        fleet_activation_operation_id: [61; 32],
+        initial_inventory_hash: [62; 32],
+        component_count: 0,
+        root_activated_at_ns: 90,
+    };
+    assert!(
+        RootComponentProvisioningOps::finalize_runtimes_active(
+            &activation,
+            RootComponentActivationEvidence {
+                root_activated_at_ns: 101,
+                ..evidence
+            },
+            600,
+        )
+        .is_err()
+    );
+    let active = RootComponentProvisioningOps::finalize_runtimes_active(&activation, evidence, 600)
+        .expect("complete active-root batch after its pre-existing root activation");
+
+    assert_eq!(
+        active.runtime_mode,
+        RootComponentProvisioningRuntimeMode::ActiveRoot
+    );
+    assert_eq!(active.activation, Some(evidence));
+    assert_eq!(active.runtimes_activated_at_ns, Some(600));
+    assert_eq!(
+        RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id: active.operation_id,
+            plan_hash: active.plan_hash,
+        })
+        .expect("replay terminal active-root batch"),
+        active
+    );
+}
+
+#[test]
 fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
     let mut fixture = fixture();
     let mut next_request = fixture.request.clone();
@@ -846,9 +983,7 @@ fn terminal_batch_releases_only_the_active_fence_for_the_next_operation() {
         component_spec_counts: BTreeMap::new(),
         component_roles: BTreeSet::new(),
     };
-    let accepted =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept empty root batch");
+    let accepted = accept_fresh_fixture(&fixture, 100);
     let advance = RootComponentProvisioningAdvanceRequest {
         operation_id: accepted.operation_id,
         plan_hash: accepted.plan_hash,
@@ -942,8 +1077,13 @@ fn reserve_claim_install_and_commit_later_operation_member(
     request: RootComponentProvisioningAcceptanceRequest,
     validation: &RootComponentProvisioningBatchValidation,
 ) {
-    let accepted = RootComponentProvisioningOps::accept(request, validation, 700)
-        .expect("accept later scale-out-shaped batch");
+    let accepted = RootComponentProvisioningOps::accept(
+        request,
+        validation,
+        RootComponentProvisioningRuntimeMode::ActiveRoot,
+        700,
+    )
+    .expect("accept later scale-out-shaped batch");
     assert_eq!(accepted.phase, RootComponentProvisioningPhase::Accepted);
     assert_eq!(accepted.batch.placements[0].group_placement.ordinal, 1);
     let reservation_request = RootComponentProvisioningAdvanceRequest {
@@ -1189,9 +1329,13 @@ fn record_one_publication_delivery(
 #[test]
 fn prepaid_claim_cannot_precede_complete_identity_reservation() {
     let fixture = fixture();
-    let accepted =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept batch");
+    let accepted = RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
     let member = RootComponentProvisioningOps::next_member_reservation(&accepted)
         .expect("unreserved member");
     let allocation = RootComponentAllocationView {
@@ -1257,9 +1401,13 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
         .next()
         .expect("Component Spec count") = 2;
 
-    let mut current =
-        RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-            .expect("accept two-placement batch");
+    let mut current = RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept two-placement batch");
     let mut operation_ids = BTreeSet::new();
     let mut allocations = Vec::new();
     let mut claimed_allocations = Vec::new();
@@ -1429,8 +1577,13 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
 #[test]
 fn conflicting_operation_and_active_batch_reject_without_new_reservations() {
     let fixture = fixture();
-    RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-        .expect("accept batch");
+    RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
 
     let mut conflicting = fixture.request.clone();
     conflicting.plan_hash = [13; 32];
@@ -1441,7 +1594,15 @@ fn conflicting_operation_and_active_batch_reject_without_new_reservations() {
     second.plan_hash = [15; 32];
     second.batch.placements[0].group_placement.ordinal = 1;
     assert!(RootComponentProvisioningOps::require_acceptance_open(second.operation_id).is_err());
-    assert!(RootComponentProvisioningOps::accept(second, &fixture.validation, 101).is_err());
+    assert!(
+        RootComponentProvisioningOps::accept(
+            second,
+            &fixture.validation,
+            RootComponentProvisioningRuntimeMode::FreshRoot,
+            101,
+        )
+        .is_err()
+    );
     assert_eq!(
         RootComponentProvisioningOps::tracked_group_placements().expect("placement count"),
         1
@@ -1451,8 +1612,13 @@ fn conflicting_operation_and_active_batch_reject_without_new_reservations() {
 #[test]
 fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
     let fixture = fixture();
-    RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-        .expect("accept batch");
+    RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
     let exact = RootComponentProvisioningStore::export();
 
     let mut corrupted = exact.clone();
@@ -1524,8 +1690,13 @@ fn corrupted_receipt_index_or_aggregate_state_fails_closed() {
 #[test]
 fn member_origin_is_valid_only_under_exact_accepted_authority() {
     let fixture = fixture();
-    RootComponentProvisioningOps::accept(fixture.request.clone(), &fixture.validation, 100)
-        .expect("accept batch");
+    RootComponentProvisioningOps::accept(
+        fixture.request.clone(),
+        &fixture.validation,
+        RootComponentProvisioningRuntimeMode::FreshRoot,
+        100,
+    )
+    .expect("accept batch");
     let placement = &fixture.request.batch.placements[0];
     let entry = &placement.entries[0];
     let origin = ComponentProvisioningOrigin::ComponentGroup {

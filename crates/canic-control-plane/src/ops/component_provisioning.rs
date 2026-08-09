@@ -16,17 +16,18 @@ use crate::{
         RootComponentProvisioningPlacementRecord, RootComponentProvisioningRecord,
         RootComponentProvisioningRegistryCursorRecord,
         RootComponentProvisioningReservationCursorRecord, RootComponentProvisioningResultRecord,
-        RootComponentProvisioningStateRecordPhase, RootComponentProvisioningStore,
-        RootComponentPublicationIntentRecord, RootProvisionedGroupMemberRecord,
-        RootProvisionedGroupPlacementRecord,
+        RootComponentProvisioningRuntimeModeRecord, RootComponentProvisioningStateRecordPhase,
+        RootComponentProvisioningStore, RootComponentPublicationIntentRecord,
+        RootProvisionedGroupMemberRecord, RootProvisionedGroupPlacementRecord,
     },
     view::{
         component_provisioning::{
             RootComponentGroupRuntimeAuthorityView, RootComponentProvisioningAdvanceDisposition,
             RootComponentProvisioningClaimCursorView, RootComponentProvisioningInstallCursorView,
             RootComponentProvisioningMemberView, RootComponentProvisioningRegistryCursorView,
-            RootComponentProvisioningReservationCursorView, RootComponentProvisioningView,
-            RootComponentPublicationIntentView, RootComponentPublicationMemberView,
+            RootComponentProvisioningReservationCursorView, RootComponentProvisioningRuntimeMode,
+            RootComponentProvisioningView, RootComponentPublicationIntentView,
+            RootComponentPublicationMemberView,
         },
         component_registry::{
             ComponentRegistryPartitionView, RootComponentAllocationProgressView,
@@ -262,12 +263,13 @@ impl RootComponentProvisioningOps {
     pub(crate) fn accept(
         request: RootComponentProvisioningAcceptanceRequest,
         validation: &RootComponentProvisioningBatchValidation,
+        runtime_mode: RootComponentProvisioningRuntimeMode,
         accepted_at_ns: u64,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         validate_acceptance_identity(&request, validation, accepted_at_ns)?;
         if let Some(existing) = RootComponentProvisioningStore::operation(request.operation_id) {
             let view = validated_record(existing)?;
-            return if request_matches_view(&request, &view) {
+            return if request_matches_view(&request, &view) && view.runtime_mode == runtime_mode {
                 Ok(view)
             } else {
                 Err(InternalError::conflict(
@@ -320,6 +322,7 @@ impl RootComponentProvisioningOps {
             fleet_registry: request.fleet_registry,
             configuration_digest: request.configuration_digest,
             batch: request.batch,
+            runtime_mode: runtime_mode.into(),
             state: RootComponentProvisioningStateRecordPhase::Accepted {
                 placement_count: validation.placement_count,
                 component_count: validation.component_count,
@@ -1127,6 +1130,7 @@ impl RootComponentProvisioningOps {
             published_receipt_content_hash,
             receipt_content_hash,
         };
+        let _validated_terminal_state = validated_record_state(&next)?;
         RootComponentProvisioningStore::complete_operation(&current_record, next.clone())
             .map_err(map_commit_error)?;
         validated_record(next)
@@ -1650,6 +1654,7 @@ fn validated_record(
         fleet_registry: record.fleet_registry,
         configuration_digest: record.configuration_digest,
         batch: record.batch,
+        runtime_mode: record.runtime_mode.into(),
         placement_count: state.placement_count,
         component_count: state.component_count,
         reservation_cursor: RootComponentProvisioningReservationCursorView {
@@ -2199,16 +2204,22 @@ fn validated_runtimes_active_state(
         fields.published_at_ns,
         fields.published_receipt_content_hash,
     )?;
-    let activation_is_exact = [
-        fields.activation_started_at_ns >= fields.published_at_ns,
-        fields.runtimes_activated_at_ns >= fields.activation_started_at_ns,
-        fields.activation.component_count == fields.component_count,
-        fields.activation.fleet_activation_operation_id != [0; 32],
-        fields.activation.initial_inventory_hash != [0; 32],
-        fields.activation.root_activated_at_ns == fields.runtimes_activated_at_ns,
-    ]
-    .into_iter()
-    .all(|matches| matches);
+    let activation_order_is_valid = fields.activation_started_at_ns >= fields.published_at_ns
+        && fields.runtimes_activated_at_ns >= fields.activation_started_at_ns;
+    let activation_identity_is_valid = fields.activation.component_count == fields.component_count
+        && fields.activation.fleet_activation_operation_id != [0; 32]
+        && fields.activation.initial_inventory_hash != [0; 32];
+    let runtime_mode_is_valid = match record.runtime_mode {
+        RootComponentProvisioningRuntimeModeRecord::FreshRoot => {
+            fields.activation.root_activated_at_ns == fields.runtimes_activated_at_ns
+        }
+        RootComponentProvisioningRuntimeModeRecord::ActiveRoot => {
+            fields.activation.root_activated_at_ns > 0
+                && fields.activation.root_activated_at_ns <= fields.accepted_at_ns
+        }
+    };
+    let activation_is_exact =
+        activation_order_is_valid && activation_identity_is_valid && runtime_mode_is_valid;
     if !activation_is_exact {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
@@ -2253,6 +2264,24 @@ fn validated_runtimes_active_state(
         runtimes_activated_at_ns: Some(fields.runtimes_activated_at_ns),
         receipt_content_hash: fields.receipt_content_hash,
     })
+}
+
+impl From<RootComponentProvisioningRuntimeMode> for RootComponentProvisioningRuntimeModeRecord {
+    fn from(mode: RootComponentProvisioningRuntimeMode) -> Self {
+        match mode {
+            RootComponentProvisioningRuntimeMode::FreshRoot => Self::FreshRoot,
+            RootComponentProvisioningRuntimeMode::ActiveRoot => Self::ActiveRoot,
+        }
+    }
+}
+
+impl From<RootComponentProvisioningRuntimeModeRecord> for RootComponentProvisioningRuntimeMode {
+    fn from(mode: RootComponentProvisioningRuntimeModeRecord) -> Self {
+        match mode {
+            RootComponentProvisioningRuntimeModeRecord::FreshRoot => Self::FreshRoot,
+            RootComponentProvisioningRuntimeModeRecord::ActiveRoot => Self::ActiveRoot,
+        }
+    }
 }
 
 fn validate_partial_publication(
