@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-08
+Date: 2026-08-09
 
 ## Status
 
@@ -117,10 +117,17 @@ Date: 2026-08-08
   Component Registry journal. A fully committed root may now freeze its exact
   group-partitioned terminal receipt; the Coordinator retains every selected
   root receipt in canonical order and reaches `ComponentsProvisioned` only
-  after all are terminal. Fleet-service publication and all later scale-out
-  effects remain fenced.
+  after all are terminal. The Coordinator now derives the complete next
+  Fleet-service set from that exact operation and its source Registry, then
+  appends all Replica or PoolMember additions in one canonical Registry
+  revision while rejecting Authority additions or any change to published
+  members. Each publication retains an independent exact receipt, so initial
+  and scale-out Registry history remains reconstructible across restart.
+  Ordinary-only scale-out records the same `ServiceTopologyPublished` boundary
+  without a Registry mutation. Directory confirmation and runtime activation
+  remain fenced.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.30` is released and `0.101.31` is open.
+- Implementation started: yes; `0.101.32` is released and `0.101.33` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -370,8 +377,9 @@ Fleet policy writer.
   the exact Store-backed journal, then commit one canonical `Prepared`
   partition through the root-local Component Registry. Every selected root may
   now freeze its exact terminal receipt, and the Coordinator advances only
-  after retaining those receipts in canonical order. Service append and later
-  effects remain fenced.
+  after retaining those receipts in canonical order. The Coordinator now
+  publishes the complete service additions atomically; Directory and runtime
+  completion remain fenced.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
@@ -389,10 +397,14 @@ Fleet policy writer.
   Fully installed members may then commit their exact Registry partition with
   response-loss replay. Each fully committed root now freezes a terminal result
   without releasing its aggregate runtime fence, and the Coordinator reaches
-  `ComponentsProvisioned` only after every selected root is terminal. Service
-  append and later provisioning effects remain.
-- [ ] Append all Replica and PoolMember bindings from one scale operation
-  atomically.
+  `ComponentsProvisioned` only after every selected root is terminal. All
+  Replica or PoolMember additions then publish in one exact Registry revision;
+  ordinary-only operations retain the same receipt boundary without a Registry
+  mutation. Directory publication and activation remain.
+- [x] Append all Replica and PoolMember bindings from one scale operation
+  atomically. The complete target set is compiled from the exact source
+  Registry and terminal selected-root receipts, existing authority and members
+  are immutable, and exact restart replay retains every publication receipt.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.
   Accepted placement authority, retained grouped origins and grouped Components
   are fenced; the aggregate grouped removal protocol remains unimplemented.

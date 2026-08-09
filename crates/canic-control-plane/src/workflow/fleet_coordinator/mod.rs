@@ -182,7 +182,8 @@ impl FleetCoordinatorWorkflow {
             acceptance_status.operation,
             FleetComponentProvisioningOperation::ScaleOut { .. }
         ) {
-            return advance_component_scale_out_root_provisioning(request, acceptance_status).await;
+            return advance_component_scale_out_service_publication(request, acceptance_status)
+                .await;
         }
         if matches!(
             acceptance_status.phase,
@@ -322,17 +323,17 @@ async fn advance_component_directory_confirmation(
     )
 }
 
-async fn advance_component_scale_out_root_provisioning(
+async fn advance_component_scale_out_service_publication(
     request: FleetComponentProvisioningAdvanceRequest,
     status: FleetComponentProvisioningStatusResponse,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
-    if scale_out_root_provisioning_is_complete(&status)? {
+    if scale_out_service_publication_is_complete(&status)? {
         return Ok(status);
     }
     advance_component_root_provisioning(request).await
 }
 
-fn scale_out_root_provisioning_is_complete(
+fn scale_out_service_publication_is_complete(
     status: &FleetComponentProvisioningStatusResponse,
 ) -> Result<bool, InternalError> {
     match status.phase {
@@ -346,6 +347,23 @@ fn scale_out_root_provisioning_is_complete(
                 status.service_topology_published_at_ns.is_none(),
             ];
             if terminal_facts.into_iter().all(|fact| fact) {
+                return Ok(false);
+            }
+        }
+        FleetComponentProvisioningPhase::ServiceTopologyPublished => {
+            let publication_facts = [
+                status.current_root.is_none(),
+                status.provisioning_in_flight_root.is_none(),
+                status.provisioned_root_count == status.root_batch_count,
+                status.components_provisioned_at_ns.is_some(),
+                status.published_fleet_registry.is_some(),
+                status.service_topology_published_at_ns.is_some(),
+                status.directory_confirmed_root_count == 0,
+                status.current_publication.is_none(),
+                status.runtime_activated_root_count == 0,
+                status.current_activation.is_none(),
+            ];
+            if publication_facts.into_iter().all(|fact| fact) {
                 return Ok(true);
             }
         }
@@ -356,7 +374,6 @@ fn scale_out_root_provisioning_is_complete(
         }
         FleetComponentProvisioningPhase::Planned
         | FleetComponentProvisioningPhase::AcceptingRoots
-        | FleetComponentProvisioningPhase::ServiceTopologyPublished
         | FleetComponentProvisioningPhase::ConfirmingDirectories
         | FleetComponentProvisioningPhase::DirectoriesConfirmed
         | FleetComponentProvisioningPhase::ActivatingRuntimes
@@ -364,7 +381,7 @@ fn scale_out_root_provisioning_is_complete(
     }
     Err(InternalError::invariant(
         canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-        "scale-out operation crossed its terminal root-provisioning fence",
+        "scale-out operation crossed its service-publication fence",
     ))
 }
 

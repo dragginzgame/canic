@@ -29,6 +29,7 @@ use crate::{
 };
 use candid::Principal;
 use sha2::{Digest, Sha256};
+use std::cmp::Ordering;
 use thiserror::Error as ThisError;
 
 const FLEET_REGISTRY_DOMAIN: &[u8] = b"canic/fleet-registry/v1";
@@ -94,6 +95,18 @@ pub enum FleetRegistryOpsError {
 
     #[error("Fleet Registry initial service publication requires a non-empty complete service set")]
     FleetServicePublicationRequiresServices,
+
+    #[error("Fleet Registry scale-out service publication contains no new members")]
+    FleetServiceAppendRequiresAdditions,
+
+    #[error("Fleet Registry scale-out service publication changes protected service authority")]
+    FleetServiceAppendAuthorityMismatch,
+
+    #[error("Fleet Registry scale-out service publication removes or changes an existing member")]
+    FleetServiceAppendRemovesMember,
+
+    #[error("Fleet Registry scale-out service publication adds an Authority member")]
+    FleetServiceAppendAddsAuthority,
 
     #[error("Fleet Registry root join requires status Joining")]
     FleetSubnetRootJoinRequiresJoining,
@@ -238,6 +251,18 @@ impl FleetRegistryOps {
         services: Vec<FleetServiceBinding>,
     ) -> Result<FleetRegistry, InternalError> {
         compile_initial_services(expected_authority, topology, current, services)
+            .map_err(OpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Construct the next snapshot by appending a complete scale-out member set atomically.
+    pub fn compile_service_additions(
+        expected_authority: &FleetRegistryAuthority,
+        topology: &ComponentTopology,
+        current: &FleetRegistry,
+        services: Vec<FleetServiceBinding>,
+    ) -> Result<FleetRegistry, InternalError> {
+        compile_service_additions(expected_authority, topology, current, services)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -491,6 +516,121 @@ fn compile_initial_services(
     next.services = services;
     validation::validate(expected_authority, topology, &next)?;
     Ok(next)
+}
+
+fn compile_service_additions(
+    expected_authority: &FleetRegistryAuthority,
+    topology: &ComponentTopology,
+    current: &FleetRegistry,
+    services: Vec<FleetServiceBinding>,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    validation::validate(expected_authority, topology, current)?;
+    validate_service_additions(&current.services, &services)?;
+
+    let mut next = current.clone();
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .ok_or(FleetRegistryOpsError::RevisionExhausted)?;
+    next.services = services;
+    validation::validate(expected_authority, topology, &next)?;
+    Ok(next)
+}
+
+fn validate_service_additions(
+    current: &[FleetServiceBinding],
+    next: &[FleetServiceBinding],
+) -> Result<(), FleetRegistryOpsError> {
+    if current.len() != next.len() {
+        return Err(FleetRegistryOpsError::FleetServiceAppendAuthorityMismatch);
+    }
+    let mut addition_count = 0_usize;
+    for (current_service, next_service) in current.iter().zip(next) {
+        validate_service_append_authority(current_service, next_service)?;
+        addition_count = addition_count
+            .checked_add(validate_service_member_additions(
+                &current_service.members,
+                &next_service.members,
+            )?)
+            .ok_or(FleetRegistryOpsError::FleetServiceAppendRequiresAdditions)?;
+    }
+    if addition_count == 0 {
+        return Err(FleetRegistryOpsError::FleetServiceAppendRequiresAdditions);
+    }
+    Ok(())
+}
+
+fn validate_service_append_authority(
+    current: &FleetServiceBinding,
+    next: &FleetServiceBinding,
+) -> Result<(), FleetRegistryOpsError> {
+    let authority_facts = [
+        current.service == next.service,
+        current.role == next.role,
+        current.component_spec == next.component_spec,
+        current.mode == next.mode,
+        current.placement == next.placement,
+    ];
+    if !authority_facts.into_iter().all(|fact| fact) {
+        return Err(FleetRegistryOpsError::FleetServiceAppendAuthorityMismatch);
+    }
+    Ok(())
+}
+
+fn validate_service_member_additions(
+    current: &[FleetServiceComponentBinding],
+    next: &[FleetServiceComponentBinding],
+) -> Result<usize, FleetRegistryOpsError> {
+    let mut current_index = 0_usize;
+    let mut next_index = 0_usize;
+    let mut additions = 0_usize;
+    while current_index < current.len() && next_index < next.len() {
+        match compare_service_members(&next[next_index], &current[current_index]) {
+            Ordering::Less => {
+                validate_added_service_member(&next[next_index])?;
+                additions += 1;
+                next_index += 1;
+            }
+            Ordering::Equal => {
+                if next[next_index] != current[current_index] {
+                    return Err(FleetRegistryOpsError::FleetServiceAppendRemovesMember);
+                }
+                current_index += 1;
+                next_index += 1;
+            }
+            Ordering::Greater => {
+                return Err(FleetRegistryOpsError::FleetServiceAppendRemovesMember);
+            }
+        }
+    }
+    if current_index != current.len() {
+        return Err(FleetRegistryOpsError::FleetServiceAppendRemovesMember);
+    }
+    for member in &next[next_index..] {
+        validate_added_service_member(member)?;
+        additions += 1;
+    }
+    Ok(additions)
+}
+
+fn validate_added_service_member(
+    member: &FleetServiceComponentBinding,
+) -> Result<(), FleetRegistryOpsError> {
+    if member.member_purpose == FleetServiceMemberPurpose::Authority {
+        return Err(FleetRegistryOpsError::FleetServiceAppendAddsAuthority);
+    }
+    Ok(())
+}
+
+fn compare_service_members(
+    left: &FleetServiceComponentBinding,
+    right: &FleetServiceComponentBinding,
+) -> Ordering {
+    service_member_purpose_tag(left.member_purpose)
+        .cmp(&service_member_purpose_tag(right.member_purpose))
+        .then_with(|| left.group_placement.cmp(&right.group_placement))
+        .then_with(|| left.member_path.cmp(&right.member_path))
+        .then_with(|| left.component.cmp(&right.component))
 }
 
 fn compile_draining(

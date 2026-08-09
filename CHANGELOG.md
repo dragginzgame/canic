@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.33` atomically appends every Replica or PoolMember introduced by one
+  scale-out operation in a single Fleet Registry revision, while ordinary-only
+  scale-out records the same durable boundary without mutating the Registry.
+
+- `0.101.32` synchronizes release metadata only; runtime behavior remains the
+  `0.101.31` implementation.
+
 - `0.101.31` freezes exact terminal scale-out receipts for every selected root
   and advances the Coordinator to `ComponentsProvisioned` while keeping
   Fleet-service publication fenced.

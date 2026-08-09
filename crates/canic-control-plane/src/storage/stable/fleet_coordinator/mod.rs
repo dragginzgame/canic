@@ -50,9 +50,9 @@ use serde::{Deserialize, Serialize};
 // one compact placement record per committed Component Group deployment copy,
 // at most one in-progress scale-out plan plus one compact acceptance per
 // selected root,
-// the complete service set again as one publication receipt, one exact
-// acknowledgement per current root, and at most one draining and one removal
-// receipt per root.
+// the complete service set again in at most one fresh and one scale-out
+// publication receipt, one exact acknowledgement per current root, and at most
+// one draining and one removal receipt per root.
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
@@ -91,7 +91,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub component_provisioning: Option<FleetComponentProvisioningRecord>,
     pub component_group_deployments: Vec<FleetComponentGroupDeploymentRecord>,
     pub component_scale_out: Option<FleetComponentProvisioningRecord>,
-    pub service_publication_receipt: Option<FleetServicePublicationReceiptRecord>,
+    pub service_publication_receipts: Vec<FleetServicePublicationReceiptRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
     pub root_deletion_readiness_intents: Vec<FleetSubnetRootDeletionReadinessIntentResponse>,
@@ -329,7 +329,7 @@ pub struct FleetComponentRuntimeActivationRecord {
     pub recorded_at_ns: u64,
 }
 
-/// Persisted exact authority and response for initial Fleet-service publication.
+/// Persisted exact authority and response for one Fleet-service publication.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetServicePublicationReceiptRecord {
     pub operation_id: [u8; 32],
