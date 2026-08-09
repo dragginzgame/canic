@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
   preserves each already-active root and its sealed initial inventory, and
   atomically commits new deployment placements under exact terminal receipts.
   Release dependency audits now isolate RustSec data from shared-cache
-  sediment.
+  sediment, while Wenzelroll renders immediately with browser-compliant sound
+  recovery and neutral chat previews.
 
 - `0.101.34` confirms scale-out Directories across every exact selected and
   affected existing service-member root with durable affected-Component
