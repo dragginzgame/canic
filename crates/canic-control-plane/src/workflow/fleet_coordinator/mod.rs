@@ -148,6 +148,9 @@ impl FleetCoordinatorWorkflow {
                 ))
             };
         }
+        if current.phase == FleetComponentProvisioningPhase::RuntimesActivated {
+            return Ok(current);
+        }
         let disposition = FleetCoordinatorOps::advance_component_provisioning_root_acceptance(
             request,
             IcOps::now_nanos(),

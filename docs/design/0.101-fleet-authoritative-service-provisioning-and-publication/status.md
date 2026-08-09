@@ -138,10 +138,14 @@ Date: 2026-08-09
   only the new Components and reuses its sealed initial-inventory evidence
   without preparing or rewriting the root runtime. Exact terminal receipts
   reach `RuntimesActivated` and atomically append the new placements to the
-  canonical deployment ledger. Terminal journal rollover for a later scale-out
-  operation remains open.
+  canonical deployment ledger. A later monotonic increase now atomically
+  retires that terminal journal into bounded compact exact-replay history,
+  installs the next validated journal and revalidates the complete deployment
+  ledger from fresh authority plus every retired receipt. Historical exact
+  prepare, status and terminal advance retry survive restart without retaining
+  another complete plan; reused identities and corrupt history fail closed.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.34` is released and `0.101.35` is open.
+- Implementation started: yes; `0.101.35` is released and `0.101.36` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -380,7 +384,7 @@ Fleet policy writer.
   sole current-count authority. It is materialized atomically with terminal
   fresh-install runtime evidence and rederived during stable-state
   validation; scale-out reservation and append remain separate later steps.
-- [ ] Accept only monotonic desired-count increases with exact unused
+- [x] Accept only monotonic desired-count increases with exact unused
   placement IDs on active roots within density, spread and aggregate limits.
   The Coordinator now freezes and atomically reserves the exact increase,
   checks all configuration-derived root capacity and advances only those
@@ -396,13 +400,15 @@ Fleet policy writer.
   after retaining those receipts in canonical order. The Coordinator now
   publishes the complete service additions atomically, completes the exact
   selected-plus-affected Directory barrier, activates only the selected new
-  batches and appends their placements under terminal root receipts. Retiring
-  the completed scale-out journal before a later increase remains open.
+  batches and appends their placements under terminal root receipts. A later
+  increase atomically retires the completed journal into bounded compact
+  history before installing the next validated plan; stable validation
+  reconstructs the deployment ledger from every exact receipt.
 - [x] Require every eligible scale-out root to belong to the complete root set
   installed and activated by the same fresh Fleet installation.
 - [x] Enforce each affected service's complete member density/spread policy
   after every addition.
-- [ ] Provision only new placements and retain exact retry identity.
+- [x] Provision only new placements and retain exact retry identity.
   The protected plan contains only the new placements and exact preparation
   retry is durable. Root acceptance now retains exact pre-call intents and
   authenticated receipts for only those placements. The Coordinator now
@@ -422,7 +428,9 @@ Fleet policy writer.
   now reaches `DirectoriesConfirmed`. Selected roots then activate only their
   new batch while retaining pre-existing root activation and sealed inventory;
   terminal receipts atomically commit the new placement vector. Repeated
-  scale-out journal rollover remains open.
+  scale-out now retains compact terminal prepare/status/advance replay across
+  restart without preserving another full plan, rejects operation-ID reuse and
+  begins the next placement range only in the same atomic rollover commit.
 - [x] Append all Replica and PoolMember bindings from one scale operation
   atomically. The complete target set is compiled from the exact source
   Registry and terminal selected-root receipts, existing authority and members

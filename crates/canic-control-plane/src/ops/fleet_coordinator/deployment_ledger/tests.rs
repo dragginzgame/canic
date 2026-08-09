@@ -87,6 +87,7 @@ fn terminal_fresh_plan_compiles_one_canonical_protected_deployment_ledger() {
         &configuration,
         &registry(),
         Some(&provisioning),
+        &[],
         None,
         &deployments,
     )
@@ -105,6 +106,7 @@ fn deployment_ledger_rejects_premature_corrupt_and_unbound_receipt_state() {
             &configuration,
             &registry(),
             Some(&provisioning),
+            &[],
             None,
             &deployments,
         )
@@ -119,6 +121,7 @@ fn deployment_ledger_rejects_premature_corrupt_and_unbound_receipt_state() {
             &configuration,
             &registry(),
             Some(&provisioning),
+            &[],
             None,
             &corrupted,
         )

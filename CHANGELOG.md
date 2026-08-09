@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.36` adds bounded exact-replay history so terminal scale-out can roll
+  atomically into a later monotonic increase, and completes Wenzelroll's
+  chat-preview surface with a Fleet diagnostics social card, crawler-compatible
+  raw delivery and one canonical unversioned experience URL.
+
 - `0.101.35` activates only the new Components on selected scale-out roots,
   preserves each already-active root and its sealed initial inventory, and
   atomically commits new deployment placements under exact terminal receipts.
