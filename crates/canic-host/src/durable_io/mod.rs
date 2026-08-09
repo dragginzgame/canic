@@ -1,8 +1,10 @@
 //! Module: durable_io
 //!
-//! Responsibility: read and publish complete host-owned regular files safely.
-//! Does not own: document serialization, multi-file transactions, or path selection.
-//! Boundary: reads reject links/special files; writes own sibling staging and filesystem syncs.
+//! Responsibility: solely own atomic durable regular-file publication for `canic-host`.
+//! Does not own: serialization, path selection, ephemeral protocol files, open command-result
+//! descriptors, backup persistence, or multi-file transactions.
+//! Boundary: reads reject links/special files; writes own sibling staging, publication, cleanup,
+//! and filesystem syncs behind replace and create-new modes.
 
 #[cfg(test)]
 mod tests;
