@@ -505,12 +505,13 @@ Historical detail is archived at:
   is a lower-threshold emergency fallback after a terminal no-grant result;
   uncertain grants suppress fallback. Direct top-up remains break-glass, and
   the attached-cycles recovery proof gates implementation.
-- Tentative `0.108` adds an optional encrypted off-machine archive tier only
-  after a complete local Canic backup exists. It keeps local backup and restore
-  canonical, requires client-side authenticated encryption, independently
-  discoverable recovery capsules and enforceable cost bounds for unattended
-  operations, and reaches the standalone 0.106 blob service only through an
-  external provider-neutral adapter. No 0.108 implementation is approved.
+- M0-only `0.108` investigates an optional encrypted off-machine archive tier
+  only after a complete local Canic backup exists. It keeps local backup and
+  restore canonical, freezes durable V1 recovery contracts, requires
+  client-side authenticated encryption and independently discoverable recovery
+  capsules, and reaches the standalone 0.106 blob service only through an
+  external provider-neutral adapter. M0 investigation is approved; M1–M7 are
+  on HOLD, and the first implementation scope is manual only.
 - Released `0.100.0` starts the reinstall-only implementation by freezing
   bounded `TreeSpecId`, `TreeGroupId` and generated 32-byte `TreeId`.
 - Released `0.100.1` hard-cuts the intermediate
@@ -1375,12 +1376,13 @@ Historical detail is archived at:
   zero-effect Coordinator result; an uncertain grant blocks fallback. Direct
   operator top-up remains independent recovery, and M0 must prove exact
   acceptance, replay refund and interruption recovery before implementation.
-- Tentative 0.108 keeps completed local backups as the sole capture and restore
+- M0-only 0.108 keeps completed local backups as the sole capture and restore
   format while optionally archiving authenticated ciphertext plus a small
-  independently discoverable recovery capsule. Host-owned keys, separate
-  archive journals and enforceable unattended cost bounds keep Canisters and
-  Canic's production dependency graph outside the provider data path; an
-  external adapter may use the standalone 0.106 service as one repository.
+  independently discoverable recovery capsule. Durable V1 readers, a blank-host
+  recovery profile, host-owned keys and separate effect journals keep Canisters
+  and Canic's production dependency graph outside the provider data path. M0
+  alone is approved; a manual external adapter may later use the standalone
+  0.106 service only after the remaining milestones leave HOLD.
 - Released `0.99.33` pins the maintained operator toolchain to ICP CLI 1.2.0
   and Rust 1.97.1 while preserving the published-crate MSRV.
 - Released `0.99.32` makes the active 0.99–0.103 design sequence
