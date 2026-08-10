@@ -28,6 +28,7 @@ POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
 WORKSPACE_TEST_RUNNER="$ROOT/scripts/ci/run-workspace-tests.sh"
+PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
     "$ROOT/scripts/ci/install-gitleaks.sh"
@@ -42,7 +43,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -88,6 +89,29 @@ bash "$WORKSPACE_TEST_INVENTORY_GATE" >/dev/null ||
     fail "the workspace integration-test inventory is incomplete or invalid"
 rg -F 'bash scripts/ci/check-workspace-test-inventory.sh' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not enforce its integration-test inventory"
+rg -F 'POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the full workspace test runner does not resolve one explicit PocketIC server"
+rg -F 'CANIC_POCKET_IC_CACHE_DIR' "$ROOT/scripts/ci/install-pocketic.sh" >/dev/null ||
+    fail "the PocketIC installer does not expose its persistent local cache boundary"
+if rg -F '${TMPDIR' "$ROOT/scripts/ci/install-pocketic.sh" >/dev/null; then
+    fail "the PocketIC server binary must not live in disposable test scratch"
+fi
+if rg --multiline 'test(-wasm)?:[^\n]*(\\\n[^\n]*)?workspace-test-inventory-gate' "$MAKEFILE" >/dev/null; then
+    fail "the public test targets duplicate the workspace runner inventory guard"
+fi
+rg -F 'make fmt-check-core' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "the pre-commit hook does not enforce formatting"
+if rg -F 'make fmt-core' "$PRE_COMMIT_HOOK" >/dev/null ||
+    rg -F 'git add' "$PRE_COMMIT_HOOK" >/dev/null; then
+    fail "the pre-commit hook may mutate the worktree or broaden the staged index"
+fi
+example_build_count="$(rg -c 'run: cargo build -p canic --examples --locked' "$CI")"
+[ "$example_build_count" -eq 1 ] ||
+    fail "the default example build must have one CI owner"
+rg --multiline 'checks:[\s\S]*?run: make clippy\n[[:space:]]+- name: Build examples \(default\)\n[[:space:]]+run: cargo build -p canic --examples --locked' "$CI" >/dev/null ||
+    fail "the checks job does not reuse its Clippy runner for the default example build"
+rg --multiline 'build:\n[[:space:]]+if: startsWith\(github\.ref, '\''refs/tags/'\''\)' "$CI" >/dev/null ||
+    fail "the release workspace build is not isolated to tag pushes"
 rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not isolate serial PocketIC execution"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||

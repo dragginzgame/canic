@@ -226,13 +226,13 @@ test-fleet-install:
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/test-fleet-install.sh
 
 test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        workspace-test-inventory-gate test-unit
+        test-unit
 
 # Fast iteration path for wasm work.
 # Runs only the three classified fast integration targets and skips every
 # PocketIC suite.
 test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        workspace-test-inventory-gate test-unit-fast
+        test-unit-fast
 
 # Version-bump gate.
 # Keeps the secret scan, control-plane feature matrix, Clippy, and complete

@@ -14,7 +14,9 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
 - `0.101.42` qualifies cross-root Fleet-service peer provisioning across two
   physical PocketIC application Subnets, including exact retry and stale,
-  forwarded, child and wrong-service rejection.
+  forwarded, child and wrong-service rejection, repairs required local Fleet-
+  install validation, and removes duplicate local hook/test and default-build
+  CI work.
 
 - `0.101.41` derives cross-root peer requesters only from exact current Fleet-
   service membership and Directory authority, then independently enforces and

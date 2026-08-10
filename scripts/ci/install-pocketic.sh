@@ -13,8 +13,14 @@ fi
 
 bash "$SCRIPT_DIR/check-pocketic-version-alignment.sh" >&2
 
-TMP_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-DIR="$TMP_ROOT/pocket-ic-server-$CANIC_POCKET_IC_VERSION"
+if [ -n "${RUNNER_TEMP:-}" ]; then
+    CACHE_ROOT="$RUNNER_TEMP"
+elif [ -n "${CANIC_POCKET_IC_CACHE_DIR:-}" ]; then
+    CACHE_ROOT="$CANIC_POCKET_IC_CACHE_DIR"
+else
+    CACHE_ROOT="${XDG_CACHE_HOME:-${HOME:?HOME must be set}/.cache}/canic"
+fi
+DIR="$CACHE_ROOT/pocket-ic-server-$CANIC_POCKET_IC_VERSION"
 BIN="$DIR/pocket-ic"
 ARCHIVE="$DIR/pocket-ic-x86_64-linux.gz"
 

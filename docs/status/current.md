@@ -24,7 +24,11 @@ Historical detail is archived at:
   Stale Registry authority, wrong service, ordinary-Component forwarding and
   real Component-Child forwarding all reject. Internal test-Wasm caching now
   fingerprints the external canonical Canic configuration so topology edits
-  cannot reuse stale compiled fixture bytes.
+  cannot reuse stale compiled fixture bytes. Release validation also removes
+  duplicate inventory and default-build execution, while the pre-commit hook
+  is check-only and cannot broaden the reviewed release index. Full local
+  tests use an explicit persistent PocketIC server path rather than installing
+  the executable inside disposable release scratch.
 - Released `0.101.41` closes the cross-root Fleet-service peer requester
   implementation. The target root derives the raw caller's exact top-level
   service membership and remote root binding from its fully validated current
