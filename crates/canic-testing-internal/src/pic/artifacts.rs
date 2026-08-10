@@ -163,6 +163,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
     build_env.extend_from_slice(extra_env);
+    let additional_inputs = canonical_build_config_inputs(workspace_root, &build_env);
     let builds = packages
         .iter()
         .map(|package| {
@@ -174,6 +175,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
             )
             .with_cargo_profile_args(&cargo_args)
             .with_extra_env(&build_env)
+            .with_additional_input_paths(additional_inputs.iter().cloned())
             .with_shared_incremental_target(internal_test_shared_wasm_target(
                 workspace_root,
                 &build_env,
@@ -208,6 +210,24 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
     }
     eprintln!("[canic-test-wasm] {batch}");
+}
+
+fn canonical_build_config_inputs(
+    workspace_root: &Path,
+    build_env: &[(&str, &str)],
+) -> Vec<PathBuf> {
+    build_env
+        .iter()
+        .filter(|(key, _)| *key == canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV)
+        .map(|(_, value)| {
+            let path = PathBuf::from(value);
+            if path.is_absolute() {
+                path
+            } else {
+                workspace_root.join(path)
+            }
+        })
+        .collect()
 }
 
 fn internal_test_shared_wasm_target(workspace_root: &Path, build_env: &[(&str, &str)]) -> PathBuf {
@@ -369,6 +389,23 @@ mod tests {
         assert_eq!(
             internal_test_shared_wasm_target(workspace_root, &build_env),
             workspace_root.join("target/test-artifacts/cargo-wasm-incremental/ic")
+        );
+    }
+
+    #[test]
+    fn canonical_build_config_is_an_explicit_artifact_input() {
+        let workspace_root = Path::new("/workspace");
+        let build_env = [
+            (
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                "canisters/test/root/canic.toml",
+            ),
+            ("UNRELATED", "value"),
+        ];
+
+        assert_eq!(
+            canonical_build_config_inputs(workspace_root, &build_env),
+            vec![workspace_root.join("canisters/test/root/canic.toml")]
         );
     }
 

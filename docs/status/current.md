@@ -14,17 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.40`.
-- The latest published release is `v0.101.40` at
-  `6c00760f1e426ad6626d6c63cf7f9720b34d09c7`.
-- Open `0.101.41` closes the cross-root Fleet-service peer requester
+- The workspace package version is `0.101.41`.
+- The latest published release is `v0.101.41` at
+  `183625b488c3f12bd0f4c692d8cec183871313d3`.
+- Open `0.101.42` qualifies the released cross-root Fleet-service peer path
+  across two physical PocketIC application Subnets. One real Project Hub
+  Canister calls the remote root, exact retry returns the original reservation
+  and the resulting Active peer is a direct child of that root on its Subnet.
+  Stale Registry authority, wrong service, ordinary-Component forwarding and
+  real Component-Child forwarding all reject. Internal test-Wasm caching now
+  fingerprints the external canonical Canic configuration so topology edits
+  cannot reuse stale compiled fixture bytes.
+- Released `0.101.41` closes the cross-root Fleet-service peer requester
   implementation. The target root derives the raw caller's exact top-level
   service membership and remote root binding from its fully validated current
   Registry Mirror plus matching Fleet Directory, then independently enforces
-  the compiled requester-Spec-to-target-Spec grant. The ordinary allocation
-  journal retains that derived identity, Registry authority and grant, and
-  every later peer lifecycle step revalidates them against the current
-  authority. Same-root peers continue through local Registry proof.
+  the compiled requester-Spec-to-target-Spec grant. The allocation journal
+  retains that identity, Registry authority and grant, and every later peer
+  lifecycle step revalidates them. Same-root peers retain local Registry proof.
 - Released `0.101.40` makes Fleet-service purpose an enforceable application
   authorization contract. The local endpoint/API guard accepts only the exact
   matching Active Authority and rejects Replica, PoolMember and ordinary
@@ -2624,15 +2631,14 @@ First primary results:
 
 ## Next Action
 
-The cross-root Fleet-service peer requester implementation is complete in open
-`0.101.41`: the target root accepts only an exact current raw-caller service
-member from its validated Registry Mirror and matching Fleet Directory, then
-applies and retains the independent requester-Spec-to-target-Spec grant. The
-remaining Slice 5 item is complete two-root PocketIC qualification, including
-forwarded-caller, stale authority and exact-retry journeys. Next, measure the
-supported root, Component, placement, service-member, plan, Registry and
-Directory envelope and continue the remaining pool-funding work. The
-purpose-bound runtime policy completed in released `0.101.40`: the exact
+The cross-root Fleet-service peer requester implementation released in
+`0.101.41` now has complete two-root PocketIC qualification in open
+`0.101.42`, including a real inter-Canister request across two physical
+application Subnets, exact retry and stale-authority, wrong-service,
+ordinary-Component-forwarding and Component-Child-forwarding rejection. Next,
+measure the supported root, Component, placement, service-member, plan,
+Registry and Directory envelope and continue the remaining pool-funding work.
+The purpose-bound runtime policy completed in released `0.101.40`: the exact
 Active Authority guard fails closed for Replica, PoolMember and ordinary
 deployments, and descendants inherit their owning top-level Component's group
 context, Directory evidence and effective limits without becoming independent

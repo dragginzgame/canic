@@ -36,7 +36,7 @@ max_revocation_latency_ns = 60000000000
 
 [component_specs.issuer]
 component_role = "issuer"
-maximum_instances = 1
+maximum_instances = 2
 initial_cycles = "1T"
 
 [component_specs.issuer.auth]
@@ -44,13 +44,13 @@ delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
-[component_specs.issuer.provisions.projects]
-maximum_instances_per_requester_per_root = 1
-
 [component_specs.projects]
 component_role = "project_hub"
 maximum_instances = 2
 initial_cycles = "1T"
+
+[component_specs.projects.provisions.issuer]
+maximum_instances_per_requester_per_root = 1
 
 [component_specs.projects.index.pools.projects]
 canister_role = "project_instance"

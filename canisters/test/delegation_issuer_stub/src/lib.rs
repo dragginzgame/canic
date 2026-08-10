@@ -6,9 +6,14 @@ use candid::Principal;
 use canic::{
     Error,
     api::auth::AuthApi,
-    dto::auth::{DelegatedToken, SignedRoleAttestation},
+    api::call::Call,
+    dto::{
+        auth::{DelegatedToken, SignedRoleAttestation},
+        component_registry::{RootComponentAllocationResponse, RootPeerComponentAllocationRequest},
+    },
     ids::cap,
     prelude::*,
+    protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
 };
 
 canic::start!();
@@ -66,6 +71,20 @@ async fn issuer_guard_is_controller() -> Result<(), Error> {
 #[canic_update(requires(caller::is_parent()))]
 async fn issuer_guard_is_parent() -> Result<(), Error> {
     Ok(())
+}
+
+/// Forward one peer allocation request so the target root observes this ordinary Component.
+#[canic_update(public)]
+async fn forward_peer_allocation(
+    fleet_subnet_root: Principal,
+    request: RootPeerComponentAllocationRequest,
+) -> Result<RootComponentAllocationResponse, Error> {
+    let response: Result<RootComponentAllocationResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_ALLOCATE)
+            .with_arg(request)?
+            .execute_candid()
+            .await?;
+    response
 }
 
 canic::finish!();

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.42` qualifies cross-root Fleet-service peer provisioning across two
+  physical PocketIC application Subnets, including exact retry and stale,
+  forwarded, child and wrong-service rejection.
+
 - `0.101.41` derives cross-root peer requesters only from exact current Fleet-
   service membership and Directory authority, then independently enforces and
   retains the compiled requester-Spec-to-target-Spec provisioning grant.
