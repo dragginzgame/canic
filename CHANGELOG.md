@@ -8,19 +8,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Align the accepted 0.101 design with maintained implementation and policy:
-  grouped root draining now has an exact Coordinator-first reservation
-  protocol, `RuntimesActivated` is terminal, provisioning is forward-only,
-  descendants inherit only their owner's placement context, and automatic
-  Cycles Ledger pool refill remains the sole autonomous creation path.
-
 ## [0.101.x] - 2026-08-05 - Composable Component Deployment
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.38` adds the durable Coordinator root-draining reservation so plan
+  preparation and Fleet-wide drain preparation have one atomic winner, with
+  exact retry, target-root status and fail-closed stable validation.
+
 - `0.101.37` moves the grouped-Component ordinary-drain fence into the
   Registry operation boundary and scopes Coordinator root lifecycle rejection
-  to exact operation, placement-ledger and Fleet-service references.
+  to exact operation, placement-ledger and Fleet-service references, while
+  freezing the Coordinator-first reservation required before local draining.
 
 - `0.101.36` adds bounded exact-replay history so terminal scale-out can roll
   atomically into a later monotonic increase, and completes Wenzelroll's

@@ -187,6 +187,45 @@ pub struct FleetRegistryActivationResponse {
 }
 
 ///
+/// FleetSubnetRootDrainingReservationRequest
+///
+/// Controller command serializing one root's Fleet-wide draining decision against placement.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingReservationRequest {
+    pub operation_id: [u8; 32],
+    pub expected_registry: FleetRegistryVersion,
+    pub expected_root: FleetSubnetRootEntry,
+}
+
+///
+/// FleetSubnetRootDrainingReservationStatusRequest
+///
+/// Passive lookup key usable by the controller or the exact target root.
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingReservationStatusRequest {
+    pub operation_id: [u8; 32],
+    pub fleet_subnet_root: Principal,
+}
+
+///
+/// FleetSubnetRootDrainingReservationResponse
+///
+/// Durable Coordinator authority that must precede the target root's local draining fence.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingReservationResponse {
+    pub request: FleetSubnetRootDrainingReservationRequest,
+    pub coordinator: Principal,
+    pub prepared_at_ns: u64,
+    pub reservation_hash: [u8; 32],
+}
+
+///
 /// FleetSubnetRootDrainingPublicationRequest
 ///
 /// Controller command publishing one root's exact local draining fence to the Coordinator.

@@ -40,6 +40,10 @@ use canic::{
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
     dto::fleet_activation::FleetActivationStatusResponse,
+    dto::fleet_registry::{
+        FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+        FleetSubnetRootDrainingReservationStatusRequest,
+    },
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
         ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
@@ -887,6 +891,7 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
         .contains("canic_update(public)"),
         "root Removed publication must remain inter-canister callable"
     );
+    assert_root_draining_reservation_protocol(&coordinator);
 
     let coordinator_api_path =
         workspace_root().join("crates/canic-control-plane/src/api/fleet_coordinator.rs");
@@ -899,6 +904,11 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
             && coordinator_api
                 .contains("FleetCoordinatorWorkflow::publish_root_removed(msg_caller(), request)",),
         "public Coordinator transports must authenticate the exact calling root in the API facade"
+    );
+    assert!(
+        coordinator_api.contains("FleetCoordinatorWorkflow::root_draining_reservation_status(")
+            && coordinator_api.contains("is_controller(&caller)"),
+        "root-draining reservation status must authenticate the controller or exact target root"
     );
 
     let root_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
@@ -914,6 +924,44 @@ fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
         "root Registry synchronization status must remain a controller-guarded composite query"
     );
     assert_root_registry_mirror_guards(&root);
+}
+
+fn assert_root_draining_reservation_protocol(coordinator: &str) {
+    assert!(
+        preceding_attribute_context(
+            coordinator,
+            "async fn canic_fleet_registry_root_draining_reservation_prepare(",
+        )
+        .contains("canic_update(requires(caller::is_controller()))"),
+        "root-draining reservation preparation must remain controller guarded"
+    );
+    assert!(
+        preceding_attribute_context(
+            coordinator,
+            "async fn canic_fleet_registry_root_draining_reservation_status(",
+        )
+        .contains("canic_query(public)"),
+        "root-draining reservation status must remain callable by the exact target root"
+    );
+    for (name, env) in [
+        (
+            "request",
+            candid_type_env::<FleetSubnetRootDrainingReservationRequest>(),
+        ),
+        (
+            "status request",
+            candid_type_env::<FleetSubnetRootDrainingReservationStatusRequest>(),
+        ),
+        (
+            "response",
+            candid_type_env::<FleetSubnetRootDrainingReservationResponse>(),
+        ),
+    ] {
+        assert!(
+            env.contains("operation_id") && env.contains("fleet_subnet_root"),
+            "root-draining reservation {name} must bind operation and root identity:\n{env}"
+        );
+    }
 }
 
 fn assert_fleet_registry_protocol_constants() {
@@ -977,6 +1025,16 @@ fn assert_fleet_registry_protocol_constants() {
             canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
             canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
             "canic_fleet_registry_root_acknowledgements",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
+            "canic_fleet_registry_root_draining_reservation_prepare",
+        ),
+        (
+            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
+            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
+            "canic_fleet_registry_root_draining_reservation_status",
         ),
         (
             canic::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,

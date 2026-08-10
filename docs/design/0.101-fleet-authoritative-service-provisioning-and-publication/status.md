@@ -442,10 +442,12 @@ Fleet policy writer.
   committed placement or Fleet-service binding, leaving unrelated empty roots
   lifecycle-open. The accepted design now freezes one nonexpiring,
   noncancellable Coordinator reservation as the atomic winner against plan
-  preparation. The root must independently verify that reservation before its
-  one-way local fence, and the local and publication receipts bind its exact
-  hash. Implementation and interruption proof remain open. Qualified grouped
-  removal remains a later design, not a 0.101 operation.
+  preparation. Coordinator prepare/status persistence, domain-separated hash
+  validation, exact retry and both plan/reservation orderings are implemented.
+  The root must still independently verify that reservation before its one-way
+  local fence, and the local and publication receipts must bind its exact hash.
+  That root-side implementation and interruption proof remain open. Qualified
+  grouped removal remains a later design, not a 0.101 operation.
 - [x] Reject scale-down, placement reuse, Authority-group scaling, live root
   creation and admission expansion.
 

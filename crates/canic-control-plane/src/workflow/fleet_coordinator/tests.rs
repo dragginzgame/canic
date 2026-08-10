@@ -60,7 +60,8 @@ use canic_core::{
             FleetRegistryActivationRequest, FleetSubnetRootDeletionCompletionRequest,
             FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionReadinessIntentRequest,
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootEntry,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingReservationRequest,
+            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootEntry,
             FleetSubnetRootJoinRequest, FleetSubnetRootRemovalPublicationRequest,
             FleetSubnetRootStatus,
         },
@@ -501,6 +502,290 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
         .expect_err("reject corrupted historical receipt");
     assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+}
+
+#[test]
+fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(70);
+    let (first, second, active_version) = activate_two_roots(coordinator);
+    let request = root_draining_reservation_request(&first, &active_version, [71; 32]);
+    let response =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            request.clone(),
+            72,
+        )
+        .expect("prepare root-draining reservation");
+    assert_eq!(response.request, request);
+    assert_eq!(response.coordinator, coordinator);
+    assert_eq!(response.prepared_at_ns, 72);
+    assert_ne!(response.reservation_hash, [0; 32]);
+
+    let status_request = FleetSubnetRootDrainingReservationStatusRequest {
+        operation_id: [71; 32],
+        fleet_subnet_root: first.fleet_subnet_root,
+    };
+    assert_eq!(
+        FleetCoordinatorWorkflow::root_draining_reservation_status(
+            first.fleet_subnet_root,
+            false,
+            status_request,
+        )
+        .expect("target root reads its reservation"),
+        response
+    );
+    assert_eq!(
+        FleetCoordinatorWorkflow::root_draining_reservation_status(
+            principal(73),
+            true,
+            status_request,
+        )
+        .expect("controller reads reservation"),
+        response
+    );
+    let forbidden = FleetCoordinatorWorkflow::root_draining_reservation_status(
+        principal(74),
+        false,
+        status_request,
+    )
+    .expect_err("foreign caller cannot read reservation");
+    assert_eq!(
+        forbidden.public_error().map(|error| error.code),
+        Some(ErrorCode::Forbidden)
+    );
+
+    FleetCoordinatorWorkflow::publish_root_draining(root_draining_publication_request(
+        &second,
+        &active_version,
+        [75; 32],
+    ))
+    .expect("advance an unrelated root through a later Registry revision");
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            request, 999
+        )
+        .expect("exact reservation retry after restart"),
+        response
+    );
+    let mut corrupted = durable.clone();
+    corrupted
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .root_draining_reservations[0]
+        .response
+        .reservation_hash[0] ^= 1;
+    FleetCoordinatorRegistryStore::import(corrupted);
+    let invalid = FleetCoordinatorWorkflow::registry()
+        .expect_err("corrupt reservation hash must fail closed");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    FleetCoordinatorRegistryStore::import(durable);
+}
+
+#[test]
+fn root_draining_reservation_rejects_stale_and_reused_authority() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (first, second, active_version) = activate_two_roots(principal(75));
+    let request = root_draining_reservation_request(&first, &active_version, [76; 32]);
+    let before = FleetCoordinatorRegistryStore::export();
+
+    let mut zero = request.clone();
+    zero.operation_id = [0; 32];
+    let invalid =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            zero, 77,
+        )
+        .expect_err("zero reservation operation rejects");
+    assert_eq!(
+        invalid.public_error().map(|error| error.code),
+        Some(ErrorCode::InvalidInput)
+    );
+
+    let mut stale = request.clone();
+    stale.expected_registry.content_hash[0] ^= 1;
+    let conflict =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            stale, 77,
+        )
+        .expect_err("stale Registry hash rejects");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
+
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+        request.clone(),
+        77,
+    )
+    .expect("prepare exact reservation");
+    let mut reused_root = request;
+    reused_root.operation_id = [78; 32];
+    assert_reservation_conflict(reused_root, "one root cannot reserve twice");
+    let reused_operation = root_draining_reservation_request(&second, &active_version, [76; 32]);
+    assert_reservation_conflict(reused_operation, "operation cannot name another root");
+
+    let wrong_status = FleetSubnetRootDrainingReservationStatusRequest {
+        operation_id: [76; 32],
+        fleet_subnet_root: second.fleet_subnet_root,
+    };
+    let conflict = FleetCoordinatorWorkflow::root_draining_reservation_status(
+        second.fleet_subnet_root,
+        false,
+        wrong_status,
+    )
+    .expect_err("status cannot substitute another root");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+}
+
+#[test]
+fn component_plan_and_root_draining_reservation_have_one_atomic_winner() {
+    let config = coordinator_config();
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (first, _, active_version) = activate_two_roots(principal(79));
+    let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let plan = fresh_component_plan(&config, &registry);
+    let reservation = root_draining_reservation_request(&first, &active_version, [80; 32]);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+        reservation,
+        81,
+    )
+    .expect("reservation wins first");
+    let before_plan = FleetCoordinatorRegistryStore::export();
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(
+            &config,
+            FleetComponentProvisioningPrepareRequest {
+                operation_id: [82; 32],
+                plan,
+            },
+            83,
+        )
+        .expect_err("plan cannot select reserved root");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before_plan);
+
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (first, _, active_version) = activate_two_roots(principal(84));
+    let registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let plan = fresh_component_plan(&config, &registry);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_component_provisioning_for_test(
+        &config,
+        FleetComponentProvisioningPrepareRequest {
+            operation_id: [85; 32],
+            plan,
+        },
+        86,
+    )
+    .expect("plan wins first");
+    let before_reservation = FleetCoordinatorRegistryStore::export();
+    let reservation = root_draining_reservation_request(&first, &active_version, [87; 32]);
+    assert_reservation_conflict(reservation, "reservation cannot overtake durable plan");
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before_reservation);
+}
+
+#[test]
+fn scale_out_cannot_select_a_root_reserved_after_fresh_provisioning() {
+    let config = scale_out_coordinator_config();
+    drive_terminal_fresh_install(&config);
+    let registry = FleetCoordinatorWorkflow::registry().expect("published Fleet Registry");
+    let target = registry
+        .fleet_subnet_roots
+        .get(1)
+        .expect("unreferenced second root");
+    let version = FleetRegistryOps::version(
+        &registry.authority,
+        &config
+            .compile_component_topology()
+            .expect("Component Topology"),
+        &registry,
+    )
+    .expect("published Registry version");
+    let reservation = root_draining_reservation_request(target, &version, [89; 32]);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+        reservation,
+        900,
+    )
+    .expect("reserve unreferenced root after fresh provisioning");
+    let before = FleetCoordinatorRegistryStore::export();
+    let scale_out = one_placement_scale_out_plan(&config, &registry);
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(
+            &config,
+            FleetComponentProvisioningPrepareRequest {
+                operation_id: [90; 32],
+                plan: scale_out,
+            },
+            901,
+        )
+        .expect_err("scale-out cannot select reserved root");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), before);
+}
+
+fn root_draining_reservation_request(
+    root: &FleetSubnetRootEntry,
+    registry: &FleetRegistryVersion,
+    operation_id: [u8; 32],
+) -> FleetSubnetRootDrainingReservationRequest {
+    let mut expected_root = root.clone();
+    expected_root.status = FleetSubnetRootStatus::Active;
+    FleetSubnetRootDrainingReservationRequest {
+        operation_id,
+        expected_registry: registry.clone(),
+        expected_root,
+    }
+}
+
+fn root_draining_publication_request(
+    root: &FleetSubnetRootEntry,
+    registry: &FleetRegistryVersion,
+    operation_id: [u8; 32],
+) -> FleetSubnetRootDrainingPublicationRequest {
+    FleetSubnetRootDrainingPublicationRequest {
+        expected_registry: registry.clone(),
+        root_draining: FleetSubnetRootDrainingResponse {
+            operation_id,
+            fleet_subnet_root: root.fleet_subnet_root,
+            placement_subnet: root.placement_subnet,
+            active_registry: registry.clone(),
+            component_topology_digest: root.component_topology_digest,
+            active_release_set: root.active_release_set,
+            next_allocation_sequence: 1,
+            reserved_component_instances: 0,
+            committed_component_instances: 0,
+            managed_descendants: 0,
+            known_created_component_canisters: 0,
+            root_registry_encoded_bytes: 0,
+            started_at_ns: 1,
+        },
+    }
+}
+
+fn assert_reservation_conflict(
+    request: FleetSubnetRootDrainingReservationRequest,
+    message: &'static str,
+) {
+    let conflict =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            request, 88,
+        )
+        .expect_err(message);
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
 }
 
 #[test]

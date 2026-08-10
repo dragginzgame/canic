@@ -27,9 +27,11 @@ use canic_core::{
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
             FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
-            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+            FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
+            FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
+            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+            FleetSubnetRootSnapshotAcknowledgementRequest,
         },
     },
 };
@@ -120,6 +122,24 @@ impl FleetCoordinatorApi {
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, Error> {
         FleetCoordinatorWorkflow::publish_root_draining(request).map_err(Into::into)
+    }
+
+    pub fn prepare_root_draining_reservation(
+        request: FleetSubnetRootDrainingReservationRequest,
+    ) -> Result<FleetSubnetRootDrainingReservationResponse, Error> {
+        FleetCoordinatorWorkflow::prepare_root_draining_reservation(request).map_err(Into::into)
+    }
+
+    pub fn root_draining_reservation_status(
+        request: FleetSubnetRootDrainingReservationStatusRequest,
+    ) -> Result<FleetSubnetRootDrainingReservationResponse, Error> {
+        let caller = msg_caller();
+        FleetCoordinatorWorkflow::root_draining_reservation_status(
+            caller,
+            is_controller(&caller),
+            request,
+        )
+        .map_err(Into::into)
     }
 
     pub fn publish_root_removed(

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 ## Purpose
 
@@ -14,9 +14,21 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.36`.
-- The latest published release is `v0.101.36` at
-  `c7bff1be94633c165dec781e53afec7d08ccc787`.
+- The workspace package version is `0.101.37`.
+- The latest published release is `v0.101.37` at
+  `4e04b895e9b02ff73d91ee98c82096a20b25088c`.
+- Open `0.101.38` adds the durable Coordinator root-draining reservation.
+  Preparation binds one nonzero operation to the exact current Registry
+  version/hash and complete Active root row; exact retry and passive
+  controller-or-target-root status survive restart. Reservation preparation
+  and Component-plan preparation perform inverse checks in the same stable
+  authority, so either ordering has one winner. The root does not yet consume
+  this as local-fence authority; independent Coordinator verification and
+  local/publication receipt binding remain next.
+- Released `0.101.37` moves grouped ordinary Component draining into the
+  Registry operation and stable-validation boundary. Coordinator root
+  lifecycle publication rejects only the exact root named by nonempty current
+  operation, placement-ledger or Fleet-service references.
 - Released `0.101.36` allows a terminal scale-out to be followed by another
   monotonic increase. The Coordinator atomically retires the completed active
   journal into bounded compact exact-replay history, validates and installs the
@@ -28,16 +40,6 @@ Historical detail is archived at:
   fencing and the remaining Slice 1/2 application-policy work are next. The
   same release also carries Wenzelroll's maintained preview and Fleet-
   diagnostics work.
-- Open `0.101.37` moves grouped ordinary Component draining into the Registry
-  operation and stable-validation boundary. Coordinator root lifecycle
-  publication now rejects only an exact root referenced by a nonempty current
-  operation batch, committed placement or Fleet-service member, so an
-  unrelated empty root is not globally blocked. The remaining grouped-root
-  boundary is a Coordinator-owned draining reservation made before local root
-  mutation; aggregate grouped removal remains a later design. The accepted
-  design now fixes that ordering, retains the reservation without expiry or
-  cancellation, requires the root to verify it independently and binds its
-  hash through local and Coordinator publication receipts.
 - Released `0.101.35` completes the exact selected plus
   affected-existing-root Directory barrier after scale-out service publication,
   activates only new Components on selected roots and atomically appends the
@@ -2600,18 +2602,16 @@ First primary results:
 
 ## Next Action
 
-Repeated scale-out exact-replay history is published at immutable `v0.101.36`.
-Open `0.101.37` has moved ordinary grouped-Component draining into the owning
-Registry operation boundary and made Coordinator root lifecycle publication
-exact to nonempty operation, committed-placement and Fleet-service references.
-Continue Slice 4 by implementing the accepted Coordinator-first root-draining
-reservation before the root mutates its local one-way fence. Plan preparation
-and reservation preparation must have one atomic winner; the root must verify
-the retained Coordinator reservation independently and bind its hash into the
-local draining and publication receipts. Exact retry and passive status must
-survive every response-loss boundary without leases, cancellation, scale-in,
-replacement or cleanup exceptions. Qualified grouped removal remains a later
-design.
+Grouped ordinary-removal fencing is published at immutable `v0.101.37`. Open
+`0.101.38` has implemented the Coordinator-owned root-draining reservation,
+its exact retry/passive status and the atomic plan-versus-reservation winner.
+Continue Slice 4 by making the target root independently fetch and verify the
+retained reservation before committing its local one-way fence. Bind the
+domain-separated reservation hash into the local draining receipt and require
+that same hash at Coordinator `Active -> Draining` publication. Preserve exact
+retry across response loss and later unrelated Registry revisions without
+leases, cancellation, scale-in, replacement or cleanup exceptions. Qualified
+grouped removal remains a later design.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
