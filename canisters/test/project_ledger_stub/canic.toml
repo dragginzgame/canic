@@ -7,7 +7,7 @@ package = "../delegation_root_stub"
 
 [roles.project_hub]
 kind = "canister"
-package = "."
+package = "../project_hub_stub"
 
 [roles.project_instance]
 kind = "canister"
@@ -15,7 +15,7 @@ package = "../project_instance_stub"
 
 [roles.project_ledger]
 kind = "canister"
-package = "../project_ledger_stub"
+package = "."
 
 [roles.project_machine]
 kind = "canister"
@@ -42,10 +42,6 @@ max_revocation_latency_ns = 60000000000
 component_role = "project_hub"
 maximum_instances = 1
 
-[component_specs.projects.auth]
-delegated_token_verifier = true
-role_attestation_cache = true
-
 [component_specs.projects.index.pools.projects]
 canister_role = "project_instance"
 key_name = "project"
@@ -53,14 +49,18 @@ key_name = "project"
 [component_specs.projects.children.project_instance]
 kind = "instance"
 
+[component_specs.projects.children.project_instance.auth]
+delegated_token_verifier = true
+role_attestation_cache = true
+
+[component_specs.projects.spawn_grants.project_hub.project_instance]
+maximum_instances_per_parent = 20_000
+
 [component_specs.projects.children.project_ledger]
 kind = "singleton"
 
 [component_specs.projects.children.project_machine]
 kind = "singleton"
-
-[component_specs.projects.spawn_grants.project_hub.project_instance]
-maximum_instances_per_parent = 20_000
 
 [component_specs.projects.spawn_grants.project_instance.project_ledger]
 maximum_instances_per_parent = 1

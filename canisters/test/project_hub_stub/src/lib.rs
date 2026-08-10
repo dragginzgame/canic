@@ -8,6 +8,7 @@ use canic::{
     api::auth::AuthApi,
     api::call::Call,
     api::canister::placement::PlacementIndexApi,
+    api::rpc::RpcApi,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
         component_registry::{
@@ -18,6 +19,7 @@ use canic::{
             RootPeerComponentAllocationRequest,
         },
         placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
+        rpc::CreateCanisterParent,
     },
     ids::cap,
     prelude::*,
@@ -182,6 +184,19 @@ async fn lookup_project_entry(
     project_key: String,
 ) -> Result<Option<PlacementIndexStatusResponse>, Error> {
     Ok(PlacementIndexApi::lookup_entry(PROJECTS_POOL, &project_key))
+}
+
+/// Attempt a Ledger request as the Hub so tests prove the parent-role grant rejects it.
+#[canic_update(public)]
+async fn attempt_project_ledger(operation_id: [u8; 32]) -> Result<Principal, Error> {
+    let response = RpcApi::create_canister_request(
+        operation_id,
+        &CanisterRole::new("project_ledger"),
+        CreateCanisterParent::ThisCanister,
+        Option::<()>::None,
+    )
+    .await?;
+    Ok(response.new_canister_pid)
 }
 
 canic::finish!();

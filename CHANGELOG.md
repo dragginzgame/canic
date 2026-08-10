@@ -12,11 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.43` requires durable application-owned operation identities for
+  dynamic child creation and qualifies the complete local Project hierarchy.
+
 - `0.101.42` qualifies cross-root Fleet-service peer provisioning across two
   physical PocketIC application Subnets, including exact retry and stale,
-  forwarded, child and wrong-service rejection, repairs required local Fleet-
-  install validation, and removes duplicate local hook/test and default-build
-  CI work.
+  forwarded, child and wrong-service rejection, hardens local and CI
+  validation, and introduces feature-oriented product documentation.
 
 - `0.101.41` derives cross-root peer requesters only from exact current Fleet-
   service membership and Directory authority, then independently enforces and

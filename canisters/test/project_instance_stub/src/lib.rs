@@ -5,10 +5,11 @@
 use candid::Principal;
 use canic::{
     Error,
-    api::call::Call,
+    api::{call::Call, rpc::RpcApi},
     dto::{
         auth::DelegatedToken,
         component_registry::{RootComponentAllocationResponse, RootPeerComponentAllocationRequest},
+        rpc::CreateCanisterParent,
     },
     ids::cap,
     prelude::*,
@@ -27,10 +28,22 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 // Keep the test instance upgrade hook empty.
 async fn canic_upgrade() {}
 
-/// Return this canister's own id so tests can confirm the instance is live.
+/// Return this Canister's ID so tests can confirm the Project Instance is live.
 #[canic_query(public)]
-async fn instance_id() -> Result<Principal, Error> {
+async fn canister_id() -> Result<Principal, Error> {
     Ok(canister_self())
+}
+
+/// Create this Project Instance's singleton Ledger through its Fleet Subnet Root.
+#[canic_update(public)]
+async fn create_project_ledger(operation_id: [u8; 32]) -> Result<Principal, Error> {
+    create_project_child(operation_id, "project_ledger").await
+}
+
+/// Create this Project Instance's optional singleton Machine through its Fleet Subnet Root.
+#[canic_update(public)]
+async fn create_project_machine(operation_id: [u8; 32]) -> Result<Principal, Error> {
+    create_project_child(operation_id, "project_machine").await
 }
 
 /// Verify one self-contained delegated token.
@@ -62,6 +75,20 @@ async fn forward_peer_allocation(
             .execute_candid()
             .await?;
     response
+}
+
+async fn create_project_child(
+    operation_id: [u8; 32],
+    role: &'static str,
+) -> Result<Principal, Error> {
+    let response = RpcApi::create_canister_request(
+        operation_id,
+        &CanisterRole::new(role),
+        CreateCanisterParent::ThisCanister,
+        Option::<()>::None,
+    )
+    .await?;
+    Ok(response.new_canister_pid)
 }
 
 canic::finish!();

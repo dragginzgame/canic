@@ -116,6 +116,7 @@ mod tests {
             },
             component_registry::{PeerComponentRequester, RootPeerComponentAllocationRequest},
             fleet_registry::FleetRegistryVersion,
+            placement::index::PlacementIndexStatusResponse,
         },
         ids::ComponentGroupPlacementId,
         protocol::{
@@ -173,19 +174,21 @@ mod tests {
     use crate::pic::CanicPicExt;
     #[cfg(test)]
     use canic::protocol::{
-        CANIC_ROOT_PEER_COMPONENT_ALLOCATE, CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
-        CANIC_ROOT_PEER_COMPONENT_COMMIT, CANIC_ROOT_PEER_COMPONENT_CREATE,
-        CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE, CANIC_ROOT_PEER_COMPONENT_INSTALL,
-        CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE, CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
-        CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
-        CANIC_WASM_STORE_STATUS,
+        CANIC_ROOT_COMPONENT_DIRECTORY_PAGE, CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+        CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_PEER_COMPONENT_COMMIT,
+        CANIC_ROOT_PEER_COMPONENT_CREATE, CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
+        CANIC_ROOT_PEER_COMPONENT_INSTALL, CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
+        CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
+        CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE, CANIC_WASM_STORE_STATUS,
     };
     #[cfg(test)]
     use canic::{
         dto::component_registry::{
-            RootComponentChildAllocationRequest, RootComponentChildAllocationResponse,
-            RootComponentChildCommitRequest, RootComponentChildCommitResponse,
-            RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
+            ComponentDirectoryChildEntry, ComponentDirectoryPageRequest,
+            ComponentDirectoryPageResponse, RootComponentChildAllocationRequest,
+            RootComponentChildAllocationResponse, RootComponentChildCommitRequest,
+            RootComponentChildCommitResponse, RootComponentChildCreationRequest,
+            RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallRequest,
             RootComponentChildMembershipActivationRequest,
             RootComponentChildMembershipActivationResponse,
@@ -282,6 +285,8 @@ mod tests {
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const PROJECT_HUB_PACKAGE: &str = "project_hub_stub";
     const PROJECT_INSTANCE_PACKAGE: &str = "project_instance_stub";
+    const PROJECT_LEDGER_PACKAGE: &str = "project_ledger_stub";
+    const PROJECT_MACHINE_PACKAGE: &str = "project_machine_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
 
     ///
@@ -555,6 +560,8 @@ mod tests {
         issuer: Vec<u8>,
         project_hub: Vec<u8>,
         project_instance: Vec<u8>,
+        project_ledger: Vec<u8>,
+        project_machine: Vec<u8>,
     }
 
     #[cfg(test)]
@@ -918,6 +925,190 @@ mod tests {
         };
         assert_eq!(child_binding.component, member.binding);
         assert_eq!(child_binding.parent_canister_id, member.binding.canister_id);
+    }
+
+    #[test]
+    fn grouped_project_tree_is_provisioned_locally_with_exact_immediate_parents() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_prepared_grouped_provisioning();
+        let prepared = prepare_coordinator_grouped_plan(&fixture);
+        let confirmed = drive_coordinator_directory_confirmation(&fixture, prepared);
+        let activated = drive_coordinator_runtime_activation(&fixture, confirmed);
+        assert_activated_grouped_runtimes(&fixture, &activated);
+
+        let root = grouped_root_provisioning_status(&fixture);
+        let hub = root
+            .result
+            .as_ref()
+            .expect("active root retains provisioned result")
+            .placements[0]
+            .members[0]
+            .binding
+            .clone();
+        let registry_before = fleet_registry_version(&fixture.pic, fixture.coordinator);
+        let instance = resolve_project_instance(&fixture.pic, hub.canister_id, "project-alpha");
+        assert_eq!(
+            resolve_project_instance(&fixture.pic, hub.canister_id, "project-alpha"),
+            instance
+        );
+
+        let ledger =
+            create_project_descendant(&fixture.pic, instance, "create_project_ledger", [0xe1; 32])
+                .expect("Project Instance creates its Ledger");
+        assert_eq!(
+            create_project_descendant(&fixture.pic, instance, "create_project_ledger", [0xe1; 32],)
+                .expect("exact Ledger creation retry"),
+            ledger
+        );
+        let machine =
+            create_project_descendant(&fixture.pic, instance, "create_project_machine", [0xe2; 32])
+                .expect("Project Instance creates its optional Machine");
+
+        assert_project_singleton_and_parent_guards(&fixture.pic, hub.canister_id, instance);
+        let entries = project_directory_entries(&fixture, &hub);
+        assert_project_child(
+            &entries,
+            instance,
+            hub.canister_id,
+            "project_instance",
+            &hub,
+        );
+        assert_project_child(&entries, ledger, instance, "project_ledger", &hub);
+        assert_project_child(&entries, machine, instance, "project_machine", &hub);
+        assert_project_tree_subnet(&fixture, [instance, ledger, machine]);
+        assert_eq!(
+            fleet_registry_version(&fixture.pic, fixture.coordinator),
+            registry_before
+        );
+    }
+
+    #[cfg(test)]
+    fn fleet_registry_version(pic: &PocketIc, coordinator: Principal) -> FleetRegistryVersion {
+        let version: Result<FleetRegistryVersion, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("query Fleet Registry version transport");
+        version.expect("query Fleet Registry version")
+    }
+
+    #[cfg(test)]
+    fn resolve_project_instance(pic: &PocketIc, hub: Principal, project: &str) -> Principal {
+        let response: Result<PlacementIndexStatusResponse, Error> = pic
+            .update_candid(hub, "resolve_project", (project.to_string(),))
+            .expect("resolve Project Instance transport");
+        let PlacementIndexStatusResponse::Bound { instance_pid, .. } =
+            response.expect("resolve Project Instance")
+        else {
+            panic!("Project Instance resolution must finish bound");
+        };
+        instance_pid
+    }
+
+    #[cfg(test)]
+    fn create_project_descendant(
+        pic: &PocketIc,
+        instance: Principal,
+        method: &str,
+        operation_id: [u8; 32],
+    ) -> Result<Principal, Error> {
+        pic.update_candid(instance, method, (operation_id,))
+            .unwrap_or_else(|error| panic!("{method} transport: {error}"))
+    }
+
+    #[cfg(test)]
+    fn assert_project_singleton_and_parent_guards(
+        pic: &PocketIc,
+        hub: Principal,
+        instance: Principal,
+    ) {
+        let duplicate =
+            create_project_descendant(pic, instance, "create_project_ledger", [0xe3; 32])
+                .expect_err("a Project Instance may own only one Ledger");
+        assert_eq!(
+            duplicate.code,
+            canic::dto::error::ErrorCode::ResourceExhausted
+        );
+        let wrong_parent =
+            create_project_descendant(pic, hub, "attempt_project_ledger", [0xe4; 32]);
+        assert_eq!(
+            wrong_parent
+                .expect_err("Project Hub has no direct Ledger spawn grant")
+                .code,
+            canic::dto::error::ErrorCode::Forbidden
+        );
+    }
+
+    #[cfg(test)]
+    fn project_directory_entries(
+        fixture: &PreparedGroupedProvisioningFixture,
+        hub: &ComponentBinding,
+    ) -> Vec<ComponentDirectoryChildEntry> {
+        let head: Result<ComponentDirectoryHead, Error> = fixture
+            .pic
+            .query_candid(
+                fixture.root.root_id,
+                CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
+                (ComponentDirectoryHeadRequest {
+                    component: hub.component,
+                },),
+            )
+            .expect("query Project Hub Directory head transport");
+        let head = head.expect("query Project Hub Directory head");
+        let page: Result<ComponentDirectoryPageResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                fixture.root.root_id,
+                hub.canister_id,
+                CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
+                (ComponentDirectoryPageRequest {
+                    directory: head,
+                    parent_canister_id: None,
+                    role: None,
+                    status: Some(ComponentLifecycleStatus::Active),
+                    cursor: None,
+                    limit: 100,
+                },),
+            )
+            .expect("query Project Hub Directory page transport");
+        let page = page.expect("query Project Hub Directory page");
+        assert!(page.next_cursor.is_none());
+        page.entries
+    }
+
+    #[cfg(test)]
+    fn assert_project_child(
+        entries: &[ComponentDirectoryChildEntry],
+        canister_id: Principal,
+        parent_canister_id: Principal,
+        role: &'static str,
+        component: &ComponentBinding,
+    ) {
+        let entry = entries
+            .iter()
+            .find(|entry| entry.binding.canister_id == canister_id)
+            .unwrap_or_else(|| panic!("missing {role} from Project Hub Directory"));
+        assert_eq!(entry.binding.component, *component);
+        assert_eq!(entry.binding.parent_canister_id, parent_canister_id);
+        assert_eq!(entry.binding.role, CanisterRole::new(role));
+        assert_eq!(entry.status, ComponentLifecycleStatus::Active);
+    }
+
+    #[cfg(test)]
+    fn assert_project_tree_subnet(
+        fixture: &PreparedGroupedProvisioningFixture,
+        descendants: [Principal; 3],
+    ) {
+        let root_subnet = fixture
+            .pic
+            .get_subnet(fixture.root.root_id)
+            .expect("Project root Subnet");
+        for descendant in descendants {
+            assert_eq!(fixture.pic.get_subnet(descendant), Some(root_subnet));
+            let observed: Result<Principal, Error> = fixture
+                .pic
+                .query_candid(descendant, "canister_id", ())
+                .expect("query live Project descendant transport");
+            assert_eq!(observed.expect("query live Project descendant"), descendant);
+        }
     }
 
     #[test]
@@ -6027,6 +6218,14 @@ mod tests {
                 CanisterRole::new("project_instance"),
                 fixture_wasms.project_instance.clone(),
             ),
+            (
+                CanisterRole::new("project_ledger"),
+                fixture_wasms.project_ledger.clone(),
+            ),
+            (
+                CanisterRole::new("project_machine"),
+                fixture_wasms.project_machine.clone(),
+            ),
         ]);
         for spec in &topology.component_specs {
             entries.push(root_store_entry(
@@ -6116,6 +6315,8 @@ mod tests {
                     ISSUER_PACKAGE,
                     PROJECT_HUB_PACKAGE,
                     PROJECT_INSTANCE_PACKAGE,
+                    PROJECT_LEDGER_PACKAGE,
+                    PROJECT_MACHINE_PACKAGE,
                 ],
                 CanicWasmBuildProfile::Fast,
                 &[(
@@ -6128,6 +6329,8 @@ mod tests {
                 issuer: read_wasm(&target_dir, ISSUER_PACKAGE, profile),
                 project_hub: read_wasm(&target_dir, PROJECT_HUB_PACKAGE, profile),
                 project_instance: read_wasm(&target_dir, PROJECT_INSTANCE_PACKAGE, profile),
+                project_ledger: read_wasm(&target_dir, PROJECT_LEDGER_PACKAGE, profile),
+                project_machine: read_wasm(&target_dir, PROJECT_MACHINE_PACKAGE, profile),
             }
         })
     }
