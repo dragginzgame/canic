@@ -84,7 +84,7 @@ pub fn validate(
     if contains_negated_auth_or_caller_predicate(&parsed.requires) {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "not(...) must not wrap caller::* or auth::* predicates",
+            "not(...) must not wrap caller::*, auth::* or deployment::is_service_authority(...) predicates",
         ));
     }
 
@@ -184,6 +184,7 @@ fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
                     | BuiltinPredicate::CallerIsWhitelisted
                     | BuiltinPredicate::Authenticated { .. }
                     | BuiltinPredicate::AttestedLocalSubnet
+                    | BuiltinPredicate::ServiceAuthority { .. }
             )
         }
         AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,

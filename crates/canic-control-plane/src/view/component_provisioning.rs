@@ -144,3 +144,10 @@ pub struct RootComponentGroupRuntimeAuthorityView {
     pub deployment: ProtectedComponentDeployment,
     pub component_group: ComponentGroupDirectory,
 }
+
+/// Exact retained deployment and optional group Directory for one Component tree.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootComponentDeploymentAuthorityView {
+    pub deployment: ProtectedComponentDeployment,
+    pub component_group: Option<ComponentGroupDirectory>,
+}

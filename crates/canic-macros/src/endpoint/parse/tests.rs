@@ -192,6 +192,38 @@ fn attested_local_subnet_is_a_builtin_auth_predicate() {
 }
 
 #[test]
+fn service_authority_accepts_one_literal_or_path_service_id() {
+    for tokens in [
+        quote!(requires(deployment::is_service_authority("database"))),
+        quote!(requires(deployment::is_service_authority(
+            service::DATABASE
+        ))),
+    ] {
+        let parsed = parse_args(tokens).expect("parse service Authority guard");
+        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+            panic!("expected requires(all)")
+        };
+        assert!(matches!(
+            &exprs[0],
+            AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::ServiceAuthority { .. }
+            ))
+        ));
+    }
+}
+
+#[test]
+fn service_authority_rejects_missing_empty_or_multiple_service_ids() {
+    for tokens in [
+        quote!(requires(deployment::is_service_authority())),
+        quote!(requires(deployment::is_service_authority(""))),
+        quote!(requires(deployment::is_service_authority("a", "b"))),
+    ] {
+        assert!(parse_args(tokens).is_err());
+    }
+}
+
+#[test]
 fn grouped_access_expression_is_unwrapped() {
     let parsed = parse_args(quote!(requires((caller::is_controller())))).expect("parse args");
     let AccessExprAst::All(exprs) = &parsed.requires[0] else {

@@ -49,8 +49,14 @@ fn facade_exposes_bounded_component_deployment_identities() {
 fn facade_exposes_protected_component_deployment_policy() {
     let current: fn() -> Result<ProtectedComponentDeployment, canic::Error> =
         ComponentDeploymentApi::current;
+    let require_authority: fn(&FleetServiceId) -> Result<(), canic::Error> =
+        ComponentDeploymentApi::require_service_authority;
+    let access_guard: fn(&str) -> Result<(), canic::access::AccessError> =
+        canic::access::deployment::require_service_authority;
     let digest = ComponentDeploymentConfigurationDigest::from_bytes([7; 32]);
 
     assert_eq!(digest.as_bytes(), &[7; 32]);
     let _ = current;
+    let _ = require_authority;
+    let _ = access_guard;
 }

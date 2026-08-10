@@ -245,7 +245,8 @@ impl From<ComponentChildAllocationPolicyError> for InternalError {
             }
             ComponentChildAllocationPolicyError::InvalidComponentBinding
             | ComponentChildAllocationPolicyError::InvalidParentBinding
-            | ComponentChildAllocationPolicyError::ComponentSpecUnknown(_) => {
+            | ComponentChildAllocationPolicyError::ComponentSpecUnknown(_)
+            | ComponentChildAllocationPolicyError::InvalidDeploymentLimits => {
                 Self::invariant(InternalErrorOrigin::Domain, message)
             }
         }

@@ -22,9 +22,10 @@ use crate::{
     },
     view::{
         component_provisioning::{
-            RootComponentGroupRuntimeAuthorityView, RootComponentProvisioningAdvanceDisposition,
-            RootComponentProvisioningClaimCursorView, RootComponentProvisioningInstallCursorView,
-            RootComponentProvisioningMemberView, RootComponentProvisioningRegistryCursorView,
+            RootComponentDeploymentAuthorityView, RootComponentGroupRuntimeAuthorityView,
+            RootComponentProvisioningAdvanceDisposition, RootComponentProvisioningClaimCursorView,
+            RootComponentProvisioningInstallCursorView, RootComponentProvisioningMemberView,
+            RootComponentProvisioningRegistryCursorView,
             RootComponentProvisioningReservationCursorView, RootComponentProvisioningRuntimeMode,
             RootComponentProvisioningView, RootComponentPublicationIntentView,
             RootComponentPublicationMemberView,
@@ -494,6 +495,105 @@ impl RootComponentProvisioningOps {
             purpose: member.purpose.clone(),
             labels: member.labels.clone(),
             limits: member.limits.clone(),
+        })
+    }
+
+    /// Reconstruct one top-level Component's protected deployment and Directory authority.
+    pub(crate) fn component_deployment_authority(
+        origin: &ComponentProvisioningOrigin,
+        binding: &ComponentBinding,
+    ) -> Result<RootComponentDeploymentAuthorityView, InternalError> {
+        let ComponentProvisioningOrigin::ComponentGroup {
+            operation_id,
+            plan_hash,
+            group_placement,
+            member_path,
+        } = origin
+        else {
+            return Ok(RootComponentDeploymentAuthorityView {
+                deployment: ProtectedComponentDeployment::UngroupedOrdinary {
+                    binding: binding.clone(),
+                },
+                component_group: None,
+            });
+        };
+        let record = RootComponentProvisioningStore::operation(*operation_id).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component deployment authority is absent",
+            )
+        })?;
+        let view = validated_record(record)?;
+        if view.plan_hash != *plan_hash {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component origin differs from its provisioning plan",
+            ));
+        }
+        let placement_index = view
+            .batch
+            .placements
+            .iter()
+            .position(|placement| &placement.group_placement == group_placement)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "grouped Component origin names an unknown placement",
+                )
+            })?;
+        let member = member_by_path(&view, group_placement, member_path)?;
+        let component_authority_is_exact = [
+            view.batch.root.authority == binding.authority,
+            view.batch.root.placement_subnet == binding.placement_subnet,
+            view.batch.root.fleet_subnet_root == binding.fleet_subnet_root,
+            member.component_spec == binding.component_spec,
+            member.spec_hash == binding.spec_hash,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !component_authority_is_exact {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component binding differs from retained provisioning authority",
+            ));
+        }
+        let result = view.result.as_ref().ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component deployment authority has no provisioned result",
+            )
+        })?;
+        let component_group =
+            derive_component_group_directory_from_view(&view, result, placement_index)?;
+        let retained_binding = component_group
+            .members
+            .iter()
+            .find(|candidate| candidate.member_path == member.member_path)
+            .map(|candidate| &candidate.binding)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Storage,
+                    "grouped Component Directory has no retained member binding",
+                )
+            })?;
+        if retained_binding != binding {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component binding differs from its retained Directory member",
+            ));
+        }
+        Ok(RootComponentDeploymentAuthorityView {
+            deployment: ProtectedComponentDeployment::GroupMember {
+                binding: binding.clone(),
+                configuration_digest: view.configuration_digest,
+                group_placement: member.group_placement,
+                component_group: member.component_group,
+                member_path: member.member_path,
+                purpose: member.purpose,
+                labels: member.labels,
+                limits: member.limits,
+            },
+            component_group: Some(component_group),
         })
     }
 
@@ -3416,6 +3516,51 @@ fn member_at_cursor(
             InternalError::invariant(
                 InternalErrorOrigin::Storage,
                 "root Component provisioning member cursor is out of bounds",
+            )
+        })?;
+    Ok(RootComponentProvisioningMemberView {
+        member_operation_id: member_operation_id(
+            view.batch.root.fleet_subnet_root,
+            view.operation_id,
+            view.plan_hash,
+            &placement.group_placement,
+            &entry.member_path,
+        )?,
+        group_placement: placement.group_placement.clone(),
+        component_group: placement.component_group.clone(),
+        member_path: entry.member_path.clone(),
+        component_spec: entry.component_spec.clone(),
+        spec_hash: entry.spec_hash,
+        purpose: entry.purpose.clone(),
+        labels: entry.labels.clone(),
+        limits: entry.limits.clone(),
+    })
+}
+
+fn member_by_path(
+    view: &RootComponentProvisioningView,
+    group_placement: &ComponentGroupPlacementId,
+    member_path: &ComponentGroupMemberPath,
+) -> Result<RootComponentProvisioningMemberView, InternalError> {
+    let placement = view
+        .batch
+        .placements
+        .iter()
+        .find(|placement| &placement.group_placement == group_placement)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component origin names an unknown placement",
+            )
+        })?;
+    let entry = placement
+        .entries
+        .iter()
+        .find(|entry| &entry.member_path == member_path)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "grouped Component origin names an unknown member path",
             )
         })?;
     Ok(RootComponentProvisioningMemberView {

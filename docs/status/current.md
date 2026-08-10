@@ -14,11 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.38`.
-- The latest published release is `v0.101.38` at
-  `2dc3eb345816e217f81606c0c02ca55265ed0292`.
-- Open `0.101.39` completes the Coordinator-first root-draining boundary. The
-  root independently fetches its exact retained reservation through a
+- The workspace package version is `0.101.39`.
+- The latest published release is `v0.101.39` at
+  `fe829ad5d4243e0e61995da7576bee0fbbf8bb9f`.
+- Open `0.101.40` makes Fleet-service purpose an enforceable application
+  authorization contract. The local endpoint/API guard accepts only the exact
+  matching Active Authority and rejects Replica, PoolMember and ordinary
+  contexts. Every descendant inherits its owning top-level Component's exact
+  protected group context and Directory authority, while root reservation and
+  retry validation enforce that deployment's reduction-only descendant,
+  Registry-byte and per-parent spawn ceilings.
+- Released `0.101.39` completes the Coordinator-first root-draining boundary.
+  The root independently fetches its exact retained reservation through a
   target-root-authenticated read-only update, accepts a later same-authority
   Mirror only while its complete Active row remains unchanged, repeats local
   grouped checks after the call and commits the complete reservation with its
@@ -2609,14 +2616,14 @@ First primary results:
 
 ## Next Action
 
-The root-verified Coordinator reservation boundary is complete in open
-`0.101.39`, including stable hash validation, later-unrelated-revision
-publication and exact retry without a second Coordinator call. Finish the
-remaining 0.101 runtime-policy contract next: Replica purpose must fail
-application database write authority, PoolMember purpose must grant no
-implicit leadership/health/consistency authority, and service-sensitive
-descendants must inherit that exact owning top-level Component fence without
-becoming group members or Fleet services. Qualified grouped removal, scale-in,
+The purpose-bound runtime policy is complete in open `0.101.40`: the exact
+Active Authority guard fails closed for Replica, PoolMember and ordinary
+deployments, and descendants inherit their owning top-level Component's group
+context, Directory evidence and effective limits without becoming independent
+group or Fleet-service members. Next, remove the remaining singleton-Spec and
+sole-root-admission assumptions, finish the cross-root peer requester proof and
+measure the supported root, Component, placement, service-member, plan,
+Registry and Directory envelope. Qualified grouped removal, scale-in,
 replacement and relocation remain later designs.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the

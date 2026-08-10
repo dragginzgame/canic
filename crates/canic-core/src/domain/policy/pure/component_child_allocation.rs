@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::types::Principal,
-    config::{ComponentTopology, schema::ComponentChildKind},
+    config::{ComponentDeploymentLimits, ComponentTopology, schema::ComponentChildKind},
     ids::{
         CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId,
         FleetSubnetRootBinding, ManagedCanisterBinding,
@@ -59,6 +59,8 @@ pub struct ComponentChildAllocationInput<'a> {
     pub readiness: ComponentChildAllocationReadiness,
     pub root: &'a FleetSubnetRootBinding,
     pub topology: &'a ComponentTopology,
+    /// Exact Spec-bounded limits inherited from the owning top-level Component deployment.
+    pub deployment_limits: &'a ComponentDeploymentLimits,
     pub reserved_component_instances: u32,
     pub committed_component_instances: u32,
     /// Reserved plus committed, non-removed descendants in this exact Component tree.
@@ -158,6 +160,9 @@ pub enum ComponentChildAllocationPolicyError {
     #[error("Component descendant capacity is exhausted")]
     ComponentDescendantCapacityExhausted,
 
+    #[error("Component deployment limits exceed or contradict the protected Component Spec")]
+    InvalidDeploymentLimits,
+
     #[error("root Component instance count overflowed")]
     ComponentCountOverflow,
 }
@@ -204,12 +209,25 @@ pub fn reserve_component_child(
             parent_role: parent_role.clone(),
             child_role: input.child_role.clone(),
         })?;
+    let effective_grant_maximum = effective_grant_maximum(
+        input.deployment_limits,
+        parent_role,
+        input.child_role,
+        grant.maximum_instances_per_parent,
+    )?;
+    let limits_are_spec_bounded = input.deployment_limits.maximum_descendants > 0
+        && input.deployment_limits.maximum_descendants <= spec.limits.maximum_descendants
+        && input.deployment_limits.maximum_registry_bytes > 0
+        && input.deployment_limits.maximum_registry_bytes <= spec.limits.maximum_registry_bytes;
+    if !limits_are_spec_bounded {
+        return Err(ComponentChildAllocationPolicyError::InvalidDeploymentLimits);
+    }
 
     validate_capacity(
         &input,
         parent_role,
-        grant.maximum_instances_per_parent,
-        spec.limits.maximum_descendants,
+        effective_grant_maximum,
+        input.deployment_limits.maximum_descendants,
     )?;
 
     Ok(ComponentChildAllocationDecision {
@@ -220,10 +238,27 @@ pub fn reserve_component_child(
         parent_role: parent_role.clone(),
         child_role: child.role.clone(),
         child_kind: child.kind,
-        maximum_instances_per_parent: grant.maximum_instances_per_parent,
-        maximum_descendants: spec.limits.maximum_descendants,
-        maximum_registry_bytes: spec.limits.maximum_registry_bytes,
+        maximum_instances_per_parent: effective_grant_maximum,
+        maximum_descendants: input.deployment_limits.maximum_descendants,
+        maximum_registry_bytes: input.deployment_limits.maximum_registry_bytes,
     })
+}
+
+fn effective_grant_maximum(
+    limits: &ComponentDeploymentLimits,
+    parent_role: &CanisterRole,
+    child_role: &CanisterRole,
+    spec_maximum: u32,
+) -> Result<u32, ComponentChildAllocationPolicyError> {
+    let reduced = limits
+        .spawn_grant_reductions
+        .iter()
+        .find(|limit| &limit.parent_role == parent_role && &limit.child_role == child_role)
+        .map_or(spec_maximum, |limit| limit.maximum_instances_per_parent);
+    if reduced == 0 || reduced > spec_maximum {
+        return Err(ComponentChildAllocationPolicyError::InvalidDeploymentLimits);
+    }
+    Ok(reduced)
 }
 
 fn parent_identity<'a>(
@@ -519,6 +554,43 @@ mod tests {
     }
 
     #[test]
+    fn deployment_reductions_bound_every_descendant_reservation() {
+        let fixture = fixture();
+        let child_role = CanisterRole::new("project_instance");
+        let parent = ManagedCanisterBinding::Component(fixture.component.clone());
+        let reduced = ComponentDeploymentLimits {
+            maximum_descendants: 2_000,
+            maximum_registry_bytes: 8_388_608,
+            spawn_grant_reductions: vec![crate::config::ComponentDeploymentSpawnGrantLimit {
+                parent_role: CanisterRole::new("project_hub"),
+                child_role: child_role.clone(),
+                maximum_instances_per_parent: 3,
+            }],
+        };
+        let mut request = input(&fixture, &parent, &child_role);
+        request.deployment_limits = &reduced;
+        let decision = reserve_component_child(request).expect("reduced deployment reservation");
+        assert_eq!(decision.maximum_instances_per_parent, 3);
+        assert_eq!(decision.maximum_descendants, 2_000);
+        assert_eq!(decision.maximum_registry_bytes, 8_388_608);
+
+        let mut parent_exhausted = input(&fixture, &parent, &child_role);
+        parent_exhausted.deployment_limits = &reduced;
+        parent_exhausted.parent_role_instances = 3;
+        assert!(matches!(
+            reserve_component_child(parent_exhausted),
+            Err(ComponentChildAllocationPolicyError::ParentRoleCapacityExhausted { .. })
+        ));
+        let mut tree_exhausted = input(&fixture, &parent, &child_role);
+        tree_exhausted.deployment_limits = &reduced;
+        tree_exhausted.component_descendants = 2_000;
+        assert_eq!(
+            reserve_component_child(tree_exhausted),
+            Err(ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted)
+        );
+    }
+
+    #[test]
     fn empty_operation_and_invalid_protected_bindings_reject() {
         let fixture = fixture();
         let child_role = CanisterRole::new("project_instance");
@@ -554,6 +626,7 @@ mod tests {
         root: FleetSubnetRootBinding,
         component: ComponentBinding,
         registry: ComponentRegistryVersionEvidence,
+        limits: ComponentDeploymentLimits,
     }
 
     fn fixture() -> Fixture {
@@ -628,11 +701,17 @@ mod tests {
             revision: 2,
             content_hash: [7; 32],
         };
+        let limits = ComponentDeploymentLimits {
+            maximum_descendants: spec.limits.maximum_descendants,
+            maximum_registry_bytes: spec.limits.maximum_registry_bytes,
+            spawn_grant_reductions: Vec::new(),
+        };
         Fixture {
             topology,
             root,
             component,
             registry,
+            limits,
         }
     }
 
@@ -652,6 +731,7 @@ mod tests {
             readiness: ComponentChildAllocationReadiness::Ready,
             root: &fixture.root,
             topology: &fixture.topology,
+            deployment_limits: &fixture.limits,
             reserved_component_instances: 0,
             committed_component_instances: 1,
             component_descendants: 0,

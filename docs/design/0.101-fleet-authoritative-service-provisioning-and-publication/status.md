@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-09
+Date: 2026-08-10
 
 ## Status
 
@@ -144,8 +144,18 @@ Date: 2026-08-09
   ledger from fresh authority plus every retired receipt. Historical exact
   prepare, status and terminal advance retry survive restart without retaining
   another complete plan; reused identities and corrupt history fail closed.
+  Managed application endpoints now have one positive
+  `deployment::is_service_authority(...)` guard backed by the fully validated
+  current runtime and Directory authority. Only the exact matching Active
+  Authority purpose passes; Replica, PoolMember and both ordinary forms fail.
+  Every dynamically created descendant now receives its owning top-level
+  Component's exact protected deployment context and applicable Component
+  Group Directory at every lifecycle phase. Root reservation and later retry
+  validation enforce the deployment's effective descendant, Registry-byte and
+  per-parent spawn ceilings rather than falling back to the Component Spec
+  maxima.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.36` is released and `0.101.37` is open.
+- Implementation started: yes; `0.101.39` is released and `0.101.40` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -261,14 +271,10 @@ Fleet policy writer.
   flattened paths and immutable Component Spec envelopes.
 - [x] Add the reinstall-only protected Component deployment runtime contract,
   hard-cut managed init/status to retain it, validate exact compiled grouped
-  projections and expose the retained purpose to application policy. Current
-  ordinary provisioning emits only `UngroupedOrdinary`.
-- [ ] Derive each `GroupMember` context from the accepted root plan, verify it
+  projections and expose the retained purpose to application policy.
+- [x] Derive each `GroupMember` context from the accepted root plan, verify it
   against the Component Group Directory and enforce its exact effective limits
-  throughout root allocation and descendant lifecycle. Accepted-plan context
-  derivation, compiled-configuration validation and exact retained-context
-  installation plus exact Component Group Directory confirmation are complete;
-  descendant-limit enforcement remains.
+  throughout root allocation and descendant lifecycle.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
 - [ ] Remove singleton-Spec and sole-root-admission service assumptions.
@@ -283,12 +289,10 @@ Fleet policy writer.
 - [x] Require strict Fleet input to assign every initial placement ordinal to
   one explicit root Subnet, persist the complete canonical assignment before
   effects and resolve only the exact live Registry root principal/binding.
-- [ ] Carry every member's canonical effective limits through plan hashing,
-  root acceptance, protected runtime context and durable receipts. Plan
-  hashing, root acceptance, the acceptance receipt and grouped runtime-context
-  installation plus the terminal group-partitioned provisioning receipt are
-  complete; complete descendant-effect enforcement remains.
-- [ ] Reserve monotonically increasing, never-reused placement ordinals before
+- [x] Carry every member's canonical effective limits through plan hashing,
+  root acceptance, protected runtime context, descendant reservations and
+  durable receipts.
+- [x] Reserve monotonically increasing, never-reused placement ordinals before
   root calls.
 - [x] Bind every placement to one exact eligible Fleet-owned root while
   permitting repeated roots within placement policy.
@@ -316,10 +320,10 @@ Fleet policy writer.
 - [ ] Derive a cross-root top-level requester from the raw caller's exact
   current Fleet Registry service binding and matching Fleet Directory, then
   independently require the compiled peer-Component grant.
-- [ ] Accept same-root child requests from any exact registered
+- [x] Accept same-root child requests from any exact registered
   Component-tree node through an exact role-to-role spawn grant and without a
   Coordinator operation.
-- [ ] Bind every descendant to its exact immediate parent while retaining the
+- [x] Bind every descendant to its exact immediate parent while retaining the
   owning top-level Component binding.
 - [x] Keep new Components runtime `Prepared`.
 - [x] Persist group-partitioned Component Registry evidence and one aggregate
@@ -369,11 +373,11 @@ Fleet policy writer.
   and every existing affected service Component on each exact barrier root,
   then publishes the prepared batch on selected roots before the Coordinator
   reaches `DirectoriesConfirmed`.
-- [ ] Require Replica purpose to fail application database write-authority
+- [x] Require Replica purpose to fail application database write-authority
   checks.
-- [ ] Require PoolMember purpose to grant no implicit leadership, health or
+- [x] Require PoolMember purpose to grant no implicit leadership, health or
   consistency.
-- [ ] Preserve that write fence for service-sensitive descendants through
+- [x] Preserve that write fence for service-sensitive descendants through
   their exact owning top-level Component without making descendants group
   members or Fleet services.
 

@@ -827,6 +827,122 @@ mod tests {
         assert_activated_grouped_runtimes(&fixture, &activated);
     }
 
+    #[test]
+    fn grouped_component_child_inherits_the_exact_owner_deployment_context() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_prepared_grouped_provisioning();
+        let prepared = prepare_coordinator_grouped_plan(&fixture);
+        let confirmed = drive_coordinator_directory_confirmation(&fixture, prepared);
+        let activated = drive_coordinator_runtime_activation(&fixture, confirmed);
+        assert_activated_grouped_runtimes(&fixture, &activated);
+
+        let root = grouped_root_provisioning_status(&fixture);
+        let member = &root
+            .result
+            .as_ref()
+            .expect("active root retains provisioned result")
+            .placements[0]
+            .members[0];
+        let owner_runtime = grouped_component_runtime(&fixture, member.binding.canister_id);
+        let expected_deployment = owner_runtime.deployment;
+        let request_id = [0xd3; 32];
+        let envelope = RootCapabilityEnvelopeV1 {
+            service: CapabilityService::Root,
+            capability_version: CAPABILITY_VERSION_V1,
+            capability: Request::CreateCanister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("project_instance"),
+                parent: CreateCanisterParent::ThisCanister,
+                extra_arg: None,
+                metadata: Some(RootRequestMetadata {
+                    request_id,
+                    ttl_ns: 60_000_000_000,
+                }),
+            }),
+            proof: CapabilityProof::Structural,
+            metadata: CapabilityRequestMetadata {
+                request_id,
+                issued_at_ns: fixture.pic.current_time_nanos(),
+                ttl_ns: 60_000_000_000,
+            },
+        };
+        let provisioned: Result<RootCapabilityResponseV1, Error> = fixture
+            .pic
+            .update_candid_as(
+                fixture.root.root_id,
+                member.binding.canister_id,
+                CANIC_RESPONSE_CAPABILITY_V1,
+                (envelope.clone(),),
+            )
+            .expect("grouped Component child capability transport");
+        let provisioned = provisioned.expect("grouped Component child capability");
+        let Response::CreateCanister(provisioned) = provisioned.response else {
+            panic!("root capability must return a create-Canister response");
+        };
+        let child = provisioned.new_canister_pid;
+
+        let replayed: Result<RootCapabilityResponseV1, Error> = fixture
+            .pic
+            .update_candid_as(
+                fixture.root.root_id,
+                member.binding.canister_id,
+                CANIC_RESPONSE_CAPABILITY_V1,
+                (envelope,),
+            )
+            .expect("grouped Component child capability replay transport");
+        let Response::CreateCanister(replayed) = replayed
+            .expect("grouped Component child capability replay")
+            .response
+        else {
+            panic!("root capability replay must return a create-Canister response");
+        };
+        assert_eq!(replayed.new_canister_pid, child);
+
+        let child_runtime = grouped_component_runtime(&fixture, child);
+        assert_eq!(child_runtime.phase, ComponentRuntimePhase::Active);
+        assert_eq!(child_runtime.deployment, expected_deployment);
+        let ManagedCanisterBinding::ComponentChild(child_binding) = child_runtime.binding else {
+            panic!("provisioned descendant must retain a Component Child binding");
+        };
+        assert_eq!(child_binding.component, member.binding);
+        assert_eq!(child_binding.parent_canister_id, member.binding.canister_id);
+    }
+
+    #[cfg(test)]
+    fn grouped_root_provisioning_status(
+        fixture: &PreparedGroupedProvisioningFixture,
+    ) -> RootComponentProvisioningStatusResponse {
+        let response: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                fixture.root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+                (RootComponentProvisioningStatusRequest {
+                    operation_id: fixture.request.operation_id,
+                    plan_hash: fixture.request.plan_hash,
+                },),
+            )
+            .expect("query grouped root provisioning status transport");
+        response.expect("query grouped root provisioning status")
+    }
+
+    #[cfg(test)]
+    fn grouped_component_runtime(
+        fixture: &PreparedGroupedProvisioningFixture,
+        canister_id: Principal,
+    ) -> ComponentRuntimeStatusResponse {
+        let response: Result<ComponentRuntimeStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                canister_id,
+                fixture.root.root_id,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )
+            .expect("query grouped managed Canister runtime transport");
+        response.expect("query grouped managed Canister runtime")
+    }
+
     #[cfg(test)]
     fn prepare_coordinator_grouped_plan(
         fixture: &PreparedGroupedProvisioningFixture,

@@ -146,6 +146,13 @@ enum SubtreeRemovalOrigin {
     DrainingDriver,
 }
 
+#[derive(Clone, Copy)]
+struct ComponentDirectoryAuthorityInput<'a> {
+    synchronized_at_ns: u64,
+    fleet: &'a FleetDirectorySnapshot,
+    component_group: Option<&'a ComponentGroupDirectory>,
+}
+
 ///
 /// ComponentRegistryOps
 ///
@@ -3527,6 +3534,7 @@ impl ComponentRegistryOps {
         component: ComponentInstanceId,
         operation_id: [u8; 32],
         fleet_directory: &FleetDirectorySnapshot,
+        component_group: Option<&ComponentGroupDirectory>,
     ) -> Result<
         (
             RootComponentChildAllocationView,
@@ -3548,7 +3556,12 @@ impl ComponentRegistryOps {
             ));
         };
         let committed = exact_committed_child_partition(&record, commitment)?;
-        validate_child_directory_authority_hash(&committed, fleet_directory, commitment)?;
+        validate_child_directory_authority_hash(
+            &committed,
+            fleet_directory,
+            component_group,
+            commitment,
+        )?;
         Ok((
             child_allocation_record_to_view(record),
             partition_record_to_view(committed),
@@ -6139,6 +6152,7 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         directory_synchronized_at_ns: u64,
         fleet_directory: FleetDirectorySnapshot,
+        component_group: Option<&ComponentGroupDirectory>,
     ) -> Result<
         (
             RootComponentChildAllocationView,
@@ -6163,7 +6177,12 @@ impl ComponentRegistryOps {
             &record.progress
         {
             let committed = exact_committed_child_partition(&record, commitment)?;
-            validate_child_directory_authority_hash(&committed, &fleet_directory, commitment)?;
+            validate_child_directory_authority_hash(
+                &committed,
+                &fleet_directory,
+                component_group,
+                commitment,
+            )?;
             return Ok((
                 child_allocation_record_to_view(record),
                 partition_record_to_view(committed),
@@ -6191,8 +6210,11 @@ impl ComponentRegistryOps {
             *canister,
             installation,
             &partition,
-            directory_synchronized_at_ns,
-            &fleet_directory,
+            ComponentDirectoryAuthorityInput {
+                synchronized_at_ns: directory_synchronized_at_ns,
+                fleet: &fleet_directory,
+                component_group,
+            },
         )?;
         let actual_terminal_bytes =
             RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
@@ -6405,6 +6427,7 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         directory_synchronized_at_ns: u64,
         fleet_directory: FleetDirectorySnapshot,
+        component_group: Option<&ComponentGroupDirectory>,
     ) -> Result<
         (
             RootComponentChildAllocationView,
@@ -6441,6 +6464,7 @@ impl ComponentRegistryOps {
             validate_child_membership_directory_authority_hash(
                 &active,
                 &fleet_directory,
+                component_group,
                 membership,
             )?;
             return Ok((
@@ -6478,6 +6502,7 @@ impl ComponentRegistryOps {
             &child,
             directory_synchronized_at_ns,
             &fleet_directory,
+            component_group,
         )
     }
 
@@ -10175,8 +10200,7 @@ fn committed_child_records(
     canister: Principal,
     installation: &RootComponentChildInstallEffectRecord,
     partition: &ComponentRegistryPartitionRecord,
-    directory_synchronized_at_ns: u64,
-    fleet_directory: &FleetDirectorySnapshot,
+    directory: ComponentDirectoryAuthorityInput<'_>,
 ) -> Result<
     (
         RootComponentChildAllocationRecord,
@@ -10242,13 +10266,14 @@ fn committed_child_records(
         revision,
         content_hash,
     };
-    let directory_authority_hash = component_directory_authority_hash(
+    let directory_authority_hash = component_directory_authority_hash_with_group(
         &partition.binding,
         revision,
         content_hash,
-        directory_synchronized_at_ns,
+        directory.synchronized_at_ns,
         committed_descendants,
-        fleet_directory,
+        directory.fleet,
+        directory.component_group,
     )?;
     let traversal = ComponentRegistryChildTraversalRecord {
         component: record.component,
@@ -10267,7 +10292,7 @@ fn committed_child_records(
             registry_encoded_bytes: 0,
             reserved_descendants,
             committed_descendants,
-            directory_synchronized_at_ns,
+            directory_synchronized_at_ns: directory.synchronized_at_ns,
             directory_authority_hash,
             directory_prepared: false,
             runtime_activated: false,
@@ -10282,7 +10307,7 @@ fn committed_child_records(
         revision,
         content_hash,
         descendant_content_hash,
-        directory_synchronized_at_ns,
+        directory_synchronized_at_ns: directory.synchronized_at_ns,
         reserved_descendants,
         committed_descendants,
         encoded_bytes: partition.encoded_bytes,
@@ -10352,6 +10377,7 @@ fn persist_child_membership_activation(
     child: &ComponentRegistryChildRecord,
     directory_synchronized_at_ns: u64,
     fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
 ) -> Result<
     (
         RootComponentChildAllocationView,
@@ -10377,6 +10403,7 @@ fn persist_child_membership_activation(
         child,
         directory_synchronized_at_ns,
         fleet_directory,
+        component_group,
     )?;
     let traversal = ComponentRegistryChildTraversalRecord {
         component: record.component,
@@ -10455,6 +10482,7 @@ fn active_child_membership_records(
     child: &ComponentRegistryChildRecord,
     directory_synchronized_at_ns: u64,
     fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
 ) -> Result<
     (
         RootComponentChildAllocationRecord,
@@ -10501,13 +10529,14 @@ fn active_child_membership_records(
         revision,
         content_hash,
     };
-    let directory_authority_hash = component_directory_authority_hash(
+    let directory_authority_hash = component_directory_authority_hash_with_group(
         &partition.binding,
         revision,
         content_hash,
         directory_synchronized_at_ns,
         partition.committed_descendants,
         fleet_directory,
+        component_group,
     )?;
     let mut next_record = record.clone();
     next_record.progress = RootComponentChildAllocationProgressRecord::Committed {
@@ -11210,6 +11239,7 @@ fn validate_membership_directory_authority_hash(
 fn validate_child_directory_authority_hash(
     partition: &ComponentRegistryPartitionRecord,
     fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
     commitment: &RootComponentChildCommitmentRecord,
 ) -> Result<(), InternalError> {
     let authority = ComponentRuntimeDirectoryAuthority {
@@ -11224,7 +11254,7 @@ fn validate_child_directory_authority_hash(
             },
             descendant_count: commitment.committed_descendants,
         },
-        component_group: None,
+        component_group: component_group.cloned(),
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
@@ -11240,6 +11270,7 @@ fn validate_child_directory_authority_hash(
 fn validate_child_membership_directory_authority_hash(
     partition: &ComponentRegistryPartitionRecord,
     fleet_directory: &FleetDirectorySnapshot,
+    component_group: Option<&ComponentGroupDirectory>,
     membership: &RootComponentChildMembershipRecord,
 ) -> Result<(), InternalError> {
     let authority = ComponentRuntimeDirectoryAuthority {
@@ -11254,7 +11285,7 @@ fn validate_child_membership_directory_authority_hash(
             },
             descendant_count: membership.committed_descendants,
         },
-        component_group: None,
+        component_group: component_group.cloned(),
     };
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
@@ -17146,6 +17177,7 @@ mod tests {
             [44; 32],
             66,
             fleet_directory(&root),
+            None,
         )
         .expect("commit verified child");
         let committed_partition = ComponentRegistryOps::partition(component)
@@ -17234,6 +17266,7 @@ mod tests {
             [44; 32],
             67,
             fleet_directory(&root),
+            None,
         )
         .expect("exact child commit retry");
         assert_eq!(committed_retry, committed);
@@ -17290,6 +17323,7 @@ mod tests {
                 [44; 32],
                 69,
                 fleet_directory(&root),
+                None,
             )
             .is_err()
         );
@@ -17334,6 +17368,7 @@ mod tests {
             [44; 32],
             69,
             fleet_directory(&root),
+            None,
         )
         .expect("activate child membership");
         restart_component_registry();
@@ -17342,6 +17377,7 @@ mod tests {
             [44; 32],
             70,
             fleet_directory(&root),
+            None,
         )
         .expect("repeat child membership activation");
         assert_eq!(membership_again, membership);
@@ -17536,6 +17572,7 @@ mod tests {
             [44; 32],
             72,
             fleet_directory(&root),
+            None,
         )
         .expect("membership retry after later reservation");
         assert_eq!(membership_after_later_reservation.0, terminal);

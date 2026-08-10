@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.40` adds an exact Active service-Authority endpoint guard and carries
+  each grouped Component's protected purpose, Directory authority and
+  reduction-only limits through every depth of its dynamic descendant tree.
+
 - `0.101.39` makes the root independently consume the Coordinator draining
   reservation, durably binds its canonical hash through the local fence and
   requires that exact authority at later `Active -> Draining` publication.

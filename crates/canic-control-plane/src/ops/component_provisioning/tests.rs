@@ -27,12 +27,12 @@ use canic_core::{
         },
     },
     ids::{
-        AppId, CanisterRole, CanonicalNetworkId, ComponentDeploymentConfigurationDigest,
-        ComponentGroupMemberPath, ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget,
-        FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
-        FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
-        FleetSubnetRootReleaseSet, IntentId, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest,
-        SubnetId,
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding,
+        ComponentDeploymentConfigurationDigest, ComponentGroupMemberPath, ComponentInstanceId,
+        ComponentSpecAdmission, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, IntentId,
+        ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -730,24 +730,15 @@ fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_termin
         &claimed_allocation,
     )
     .expect("plan-derived deployment context");
-    assert_group_context(context, canister, fixture.request.configuration_digest);
+    let binding = match &context {
+        ProtectedComponentDeployment::GroupMember { binding, .. } => binding.clone(),
+        ProtectedComponentDeployment::UngroupedOrdinary { .. } => {
+            panic!("group provisioning must derive grouped context")
+        }
+    };
+    let provisioning_origin = claimed_allocation.provisioning_origin.clone();
 
-    let claimed =
-        RootComponentProvisioningOps::mark_member_claimed(claim_request, &claimed_allocation)
-            .expect("commit member claim");
-    assert_eq!(claimed.claim_cursor.claimed_component_count, 1);
-    assert_eq!(claimed.claim_cursor.placement_index, 1);
-    assert_eq!(claimed.claim_cursor.member_index, 0);
-    let response = status_response(claimed.clone());
-    assert_eq!(response.reserved_component_count, 1);
-    assert_eq!(response.claimed_component_count, 1);
-    assert_eq!(response.installed_component_count, 0);
-    assert_eq!(response.registry_committed_component_count, 0);
-    assert_eq!(
-        RootComponentProvisioningOps::advance_disposition(claim_request, &claimed)
-            .expect("claim response-loss replay"),
-        RootComponentProvisioningAdvanceDisposition::Replay
-    );
+    let claimed = commit_single_member_claim(claim_request, &claimed_allocation);
     let install_request = RootComponentProvisioningAdvanceRequest {
         expected_claimed_component_count: 1,
         ..claim_request
@@ -806,8 +797,64 @@ fn claim_install_and_registry_advances_are_context_bound_restart_safe_and_termin
 
     let provisioned = finalize_single_provisioned_result(&fixture, &registered, evidence, complete);
 
+    assert_inherited_component_deployment_authority(&provisioning_origin, &binding, &context);
+    assert_group_context(context, canister, fixture.request.configuration_digest);
+
     assert_restart_retains_registered(request, &provisioned);
     assert_terminal_provisioning_corruption_rejects(&fixture);
+}
+
+fn commit_single_member_claim(
+    request: RootComponentProvisioningAdvanceRequest,
+    allocation: &RootComponentAllocationView,
+) -> RootComponentProvisioningView {
+    let claimed = RootComponentProvisioningOps::mark_member_claimed(request, allocation)
+        .expect("commit member claim");
+    assert_eq!(claimed.claim_cursor.claimed_component_count, 1);
+    assert_eq!(claimed.claim_cursor.placement_index, 1);
+    assert_eq!(claimed.claim_cursor.member_index, 0);
+    let response = status_response(claimed.clone());
+    assert_eq!(response.reserved_component_count, 1);
+    assert_eq!(response.claimed_component_count, 1);
+    assert_eq!(response.installed_component_count, 0);
+    assert_eq!(response.registry_committed_component_count, 0);
+    assert_eq!(
+        RootComponentProvisioningOps::advance_disposition(request, &claimed)
+            .expect("claim response-loss replay"),
+        RootComponentProvisioningAdvanceDisposition::Replay
+    );
+    claimed
+}
+
+fn assert_inherited_component_deployment_authority(
+    provisioning_origin: &ComponentProvisioningOrigin,
+    binding: &ComponentBinding,
+    expected: &ProtectedComponentDeployment,
+) {
+    let inherited =
+        RootComponentProvisioningOps::component_deployment_authority(provisioning_origin, binding)
+            .expect("reconstruct descendant deployment authority");
+    assert_eq!(&inherited.deployment, expected);
+    assert!(inherited.component_group.is_some());
+
+    let mut wrong_origin = provisioning_origin.clone();
+    let ComponentProvisioningOrigin::ComponentGroup { plan_hash, .. } = &mut wrong_origin else {
+        panic!("group allocation must retain its provisioning origin")
+    };
+    plan_hash[0] ^= 1;
+    assert!(
+        RootComponentProvisioningOps::component_deployment_authority(&wrong_origin, binding)
+            .is_err()
+    );
+    let mut wrong_binding = binding.clone();
+    wrong_binding.spec_hash[0] ^= 1;
+    assert!(
+        RootComponentProvisioningOps::component_deployment_authority(
+            provisioning_origin,
+            &wrong_binding,
+        )
+        .is_err()
+    );
 }
 
 #[test]

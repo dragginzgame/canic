@@ -106,10 +106,28 @@ fn negated_caller_predicate_is_rejected() {
     };
 
     let err = validate(EndpointKind::Update, parsed, &sig, true).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("not(...) must not wrap caller::* or auth::* predicates")
-    );
+    assert!(err.to_string().contains("not(...) must not wrap"));
+}
+
+#[test]
+fn negated_service_authority_predicate_is_rejected() {
+    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+    let parsed = ParsedArgs {
+        forwarded: Vec::new(),
+        export_name: None,
+        payload_max_bytes: None,
+        requires: vec![AccessExprAst::Not(Box::new(AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::ServiceAuthority {
+                service: crate::endpoint::parse::AuthScopeArg::Literal("database".to_string()),
+            }),
+        )))],
+        internal: false,
+        public: false,
+        query_mode: QueryMode::Plain,
+    };
+
+    let err = validate(EndpointKind::Update, parsed, &sig, true).unwrap_err();
+    assert!(err.to_string().contains("not(...) must not wrap"));
 }
 
 #[test]
