@@ -3678,6 +3678,7 @@ impl ComponentRegistryOps {
             InternalError::unavailable("Component Registry partition has not been committed")
         })?;
         validate_partition_record(&partition)?;
+        require_ordinary_component_lifecycle(&partition)?;
         if let Some(existing) = RootComponentRegistryStore::component_draining(component) {
             validate_component_draining_record(&partition, &existing)?;
             return if existing.operation_id == operation_id
@@ -11291,10 +11292,41 @@ const fn component_partition_retains_active_membership(status: ComponentLifecycl
     )
 }
 
+fn require_ordinary_component_lifecycle(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
+    if component_uses_grouped_lifecycle(partition) {
+        return Err(InternalError::conflict(
+            "grouped Components require the aggregate Component Group removal protocol",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_ordinary_component_lifecycle(
+    partition: &ComponentRegistryPartitionRecord,
+) -> Result<(), InternalError> {
+    if component_uses_grouped_lifecycle(partition) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "grouped Component entered the ordinary draining lifecycle",
+        ));
+    }
+    Ok(())
+}
+
+const fn component_uses_grouped_lifecycle(partition: &ComponentRegistryPartitionRecord) -> bool {
+    matches!(
+        partition.provisioning_origin,
+        ComponentProvisioningOrigin::ComponentGroup { .. }
+    )
+}
+
 fn validate_component_draining_record(
     partition: &ComponentRegistryPartitionRecord,
     record: &RootComponentDrainingRecord,
 ) -> Result<(), InternalError> {
+    validate_ordinary_component_lifecycle(partition)?;
     let previous_content_hash = component_partition_content_hash(
         &partition.binding,
         &partition.provisioning_origin,
@@ -13366,10 +13398,11 @@ mod tests {
             root_store::RootStoreBootstrapRequest,
         },
         ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentInstanceId, ComponentSpecAdmission,
-            ComponentTopologyDigest, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
-            FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
-            ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+            AppId, CanisterRole, CanonicalNetworkId, ComponentGroupDeploymentId,
+            ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId,
+            ComponentSpecAdmission, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
+            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
+            FleetSubnetRootLimits, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
         },
     };
 
@@ -15814,6 +15847,28 @@ mod tests {
         )
         .expect_err("future traversal expectation must fail");
         assert_eq!(RootComponentRegistryStore::export(), before_ahead_rejection);
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
+
+    #[test]
+    fn grouped_component_rejects_ordinary_draining_before_mutation() {
+        let fixture = import_grouped_active_component_tree();
+        let before = RootComponentRegistryStore::export();
+        let error = ComponentRegistryOps::begin_component_draining(
+            fixture.component,
+            [78; 32],
+            component_registry_head(&fixture.partition),
+            100,
+            16_777_216,
+            fleet_directory(&before.current.as_ref().expect("Registry meta").root),
+        )
+        .expect_err("grouped Component must reject the ordinary draining lifecycle");
+
+        assert_eq!(
+            error.public_error().map(|public| public.code),
+            Some(canic_core::dto::error::ErrorCode::Conflict)
+        );
+        assert_eq!(RootComponentRegistryStore::export(), before);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
@@ -18290,11 +18345,36 @@ mod tests {
         unrelated: ComponentRegistryChildRecord,
     }
 
+    fn import_active_component_tree() -> ActiveComponentTreeFixture {
+        import_active_component_tree_with_origin(ComponentProvisioningOrigin::FleetAdministrator {
+            caller: candid::Principal::from_slice(&[11; 29]),
+        })
+    }
+
+    fn import_grouped_active_component_tree() -> ActiveComponentTreeFixture {
+        import_active_component_tree_with_origin(ComponentProvisioningOrigin::ComponentGroup {
+            operation_id: [41; 32],
+            plan_hash: [42; 32],
+            group_placement: ComponentGroupPlacementId {
+                deployment: "project_cells"
+                    .parse::<ComponentGroupDeploymentId>()
+                    .expect("deployment ID"),
+                ordinal: 0,
+            },
+            member_path: ComponentGroupMemberPath::try_from(vec![
+                "project".parse().expect("member ID"),
+            ])
+            .expect("member path"),
+        })
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "the fixture assembles one exact normalized multi-level Component tree"
     )]
-    fn import_active_component_tree() -> ActiveComponentTreeFixture {
+    fn import_active_component_tree_with_origin(
+        provisioning_origin: ComponentProvisioningOrigin,
+    ) -> ActiveComponentTreeFixture {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
         let root = root_binding();
         let release_set = FleetSubnetRootReleaseSet {
@@ -18307,6 +18387,7 @@ mod tests {
         let component_canister = candid::Principal::from_slice(&[18; 29]);
         let mut partition =
             active_component_partition(&root, release_set, component, component_canister);
+        partition.provisioning_origin = provisioning_origin;
         let target = ComponentRegistryChildRecord {
             component,
             canister_id: candid::Principal::from_slice(&[21; 29]),

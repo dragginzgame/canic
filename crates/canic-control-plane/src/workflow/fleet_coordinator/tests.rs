@@ -774,6 +774,68 @@ fn ordinary_only_provisioning_records_publication_without_registry_mutation() {
 }
 
 #[test]
+fn grouped_root_lifecycle_fence_is_exact_to_referenced_root() {
+    let config = scale_out_coordinator_config();
+    drive_terminal_fresh_install(&config);
+    let registry = FleetCoordinatorWorkflow::registry().expect("terminal Fleet Registry");
+    let current = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("Coordinator state");
+    let occupied_root = current.component_group_deployments[0].placements[0].fleet_subnet_root;
+    let empty_root = registry
+        .fleet_subnet_roots
+        .iter()
+        .map(|root| root.fleet_subnet_root)
+        .find(|root| *root != occupied_root)
+        .expect("unreferenced Fleet Subnet Root");
+
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
+        &config,
+        occupied_root,
+    )
+    .expect_err("committed placement and service authority must fence its root");
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
+        &config, empty_root,
+    )
+    .expect("another root without grouped authority remains lifecycle-open");
+
+    let plan = one_placement_scale_out_plan(&config, &registry);
+    let selected_root = plan.batches[0].root.fleet_subnet_root;
+    assert_eq!(selected_root, empty_root);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_component_provisioning_for_test(
+        &config,
+        FleetComponentProvisioningPrepareRequest {
+            operation_id: [200; 32],
+            plan,
+        },
+        1_000,
+    )
+    .expect("persist scale-out operation journal");
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
+        &config,
+        selected_root,
+    )
+    .expect_err("in-progress grouped placement authority must fence its selected root");
+}
+
+#[test]
+fn ordinary_group_placement_ledger_fences_its_root_without_a_service_binding() {
+    let config = ordinary_scale_out_coordinator_config();
+    drive_terminal_fresh_install(&config);
+    let current = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("Coordinator state");
+    assert!(current.registry.services.is_empty());
+    let occupied_root = current.component_group_deployments[0].placements[0].fleet_subnet_root;
+
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
+        &config,
+        occupied_root,
+    )
+    .expect_err("ordinary grouped placement authority must fence its exact root");
+}
+
+#[test]
 fn scale_out_publishes_all_new_pool_members_in_one_atomic_registry_append() {
     let config = scale_out_coordinator_config();
     let fresh = drive_terminal_fresh_install(&config);
@@ -1617,6 +1679,14 @@ fn assert_conflicting_plan_authority_fails_closed(
     plan_hash: [u8; 32],
     durable: &FleetCoordinatorRegistryData,
 ) {
+    let referenced_root = request
+        .plan
+        .batches
+        .iter()
+        .find(|batch| !batch.placements.is_empty())
+        .expect("grouped root batch")
+        .root
+        .fleet_subnet_root;
     let mut conflicting = request;
     conflicting.plan.directory_confirmation_roots.pop();
     let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -1631,6 +1701,7 @@ fn assert_conflicting_plan_authority_fails_closed(
     let drain =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::require_root_lifecycle_open_for_test(
             config,
+            referenced_root,
         )
         .expect_err("a planned grouped Fleet fences root lifecycle");
     assert_eq!(
