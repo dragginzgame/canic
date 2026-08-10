@@ -2,6 +2,8 @@
 
 #[cfg(test)]
 use super::build::build_mainnet_refill_wasms;
+#[cfg(test)]
+use super::build::build_two_application_subnet_pic;
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
@@ -534,6 +536,16 @@ mod tests {
         request: RootComponentProvisioningAcceptanceRequest,
     }
 
+    #[cfg(test)]
+    struct ActiveCrossRootPeerFixture {
+        pic: PocketIc,
+        requester_root: BootstrappedRootFixture,
+        target_root: BootstrappedRootFixture,
+        requester: ComponentBinding,
+        initial_registry: FleetRegistryVersion,
+        service_registry: FleetRegistryVersion,
+    }
+
     struct RootStoreFixture {
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
@@ -908,6 +920,221 @@ mod tests {
         assert_eq!(child_binding.parent_canister_id, member.binding.canister_id);
     }
 
+    #[test]
+    fn active_fleet_service_component_provisions_one_cross_root_peer() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_cross_root_peer();
+        let allocation =
+            cross_root_peer_allocation([0xd5; 32], fixture.service_registry.clone(), "projects");
+        let response: Result<
+            (
+                RootComponentAllocationResponse,
+                RootComponentAllocationResponse,
+                RootComponentMembershipActivationResponse,
+            ),
+            Error,
+        > = fixture
+            .pic
+            .update_candid(
+                fixture.requester.canister_id,
+                "provision_cross_root_peer",
+                (fixture.target_root.root_id, allocation),
+            )
+            .expect("direct cross-root service provisioning transport");
+        let (reserved, retried, membership) =
+            response.expect("direct cross-root service provisioning");
+        assert_eq!(retried, reserved);
+        assert_eq!(membership.registry.status, ComponentLifecycleStatus::Active);
+        assert_eq!(
+            membership.registry.binding.fleet_subnet_root,
+            fixture.target_root.root_id
+        );
+        assert_eq!(
+            membership.registry.binding.component_spec.as_str(),
+            "issuer"
+        );
+        assert_eq!(
+            fixture
+                .pic
+                .get_subnet(membership.registry.binding.canister_id),
+            Some(
+                *fixture
+                    .target_root
+                    .init_args
+                    .authority
+                    .binding
+                    .placement_subnet
+                    .as_principal()
+            )
+        );
+        let ComponentProvisioningOrigin::FleetServiceComponent {
+            requester,
+            registry,
+            grant,
+        } = &reserved.provisioning_origin
+        else {
+            panic!("cross-root reservation must retain Fleet-service requester authority")
+        };
+        assert_eq!(requester.component, fixture.requester);
+        assert_eq!(requester.service.as_str(), "projects");
+        assert_eq!(registry.as_ref(), &fixture.service_registry);
+        assert_eq!(grant.requester_component_spec.as_str(), "projects");
+        assert_eq!(grant.target_component_spec.as_str(), "issuer");
+
+        assert_cross_root_invalid_proofs_reject(&fixture, membership.registry.binding.canister_id);
+    }
+
+    #[cfg(test)]
+    fn assert_cross_root_invalid_proofs_reject(
+        fixture: &ActiveCrossRootPeerFixture,
+        ordinary_component: Principal,
+    ) {
+        let stale = call_cross_root_service(
+            fixture,
+            cross_root_peer_allocation([0xd6; 32], fixture.initial_registry.clone(), "projects"),
+        );
+        assert_eq!(
+            stale
+                .expect_err("stale Fleet Registry proof must reject")
+                .code,
+            canic::dto::error::ErrorCode::Conflict
+        );
+        let wrong_service = call_cross_root_service(
+            fixture,
+            cross_root_peer_allocation(
+                [0xd7; 32],
+                fixture.service_registry.clone(),
+                "not-projects",
+            ),
+        );
+        assert_eq!(
+            wrong_service
+                .expect_err("wrong Fleet service proof must reject")
+                .code,
+            canic::dto::error::ErrorCode::Forbidden
+        );
+        assert_forwarded_cross_root_allocation_rejects(
+            fixture,
+            ordinary_component,
+            [0xd8; 32],
+            "ordinary Component forwarding",
+        );
+        let child = provision_cross_root_fixture_child(fixture);
+        assert_forwarded_cross_root_allocation_rejects(
+            fixture,
+            child,
+            [0xda; 32],
+            "Component Child forwarding",
+        );
+    }
+
+    #[cfg(test)]
+    fn cross_root_peer_allocation(
+        operation_id: [u8; 32],
+        expected_registry: FleetRegistryVersion,
+        service: &str,
+    ) -> RootPeerComponentAllocationRequest {
+        RootPeerComponentAllocationRequest {
+            operation_id,
+            component_spec: "issuer".parse().expect("issuer Component Spec"),
+            requester: PeerComponentRequester::FleetService {
+                service: service.parse().expect("Fleet service ID"),
+                expected_registry: Box::new(expected_registry),
+            },
+        }
+    }
+
+    #[cfg(test)]
+    fn call_cross_root_service(
+        fixture: &ActiveCrossRootPeerFixture,
+        allocation: RootPeerComponentAllocationRequest,
+    ) -> Result<
+        (
+            RootComponentAllocationResponse,
+            RootComponentAllocationResponse,
+            RootComponentMembershipActivationResponse,
+        ),
+        Error,
+    > {
+        fixture
+            .pic
+            .update_candid(
+                fixture.requester.canister_id,
+                "provision_cross_root_peer",
+                (fixture.target_root.root_id, allocation),
+            )
+            .expect("invalid cross-root service proof transport")
+    }
+
+    #[cfg(test)]
+    fn assert_forwarded_cross_root_allocation_rejects(
+        fixture: &ActiveCrossRootPeerFixture,
+        forwarding_canister: Principal,
+        operation_id: [u8; 32],
+        subject: &str,
+    ) {
+        let response: Result<RootComponentAllocationResponse, Error> = fixture
+            .pic
+            .update_candid(
+                forwarding_canister,
+                "forward_peer_allocation",
+                (
+                    fixture.target_root.root_id,
+                    cross_root_peer_allocation(
+                        operation_id,
+                        fixture.service_registry.clone(),
+                        "projects",
+                    ),
+                ),
+            )
+            .unwrap_or_else(|error| panic!("{subject} transport: {error}"));
+        let error = match response {
+            Ok(response) => panic!("{subject} unexpectedly allocated {response:?}"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, canic::dto::error::ErrorCode::Forbidden);
+    }
+
+    #[cfg(test)]
+    fn provision_cross_root_fixture_child(fixture: &ActiveCrossRootPeerFixture) -> Principal {
+        let request_id = [0xd9; 32];
+        let envelope = RootCapabilityEnvelopeV1 {
+            service: CapabilityService::Root,
+            capability_version: CAPABILITY_VERSION_V1,
+            capability: Request::CreateCanister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("project_instance"),
+                parent: CreateCanisterParent::ThisCanister,
+                extra_arg: None,
+                metadata: Some(RootRequestMetadata {
+                    request_id,
+                    ttl_ns: 60_000_000_000,
+                }),
+            }),
+            proof: CapabilityProof::Structural,
+            metadata: CapabilityRequestMetadata {
+                request_id,
+                issued_at_ns: fixture.pic.current_time_nanos(),
+                ttl_ns: 60_000_000_000,
+            },
+        };
+        let response: Result<RootCapabilityResponseV1, Error> = fixture
+            .pic
+            .update_candid_as(
+                fixture.requester_root.root_id,
+                fixture.requester.canister_id,
+                CANIC_RESPONSE_CAPABILITY_V1,
+                (envelope,),
+            )
+            .expect("provision cross-root fixture child transport");
+        let Response::CreateCanister(created) = response
+            .expect("provision cross-root fixture child")
+            .response
+        else {
+            panic!("cross-root fixture child must return create-Canister response")
+        };
+        created.new_canister_pid
+    }
+
     #[cfg(test)]
     fn grouped_root_provisioning_status(
         fixture: &PreparedGroupedProvisioningFixture,
@@ -988,93 +1215,73 @@ mod tests {
     #[cfg(test)]
     fn drive_coordinator_directory_confirmation(
         fixture: &PreparedGroupedProvisioningFixture,
-        mut status: FleetComponentProvisioningStatusResponse,
+        status: FleetComponentProvisioningStatusResponse,
     ) -> FleetComponentProvisioningStatusResponse {
-        while status.phase != FleetComponentProvisioningPhase::DirectoriesConfirmed {
+        drive_coordinator_provisioning(
+            &fixture.pic,
+            fixture.coordinator,
+            status,
+            FleetComponentProvisioningPhase::DirectoriesConfirmed,
+        )
+    }
+
+    #[cfg(test)]
+    fn drive_coordinator_runtime_activation(
+        fixture: &PreparedGroupedProvisioningFixture,
+        status: FleetComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningStatusResponse {
+        drive_coordinator_provisioning(
+            &fixture.pic,
+            fixture.coordinator,
+            status,
+            FleetComponentProvisioningPhase::RuntimesActivated,
+        )
+    }
+
+    #[cfg(test)]
+    fn drive_coordinator_provisioning(
+        pic: &PocketIc,
+        coordinator: Principal,
+        mut status: FleetComponentProvisioningStatusResponse,
+        target_phase: FleetComponentProvisioningPhase,
+    ) -> FleetComponentProvisioningStatusResponse {
+        while status.phase != target_phase {
             let request = FleetComponentProvisioningAdvanceRequest {
                 operation_id: status.operation_id,
                 plan_hash: status.plan_hash,
                 expected_phase: status.phase,
                 expected_accepted_root_count: status.accepted_root_count,
                 expected_provisioned_root_count: status.provisioned_root_count,
-                expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
                 expected_current_root: status.current_root,
+                expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
                 expected_current_publication: status.current_publication,
                 expected_runtime_activated_root_count: status.runtime_activated_root_count,
                 expected_current_activation: status.current_activation,
             };
-            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
-                .pic
+            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = pic
                 .update_candid(
-                    fixture.coordinator,
+                    coordinator,
                     CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
                     (request,),
                 )
                 .expect("advance Coordinator provisioning transport");
             let advanced = advanced.unwrap_or_else(|error| {
                 panic!(
-                    "advance Coordinator provisioning from phase {:?} with root cursor {:?} and Directory cursor {:?}: {error:?}",
-                    status.phase, status.current_root, status.current_publication,
+                    "advance Coordinator provisioning from phase {:?}, root cursor {:?}, Directory cursor {:?}, and activation cursor {:?}: {error:?}",
+                    status.phase,
+                    status.current_root,
+                    status.current_publication,
+                    status.current_activation,
                 )
             });
-            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
-                .pic
+            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = pic
                 .update_candid(
-                    fixture.coordinator,
+                    coordinator,
                     CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
                     (request,),
                 )
                 .expect("replay Coordinator provisioning transport");
             assert_eq!(replayed.expect("replay Coordinator provisioning"), advanced);
-            status = advanced;
-        }
-        status
-    }
-
-    #[cfg(test)]
-    fn drive_coordinator_runtime_activation(
-        fixture: &PreparedGroupedProvisioningFixture,
-        mut status: FleetComponentProvisioningStatusResponse,
-    ) -> FleetComponentProvisioningStatusResponse {
-        while status.phase != FleetComponentProvisioningPhase::RuntimesActivated {
-            let request = FleetComponentProvisioningAdvanceRequest {
-                operation_id: status.operation_id,
-                plan_hash: status.plan_hash,
-                expected_phase: status.phase,
-                expected_accepted_root_count: status.accepted_root_count,
-                expected_provisioned_root_count: status.provisioned_root_count,
-                expected_current_root: status.current_root,
-                expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
-                expected_current_publication: status.current_publication,
-                expected_runtime_activated_root_count: status.runtime_activated_root_count,
-                expected_current_activation: status.current_activation,
-            };
-            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
-                .pic
-                .update_candid(
-                    fixture.coordinator,
-                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
-                    (request,),
-                )
-                .expect("advance Coordinator runtime activation transport");
-            let advanced = advanced.unwrap_or_else(|error| {
-                panic!(
-                    "advance Coordinator runtime activation from root cursor {:?}: {error:?}",
-                    status.current_activation,
-                )
-            });
-            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
-                .pic
-                .update_candid(
-                    fixture.coordinator,
-                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
-                    (request,),
-                )
-                .expect("replay Coordinator runtime activation transport");
-            assert_eq!(
-                replayed.expect("replay Coordinator runtime activation"),
-                advanced
-            );
             status = advanced;
         }
         status
@@ -1668,7 +1875,7 @@ mod tests {
     fn active_component_provisions_one_same_root_peer_without_parentage() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = acquire_active_component_registry();
-        let requester = fixture.issuer.clone();
+        let requester = fixture.verifier.clone();
         let operation_id = [0xb1; 32];
         let reserved = reserve_peer_component(&fixture, &requester, operation_id);
         let membership = activate_peer_component(&fixture, &requester, operation_id, &reserved);
@@ -1690,7 +1897,7 @@ mod tests {
     ) -> RootComponentAllocationResponse {
         let allocation_request = RootPeerComponentAllocationRequest {
             operation_id,
-            component_spec: "projects".parse().expect("projects Component Spec"),
+            component_spec: "issuer".parse().expect("issuer Component Spec"),
             requester: PeerComponentRequester::SameRoot,
         };
         let denied: Result<RootComponentAllocationResponse, Error> = fixture
@@ -1863,7 +2070,7 @@ mod tests {
                 CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
                 (RootPeerComponentAllocationRequest {
                     operation_id: [0xb2; 32],
-                    component_spec: "projects".parse().expect("projects Component Spec"),
+                    component_spec: "issuer".parse().expect("issuer Component Spec"),
                     requester: PeerComponentRequester::SameRoot,
                 },),
             )
@@ -3016,6 +3223,221 @@ mod tests {
     }
 
     #[cfg(test)]
+    fn setup_active_cross_root_peer() -> ActiveCrossRootPeerFixture {
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let pic = build_two_application_subnet_pic();
+        let mut application_subnets = pic.topology().get_app_subnets();
+        application_subnets.sort();
+        let [requester_subnet, target_subnet] = application_subnets.as_slice() else {
+            panic!("cross-root qualification requires exactly two application Subnets")
+        };
+        let coordinator = pic.create_canister_on_subnet(None, None, *requester_subnet);
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let requester_root = install_bootstrapped_root_on_subnet(
+            &pic,
+            root_wasm.clone(),
+            coordinator,
+            build_root_store_fixture(),
+            *requester_subnet,
+        );
+        let target_root = install_bootstrapped_root_on_subnet(
+            &pic,
+            root_wasm,
+            coordinator,
+            build_root_store_fixture(),
+            *target_subnet,
+        );
+        assert_root_local_physical_inventory(&pic, &requester_root);
+        assert_root_local_physical_inventory(&pic, &target_root);
+        install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &requester_root);
+        let roots = [&requester_root, &target_root];
+        let (joining_version, sync_requests) =
+            join_and_synchronize_roots(&pic, coordinator, &roots);
+        let initial_registry = activate_registry_and_prepare_component_registries(
+            &pic,
+            coordinator,
+            &roots,
+            joining_version,
+            &sync_requests,
+        );
+        let (requester, service_registry) = provision_cross_root_service_topology(
+            &pic,
+            coordinator,
+            &requester_root,
+            &target_root,
+            initial_registry.clone(),
+        );
+        ActiveCrossRootPeerFixture {
+            pic,
+            requester_root,
+            target_root,
+            requester,
+            initial_registry,
+            service_registry,
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_root_local_physical_inventory(pic: &PocketIc, fixture: &BootstrappedRootFixture) {
+        let expected_subnet = *fixture
+            .init_args
+            .authority
+            .binding
+            .placement_subnet
+            .as_principal();
+        assert_eq!(pic.get_subnet(fixture.root_id), Some(expected_subnet));
+        assert_eq!(
+            pic.get_subnet(fixture.response.wasm_store),
+            Some(expected_subnet)
+        );
+        assert!(
+            fixture
+                .init_args
+                .canister_pool_imports
+                .iter()
+                .all(|canister| { pic.get_subnet(*canister) == Some(expected_subnet) })
+        );
+    }
+
+    #[cfg(test)]
+    fn provision_cross_root_service_topology(
+        pic: &PocketIc,
+        coordinator: Principal,
+        requester_root: &BootstrappedRootFixture,
+        target_root: &BootstrappedRootFixture,
+        initial_registry: FleetRegistryVersion,
+    ) -> (ComponentBinding, FleetRegistryVersion) {
+        let registry: Result<FleetRegistry, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query pre-service Registry transport");
+        let registry = registry.expect("query pre-service Registry");
+        assert_eq!(registry.services, vec![]);
+        let (plan, plan_hash) = cross_root_projects_provisioning_plan(
+            requester_root,
+            target_root,
+            &registry,
+            initial_registry,
+        );
+        let operation_id = [0xd4; 32];
+        let prepared: Result<FleetComponentProvisioningStatusResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (FleetComponentProvisioningPrepareRequest { operation_id, plan },),
+            )
+            .expect("prepare cross-root service topology transport");
+        let prepared = prepared.expect("prepare cross-root service topology");
+        assert_eq!(prepared.plan_hash, plan_hash);
+        let activated = drive_coordinator_provisioning(
+            pic,
+            coordinator,
+            prepared,
+            FleetComponentProvisioningPhase::RuntimesActivated,
+        );
+        assert_eq!(activated.accepted_root_count, 2);
+        assert_eq!(activated.provisioned_root_count, 2);
+        assert_eq!(activated.directory_confirmed_root_count, 2);
+        assert_eq!(activated.runtime_activated_root_count, 2);
+        let service_registry = activated
+            .published_fleet_registry
+            .expect("cross-root service Registry publication");
+        let status: Result<RootComponentProvisioningStatusResponse, Error> = pic
+            .query_candid_as(
+                requester_root.root_id,
+                coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+                (RootComponentProvisioningStatusRequest {
+                    operation_id,
+                    plan_hash,
+                },),
+            )
+            .expect("query cross-root requester provisioning status transport");
+        let status = status.expect("query cross-root requester provisioning status");
+        let result = status
+            .result
+            .expect("cross-root requester provisioning result");
+        let [placement] = result.placements.as_slice() else {
+            panic!("cross-root service plan must materialize one requester placement")
+        };
+        let [member] = placement.members.as_slice() else {
+            panic!("cross-root service placement must materialize one requester member")
+        };
+        assert_eq!(member.binding.component_spec.as_str(), "projects");
+        (member.binding.clone(), service_registry)
+    }
+
+    #[cfg(test)]
+    fn cross_root_projects_provisioning_plan(
+        requester_root: &BootstrappedRootFixture,
+        target_root: &BootstrappedRootFixture,
+        registry: &FleetRegistry,
+        fleet_registry: FleetRegistryVersion,
+    ) -> (FleetComponentProvisioningPlan, [u8; 32]) {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load cross-root Component configuration");
+        let deployments = config
+            .model()
+            .compile_component_group_deployment_topology()
+            .expect("compile cross-root deployment topology");
+        let deployment = deployments
+            .get(
+                &"grouped_projects"
+                    .parse()
+                    .expect("grouped projects deployment ID"),
+            )
+            .expect("grouped projects deployment");
+        let entries = deployment
+            .members
+            .iter()
+            .map(|member| ComponentGroupPlanEntry {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                spec_hash: member.component_spec_hash,
+                purpose: member.purpose.clone(),
+                labels: member.labels.clone(),
+                limits: member.limits.clone(),
+            })
+            .collect();
+        let requester_batch = FleetSubnetRootProvisioningBatch {
+            root: requester_root.init_args.authority.binding.clone(),
+            active_release_set: requester_root.init_args.authority.initial_release_set,
+            placements: vec![ComponentGroupPlacementPlan {
+                group_placement: ComponentGroupPlacementId {
+                    deployment: deployment.deployment.clone(),
+                    ordinal: 0,
+                },
+                component_group: deployment.component_group.clone(),
+                entries,
+            }],
+        };
+        let target_batch = FleetSubnetRootProvisioningBatch {
+            root: target_root.init_args.authority.binding.clone(),
+            active_release_set: target_root.init_args.authority.initial_release_set,
+            placements: vec![],
+        };
+        let mut batches = vec![requester_batch, target_batch];
+        batches.sort_by_key(|batch| batch.root.fleet_subnet_root);
+        let mut directory_confirmation_roots = vec![requester_root.root_id, target_root.root_id];
+        directory_confirmation_roots.sort();
+        let plan = FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry,
+            configuration_digest: config
+                .model()
+                .compile_component_deployment_configuration_digest()
+                .expect("compile cross-root deployment configuration digest"),
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            directory_confirmation_roots,
+            batches,
+        };
+        let plan_hash = ComponentProvisioningPlanOps::hash(config.model(), registry, &plan)
+            .expect("hash cross-root provisioning plan");
+        (plan, plan_hash)
+    }
+
+    #[cfg(test)]
     fn grouped_projects_provisioning_request(
         root: &BootstrappedRootFixture,
         registry: &FleetRegistry,
@@ -3437,6 +3859,73 @@ mod tests {
             vec![synchronized.acknowledgement]
         );
         (joined.version, sync_request)
+    }
+
+    #[cfg(test)]
+    fn join_and_synchronize_roots(
+        pic: &PocketIc,
+        coordinator: Principal,
+        fixtures: &[&BootstrappedRootFixture],
+    ) -> (
+        FleetRegistryVersion,
+        Vec<FleetSubnetRootRegistrySyncRequest>,
+    ) {
+        let current: Result<FleetRegistryVersion, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
+            .expect("query multi-root Registry genesis transport");
+        let mut current = current.expect("query multi-root Registry genesis");
+        for fixture in fixtures {
+            let binding = &fixture.init_args.authority.binding;
+            let joined: Result<FleetSubnetRootJoinResponse, Error> = pic
+                .update_candid(
+                    coordinator,
+                    CANIC_FLEET_SUBNET_ROOT_JOIN,
+                    (FleetSubnetRootJoinRequest {
+                        expected_registry: current,
+                        entry: FleetSubnetRootEntry {
+                            placement_subnet: binding.placement_subnet,
+                            fleet_subnet_root: fixture.root_id,
+                            component_admissions: binding.component_admissions.clone(),
+                            component_topology_digest: binding.component_topology_digest,
+                            active_release_set: fixture.init_args.authority.initial_release_set,
+                            limits: binding.limits.clone(),
+                            status: FleetSubnetRootStatus::Joining,
+                        },
+                    },),
+                )
+                .expect("join one multi-root fixture transport");
+            current = joined.expect("join one multi-root fixture").version;
+        }
+
+        let mut sync_requests = Vec::with_capacity(fixtures.len());
+        let mut expected_acknowledgements = Vec::with_capacity(fixtures.len());
+        for fixture in fixtures {
+            let request = FleetSubnetRootRegistrySyncRequest {
+                expected_registry: current.clone(),
+                store_bootstrap: fixture.request.clone(),
+            };
+            let synchronized: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
+                .update_candid(
+                    fixture.root_id,
+                    CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+                    (request.clone(),),
+                )
+                .expect("synchronize one multi-root fixture transport");
+            let synchronized = synchronized.expect("synchronize one multi-root fixture");
+            assert_eq!(synchronized.fleet_subnet_root, fixture.root_id);
+            assert_eq!(synchronized.version, current);
+            expected_acknowledgements.push(synchronized.acknowledgement);
+            sync_requests.push(request);
+        }
+        expected_acknowledgements.sort_by_key(|acknowledgement| acknowledgement.fleet_subnet_root);
+        let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, ())
+            .expect("query multi-root acknowledgements transport");
+        assert_eq!(
+            acknowledgements.expect("query multi-root acknowledgements"),
+            expected_acknowledgements
+        );
+        (current, sync_requests)
     }
 
     fn reset_unclaimed_pool_assets(
@@ -4192,6 +4681,86 @@ mod tests {
         component_registry_request
     }
 
+    #[cfg(test)]
+    fn activate_registry_and_prepare_component_registries(
+        pic: &PocketIc,
+        coordinator: Principal,
+        fixtures: &[&BootstrappedRootFixture],
+        joining_version: FleetRegistryVersion,
+        sync_requests: &[FleetSubnetRootRegistrySyncRequest],
+    ) -> FleetRegistryVersion {
+        assert_eq!(fixtures.len(), sync_requests.len());
+        let activated: Result<FleetRegistryActivationResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                CANIC_FLEET_REGISTRY_ACTIVATE,
+                (FleetRegistryActivationRequest {
+                    expected_registry: joining_version,
+                },),
+            )
+            .expect("activate multi-root Registry transport");
+        let activated = activated.expect("activate multi-root Registry");
+        let active: Result<FleetRegistry, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query active multi-root Registry transport");
+        let active = active.expect("query active multi-root Registry");
+        assert_eq!(active.fleet_subnet_roots.len(), fixtures.len());
+        assert!(
+            active
+                .fleet_subnet_roots
+                .iter()
+                .all(|root| root.status == FleetSubnetRootStatus::Active)
+        );
+
+        for (fixture, sync_request) in fixtures.iter().zip(sync_requests) {
+            let directory = FleetDirectorySnapshot {
+                provenance: FleetDirectoryProvenance {
+                    registry: activated.version.clone(),
+                    source_fleet_subnet_root: fixture.root_id,
+                },
+                fleet_subnet_roots: active
+                    .fleet_subnet_roots
+                    .iter()
+                    .map(|entry| FleetSubnetRootDirectoryEntry {
+                        placement_subnet: entry.placement_subnet,
+                        fleet_subnet_root: entry.fleet_subnet_root,
+                        status: entry.status,
+                    })
+                    .collect(),
+                services: vec![],
+            };
+            let activation_request = FleetSubnetRootRegistryMirrorActivationRequest {
+                previous_registry: activated.previous_version.clone(),
+                expected_registry: activated.version.clone(),
+                expected_directory: directory,
+                store_bootstrap: fixture.request.clone(),
+            };
+            let mirror: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
+                .update_candid(
+                    fixture.root_id,
+                    CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
+                    (activation_request.clone(),),
+                )
+                .expect("activate one multi-root Registry mirror transport");
+            mirror.expect("activate one multi-root Registry mirror");
+            prepare_component_registry(pic, fixture, activation_request);
+            let old_candidate: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
+                .query_candid(
+                    fixture.root_id,
+                    CANIC_FLEET_REGISTRY_SYNC_STATUS,
+                    (sync_request.clone(),),
+                )
+                .expect("query replaced multi-root Joining candidate transport");
+            assert_eq!(
+                old_candidate
+                    .expect_err("multi-root Joining candidate must be replaced")
+                    .code,
+                canic::dto::error::ErrorCode::Unavailable
+            );
+        }
+        activated.version
+    }
+
     fn prepare_component_registry(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
@@ -4255,10 +4824,6 @@ mod tests {
         component_registry_request
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the activation fixture verifies both initial Component allocations and their shared inventory transition"
-    )]
     fn assert_component_allocation(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
@@ -4299,23 +4864,6 @@ mod tests {
                 .expect_err("conflicting Component reservation retry must fail")
                 .code,
             canic::dto::error::ErrorCode::Conflict
-        );
-
-        let exhausted: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (RootComponentAllocationRequest {
-                    operation_id: [0xa3; 32],
-                    component_spec: issuer_request.component_spec,
-                },),
-            )
-            .expect("exhausted issuer Component reservation transport");
-        assert_eq!(
-            exhausted
-                .expect_err("issuer Component admission must be exhausted")
-                .code,
-            canic::dto::error::ErrorCode::ResourceExhausted
         );
 
         let component_registry: Result<RootComponentRegistryStatusResponse, Error> = pic
@@ -5168,11 +5716,55 @@ mod tests {
         fixture
     }
 
+    #[cfg(test)]
+    fn install_bootstrapped_root_on_subnet(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement_subnet: Principal,
+    ) -> BootstrappedRootFixture {
+        let fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            Some(placement_subnet),
+            Some(1),
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(pic, fixture.root_id);
+        fixture
+    }
+
     fn install_bootstrapped_root_with_pool_setup<F>(
         pic: &PocketIc,
         root_wasm: Vec<u8>,
         coordinator: Principal,
         store_fixture: RootStoreFixture,
+        pool_setup: F,
+    ) -> BootstrappedRootFixture
+    where
+        F: FnOnce(&PocketIc, Principal) -> Vec<Principal>,
+    {
+        install_bootstrapped_root_on_subnet_with_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            None,
+            None,
+            pool_setup,
+        )
+    }
+
+    fn install_bootstrapped_root_on_subnet_with_pool_setup<F>(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement_subnet: Option<Principal>,
+        maximum_root_instances: Option<u32>,
         pool_setup: F,
     ) -> BootstrappedRootFixture
     where
@@ -5193,9 +5785,13 @@ mod tests {
                 .try_into()
                 .expect("SHA-256 digest"),
         );
-        let root_id = pic.create_canister();
+        let root_id = placement_subnet.map_or_else(
+            || pic.create_canister(),
+            |subnet| pic.create_canister_on_subnet(None, None, subnet),
+        );
         pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
-        let wasm_store = pic.create_canister();
+        let root_subnet = pic.get_subnet(root_id).expect("root placement Subnet");
+        let wasm_store = pic.create_canister_on_subnet(None, None, root_subnet);
         pic.add_cycles(wasm_store, ROOT_INSTALL_CYCLES);
         let wasm_store_wasm = build_test_wasm_store_wasm();
         let installation_controller = Principal::from_slice(&[0x46; 29]);
@@ -5213,7 +5809,18 @@ mod tests {
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
-        bind_init_args_to_pocket_ic_subnet(pic, root_id, &mut init_args);
+        if let Some(maximum_root_instances) = maximum_root_instances {
+            for admission in &mut init_args.authority.binding.component_admissions {
+                admission.maximum_root_instances = maximum_root_instances;
+            }
+            let config = AppConfigSnapshot::load(&config_path).expect("reload root config");
+            init_args.authority.binding.component_topology_digest = config
+                .component_topology()
+                .project_for_admissions(&init_args.authority.binding.component_admissions)
+                .and_then(|projection| projection.digest())
+                .expect("compile bounded multi-root topology digest");
+        }
+        bind_init_args_to_pocket_ic_subnet(pic, root_id, coordinator, &mut init_args);
         init_args.canister_pool_imports = pool_setup(pic, root_id);
         let store_init_args = FleetSubnetWasmStoreInitArgs {
             authority: init_args.authority.wasm_store_authority.clone(),
@@ -5230,13 +5837,37 @@ mod tests {
         pic.install_canister(root_id, root_wasm, init_bytes, None);
         adopt_sibling_wasm_store(pic, root_id, &init_args);
         assert_prepared(pic, root_id);
+        let (request, response) = bootstrap_root_store_release_set(
+            pic,
+            root_id,
+            &manifest,
+            artifacts,
+            &manifest_bytes,
+            digest,
+        );
+        BootstrappedRootFixture {
+            root_id,
+            init_args,
+            request,
+            response,
+        }
+    }
+
+    fn bootstrap_root_store_release_set(
+        pic: &PocketIc,
+        root_id: Principal,
+        manifest: &RootStoreReleaseSetManifest,
+        artifacts: BTreeMap<CanisterRole, Vec<u8>>,
+        manifest_bytes: &[u8],
+        digest: ReleaseSetDigest,
+    ) -> (RootStoreBootstrapRequest, RootStoreBootstrapResponse) {
         let version = TemplateVersion::owned(manifest.release_build_id.to_string());
         stage_chunked_payload(
             pic,
             root_id,
             TemplateId::owned(format!("{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{digest}")),
             version.clone(),
-            &manifest_bytes,
+            manifest_bytes,
         );
         for (role, bytes) in artifacts {
             let template_id =
@@ -5269,18 +5900,14 @@ mod tests {
         let response: Result<RootStoreBootstrapResponse, Error> = pic
             .update_candid(root_id, CANIC_ROOT_STORE_BOOTSTRAP, (request.clone(),))
             .expect("root Store bootstrap transport");
-        BootstrappedRootFixture {
-            root_id,
-            init_args,
-            request,
-            response: response.expect("root Store bootstrap"),
-        }
+        (request, response.expect("root Store bootstrap"))
     }
 
     fn create_prepaid_pool_assets(pic: &PocketIc, root: Principal) -> Vec<Principal> {
+        let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
         (0..PREPAID_POOL_ASSET_COUNT)
             .map(|_| {
-                let canister = pic.create_canister();
+                let canister = pic.create_canister_on_subnet(None, None, root_subnet);
                 pic.add_cycles(canister, PREPAID_POOL_ASSET_CYCLES);
                 pic.set_controllers(canister, None, vec![root])
                     .expect("prepare root-owned prepaid Canister");
@@ -5320,26 +5947,31 @@ mod tests {
     fn bind_init_args_to_pocket_ic_subnet(
         pic: &PocketIc,
         root_id: Principal,
+        coordinator: Principal,
         init_args: &mut FleetSubnetRootInitArgs,
     ) {
-        let physical_subnet = SubnetId::from_principal(
+        let root_subnet = SubnetId::from_principal(
             pic.get_subnet(root_id)
                 .expect("PocketIC root placement Subnet identity"),
         );
-        init_args.authority.binding.placement_subnet = physical_subnet;
+        let coordinator_subnet = SubnetId::from_principal(
+            pic.get_subnet(coordinator)
+                .expect("PocketIC Coordinator placement Subnet identity"),
+        );
+        init_args.authority.binding.placement_subnet = root_subnet;
         init_args
             .authority
             .binding
             .authority
             .binding
-            .coordinator_subnet = physical_subnet;
-        init_args.authority.wasm_store_authority.placement_subnet = physical_subnet;
+            .coordinator_subnet = coordinator_subnet;
+        init_args.authority.wasm_store_authority.placement_subnet = root_subnet;
         init_args
             .authority
             .wasm_store_authority
             .authority
             .binding
-            .coordinator_subnet = physical_subnet;
+            .coordinator_subnet = coordinator_subnet;
     }
 
     fn build_test_coordinator_wasm() -> Vec<u8> {

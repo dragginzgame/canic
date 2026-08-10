@@ -6,13 +6,27 @@ use candid::Principal;
 use canic::{
     Error,
     api::auth::AuthApi,
+    api::call::Call,
     api::canister::placement::PlacementIndexApi,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
+        component_registry::{
+            RootComponentAllocationResponse, RootComponentCommitRequest,
+            RootComponentCreationRequest, RootComponentDirectoryPreparationRequest,
+            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
+            RootComponentMembershipActivationResponse, RootComponentRuntimeActivationRequest,
+            RootPeerComponentAllocationRequest,
+        },
         placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
     },
     ids::cap,
     prelude::*,
+    protocol::{
+        CANIC_ROOT_PEER_COMPONENT_ALLOCATE, CANIC_ROOT_PEER_COMPONENT_COMMIT,
+        CANIC_ROOT_PEER_COMPONENT_CREATE, CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
+        CANIC_ROOT_PEER_COMPONENT_INSTALL, CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
+        CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
+    },
 };
 
 const PROJECTS_POOL: &str = "projects";
@@ -65,6 +79,83 @@ async fn verifier_require_attested_local_subnet(
 ) -> Result<(), Error> {
     let _ = attestation;
     Ok(())
+}
+
+/// Provision one peer Component through another Fleet Subnet Root as this exact service caller.
+#[canic_update(public)]
+async fn provision_cross_root_peer(
+    fleet_subnet_root: Principal,
+    allocation: RootPeerComponentAllocationRequest,
+) -> Result<
+    (
+        RootComponentAllocationResponse,
+        RootComponentAllocationResponse,
+        RootComponentMembershipActivationResponse,
+    ),
+    Error,
+> {
+    let operation_id = allocation.operation_id;
+    let reserved: Result<RootComponentAllocationResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_ALLOCATE)
+            .with_arg(allocation.clone())?
+            .execute_candid()
+            .await?;
+    let reserved = reserved?;
+    let retried: Result<RootComponentAllocationResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_ALLOCATE)
+            .with_arg(allocation)?
+            .execute_candid()
+            .await?;
+    let retried = retried?;
+    let created: Result<RootComponentAllocationResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_CREATE)
+            .with_arg(RootComponentCreationRequest { operation_id })?
+            .execute_candid()
+            .await?;
+    let _created = created?;
+    let installed: Result<RootComponentAllocationResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_INSTALL)
+            .with_arg(RootComponentInstallRequest { operation_id })?
+            .execute_candid()
+            .await?;
+    let _installed = installed?;
+    let committed: Result<canic::dto::component_registry::RootComponentCommitResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_COMMIT)
+            .with_arg(RootComponentCommitRequest { operation_id })?
+            .execute_candid()
+            .await?;
+    let _committed = committed?;
+    let prepared: Result<
+        canic::dto::component_registry::RootComponentDirectoryPreparationResponse,
+        Error,
+    > = Call::bounded_wait(
+        fleet_subnet_root,
+        CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
+    )
+    .with_arg(RootComponentDirectoryPreparationRequest { operation_id })?
+    .execute_candid()
+    .await?;
+    let _prepared = prepared?;
+    let activated: Result<
+        canic::dto::component_registry::RootComponentRuntimeActivationResponse,
+        Error,
+    > = Call::bounded_wait(
+        fleet_subnet_root,
+        CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
+    )
+    .with_arg(RootComponentRuntimeActivationRequest { operation_id })?
+    .execute_candid()
+    .await?;
+    let _activated = activated?;
+    let membership: Result<RootComponentMembershipActivationResponse, Error> = Call::bounded_wait(
+        fleet_subnet_root,
+        CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
+    )
+    .with_arg(RootComponentMembershipActivationRequest { operation_id })?
+    .execute_candid()
+    .await?;
+
+    Ok((reserved, retried, membership?))
 }
 
 /// Resolve one logical project key to a dedicated instance, creating it when absent.

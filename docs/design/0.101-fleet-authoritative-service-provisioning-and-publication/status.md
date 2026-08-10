@@ -164,7 +164,7 @@ Date: 2026-08-10
   child, forwarded caller, wrong service, inactive root or caller-supplied
   identity cannot substitute for either proof.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.40` is released and `0.101.41` is open.
+- Implementation started: yes; `0.101.41` is released and `0.101.42` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -480,7 +480,7 @@ Fleet policy writer.
   identity or Component Group Directory ambiguity.
 - [ ] Prove two Fleets remain isolated when their roots share one physical
   Subnet.
-- [ ] Prove cross-root peer provisioning requires the exact current raw-caller
+- [x] Prove cross-root peer provisioning requires the exact current raw-caller
   Registry member, matching Directory projection and independent
   requester-Spec-to-target-Spec grant, while stale, forwarded, child and
   caller-supplied identities reject.

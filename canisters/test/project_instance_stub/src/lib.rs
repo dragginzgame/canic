@@ -3,7 +3,17 @@
 #![expect(clippy::unused_async)]
 
 use candid::Principal;
-use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use canic::{
+    Error,
+    api::call::Call,
+    dto::{
+        auth::DelegatedToken,
+        component_registry::{RootComponentAllocationResponse, RootPeerComponentAllocationRequest},
+    },
+    ids::cap,
+    prelude::*,
+    protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+};
 use ic_cdk::api::canister_self;
 
 canic::start!();
@@ -38,6 +48,20 @@ async fn instance_verify_token(token: DelegatedToken) -> Result<(), Error> {
 async fn record_visit(token: DelegatedToken, project_key: String) -> Result<(), Error> {
     let _ = (token, project_key);
     Ok(())
+}
+
+/// Forward one peer allocation request so the target root observes this Component Child.
+#[canic_update(public)]
+async fn forward_peer_allocation(
+    fleet_subnet_root: Principal,
+    request: RootPeerComponentAllocationRequest,
+) -> Result<RootComponentAllocationResponse, Error> {
+    let response: Result<RootComponentAllocationResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_ALLOCATE)
+            .with_arg(request)?
+            .execute_candid()
+            .await?;
+    response
 }
 
 canic::finish!();
