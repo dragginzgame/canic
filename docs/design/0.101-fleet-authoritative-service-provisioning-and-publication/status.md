@@ -435,7 +435,7 @@ Fleet policy writer.
   atomically. The complete target set is compiled from the exact source
   Registry and terminal selected-root receipts, existing authority and members
   are immutable, and exact restart replay retains every publication receipt.
-- [ ] Fence grouped Components and their roots from ordinary drain/removal.
+- [x] Fence grouped Components and their roots from ordinary drain/removal.
   The Component Registry operation boundary rejects grouped Components before
   ordinary draining and rejects any persisted grouped ordinary-draining state.
   The Coordinator now fences only a root named by a nonempty operation batch,
@@ -444,10 +444,14 @@ Fleet policy writer.
   noncancellable Coordinator reservation as the atomic winner against plan
   preparation. Coordinator prepare/status persistence, domain-separated hash
   validation, exact retry and both plan/reservation orderings are implemented.
-  The root must still independently verify that reservation before its one-way
-  local fence, and the local and publication receipts must bind its exact hash.
-  That root-side implementation and interruption proof remain open. Qualified
-  grouped removal remains a later design, not a 0.101 operation.
+  The root independently fetches the retained reservation from its protected
+  Coordinator, accepts later unrelated Registry revisions only while the
+  exact Active target row remains unchanged, rechecks local grouped authority
+  after the call and durably binds the canonical reservation hash before its
+  one-way fence. The Coordinator requires that same retained hash and current
+  target row at publication. Local and publication exact retry survive
+  response loss and later revisions. Qualified grouped removal remains a later
+  design, not a 0.101 operation.
 - [x] Reject scale-down, placement reuse, Authority-group scaling, live root
   creation and admission expansion.
 

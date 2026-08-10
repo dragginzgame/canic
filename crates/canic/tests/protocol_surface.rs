@@ -940,8 +940,8 @@ fn assert_root_draining_reservation_protocol(coordinator: &str) {
             coordinator,
             "async fn canic_fleet_registry_root_draining_reservation_status(",
         )
-        .contains("canic_query(public)"),
-        "root-draining reservation status must remain callable by the exact target root"
+        .contains("canic_update(public)"),
+        "root-draining reservation status must remain inter-Canister callable by the exact target root"
     );
     for (name, env) in [
         (

@@ -94,6 +94,10 @@ pub mod ops {
         pub use crate::ops::fleet_service_binding::FleetServiceBindingOps;
     }
 
+    pub mod root_draining_reservation {
+        pub use crate::ops::root_draining_reservation::FleetSubnetRootDrainingReservationOps;
+    }
+
     pub mod ic {
         pub use crate::ops::ic::IcOps;
 

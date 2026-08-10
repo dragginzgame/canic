@@ -82,7 +82,10 @@ use canic_core::{
         config::schema::ComponentChildKind,
         error::{InternalError, InternalErrorOrigin},
         model::replay::ReplayCostGuardSettlement,
-        ops::component_runtime::ComponentRuntimeOps,
+        ops::{
+            component_runtime::ComponentRuntimeOps,
+            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
+        },
         policy::{
             component_allocation::TopLevelComponentAllocationDecision,
             component_child_allocation::ComponentChildAllocationDecision,
@@ -96,7 +99,8 @@ use canic_core::{
             ComponentRuntimeDirectoryConvergenceEvidence,
         },
         fleet_registry::{
-            FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootRemovalPublicationResponse,
+            FleetDirectorySnapshot, FleetRegistryVersion,
+            FleetSubnetRootDrainingReservationResponse, FleetSubnetRootRemovalPublicationResponse,
         },
         fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
         root_store::RootStoreBootstrapRequest,
@@ -1460,6 +1464,7 @@ impl ComponentRegistryOps {
     pub(crate) fn begin_root_draining(
         operation_id: [u8; 32],
         expected_registry: &FleetRegistryVersion,
+        reservation: &FleetSubnetRootDrainingReservationResponse,
         started_at_ns: u64,
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
         if operation_id == [0; 32] {
@@ -1472,6 +1477,11 @@ impl ComponentRegistryOps {
                 "Fleet Subnet Root draining start time must be positive",
             ));
         }
+        if reservation.reservation_hash == [0; 32] {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root draining reservation hash must be nonzero",
+            ));
+        }
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
         })?;
@@ -1479,6 +1489,7 @@ impl ComponentRegistryOps {
             validate_root_draining_record(&current, existing)?;
             return if existing.operation_id == operation_id
                 && &existing.active_registry == expected_registry
+                && &existing.reservation == reservation
             {
                 Ok(root_draining_record_to_view(existing.clone()))
             } else {
@@ -1498,6 +1509,7 @@ impl ComponentRegistryOps {
             fleet_subnet_root: current.root.fleet_subnet_root,
             placement_subnet: current.root.placement_subnet,
             active_registry: expected_registry.clone(),
+            reservation: reservation.clone(),
             component_topology_digest: current.root.component_topology_digest,
             active_release_set: current.release_set,
             next_allocation_sequence: current.next_allocation_sequence,
@@ -1532,19 +1544,26 @@ impl ComponentRegistryOps {
     pub(crate) fn root_draining(
         operation_id: [u8; 32],
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        Self::root_draining_if_present(operation_id)?
+            .ok_or_else(|| InternalError::unavailable("Fleet Subnet Root draining has not begun"))
+    }
+
+    pub(crate) fn root_draining_if_present(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootFleetSubnetDrainingView>, InternalError> {
         let current = RootComponentRegistryStore::current().ok_or_else(|| {
             InternalError::unavailable("root Component Registry authority has not been prepared")
         })?;
-        let record = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let Some(record) = current.root_draining.as_ref() else {
+            return Ok(None);
+        };
         validate_root_draining_record(&current, record)?;
         if record.operation_id != operation_id {
             return Err(InternalError::conflict(
                 "Fleet Subnet Root draining status names a different operation",
             ));
         }
-        Ok(root_draining_record_to_view(record.clone()))
+        Ok(Some(root_draining_record_to_view(record.clone())))
     }
 
     pub(crate) fn validate_published_root_draining(
@@ -7322,6 +7341,14 @@ fn validate_root_draining_record(
             "Fleet Subnet Root draining receipt differs from protected root authority",
         ));
     }
+    if FleetSubnetRootDrainingReservationOps::content_hash(&record.reservation)?
+        != record.reservation.reservation_hash
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "Fleet Subnet Root draining reservation hash differs from retained authority",
+        ));
+    }
     if let Some(reclamation) = record.store_reclamation.as_ref() {
         let expected_hash = root_store_reclamation_hash(reclamation)?;
         if reclamation.reclamation_hash != expected_hash {
@@ -8123,6 +8150,7 @@ fn root_draining_record_to_view(
         fleet_subnet_root: record.fleet_subnet_root,
         placement_subnet: record.placement_subnet,
         active_registry: record.active_registry,
+        reservation_hash: record.reservation.reservation_hash,
         component_topology_digest: record.component_topology_digest,
         active_release_set: record.active_release_set,
         next_allocation_sequence: record.next_allocation_sequence,
@@ -13393,7 +13421,9 @@ mod tests {
             component_registry::{ComponentProvisioningOrigin, ComponentRuntimeActivationEvidence},
             fleet_registry::{
                 FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
-                FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+                FleetSubnetRootDirectoryEntry, FleetSubnetRootDrainingReservationRequest,
+                FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
+                FleetSubnetRootStatus,
             },
             root_store::RootStoreBootstrapRequest,
         },
@@ -13422,6 +13452,36 @@ mod tests {
         RootComponentRegistryStore::import(snapshot.clone());
         assert_eq!(RootComponentRegistryStore::export(), snapshot);
         snapshot
+    }
+
+    fn root_draining_reservation(
+        root: &FleetSubnetRootBinding,
+        release_set: FleetSubnetRootReleaseSet,
+        registry: &FleetRegistryVersion,
+        operation_id: [u8; 32],
+        prepared_at_ns: u64,
+    ) -> FleetSubnetRootDrainingReservationResponse {
+        let mut response = FleetSubnetRootDrainingReservationResponse {
+            request: FleetSubnetRootDrainingReservationRequest {
+                operation_id,
+                expected_registry: registry.clone(),
+                expected_root: FleetSubnetRootEntry {
+                    placement_subnet: root.placement_subnet,
+                    fleet_subnet_root: root.fleet_subnet_root,
+                    component_admissions: root.component_admissions.clone(),
+                    component_topology_digest: root.component_topology_digest,
+                    active_release_set: release_set,
+                    limits: root.limits.clone(),
+                    status: FleetSubnetRootStatus::Active,
+                },
+            },
+            coordinator: root.authority.binding.coordinator,
+            prepared_at_ns,
+            reservation_hash: [0; 32],
+        };
+        response.reservation_hash = FleetSubnetRootDrainingReservationOps::content_hash(&response)
+            .expect("hash root-draining reservation");
+        response
     }
 
     fn exact_registry_entry_bytes(data: &RootComponentRegistryData) -> u64 {
@@ -13831,7 +13891,7 @@ mod tests {
             manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
         };
         ComponentRegistryOps::prepare(
-            root,
+            root.clone(),
             version.clone(),
             release_set,
             RootStoreBootstrapRequest {
@@ -13844,8 +13904,15 @@ mod tests {
             revision: version.revision,
             content_hash: [15; 32],
         };
-        ComponentRegistryOps::begin_root_draining([13; 32], &conflicting_version, 14)
-            .expect_err("equal Registry revision with a different hash must fail closed");
+        let conflicting_reservation =
+            root_draining_reservation(&root, release_set, &conflicting_version, [13; 32], 12);
+        ComponentRegistryOps::begin_root_draining(
+            [13; 32],
+            &conflicting_version,
+            &conflicting_reservation,
+            14,
+        )
+        .expect_err("equal Registry revision with a different hash must fail closed");
         let existing_decision = TopLevelComponentAllocationDecision {
             allocation_sequence: 1,
             component: ComponentInstanceId::from_generated_bytes([10; 32]),
@@ -13869,8 +13936,11 @@ mod tests {
             revision: version.revision + 2,
             content_hash: [15; 32],
         };
-        let draining = ComponentRegistryOps::begin_root_draining([13; 32], &current_version, 14)
-            .expect("begin after later mirror synchronization");
+        let reservation =
+            root_draining_reservation(&root, release_set, &current_version, [13; 32], 12);
+        let draining =
+            ComponentRegistryOps::begin_root_draining([13; 32], &current_version, &reservation, 14)
+                .expect("begin after later mirror synchronization");
         assert_eq!(draining.active_registry, current_version);
         assert_eq!(draining.next_allocation_sequence, 2);
         assert_eq!(draining.reserved_component_instances, 1);
@@ -13880,22 +13950,65 @@ mod tests {
         assert_eq!(draining.active_release_set, release_set);
         assert_eq!(draining.final_inventory, None);
         assert_root_final_inventory_is_fenced(&current_version);
+        assert_root_draining_is_durable(
+            &root,
+            release_set,
+            &current_version,
+            &reservation,
+            &draining,
+        );
+        assert_root_draining_allocation_fence(existing_decision, origin, existing);
+        RootComponentRegistryStore::import(RootComponentRegistryData::default());
+    }
 
+    fn assert_root_draining_is_durable(
+        root: &FleetSubnetRootBinding,
+        release_set: FleetSubnetRootReleaseSet,
+        current_version: &FleetRegistryVersion,
+        reservation: &FleetSubnetRootDrainingReservationResponse,
+        draining: &RootFleetSubnetDrainingView,
+    ) {
         restart_component_registry();
         assert_eq!(
-            ComponentRegistryOps::root_draining([13; 32]).expect("status after restart"),
+            &ComponentRegistryOps::root_draining([13; 32]).expect("status after restart"),
             draining
         );
         assert_eq!(
-            ComponentRegistryOps::begin_root_draining([13; 32], &current_version, 99)
+            &ComponentRegistryOps::begin_root_draining([13; 32], current_version, reservation, 99,)
                 .expect("exact retry"),
             draining
         );
+        let durable = RootComponentRegistryStore::export();
+        let mut corrupted = durable.clone();
+        corrupted
+            .current
+            .as_mut()
+            .expect("root Component Registry")
+            .root_draining
+            .as_mut()
+            .expect("root draining record")
+            .reservation
+            .reservation_hash[0] ^= 1;
+        RootComponentRegistryStore::import(corrupted);
+        let invalid = ComponentRegistryOps::root_draining([13; 32])
+            .expect_err("corrupt retained reservation must fail closed");
+        assert_eq!(
+            invalid.class(),
+            canic_core::control_plane_support::error::InternalErrorClass::Invariant
+        );
+        RootComponentRegistryStore::import(durable);
         ComponentRegistryOps::root_draining([15; 32])
             .expect_err("status must bind the exact operation");
-        ComponentRegistryOps::begin_root_draining([15; 32], &current_version, 16)
+        let conflict = root_draining_reservation(root, release_set, current_version, [15; 32], 14);
+        ComponentRegistryOps::begin_root_draining([15; 32], current_version, &conflict, 16)
             .expect_err("different draining intent must conflict");
+    }
 
+    fn assert_root_draining_allocation_fence(
+        existing_decision: TopLevelComponentAllocationDecision,
+        origin: ComponentProvisioningOrigin,
+        existing: RootComponentAllocationView,
+    ) {
         let repeated = ComponentRegistryOps::reserve_allocation(
             existing_decision,
             [12; 32],
@@ -13920,7 +14033,6 @@ mod tests {
             Some(canic_core::dto::error::ErrorCode::Conflict)
         );
         assert_eq!(RootComponentRegistryStore::export(), before_rejection);
-        RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 
     fn assert_root_final_inventory_is_fenced(current_version: &FleetRegistryVersion) {
@@ -13955,7 +14067,9 @@ mod tests {
         )
         .expect("prepare");
         ComponentRegistryOps::require_root_store_admin_open().expect("active root Store admin");
-        ComponentRegistryOps::begin_root_draining([10; 32], &prepared_registry, 11)
+        let reservation =
+            root_draining_reservation(&root, release_set, &prepared_registry, [10; 32], 9);
+        ComponentRegistryOps::begin_root_draining([10; 32], &prepared_registry, &reservation, 11)
             .expect("begin root draining");
         let published_registry = FleetRegistryVersion {
             authority: prepared_registry.authority,

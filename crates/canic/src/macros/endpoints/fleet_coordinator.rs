@@ -168,7 +168,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_root_draining_reservation(request)
         }
 
-        #[$crate::canic_query(public)]
+        #[$crate::canic_update(public)]
         async fn canic_fleet_registry_root_draining_reservation_status(
             request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationStatusRequest,
         ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationResponse, ::canic::Error> {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.39` makes the root independently consume the Coordinator draining
+  reservation, durably binds its canonical hash through the local fence and
+  requires that exact authority at later `Active -> Draining` publication.
+
 - `0.101.38` adds the durable Coordinator root-draining reservation so plan
   preparation and Fleet-wide drain preparation have one atomic winner, with
   exact retry, target-root status and fail-closed stable validation.

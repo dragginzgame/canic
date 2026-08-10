@@ -31,7 +31,9 @@ mod tests {
             fleet_registry::{
                 FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
                 FleetRegistrySnapshotResponse, FleetSubnetRootDrainingPublicationRequest,
-                FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootEntry,
+                FleetSubnetRootDrainingPublicationResponse,
+                FleetSubnetRootDrainingReservationRequest,
+                FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
                 FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
                 FleetSubnetRootRemovalPublicationRequest,
                 FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
@@ -534,6 +536,20 @@ placement.minimum_distinct_roots = 2
             .iter()
             .find(|entry| entry.fleet_subnet_root == removed_root)
             .expect("removed root entry");
+        let mut expected_root = removed_entry.clone();
+        expected_root.status = FleetSubnetRootStatus::Active;
+        let reservation: Result<FleetSubnetRootDrainingReservationResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
+                (FleetSubnetRootDrainingReservationRequest {
+                    operation_id: [31; 32],
+                    expected_registry: active_version.clone(),
+                    expected_root,
+                },),
+            )
+            .expect("prepare root Draining reservation transport");
+        let reservation = reservation.expect("prepare root Draining reservation");
         let draining: Result<FleetSubnetRootDrainingPublicationResponse, Error> = pic
             .update_candid(
                 coordinator,
@@ -545,6 +561,7 @@ placement.minimum_distinct_roots = 2
                         fleet_subnet_root: removed_root,
                         placement_subnet: removed_entry.placement_subnet,
                         active_registry: active_version.clone(),
+                        reservation_hash: reservation.reservation_hash,
                         component_topology_digest: removed_entry.component_topology_digest,
                         active_release_set: removed_entry.active_release_set,
                         next_allocation_sequence: 1,

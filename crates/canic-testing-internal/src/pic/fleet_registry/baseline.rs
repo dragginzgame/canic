@@ -205,7 +205,8 @@ mod tests {
         dto::fleet_registry::{
             FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
             FleetSubnetRootDeletionStatusRequest, FleetSubnetRootDrainingPublicationRequest,
-            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationRequest,
+            FleetSubnetRootDrainingReservationResponse, FleetSubnetRootRemovalPublicationResponse,
         },
         dto::fleet_subnet_root::{
             FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
@@ -225,6 +226,7 @@ mod tests {
             CANIC_CYCLE_BALANCE, CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
             CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
             CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
+            CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
             CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
             CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
             CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
@@ -3644,6 +3646,7 @@ mod tests {
             operation_id: [0xd1; 32],
             expected_registry: version.expect("Coordinator Registry version before root draining"),
         };
+        let reservation = prepare_root_draining_reservation(fixture, &request);
         let begun: Result<FleetSubnetRootDrainingResponse, Error> = fixture
             .pic()
             .update_candid(
@@ -3655,6 +3658,7 @@ mod tests {
         let begun = begun.expect("begin Fleet Subnet Root draining");
         assert_eq!(begun.operation_id, request.operation_id);
         assert_eq!(begun.active_registry, request.expected_registry);
+        assert_eq!(begun.reservation_hash, reservation.reservation_hash);
         assert_eq!(begun.fleet_subnet_root, fixture.root);
         assert_eq!(begun.placement_subnet, fixture.verifier.placement_subnet);
         assert_eq!(begun.next_allocation_sequence, 3);
@@ -3685,7 +3689,42 @@ mod tests {
             )
             .expect("query Fleet Subnet Root draining status transport");
         assert_eq!(status.expect("Fleet Subnet Root draining status"), begun);
+        assert_root_allocation_is_fenced(fixture);
+        begun
+    }
 
+    #[cfg(test)]
+    fn prepare_root_draining_reservation(
+        fixture: &ActiveComponentRegistryFixture,
+        request: &FleetSubnetRootDrainingRequest,
+    ) -> FleetSubnetRootDrainingReservationResponse {
+        let registry: Result<FleetRegistry, Error> = fixture
+            .pic()
+            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query Coordinator Registry before root draining reservation");
+        let expected_root = registry
+            .expect("Coordinator Registry before root draining reservation")
+            .fleet_subnet_roots
+            .into_iter()
+            .find(|entry| entry.fleet_subnet_root == fixture.root)
+            .expect("target root in Coordinator Registry");
+        let reservation: Result<FleetSubnetRootDrainingReservationResponse, Error> = fixture
+            .pic()
+            .update_candid(
+                fixture.coordinator,
+                CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
+                (FleetSubnetRootDrainingReservationRequest {
+                    operation_id: request.operation_id,
+                    expected_registry: request.expected_registry.clone(),
+                    expected_root,
+                },),
+            )
+            .expect("prepare Fleet Subnet Root draining reservation transport");
+        reservation.expect("prepare Fleet Subnet Root draining reservation")
+    }
+
+    #[cfg(test)]
+    fn assert_root_allocation_is_fenced(fixture: &ActiveComponentRegistryFixture) {
         let existing: Result<RootComponentAllocationResponse, Error> = fixture
             .pic()
             .update_candid(
@@ -3721,7 +3760,6 @@ mod tests {
                 .code,
             canic::dto::error::ErrorCode::Conflict
         );
-        begun
     }
 
     #[cfg(test)]
