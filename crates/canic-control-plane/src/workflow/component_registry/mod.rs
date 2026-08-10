@@ -992,14 +992,6 @@ pub async fn begin_component_draining(
         &topology,
         &partition,
     )?;
-    if matches!(
-        &partition.provisioning_origin,
-        ComponentProvisioningOrigin::ComponentGroup { .. }
-    ) {
-        return Err(InternalError::conflict(
-            "grouped Components require the aggregate Component Group removal protocol",
-        ));
-    }
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
         .ok_or_else(|| {

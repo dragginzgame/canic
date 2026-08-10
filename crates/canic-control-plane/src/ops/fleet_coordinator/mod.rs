@@ -909,10 +909,11 @@ impl FleetCoordinatorOps {
     #[cfg(test)]
     pub(crate) fn require_root_lifecycle_open_for_test(
         config: &ConfigModel,
+        fleet_subnet_root: Principal,
     ) -> Result<(), InternalError> {
         require_test_component_deployment_configuration(config)?;
         let current = Self::current()?;
-        require_grouped_root_lifecycle_open(&current)
+        require_grouped_root_lifecycle_open(&current, fleet_subnet_root)
     }
 
     pub(crate) fn publish_component_provisioning_services(
@@ -1407,7 +1408,7 @@ impl FleetCoordinatorOps {
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
         let current = Self::current()?;
-        require_grouped_root_lifecycle_open(&current)?;
+        require_grouped_root_lifecycle_open(&current, request.root_draining.fleet_subnet_root)?;
         if let Some(receipt) = current
             .root_draining_publication_receipts
             .iter()
@@ -1483,7 +1484,7 @@ impl FleetCoordinatorOps {
             ));
         }
         let current = Self::current()?;
-        require_grouped_root_lifecycle_open(&current)?;
+        require_grouped_root_lifecycle_open(&current, request.final_inventory.fleet_subnet_root)?;
         if let Some(receipt) = current
             .root_removal_publication_receipts
             .iter()
@@ -6887,15 +6888,65 @@ fn component_provisioning_plan_counts(
     })
 }
 
+struct GroupedRootLifecycleReferences {
+    operation_journal: bool,
+    placement_ledger: bool,
+    fleet_service: bool,
+}
+
+impl GroupedRootLifecycleReferences {
+    const fn is_empty(&self) -> bool {
+        !self.operation_journal && !self.placement_ledger && !self.fleet_service
+    }
+}
+
 fn require_grouped_root_lifecycle_open(
     current: &FleetCoordinatorRegistryRecord,
+    fleet_subnet_root: Principal,
 ) -> Result<(), InternalError> {
-    if current.component_provisioning.is_some() {
+    let references = grouped_root_lifecycle_references(current, fleet_subnet_root);
+    if !references.is_empty() {
         return Err(InternalError::conflict(
-            "Fleet Subnet Root lifecycle is fenced while grouped Component provisioning authority exists",
+            "Fleet Subnet Root lifecycle is fenced while grouped Component authority references the root",
         ));
     }
     Ok(())
+}
+
+fn grouped_root_lifecycle_references(
+    current: &FleetCoordinatorRegistryRecord,
+    fleet_subnet_root: Principal,
+) -> GroupedRootLifecycleReferences {
+    let operation_journal = current
+        .component_provisioning
+        .iter()
+        .chain(current.component_scale_out.iter())
+        .any(|record| component_operation_references_root(record, fleet_subnet_root));
+    let placement_ledger = current
+        .component_group_deployments
+        .iter()
+        .flat_map(|deployment| &deployment.placements)
+        .any(|placement| placement.fleet_subnet_root == fleet_subnet_root);
+    let fleet_service = current
+        .registry
+        .services
+        .iter()
+        .flat_map(|service| &service.members)
+        .any(|member| member.fleet_subnet_root == fleet_subnet_root);
+    GroupedRootLifecycleReferences {
+        operation_journal,
+        placement_ledger,
+        fleet_service,
+    }
+}
+
+fn component_operation_references_root(
+    record: &FleetComponentProvisioningRecord,
+    fleet_subnet_root: Principal,
+) -> bool {
+    record.plan.batches.iter().any(|batch| {
+        batch.root.fleet_subnet_root == fleet_subnet_root && !batch.placements.is_empty()
+    })
 }
 
 fn require_snapshot_root(

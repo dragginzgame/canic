@@ -14,10 +14,10 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.35`.
-- The latest published release is `v0.101.35` at
-  `6f20fa06d35f82e34b65da3e0f8c94c54009768e`.
-- Open `0.101.36` allows a terminal scale-out to be followed by another
+- The workspace package version is `0.101.36`.
+- The latest published release is `v0.101.36` at
+  `c7bff1be94633c165dec781e53afec7d08ccc787`.
+- Released `0.101.36` allows a terminal scale-out to be followed by another
   monotonic increase. The Coordinator atomically retires the completed active
   journal into bounded compact exact-replay history, validates and installs the
   next plan and preserves the committed placement ledger. Stable validation
@@ -26,8 +26,15 @@ Historical detail is archived at:
   advance retry survive restart, while conflicting operation reuse and corrupt
   receipt, placement or publication evidence fail closed. Grouped removal
   fencing and the remaining Slice 1/2 application-policy work are next. The
-  same open patch also carries Wenzelroll's maintained preview and Fleet-
+  same release also carries Wenzelroll's maintained preview and Fleet-
   diagnostics work.
+- Open `0.101.37` moves grouped ordinary Component draining into the Registry
+  operation and stable-validation boundary. Coordinator root lifecycle
+  publication now rejects only an exact root referenced by a nonempty current
+  operation batch, committed placement or Fleet-service member, so an
+  unrelated empty root is not globally blocked. The remaining grouped-root
+  boundary is a Coordinator-owned draining reservation made before local root
+  mutation; aggregate grouped removal remains a later design.
 - Released `0.101.35` completes the exact selected plus
   affected-existing-root Directory barrier after scale-out service publication,
   activates only new Components on selected roots and atomically appends the
@@ -2590,13 +2597,15 @@ First primary results:
 
 ## Next Action
 
-Selected-root scale-out runtime activation is published at immutable
-`v0.101.35`. Open `0.101.36` atomically retires each completed scale-out journal
-into compact content-hashed exact-replay history before a later monotonic
-increase reserves its next never-reused ordinal range. Continue Slice 4 by
-closing the grouped lifecycle fence: ordinary Component and root drain/removal
-must reject every committed or in-progress placement and Fleet-service binding
-without introducing a scale-in, replacement or cleanup exception.
+Repeated scale-out exact-replay history is published at immutable `v0.101.36`.
+Open `0.101.37` has moved ordinary grouped-Component draining into the owning
+Registry operation boundary and made Coordinator root lifecycle publication
+exact to nonempty operation, committed-placement and Fleet-service references.
+Continue Slice 4 by reserving Coordinator root-draining authority before the
+root mutates its local one-way fence. A concurrently durable grouped plan must
+not leave a selected root locally draining, and a pending drain must prevent a
+new plan from selecting that root. Do not introduce scale-in, replacement or a
+cleanup exception; qualified grouped removal remains a later design.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

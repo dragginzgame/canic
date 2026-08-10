@@ -145,7 +145,7 @@ Date: 2026-08-09
   prepare, status and terminal advance retry survive restart without retaining
   another complete plan; reused identities and corrupt history fail closed.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.35` is released and `0.101.36` is open.
+- Implementation started: yes; `0.101.36` is released and `0.101.37` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -436,8 +436,14 @@ Fleet policy writer.
   Registry and terminal selected-root receipts, existing authority and members
   are immutable, and exact restart replay retains every publication receipt.
 - [ ] Fence grouped Components and their roots from ordinary drain/removal.
-  Accepted placement authority, retained grouped origins and grouped Components
-  are fenced; the aggregate grouped removal protocol remains unimplemented.
+  The Component Registry operation boundary rejects grouped Components before
+  ordinary draining and rejects any persisted grouped ordinary-draining state.
+  The Coordinator now fences only a root named by a nonempty operation batch,
+  committed placement or Fleet-service binding, leaving unrelated empty roots
+  lifecycle-open. A Coordinator-owned intent must still be reserved before the
+  root-local draining fence so a plan accepted concurrently cannot strand a
+  locally draining root. Qualified grouped removal remains a later design, not
+  a 0.101 operation.
 - [x] Reject scale-down, placement reuse, Authority-group scaling, live root
   creation and admission expansion.
 
