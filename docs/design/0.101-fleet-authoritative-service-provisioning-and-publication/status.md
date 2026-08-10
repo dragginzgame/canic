@@ -162,9 +162,14 @@ Date: 2026-08-10
   every later lifecycle step revalidates the current member and exact grant.
   Same-root callers continue through local Component Registry proof, while a
   child, forwarded caller, wrong service, inactive root or caller-supplied
-  identity cannot substitute for either proof.
+  identity cannot substitute for either proof. A focused Project hierarchy
+  journey now uses application-owned durable operation identities to create a
+  Project Instance under its Hub and role-qualified Ledger and optional
+  Machine children under that Instance. Exact retries preserve the original
+  Canisters, Directory rows preserve immediate parents, all descendants remain
+  on the root's Subnet and the Coordinator Registry is unchanged.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.41` is released and `0.101.42` is open.
+- Implementation started: yes; `0.101.42` is released and `0.101.43` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -492,7 +497,7 @@ Fleet policy writer.
 - [ ] Prove configured Replica discovery never claims data readiness,
   promotion or failover and configured PoolMember discovery never claims
   health, load-balancer eligibility or consistency.
-- [ ] Prove local Project Hub -> Project Instance -> Ledger/Machine
+- [x] Prove local Project Hub -> Project Instance -> Ledger/Machine
   provisioning, exact immediate-parent bindings and Coordinator-free retry.
 - [ ] Prove two deployments reuse one Project Hub group with distinct
   reduction-only 10,000/2,000 Hub-to-Instance ceilings on different roots.

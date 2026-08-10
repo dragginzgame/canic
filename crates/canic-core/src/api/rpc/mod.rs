@@ -57,7 +57,13 @@ impl RpcApi {
             .map_err(Error::from)
     }
 
+    /// Request one role-admitted direct child through the local Fleet Subnet Root.
+    ///
+    /// The application must durably allocate a nonzero `operation_id` before
+    /// calling and reuse that exact identity after an interrupted or uncertain
+    /// result. Reusing the identity with a different request is rejected.
     pub async fn create_canister_request<A>(
+        operation_id: [u8; 32],
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
@@ -65,7 +71,7 @@ impl RpcApi {
     where
         A: CandidType + Send + Sync,
     {
-        RpcRequestWorkflow::create_canister_request(canister_role, parent, extra)
+        RpcRequestWorkflow::create_canister_request(operation_id, canister_role, parent, extra)
             .await
             .map_err(Error::from)
     }

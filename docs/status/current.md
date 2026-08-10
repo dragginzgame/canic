@@ -14,10 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.41`.
-- The latest published release is `v0.101.41` at
-  `183625b488c3f12bd0f4c692d8cec183871313d3`.
-- Open `0.101.42` qualifies the released cross-root Fleet-service peer path
+- The workspace package version is `0.101.42`.
+- The latest published release is `v0.101.42` at
+  `1f19c8ffec3879adb02866cd3daf312d64642a5e`.
+- Open `0.101.43` requires applications to supply a durable nonzero operation
+  identity for dynamic child creation. A focused PocketIC journey now drives
+  Project Hub -> Project Instance -> Ledger/optional Machine through the
+  Fleet Subnet Root, proving exact retry, immediate parentage, role-qualified
+  Wasms, same-Subnet placement, singleton and wrong-parent rejection, and no
+  Coordinator Registry mutation.
+- Released `0.101.42` qualifies the cross-root Fleet-service peer path
   across two physical PocketIC application Subnets. One real Project Hub
   Canister calls the remote root, exact retry returns the original reservation
   and the resulting Active peer is a direct child of that root on its Subnet.

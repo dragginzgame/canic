@@ -39,6 +39,7 @@ pub struct RequestOps;
 impl RequestOps {
     /// Dispatch a create-canister request to the configured root canister.
     pub async fn create_canister<A>(
+        operation_id: OperationId,
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
@@ -46,8 +47,13 @@ impl RequestOps {
     where
         A: CandidType + Send + Sync,
     {
-        Self::create_canister_with_metadata(canister_role, parent, extra, new_request_metadata())
-            .await
+        Self::create_canister_with_metadata(
+            canister_role,
+            parent,
+            extra,
+            operation_request_metadata(operation_id),
+        )
+        .await
     }
 
     /// Dispatch a placement-child request under a caller-owned durable operation identity.
@@ -406,6 +412,26 @@ mod tests {
             panic!("operation-bound create must use the placement command");
         };
         assert_eq!(request.metadata, Some(metadata));
+    }
+
+    #[test]
+    fn application_operation_bound_create_uses_the_generic_command() {
+        let operation_id = OperationId::from_bytes([13; 32]);
+        let metadata = operation_request_metadata(operation_id);
+        let request = CreateCanisterRpc {
+            command: CreateCanisterCommand::Generic,
+            canister_role: CanisterRole::new("project_ledger"),
+            parent: CreateCanisterParent::ThisCanister,
+            extra_arg: None,
+            metadata: Some(metadata),
+        }
+        .into_request();
+
+        let Request::CreateCanister(request) = request else {
+            panic!("application operation-bound create must use the generic command");
+        };
+        assert_eq!(request.metadata, Some(metadata));
+        assert_eq!(metadata.request_id, operation_id.into_bytes());
     }
 
     #[test]

@@ -2,6 +2,9 @@
 
 This directory contains current approved Canic system design notes.
 
+For short capability overviews before entering these detailed designs, start
+with the [feature guides](../features/README.md).
+
 Use these documents as the maintained architecture baseline for implementation,
 reviews, and developer handoff. Versioned WIP and release-line plans belong in
 `docs/design/`; point-in-time audit evidence belongs in `docs/audits/`; exact

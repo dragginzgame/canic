@@ -3451,6 +3451,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "project_ledger_stub"
+version = "0.101.42"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
+name = "project_machine_stub"
+version = "0.101.42"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "prost"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

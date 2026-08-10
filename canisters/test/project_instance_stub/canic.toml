@@ -13,6 +13,14 @@ package = "../project_hub_stub"
 kind = "canister"
 package = "."
 
+[roles.project_ledger]
+kind = "canister"
+package = "../project_ledger_stub"
+
+[roles.project_machine]
+kind = "canister"
+package = "../project_machine_stub"
+
 [auth.delegated_tokens]
 enabled = true
 build_network = "local"
@@ -47,3 +55,15 @@ role_attestation_cache = true
 
 [component_specs.projects.spawn_grants.project_hub.project_instance]
 maximum_instances_per_parent = 20_000
+
+[component_specs.projects.children.project_ledger]
+kind = "singleton"
+
+[component_specs.projects.children.project_machine]
+kind = "singleton"
+
+[component_specs.projects.spawn_grants.project_instance.project_ledger]
+maximum_instances_per_parent = 1
+
+[component_specs.projects.spawn_grants.project_instance.project_machine]
+maximum_instances_per_parent = 1

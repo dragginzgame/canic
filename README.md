@@ -2,7 +2,7 @@
   <img src="assets/canic_logo.svg" alt="Canic logo" width="360" />
 </p>
 
-# Canic - Internet Computer Orchestration
+# Canic
 
 [![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
@@ -10,245 +10,152 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.97.1-orange.svg)](rust-toolchain.toml)
 
-Canic is a Rust toolkit and operator CLI for Internet Computer canister fleets.
-It gives canister crates metadata-driven lifecycle macros, validated topology
-config, stable-memory helpers, endpoint guards, qualified Fleet infrastructure
-and application artifact builds, journaled installation, and topology-aware
-backup and restore workflows.
+Canic is a Rust toolkit and operator CLI for building and running Internet
+Computer canister fleets. Its capabilities are deliberately separable: use the
+runtime facade without Fleet installation, add authentication without scaling,
+or use the host-side backup tools without giving application canisters access
+to files, credentials, or operator authority.
 
-Install the published operator binary:
+## Start Here
+
+Install the published operator CLI at the same version as the `canic` crate
+used by your canisters:
 
 ```bash
-cargo install --locked canic-cli --version <same-version-as-canic>
+cargo install --locked canic-cli --version <version>
 canic --version
 ```
 
-Canic uses the installed `icp` binary for local replica and canister
-operations. If Canic reports an unsupported ICP CLI, check `icp --version`;
-`icp network update` updates only the local network launcher, not the `icp`
-CLI binary. See [INSTALLING.md](INSTALLING.md#icp-cli-compatibility) for the
-supported version range and upgrade command.
-
-When working from this checkout:
+For a checkout of this repository:
 
 ```bash
 make install
 ```
 
-See [INSTALLING.md](INSTALLING.md) for the complete setup guide, local replica
-notes, fleet management flow, path dependency setup, and backup/restore operator
-walkthrough.
+Then choose the path that matches what you are doing:
 
-## Current 0.100 Status
+- **Build a first managed canister:**
+  [Minimal managed Fleet](docs/getting-started/minimal-managed-fleet.md)
+- **Install and operate Canic:** [Installing Canic](INSTALLING.md)
+- **Configure roles and topology:** [Canic configuration](CONFIG.md)
+- **Work on Canic itself:** [Contributor rules](AGENTS.md) and
+  [testing guide](TESTING.md)
 
-The 0.100 line is an in-progress, reinstall-only hard cut to a Fleet
-Coordinator plus one Fleet Subnet Root and one root-local Wasm Store on every
-occupied Fleet/Subnet pair. The current installer builds, creates, installs,
-and independently verifies the Coordinator, all planned roots, and every
-root's exact Store. It then registers and independently verifies every root as
-Fleet Registry `Joining`, durably stages that exact snapshot at every root and
-verifies every Coordinator acknowledgement before atomically committing and
-independently verifying the complete Coordinator Registry as `Active`. It
-then atomically activates and independently verifies every root's exact
-all-`Active` Registry Mirror and Registry-derived Fleet Directory. Every root
-remains runtime-`Prepared`; installation stops before Component creation,
-runtime activation, or terminal Fleet-catalog publication.
+Canic uses the installed `icp` binary for replica, canister, snapshot, and
+restore operations. Supported versions and upgrade guidance are maintained in
+[INSTALLING.md](INSTALLING.md#icp-cli-compatibility).
 
-Consequently, `canic info list`, `canic info env`, backup, and restore commands
-require a terminal installed Fleet and are not a successful next step after a
-fresh 0.100 install yet. The planned `canic info subnets <fleet> [--json]`
-inventory is also a required 0.100 closeout surface, not a command in the
-current binary. See the
-[implementation status](docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md)
-for the exact completed and pending boundaries.
+[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.97.1`;
+published crates declare MSRV `1.91.0` in [Cargo.toml](Cargo.toml).
 
-## Highlights
+## Features
 
-* **Lifecycle and build macros:** `canic::start!()` and `canic::build!(...)`
-  wire IC hooks, endpoint bundles, and compile-time config validation from
-  `[package.metadata.canic] app = "..."` and `role = "..."`.
-* **Application timers:** `timer!` schedules one asynchronous invocation, while
-  `timer_interval!` rearms only after the current future completes. Both return
-  opaque handles consumed by cancellation. See the
-  [facade timer contract](crates/canic/README.md#application-timers).
-* **Role lifecycle:** ordinary managed canisters can be declared before
-  topology placement, then explicitly attached before artifact builds or
-  deployment truth.
-* **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
-  flat Component Specs, potential-descendant role catalogs, exact role-to-role
-  spawn grants, bounded instance and descendant ceilings, scaling pools,
-  sharding pools, and binding pools.
-* **Delegated auth:** Root renews chain-key batch delegation proofs, issuer
-  canisters sign reusable delegated tokens, and endpoint verifiers check the
-  self-contained token, embedded root proof, issuer proof, audience, subject,
-  and scopes locally. See
-  [AUTH_DELEGATED_SIGNATURES.md](docs/contracts/AUTH_DELEGATED_SIGNATURES.md).
-* **Multi-root install flow:** The host qualifies the Coordinator, Fleet
-  Subnet Root, and Wasm Store as separate infrastructure artifacts, builds one
-  Fleet-wide application artifact union, and stages only each root's admitted
-  release set into that root's independently verified Store. See
-  [fleet-install-input.md](docs/architecture/fleet-install-input.md) and
-  [build-artifacts.md](docs/architecture/build-artifacts.md).
-* **Passive adoption reports:** Existing and partial deployments can be
-  inspected with read-only adoption profiles. Reports classify configured and
-  observed resources, but recommendations are non-executed previews. See
-  [adoption-profiles.md](docs/architecture/adoption-profiles.md).
-* **Evidence and catalog reports:** Build provenance, deployment-check
-  envelopes, policy gates, and the passive network-scoped Fleet catalog give operators a
-  compact evidence flow without adding install, controller, registry, topology,
-  or teardown authority. See
-  [v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md) and
-  [v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md).
-* **NNS evidence through shared libraries:** Canic host checks use `ic-query`
-  to read and refresh cached IC mainnet Subnet metadata without requiring the
-  standalone NNS inspection CLI.
-* **Operator workflows:** The `canic` binary builds artifacts, manages local
-  App configs and replica status, installs Fleets, creates topology-aware
-  backups, validates their manifests, and drives journaled, resumable restore
-  execution.
+Each feature has a short guide of its own. The guides explain the capability
+and its authority boundary, then point to the detailed contracts and runbooks.
 
-## Quick Start
+### Canister Runtime
 
-For a copyable root-plus-two-role Component example, start with
-[minimal-managed-fleet.md](docs/getting-started/minimal-managed-fleet.md).
-For the compact setup checklist, use [INSTALLING.md](INSTALLING.md).
+Lifecycle and build macros, stable-memory helpers, timers, typed calls,
+metrics, and configuration-derived runtime context for Rust canisters.
 
-To exercise the current local installation boundary from this checkout, create
-a Fleet input with exact local Subnet placement and run:
+[Explore the canister runtime](docs/features/runtime/README.md)
 
-```bash
-canic status
-canic replica start --background
-canic install test test-local \
-  --fleet-input deployments/test-local.toml \
-  --profile fast
-```
+### Authentication
 
-The Fleet input is required and is separate from `apps/test/canic.toml`. See
-[fleet-install-input.md](docs/architecture/fleet-install-input.md) for its
-schema. On the current 0.100 implementation, the command stops after all
-root-local Stores and `Joining` Registry rows are verified; the terminal
-inspection commands become applicable after the synchronization and
-activation slices are complete.
+Endpoint guards, delegated subject tokens, root-managed chain-key proof
+renewal, issuer proofs, role attestation, and explicit caller/subject binding.
 
-For ad hoc IC mainnet NNS inspection outside Canic, install the optional
-upstream CLI:
+[Explore authentication](docs/features/authentication/README.md)
 
-```bash
-cargo install --locked ic-query-cli
-```
+### Fleet Orchestration
 
-Useful next reads:
+Coordinator-backed Fleet installation, one root and Wasm Store per occupied
+Subnet, qualified artifacts, registries, directories, and root-owned platform
+effects.
 
-* [INSTALLING.md](INSTALLING.md) - end-to-end installation and local operation.
-* [docs/getting-started/local-academic-fleet.md](docs/getting-started/local-academic-fleet.md)
-  - local named-target runbook for Canic, raw `icp`, sharding, metrics, and
-  install/upgrade traps.
-* [docs/architecture/v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md)
-  - compact pre-v1 build, evidence, policy, and catalog flow.
-* [docs/architecture/v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md)
-  - compact v1-candidate commands, files, evidence outputs, and boundaries.
-* [docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md](docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
-  - approved Coordinator, multi-root Registry, Component, and Subnet-inventory
-  destination.
-* [crates/canic-cli/README.md](crates/canic-cli/README.md) - operator command
-  guide, including backup and restore.
-* `ic-query` - IC metadata query library used by Canic host checks. The
-  standalone NNS inspection CLI is optional and installed directly from the
-  upstream `ic-query-cli` package.
-* [crates/canic-host/README.md](crates/canic-host/README.md) - build profiles,
-  split workspace/ICP roots, custom canister roots, and lower-level install
-  commands.
-* [TESTING.md](TESTING.md) - canister placement and test expectations.
+[Explore Fleet orchestration](docs/features/fleet-orchestration/README.md)
 
-## Repository Layout
+### Scaling And Placement
 
-The workspace keeps Rust crates under [crates/](crates/) and App fixtures under
-[apps/](apps/). Detailed ownership and layering rules live in
-[AGENTS.md](AGENTS.md).
+Reusable Component Specs and Groups, bounded placement, service roles,
+dynamic child trees, sharding pools, scaling pools, and reduction-only limits.
 
-* [crates/canic/](crates/canic/) - public facade crate, lifecycle/build macros,
-  endpoint bundles, and protocol constants.
-* [crates/canic-core/](crates/canic-core/) - shared canister runtime foundation:
-  config, lifecycle, ingress limits, auth, storage, workflow, DTOs, and IDs.
-* [crates/canic-macros/](crates/canic-macros/) - proc macros behind the public
-  facade.
-* [crates/canic-control-plane/](crates/canic-control-plane/) - Fleet
-  Coordinator, Fleet Subnet Root, and Store control-plane runtime support
-  built on `canic-core`.
-* [crates/canic-fleet-coordinator/](crates/canic-fleet-coordinator/) - canonical
-  runtime-only Fleet Coordinator canister artifact source.
-* [crates/canic-wasm-store/](crates/canic-wasm-store/) - canonical implicit
-  bootstrap `wasm_store` canister crate.
-* [crates/canic-cli/](crates/canic-cli/) - published `canic` operator binary.
-* [crates/canic-host/](crates/canic-host/) - host-side build, install, fleet,
-  and thin-root staging library.
-* [crates/canic-backup/](crates/canic-backup/) - backup/restore domain library.
-* [crates/canic-testing-internal/](crates/canic-testing-internal/) and
-  [crates/canic-tests/](crates/canic-tests/) - repo-only PocketIC harnesses and
-  integration tests.
-* [apps/test/](apps/test/) and [apps/demo/](apps/demo/) - local reference App
-  configs.
-* [canisters/](canisters/) - runnable canisters that are not config-defined
-  Apps.
-* [scripts/](scripts/) - dev setup, CI, release, Wasm, and audit helpers.
-* [docs/](docs/) and [.github/workflows/](.github/workflows/) - design notes,
-  operational docs, audits, and CI.
+[Explore scaling and placement](docs/features/scaling-and-placement/README.md)
 
-## Architecture And Contracts
+### Builds, Provenance, And Evidence
 
-Canic follows the layering rules in [AGENTS.md](AGENTS.md): endpoints
-authenticate and delegate, workflow orchestrates, policy decides, ops performs
-approved state or platform actions, and model owns authoritative state and
-storage invariants.
+Role-aware Wasm builds, build provenance, passive deployment evidence,
+policy gates, adoption reports, and network-scoped Fleet catalogs.
 
-Reference docs:
+[Explore builds and evidence](docs/features/build-and-evidence/README.md)
 
-* [docs/architecture/README.md](docs/architecture/README.md)
-* [docs/status/current.md](docs/status/current.md)
-* [docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md](docs/design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
-* [docs/architecture/build-artifacts.md](docs/architecture/build-artifacts.md)
-* [docs/architecture/authentication.md](docs/architecture/authentication.md)
-* [docs/contracts/AUTH_DELEGATED_SIGNATURES.md](docs/contracts/AUTH_DELEGATED_SIGNATURES.md)
-* [docs/contracts/ACCESS_ARCHITECTURE.md](docs/contracts/ACCESS_ARCHITECTURE.md)
+### Backup And Restore
 
-## Development
+Topology-aware canister snapshots, manifests, checksums, resumable download
+journals, verified restore plans, and guarded execution from the host CLI.
 
-Common local checks:
+[Explore backup and restore](docs/features/backup-and-restore/README.md)
 
-```bash
-cargo fmt --all
-make fmt-check
-make check
-make clippy
-make test
-```
+### Blob Storage
 
-Focused local checks:
+Optional runtime APIs and operator tooling for product blob storage, with the
+non-billing integration kept separate from Cashier-backed billing support.
 
-```bash
-make test-auth
-make test-auth-chain-key
-make test-cli
-make test-runtime-fast
-```
+[Explore blob storage](docs/features/blob-storage/README.md)
 
-[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.97.1` so CI and
-local builds stay in sync. Published crates declare MSRV `1.91.0` in
-[Cargo.toml](Cargo.toml).
+### Operations And Diagnostics
 
-Follow [docs/governance/ci-deployment.md](docs/governance/ci-deployment.md) for
-CI, git, deployment, and automation rules. Follow
-[docs/governance/changelog.md](docs/governance/changelog.md) and
-[CHANGELOG.md](CHANGELOG.md) for changelog policy.
+App and Fleet setup, network trust, local replicas, installation, status,
+inspection, medic checks, recovery guidance, and automation-friendly output.
 
-## Project Status & Contributing
+[Explore operations and diagnostics](docs/features/operations/README.md)
 
-Canic is the successor to the internal ICU toolkit. The repository is in the
-process of being opened for wider use; issues and PRs are currently limited to
-the core team. Follow [AGENTS.md](AGENTS.md), [CONFIG.md](CONFIG.md), and
-[scripts/ci/](scripts/ci/) for workflow expectations.
+The complete feature index is in [docs/features](docs/features/README.md).
+
+## Core Vocabulary
+
+- An **App** is checked-in source and configuration.
+- A **Fleet** is one installed instance of an App on one network.
+- A **workspace** is the local checkout containing configuration and operator
+  state; it is not a deployment identity.
+- A **Component Spec** is a reusable blueprint. A concrete Component is one
+  deployed occurrence with its own identity, root, state, and limits.
+- A **Fleet Subnet Root** owns lifecycle effects for Components on its physical
+  Subnet. The Fleet Coordinator owns Fleet-wide planning and publication.
+
+See [CONFIG.md](CONFIG.md) for the complete configuration vocabulary and
+[fleet-install-input.md](docs/architecture/fleet-install-input.md) for the
+separate operator-owned installation input.
+
+## Repository Map
+
+- [crates/canic](crates/canic/) — public canister facade
+- [crates/canic-core](crates/canic-core/) — shared runtime, models, policy, and
+  protocols
+- [crates/canic-control-plane](crates/canic-control-plane/) — root,
+  Coordinator, and Store runtime support
+- [crates/canic-cli](crates/canic-cli/) — published `canic` operator binary
+- [crates/canic-host](crates/canic-host/) — host-side build, install, and Fleet
+  orchestration
+- [crates/canic-backup](crates/canic-backup/) — backup and restore domain
+  contracts
+- [apps](apps/) — reference App configurations and canister packages
+- [docs](docs/) — architecture, contracts, operations, designs, and audits
+
+Detailed ownership and dependency rules live in [AGENTS.md](AGENTS.md).
+
+## Status
+
+Canic is pre-1.0. Release transitions are reinstall-only unless an explicit
+design says otherwise; same-release retry, backup, and recovery remain durable
+operational contracts. Read the
+[current implementation status](docs/status/current.md) for the exact completed
+boundary rather than relying on a version-specific summary in this landing
+page.
+
+The repository is being opened for wider use; issues and pull requests are
+currently limited to the core team.
 
 ## License
 
-MIT. See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).
