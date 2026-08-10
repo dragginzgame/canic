@@ -29,7 +29,10 @@ use canic_core::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
             ComponentRuntimeActivationEvidence,
         },
-        fleet_registry::FleetRegistryVersion,
+        fleet_registry::{
+            FleetRegistryVersion, FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
+            FleetSubnetRootStatus,
+        },
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
@@ -238,6 +241,7 @@ pub struct RootFleetSubnetDrainingRecord {
     pub fleet_subnet_root: Principal,
     pub placement_subnet: SubnetId,
     pub active_registry: FleetRegistryVersion,
+    pub reservation: FleetSubnetRootDrainingReservationResponse,
     pub component_topology_digest: ComponentTopologyDigest,
     pub active_release_set: FleetSubnetRootReleaseSet,
     pub next_allocation_sequence: u64,
@@ -460,6 +464,25 @@ impl RootFleetSubnetDrainingRecord {
         let registry_is_covered =
             registry_covers_preparation(&meta.prepared_against_registry, &self.active_registry);
         let operation_is_valid = self.operation_id != [0; 32];
+        let expected_root = FleetSubnetRootEntry {
+            placement_subnet: meta.root.placement_subnet,
+            fleet_subnet_root: meta.root.fleet_subnet_root,
+            component_admissions: meta.root.component_admissions.clone(),
+            component_topology_digest: meta.root.component_topology_digest,
+            active_release_set: meta.release_set,
+            limits: meta.root.limits.clone(),
+            status: FleetSubnetRootStatus::Active,
+        };
+        let reservation_is_valid = [
+            self.reservation.request.operation_id == self.operation_id,
+            self.reservation.request.expected_registry == self.active_registry,
+            self.reservation.request.expected_root == expected_root,
+            self.reservation.coordinator == meta.root.authority.binding.coordinator,
+            self.reservation.prepared_at_ns > 0,
+            self.reservation.reservation_hash != [0; 32],
+        ]
+        .into_iter()
+        .all(|valid| valid);
         let time_is_valid = self.started_at_ns > 0;
         let sequence_is_valid = self.next_allocation_sequence > 0;
         let bytes_are_bounded =
@@ -512,6 +535,7 @@ impl RootFleetSubnetDrainingRecord {
             source_is_exact,
             registry_is_covered,
             operation_is_valid,
+            reservation_is_valid,
             time_is_valid,
             sequence_is_valid,
             bytes_are_bounded,

@@ -30,6 +30,7 @@ use canic_core::{
         ops::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
             ic::{IcOps, call::CallOps, mgmt::MgmtOps},
+            root_draining_reservation::FleetSubnetRootDrainingReservationOps,
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
@@ -40,8 +41,10 @@ use canic_core::{
             FleetRegistryVersion, FleetSubnetRootDeletionReadinessIntentRequest,
             FleetSubnetRootDeletionReadinessIntentResponse,
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
-            FleetSubnetRootEntry, FleetSubnetRootRemovalPublicationRequest,
-            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootStatus,
+            FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootEntry,
+            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootStatus,
         },
         fleet_subnet_root::{
             FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES,
@@ -244,28 +247,107 @@ fn require_final_sibling_wasm_store_controllers(
 }
 
 /// Durably fence new top-level Component allocation under exact active authority.
-pub fn begin_draining(
+pub async fn begin_draining(
     request: FleetSubnetRootDrainingRequest,
 ) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
     let state = validated_root_state()?;
+    if let Some(existing) = ComponentRegistryOps::root_draining_if_present(request.operation_id)? {
+        return exact_draining_retry(&request, existing);
+    }
     if state.root_entry.status != FleetSubnetRootStatus::Active {
         return Err(InternalError::conflict(
             "only an Active Fleet Subnet Root can begin draining",
         ));
     }
-    if request.expected_registry != state.fleet_registry {
+    if !ComponentRegistryOps::registry_covers_preparation(
+        &request.expected_registry,
+        &state.fleet_registry,
+    ) {
         return Err(InternalError::conflict(
-            "Fleet Subnet Root draining request differs from the active Registry mirror",
+            "Fleet Subnet Root draining source Registry is not covered by its active mirror",
         ));
     }
+    RootComponentProvisioningOps::require_root_draining_open()?;
+    let coordinator = state.fleet_registry.authority.binding.coordinator;
+    let reservation = fetch_root_draining_reservation(
+        coordinator,
+        FleetSubnetRootDrainingReservationStatusRequest {
+            operation_id: request.operation_id,
+            fleet_subnet_root: state.root_entry.fleet_subnet_root,
+        },
+    )
+    .await?;
+    validate_root_draining_reservation(&state, &request, &reservation)?;
+
+    let current = validated_root_state()?;
+    validate_root_draining_reservation(&current, &request, &reservation)?;
     RootComponentProvisioningOps::require_root_draining_open()?;
     let draining = ComponentRegistryOps::begin_root_draining(
         request.operation_id,
         &request.expected_registry,
+        &reservation,
         IcOps::now_nanos(),
     )?;
     crate::workflow::canister_pool::stop();
     Ok(draining_response(draining))
+}
+
+fn exact_draining_retry(
+    request: &FleetSubnetRootDrainingRequest,
+    existing: RootFleetSubnetDrainingView,
+) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
+    if request.expected_registry != existing.active_registry {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root draining retry names a different source Registry",
+        ));
+    }
+    Ok(draining_response(existing))
+}
+
+async fn fetch_root_draining_reservation(
+    coordinator: Principal,
+    request: FleetSubnetRootDrainingReservationStatusRequest,
+) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
+    let call = CallOps::unbounded_wait(
+        coordinator,
+        protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
+    )
+    .with_arg(request)?
+    .execute()
+    .await?;
+    let result: Result<FleetSubnetRootDrainingReservationResponse, Error> = call.candid()?;
+    result.map_err(InternalError::public)
+}
+
+fn validate_root_draining_reservation(
+    state: &ValidatedFleetSubnetRootState,
+    request: &FleetSubnetRootDrainingRequest,
+    reservation: &FleetSubnetRootDrainingReservationResponse,
+) -> Result<(), InternalError> {
+    let source_is_covered = ComponentRegistryOps::registry_covers_preparation(
+        &reservation.request.expected_registry,
+        &state.fleet_registry,
+    );
+    let reservation_is_exact = [
+        reservation.request.operation_id == request.operation_id,
+        reservation.request.expected_registry == request.expected_registry,
+        reservation.request.expected_root == state.root_entry,
+        reservation.request.expected_root.status == FleetSubnetRootStatus::Active,
+        reservation.coordinator == state.fleet_registry.authority.binding.coordinator,
+        reservation.prepared_at_ns > 0,
+        reservation.reservation_hash != [0; 32],
+        source_is_covered,
+        FleetSubnetRootDrainingReservationOps::content_hash(reservation)?
+            == reservation.reservation_hash,
+    ]
+    .into_iter()
+    .all(|valid| valid);
+    if !reservation_is_exact {
+        return Err(InternalError::conflict(
+            "Coordinator root-draining reservation differs from protected local authority",
+        ));
+    }
+    Ok(())
 }
 
 /// Read one exact durable root-local draining fence without mutation.
@@ -970,6 +1052,7 @@ fn draining_response(view: RootFleetSubnetDrainingView) -> FleetSubnetRootDraini
         fleet_subnet_root: view.fleet_subnet_root,
         placement_subnet: view.placement_subnet,
         active_registry: view.active_registry,
+        reservation_hash: view.reservation_hash,
         component_topology_digest: view.component_topology_digest,
         active_release_set: view.active_release_set,
         next_allocation_sequence: view.next_allocation_sequence,

@@ -4,7 +4,9 @@ use canic_core::{
         fleet_registry::{
             FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry, FleetRegistryVersion,
             FleetSubnetRootDirectoryEntry, FleetSubnetRootDrainingPublicationRequest,
-            FleetSubnetRootDrainingPublicationResponse,
+            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationRequest,
+            FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootDrainingReservationStatusRequest,
             FleetSubnetRootRegistryMirrorActivationRequest,
             FleetSubnetRootRegistryMirrorActivationResponse,
         },
@@ -226,36 +228,86 @@ fn resume_store_deletion(context: &RetirementContext) -> Result<(), Box<dyn std:
 fn publish_draining(
     context: &RetirementContext,
 ) -> Result<FleetSubnetRootDrainingPublicationResponse, Box<dyn std::error::Error>> {
-    let active_registry: FleetRegistryVersion = query(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY_VERSION,
-        &(),
-    )?;
+    let reservation = retained_or_new_draining_reservation(context)?;
+    eprintln!("retirement stage complete: Coordinator draining reservation");
     let root_draining: FleetSubnetRootDrainingResponse = call(
         &context.icp,
         context.fleet_subnet_root,
         protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
         &FleetSubnetRootDrainingRequest {
             operation_id: context.operation_id,
-            expected_registry: active_registry.clone(),
+            expected_registry: reservation.request.expected_registry.clone(),
         },
     )?;
+    if root_draining.reservation_hash != reservation.reservation_hash {
+        return Err("root draining receipt differs from the Coordinator reservation".into());
+    }
     require_empty_root(&root_draining)?;
     eprintln!("retirement stage complete: root draining fence");
 
+    let publication_registry: FleetRegistryVersion = query(
+        &context.icp,
+        context.coordinator,
+        protocol::CANIC_FLEET_REGISTRY_VERSION,
+        &(),
+    )?;
     let published: FleetSubnetRootDrainingPublicationResponse = call(
         &context.icp,
         context.coordinator,
         protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
         &FleetSubnetRootDrainingPublicationRequest {
-            expected_registry: active_registry.clone(),
+            expected_registry: publication_registry,
             root_draining,
         },
     )?;
     eprintln!("retirement stage complete: Coordinator draining publication");
-    activate_draining_mirror(context, active_registry, &published)?;
+    activate_draining_mirror(context, published.previous_version.clone(), &published)?;
     Ok(published)
+}
+
+fn retained_or_new_draining_reservation(
+    context: &RetirementContext,
+) -> Result<FleetSubnetRootDrainingReservationResponse, Box<dyn std::error::Error>> {
+    let retained = call(
+        &context.icp,
+        context.coordinator,
+        protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
+        &FleetSubnetRootDrainingReservationStatusRequest {
+            operation_id: context.operation_id,
+            fleet_subnet_root: context.fleet_subnet_root,
+        },
+    );
+    if let Ok(reservation) = retained {
+        return Ok(reservation);
+    }
+    let active_registry: FleetRegistryVersion = query(
+        &context.icp,
+        context.coordinator,
+        protocol::CANIC_FLEET_REGISTRY_VERSION,
+        &(),
+    )?;
+    let registry: FleetRegistry = query(
+        &context.icp,
+        context.coordinator,
+        protocol::CANIC_FLEET_REGISTRY,
+        &(),
+    )?;
+    let expected_root = registry
+        .fleet_subnet_roots
+        .iter()
+        .find(|entry| entry.fleet_subnet_root == context.fleet_subnet_root)
+        .cloned()
+        .ok_or("Fleet Subnet Root is absent from the Coordinator Registry")?;
+    call(
+        &context.icp,
+        context.coordinator,
+        protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
+        &FleetSubnetRootDrainingReservationRequest {
+            operation_id: context.operation_id,
+            expected_registry: active_registry,
+            expected_root,
+        },
+    )
 }
 
 fn activate_draining_mirror(

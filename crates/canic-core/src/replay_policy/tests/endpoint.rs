@@ -166,6 +166,18 @@ fn canister_status_is_manifested_as_read_only() {
 }
 
 #[test]
+fn root_draining_reservation_status_is_an_inter_canister_read_only_update() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_fleet_registry_root_draining_reservation_status")
+        .expect("root-draining reservation status policy entry");
+
+    assert_eq!(entry.endpoint_kind, EndpointKind::Update);
+    assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(entry.cost_class, CostClass::None);
+}
+
+#[test]
 fn runtime_introspection_endpoints_are_manifested_as_read_only_queries() {
     for endpoint in ["canic_health", "canic_readiness", "canic_runtime_status"] {
         let entry = ENDPOINT_REPLAY_POLICY_MANIFEST

@@ -59,6 +59,7 @@ pub struct RootFleetSubnetDrainingView {
     pub fleet_subnet_root: Principal,
     pub placement_subnet: SubnetId,
     pub active_registry: FleetRegistryVersion,
+    pub reservation_hash: [u8; 32],
     pub component_topology_digest: ComponentTopologyDigest,
     pub active_release_set: FleetSubnetRootReleaseSet,
     pub next_allocation_sequence: u64,

@@ -14,17 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.37`.
-- The latest published release is `v0.101.37` at
-  `4e04b895e9b02ff73d91ee98c82096a20b25088c`.
-- Open `0.101.38` adds the durable Coordinator root-draining reservation.
+- The workspace package version is `0.101.38`.
+- The latest published release is `v0.101.38` at
+  `2dc3eb345816e217f81606c0c02ca55265ed0292`.
+- Open `0.101.39` completes the Coordinator-first root-draining boundary. The
+  root independently fetches its exact retained reservation through a
+  target-root-authenticated read-only update, accepts a later same-authority
+  Mirror only while its complete Active row remains unchanged, repeats local
+  grouped checks after the call and commits the complete reservation with its
+  one-way local fence. Stable validation recomputes the reservation hash, the
+  local receipt projects it, and Coordinator publication requires that exact
+  retained hash and current target row. Exact local retry no longer depends on
+  another Coordinator call.
+- Released `0.101.38` adds the durable Coordinator root-draining reservation.
   Preparation binds one nonzero operation to the exact current Registry
   version/hash and complete Active root row; exact retry and passive
   controller-or-target-root status survive restart. Reservation preparation
   and Component-plan preparation perform inverse checks in the same stable
-  authority, so either ordering has one winner. The root does not yet consume
-  this as local-fence authority; independent Coordinator verification and
-  local/publication receipt binding remain next.
+  authority, so either ordering has one winner.
 - Released `0.101.37` moves grouped ordinary Component draining into the
   Registry operation and stable-validation boundary. Coordinator root
   lifecycle publication rejects only the exact root named by nonempty current
@@ -2602,16 +2609,15 @@ First primary results:
 
 ## Next Action
 
-Grouped ordinary-removal fencing is published at immutable `v0.101.37`. Open
-`0.101.38` has implemented the Coordinator-owned root-draining reservation,
-its exact retry/passive status and the atomic plan-versus-reservation winner.
-Continue Slice 4 by making the target root independently fetch and verify the
-retained reservation before committing its local one-way fence. Bind the
-domain-separated reservation hash into the local draining receipt and require
-that same hash at Coordinator `Active -> Draining` publication. Preserve exact
-retry across response loss and later unrelated Registry revisions without
-leases, cancellation, scale-in, replacement or cleanup exceptions. Qualified
-grouped removal remains a later design.
+The root-verified Coordinator reservation boundary is complete in open
+`0.101.39`, including stable hash validation, later-unrelated-revision
+publication and exact retry without a second Coordinator call. Finish the
+remaining 0.101 runtime-policy contract next: Replica purpose must fail
+application database write authority, PoolMember purpose must grant no
+implicit leadership/health/consistency authority, and service-sensitive
+descendants must inherit that exact owning top-level Component fence without
+becoming group members or Fleet services. Qualified grouped removal, scale-in,
+replacement and relocation remain later designs.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.

@@ -30,6 +30,7 @@ pub mod ic;
 pub mod perf;
 pub mod placement;
 pub mod replay;
+pub mod root_draining_reservation;
 pub mod rpc;
 pub mod runtime;
 pub mod storage;

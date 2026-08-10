@@ -561,7 +561,7 @@ fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
     ))
     .expect("advance an unrelated root through a later Registry revision");
     let durable = FleetCoordinatorRegistryStore::export();
-    FleetCoordinatorRegistryStore::import(durable.clone());
+    FleetCoordinatorRegistryStore::import(durable);
     assert_eq!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
             request, 999
@@ -569,6 +569,15 @@ fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
         .expect("exact reservation retry after restart"),
         response
     );
+    let publication_registry =
+        FleetCoordinatorWorkflow::version().expect("Registry version after unrelated root drains");
+    let mut publication = root_draining_publication_request(&first, &active_version, [71; 32]);
+    publication.expected_registry = publication_registry.clone();
+    let published = FleetCoordinatorWorkflow::publish_root_draining(publication)
+        .expect("consume earlier reservation after unrelated Registry revision");
+    assert_eq!(published.previous_version, publication_registry);
+    assert_eq!(published.root_draining.active_registry, active_version);
+    let durable = FleetCoordinatorRegistryStore::export();
     let mut corrupted = durable.clone();
     corrupted
         .current
@@ -753,13 +762,36 @@ fn root_draining_publication_request(
     registry: &FleetRegistryVersion,
     operation_id: [u8; 32],
 ) -> FleetSubnetRootDrainingPublicationRequest {
+    let reservation =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            root_draining_reservation_request(root, registry, operation_id),
+            1,
+        )
+        .expect("prepare root-draining reservation for publication");
+    root_draining_publication_request_with_hash(
+        root,
+        registry,
+        registry,
+        operation_id,
+        reservation.reservation_hash,
+    )
+}
+
+fn root_draining_publication_request_with_hash(
+    root: &FleetSubnetRootEntry,
+    source_registry: &FleetRegistryVersion,
+    publication_registry: &FleetRegistryVersion,
+    operation_id: [u8; 32],
+    reservation_hash: [u8; 32],
+) -> FleetSubnetRootDrainingPublicationRequest {
     FleetSubnetRootDrainingPublicationRequest {
-        expected_registry: registry.clone(),
+        expected_registry: publication_registry.clone(),
         root_draining: FleetSubnetRootDrainingResponse {
             operation_id,
             fleet_subnet_root: root.fleet_subnet_root,
             placement_subnet: root.placement_subnet,
-            active_registry: registry.clone(),
+            active_registry: source_registry.clone(),
+            reservation_hash,
             component_topology_digest: root.component_topology_digest,
             active_release_set: root.active_release_set,
             next_allocation_sequence: 1,
@@ -771,6 +803,39 @@ fn root_draining_publication_request(
             started_at_ns: 1,
         },
     }
+}
+
+#[test]
+fn root_draining_publication_requires_one_exact_retained_reservation() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (root, _, version) = activate_two_roots(principal(91));
+    let missing =
+        root_draining_publication_request_with_hash(&root, &version, &version, [92; 32], [93; 32]);
+    let unavailable = FleetCoordinatorWorkflow::publish_root_draining(missing)
+        .expect_err("publication without retained reservation must fail closed");
+    assert_eq!(
+        unavailable.public_error().map(|error| error.code),
+        Some(ErrorCode::Unavailable)
+    );
+
+    let reservation =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            root_draining_reservation_request(&root, &version, [92; 32]),
+            94,
+        )
+        .expect("prepare exact reservation");
+    let wrong_hash =
+        root_draining_publication_request_with_hash(&root, &version, &version, [92; 32], {
+            let mut hash = reservation.reservation_hash;
+            hash[0] ^= 1;
+            hash
+        });
+    let conflict = FleetCoordinatorWorkflow::publish_root_draining(wrong_hash)
+        .expect_err("publication with substituted reservation hash must fail closed");
+    assert_eq!(
+        conflict.public_error().map(|error| error.code),
+        Some(ErrorCode::InvalidInput)
+    );
 }
 
 fn assert_reservation_conflict(
@@ -3731,6 +3796,12 @@ fn assert_root_draining_publication(
     second_entry: &FleetSubnetRootEntry,
     active_version: &FleetRegistryVersion,
 ) {
+    let reservation =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            root_draining_reservation_request(first_entry, active_version, [21; 32]),
+            20,
+        )
+        .expect("prepare first root draining reservation");
     let request = FleetSubnetRootDrainingPublicationRequest {
         expected_registry: active_version.clone(),
         root_draining: FleetSubnetRootDrainingResponse {
@@ -3738,6 +3809,7 @@ fn assert_root_draining_publication(
             fleet_subnet_root: first_entry.fleet_subnet_root,
             placement_subnet: first_entry.placement_subnet,
             active_registry: active_version.clone(),
+            reservation_hash: reservation.reservation_hash,
             component_topology_digest: first_entry.component_topology_digest,
             active_release_set: first_entry.active_release_set,
             next_allocation_sequence: 3,
@@ -4053,6 +4125,12 @@ fn assert_later_root_can_drain_after_removal(
     second_entry: &FleetSubnetRootEntry,
     removed_version: &FleetRegistryVersion,
 ) {
+    let reservation =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::prepare_root_draining_reservation(
+            root_draining_reservation_request(second_entry, removed_version, [31; 32]),
+            31,
+        )
+        .expect("prepare later root draining reservation");
     let request = FleetSubnetRootDrainingPublicationRequest {
         expected_registry: removed_version.clone(),
         root_draining: FleetSubnetRootDrainingResponse {
@@ -4060,6 +4138,7 @@ fn assert_later_root_can_drain_after_removal(
             fleet_subnet_root: second_entry.fleet_subnet_root,
             placement_subnet: second_entry.placement_subnet,
             active_registry: removed_version.clone(),
+            reservation_hash: reservation.reservation_hash,
             component_topology_digest: second_entry.component_topology_digest,
             active_release_set: second_entry.active_release_set,
             next_allocation_sequence: 1,

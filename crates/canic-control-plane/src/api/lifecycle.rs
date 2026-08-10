@@ -130,10 +130,12 @@ impl LifecycleApi {
         crate::workflow::fleet_subnet_root::wasm_store_adoption_status(request).map_err(Into::into)
     }
 
-    pub fn begin_fleet_subnet_root_draining(
+    pub async fn begin_fleet_subnet_root_draining(
         request: FleetSubnetRootDrainingRequest,
     ) -> Result<FleetSubnetRootDrainingResponse, canic_core::dto::error::Error> {
-        crate::workflow::fleet_subnet_root::begin_draining(request).map_err(Into::into)
+        crate::workflow::fleet_subnet_root::begin_draining(request)
+            .await
+            .map_err(Into::into)
     }
 
     pub fn fleet_subnet_root_draining_status(

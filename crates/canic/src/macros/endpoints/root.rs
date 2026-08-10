@@ -38,7 +38,7 @@ macro_rules! canic_emit_root_admin_endpoints {
         async fn canic_fleet_subnet_root_draining_begin(
             request: ::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingRequest,
         ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_fleet_subnet_root_draining(request)
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_fleet_subnet_root_draining(request).await
         }
 
         #[$crate::canic_query(requires(caller::is_controller()))]
