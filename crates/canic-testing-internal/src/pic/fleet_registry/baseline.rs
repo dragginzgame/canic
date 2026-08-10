@@ -5716,6 +5716,12 @@ mod tests {
         fixture
     }
 
+    struct BootstrappedRootPlacement {
+        coordinator_subnet: Option<Principal>,
+        root_subnet: Option<Principal>,
+        maximum_root_instances: Option<u32>,
+    }
+
     #[cfg(test)]
     fn install_bootstrapped_root_on_subnet(
         pic: &PocketIc,
@@ -5724,13 +5730,19 @@ mod tests {
         store_fixture: RootStoreFixture,
         placement_subnet: Principal,
     ) -> BootstrappedRootFixture {
+        let coordinator_subnet = pic
+            .get_subnet(coordinator)
+            .expect("PocketIC Coordinator placement Subnet identity");
         let fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
             pic,
             root_wasm,
             coordinator,
             store_fixture,
-            Some(placement_subnet),
-            Some(1),
+            BootstrappedRootPlacement {
+                coordinator_subnet: Some(coordinator_subnet),
+                root_subnet: Some(placement_subnet),
+                maximum_root_instances: Some(1),
+            },
             create_prepaid_pool_assets,
         );
         reset_prepaid_pool_assets(pic, fixture.root_id);
@@ -5752,8 +5764,11 @@ mod tests {
             root_wasm,
             coordinator,
             store_fixture,
-            None,
-            None,
+            BootstrappedRootPlacement {
+                coordinator_subnet: None,
+                root_subnet: None,
+                maximum_root_instances: None,
+            },
             pool_setup,
         )
     }
@@ -5763,8 +5778,7 @@ mod tests {
         root_wasm: Vec<u8>,
         coordinator: Principal,
         store_fixture: RootStoreFixture,
-        placement_subnet: Option<Principal>,
-        maximum_root_instances: Option<u32>,
+        placement: BootstrappedRootPlacement,
         pool_setup: F,
     ) -> BootstrappedRootFixture
     where
@@ -5785,7 +5799,7 @@ mod tests {
                 .try_into()
                 .expect("SHA-256 digest"),
         );
-        let root_id = placement_subnet.map_or_else(
+        let root_id = placement.root_subnet.map_or_else(
             || pic.create_canister(),
             |subnet| pic.create_canister_on_subnet(None, None, subnet),
         );
@@ -5809,7 +5823,7 @@ mod tests {
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
-        if let Some(maximum_root_instances) = maximum_root_instances {
+        if let Some(maximum_root_instances) = placement.maximum_root_instances {
             for admission in &mut init_args.authority.binding.component_admissions {
                 admission.maximum_root_instances = maximum_root_instances;
             }
@@ -5820,7 +5834,12 @@ mod tests {
                 .and_then(|projection| projection.digest())
                 .expect("compile bounded multi-root topology digest");
         }
-        bind_init_args_to_pocket_ic_subnet(pic, root_id, coordinator, &mut init_args);
+        bind_init_args_to_pocket_ic_subnet(
+            pic,
+            root_id,
+            placement.coordinator_subnet,
+            &mut init_args,
+        );
         init_args.canister_pool_imports = pool_setup(pic, root_id);
         let store_init_args = FleetSubnetWasmStoreInitArgs {
             authority: init_args.authority.wasm_store_authority.clone(),
@@ -5947,17 +5966,14 @@ mod tests {
     fn bind_init_args_to_pocket_ic_subnet(
         pic: &PocketIc,
         root_id: Principal,
-        coordinator: Principal,
+        coordinator_subnet: Option<Principal>,
         init_args: &mut FleetSubnetRootInitArgs,
     ) {
         let root_subnet = SubnetId::from_principal(
             pic.get_subnet(root_id)
                 .expect("PocketIC root placement Subnet identity"),
         );
-        let coordinator_subnet = SubnetId::from_principal(
-            pic.get_subnet(coordinator)
-                .expect("PocketIC Coordinator placement Subnet identity"),
-        );
+        let coordinator_subnet = coordinator_subnet.map_or(root_subnet, SubnetId::from_principal);
         init_args.authority.binding.placement_subnet = root_subnet;
         init_args
             .authority

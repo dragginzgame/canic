@@ -151,6 +151,8 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096
       - run: make fmt-check
       - run: make clippy
+      - name: Build examples (default)
+        run: cargo build -p canic --examples --locked
       - name: Report runner disk at checks finish
         if: ${{ always() }}
         shell: bash
@@ -213,7 +215,7 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit finish"
 
   build:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -252,11 +254,7 @@ jobs:
       - name: Check runner disk before build
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "build before cargo build" --min-free-mib 4096
-      - name: Build examples (default)
-        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-        run: cargo build -p canic --examples --locked
       - name: Build release workspace
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: cargo build --release --workspace --locked
       - name: Report runner disk at build finish
         if: ${{ always() }}

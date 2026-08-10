@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Auto-format before checks (matches `make fmt` without ensure-hooks)
-make fmt-core
-
-# Stage any formatting changes so they are included in the commit
-if ! git diff --quiet; then
-  echo "Formatting changed files; staging tracked updates..."
-  git add -u
-fi
-
 # Reject accidentally staged large files before running slower checks.
 large_file_limit_bytes=$((20 * 1024 * 1024))
 large_files=()
@@ -31,7 +22,8 @@ if [ "${#large_files[@]}" -gt 0 ]; then
   exit 1
 fi
 
-# Run checks
+# Keep the hook observational: formatting and staging remain explicit developer
+# actions, so this hook cannot broaden a reviewed index or a release commit.
 make fmt-check-core
 
 echo "Pre-commit checks passed."

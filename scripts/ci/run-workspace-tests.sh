@@ -203,7 +203,13 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     # Role-package contract tests inspect the Wasm graph with locked offline Cargo
     # metadata. Populate the complete locked graph once so results do not depend on
     # whether the restored Cargo cache contains every target and host/build package.
-    bash scripts/ci/check-pocketic-version-alignment.sh
+    if [[ "$MODE" == "full" && -z "${POCKET_IC_BIN:-}" ]]; then
+        POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"
+        export POCKET_IC_BIN
+        echo "==> using persistent PocketIC server: $POCKET_IC_BIN"
+    else
+        bash scripts/ci/check-pocketic-version-alignment.sh
+    fi
     echo "==> prefetching locked dependency graph for offline metadata checks"
     cargo fetch --locked
 fi
