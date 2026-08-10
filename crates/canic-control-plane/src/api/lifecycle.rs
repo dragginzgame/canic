@@ -61,7 +61,7 @@ use canic_core::{
             RootComponentSubtreeRemovalRequest, RootComponentSubtreeRemovalResponse,
             RootComponentSubtreeRemovalStatusRequest,
             RootComponentSubtreeRemovalStopPreparationRequest,
-            RootComponentSubtreeRemovalStopRequest,
+            RootComponentSubtreeRemovalStopRequest, RootPeerComponentAllocationRequest,
         },
         fleet_activation::{FleetActivationResumeRequest, FleetActivationStatusResponse},
     },
@@ -290,7 +290,7 @@ impl LifecycleApi {
     }
 
     pub async fn reserve_peer_component_allocation(
-        request: RootComponentAllocationRequest,
+        request: RootPeerComponentAllocationRequest,
     ) -> Result<RootComponentAllocationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::reserve_peer_allocation(request)
             .await

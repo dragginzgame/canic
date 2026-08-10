@@ -13,6 +13,7 @@ use crate::{
             RootComponentInstallPlan,
         },
         fleet_registry_mirror::FleetRegistryMirrorOps,
+        fleet_service_peer::FleetServicePeerOps,
     },
     view::component_registry::{
         ActiveComponentMemberView, ComponentDirectoryCanonicalCursor,
@@ -83,12 +84,13 @@ use canic_core::{
             ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryConvergenceEvidence,
             ComponentRuntimeDirectoryPreparationRequest,
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
-            ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
-            RootComponentAllocationRequest, RootComponentAllocationResponse,
-            RootComponentAllocationStatusRequest, RootComponentChildAllocationRequest,
-            RootComponentChildAllocationResponse, RootComponentChildAllocationStatusRequest,
-            RootComponentChildCommitRequest, RootComponentChildCommitResponse,
-            RootComponentChildCreationRequest, RootComponentChildDirectoryPreparationRequest,
+            ComponentRuntimeStatusResponse, FleetServiceComponentRequester, PeerComponentRequester,
+            RootComponentAllocationPhase, RootComponentAllocationRequest,
+            RootComponentAllocationResponse, RootComponentAllocationStatusRequest,
+            RootComponentChildAllocationRequest, RootComponentChildAllocationResponse,
+            RootComponentChildAllocationStatusRequest, RootComponentChildCommitRequest,
+            RootComponentChildCommitResponse, RootComponentChildCreationRequest,
+            RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallEvidence,
             RootComponentChildInstallRequest, RootComponentChildMembershipActivationRequest,
             RootComponentChildMembershipActivationResponse,
@@ -127,6 +129,7 @@ use canic_core::{
             RootComponentSubtreeRemovalStopIntent,
             RootComponentSubtreeRemovalStopPreparationRequest,
             RootComponentSubtreeRemovalStopRequest, RootComponentSubtreeRemovalStoppedReceipt,
+            RootPeerComponentAllocationRequest,
         },
         error::Error,
         fleet_activation::FleetActivationPhase,
@@ -635,9 +638,9 @@ pub async fn reserve_allocation(
     allocation_response(reserved)
 }
 
-/// Durably reserve one same-root peer Component for its exact registered requester caller.
+/// Durably reserve one peer Component for an exact local or remote requester caller.
 pub async fn reserve_peer_allocation(
-    request: RootComponentAllocationRequest,
+    request: RootPeerComponentAllocationRequest,
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
@@ -649,43 +652,154 @@ pub async fn reserve_peer_allocation(
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
-    let requester = peer_component_requester(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        IcOps::msg_caller(),
-    )?;
-    let provisioning_origin =
-        peer_provisioning_origin(&topology, &requester.binding, &request.component_spec)?;
-    if let Some(response) = replay_peer_allocation(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        &request,
-        &provisioning_origin,
-    )? {
-        return Ok(response);
+    if let Some(existing) = ComponentRegistryOps::allocation(request.operation_id) {
+        revalidate_peer_provisioning_origin(
+            &authority,
+            &topology,
+            &request.requester,
+            &existing.provisioning_origin,
+            IcOps::msg_caller(),
+        )?;
+        return replay_peer_allocation(
+            &authority.binding,
+            authority.initial_release_set,
+            &topology,
+            &request,
+            existing,
+        );
     }
 
+    let requester = peer_requester_authority(
+        &authority,
+        authority.initial_release_set,
+        &topology,
+        &request.requester,
+        IcOps::msg_caller(),
+    )?;
     crate::ops::component_provisioning::RootComponentProvisioningOps::
         require_ordinary_allocation_open()?;
     ComponentRegistryOps::require_top_level_allocation_open()?;
-    authorize_new_peer_allocation(
+    let provisioning_origin = authorize_new_peer_allocation(
         &authority.binding,
         &topology,
         &requester,
         &request.component_spec,
-        &provisioning_origin,
     )?;
-    let decision =
-        top_level_allocation_decision(&authority.binding, &topology, &prepared, &request)?;
+    let allocation_request = RootComponentAllocationRequest {
+        operation_id: request.operation_id,
+        component_spec: request.component_spec,
+    };
+    let decision = top_level_allocation_decision(
+        &authority.binding,
+        &topology,
+        &prepared,
+        &allocation_request,
+    )?;
     let reserved = ComponentRegistryOps::reserve_allocation(
         decision,
-        request.operation_id,
+        allocation_request.operation_id,
         provisioning_origin,
         true,
     )?;
     allocation_response(reserved)
+}
+
+enum PeerRequesterAuthority {
+    SameRoot {
+        partition: ComponentRegistryPartitionView,
+        root: FleetSubnetRootBinding,
+    },
+    FleetService {
+        requester: FleetServiceComponentRequester,
+        registry: FleetRegistryVersion,
+        root: FleetSubnetRootBinding,
+    },
+}
+
+impl PeerRequesterAuthority {
+    const fn binding(&self) -> &ComponentBinding {
+        match self {
+            Self::SameRoot { partition, .. } => &partition.binding,
+            Self::FleetService { requester, .. } => &requester.component,
+        }
+    }
+
+    const fn root(&self) -> &FleetSubnetRootBinding {
+        match self {
+            Self::SameRoot { root, .. } | Self::FleetService { root, .. } => root,
+        }
+    }
+
+    const fn requester_is_active(&self) -> bool {
+        match self {
+            Self::SameRoot { partition, .. } => {
+                matches!(partition.status, ComponentLifecycleStatus::Active)
+            }
+            Self::FleetService { .. } => true,
+        }
+    }
+
+    fn origin(
+        &self,
+        grant: canic_core::control_plane_support::config::ComponentProvisioningGrant,
+    ) -> ComponentProvisioningOrigin {
+        match self {
+            Self::SameRoot { partition, .. } => ComponentProvisioningOrigin::Component {
+                requester: Box::new(partition.binding.clone()),
+                grant: Box::new(grant),
+            },
+            Self::FleetService {
+                requester,
+                registry,
+                ..
+            } => ComponentProvisioningOrigin::FleetServiceComponent {
+                requester: Box::new(requester.clone()),
+                registry: Box::new(registry.clone()),
+                grant: Box::new(grant),
+            },
+        }
+    }
+}
+
+fn peer_requester_authority(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    release_set: FleetSubnetRootReleaseSet,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    requester: &PeerComponentRequester,
+    caller: candid::Principal,
+) -> Result<PeerRequesterAuthority, InternalError> {
+    match requester {
+        PeerComponentRequester::SameRoot => Ok(PeerRequesterAuthority::SameRoot {
+            partition: peer_component_requester(&authority.binding, release_set, topology, caller)?,
+            root: authority.binding.clone(),
+        }),
+        PeerComponentRequester::FleetService {
+            service,
+            expected_registry,
+        } => {
+            let mirror = FleetRegistryMirrorOps::validated_current(
+                authority,
+                authority.binding.fleet_subnet_root,
+            )?;
+            if &mirror.active.snapshot.version != expected_registry.as_ref() {
+                return Err(InternalError::conflict(
+                    "cross-root peer request requires the target root's exact current Registry",
+                ));
+            }
+            let resolved = FleetServicePeerOps::resolve(
+                &authority.binding,
+                topology,
+                &mirror,
+                caller,
+                service,
+            )?;
+            Ok(PeerRequesterAuthority::FleetService {
+                requester: resolved.requester,
+                registry: expected_registry.as_ref().clone(),
+                root: resolved.root,
+            })
+        }
+    }
 }
 
 fn peer_component_requester(
@@ -715,85 +829,52 @@ fn peer_component_requester(
     Ok(requester)
 }
 
-fn peer_provisioning_origin(
-    topology: &canic_core::control_plane_support::config::ComponentTopology,
-    requester: &canic_core::ids::ComponentBinding,
-    target_component_spec: &canic_core::ids::ComponentSpecId,
-) -> Result<ComponentProvisioningOrigin, InternalError> {
-    let grant = topology
-        .provisioning_grant(&requester.component_spec, target_component_spec)
-        .ok_or_else(|| {
-            InternalError::forbidden(format!(
-                "Component Spec '{}' has no provisioning grant for peer Spec '{target_component_spec}'",
-                requester.component_spec
-            ))
-        })?;
-    Ok(ComponentProvisioningOrigin::Component {
-        requester: Box::new(requester.clone()),
-        grant: Box::new(grant.clone()),
-    })
-}
-
 fn replay_peer_allocation(
     root: &canic_core::ids::FleetSubnetRootBinding,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
-    request: &RootComponentAllocationRequest,
-    provisioning_origin: &ComponentProvisioningOrigin,
-) -> Result<Option<RootComponentAllocationResponse>, InternalError> {
-    let Some(existing) = ComponentRegistryOps::allocation(request.operation_id) else {
-        return Ok(None);
-    };
-    if existing.component_spec != request.component_spec
-        || &existing.provisioning_origin != provisioning_origin
-    {
+    request: &RootPeerComponentAllocationRequest,
+    existing: RootComponentAllocationView,
+) -> Result<RootComponentAllocationResponse, InternalError> {
+    if existing.component_spec != request.component_spec {
         return Err(InternalError::conflict(
             "peer Component allocation operation is already bound to different intent",
         ));
     }
     validate_allocation_record(root, release_set, topology, &existing, request.operation_id)?;
-    allocation_response(existing).map(Some)
+    allocation_response(existing)
 }
 
 fn authorize_new_peer_allocation(
-    root: &canic_core::ids::FleetSubnetRootBinding,
+    target_root: &canic_core::ids::FleetSubnetRootBinding,
     topology: &canic_core::control_plane_support::config::ComponentTopology,
-    requester: &ComponentRegistryPartitionView,
+    requester: &PeerRequesterAuthority,
     target_component_spec: &canic_core::ids::ComponentSpecId,
-    provisioning_origin: &ComponentProvisioningOrigin,
-) -> Result<(), InternalError> {
-    let readiness = match (FleetActivationWorkflow::status()?.phase, requester.status) {
-        (FleetActivationPhase::Active, ComponentLifecycleStatus::Active) => {
-            PeerComponentProvisioningReadiness::Ready
-        }
-        (FleetActivationPhase::Active, _) => {
+) -> Result<ComponentProvisioningOrigin, InternalError> {
+    let readiness = match (
+        FleetActivationWorkflow::status()?.phase,
+        requester.requester_is_active(),
+    ) {
+        (FleetActivationPhase::Active, true) => PeerComponentProvisioningReadiness::Ready,
+        (FleetActivationPhase::Active, false) => {
             PeerComponentProvisioningReadiness::RequesterRegistryMemberInactive
         }
         _ => PeerComponentProvisioningReadiness::RootRuntimeInactive,
     };
     let counts =
-        ComponentRegistryOps::peer_component_counts(&requester.binding, target_component_spec)?;
+        ComponentRegistryOps::peer_component_counts(requester.binding(), target_component_spec)?;
     let grant = authorize_peer_component_provisioning(PeerComponentProvisioningInput {
-        requester: &requester.binding,
+        requester: requester.binding(),
+        requester_root: requester.root(),
         target_component_spec,
-        root,
+        target_root,
         topology,
         readiness,
         reserved_peer_instances: counts.reserved,
         committed_peer_instances: counts.committed,
     })
     .map_err(InternalError::from)?;
-    let expected = ComponentProvisioningOrigin::Component {
-        requester: Box::new(requester.binding.clone()),
-        grant: Box::new(grant),
-    };
-    if provisioning_origin != &expected {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "peer Component provisioning decision differs from protected topology",
-        ));
-    }
-    Ok(())
+    Ok(requester.origin(grant))
 }
 
 pub(super) fn top_level_allocation_decision(
@@ -7580,7 +7661,8 @@ fn validate_allocation_caller(
             )))
         }
         ComponentProvisioningOrigin::FleetAdministrator { .. }
-        | ComponentProvisioningOrigin::Component { .. } => Ok(()),
+        | ComponentProvisioningOrigin::Component { .. }
+        | ComponentProvisioningOrigin::FleetServiceComponent { .. } => Ok(()),
     }
 }
 
@@ -7595,27 +7677,102 @@ struct PeerRequesterAccessEvidence<'a> {
 
 impl PeerRequesterAccessEvidence<'_> {
     fn is_exact_active(&self) -> bool {
-        let caller_is_retained = self.retained.canister_id == self.caller;
-        let index_is_retained = self.indexed_component == Some(self.retained.component);
-        let current_is_retained = self.current == self.retained;
-        caller_is_retained
-            && index_is_retained
-            && current_is_retained
-            && self.current_status == ComponentLifecycleStatus::Active
+        [
+            self.retained.canister_id == self.caller,
+            self.indexed_component == Some(self.retained.component),
+            self.current == self.retained,
+            self.current_status == ComponentLifecycleStatus::Active,
+        ]
+        .into_iter()
+        .all(|exact| exact)
     }
 }
 
 fn require_active_peer_allocation_caller(operation_id: [u8; 32]) -> Result<(), InternalError> {
     let caller = IcOps::msg_caller();
+    let (authority, _) = root_authority()?;
+    require_active_root_runtime(
+        "peer Component lifecycle requires an Active Fleet Subnet Root runtime",
+    )?;
     let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
         InternalError::unavailable("peer Component allocation operation has not been reserved")
     })?;
-    let ComponentProvisioningOrigin::Component { requester, .. } = &allocation.provisioning_origin
-    else {
-        return Err(InternalError::public(Error::forbidden(
-            "Component allocation was not requested through peer provisioning",
-        )));
+    revalidate_retained_peer_origin(
+        &authority,
+        &ConfigOps::component_topology()?,
+        &allocation.provisioning_origin,
+        caller,
+    )
+}
+
+fn revalidate_peer_provisioning_origin(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    request: &PeerComponentRequester,
+    origin: &ComponentProvisioningOrigin,
+    caller: candid::Principal,
+) -> Result<(), InternalError> {
+    let request_matches_origin = match (request, origin) {
+        (PeerComponentRequester::SameRoot, ComponentProvisioningOrigin::Component { .. }) => true,
+        (
+            PeerComponentRequester::FleetService {
+                service,
+                expected_registry,
+            },
+            ComponentProvisioningOrigin::FleetServiceComponent {
+                requester,
+                registry,
+                ..
+            },
+        ) => service == &requester.service && expected_registry.as_ref() == registry.as_ref(),
+        _ => false,
     };
+    if !request_matches_origin {
+        return Err(InternalError::conflict(
+            "peer Component allocation operation is already bound to a different requester proof",
+        ));
+    }
+    revalidate_retained_peer_origin(authority, topology, origin, caller)
+}
+
+fn revalidate_retained_peer_origin(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    origin: &ComponentProvisioningOrigin,
+    caller: candid::Principal,
+) -> Result<(), InternalError> {
+    match origin {
+        ComponentProvisioningOrigin::Component { requester, grant } => {
+            revalidate_same_root_peer_origin(authority, topology, requester, grant, caller)
+        }
+        ComponentProvisioningOrigin::FleetServiceComponent {
+            requester,
+            registry,
+            grant,
+        } => revalidate_fleet_service_peer_origin(
+            authority, topology, requester, registry, grant, caller,
+        ),
+        ComponentProvisioningOrigin::FleetAdministrator { .. }
+        | ComponentProvisioningOrigin::ComponentGroup { .. } => Err(InternalError::public(
+            Error::forbidden("Component allocation was not requested through peer provisioning"),
+        )),
+    }
+}
+
+fn revalidate_same_root_peer_origin(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    requester: &ComponentBinding,
+    grant: &canic_core::control_plane_support::config::ComponentProvisioningGrant,
+    caller: candid::Principal,
+) -> Result<(), InternalError> {
+    topology
+        .validate_component_binding(&authority.binding, requester)
+        .map_err(|_| {
+            InternalError::public(Error::forbidden(
+                "peer Component requester no longer belongs to this root",
+            ))
+        })?;
     let current = ComponentRegistryOps::partition(requester.component)?.ok_or_else(|| {
         InternalError::public(Error::forbidden(
             "peer Component allocation requester is no longer registered",
@@ -7632,6 +7789,53 @@ fn require_active_peer_allocation_caller(operation_id: [u8; 32]) -> Result<(), I
         return Err(InternalError::public(Error::forbidden(
             "peer Component allocation requester is no longer an exact Active Component",
         )));
+    }
+    validate_retained_peer_grant(topology, requester, grant)
+}
+
+fn revalidate_fleet_service_peer_origin(
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    requester: &FleetServiceComponentRequester,
+    registry: &FleetRegistryVersion,
+    grant: &canic_core::control_plane_support::config::ComponentProvisioningGrant,
+    caller: candid::Principal,
+) -> Result<(), InternalError> {
+    let mirror =
+        FleetRegistryMirrorOps::validated_current(authority, authority.binding.fleet_subnet_root)?;
+    if !ComponentRegistryOps::registry_covers_preparation(registry, &mirror.active.snapshot.version)
+    {
+        return Err(InternalError::conflict(
+            "current Fleet Registry does not cover the retained cross-root requester proof",
+        ));
+    }
+    let current = FleetServicePeerOps::resolve(
+        &authority.binding,
+        topology,
+        &mirror,
+        caller,
+        &requester.service,
+    )?;
+    if &current.requester != requester {
+        return Err(InternalError::public(Error::forbidden(
+            "cross-root peer caller no longer has its exact retained Fleet service identity",
+        )));
+    }
+    validate_retained_peer_grant(topology, &requester.component, grant)
+}
+
+fn validate_retained_peer_grant(
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+    requester: &ComponentBinding,
+    grant: &canic_core::control_plane_support::config::ComponentProvisioningGrant,
+) -> Result<(), InternalError> {
+    let current =
+        topology.provisioning_grant(&requester.component_spec, &grant.target_component_spec);
+    if current != Some(grant) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "retained peer Component grant differs from the protected topology",
+        ));
     }
     Ok(())
 }
@@ -7803,6 +8007,20 @@ fn validate_provisioning_origin(
                     "stored peer Component provisioning origin differs from protected topology",
                 ));
             }
+        }
+        ComponentProvisioningOrigin::FleetServiceComponent {
+            requester,
+            registry,
+            grant,
+        } => {
+            FleetServicePeerOps::validate_origin(
+                root,
+                topology,
+                &allocation.component_spec,
+                requester,
+                registry,
+                grant,
+            )?;
         }
         origin @ ComponentProvisioningOrigin::ComponentGroup { .. } => {
             crate::ops::component_provisioning::RootComponentProvisioningOps::

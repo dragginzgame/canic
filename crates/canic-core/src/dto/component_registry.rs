@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::types::Cycles,
-    config::schema::ComponentChildKind,
+    config::{FleetServiceMemberPurpose, schema::ComponentChildKind},
     dto::{
         component_deployment::ProtectedComponentDeployment,
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion},
@@ -15,7 +15,7 @@ use crate::{
     ids::{
         CanisterRole, ComponentBinding, ComponentChildBinding, ComponentGroupMemberPath,
         ComponentGroupPlacementId, ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest,
-        FleetSubnetRootReleaseSet, ManagedCanisterBinding,
+        FleetServiceId, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
     },
 };
 use candid::{CandidType, Principal};
@@ -80,6 +80,34 @@ pub struct RootComponentRegistryStatusResponse {
 pub struct RootComponentAllocationRequest {
     pub operation_id: [u8; 32],
     pub component_spec: ComponentSpecId,
+}
+
+///
+/// PeerComponentRequester
+///
+/// Caller-selected peer proof mode; authoritative requester facts are derived by the target root.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PeerComponentRequester {
+    SameRoot,
+    FleetService {
+        service: FleetServiceId,
+        expected_registry: Box<FleetRegistryVersion>,
+    },
+}
+
+///
+/// RootPeerComponentAllocationRequest
+///
+/// Component command naming one local or cross-root idempotent peer reservation intent.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootPeerComponentAllocationRequest {
+    pub operation_id: [u8; 32],
+    pub component_spec: ComponentSpecId,
+    pub requester: PeerComponentRequester,
 }
 
 ///
@@ -517,12 +545,32 @@ pub enum ComponentProvisioningOrigin {
         requester: Box<ComponentBinding>,
         grant: Box<crate::config::ComponentProvisioningGrant>,
     },
+    FleetServiceComponent {
+        requester: Box<FleetServiceComponentRequester>,
+        registry: Box<FleetRegistryVersion>,
+        grant: Box<crate::config::ComponentProvisioningGrant>,
+    },
     ComponentGroup {
         operation_id: [u8; 32],
         plan_hash: [u8; 32],
         group_placement: ComponentGroupPlacementId,
         member_path: ComponentGroupMemberPath,
     },
+}
+
+///
+/// FleetServiceComponentRequester
+///
+/// Registry-derived remote Fleet-service member identity retained by one target-root operation.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetServiceComponentRequester {
+    pub service: FleetServiceId,
+    pub member_purpose: FleetServiceMemberPurpose,
+    pub group_placement: ComponentGroupPlacementId,
+    pub member_path: ComponentGroupMemberPath,
+    pub component: ComponentBinding,
 }
 
 ///
@@ -1704,6 +1752,70 @@ mod tests {
         assert_eq!(
             candid::decode_one::<ComponentProvisioningOrigin>(&bytes)
                 .expect("decode peer provisioning origin"),
+            origin
+        );
+    }
+
+    #[test]
+    fn cross_root_peer_request_and_origin_round_trip_through_candid() {
+        let authority = fleet_registry_authority();
+        let requester_spec: ComponentSpecId =
+            "projects".parse().expect("requester Component Spec ID");
+        let target_spec: ComponentSpecId = "users".parse().expect("target Component Spec ID");
+        let registry = FleetRegistryVersion {
+            authority: authority.clone(),
+            revision: 7,
+            content_hash: [30; 32],
+        };
+        let request = RootPeerComponentAllocationRequest {
+            operation_id: [31; 32],
+            component_spec: target_spec.clone(),
+            requester: PeerComponentRequester::FleetService {
+                service: "projects".parse().expect("Fleet service ID"),
+                expected_registry: Box::new(registry.clone()),
+            },
+        };
+        let origin = ComponentProvisioningOrigin::FleetServiceComponent {
+            requester: Box::new(FleetServiceComponentRequester {
+                service: "projects".parse().expect("Fleet service ID"),
+                member_purpose: FleetServiceMemberPurpose::PoolMember,
+                group_placement: ComponentGroupPlacementId {
+                    deployment: "project_hubs".parse().expect("deployment ID"),
+                    ordinal: 2,
+                },
+                member_path: ComponentGroupMemberPath::try_from(vec![
+                    "hub".parse().expect("member ID"),
+                ])
+                .expect("member path"),
+                component: ComponentBinding {
+                    authority,
+                    component: ComponentInstanceId::from_generated_bytes([32; 32]),
+                    component_spec: requester_spec.clone(),
+                    spec_hash: [33; 32],
+                    role: CanisterRole::new("project_hub"),
+                    placement_subnet: SubnetId::from_principal(Principal::from_slice(&[34; 29])),
+                    fleet_subnet_root: Principal::from_slice(&[35; 29]),
+                    canister_id: Principal::from_slice(&[36; 29]),
+                },
+            }),
+            registry: Box::new(registry),
+            grant: Box::new(crate::config::ComponentProvisioningGrant {
+                requester_component_spec: requester_spec,
+                target_component_spec: target_spec,
+                maximum_instances_per_requester_per_root: 3,
+            }),
+        };
+        let request_bytes = candid::encode_one(&request).expect("encode cross-root request");
+        let origin_bytes = candid::encode_one(&origin).expect("encode cross-root origin");
+
+        assert_eq!(
+            candid::decode_one::<RootPeerComponentAllocationRequest>(&request_bytes)
+                .expect("decode cross-root request"),
+            request
+        );
+        assert_eq!(
+            candid::decode_one::<ComponentProvisioningOrigin>(&origin_bytes)
+                .expect("decode cross-root origin"),
             origin
         );
     }

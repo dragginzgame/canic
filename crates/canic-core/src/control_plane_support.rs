@@ -10,7 +10,8 @@ pub mod config {
     pub use crate::config::{
         ComponentDeploymentConfiguration, ComponentDeploymentPurpose, ComponentGroupDeploymentSpec,
         ComponentGroupPlacementPolicy, ComponentProvisioningGrant, ComponentTopology, ConfigModel,
-        FlattenedComponentGroupDeploymentMember, FleetServiceTopology,
+        FlattenedComponentGroupDeploymentMember, FleetServiceMemberPurpose,
+        FleetServicePlacementPolicy, FleetServiceTopology,
     };
 }
 

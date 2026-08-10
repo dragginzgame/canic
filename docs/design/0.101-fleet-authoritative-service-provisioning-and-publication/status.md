@@ -153,9 +153,18 @@ Date: 2026-08-10
   Group Directory at every lifecycle phase. Root reservation and later retry
   validation enforce the deployment's effective descendant, Registry-byte and
   per-parent spawn ceilings rather than falling back to the Component Spec
-  maxima.
+  maxima. Cross-root peer provisioning now accepts only the IC-authenticated
+  raw caller that the target root derives as one exact top-level member of the
+  expected Fleet service from its fully validated current Registry Mirror and
+  matching Fleet Directory. It retains that remote Component identity,
+  owning-root authority, Registry version and independently compiled
+  requester-Spec-to-target-Spec grant in the ordinary allocation journal;
+  every later lifecycle step revalidates the current member and exact grant.
+  Same-root callers continue through local Component Registry proof, while a
+  child, forwarded caller, wrong service, inactive root or caller-supplied
+  identity cannot substitute for either proof.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.39` is released and `0.101.40` is open.
+- Implementation started: yes; `0.101.40` is released and `0.101.41` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -277,7 +286,7 @@ Fleet policy writer.
   throughout root allocation and descendant lifecycle.
 - [x] Derive one semantic protected configuration digest over groups,
   deployments and service targets.
-- [ ] Remove singleton-Spec and sole-root-admission service assumptions.
+- [x] Remove singleton-Spec and sole-root-admission service assumptions.
 - [x] Validate worst-case Spec demand, placement density/spread and the
   zero-placement/non-Authority versus singleton-Authority count rules.
 - [ ] Measure and freeze the initial supported root, Component, placement,
@@ -317,7 +326,7 @@ Fleet policy writer.
   overfunding warnings without inventing an absolute maximum balance.
 - [ ] Add non-IC ledger funding/configuration only with the same exact-Subnet,
   guaranteed-response and expired-uncertainty fences as the 0.100 mainnet path.
-- [ ] Derive a cross-root top-level requester from the raw caller's exact
+- [x] Derive a cross-root top-level requester from the raw caller's exact
   current Fleet Registry service binding and matching Fleet Directory, then
   independently require the compiled peer-Component grant.
 - [x] Accept same-root child requests from any exact registered

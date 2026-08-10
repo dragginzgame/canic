@@ -50,7 +50,7 @@ pub struct TopLevelComponentAllocationDecision {
 ///
 /// PeerComponentProvisioningReadiness
 ///
-/// Runtime state supplied to the pure same-root peer-provisioning decision.
+/// Runtime state supplied to the pure local or cross-root peer-provisioning decision.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,8 +68,9 @@ pub enum PeerComponentProvisioningReadiness {
 
 pub struct PeerComponentProvisioningInput<'a> {
     pub requester: &'a ComponentBinding,
+    pub requester_root: &'a FleetSubnetRootBinding,
     pub target_component_spec: &'a ComponentSpecId,
-    pub root: &'a FleetSubnetRootBinding,
+    pub target_root: &'a FleetSubnetRootBinding,
     pub topology: &'a ComponentTopology,
     pub readiness: PeerComponentProvisioningReadiness,
     pub reserved_peer_instances: u32,
@@ -146,14 +147,17 @@ pub enum ComponentAllocationPolicyError {
     },
 }
 
-/// Authorize one exact same-root peer Component request without creating parentage.
+/// Authorize one exact local or cross-root peer Component request without creating parentage.
 pub fn authorize_peer_component_provisioning(
     input: PeerComponentProvisioningInput<'_>,
 ) -> Result<ComponentProvisioningGrant, ComponentAllocationPolicyError> {
     input
         .topology
-        .validate_component_binding(input.root, input.requester)
+        .validate_component_binding(input.requester_root, input.requester)
         .map_err(|_| ComponentAllocationPolicyError::InvalidPeerRequesterBinding)?;
+    if input.requester_root.authority != input.target_root.authority {
+        return Err(ComponentAllocationPolicyError::InvalidPeerRequesterBinding);
+    }
     match input.readiness {
         PeerComponentProvisioningReadiness::RootRuntimeInactive => {
             return Err(ComponentAllocationPolicyError::PeerRootRuntimeInactive);
@@ -440,6 +444,42 @@ mod tests {
     }
 
     #[test]
+    fn peer_provisioning_accepts_an_exact_remote_root_in_the_same_fleet() {
+        let (topology, target_root, mut requester, target) = peer_fixture();
+        let mut requester_root = target_root.clone();
+        requester_root.placement_subnet =
+            SubnetId::from_principal(candid::Principal::from_slice(&[17; 29]));
+        requester_root.fleet_subnet_root = candid::Principal::from_slice(&[18; 29]);
+        requester.component = ComponentInstanceId::from_root_allocation(
+            requester_root.authority.binding.fleet.fleet,
+            requester_root.authority.epoch,
+            requester_root.fleet_subnet_root,
+            1,
+        );
+        requester.placement_subnet = requester_root.placement_subnet;
+        requester.fleet_subnet_root = requester_root.fleet_subnet_root;
+        let mut request = peer_input(&topology, &target_root, &requester, &target);
+        request.requester_root = &requester_root;
+
+        assert!(authorize_peer_component_provisioning(request).is_ok());
+
+        requester_root.authority.epoch = 2;
+        requester.authority = requester_root.authority.clone();
+        requester.component = ComponentInstanceId::from_root_allocation(
+            requester_root.authority.binding.fleet.fleet,
+            requester_root.authority.epoch,
+            requester_root.fleet_subnet_root,
+            1,
+        );
+        let mut foreign = peer_input(&topology, &target_root, &requester, &target);
+        foreign.requester_root = &requester_root;
+        assert_eq!(
+            authorize_peer_component_provisioning(foreign),
+            Err(ComponentAllocationPolicyError::InvalidPeerRequesterBinding)
+        );
+    }
+
+    #[test]
     fn peer_provisioning_rejects_missing_grant_inactive_requester_and_exhausted_ceiling() {
         let (topology, root, requester, target) = peer_fixture();
         let mut request = peer_input(&topology, &root, &requester, &target);
@@ -638,8 +678,9 @@ mod tests {
     ) -> PeerComponentProvisioningInput<'a> {
         PeerComponentProvisioningInput {
             requester,
+            requester_root: root,
             target_component_spec: target,
-            root,
+            target_root: root,
             topology,
             readiness: PeerComponentProvisioningReadiness::Ready,
             reserved_peer_instances: 0,
