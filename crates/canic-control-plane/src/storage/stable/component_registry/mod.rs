@@ -3622,14 +3622,17 @@ impl RootComponentRegistryStore {
         ROOT_COMPONENT_ALLOCATIONS.with_borrow(|map| {
             map.iter().fold((0, 0), |(reserved, committed), entry| {
                 let record = entry.value();
-                let ComponentProvisioningOrigin::Component {
-                    requester: recorded_requester,
-                    ..
-                } = &record.provisioning_origin
-                else {
-                    return (reserved, committed);
+                let recorded_requester = match &record.provisioning_origin {
+                    ComponentProvisioningOrigin::Component { requester, .. } => requester.as_ref(),
+                    ComponentProvisioningOrigin::FleetServiceComponent { requester, .. } => {
+                        &requester.component
+                    }
+                    ComponentProvisioningOrigin::FleetAdministrator { .. }
+                    | ComponentProvisioningOrigin::ComponentGroup { .. } => {
+                        return (reserved, committed);
+                    }
                 };
-                if recorded_requester.as_ref() != requester
+                if recorded_requester != requester
                     || &record.component_spec != target_component_spec
                 {
                     return (reserved, committed);

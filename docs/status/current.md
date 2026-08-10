@@ -14,10 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.39`.
-- The latest published release is `v0.101.39` at
-  `fe829ad5d4243e0e61995da7576bee0fbbf8bb9f`.
-- Open `0.101.40` makes Fleet-service purpose an enforceable application
+- The workspace package version is `0.101.40`.
+- The latest published release is `v0.101.40` at
+  `6c00760f1e426ad6626d6c63cf7f9720b34d09c7`.
+- Open `0.101.41` closes the cross-root Fleet-service peer requester
+  implementation. The target root derives the raw caller's exact top-level
+  service membership and remote root binding from its fully validated current
+  Registry Mirror plus matching Fleet Directory, then independently enforces
+  the compiled requester-Spec-to-target-Spec grant. The ordinary allocation
+  journal retains that derived identity, Registry authority and grant, and
+  every later peer lifecycle step revalidates them against the current
+  authority. Same-root peers continue through local Registry proof.
+- Released `0.101.40` makes Fleet-service purpose an enforceable application
   authorization contract. The local endpoint/API guard accepts only the exact
   matching Active Authority and rejects Replica, PoolMember and ordinary
   contexts. Every descendant inherits its owning top-level Component's exact
@@ -2616,14 +2624,19 @@ First primary results:
 
 ## Next Action
 
-The purpose-bound runtime policy is complete in open `0.101.40`: the exact
+The cross-root Fleet-service peer requester implementation is complete in open
+`0.101.41`: the target root accepts only an exact current raw-caller service
+member from its validated Registry Mirror and matching Fleet Directory, then
+applies and retains the independent requester-Spec-to-target-Spec grant. The
+remaining Slice 5 item is complete two-root PocketIC qualification, including
+forwarded-caller, stale authority and exact-retry journeys. Next, measure the
+supported root, Component, placement, service-member, plan, Registry and
+Directory envelope and continue the remaining pool-funding work. The
+purpose-bound runtime policy completed in released `0.101.40`: the exact
 Active Authority guard fails closed for Replica, PoolMember and ordinary
 deployments, and descendants inherit their owning top-level Component's group
 context, Directory evidence and effective limits without becoming independent
-group or Fleet-service members. Next, remove the remaining singleton-Spec and
-sole-root-admission assumptions, finish the cross-root peer requester proof and
-measure the supported root, Component, placement, service-member, plan,
-Registry and Directory envelope. Qualified grouped removal, scale-in,
+group or Fleet-service members. Qualified grouped removal, scale-in,
 replacement and relocation remain later designs.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the

@@ -112,6 +112,7 @@ mod tests {
                 RootComponentProvisioningAdvanceRequest, RootComponentProvisioningPhase,
                 RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
             },
+            component_registry::{PeerComponentRequester, RootPeerComponentAllocationRequest},
             fleet_registry::FleetRegistryVersion,
         },
         ids::ComponentGroupPlacementId,
@@ -1687,9 +1688,10 @@ mod tests {
         requester: &ComponentBinding,
         operation_id: [u8; 32],
     ) -> RootComponentAllocationResponse {
-        let allocation_request = RootComponentAllocationRequest {
+        let allocation_request = RootPeerComponentAllocationRequest {
             operation_id,
             component_spec: "projects".parse().expect("projects Component Spec"),
+            requester: PeerComponentRequester::SameRoot,
         };
         let denied: Result<RootComponentAllocationResponse, Error> = fixture
             .pic()
@@ -1859,9 +1861,10 @@ mod tests {
                 fixture.root,
                 requester.canister_id,
                 CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
-                (RootComponentAllocationRequest {
+                (RootPeerComponentAllocationRequest {
                     operation_id: [0xb2; 32],
                     component_spec: "projects".parse().expect("projects Component Spec"),
+                    requester: PeerComponentRequester::SameRoot,
                 },),
             )
             .expect("exhausted peer Component reservation transport");

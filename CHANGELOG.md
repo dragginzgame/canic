@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.41` derives cross-root peer requesters only from exact current Fleet-
+  service membership and Directory authority, then independently enforces and
+  retains the compiled requester-Spec-to-target-Spec provisioning grant.
+
 - `0.101.40` adds an exact Active service-Authority endpoint guard and carries
   each grouped Component's protected purpose, Directory authority and
   reduction-only limits through every depth of its dynamic descendant tree.
