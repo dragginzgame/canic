@@ -440,10 +440,12 @@ Fleet policy writer.
   ordinary draining and rejects any persisted grouped ordinary-draining state.
   The Coordinator now fences only a root named by a nonempty operation batch,
   committed placement or Fleet-service binding, leaving unrelated empty roots
-  lifecycle-open. A Coordinator-owned intent must still be reserved before the
-  root-local draining fence so a plan accepted concurrently cannot strand a
-  locally draining root. Qualified grouped removal remains a later design, not
-  a 0.101 operation.
+  lifecycle-open. The accepted design now freezes one nonexpiring,
+  noncancellable Coordinator reservation as the atomic winner against plan
+  preparation. The root must independently verify that reservation before its
+  one-way local fence, and the local and publication receipts bind its exact
+  hash. Implementation and interruption proof remain open. Qualified grouped
+  removal remains a later design, not a 0.101 operation.
 - [x] Reject scale-down, placement reuse, Authority-group scaling, live root
   creation and admission expansion.
 

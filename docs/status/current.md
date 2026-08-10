@@ -34,7 +34,10 @@ Historical detail is archived at:
   operation batch, committed placement or Fleet-service member, so an
   unrelated empty root is not globally blocked. The remaining grouped-root
   boundary is a Coordinator-owned draining reservation made before local root
-  mutation; aggregate grouped removal remains a later design.
+  mutation; aggregate grouped removal remains a later design. The accepted
+  design now fixes that ordering, retains the reservation without expiry or
+  cancellation, requires the root to verify it independently and binds its
+  hash through local and Coordinator publication receipts.
 - Released `0.101.35` completes the exact selected plus
   affected-existing-root Directory barrier after scale-out service publication,
   activates only new Components on selected roots and atomically appends the
@@ -2601,11 +2604,14 @@ Repeated scale-out exact-replay history is published at immutable `v0.101.36`.
 Open `0.101.37` has moved ordinary grouped-Component draining into the owning
 Registry operation boundary and made Coordinator root lifecycle publication
 exact to nonempty operation, committed-placement and Fleet-service references.
-Continue Slice 4 by reserving Coordinator root-draining authority before the
-root mutates its local one-way fence. A concurrently durable grouped plan must
-not leave a selected root locally draining, and a pending drain must prevent a
-new plan from selecting that root. Do not introduce scale-in, replacement or a
-cleanup exception; qualified grouped removal remains a later design.
+Continue Slice 4 by implementing the accepted Coordinator-first root-draining
+reservation before the root mutates its local one-way fence. Plan preparation
+and reservation preparation must have one atomic winner; the root must verify
+the retained Coordinator reservation independently and bind its hash into the
+local draining and publication receipts. Exact retry and passive status must
+survive every response-loss boundary without leases, cancellation, scale-in,
+replacement or cleanup exceptions. Qualified grouped removal remains a later
+design.
 The `0.100.102` maintainer-owned disposable mainnet proof remains valid for
 independent Store/root deletion and terminal replay, but it does not prove the
 corrected automatic Cycles Ledger pool refill or exclusive physical inventory.
