@@ -160,5 +160,19 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
         ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionResponse, ::canic::Error> {
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_deletion_status(request)
         }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_fleet_registry_root_draining_reservation_prepare(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_root_draining_reservation(request)
+        }
+
+        #[$crate::canic_query(public)]
+        async fn canic_fleet_registry_root_draining_reservation_status(
+            request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationStatusRequest,
+        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_draining_reservation_status(request)
+        }
     };
 }

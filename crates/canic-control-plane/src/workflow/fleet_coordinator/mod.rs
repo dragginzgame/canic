@@ -45,9 +45,11 @@ use canic_core::{
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
             FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
-            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
+            FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
+            FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
+            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+            FleetSubnetRootSnapshotAcknowledgementRequest,
         },
     },
     protocol,
@@ -226,6 +228,25 @@ impl FleetCoordinatorWorkflow {
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
         FleetCoordinatorOps::publish_root_draining(request)
+    }
+
+    pub(crate) fn prepare_root_draining_reservation(
+        request: FleetSubnetRootDrainingReservationRequest,
+    ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
+        FleetCoordinatorOps::prepare_root_draining_reservation(request, IcOps::now_nanos())
+    }
+
+    pub(crate) fn root_draining_reservation_status(
+        caller: Principal,
+        caller_is_controller: bool,
+        request: FleetSubnetRootDrainingReservationStatusRequest,
+    ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
+        if !caller_is_controller && caller != request.fleet_subnet_root {
+            return Err(InternalError::forbidden(
+                "root-draining reservation status caller is neither a controller nor the target root",
+            ));
+        }
+        FleetCoordinatorOps::root_draining_reservation_status(request)
     }
 
     pub(crate) fn publish_root_removed(

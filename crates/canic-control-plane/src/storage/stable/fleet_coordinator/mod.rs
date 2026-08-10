@@ -32,8 +32,9 @@ use canic_core::{
             FleetSubnetRootDeletionReadinessIntentResponse,
             FleetSubnetRootDeletionReadinessResponse, FleetSubnetRootDeletionResponse,
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootEntry, FleetSubnetRootRemovalPublicationRequest,
-            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+            FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
+            FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootSnapshotAcknowledgement,
         },
     },
     ids::{
@@ -54,7 +55,8 @@ use serde::{Deserialize, Serialize};
 // root,
 // the complete service set again in at most one fresh and one scale-out
 // publication receipt, one exact acknowledgement per current root, and at most
-// one draining and one removal receipt per root.
+// one draining reservation, one draining receipt and one removal receipt per
+// root.
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
@@ -95,6 +97,7 @@ pub struct FleetCoordinatorRegistryRecord {
     pub component_scale_out_receipts: Vec<FleetComponentScaleOutReceiptRecord>,
     pub component_scale_out: Option<FleetComponentProvisioningRecord>,
     pub service_publication_receipts: Vec<FleetServicePublicationReceiptRecord>,
+    pub root_draining_reservations: Vec<FleetSubnetRootDrainingReservationRecord>,
     pub root_draining_publication_receipts: Vec<FleetSubnetRootDrainingPublicationReceiptRecord>,
     pub root_removal_publication_receipts: Vec<FleetSubnetRootRemovalPublicationReceiptRecord>,
     pub root_deletion_readiness_intents: Vec<FleetSubnetRootDeletionReadinessIntentResponse>,
@@ -391,6 +394,12 @@ pub struct FleetServicePublicationReceiptRecord {
     pub services: Vec<FleetServiceBinding>,
     pub previous_version: FleetRegistryVersion,
     pub version: FleetRegistryVersion,
+}
+
+/// Persisted exact Coordinator reservation for one root's Fleet-wide draining decision.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetSubnetRootDrainingReservationRecord {
+    pub response: FleetSubnetRootDrainingReservationResponse,
 }
 
 /// Persisted exact request and response for one root's published `Draining` transition.

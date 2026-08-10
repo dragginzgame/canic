@@ -20,7 +20,8 @@ use crate::{
         FleetCoordinatorCommitOutcome, FleetCoordinatorRegistryRecord,
         FleetCoordinatorRegistryStore, FleetRegistryActivationReceiptRecord,
         FleetServicePublicationReceiptRecord, FleetSubnetRootDrainingPublicationReceiptRecord,
-        FleetSubnetRootJoinReceiptRecord, FleetSubnetRootRemovalPublicationReceiptRecord,
+        FleetSubnetRootDrainingReservationRecord, FleetSubnetRootJoinReceiptRecord,
+        FleetSubnetRootRemovalPublicationReceiptRecord,
     },
     view::fleet_coordinator::{
         FleetComponentDirectoryConfirmationCallView,
@@ -82,7 +83,9 @@ use canic_core::{
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
             FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
             FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootEntry, FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
+            FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootEntry,
+            FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
             FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
             FleetSubnetRootStatus,
@@ -98,6 +101,8 @@ use sha2::{Digest, Sha256};
 
 const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
     b"canic/fleet-component-scale-out-terminal-receipt/v1";
+const ROOT_DRAINING_RESERVATION_HASH_DOMAIN: &[u8] =
+    b"canic/fleet-subnet-root/draining-reservation/v1";
 
 const ROOT_DELETION_READINESS_INTENT_HASH_DOMAIN: &[u8] =
     b"canic.fleet-subnet-root.deletion-readiness-intent.v1";
@@ -146,6 +151,7 @@ impl FleetCoordinatorOps {
             component_scale_out_receipts: Vec::new(),
             component_scale_out: None,
             service_publication_receipts: Vec::new(),
+            root_draining_reservations: Vec::new(),
             root_draining_publication_receipts: Vec::new(),
             root_removal_publication_receipts: Vec::new(),
             root_deletion_readiness_intents: Vec::new(),
@@ -421,6 +427,7 @@ impl FleetCoordinatorOps {
                 "Fleet Component provisioning already contains different protected plan authority",
             ));
         }
+        require_component_plan_roots_unreserved(&current, &request.plan)?;
         if !current.service_publication_receipts.is_empty() {
             return Err(InternalError::conflict(
                 "Fleet Component provisioning plan must precede Fleet-service publication",
@@ -517,6 +524,7 @@ impl FleetCoordinatorOps {
                 "Fleet Component scale-out requires terminal fresh provisioning",
             ));
         }
+        require_component_plan_roots_unreserved(&current, &request.plan)?;
         let plan_hash = deployment_ledger::scale_out_plan_hash(
             &current.component_deployment_configuration,
             &current.registry,
@@ -1404,6 +1412,91 @@ impl FleetCoordinatorOps {
         )
     }
 
+    pub(crate) fn prepare_root_draining_reservation(
+        request: FleetSubnetRootDrainingReservationRequest,
+        prepared_at_ns: u64,
+    ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
+        if request.operation_id == [0; 32] {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root draining reservation operation ID must be nonzero",
+            ));
+        }
+        if prepared_at_ns == 0 {
+            return Err(InternalError::invalid_input(
+                "Fleet Subnet Root draining reservation time must be nonzero",
+            ));
+        }
+        let current = Self::current()?;
+        if let Some(record) = current
+            .root_draining_reservations
+            .iter()
+            .find(|record| draining_reservation_identity_matches(&record.response, &request))
+        {
+            if record.response.request == request {
+                return Ok(record.response.clone());
+            }
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining reservation identity already has different authority",
+            ));
+        }
+        if current.registry_activation_receipt.is_none() {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining reservation requires an active Fleet Registry",
+            ));
+        }
+        let current_version = FleetRegistryOps::version(
+            &current.authority,
+            &current
+                .component_deployment_configuration
+                .component_topology,
+            &current.registry,
+        )?;
+        validate_root_draining_reservation_request(&current, &current_version, &request)?;
+        require_grouped_root_lifecycle_open(&current, request.expected_root.fleet_subnet_root)?;
+
+        let mut response = FleetSubnetRootDrainingReservationResponse {
+            request,
+            coordinator: current.authority.binding.coordinator,
+            prepared_at_ns,
+            reservation_hash: [0; 32],
+        };
+        response.reservation_hash = response_hash(
+            ROOT_DRAINING_RESERVATION_HASH_DOMAIN,
+            &response,
+            "draining reservation",
+        )?;
+        let mut next = current.clone();
+        next.root_draining_reservations
+            .push(FleetSubnetRootDrainingReservationRecord {
+                response: response.clone(),
+            });
+        let next = Self::validate_current(next)?;
+        Self::commit_transition(&current, next)?;
+        Ok(response)
+    }
+
+    pub(crate) fn root_draining_reservation_status(
+        request: FleetSubnetRootDrainingReservationStatusRequest,
+    ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
+        let current = Self::current()?;
+        let record = current
+            .root_draining_reservations
+            .iter()
+            .find(|record| draining_reservation_status_matches(&record.response, &request))
+            .ok_or_else(|| {
+                InternalError::unavailable("Fleet Subnet Root draining reservation is not prepared")
+            })?;
+        let response = &record.response;
+        if response.request.operation_id != request.operation_id
+            || response.request.expected_root.fleet_subnet_root != request.fleet_subnet_root
+        {
+            return Err(InternalError::conflict(
+                "Fleet Subnet Root draining reservation status names conflicting authority",
+            ));
+        }
+        Ok(response.clone())
+    }
+
     pub(crate) fn publish_root_draining(
         request: FleetSubnetRootDrainingPublicationRequest,
     ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
@@ -1912,6 +2005,7 @@ impl FleetCoordinatorOps {
         validate_root_join_receipts(&current)?;
         validate_root_snapshot_acknowledgements(&current)?;
         validate_registry_lifecycle_history(&current)?;
+        validate_root_draining_reservations(&current)?;
         validate_root_deletion_history(&current)?;
         Ok(current)
     }
@@ -6900,6 +6994,25 @@ impl GroupedRootLifecycleReferences {
     }
 }
 
+fn require_component_plan_roots_unreserved(
+    current: &FleetCoordinatorRegistryRecord,
+    plan: &FleetComponentProvisioningPlan,
+) -> Result<(), InternalError> {
+    let selects_reserved_root = plan.batches.iter().any(|batch| {
+        !batch.placements.is_empty()
+            && current.root_draining_reservations.iter().any(|record| {
+                record.response.request.expected_root.fleet_subnet_root
+                    == batch.root.fleet_subnet_root
+            })
+    });
+    if selects_reserved_root {
+        return Err(InternalError::conflict(
+            "Fleet Component provisioning plan selects a root reserved for draining",
+        ));
+    }
+    Ok(())
+}
+
 fn require_grouped_root_lifecycle_open(
     current: &FleetCoordinatorRegistryRecord,
     fleet_subnet_root: Principal,
@@ -7511,7 +7624,7 @@ fn validate_lifecycle_receipt_identities(
 ) -> Result<(), InternalError> {
     let mut draining_identities = Vec::new();
     for receipt in &current.root_draining_publication_receipts {
-        let identity = FleetSubnetRootDrainingPublicationIdentity::from_request(&receipt.request);
+        let identity = FleetSubnetRootDrainingIdentity::from_publication_request(&receipt.request);
         if draining_identities
             .iter()
             .any(|existing| identity.conflicts_with(*existing))
@@ -7681,28 +7794,95 @@ fn draining_publication_identity_matches(
     receipt: &FleetSubnetRootDrainingPublicationReceiptRecord,
     request: &FleetSubnetRootDrainingPublicationRequest,
 ) -> bool {
-    FleetSubnetRootDrainingPublicationIdentity::from_request(&receipt.request).conflicts_with(
-        FleetSubnetRootDrainingPublicationIdentity::from_request(request),
+    FleetSubnetRootDrainingIdentity::from_publication_request(&receipt.request).conflicts_with(
+        FleetSubnetRootDrainingIdentity::from_publication_request(request),
     )
 }
 
 #[derive(Clone, Copy)]
-struct FleetSubnetRootDrainingPublicationIdentity {
+struct FleetSubnetRootDrainingIdentity {
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
 }
 
-impl FleetSubnetRootDrainingPublicationIdentity {
-    const fn from_request(request: &FleetSubnetRootDrainingPublicationRequest) -> Self {
+impl FleetSubnetRootDrainingIdentity {
+    const fn from_publication_request(request: &FleetSubnetRootDrainingPublicationRequest) -> Self {
         Self {
             fleet_subnet_root: request.root_draining.fleet_subnet_root,
             operation_id: request.root_draining.operation_id,
         }
     }
 
+    const fn from_reservation_request(request: &FleetSubnetRootDrainingReservationRequest) -> Self {
+        Self {
+            fleet_subnet_root: request.expected_root.fleet_subnet_root,
+            operation_id: request.operation_id,
+        }
+    }
+
+    const fn from_reservation_status(
+        request: &FleetSubnetRootDrainingReservationStatusRequest,
+    ) -> Self {
+        Self {
+            fleet_subnet_root: request.fleet_subnet_root,
+            operation_id: request.operation_id,
+        }
+    }
+
     fn conflicts_with(self, other: Self) -> bool {
         self.fleet_subnet_root == other.fleet_subnet_root || self.operation_id == other.operation_id
     }
+}
+
+fn draining_reservation_identity_matches(
+    response: &FleetSubnetRootDrainingReservationResponse,
+    request: &FleetSubnetRootDrainingReservationRequest,
+) -> bool {
+    FleetSubnetRootDrainingIdentity::from_reservation_request(&response.request).conflicts_with(
+        FleetSubnetRootDrainingIdentity::from_reservation_request(request),
+    )
+}
+
+fn draining_reservation_status_matches(
+    response: &FleetSubnetRootDrainingReservationResponse,
+    request: &FleetSubnetRootDrainingReservationStatusRequest,
+) -> bool {
+    FleetSubnetRootDrainingIdentity::from_reservation_request(&response.request).conflicts_with(
+        FleetSubnetRootDrainingIdentity::from_reservation_status(request),
+    )
+}
+
+fn validate_root_draining_reservation_request(
+    current: &FleetCoordinatorRegistryRecord,
+    version: &FleetRegistryVersion,
+    request: &FleetSubnetRootDrainingReservationRequest,
+) -> Result<(), InternalError> {
+    if request.expected_registry != *version {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root draining reservation expected Registry version is stale",
+        ));
+    }
+    if request.expected_root.status != FleetSubnetRootStatus::Active {
+        return Err(InternalError::invalid_input(
+            "Fleet Subnet Root draining reservation expected root is not Active",
+        ));
+    }
+    let Some(target) = current
+        .registry
+        .fleet_subnet_roots
+        .iter()
+        .find(|entry| entry.fleet_subnet_root == request.expected_root.fleet_subnet_root)
+    else {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root draining reservation target is missing",
+        ));
+    };
+    if target != &request.expected_root {
+        return Err(InternalError::conflict(
+            "Fleet Subnet Root draining reservation expected root differs from Registry authority",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_draining_publication_request(
@@ -8108,6 +8288,71 @@ fn validate_root_deletion_execution_request(
         return Err(InternalError::conflict(
             "Fleet Subnet Root deletion execution differs from durable readiness authority",
         ));
+    }
+    Ok(())
+}
+
+fn validate_root_draining_reservations(
+    current: &FleetCoordinatorRegistryRecord,
+) -> Result<(), InternalError> {
+    if current.root_draining_reservations.len() > current.registry.fleet_subnet_roots.len() {
+        return Err(receipt_invariant(
+            "Fleet Subnet Root draining reservation count exceeds the Fleet root count",
+        ));
+    }
+    let mut identities = Vec::new();
+    for record in &current.root_draining_reservations {
+        let response = &record.response;
+        let request = &response.request;
+        let identity = FleetSubnetRootDrainingIdentity::from_reservation_request(request);
+        if identities
+            .iter()
+            .any(|existing| identity.conflicts_with(*existing))
+        {
+            return Err(receipt_invariant(
+                "Fleet Subnet Root draining reservation identity is not unique",
+            ));
+        }
+        identities.push(identity);
+
+        let source_registry = registry_snapshot_at_version(current, &request.expected_registry)?;
+        let source_root = source_registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == request.expected_root.fleet_subnet_root)
+            .ok_or_else(|| {
+                receipt_invariant("Fleet Subnet Root draining reservation source root is missing")
+            })?;
+        let mut expected = response.clone();
+        expected.reservation_hash = [0; 32];
+        let response_is_exact = [
+            request.operation_id != [0; 32],
+            request.expected_root.status == FleetSubnetRootStatus::Active,
+            source_root == &request.expected_root,
+            response.coordinator == current.authority.binding.coordinator,
+            response.prepared_at_ns > 0,
+            response.reservation_hash != [0; 32],
+            response.reservation_hash
+                == response_hash(
+                    ROOT_DRAINING_RESERVATION_HASH_DOMAIN,
+                    &expected,
+                    "draining reservation",
+                )?,
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !response_is_exact {
+            return Err(receipt_invariant(
+                "Fleet Subnet Root draining reservation is not canonical",
+            ));
+        }
+        require_grouped_root_lifecycle_open(current, source_root.fleet_subnet_root).map_err(
+            |_| {
+                receipt_invariant(
+                    "Fleet Subnet Root draining reservation conflicts with grouped authority",
+                )
+            },
+        )?;
     }
     Ok(())
 }
