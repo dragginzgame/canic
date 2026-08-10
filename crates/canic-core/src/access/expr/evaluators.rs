@@ -29,6 +29,7 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => "build_local_only",
         BuiltinPredicate::Authenticated { .. } => "authenticated",
         BuiltinPredicate::AttestedLocalSubnet => "attested_local_subnet",
+        BuiltinPredicate::ServiceAuthority { .. } => "deployment_service_authority",
     }
 }
 
@@ -37,7 +38,8 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
         BuiltinPredicate::Fleet(_) => AccessMetricKind::Guard,
         BuiltinPredicate::Caller(_)
         | BuiltinPredicate::Authenticated { .. }
-        | BuiltinPredicate::AttestedLocalSubnet => AccessMetricKind::Auth,
+        | BuiltinPredicate::AttestedLocalSubnet
+        | BuiltinPredicate::ServiceAuthority { .. } => AccessMetricKind::Auth,
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             AccessMetricKind::Env
         }
@@ -91,6 +93,9 @@ pub(super) async fn evaluate(
         }
         BuiltinPredicate::AttestedLocalSubnet => {
             access::auth::is_attested_local_subnet(ctx.caller).await
+        }
+        BuiltinPredicate::ServiceAuthority { service } => {
+            access::deployment::require_service_authority(service)
         }
     }
 }

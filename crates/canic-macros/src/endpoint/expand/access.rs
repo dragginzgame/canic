@@ -260,6 +260,18 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::AttestedLocalSubnet => {
             quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet())
         }
+        BuiltinPredicate::ServiceAuthority { service } => match service {
+            AuthScopeArg::Literal(service) => quote!(
+                ::canic::__internal::core::access::expr::deployment::is_service_authority(
+                    #service
+                )
+            ),
+            AuthScopeArg::Expr(service) => quote!(
+                ::canic::__internal::core::access::expr::deployment::is_service_authority(
+                    #service
+                )
+            ),
+        },
         BuiltinPredicate::BuildIcOnly => {
             quote!(::canic::__internal::core::access::expr::env::build_ic_only())
         }

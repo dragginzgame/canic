@@ -5,6 +5,7 @@
 //! Boundary: endpoint macros call access predicates before delegating to workflow.
 
 pub mod auth;
+pub mod deployment;
 pub mod env;
 #[doc(hidden)]
 pub mod expr;

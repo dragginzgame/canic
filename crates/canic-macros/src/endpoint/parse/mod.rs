@@ -48,6 +48,9 @@ pub enum BuiltinPredicate {
     Authenticated {
         required_scope: Option<AuthScopeArg>,
     },
+    ServiceAuthority {
+        service: AuthScopeArg,
+    },
     BuildIcOnly,
     BuildLocalOnly,
 }
@@ -441,38 +444,36 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                                 "authenticated(...) accepts zero arguments or one string literal/path scope",
                             ));
                         }
-                        let scope = match scope_expr {
-                            Expr::Lit(expr_lit) => match &expr_lit.lit {
-                                syn::Lit::Str(scope_lit) => {
-                                    let value = scope_lit.value();
-                                    if value.trim().is_empty() {
-                                        return Err(syn::Error::new_spanned(
-                                            &path,
-                                            "authenticated(...) scope must not be empty",
-                                        ));
-                                    }
-                                    AuthScopeArg::Literal(value)
-                                }
-                                _ => {
-                                    return Err(syn::Error::new_spanned(
-                                        expr_lit,
-                                        "authenticated(...) scope must be a string literal or path constant",
-                                    ));
-                                }
-                            },
-                            Expr::Path(expr_path) => AuthScopeArg::Expr(quote::quote!(#expr_path)),
-                            other => {
-                                return Err(syn::Error::new_spanned(
-                                    other,
-                                    "authenticated(...) scope must be a string literal or path constant",
-                                ));
-                            }
-                        };
-                        Some(scope)
+                        Some(parse_static_string_arg(
+                            scope_expr,
+                            "authenticated(...) scope",
+                        )?)
                     }
                 };
                 return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
                     BuiltinPredicate::Authenticated { required_scope },
+                )));
+            }
+
+            if is_service_authority_path(&path) {
+                let service = args.next().ok_or_else(|| {
+                    syn::Error::new_spanned(
+                        &path,
+                        "deployment::is_service_authority(...) requires one service ID",
+                    )
+                })?;
+                if args.next().is_some() {
+                    return Err(syn::Error::new_spanned(
+                        &path,
+                        "deployment::is_service_authority(...) accepts exactly one string literal or path constant",
+                    ));
+                }
+                let service = parse_static_string_arg(
+                    service,
+                    "deployment::is_service_authority(...) service ID",
+                )?;
+                return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                    BuiltinPredicate::ServiceAuthority { service },
                 )));
             }
 
@@ -486,6 +487,8 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 if builtin_from_path_tail(&path).is_some()
                     || is_authenticated_path(&path)
                     || is_bare_authenticated_path(&path)
+                    || is_service_authority_path(&path)
+                    || is_bare_service_authority_path(&path)
                 {
                     return syn::Error::new_spanned(
                         &path,
@@ -517,6 +520,29 @@ where
         ));
     }
     Ok(out)
+}
+
+fn parse_static_string_arg(expr: Expr, label: &'static str) -> syn::Result<AuthScopeArg> {
+    match expr {
+        Expr::Lit(expr_lit) => match &expr_lit.lit {
+            syn::Lit::Str(value) if !value.value().trim().is_empty() => {
+                Ok(AuthScopeArg::Literal(value.value()))
+            }
+            syn::Lit::Str(_) => Err(syn::Error::new_spanned(
+                expr_lit,
+                format!("{label} must not be empty"),
+            )),
+            _ => Err(syn::Error::new_spanned(
+                expr_lit,
+                format!("{label} must be a string literal or path constant"),
+            )),
+        },
+        Expr::Path(expr_path) => Ok(AuthScopeArg::Expr(quote::quote!(#expr_path))),
+        other => Err(syn::Error::new_spanned(
+            other,
+            format!("{label} must be a string literal or path constant"),
+        )),
+    }
 }
 
 //
@@ -566,6 +592,22 @@ fn is_bare_authenticated_path(path: &Path) -> bool {
             .segments
             .last()
             .is_some_and(|seg| seg.ident == "authenticated")
+}
+
+fn is_service_authority_path(path: &Path) -> bool {
+    short_path_is(path, "deployment", "is_service_authority")
+}
+
+fn is_bare_service_authority_path(path: &Path) -> bool {
+    if path.leading_colon.is_some() {
+        return false;
+    }
+
+    path.segments.len() == 1
+        && path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "is_service_authority")
 }
 
 fn path_tail(path: &Path) -> Option<(&Ident, &Ident)> {

@@ -18,7 +18,7 @@ use crate::{
         },
         fleet_registry::{FleetDirectorySnapshot, FleetServiceMode, FleetSubnetRootStatus},
     },
-    ids::{ComponentBinding, FleetRegistryAuthority, ManagedCanisterBinding},
+    ids::{ComponentBinding, FleetRegistryAuthority, FleetServiceId, ManagedCanisterBinding},
     ops::{
         component_runtime::ComponentRuntimeOps,
         ic::IcOps,
@@ -185,6 +185,37 @@ pub fn status() -> Result<ComponentRuntimeStatusResponse, InternalError> {
         }
     }
     Ok(status)
+}
+
+/// Require this exact active Component tree to own one service's protected write authority.
+pub fn require_service_authority(service: &FleetServiceId) -> Result<(), InternalError> {
+    let current = status()?;
+    if active_service_authority_matches(current.phase, &current.deployment, service) {
+        return Ok(());
+    }
+    Err(InternalError::forbidden(
+        "Component runtime does not hold the requested Fleet-service Authority purpose",
+    ))
+}
+
+fn active_service_authority_matches(
+    phase: ComponentRuntimePhase,
+    deployment: &ProtectedComponentDeployment,
+    expected_service: &FleetServiceId,
+) -> bool {
+    matches!(
+        (phase, deployment),
+        (
+            ComponentRuntimePhase::Active,
+            ProtectedComponentDeployment::GroupMember {
+                purpose: ComponentDeploymentPurpose::FleetServiceMember {
+                    service,
+                    member_purpose: crate::config::FleetServiceMemberPurpose::Authority,
+                },
+                ..
+            }
+        ) if service == expected_service
+    )
 }
 
 /// Activate one exact Directory-prepared Component runtime.
@@ -782,6 +813,92 @@ mod tests {
 
         authority.fleet.services[0].members[0].canister_id = Principal::from_slice(&[24; 29]);
         assert!(validate_authority(&binding, &deployment, &authority).is_err());
+    }
+
+    #[test]
+    fn only_matching_active_authority_purpose_grants_service_write_authority() {
+        let component = directory_authority().component.provenance.component;
+        let database: FleetServiceId = "database".parse().expect("service ID");
+        let other: FleetServiceId = "other".parse().expect("service ID");
+        let authority = grouped_deployment(
+            component.clone(),
+            ComponentDeploymentPurpose::FleetServiceMember {
+                service: database.clone(),
+                member_purpose: FleetServiceMemberPurpose::Authority,
+            },
+        );
+        assert!(active_service_authority_matches(
+            ComponentRuntimePhase::Active,
+            &authority,
+            &database,
+        ));
+        assert!(!active_service_authority_matches(
+            ComponentRuntimePhase::DirectoryPrepared,
+            &authority,
+            &database,
+        ));
+        assert!(!active_service_authority_matches(
+            ComponentRuntimePhase::Active,
+            &authority,
+            &other,
+        ));
+
+        for member_purpose in [
+            FleetServiceMemberPurpose::Replica,
+            FleetServiceMemberPurpose::PoolMember,
+        ] {
+            let deployment = grouped_deployment(
+                component.clone(),
+                ComponentDeploymentPurpose::FleetServiceMember {
+                    service: database.clone(),
+                    member_purpose,
+                },
+            );
+            assert!(!active_service_authority_matches(
+                ComponentRuntimePhase::Active,
+                &deployment,
+                &database,
+            ));
+        }
+        let grouped_ordinary =
+            grouped_deployment(component.clone(), ComponentDeploymentPurpose::Ordinary);
+        assert!(!active_service_authority_matches(
+            ComponentRuntimePhase::Active,
+            &grouped_ordinary,
+            &database,
+        ));
+        let ungrouped = ProtectedComponentDeployment::UngroupedOrdinary { binding: component };
+        assert!(!active_service_authority_matches(
+            ComponentRuntimePhase::Active,
+            &ungrouped,
+            &database,
+        ));
+    }
+
+    fn grouped_deployment(
+        binding: ComponentBinding,
+        purpose: ComponentDeploymentPurpose,
+    ) -> ProtectedComponentDeployment {
+        ProtectedComponentDeployment::GroupMember {
+            binding,
+            configuration_digest: ComponentDeploymentConfigurationDigest::from_bytes([25; 32]),
+            group_placement: ComponentGroupPlacementId {
+                deployment: "projects".parse().expect("deployment ID"),
+                ordinal: 0,
+            },
+            component_group: "project_cell".parse().expect("Component Group ID"),
+            member_path: ComponentGroupMemberPath::try_from(vec![
+                "database".parse().expect("member ID"),
+            ])
+            .expect("member path"),
+            purpose,
+            labels: vec![],
+            limits: ComponentDeploymentLimits {
+                maximum_descendants: 20_000,
+                maximum_registry_bytes: 16_777_216,
+                spawn_grant_reductions: vec![],
+            },
+        }
     }
 
     fn directory_authority() -> ComponentRuntimeDirectoryAuthority {

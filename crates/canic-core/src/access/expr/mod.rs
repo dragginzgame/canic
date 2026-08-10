@@ -102,6 +102,9 @@ pub enum BuiltinPredicate {
         required_scope: Option<&'static str>,
     },
     AttestedLocalSubnet,
+    ServiceAuthority {
+        service: &'static str,
+    },
 }
 
 impl BuiltinPredicate {
@@ -303,6 +306,15 @@ pub mod auth {
     #[must_use]
     pub const fn authenticated_with_scope(required_scope: &'static str) -> AccessExpr {
         authenticated(Some(required_scope))
+    }
+}
+
+pub mod deployment {
+    use super::{AccessExpr, BuiltinPredicate, builtin};
+
+    #[must_use]
+    pub const fn is_service_authority(service: &'static str) -> AccessExpr {
+        builtin(BuiltinPredicate::ServiceAuthority { service })
     }
 }
 

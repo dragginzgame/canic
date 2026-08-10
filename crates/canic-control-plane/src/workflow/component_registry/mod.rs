@@ -71,7 +71,7 @@ use canic_core::{
     },
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
-        component_deployment::ProtectedComponentDeployment,
+        component_deployment::{ComponentDeploymentLimits, ProtectedComponentDeployment},
         component_provisioning::ComponentGroupDirectory,
         component_registry::{
             ComponentDirectoryChildEntry, ComponentDirectoryHead, ComponentDirectoryHeadRequest,
@@ -387,11 +387,18 @@ struct PreparedChildRuntimePlan {
     committed_partition: ComponentRegistryPartitionView,
     child_canister: candid::Principal,
     child_binding: ManagedCanisterBinding,
+    deployment: ProtectedComponentDeployment,
     owning_component_binding: ManagedCanisterBinding,
     requesting_parent_binding: ManagedCanisterBinding,
     parent_binding: Option<ManagedCanisterBinding>,
     directory_request: ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
+}
+
+struct ActivatedChildMembership {
+    partition: ComponentRegistryPartitionView,
+    synchronization_request: ComponentRuntimeDirectorySynchronizationRequest,
+    authority_hash: [u8; 32],
 }
 
 #[derive(Clone, Debug)]
@@ -908,6 +915,7 @@ pub async fn reserve_child_allocation(
         caller,
         &request.child_role,
     )?;
+    let deployment_limits = component_deployment_limits(&partition, &topology)?;
     let decision = reserve_component_child(ComponentChildAllocationInput {
         operation_id: request.operation_id,
         caller,
@@ -919,6 +927,7 @@ pub async fn reserve_child_allocation(
         readiness,
         root: &authority.binding,
         topology: &topology,
+        deployment_limits: &deployment_limits,
         reserved_component_instances: prepared.reserved_component_instances,
         committed_component_instances: prepared.committed_component_instances,
         component_descendants,
@@ -1108,11 +1117,8 @@ pub async fn quiesce_component(
     }
 
     let draining = if draining.quiescence.is_none() {
-        let component_authority = ComponentRuntimeDirectoryAuthority {
-            fleet: fleet_directory,
-            component: component_directory_head(&partition),
-            component_group: None,
-        };
+        let component_authority =
+            current_component_directory_authority(&partition, fleet_directory)?;
         let authority_hash = ComponentRuntimeOps::directory_authority_hash(&component_authority)?;
         let binding = ManagedCanisterBinding::Component(partition.binding.clone());
         let convergence =
@@ -2176,11 +2182,7 @@ pub async fn synchronize_subtree_leaf_directory(
     };
     validate_subtree_directory_request(&removal, membership_removed, &request)?;
 
-    let directory_authority = ComponentRuntimeDirectoryAuthority {
-        fleet: fleet_directory,
-        component: component_directory_head(&partition),
-        component_group: None,
-    };
+    let directory_authority = current_component_directory_authority(&partition, fleet_directory)?;
     let directory_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&directory_authority)?;
     let (owning_component, parent) = converge_subtree_directory_recipients(
@@ -2596,6 +2598,7 @@ pub async fn commit_child_allocation(
         request.operation_id,
         IcOps::now_nanos(),
         fleet_directory,
+        plan.component_group.as_ref(),
     )?;
     validate_partition(
         &authority.binding,
@@ -2612,9 +2615,10 @@ pub async fn prepare_child_directories(
 ) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
     let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
     let observed = query_component_runtime_status(plan.child_canister).await?;
-    let prepared_child = match validate_target_directory_status(
+    let prepared_child = match validate_target_directory_status_for_deployment(
         &observed,
         &plan.child_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )? {
@@ -2627,17 +2631,19 @@ pub async fn prepare_child_directories(
         }
         ComponentRuntimePhase::DirectoryPrepared | ComponentRuntimePhase::Active => observed,
     };
-    let _ = prepared_target_directory_status(
+    let _ = prepared_target_directory_status_for_deployment(
         &prepared_child,
         &plan.child_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )?;
 
     let independently_observed = query_component_runtime_status(plan.child_canister).await?;
-    let child = prepared_target_directory_status(
+    let child = prepared_target_directory_status_for_deployment(
         &independently_observed,
         &plan.child_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )?;
@@ -2690,9 +2696,10 @@ pub async fn activate_child_runtime(
         ));
     }
 
-    let child = activate_directory_prepared_runtime(
+    let child = activate_directory_prepared_runtime_for_deployment(
         plan.child_canister,
         &plan.child_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )
@@ -2727,27 +2734,65 @@ pub async fn activate_child_membership(
         ));
     }
     let observed = query_component_runtime_status(plan.child_canister).await?;
-    validate_active_target_runtime_status(
+    validate_active_target_runtime_status_for_deployment(
         &observed,
         &plan.child_binding,
+        &plan.deployment,
         &plan.directory_request,
         plan.directory_authority_hash,
     )?;
 
-    let (activated_allocation, active_partition) = ComponentRegistryOps::activate_child_membership(
+    let active = activate_and_validate_child_membership(&plan, request.operation_id)?;
+
+    let child = converge_active_membership_directory_for_deployment(
+        plan.child_canister,
+        &plan.child_binding,
+        &plan.deployment,
+        &plan.directory_request,
+        plan.directory_authority_hash,
+        &active.synchronization_request,
+        active.authority_hash,
+    )
+    .await?;
+    converge_active_child_parent_directories(
+        &plan,
+        &active.synchronization_request.authority,
+        active.authority_hash,
+    )
+    .await?;
+    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    let allocation = ComponentRegistryOps::mark_child_membership_synchronized(
         request.component,
         request.operation_id,
+        active.authority_hash,
+    )?;
+    child_membership_response(
+        allocation,
+        plan.committed_partition,
+        active.partition,
+        child,
+    )
+}
+
+fn activate_and_validate_child_membership(
+    plan: &PreparedChildRuntimePlan,
+    operation_id: [u8; 32],
+) -> Result<ActivatedChildMembership, InternalError> {
+    let (allocation, partition) = ComponentRegistryOps::activate_child_membership(
+        plan.allocation.component,
+        operation_id,
         IcOps::now_nanos(),
         plan.directory_request.authority.fleet.clone(),
+        plan.directory_request.authority.component_group.as_ref(),
     )?;
     validate_partition(
         &plan.root_binding,
-        activated_allocation.release_set,
+        allocation.release_set,
         &ConfigOps::component_topology()?,
-        &active_partition,
+        &partition,
     )?;
     let registered =
-        ComponentRegistryOps::registered_parent(request.component, plan.child_canister)?
+        ComponentRegistryOps::registered_parent(plan.allocation.component, plan.child_canister)?
             .ok_or_else(|| {
                 InternalError::invariant(
                     InternalErrorOrigin::Storage,
@@ -2762,17 +2807,30 @@ pub async fn activate_child_membership(
     }
 
     let synchronization_request = ComponentRuntimeDirectorySynchronizationRequest {
-        operation_id: request.operation_id,
+        operation_id,
         authority: ComponentRuntimeDirectoryAuthority {
             fleet: plan.directory_request.authority.fleet.clone(),
-            component: component_directory_head(&active_partition),
+            component: component_directory_head(&partition),
             component_group: plan.directory_request.authority.component_group.clone(),
         },
-        direct_children: active_component_direct_children(&active_partition, plan.child_canister)?,
+        direct_children: active_component_direct_children(&partition, plan.child_canister)?,
     };
-    let active_authority_hash =
+    let authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&synchronization_request.authority)?;
-    let membership = committed_child_directory_receipt(&activated_allocation)?
+    validate_child_membership_receipt(&allocation, &partition, authority_hash)?;
+    Ok(ActivatedChildMembership {
+        partition,
+        synchronization_request,
+        authority_hash,
+    })
+}
+
+fn validate_child_membership_receipt(
+    allocation: &RootComponentChildAllocationView,
+    partition: &ComponentRegistryPartitionView,
+    authority_hash: [u8; 32],
+) -> Result<(), InternalError> {
+    let membership = committed_child_directory_receipt(allocation)?
         .membership
         .as_ref()
         .ok_or_else(|| {
@@ -2783,44 +2841,16 @@ pub async fn activate_child_membership(
         })?;
     let membership_authority =
         ComponentPartitionSnapshotAuthority::from_child_membership(membership);
-    let partition_authority =
-        ComponentPartitionSnapshotAuthority::from_partition(&active_partition);
+    let partition_authority = ComponentPartitionSnapshotAuthority::from_partition(partition);
     if membership_authority.state != partition_authority.state
-        || membership.directory_authority_hash != active_authority_hash
+        || membership.directory_authority_hash != authority_hash
     {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Storage,
             "active child membership receipt differs from its derived current Directory",
         ));
     }
-
-    let child = converge_active_membership_directory(
-        plan.child_canister,
-        &plan.child_binding,
-        &plan.directory_request,
-        plan.directory_authority_hash,
-        &synchronization_request,
-        active_authority_hash,
-    )
-    .await?;
-    converge_active_child_parent_directories(
-        &plan,
-        &synchronization_request.authority,
-        active_authority_hash,
-    )
-    .await?;
-    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
-    let allocation = ComponentRegistryOps::mark_child_membership_synchronized(
-        request.component,
-        request.operation_id,
-        active_authority_hash,
-    )?;
-    child_membership_response(
-        allocation,
-        plan.committed_partition,
-        active_partition,
-        child,
-    )
+    Ok(())
 }
 
 async fn converge_active_child_parent_directories(
@@ -3960,6 +3990,8 @@ struct ComponentChildInstallPlan {
     durable: RootComponentChildInstallPlan,
     source: ApprovedModuleSource,
     payload: CanisterInitPayload,
+    deployment: ProtectedComponentDeployment,
+    component_group: Option<ComponentGroupDirectory>,
     canister: candid::Principal,
     expected_status_module_hash: [u8; 32],
     application_init_args: Option<Vec<u8>>,
@@ -4123,6 +4155,18 @@ async fn child_component_install_plan(
                 "derived Component Child install binding is invalid: {error}"
             ))
         })?;
+    let partition = ComponentRegistryOps::partition(allocation.component)?.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Component Child install requires its owning Component Registry partition",
+        )
+    })?;
+    let deployment_authority = RootComponentProvisioningOps::component_deployment_authority(
+        &partition.provisioning_origin,
+        &binding.component,
+    )?;
+    let deployment = deployment_authority.deployment;
+    ConfigOps::validate_protected_component_deployment(&deployment, &binding.component)?;
     let durable = RootComponentChildInstallPlan {
         raw_module_hash: artifact.raw_module_hash,
         chunk_hashes,
@@ -4132,9 +4176,7 @@ async fn child_component_install_plan(
     let payload = CanisterInitPayload {
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
-        component_deployment: Box::new(ProtectedComponentDeployment::UngroupedOrdinary {
-            binding: binding.component.clone(),
-        }),
+        component_deployment: Box::new(deployment.clone()),
         authority: CanisterInitAuthority::ComponentChild {
             root: root.clone(),
             binding,
@@ -4145,6 +4187,8 @@ async fn child_component_install_plan(
         durable,
         source,
         payload,
+        deployment,
+        component_group: deployment_authority.component_group,
         canister,
         expected_status_module_hash: artifact.payload_hash,
         application_init_args: allocation.application_init_args.clone(),
@@ -4845,8 +4889,12 @@ async fn prepared_child_runtime_plan(
     verify_installed_child(&install).await?;
     let child_binding = ManagedCanisterBinding::ComponentChild(installation.binding.clone());
 
-    let (allocation, committed_partition) =
-        ComponentRegistryOps::committed_child_authority(component, operation_id, &fleet_directory)?;
+    let (allocation, committed_partition) = ComponentRegistryOps::committed_child_authority(
+        component,
+        operation_id,
+        &fleet_directory,
+        install.component_group.as_ref(),
+    )?;
     validate_partition(
         &root_authority.binding,
         root_authority.initial_release_set,
@@ -4866,6 +4914,7 @@ async fn prepared_child_runtime_plan(
         &committed_partition,
         &allocation,
         install.canister,
+        install.component_group.clone(),
     )?;
 
     let owning_component_binding = ManagedCanisterBinding::Component(current_partition.binding);
@@ -4879,6 +4928,7 @@ async fn prepared_child_runtime_plan(
         committed_partition,
         child_canister: install.canister,
         child_binding,
+        deployment: install.deployment,
         owning_component_binding,
         requesting_parent_binding,
         parent_binding,
@@ -4938,13 +4988,14 @@ fn child_directory_request(
     partition: &ComponentRegistryPartitionView,
     allocation: &RootComponentChildAllocationView,
     child_canister: candid::Principal,
+    component_group: Option<ComponentGroupDirectory>,
 ) -> Result<(ComponentRuntimeDirectoryPreparationRequest, [u8; 32]), InternalError> {
     let request = ComponentRuntimeDirectoryPreparationRequest {
         operation_id,
         authority: ComponentRuntimeDirectoryAuthority {
             fleet,
             component: component_directory_head(partition),
-            component_group: None,
+            component_group,
         },
         direct_children: active_component_direct_children(partition, child_canister)?,
     };
@@ -5046,23 +5097,6 @@ async fn activate_target_component_runtime(
     result.map_err(InternalError::public)
 }
 
-async fn activate_directory_prepared_runtime(
-    canister: candid::Principal,
-    binding: &ManagedCanisterBinding,
-    directory_request: &ComponentRuntimeDirectoryPreparationRequest,
-    directory_authority_hash: [u8; 32],
-) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let deployment = ungrouped_component_deployment(binding);
-    activate_directory_prepared_runtime_for_deployment(
-        canister,
-        binding,
-        &deployment,
-        directory_request,
-        directory_authority_hash,
-    )
-    .await
-}
-
 async fn activate_directory_prepared_runtime_for_deployment(
     canister: candid::Principal,
     binding: &ManagedCanisterBinding,
@@ -5126,27 +5160,6 @@ async fn activate_directory_prepared_runtime_for_deployment(
         directory_request,
         directory_authority_hash,
     )
-}
-
-async fn converge_active_membership_directory(
-    canister: candid::Principal,
-    binding: &ManagedCanisterBinding,
-    prepared_request: &ComponentRuntimeDirectoryPreparationRequest,
-    prepared_authority_hash: [u8; 32],
-    active_request: &ComponentRuntimeDirectorySynchronizationRequest,
-    active_authority_hash: [u8; 32],
-) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let deployment = ungrouped_component_deployment(binding);
-    converge_active_membership_directory_for_deployment(
-        canister,
-        binding,
-        &deployment,
-        prepared_request,
-        prepared_authority_hash,
-        active_request,
-        active_authority_hash,
-    )
-    .await
 }
 
 async fn converge_active_membership_directory_for_deployment(
@@ -5802,22 +5815,6 @@ fn prepared_target_directory_status_for_deployment(
             "Component runtime has not retained the complete Directory authority",
         )),
     }
-}
-
-fn validate_active_target_runtime_status(
-    status: &ComponentRuntimeStatusResponse,
-    binding: &ManagedCanisterBinding,
-    request: &ComponentRuntimeDirectoryPreparationRequest,
-    authority_hash: [u8; 32],
-) -> Result<(), InternalError> {
-    let deployment = ungrouped_component_deployment(binding);
-    validate_active_target_runtime_status_for_deployment(
-        status,
-        binding,
-        &deployment,
-        request,
-        authority_hash,
-    )
 }
 
 fn validate_active_target_runtime_status_for_deployment(
@@ -6827,6 +6824,50 @@ pub(super) fn component_directory_head(
             synchronized_at_ns: partition.directory_synchronized_at_ns,
         },
         descendant_count: partition.committed_descendants,
+    }
+}
+
+fn current_component_directory_authority(
+    partition: &ComponentRegistryPartitionView,
+    fleet: FleetDirectorySnapshot,
+) -> Result<ComponentRuntimeDirectoryAuthority, InternalError> {
+    let deployment_authority = RootComponentProvisioningOps::component_deployment_authority(
+        &partition.provisioning_origin,
+        &partition.binding,
+    )?;
+    Ok(ComponentRuntimeDirectoryAuthority {
+        fleet,
+        component: component_directory_head(partition),
+        component_group: deployment_authority.component_group,
+    })
+}
+
+fn component_deployment_limits(
+    partition: &ComponentRegistryPartitionView,
+    topology: &canic_core::control_plane_support::config::ComponentTopology,
+) -> Result<ComponentDeploymentLimits, InternalError> {
+    let authority = RootComponentProvisioningOps::component_deployment_authority(
+        &partition.provisioning_origin,
+        &partition.binding,
+    )?;
+    ConfigOps::validate_protected_component_deployment(&authority.deployment, &partition.binding)?;
+    match authority.deployment {
+        ProtectedComponentDeployment::UngroupedOrdinary { .. } => {
+            let spec = topology
+                .get(&partition.binding.component_spec)
+                .ok_or_else(|| {
+                    InternalError::invariant(
+                        InternalErrorOrigin::Config,
+                        "Component deployment limits reference an unknown protected Spec",
+                    )
+                })?;
+            Ok(ComponentDeploymentLimits {
+                maximum_descendants: spec.limits.maximum_descendants,
+                maximum_registry_bytes: spec.limits.maximum_registry_bytes,
+                spawn_grant_reductions: Vec::new(),
+            })
+        }
+        ProtectedComponentDeployment::GroupMember { limits, .. } => Ok(limits),
     }
 }
 
@@ -8001,13 +8042,33 @@ fn validate_child_allocation(
                 "reserved Component Child has no protected parent spawn grant",
             )
         })?;
+    let partition =
+        ComponentRegistryOps::partition(parent_component.component)?.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Storage,
+                "reserved Component Child has no owning Component Registry partition",
+            )
+        })?;
+    if partition.binding != *parent_component {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Storage,
+            "reserved Component Child parent differs from its owning partition",
+        ));
+    }
+    let deployment_limits = component_deployment_limits(&partition, topology)?;
+    let maximum_instances_per_parent = deployment_spawn_grant_maximum(
+        &deployment_limits,
+        parent_role,
+        &allocation.child_role,
+        grant.maximum_instances_per_parent,
+    )?;
     let expected_authority = ComponentChildAllocationAuthority {
         component: parent_component.component,
         parent_role,
         child_kind: child.kind,
-        maximum_instances_per_parent: grant.maximum_instances_per_parent,
-        maximum_descendants: spec.limits.maximum_descendants,
-        maximum_registry_bytes: spec.limits.maximum_registry_bytes,
+        maximum_instances_per_parent,
+        maximum_descendants: deployment_limits.maximum_descendants,
+        maximum_registry_bytes: deployment_limits.maximum_registry_bytes,
         release_set,
         reserved_component: parent_component.component,
     };
@@ -8026,6 +8087,26 @@ fn validate_child_allocation(
         ));
     }
     Ok(())
+}
+
+fn deployment_spawn_grant_maximum(
+    limits: &ComponentDeploymentLimits,
+    parent_role: &CanisterRole,
+    child_role: &CanisterRole,
+    spec_maximum: u32,
+) -> Result<u32, InternalError> {
+    let maximum = limits
+        .spawn_grant_reductions
+        .iter()
+        .find(|limit| &limit.parent_role == parent_role && &limit.child_role == child_role)
+        .map_or(spec_maximum, |limit| limit.maximum_instances_per_parent);
+    if maximum == 0 || maximum > spec_maximum {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Config,
+            "Component deployment spawn-grant ceiling exceeds its protected Spec",
+        ));
+    }
+    Ok(maximum)
 }
 
 fn child_allocation_request_matches(
