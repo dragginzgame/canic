@@ -60,6 +60,7 @@ imports = []
 maximum_component_instances = 4
 maximum_registry_bytes = 16777216
 maximum_wasm_store_bytes = 200000000
+maximum_group_placements = 16
 
 [fleet_subnet_roots.limits.cycles_funding]
 window_secs = 3600
