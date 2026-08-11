@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
 - `0.101.43` requires durable application-owned operation identities for
-  dynamic child creation and qualifies the complete local Project hierarchy.
+  dynamic child creation, qualifies the complete local Project hierarchy and
+  adds a live multi-Subnet Skynet Fleet demonstration, and hardens developer-
+  tool refresh against incomplete or contaminated caches.
 
 - `0.101.42` qualifies cross-root Fleet-service peer provisioning across two
   physical PocketIC application Subnets, including exact retry and stale,

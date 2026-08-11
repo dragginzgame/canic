@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 ## Purpose
 
@@ -22,7 +22,13 @@ Historical detail is archived at:
   Project Hub -> Project Instance -> Ledger/optional Machine through the
   Fleet Subnet Root, proving exact retry, immediate parentage, role-qualified
   Wasms, same-Subnet placement, singleton and wrong-parent rejection, and no
-  Coordinator Registry mutation.
+  Coordinator Registry mutation. The checked-in Skynet demonstration layers a
+  live responsive HTML/JSON observability console over an initial eight-Subnet
+  Authority/Replica service, independently scaled T-800 workers and sharded
+  memory cells, with policy for up to 32 one-per-root members. Developer
+  refresh now installs and verifies PCRE2-enabled ripgrep and runs dependency
+  audit through the isolated repository gate, avoiding contamination from
+  Cargo's shared advisory cache.
 - Released `0.101.42` qualifies the cross-root Fleet-service peer path
   across two physical PocketIC application Subnets. One real Project Hub
   Canister calls the remote root, exact retry returns the original reservation

@@ -112,6 +112,15 @@ inspection, medic checks, recovery guidance, and automation-friendly output.
 
 The complete feature index is in [docs/features](docs/features/README.md).
 
+## Demo Fleets
+
+**Skynet** combines Fleet services, multi-Subnet placement, scaling, sharding,
+metrics and protected runtime discovery in a Terminator-themed live network
+console. Its checked-in App starts with eight Authority/Replica nodes and can
+prepare one member on each of up to 32 distinct workload Subnets.
+
+[Explore the Skynet Fleet demo](apps/skynet/README.md)
+
 ## Core Vocabulary
 
 - An **App** is checked-in source and configuration.

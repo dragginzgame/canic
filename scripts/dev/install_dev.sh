@@ -17,7 +17,6 @@ CANIC_DEV_TOOLS=(
     "cargo-get@$CANIC_CARGO_GET_VERSION"
     "cargo-sort@$CANIC_CARGO_SORT_VERSION"
     "cargo-sort-derives@$CANIC_CARGO_SORT_DERIVES_VERSION"
-    "ripgrep@$CANIC_RIPGREP_VERSION"
 )
 CANIC_WASM_TOOLS=(
     "candid-extractor@$CANIC_CANDID_EXTRACTOR_VERSION"
@@ -79,6 +78,35 @@ install_cargo_tools() {
     yellow "$label:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked ${tools[*]}"
     cargo_toolchain install --quiet --locked "${tools[@]}"
+}
+
+install_or_update_ripgrep() {
+    local version_output=""
+
+    if command -v rg >/dev/null 2>&1; then
+        version_output="$(rg --version 2>/dev/null | head -n 1)"
+        if [ "$version_output" = "ripgrep $CANIC_RIPGREP_VERSION" ] &&
+            rg --pcre2-version >/dev/null 2>&1; then
+            green "rg ready: $version_output with PCRE2"
+            return 0
+        fi
+    fi
+
+    yellow "ripgrep with PCRE2:"
+    cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked --force --features pcre2 ripgrep@$CANIC_RIPGREP_VERSION"
+    cargo_toolchain install --quiet --locked --force --features pcre2 \
+        "ripgrep@$CANIC_RIPGREP_VERSION"
+    require_command rg
+    version_output="$(rg --version 2>&1 | head -n 1)"
+    [ "$version_output" = "ripgrep $CANIC_RIPGREP_VERSION" ] || {
+        red "unexpected ripgrep version: $version_output"
+        exit 1
+    }
+    rg --pcre2-version >/dev/null 2>&1 || {
+        red "ripgrep was installed without required PCRE2 support"
+        exit 1
+    }
+    green "rg ready: $version_output with PCRE2"
 }
 
 install_or_update_actionlint() {
@@ -203,6 +231,13 @@ configure_git_hooks_if_present() {
 }
 
 main() {
+    if [ "${1:-}" = "--ensure-ripgrep" ]; then
+        require_command cargo
+        ensure_cargo_bin_on_path
+        install_or_update_ripgrep
+        return 0
+    fi
+
     if [ "${1:-}" = "--update-prereqs" ]; then
         blue "Checking Python, shell lint, workflow lint, secret scan, and ICP CLI prerequisites"
         require_python
@@ -236,8 +271,7 @@ main() {
     require_python
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
-    require_command rg
-    green "rg ready: $(rg --version 2>&1 | head -n 1)"
+    install_or_update_ripgrep
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_shellcheck
     install_or_update_actionlint

@@ -13,6 +13,7 @@
         test-canisters fmt-core cloc
 
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
+CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
@@ -115,14 +116,15 @@ update-dev:
 		"cargo-sort@$(CANIC_CARGO_SORT_VERSION)" \
 		"cargo-tarpaulin@$(CANIC_CARGO_TARPAULIN_VERSION)" \
 		"cargo-sort-derives@$(CANIC_CARGO_SORT_DERIVES_VERSION)" \
-		"ripgrep@$(CANIC_RIPGREP_VERSION)" \
 		"candid-extractor@$(CANIC_CANDID_EXTRACTOR_VERSION)" \
 		--locked
-	rg --version
+	bash scripts/dev/install_dev.sh --ensure-ripgrep
+	"$(CARGO_INSTALL_BIN_DIR)/rg" --version
+	"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version
 	icp --version
 	ic-wasm --version
 	"$(GITLEAKS_INSTALL_DIR)/gitleaks" version
-	cargo audit
+	bash scripts/ci/check-dependency-risk-inventory.sh
 
 # Optional explicit install target (idempotent)
 ensure-hooks:

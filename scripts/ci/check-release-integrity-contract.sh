@@ -220,6 +220,19 @@ rg -F 'maintainer toolchain currently pins `'"$CANIC_ICP_CLI_VERSION"'`' "$INSTA
 rg -F 'bash scripts/dev/update-icp-cli-pin.sh' "$MAKEFILE" >/dev/null ||
     fail "make update-dev does not refresh the ICP CLI pin"
 
+update_dev_recipe="$(sed -n '/^update-dev:/,/^$/p' "$MAKEFILE")"
+rg -F 'bash scripts/dev/install_dev.sh --ensure-ripgrep' <<<"$update_dev_recipe" >/dev/null ||
+    fail "make update-dev does not install the feature-qualified ripgrep tool"
+rg -F '"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version' <<<"$update_dev_recipe" >/dev/null ||
+    fail "make update-dev does not verify ripgrep PCRE2 support"
+rg -F 'bash scripts/ci/check-dependency-risk-inventory.sh' <<<"$update_dev_recipe" >/dev/null ||
+    fail "make update-dev does not use the isolated dependency risk gate"
+if rg -F 'cargo audit' <<<"$update_dev_recipe" >/dev/null; then
+    fail "make update-dev must not use cargo-audit's mutable shared database"
+fi
+rg -F 'cargo_toolchain install --quiet --locked --force --features pcre2' "$DEV_INSTALL" >/dev/null ||
+    fail "developer ripgrep installation does not enable required PCRE2 support"
+
 mapfile -t version_vars < <(
     sed -n 's/^export \(CANIC_[A-Z0-9_]*_VERSION\)=.*/\1/p' "$TOOLS"
 )

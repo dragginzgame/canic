@@ -1,0 +1,30 @@
+[package]
+name = "skynet_node"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+build = "../build.rs"
+description = "Skynet Authority/Replica node and live Canic Fleet console"
+
+[package.metadata.cargo-machete]
+ignored = ["candid"]
+
+[package.metadata.canic]
+app = "skynet"
+role = "skynet_node"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["metrics", "sharding"] }
+ic-cdk = { workspace = true }
+skynet_console = { path = "../console" }
+
+[build-dependencies]
+canic = { workspace = true, features = [] }
+
+[lints]
+workspace = true
