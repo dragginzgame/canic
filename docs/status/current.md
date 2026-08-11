@@ -14,21 +14,32 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.42`.
-- The latest published release is `v0.101.42` at
-  `1f19c8ffec3879adb02866cd3daf312d64642a5e`.
-- Open `0.101.43` requires applications to supply a durable nonzero operation
-  identity for dynamic child creation. A focused PocketIC journey now drives
-  Project Hub -> Project Instance -> Ledger/optional Machine through the
-  Fleet Subnet Root, proving exact retry, immediate parentage, role-qualified
-  Wasms, same-Subnet placement, singleton and wrong-parent rejection, and no
-  Coordinator Registry mutation. The checked-in Skynet demonstration layers a
-  live responsive HTML/JSON observability console over an initial eight-Subnet
-  Authority/Replica service, independently scaled T-800 workers and sharded
-  memory cells, with policy for up to 32 one-per-root members. Developer
-  refresh now installs and verifies PCRE2-enabled ripgrep and runs dependency
-  audit through the isolated repository gate, avoiding contamination from
-  Cargo's shared advisory cache.
+- The workspace package version is `0.101.43`.
+- The latest published release is `v0.101.43` at
+  `c190a54aa26a368fea7bf3a9e6200a7cc89daba9`.
+- Open `0.101.44` proves the protected composition boundary for differently
+  sized deployments of one reusable Project Hub group. One canonical plan
+  assigns the shared Component Spec and Spec hash to distinct root/Subnet
+  bindings while retaining a 10,000-instance Hub-to-Instance Spec ceiling in
+  one placement and a 2,000-instance reduction in the other; limit
+  substitution rejects.
+- Released `0.101.43` requires applications to supply a durable nonzero
+  operation identity for dynamic child creation. A focused PocketIC journey
+  now drives Project Hub -> Project Instance -> Ledger/optional Machine
+  through the Fleet Subnet Root, proving exact retry, immediate parentage,
+  role-qualified Wasms, same-Subnet placement, singleton and wrong-parent
+  rejection, and no Coordinator Registry mutation. The checked-in Skynet
+  demonstration layers a live responsive HTML/JSON observability console over
+  an initial eight-Subnet Authority/Replica service, independently scaled
+  T-800 workers and sharded memory cells, with policy for up to 32
+  one-per-root members. Developer refresh now installs and verifies
+  PCRE2-enabled ripgrep and runs dependency audit through the isolated
+  repository gate, avoiding contamination from Cargo's shared advisory cache.
+- Unreleased design work reserves 0.110 as one provisional Skynet Fleet
+  Observatory idea reservoir. It will probably be pushed forward in the
+  release sequence while prerequisite designs mature; it approves no runtime
+  implementation and keeps fictional presentation separate from harmful
+  real-world autonomy.
 - Released `0.101.42` qualifies the cross-root Fleet-service peer path
   across two physical PocketIC application Subnets. One real Project Hub
   Canister calls the remote root, exact retry returns the original reservation

@@ -3,6 +3,7 @@
 use super::*;
 use crate::{
     bootstrap::parse_config_model,
+    config::ComponentGroupDeploymentSpec,
     dto::{
         component_provisioning::{
             ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
@@ -95,6 +96,62 @@ component_spec = "alpha"
 mode = "active_pool"
 placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 2
+"#;
+
+const PROJECT_HUB_CAPACITY_CONFIG: &str = r#"
+[app]
+name = "plan_test"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.project_hub]
+kind = "canister"
+package = "project_hub"
+
+[roles.project_instance]
+kind = "canister"
+package = "project_instance"
+
+[component_specs.project_hub]
+component_role = "project_hub"
+maximum_instances = 4
+
+[component_specs.project_hub.children.project_instance]
+kind = "instance"
+
+[component_specs.project_hub.spawn_grants.project_hub.project_instance]
+maximum_instances_per_parent = 10_000
+
+[component_groups.project_hubs.components.project_hub]
+component_spec = "project_hub"
+
+[component_group_deployments.project_hubs_large]
+component_group = "project_hubs"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[[component_group_deployments.project_hubs_large.member_limits]]
+member = ["project_hub"]
+spawn_grants = [
+  { parent_role = "project_hub", child_role = "project_instance", maximum_instances_per_parent = 10_000 },
+]
+
+[component_group_deployments.project_hubs_small]
+component_group = "project_hubs"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[[component_group_deployments.project_hubs_small.member_limits]]
+member = ["project_hub"]
+spawn_grants = [
+  { parent_role = "project_hub", child_role = "project_instance", maximum_instances_per_parent = 2_000 },
+]
 "#;
 
 fn principal(byte: u8) -> Principal {
@@ -209,15 +266,34 @@ fn binding(registry: &FleetRegistry, root: &FleetSubnetRootEntry) -> FleetSubnet
 }
 
 fn plan(config: &ConfigModel, registry: &FleetRegistry) -> FleetComponentProvisioningPlan {
-    let topology = config
-        .compile_component_topology()
-        .expect("Component Topology");
     let deployment_topology = config
         .compile_component_group_deployment_topology()
         .expect("deployment topology");
     let deployment = deployment_topology
         .get(&"cells".parse().expect("deployment ID"))
         .expect("cells deployment");
+    let placement = placement_plan(deployment, 0);
+    let batches = registry
+        .fleet_subnet_roots
+        .iter()
+        .enumerate()
+        .map(|(ordinal, root)| {
+            let mut placement = placement.clone();
+            placement.group_placement.ordinal = u32::try_from(ordinal).expect("bounded ordinal");
+            FleetSubnetRootProvisioningBatch {
+                root: binding(registry, root),
+                active_release_set: root.active_release_set,
+                placements: vec![placement],
+            }
+        })
+        .collect::<Vec<_>>();
+    complete_plan(config, registry, batches)
+}
+
+fn placement_plan(
+    deployment: &ComponentGroupDeploymentSpec,
+    ordinal: u32,
+) -> ComponentGroupPlacementPlan {
     let entries = deployment
         .members
         .iter()
@@ -230,23 +306,24 @@ fn plan(config: &ConfigModel, registry: &FleetRegistry) -> FleetComponentProvisi
             limits: member.limits.clone(),
         })
         .collect::<Vec<_>>();
-    let batches = registry
-        .fleet_subnet_roots
-        .iter()
-        .enumerate()
-        .map(|(ordinal, root)| FleetSubnetRootProvisioningBatch {
-            root: binding(registry, root),
-            active_release_set: root.active_release_set,
-            placements: vec![ComponentGroupPlacementPlan {
-                group_placement: ComponentGroupPlacementId {
-                    deployment: deployment.deployment.clone(),
-                    ordinal: u32::try_from(ordinal).expect("bounded ordinal"),
-                },
-                component_group: deployment.component_group.clone(),
-                entries: entries.clone(),
-            }],
-        })
-        .collect::<Vec<_>>();
+    ComponentGroupPlacementPlan {
+        group_placement: ComponentGroupPlacementId {
+            deployment: deployment.deployment.clone(),
+            ordinal,
+        },
+        component_group: deployment.component_group.clone(),
+        entries,
+    }
+}
+
+fn complete_plan(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    batches: Vec<FleetSubnetRootProvisioningBatch>,
+) -> FleetComponentProvisioningPlan {
+    let topology = config
+        .compile_component_topology()
+        .expect("Component Topology");
     let mut confirmation_roots = registry
         .fleet_subnet_roots
         .iter()
@@ -279,6 +356,67 @@ fn fixture_from(
     let config = parse_config_model(source).expect("valid config");
     let registry = active_registry(&config, maximum_group_placements);
     let plan = plan(&config, &registry);
+    (config, registry, plan)
+}
+
+fn project_hub_capacity_placements(config: &ConfigModel) -> [ComponentGroupPlacementPlan; 2] {
+    let topology = config
+        .compile_component_topology()
+        .expect("Component Topology");
+    let deployments = config
+        .compile_component_group_deployment_topology()
+        .expect("deployment topology");
+    let large = deployments
+        .get(&"project_hubs_large".parse().expect("large deployment ID"))
+        .expect("large Project Hub deployment");
+    let small = deployments
+        .get(&"project_hubs_small".parse().expect("small deployment ID"))
+        .expect("small Project Hub deployment");
+
+    assert_eq!(topology.component_specs.len(), 1);
+    assert_eq!(large.component_group, small.component_group);
+    assert_eq!(large.members.len(), 1);
+    assert_eq!(small.members.len(), 1);
+    assert_eq!(
+        large.members[0].component_spec,
+        small.members[0].component_spec
+    );
+    assert_eq!(
+        large.members[0].component_spec_hash,
+        small.members[0].component_spec_hash
+    );
+    assert!(large.members[0].limits.spawn_grant_reductions.is_empty());
+    assert_eq!(small.members[0].limits.spawn_grant_reductions.len(), 1);
+    assert_eq!(
+        small.members[0].limits.spawn_grant_reductions[0].maximum_instances_per_parent,
+        2_000
+    );
+    let project_hub_spec = topology
+        .get(&large.members[0].component_spec)
+        .expect("shared Project Hub Spec");
+    assert_eq!(
+        project_hub_spec.spawn_grants[0].maximum_instances_per_parent,
+        10_000
+    );
+
+    [placement_plan(large, 0), placement_plan(small, 0)]
+}
+
+fn project_hub_capacity_fixture() -> (ConfigModel, FleetRegistry, FleetComponentProvisioningPlan) {
+    let config = parse_config_model(PROJECT_HUB_CAPACITY_CONFIG).expect("valid Project Hub config");
+    let placements = project_hub_capacity_placements(&config);
+    let registry = active_registry(&config, 1);
+    let batches = registry
+        .fleet_subnet_roots
+        .iter()
+        .zip(placements)
+        .map(|(root, placement)| FleetSubnetRootProvisioningBatch {
+            root: binding(&registry, root),
+            active_release_set: root.active_release_set,
+            placements: vec![placement],
+        })
+        .collect::<Vec<_>>();
+    let plan = complete_plan(&config, &registry, batches);
     (config, registry, plan)
 }
 
@@ -543,6 +681,75 @@ fn deployment_placements_may_share_one_root_within_density_and_capacity() {
         &plan.batches[0],
     )
     .expect("valid packed root batch");
+}
+
+#[test]
+fn one_project_hub_group_has_distinct_protected_limits_on_different_roots() {
+    let (config, registry, plan) = project_hub_capacity_fixture();
+
+    validate(&config, &registry, &plan).expect("valid protected Project Hub plan");
+    let plan_hash =
+        ComponentProvisioningPlanOps::hash(&config, &registry, &plan).expect("protected plan hash");
+    assert_ne!(plan_hash, [0; 32]);
+    let large_batch = &plan.batches[0];
+    let small_batch = &plan.batches[1];
+    assert_ne!(
+        large_batch.root.fleet_subnet_root,
+        small_batch.root.fleet_subnet_root
+    );
+    assert_ne!(
+        large_batch.root.placement_subnet,
+        small_batch.root.placement_subnet
+    );
+    assert_eq!(
+        large_batch.placements[0].component_group,
+        small_batch.placements[0].component_group
+    );
+    assert_eq!(
+        large_batch.placements[0].entries[0].component_spec,
+        small_batch.placements[0].entries[0].component_spec
+    );
+    assert!(
+        large_batch.placements[0].entries[0]
+            .limits
+            .spawn_grant_reductions
+            .is_empty()
+    );
+    assert_eq!(
+        small_batch.placements[0].entries[0]
+            .limits
+            .spawn_grant_reductions[0]
+            .maximum_instances_per_parent,
+        2_000
+    );
+
+    let mut reassigned = plan.clone();
+    let large_placement = reassigned.batches[0]
+        .placements
+        .pop()
+        .expect("large placement");
+    let small_placement = reassigned.batches[1]
+        .placements
+        .pop()
+        .expect("small placement");
+    reassigned.batches[0].placements.push(small_placement);
+    reassigned.batches[1].placements.push(large_placement);
+    validate(&config, &registry, &reassigned).expect("valid reassigned Project Hub plan");
+    assert_ne!(
+        ComponentProvisioningPlanOps::hash(&config, &registry, &reassigned)
+            .expect("reassigned plan hash"),
+        plan_hash
+    );
+
+    let mut substituted = plan;
+    substituted.batches[1].placements[0].entries[0]
+        .limits
+        .spawn_grant_reductions[0]
+        .maximum_instances_per_parent = 10_000;
+    crate::assert_err_variant!(
+        validate(&config, &registry, &substituted),
+        Err(ComponentProvisioningPlanOpsError::PlacementEntriesMismatch)
+    );
 }
 
 #[test]

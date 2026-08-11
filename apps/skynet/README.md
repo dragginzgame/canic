@@ -97,3 +97,16 @@ No deployment is automated by this demo. Inspect the generated file, confirm
 the identity and network, and fund the relevant Cycles Ledger accounts before
 running installation. Use a disposable non-mainnet environment for functional
 experiments unless the multi-Subnet mainnet display is explicitly intended.
+
+Every Skynet Canister is intended to be repurposed eventually for a real
+workload such as Toko. Canic 0.101 does not yet qualify grouped removal or
+full-Fleet asset reprovisioning, so that is a future design invariant rather
+than a current teardown command. Do not treat a label or Wasm replacement as
+proof that Skynet state and authority were safely detached.
+
+## Future Design
+
+Prospective Skynet presentation and product ideas are centralized in the
+[provisional 0.110 design reservoir](../../docs/design/0.110-skynet-fleet-observatory/0.110-design.md).
+It is expected to move forward in the release sequence while its prerequisite
+Canic designs are completed, and it does not approve implementation by itself.
