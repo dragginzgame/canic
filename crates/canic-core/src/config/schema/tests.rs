@@ -291,7 +291,7 @@ fn every_checked_in_canic_config_parses_and_validates() {
     let mut configs = Vec::new();
     collect_canic_configs(&root, &mut configs);
     configs.sort();
-    assert_eq!(configs.len(), 21, "checked-in canic.toml inventory changed");
+    assert_eq!(configs.len(), 22, "checked-in canic.toml inventory changed");
 
     for path in configs {
         let rel_path = path.strip_prefix(&root).unwrap_or(&path).display();
