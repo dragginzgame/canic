@@ -9,11 +9,12 @@ use super::fleet_catalog_publication::{
     TerminalFleetCatalogPublicationRequest, publish_terminal_fleet_catalog,
     validate_terminal_fleet_registry,
 };
+use super::icp_context::InstallIcpContext;
 use crate::{
     canister_protocol::{CanisterProtocolError, query_no_arg},
     fleet_catalog::CommittedFleetCatalog,
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget},
+    icp::IcpCli,
     release_set::AppConfigSnapshot,
 };
 use std::{path::Path, thread};
@@ -39,9 +40,7 @@ use thiserror::Error as ThisError;
 ///
 
 pub(super) struct PublishInstalledFleetCatalogRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_name: FleetName,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
@@ -74,10 +73,8 @@ pub(super) fn publish_installed_fleet_catalog(
 ) -> Result<CommittedFleetCatalog, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
-    let icp = IcpCli::new("icp", Some(request.environment.to_string()))
-        .with_cwd(request.icp_root)
-        .with_local_replica(request.local_replica.cloned());
-    let registry = query_registry(&icp, request.coordinator)?;
+    let icp = request.icp.cli();
+    let registry = query_registry(icp, request.coordinator)?;
 
     validate_terminal_fleet_registry(
         &request.fleet_install_plan.plan,
@@ -88,12 +85,12 @@ pub(super) fn publish_installed_fleet_catalog(
     if &registry.version != request.terminal_fleet_registry {
         return Err(FleetCatalogCloseoutError::TerminalRegistryMismatch.into());
     }
-    let root_summaries = query_root_summaries(&icp, &registry)?;
+    let root_summaries = query_root_summaries(icp, &registry)?;
 
     publish_terminal_fleet_catalog(TerminalFleetCatalogPublicationRequest {
-        workspace_root: request.icp_root,
+        workspace_root: request.icp.root(),
         fleet_name: request.fleet_name,
-        environment: request.environment,
+        environment: request.icp.environment(),
         deployed_at_unix_secs: request.deployed_at_unix_secs,
         fleet_install_plan: &request.fleet_install_plan.plan,
         component_topology: &component_topology,

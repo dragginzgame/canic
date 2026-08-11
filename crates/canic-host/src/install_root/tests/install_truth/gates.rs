@@ -118,6 +118,7 @@ fn install_truth_gate_blocks_observed_controller_drift() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
@@ -213,6 +214,7 @@ fn install_truth_gate_blocks_missing_expected_root_canister() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),

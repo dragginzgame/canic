@@ -9,8 +9,10 @@ use crate::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
         write_bytes,
     },
-    icp::{self, IcpCommandError, IcpDiagnostic, LocalReplicaTarget},
-    install_root::{commands::icp_canister_install_binary_args_command, install_icp},
+    icp::{self, IcpCommandError, IcpDiagnostic},
+    install_root::{
+        commands::icp_canister_install_binary_args_command, icp_context::InstallIcpContext,
+    },
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -75,9 +77,7 @@ enum InstallRejectionReceiptError {
 }
 
 pub(in crate::install_root) struct InstallEffectRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub subject: &'static str,
     pub canister: Principal,
     pub wasm_path: &'a Path,
@@ -94,8 +94,8 @@ where
     T: CandidType,
     F: FnOnce() -> Result<T, Box<dyn std::error::Error>>,
 {
-    let icp = install_icp(request.icp_root, request.environment, request.local_replica);
-    let prior_rejection = match observe_module_hash(&icp, request.canister)? {
+    let icp = request.icp.cli();
+    let prior_rejection = match observe_module_hash(icp, request.canister)? {
         Some(module_hash) if module_hash == request.expected_module_hash => {
             return Ok(module_hash);
         }
@@ -134,15 +134,13 @@ where
     }
     write_bytes(request.args_path, &args)?;
     let mut command = icp_canister_install_binary_args_command(
-        request.icp_root,
-        request.environment,
-        request.local_replica,
+        request.icp,
         request.canister,
         request.wasm_path,
         request.args_path,
     );
     let command_result = icp::run_status(&mut command);
-    match observe_module_hash(&icp, request.canister) {
+    match observe_module_hash(icp, request.canister) {
         Ok(Some(module_hash)) if module_hash == request.expected_module_hash => Ok(module_hash),
         Ok(Some(module_hash)) => Err(effect_error(
             &request,

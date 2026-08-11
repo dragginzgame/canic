@@ -8,12 +8,9 @@ use super::super::{
     commands::{
         icp_canister_create_command, open_creation_result_for_effect, read_created_canister,
     },
-    install_icp,
+    icp_context::InstallIcpContext,
 };
-use crate::{
-    fleet_install_plan::PlannedCanisterCreationFunding,
-    icp::{LocalReplicaTarget, run_output_to_file},
-};
+use crate::{fleet_install_plan::PlannedCanisterCreationFunding, icp::run_output_to_file};
 use candid::Principal;
 use canic_core::ids::SubnetId;
 use std::path::Path;
@@ -29,9 +26,7 @@ pub(in crate::install_root) struct CreationEffectEvidence {
 }
 
 pub(in crate::install_root) struct CreationEffectRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub result_path: &'a Path,
     pub subject: &'static str,
     pub placement_subnet: SubnetId,
@@ -55,9 +50,7 @@ pub(in crate::install_root) fn execute_or_observe_creation(
     if matches!(request.action, EffectAction::Execute) {
         let result = open_creation_result_for_effect(request.result_path, request.subject)?;
         let mut command = icp_canister_create_command(
-            request.icp_root,
-            request.environment,
-            request.local_replica,
+            request.icp,
             request.placement_subnet,
             request.funding,
             request.controllers,
@@ -69,14 +62,14 @@ pub(in crate::install_root) fn execute_or_observe_creation(
 
     let canister = read_created_canister(request.result_path)?;
     if let Some(canister) = canister {
-        let icp = install_icp(request.icp_root, request.environment, request.local_replica);
+        let icp = request.icp.cli();
         require_uninstalled_created_canister(
-            &icp,
+            icp,
             canister,
             request.expected_module_hash,
             request.subject,
         )?;
-        require_expected_controllers(&icp, canister, request.controllers, request.subject)?;
+        require_expected_controllers(icp, canister, request.controllers, request.subject)?;
     }
     Ok(CreationEffectEvidence {
         canister,
@@ -96,11 +89,10 @@ mod tests {
         let result_path = root.join("created.json");
         prepare_creation_result(&result_path, "test Canister").expect("prepare result");
         let funding = PlannedCanisterCreationFunding::Cycles { cycles: 1 };
+        let icp = InstallIcpContext::new("icp", &root, "local");
 
         let evidence = execute_or_observe_creation(CreationEffectRequest {
-            icp_root: &root,
-            environment: "local",
-            local_replica: None,
+            icp: &icp,
             result_path: &result_path,
             subject: "test Canister",
             placement_subnet: SubnetId::from_principal(Principal::from_slice(&[42])),
@@ -120,11 +112,10 @@ mod tests {
     fn creation_rejects_ambient_controller_authority() {
         let root = crate::test_support::temp_dir("canic-creation-controller-authority");
         let funding = PlannedCanisterCreationFunding::Cycles { cycles: 1 };
+        let icp = InstallIcpContext::new("icp", &root, "local");
 
         let result = execute_or_observe_creation(CreationEffectRequest {
-            icp_root: &root,
-            environment: "local",
-            local_replica: None,
+            icp: &icp,
             result_path: &root.join("created.json"),
             subject: "test Canister",
             placement_subnet: SubnetId::from_principal(Principal::from_slice(&[42])),

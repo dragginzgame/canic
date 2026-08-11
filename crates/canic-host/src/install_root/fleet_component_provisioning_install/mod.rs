@@ -20,14 +20,12 @@ use super::{
     fleet_component_provisioning_plan::{
         CompileFleetComponentProvisioningPlanRequest, compile_fleet_component_provisioning_plan,
     },
+    icp_context::InstallIcpContext,
     operations::{call_with_arg, query_with_arg},
 };
 use crate::{
-    canister_protocol::CanisterProtocolError,
-    fleet_catalog::FleetCatalogEntryV1,
-    fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget},
-    release_set::AppConfigSnapshot,
+    canister_protocol::CanisterProtocolError, fleet_catalog::FleetCatalogEntryV1,
+    fleet_install_plan::PersistedFleetInstallPlan, icp::IcpCli, release_set::AppConfigSnapshot,
 };
 use std::path::Path;
 
@@ -52,9 +50,7 @@ const ADVANCES_PER_PLACEMENT: usize = 4;
 const ADVANCES_PER_ROOT: usize = 8;
 
 pub(super) struct InstallFleetComponentsRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_name: FleetName,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
@@ -99,12 +95,10 @@ pub(super) fn install_fleet_components_and_publish_catalog(
             fleet_install_plan: request.fleet_install_plan,
             coordinator: request.coordinator,
             fleet_name: request.fleet_name.clone(),
-            environment: request.environment.to_string(),
+            environment: request.icp.environment().to_string(),
             compiled,
         })?;
-    let icp = IcpCli::new("icp", Some(request.environment.to_string()))
-        .with_cwd(request.icp_root)
-        .with_local_replica(request.local_replica.cloned());
+    let icp = request.icp.cli();
     let mut remote_advances = 0_usize;
 
     loop {
@@ -113,7 +107,7 @@ pub(super) fn install_fleet_components_and_publish_catalog(
                 begin_component_provisioning_preparation(&current)?
             }
             FleetComponentProvisioningInstallPhase::PreparationInFlight => {
-                let status = query_or_prepare(&icp, request.coordinator, &current)?;
+                let status = query_or_prepare(icp, request.coordinator, &current)?;
                 record_component_provisioning_prepared(&current, status)?
             }
             FleetComponentProvisioningInstallPhase::Prepared => {
@@ -126,7 +120,7 @@ pub(super) fn install_fleet_components_and_publish_catalog(
                 if remote_advances > advance_limit {
                     return Err(FleetComponentProvisioningInstallError::AdvanceBoundExceeded.into());
                 }
-                let status = reconcile_or_advance(&icp, request.coordinator, &current)?;
+                let status = reconcile_or_advance(icp, request.coordinator, &current)?;
                 record_component_provisioning_advanced(&current, status)?
             }
             FleetComponentProvisioningInstallPhase::RuntimesActivated => {
@@ -230,9 +224,7 @@ fn publish_catalog(
         .as_ref()
         .ok_or(FleetComponentProvisioningInstallError::MissingCatalogIntent)?;
     publish_installed_fleet_catalog(PublishInstalledFleetCatalogRequest {
-        icp_root: request.icp_root,
-        environment: &catalog_entry.environment,
-        local_replica: request.local_replica,
+        icp: request.icp,
         config_path: request.config_path,
         fleet_name: catalog_entry.fleet_name.clone(),
         fleet_install_plan: request.fleet_install_plan,
@@ -252,7 +244,7 @@ fn catalog_entry(
         fleet_id: fleet.fleet.fleet_id,
         fleet_name: request.fleet_name.clone(),
         app: fleet.app.clone(),
-        environment: request.environment.to_string(),
+        environment: request.icp.environment().to_string(),
         deployed_at_unix_secs,
         coordinator_principal: request.coordinator.to_text(),
     }

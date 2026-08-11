@@ -9,6 +9,7 @@ use std::path::PathBuf;
 pub struct InstallRootOptions {
     pub root_canister: String,
     pub root_build_target: String,
+    pub icp_executable: String,
     pub environment: String,
     pub fleet_name: String,
     pub icp_root: Option<PathBuf>,

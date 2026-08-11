@@ -12,7 +12,6 @@
         test-auth test-auth-chain-key test-cli test-runtime-fast \
         test-canisters fmt-core cloc
 
-TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
@@ -71,7 +70,7 @@ help:
 	@echo "  clippy           Run clippy checks"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
-	@echo "  clean            Clean Cargo artifacts and repository-owned test scratch"
+	@echo "  clean            Clean Cargo artifacts; each test invocation cleans its own scratch"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
 	@echo "  gitleaks-scan     Scan complete repository history with pinned Gitleaks"
 	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
@@ -224,8 +223,8 @@ test-installed-canic-cli:
 #
 
 test-fleet-install:
-	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/test-fleet-install.sh
+	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+		bash scripts/ci/test-fleet-install.sh
 
 test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         test-unit
@@ -266,12 +265,12 @@ workspace-test-inventory-gate:
 	bash scripts/ci/check-workspace-test-inventory.sh
 
 test-unit:
-	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh full
+	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+		bash scripts/ci/run-workspace-tests.sh full
 
 test-unit-fast:
-	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
+	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+		bash scripts/ci/run-workspace-tests.sh fast
 
 test-auth:
 	$(CARGO_ENV) cargo test --locked -p canic-core auth --lib
@@ -292,7 +291,7 @@ test-cli:
 test-runtime-fast: test-unit-fast
 
 test-canisters: test-fleet-install
-	TMPDIR="$(TEST_TMPDIR)" icp canister -e "$(ICP_ENVIRONMENT)" call test test
+	icp canister -e "$(ICP_ENVIRONMENT)" call test test
 
 #
 # Development commands

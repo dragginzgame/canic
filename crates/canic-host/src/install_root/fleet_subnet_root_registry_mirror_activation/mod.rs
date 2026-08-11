@@ -12,11 +12,11 @@ use super::{
         record_registry_mirror_activation_verified,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
+    icp_context::InstallIcpContext,
     operations::{call_with_arg, query_with_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::Principal;
@@ -54,9 +54,7 @@ enum RootRegistryMirrorActivationError {
 }
 
 pub(super) struct ActivateFleetSubnetRootRegistryMirrorsRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub coordinator: Principal,
@@ -72,7 +70,7 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        request.icp_root,
+        request.icp.root(),
         request.fleet_install_plan.plan.release_build_id,
     )?;
     let observed_version = FleetRegistryOps::version(
@@ -117,21 +115,13 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
                 manifest_payload_size_bytes: canonical_manifest_bytes(release_set)?.len() as u64,
             },
         };
-        drive_root_mirror_activation(
-            request.icp_root,
-            request.environment,
-            request.local_replica,
-            current,
-            activation_request,
-        )?;
+        drive_root_mirror_activation(request.icp, current, activation_request)?;
     }
     Ok(())
 }
 
 fn drive_root_mirror_activation(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     mut current: ResolvedFleetSubnetRootInstall,
     request: FleetSubnetRootRegistryMirrorActivationRequest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -139,7 +129,7 @@ fn drive_root_mirror_activation(
         .journal
         .fleet_subnet_root
         .ok_or(RootRegistryMirrorActivationError::LiveEvidenceMismatch)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     for _ in 0..MAX_MIRROR_ACTIVATION_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistrySyncVerified => {
@@ -147,7 +137,7 @@ fn drive_root_mirror_activation(
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => {
                 let response = call_with_arg(
-                    &icp,
+                    icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
                     &request,
@@ -156,7 +146,7 @@ fn drive_root_mirror_activation(
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivated => {
                 let response = query_with_arg(
-                    &icp,
+                    icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
                     &request,

@@ -5,6 +5,8 @@
 //! Boundary: workflow layer between lifecycle bootstrap input, policy, and env ops.
 
 pub mod query;
+#[cfg(test)]
+mod tests;
 
 use crate::{
     InternalError, InternalErrorOrigin,
@@ -79,15 +81,10 @@ impl EnvWorkflow {
             ));
         }
 
-        EnvOps::import_validated(ValidatedEnv {
-            managed_binding: Some(ManagedCanisterBinding::Component(binding.clone())),
-            fleet_subnet_root_pid: root.fleet_subnet_root,
-            component_spec: Some(binding.component_spec),
-            subnet_pid: root.fleet_subnet_root,
-            root_pid: root.fleet_subnet_root,
-            canister_role: binding.role,
-            parent_pid: root.fleet_subnet_root,
-        })
+        EnvOps::import_validated(validated_managed_env(
+            root.fleet_subnet_root,
+            ManagedCanisterBinding::Component(binding),
+        ))
     }
 
     /// Initialize one Component descendant from exact root-issued Registry authority.
@@ -106,15 +103,40 @@ impl EnvWorkflow {
             ));
         }
 
-        EnvOps::import_validated(ValidatedEnv {
-            managed_binding: Some(ManagedCanisterBinding::ComponentChild(binding.clone())),
-            fleet_subnet_root_pid: root.fleet_subnet_root,
-            component_spec: Some(binding.component.component_spec),
-            subnet_pid: root.fleet_subnet_root,
-            root_pid: root.fleet_subnet_root,
-            canister_role: binding.role,
-            parent_pid: binding.parent_canister_id,
-        })
+        EnvOps::import_validated(validated_managed_env(
+            root.fleet_subnet_root,
+            ManagedCanisterBinding::ComponentChild(binding),
+        ))
+    }
+}
+
+fn validated_managed_env(
+    fleet_subnet_root: candid::Principal,
+    binding: ManagedCanisterBinding,
+) -> ValidatedEnv {
+    let (component_spec, placement_subnet, canister_role, parent_pid) = match &binding {
+        ManagedCanisterBinding::Component(component) => (
+            component.component_spec.clone(),
+            component.placement_subnet,
+            component.role.clone(),
+            fleet_subnet_root,
+        ),
+        ManagedCanisterBinding::ComponentChild(child) => (
+            child.component.component_spec.clone(),
+            child.component.placement_subnet,
+            child.role.clone(),
+            child.parent_canister_id,
+        ),
+    };
+
+    ValidatedEnv {
+        managed_binding: Some(binding),
+        fleet_subnet_root_pid: fleet_subnet_root,
+        component_spec: Some(component_spec),
+        subnet_pid: placement_subnet.into_principal(),
+        root_pid: fleet_subnet_root,
+        canister_role,
+        parent_pid,
     }
 }
 

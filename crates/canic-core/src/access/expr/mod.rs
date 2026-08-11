@@ -13,8 +13,9 @@ use crate::{
     log,
     log::Topic,
 };
-use async_trait::async_trait;
 use std::{future::Future, pin::Pin, sync::Arc};
+
+pub use async_trait::async_trait;
 
 ///
 /// AccessContext

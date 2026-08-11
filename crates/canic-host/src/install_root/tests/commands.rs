@@ -1,12 +1,17 @@
 use super::*;
 
+fn test_icp(root: &Path, environment: &str) -> InstallIcpContext {
+    InstallIcpContext::new("/opt/icp", root, environment)
+}
+
 #[test]
 fn icp_canister_command_carries_selected_environment() {
-    let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
+    let icp = test_icp(Path::new("/tmp/canic-icp-root"), "ic");
+    let mut command = icp_canister_command(&icp);
     command.args(["status", "root"]);
-    add_icp_environment_target(&mut command, "ic", None);
+    icp.add_target_args(&mut command);
 
-    assert_eq!(command.get_program(), "icp");
+    assert_eq!(command.get_program(), "/opt/icp");
     assert_eq!(
         command
             .get_args()
@@ -30,10 +35,12 @@ fn local_canister_command_uses_http_target_when_configured() {
         url: "http://127.0.0.1:8000".to_string(),
         root_key: "abcd".to_string(),
     };
-    let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
+    let icp = InstallIcpContext::new("/opt/icp", Path::new("/tmp/canic-icp-root"), "local")
+        .with_local_replica(Some(target));
+    let mut command = icp_canister_command(&icp);
     command.env("ICP_ENVIRONMENT", "local");
     command.args(["status", "root"]);
-    add_icp_environment_target(&mut command, "local", Some(&target));
+    icp.add_target_args(&mut command);
 
     assert_eq!(
         command
@@ -87,9 +94,7 @@ fn creation_result_decoding_accepts_icp_json_and_plain_principal() {
 fn install_command_uses_binary_candid_file() {
     let canister = candid::Principal::from_slice(&[44]);
     let command = icp_canister_install_binary_args_command(
-        Path::new("/workspace"),
-        "caelum-backend",
-        None,
+        &test_icp(Path::new("/workspace"), "caelum-backend"),
         canister,
         Path::new("/artifacts/root.wasm"),
         Path::new("/state/root-install-args.bin"),
@@ -98,7 +103,7 @@ fn install_command_uses_binary_candid_file() {
     assert_eq!(
         crate::icp::command_display(&command),
         format!(
-            "icp --project-root-override /workspace canister install {canister} --mode=install -y --wasm /artifacts/root.wasm --args-file /state/root-install-args.bin --args-format bin -e caelum-backend"
+            "/opt/icp --project-root-override /workspace canister install {canister} --mode=install -y --wasm /artifacts/root.wasm --args-file /state/root-install-args.bin --args-format bin -e caelum-backend"
         )
     );
 }
@@ -107,9 +112,7 @@ fn install_command_uses_binary_candid_file() {
 fn create_command_binds_subnet_and_exact_cycles() {
     let subnet = canic_core::ids::SubnetId::from_principal(candid::Principal::from_slice(&[41]));
     let command = icp_canister_create_command(
-        Path::new("/workspace"),
-        "staging",
-        None,
+        &test_icp(Path::new("/workspace"), "staging"),
         subnet,
         &crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
@@ -120,7 +123,7 @@ fn create_command_binds_subnet_and_exact_cycles() {
     assert_eq!(
         crate::icp::command_display(&command),
         format!(
-            "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 -e staging"
+            "/opt/icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 -e staging"
         )
     );
 }
@@ -131,9 +134,7 @@ fn create_command_preserves_every_explicit_controller() {
     let first = candid::Principal::from_slice(&[42]);
     let second = candid::Principal::from_slice(&[43]);
     let command = icp_canister_create_command(
-        Path::new("/workspace"),
-        "staging",
-        None,
+        &test_icp(Path::new("/workspace"), "staging"),
         subnet,
         &crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
@@ -144,7 +145,7 @@ fn create_command_preserves_every_explicit_controller() {
     assert_eq!(
         crate::icp::command_display(&command),
         format!(
-            "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 --controller {first} --controller {second} -e staging"
+            "/opt/icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --cycles 2000000000000 --controller {first} --controller {second} -e staging"
         )
     );
 }
@@ -153,9 +154,7 @@ fn create_command_preserves_every_explicit_controller() {
 fn create_command_preserves_exact_icp_e8s() {
     let subnet = canic_core::ids::SubnetId::from_principal(candid::Principal::from_slice(&[42]));
     let command = icp_canister_create_command(
-        Path::new("/workspace"),
-        "ic",
-        None,
+        &test_icp(Path::new("/workspace"), "ic"),
         subnet,
         &crate::fleet_install_plan::PlannedCanisterCreationFunding::Icp { e8s: 1 },
         &[],
@@ -164,7 +163,7 @@ fn create_command_preserves_exact_icp_e8s() {
     assert_eq!(
         crate::icp::command_display(&command),
         format!(
-            "icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --with-icp 0.00000001 -e ic"
+            "/opt/icp --project-root-override /workspace canister create --detached --json --subnet {subnet} --with-icp 0.00000001 -e ic"
         )
     );
 }

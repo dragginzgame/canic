@@ -116,7 +116,10 @@ pub async fn status(
     let (authority, root) = validated_root_authority()?;
     let manifest = load_and_validate_manifest(&authority, request)?;
     let module_hashes = artifact_module_hashes(&manifest)?;
-    let staged = exact_staged_manifests(&manifest)?;
+    // Bootstrap already verified every staged chunk before publishing the release set. Status is
+    // a bounded verification of the protected manifest metadata against the live Store catalog;
+    // re-reading and hashing every staged payload here makes its query cost scale with Wasm bytes.
+    let staged = exact_staged_manifest_metadata(&manifest)?;
     let (wasm_store, live_catalog) = WasmStorePublicationWorkflow::single_store_catalog().await?;
     let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;
 
@@ -291,6 +294,16 @@ fn validate_artifact_shape(
 fn exact_staged_manifests(
     manifest: &RootStoreReleaseSetManifest,
 ) -> Result<Vec<TemplateManifestResponse>, InternalError> {
+    let staged = exact_staged_manifest_metadata(manifest)?;
+    for observed in &staged {
+        TemplateChunkedOps::validate_staged_release(observed)?;
+    }
+    Ok(staged)
+}
+
+fn exact_staged_manifest_metadata(
+    manifest: &RootStoreReleaseSetManifest,
+) -> Result<Vec<TemplateManifestResponse>, InternalError> {
     let mut artifacts = BTreeMap::new();
     for entry in &manifest.entries {
         let payload_hash = decode_sha256(&entry.artifact.wasm_gz_sha256_hex)?;
@@ -326,7 +339,6 @@ fn exact_staged_manifests(
                     "staged artifact for role '{role}' differs from the protected root release set"
                 )));
             }
-            TemplateChunkedOps::validate_staged_release(&observed)?;
             Ok(observed)
         })
         .collect()
@@ -446,8 +458,14 @@ const fn decode_nibble(byte: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding};
-    use canic_core::dto::root_store::RootStoreArtifact;
+    use crate::{
+        dto::template::TemplateManifestInput,
+        ids::{TemplateChunkingMode, TemplateManifestState, WasmStoreBinding},
+        storage::stable::template::{
+            TemplateChunkSetStateStore, TemplateChunkStore, TemplateManifestStateStore,
+        },
+    };
+    use canic_core::{dto::root_store::RootStoreArtifact, ids::ComponentTopologyDigest};
 
     fn manifest(role: &str, byte: u8) -> TemplateManifestResponse {
         TemplateManifestResponse {
@@ -490,6 +508,12 @@ mod tests {
                 wasm_gz_sha256_hex: "02".repeat(32),
             },
         }
+    }
+
+    fn reset_staged_templates() {
+        TemplateManifestStateStore::clear_for_test();
+        TemplateChunkSetStateStore::clear_for_test();
+        TemplateChunkStore::clear_for_test();
     }
 
     #[test]
@@ -553,5 +577,38 @@ mod tests {
             verify_live_catalog(&expected, vec![catalog(&first)], &module_hashes).is_err(),
             "a partial catalog must not verify"
         );
+    }
+
+    #[test]
+    fn metadata_status_path_does_not_rehash_staged_payload_bytes() {
+        reset_staged_templates();
+        let entry = release_set_entry("app");
+        let manifest = RootStoreReleaseSetManifest {
+            release_build_id: entry.artifact.release_build_id,
+            component_topology_digest: ComponentTopologyDigest::from_bytes([3; 32]),
+            entries: vec![entry],
+        };
+        let artifact = &manifest.entries[0].artifact;
+        TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
+            template_id: artifact_template_id(&artifact.role),
+            role: artifact.role.clone(),
+            version: TemplateVersion::owned(manifest.release_build_id.to_string()),
+            payload_hash: decode_sha256(&artifact.wasm_gz_sha256_hex)
+                .expect("payload digest")
+                .to_vec(),
+            payload_size_bytes: artifact.wasm_gz_size_bytes,
+            store_binding: WASM_STORE_BOOTSTRAP_BINDING.clone(),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(1),
+            created_at: 1,
+        });
+
+        let metadata = exact_staged_manifest_metadata(&manifest)
+            .expect("exact approved metadata does not require chunk reads");
+        assert_eq!(metadata.len(), 1);
+        exact_staged_manifests(&manifest)
+            .expect_err("bootstrap validation still requires complete staged chunks");
+        reset_staged_templates();
     }
 }

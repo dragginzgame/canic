@@ -3,7 +3,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TEST_SCRATCH_PARENT="$ROOT/.tmp"
-TEST_SCRATCH="$TEST_SCRATCH_PARENT/test-runtime"
+TEST_SCRATCH="${CANIC_TEST_SCRATCH:-}"
 MAX_CARGO_CLEAN_ATTEMPTS=2
 CLEANUP_MODE="${1:-all}"
 status=0
@@ -35,28 +35,55 @@ clean_cargo_artifacts() {
     return 1
 }
 
+validate_test_scratch() {
+    local parent name
+
+    parent="${TEST_SCRATCH%/*}"
+    name="${TEST_SCRATCH##*/}"
+    if [[ "$parent" != "$TEST_SCRATCH_PARENT" ||
+        ! "$name" =~ ^test-runtime\.[[:alnum:]]{6}$ ]]; then
+        echo "release cleanup refuses unowned test scratch: $TEST_SCRATCH" >&2
+        return 1
+    fi
+    if [[ -L "$TEST_SCRATCH_PARENT" || -L "$TEST_SCRATCH" ]]; then
+        echo "release cleanup refuses symlinked test scratch: $TEST_SCRATCH" >&2
+        return 1
+    fi
+    return 0
+}
+
 if [[ "$CLEANUP_MODE" == "all" ]]; then
     if ! clean_cargo_artifacts; then
         echo "release cleanup failed to clear Cargo build artifacts" >&2
         status=1
     fi
 else
-    echo "==> retaining Cargo build artifacts after unsuccessful release gates"
+    echo "==> leaving Cargo build artifacts intact"
 fi
 
-if [[ -L "$TEST_SCRATCH_PARENT" ]]; then
-    echo "release cleanup refuses symlinked repository scratch root: $TEST_SCRATCH_PARENT" >&2
-    status=1
-elif [[ -e "$TEST_SCRATCH" || -L "$TEST_SCRATCH" ]]; then
-    echo "==> clearing repository-owned test scratch: .tmp/test-runtime"
-    if ! rm -rf -- "$TEST_SCRATCH"; then
-        echo "release cleanup failed to clear repository-owned test scratch" >&2
+if [[ -n "$TEST_SCRATCH" ]]; then
+    if ! validate_test_scratch; then
+        status=1
+    elif [[ -e "$TEST_SCRATCH" ]]; then
+        echo "==> clearing invocation-owned test scratch: ${TEST_SCRATCH##*/}"
+        if ! rm -rf -- "$TEST_SCRATCH"; then
+            echo "release cleanup failed to clear invocation-owned test scratch" >&2
+            status=1
+        fi
+    fi
+elif [[ "$CLEANUP_MODE" == "--scratch-only" ]]; then
+    echo "release cleanup has no invocation-owned test scratch to clear"
+fi
+
+if [[ -d "$TEST_SCRATCH_PARENT" && ! -L "$TEST_SCRATCH_PARENT" ]]; then
+    if ! rmdir "$TEST_SCRATCH_PARENT" 2>/dev/null; then
+        :
+    fi
+elif [[ -L "$TEST_SCRATCH_PARENT" ]]; then
+    if [[ -n "$TEST_SCRATCH" ]]; then
+        echo "release cleanup refuses symlinked repository scratch root: $TEST_SCRATCH_PARENT" >&2
         status=1
     fi
-fi
-
-if [[ -d "$TEST_SCRATCH_PARENT" ]]; then
-    rmdir "$TEST_SCRATCH_PARENT" 2>/dev/null || true
 fi
 
 exit "$status"

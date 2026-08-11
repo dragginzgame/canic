@@ -16,6 +16,7 @@ use super::{
         plan_fleet_coordinator_install, record_coordinator_created, record_coordinator_installed,
         record_coordinator_verified,
     },
+    icp_context::InstallIcpContext,
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
         active_installation_controller, execute_or_observe_creation, execute_or_observe_install,
@@ -25,7 +26,6 @@ use super::{
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::LocalReplicaTarget,
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
         load_persisted_canic_infrastructure_artifact_manifest,
@@ -87,9 +87,7 @@ struct ExpectedCoordinatorGenesis {
 
 /// Drive the exact Coordinator to independently verified Registry genesis.
 pub(super) fn install_and_verify_fleet_coordinator(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     fleet_install_plan: &PersistedFleetInstallPlan,
 ) -> Result<VerifiedFleetCoordinator, Box<dyn std::error::Error>> {
@@ -98,11 +96,11 @@ pub(super) fn install_and_verify_fleet_coordinator(
         .model()
         .compile_component_deployment_configuration()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        icp_root,
+        icp_context.root(),
         fleet_install_plan.plan.release_build_id,
     )?;
     let artifact = resolve_install_artifact(
-        icp_root,
+        icp_context.root(),
         &infrastructure_manifest,
         CanicInfrastructureRole::FleetCoordinator,
         fleet_install_plan.plan.release_build_id,
@@ -114,59 +112,41 @@ pub(super) fn install_and_verify_fleet_coordinator(
     })?;
 
     for _ in 0..MAX_COORDINATOR_TRANSITIONS {
-        current =
-            match current.journal.phase {
-                FleetCoordinatorInstallPhase::Planned => {
-                    prepare_creation_result(
-                        &coordinator_create_result_path(&fleet_install_plan.path),
-                        "Coordinator",
-                    )?;
-                    let installation_controller = active_installation_controller(
-                        &super::install_icp(icp_root, environment, local_replica),
-                    )?;
-                    begin_coordinator_creation(&current, installation_controller)?
-                }
-                FleetCoordinatorInstallPhase::CreationInFlight => recover_or_create_coordinator(
-                    icp_root,
-                    environment,
-                    local_replica,
-                    fleet_install_plan,
-                    &current,
-                )?,
-                FleetCoordinatorInstallPhase::Created => begin_coordinator_install(&current)?,
-                FleetCoordinatorInstallPhase::InstallInFlight => recover_or_install_coordinator(
-                    icp_root,
-                    environment,
-                    local_replica,
-                    &artifact,
-                    &current,
-                )?,
-                FleetCoordinatorInstallPhase::Installed => {
-                    verify_and_record_coordinator(icp_root, environment, local_replica, &current)?
-                }
-                FleetCoordinatorInstallPhase::Verified => {
-                    let coordinator = current
-                        .journal
-                        .coordinator
-                        .expect("validated Verified journal retains its Coordinator");
-                    verify_live_coordinator_current(
-                        icp_root,
-                        environment,
-                        local_replica,
-                        &current.journal,
-                    )?;
-                    return Ok(VerifiedFleetCoordinator { coordinator });
-                }
-            };
+        current = match current.journal.phase {
+            FleetCoordinatorInstallPhase::Planned => {
+                prepare_creation_result(
+                    &coordinator_create_result_path(&fleet_install_plan.path),
+                    "Coordinator",
+                )?;
+                let installation_controller = active_installation_controller(icp_context.cli())?;
+                begin_coordinator_creation(&current, installation_controller)?
+            }
+            FleetCoordinatorInstallPhase::CreationInFlight => {
+                recover_or_create_coordinator(icp_context, fleet_install_plan, &current)?
+            }
+            FleetCoordinatorInstallPhase::Created => begin_coordinator_install(&current)?,
+            FleetCoordinatorInstallPhase::InstallInFlight => {
+                recover_or_install_coordinator(icp_context, &artifact, &current)?
+            }
+            FleetCoordinatorInstallPhase::Installed => {
+                verify_and_record_coordinator(icp_context, &current)?
+            }
+            FleetCoordinatorInstallPhase::Verified => {
+                let coordinator = current
+                    .journal
+                    .coordinator
+                    .expect("validated Verified journal retains its Coordinator");
+                verify_live_coordinator_current(icp_context, &current.journal)?;
+                return Ok(VerifiedFleetCoordinator { coordinator });
+            }
+        };
     }
 
     Err(CoordinatorInstallStateError::TransitionBoundExceeded.into())
 }
 
 fn recover_or_create_coordinator(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     fleet_install_plan: &PersistedFleetInstallPlan,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
@@ -176,9 +156,7 @@ fn recover_or_create_coordinator(
         .installation_controller
         .expect("Coordinator creation intent retains its installation controller");
     let evidence = execute_or_observe_creation(CreationEffectRequest {
-        icp_root,
-        environment,
-        local_replica,
+        icp: icp_context,
         result_path: &result_path,
         subject: "Coordinator",
         placement_subnet: current.journal.coordinator_subnet,
@@ -201,9 +179,7 @@ fn recover_or_create_coordinator(
 }
 
 fn recover_or_install_coordinator(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     artifact: &InstallArtifact,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
@@ -214,9 +190,7 @@ fn recover_or_install_coordinator(
     let args_path = current.path.with_file_name(COORDINATOR_INSTALL_ARGS_FILE);
     let module_hash = execute_or_observe_install(
         InstallEffectRequest {
-            icp_root,
-            environment,
-            local_replica,
+            icp: icp_context,
             subject: "Coordinator",
             canister: coordinator,
             wasm_path: &artifact.wasm_path,
@@ -230,28 +204,23 @@ fn recover_or_install_coordinator(
 }
 
 fn verify_and_record_coordinator(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
-    let genesis =
-        verify_live_coordinator_genesis(icp_root, environment, local_replica, &current.journal)?;
+    let genesis = verify_live_coordinator_genesis(icp_context, &current.journal)?;
     record_coordinator_verified(current, genesis.manifest, genesis.version).map_err(Into::into)
 }
 
 fn verify_live_coordinator_genesis(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     journal: &FleetCoordinatorInstallJournal,
 ) -> Result<ExpectedCoordinatorGenesis, Box<dyn std::error::Error>> {
     let coordinator = journal
         .coordinator
         .expect("verified Coordinator phases retain a principal");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     require_expected_controllers(
-        &icp,
+        icp,
         coordinator,
         std::slice::from_ref(
             &journal
@@ -261,14 +230,14 @@ fn verify_live_coordinator_genesis(
         "Coordinator",
     )?;
     require_expected_module_hash(
-        &icp,
+        icp,
         coordinator,
         journal.expected_module_hash,
         "Coordinator",
     )?;
 
     let expected = expected_genesis(journal)?;
-    let live = query_live_registry(&icp, coordinator)?;
+    let live = query_live_registry(icp, coordinator)?;
     if live.registry != expected.registry {
         return Err(CoordinatorInstallStateError::RegistryMismatch.into());
     }
@@ -282,17 +251,15 @@ fn verify_live_coordinator_genesis(
 }
 
 fn verify_live_coordinator_current(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     journal: &FleetCoordinatorInstallJournal,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator = journal
         .coordinator
         .expect("verified Coordinator phases retain a principal");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     require_expected_controllers(
-        &icp,
+        icp,
         coordinator,
         std::slice::from_ref(
             &journal
@@ -302,14 +269,14 @@ fn verify_live_coordinator_current(
         "Coordinator",
     )?;
     require_expected_module_hash(
-        &icp,
+        icp,
         coordinator,
         journal.expected_module_hash,
         "Coordinator",
     )?;
 
     let expected = expected_genesis(journal)?;
-    let live = query_live_registry(&icp, coordinator)?;
+    let live = query_live_registry(icp, coordinator)?;
     FleetRegistryOps::validate(
         &expected.init_args.authority,
         &journal

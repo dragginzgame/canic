@@ -405,11 +405,13 @@ fn blocked_deploy_plan_report_suppresses_duplicate_cli_stderr() {
 fn global_icp_is_forwarded_to_commands_that_use_icp() {
     let mut status_tail = Vec::new();
     let mut cycles_tail = vec![OsString::from("balance")];
+    let mut install_tail = vec![OsString::from("toko"), OsString::from("toko-local")];
     let mut medic_tail = Vec::new();
     let mut token_tail = vec![OsString::from("balance")];
 
     apply_global_icp("status", &mut status_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("cycles", &mut cycles_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("install", &mut install_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("medic", &mut medic_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("token", &mut token_tail, Some("/tmp/icp".to_string()));
 
@@ -424,6 +426,15 @@ fn global_icp_is_forwarded_to_commands_that_use_icp() {
         cycles_tail,
         vec![
             OsString::from("balance"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        install_tail,
+        vec![
+            OsString::from("toko"),
+            OsString::from("toko-local"),
             OsString::from(INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp")
         ]

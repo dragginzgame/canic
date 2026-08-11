@@ -10,10 +10,10 @@ use super::fleet_subnet_root_install_journal::{
     begin_registry_join, expected_registry_join_entry, plan_fleet_subnet_root_install,
     record_registry_join_verified, record_registry_joined,
 };
+use super::icp_context::InstallIcpContext;
 use super::operations::{LiveRegistryEvidence, call_with_arg, query_live_registry};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::Principal;
@@ -47,9 +47,7 @@ enum RootRegistryJoinError {
 }
 
 pub(super) fn register_and_verify_fleet_subnet_roots_joining(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     fleet_install_plan: &PersistedFleetInstallPlan,
     coordinator: Principal,
@@ -58,7 +56,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
     let config = AppConfigSnapshot::load(config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        icp_root,
+        icp_context.root(),
         fleet_install_plan.plan.release_build_id,
     )?;
     let authority = FleetRegistryAuthority {
@@ -92,9 +90,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
             entry,
         )?;
         drive_registry_join(
-            icp_root,
-            environment,
-            local_replica,
+            icp_context,
             &component_topology,
             current,
             &expected_registry,
@@ -105,10 +101,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
 
     let joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &expected_registry)?;
-    let live = query_live_registry(
-        &super::install_icp(icp_root, environment, local_replica),
-        coordinator,
-    )?;
+    let live = query_live_registry(icp_context.cli(), coordinator)?;
     if exact_registry_matches(&authority, &component_topology, &expected_registry, &live)? {
         return Ok(joining_version);
     }
@@ -125,16 +118,14 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
 }
 
 fn drive_registry_join(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     component_topology: &ComponentTopology,
     mut current: ResolvedFleetSubnetRootInstall,
     expected_before: &FleetRegistry,
     expected_after: &FleetRegistry,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator = current.journal.authority.binding.coordinator;
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     let expected_after_version = FleetRegistryOps::version(
         &current.journal.authority,
         component_topology,
@@ -144,7 +135,7 @@ fn drive_registry_join(
     for _ in 0..MAX_REGISTRY_JOIN_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::StoreVerified => {
-                let live = query_live_registry(&icp, coordinator)?;
+                let live = query_live_registry(icp, coordinator)?;
                 require_exact_registry(
                     &current.journal.authority,
                     component_topology,
@@ -161,7 +152,7 @@ fn drive_registry_join(
                     .clone()
                     .ok_or(RootRegistryJoinError::MissingJoinRequest)?;
                 let response: FleetSubnetRootJoinResponse = call_with_arg(
-                    &icp,
+                    icp,
                     coordinator,
                     protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
                     &request,
@@ -172,7 +163,7 @@ fn drive_registry_join(
                 record_registry_joined(&current, response)?
             }
             FleetSubnetRootInstallPhase::RegistryJoined => {
-                let live = query_live_registry(&icp, coordinator)?;
+                let live = query_live_registry(icp, coordinator)?;
                 require_exact_registry(
                     &current.journal.authority,
                     component_topology,

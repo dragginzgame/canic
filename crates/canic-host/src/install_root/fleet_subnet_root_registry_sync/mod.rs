@@ -12,11 +12,11 @@ use super::{
         record_registry_synchronized,
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
+    icp_context::InstallIcpContext,
     operations::{call_with_arg, query_live_registry, query_no_arg, query_with_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::Principal;
@@ -51,9 +51,7 @@ enum RootRegistrySyncError {
 }
 
 pub(super) struct SynchronizeFleetSubnetRootsRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub coordinator: Principal,
@@ -65,9 +63,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     request: SynchronizeFleetSubnetRootsRequest<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let SynchronizeFleetSubnetRootsRequest {
-        icp_root,
-        environment,
-        local_replica,
+        icp,
         config_path,
         fleet_install_plan,
         coordinator,
@@ -77,7 +73,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     let config = AppConfigSnapshot::load(config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        icp_root,
+        icp.root(),
         fleet_install_plan.plan.release_build_id,
     )?;
     let authority = FleetRegistryAuthority {
@@ -127,7 +123,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
             &joining_registry,
             expected_registry_join_entry(&current.journal)?,
         )?;
-        drive_root_sync(icp_root, environment, local_replica, current, request)?;
+        drive_root_sync(icp, current, request)?;
     }
     let expected_joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &joining_registry)?;
@@ -135,9 +131,9 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
         return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
     }
 
-    let coordinator_icp = super::install_icp(icp_root, environment, local_replica);
+    let coordinator_icp = icp.cli();
     let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_no_arg(
-        &coordinator_icp,
+        coordinator_icp,
         coordinator,
         protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
     )?;
@@ -152,7 +148,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     }
     let active_registry =
         FleetRegistryOps::compile_active(&authority, &component_topology, &joining_registry)?;
-    let live_registry = query_live_registry(&coordinator_icp, coordinator)?;
+    let live_registry = query_live_registry(coordinator_icp, coordinator)?;
     let expected_manifest =
         FleetRegistryOps::manifest(&authority, &component_topology, &active_registry)?;
     let expected_version =
@@ -168,9 +164,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
 }
 
 fn drive_root_sync(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     mut current: ResolvedFleetSubnetRootInstall,
     request: FleetSubnetRootRegistrySyncRequest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -178,7 +172,7 @@ fn drive_root_sync(
         .journal
         .fleet_subnet_root
         .expect("Registry synchronization follows root verification");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     for _ in 0..MAX_SYNC_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistryJoinVerified => {
@@ -186,7 +180,7 @@ fn drive_root_sync(
             }
             FleetSubnetRootInstallPhase::RegistrySyncInFlight => {
                 let response = call_with_arg(
-                    &icp,
+                    icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
                     &request,
@@ -195,7 +189,7 @@ fn drive_root_sync(
             }
             FleetSubnetRootInstallPhase::RegistrySynchronized => {
                 let response = query_with_arg(
-                    &icp,
+                    icp,
                     root,
                     protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
                     &request,

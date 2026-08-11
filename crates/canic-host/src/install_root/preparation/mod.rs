@@ -3,6 +3,7 @@ use super::build_snapshot::ValidatedInstallSnapshot;
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
 };
+use super::icp_context::InstallIcpContext;
 use super::operations::{BuildInstallTargetsOperation, InstallPhaseLabel};
 use super::phase_receipts::CompletedInstallPhase;
 use super::plan_artifacts::{PreparedPlanArtifacts, prepare_plan_artifacts_with_phase};
@@ -43,7 +44,7 @@ struct PreparedInstallBuild {
 
 pub(super) fn prepare_install_deployment_truth(
     options: &InstallRootOptions,
-    icp_root: &Path,
+    icp: &InstallIcpContext,
     config_path: &Path,
     fleet_name: &str,
     execution_context: &DeploymentExecutionContextV1,
@@ -51,8 +52,9 @@ pub(super) fn prepare_install_deployment_truth(
     install_snapshot: &ValidatedInstallSnapshot,
 ) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
+    let icp_root = icp.root();
     ensure_current_install_executor_capabilities(execution_context)?;
-    ensure_icp_environment_ready(icp_root, &options.environment)?;
+    ensure_icp_environment_ready(icp)?;
     let build =
         build_install_targets_with_phase(options, build_context, icp_root, install_snapshot)?;
     timings.build_all = build.duration;

@@ -18,7 +18,7 @@ use crate::{
         clap::{
             parse_matches, parse_subcommand, required_string, string_option_or_else, typed_option,
         },
-        defaults::local_environment,
+        defaults::{default_icp, local_environment},
         help::print_help_or_version,
     },
     evidence_support::current_evidence_timestamp,
@@ -203,6 +203,7 @@ impl DeployTruthOptions {
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
+            icp_executable: default_icp(),
             environment: self.environment,
             fleet_name: self.fleet,
             icp_root,

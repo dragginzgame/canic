@@ -11,11 +11,12 @@ use super::fleet_subnet_root_install_journal::{
     expected_wasm_store_authority, plan_fleet_subnet_root_install, record_store_adopted,
     record_store_bootstrapped, record_store_staged, record_store_verified,
 };
+use super::icp_context::InstallIcpContext;
 use super::operations::{call_with_arg, query_with_arg};
 use crate::{
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet},
-    icp::{IcpCli, LocalReplicaTarget},
+    icp::IcpCli,
     release_set::{
         AppConfigSnapshot, ApplicationArtifactEntry,
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
@@ -103,9 +104,7 @@ enum RootStoreBootstrapError {
 }
 
 pub(super) fn bootstrap_and_verify_fleet_subnet_root_stores(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     fleet_install_plan: &PersistedFleetInstallPlan,
     coordinator: Principal,
@@ -114,7 +113,7 @@ pub(super) fn bootstrap_and_verify_fleet_subnet_root_stores(
     let config = AppConfigSnapshot::load(config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        icp_root,
+        icp_context.root(),
         fleet_install_plan.plan.release_build_id,
     )?;
 
@@ -134,16 +133,14 @@ pub(super) fn bootstrap_and_verify_fleet_subnet_root_stores(
             component_topology: component_topology.clone(),
             root_plan,
         })?;
-        drive_store_bootstrap(icp_root, environment, local_replica, release_set, current)?;
+        drive_store_bootstrap(icp_context, release_set, current)?;
     }
 
     Ok(())
 }
 
 fn drive_store_bootstrap(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     release_set: &PersistedFleetSubnetRootReleaseSet,
     mut current: ResolvedFleetSubnetRootInstall,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -156,40 +153,22 @@ fn drive_store_bootstrap(
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::InfrastructureVerified => begin_store_adoption(&current)?,
             FleetSubnetRootInstallPhase::StoreAdoptionInFlight => {
-                let evidence = adopt_store(icp_root, environment, local_replica, &current)?;
+                let evidence = adopt_store(icp_context, &current)?;
                 record_store_adopted(&current, evidence)?
             }
             FleetSubnetRootInstallPhase::StoreAdopted => begin_store_staging(&current)?,
             FleetSubnetRootInstallPhase::StoreStaging => {
-                stage_release_set(
-                    icp_root,
-                    environment,
-                    local_replica,
-                    &current,
-                    release_set,
-                    &manifest_bytes,
-                )?;
+                stage_release_set(icp_context, &current, release_set, &manifest_bytes)?;
                 record_store_staged(&current)?
             }
             FleetSubnetRootInstallPhase::StoreStaged => begin_store_bootstrap(&current)?,
             FleetSubnetRootInstallPhase::StoreBootstrapInFlight => {
-                let evidence = call_store_bootstrap(
-                    icp_root,
-                    environment,
-                    local_replica,
-                    &current,
-                    request.clone(),
-                )?;
+                let evidence = call_store_bootstrap(icp_context, &current, request.clone())?;
                 record_store_bootstrapped(&current, evidence)?
             }
             FleetSubnetRootInstallPhase::StoreBootstrapped => {
-                let evidence = query_store_bootstrap_status(
-                    icp_root,
-                    environment,
-                    local_replica,
-                    &current,
-                    request.clone(),
-                )?;
+                let evidence =
+                    query_store_bootstrap_status(icp_context, &current, request.clone())?;
                 record_store_verified(&current, evidence)?
             }
             FleetSubnetRootInstallPhase::StoreVerified
@@ -205,13 +184,7 @@ fn drive_store_bootstrap(
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
-                let observed = query_store_bootstrap_status(
-                    icp_root,
-                    environment,
-                    local_replica,
-                    &current,
-                    request,
-                )?;
+                let observed = query_store_bootstrap_status(icp_context, &current, request)?;
                 if current.journal.store_bootstrap.as_ref() != Some(&observed) {
                     return Err(RootStoreBootstrapError::LiveEvidenceMismatch.into());
                 }
@@ -224,9 +197,7 @@ fn drive_store_bootstrap(
 }
 
 fn adopt_store(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<FleetSubnetWasmStoreAdoptionResponse, Box<dyn std::error::Error>> {
     let root = current
@@ -237,15 +208,15 @@ fn adopt_store(
         operation_id: current.journal.install_operation_id,
         authority: expected_wasm_store_authority(&current.journal)?,
     };
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     let updated = call_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
-        &icp,
+        icp,
         root,
         protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
         &request,
     );
     let observed = query_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
-        &icp,
+        icp,
         root,
         protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
         &request,
@@ -280,9 +251,7 @@ pub(super) fn canonical_manifest_bytes(
 }
 
 fn stage_release_set(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     current: &ResolvedFleetSubnetRootInstall,
     release_set: &PersistedFleetSubnetRootReleaseSet,
     manifest_bytes: &[u8],
@@ -291,14 +260,14 @@ fn stage_release_set(
         .journal
         .fleet_subnet_root
         .expect("Store staging follows verified root installation");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     let version = TemplateVersion::owned(release_set.manifest.release_build_id.to_string());
     let manifest_template_id = TemplateId::owned(format!(
         "{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{}",
         release_set.digest
     ));
     stage_chunk_set(
-        &icp,
+        icp,
         root,
         manifest_template_id,
         version.clone(),
@@ -308,11 +277,11 @@ fn stage_release_set(
 
     let artifacts = unique_artifacts(release_set)?;
     for (role, artifact) in artifacts {
-        let bytes = load_artifact_bytes(icp_root, artifact)?;
+        let bytes = load_artifact_bytes(icp_context.root(), artifact)?;
         let template_id = TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
         let payload_hash = wasm_hash(&bytes);
         call_with_arg::<_, ()>(
-            &icp,
+            icp,
             root,
             protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
             &TemplateManifestInput {
@@ -329,7 +298,7 @@ fn stage_release_set(
             },
         )?;
         stage_chunk_set(
-            &icp,
+            icp,
             root,
             template_id,
             version.clone(),
@@ -447,9 +416,7 @@ fn stage_chunk_set(
 }
 
 fn call_store_bootstrap(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     current: &ResolvedFleetSubnetRootInstall,
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreBootstrapResponse, Box<dyn std::error::Error>> {
@@ -458,7 +425,7 @@ fn call_store_bootstrap(
         .fleet_subnet_root
         .expect("Store bootstrap follows verified root installation");
     call_with_arg(
-        &super::install_icp(icp_root, environment, local_replica),
+        icp_context.cli(),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP,
         &request,
@@ -467,9 +434,7 @@ fn call_store_bootstrap(
 }
 
 fn query_store_bootstrap_status(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     current: &ResolvedFleetSubnetRootInstall,
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreBootstrapResponse, Box<dyn std::error::Error>> {
@@ -478,7 +443,7 @@ fn query_store_bootstrap_status(
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
     query_with_arg(
-        &super::install_icp(icp_root, environment, local_replica),
+        icp_context.cli(),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
         &request,
