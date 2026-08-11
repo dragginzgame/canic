@@ -662,7 +662,23 @@ mod tests {
             fixture.response.release_set,
             fixture.init_args.authority.initial_release_set
         );
-        assert_eq!(fixture.response.catalog.len(), 3);
+        let catalog_roles = fixture
+            .response
+            .catalog
+            .iter()
+            .map(|entry| entry.role.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            catalog_roles,
+            vec![
+                CanisterRole::new("issuer"),
+                CanisterRole::new("project_hub"),
+                CanisterRole::new("project_instance"),
+                CanisterRole::new("project_ledger"),
+                CanisterRole::new("project_machine"),
+            ],
+            "root Store catalog must contain the exact canonical application role closure"
+        );
 
         let retried: Result<RootStoreBootstrapResponse, Error> = pic
             .update_candid(
