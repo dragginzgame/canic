@@ -174,7 +174,7 @@ Date: 2026-08-11
   one placement and the exact 2,000-instance reduction in the other;
   substituted limit authority rejects.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.44` is released and `0.101.45` is open.
+- Implementation started: yes; `0.101.45` is released and `0.101.46` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,

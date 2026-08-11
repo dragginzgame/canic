@@ -176,17 +176,32 @@ fn release_push_guard_rejects_tag_on_another_commit() {
 }
 
 #[test]
-fn release_push_guard_rejects_dirty_release_head() {
+fn release_push_guard_uses_tagged_head_while_local_changes_remain_unpushed() {
     let root = create_release_repo("push-dirty");
     create_release_commit(&root);
     tag_release(&root, "0.92.8");
+
+    write_file(
+        &root,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"9.9.9\"\n",
+    );
+    run_git(&root, &["add", "Cargo.toml"]);
+    write_file(
+        &root,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"10.0.0\"\n",
+    );
     write_file(&root, "untracked.txt", "dirty\n");
 
     let output = run_push_guard(&root);
     let text = output_text(&output);
 
-    assert!(!output.status.success(), "guard should reject dirty state");
-    assert!(text.contains("worktree or index is not clean"));
+    assert!(
+        output.status.success(),
+        "guard should validate committed HEAD independently of local changes\n{text}"
+    );
+    assert!(text.contains("with v0.92.8"));
     let _ = fs::remove_dir_all(root);
 }
 

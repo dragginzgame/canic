@@ -14,10 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.44`.
-- The latest published release is `v0.101.44` at
-  `2b485798f42e42f61c1c06b2b43096df13284162`.
-- Open `0.101.45` gives each public test and release-gate invocation one
+- The workspace package version is `0.101.45`.
+- The latest published release is `v0.101.45` at
+  `8c861548114408b744ea728dc877dae2fe8e78cd`.
+- Open `0.101.46` lets the exact tagged release commit push even when later
+  staged, unstaged or untracked work exists locally. The push identity and tag
+  are derived from committed `HEAD`, so those changes remain local and a dirty
+  manifest cannot redirect the release.
+- Released `0.101.45` gives each public test and release-gate invocation one
   private repository-owned scratch directory. Nested targets borrow the exact
   directory, only its creator removes it, and cleanup rejects shared,
   traversing or symlinked targets, preventing one completed release from
