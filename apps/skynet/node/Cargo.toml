@@ -21,7 +21,7 @@ crate-type = ["cdylib"]
 candid = { workspace = true }
 canic = { workspace = true, features = ["metrics", "sharding"] }
 ic-cdk = { workspace = true }
-skynet_console = { path = "../console" }
+skynet_console = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
