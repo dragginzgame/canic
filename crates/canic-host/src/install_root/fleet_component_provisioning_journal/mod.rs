@@ -335,6 +335,7 @@ const fn advance_request(
         expected_provisioned_root_count: status.provisioned_root_count,
         expected_current_root: status.current_root,
         expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+        expected_current_synchronization: status.current_synchronization,
         expected_current_publication: status.current_publication,
         expected_runtime_activated_root_count: status.runtime_activated_root_count,
         expected_current_activation: status.current_activation,
@@ -430,6 +431,7 @@ fn validate_terminal_status(
     .all(|root| root.is_none());
     let no_cursor_remains = [
         status.current_root.is_none(),
+        status.current_synchronization.is_none(),
         status.current_publication.is_none(),
         status.current_activation.is_none(),
     ]

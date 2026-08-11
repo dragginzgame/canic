@@ -9,7 +9,8 @@ use crate::{
     bootstrap::parse_config_model,
     config::{FleetServiceMemberPurpose, FleetServicePlacementPolicy},
     dto::fleet_registry::{
-        FleetServiceBinding, FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootEntry,
+        FleetDirectoryService, FleetDirectoryServiceComponent, FleetServiceBinding,
+        FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootEntry,
         FleetSubnetRootStatus,
     },
     ids::{
@@ -764,12 +765,7 @@ fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
         ]
     );
     assert_eq!(directory.services.len(), 1);
-    assert_eq!(directory.services[0].service.as_str(), "workers");
-    assert_eq!(directory.services[0].members.len(), 1);
-    assert_eq!(
-        directory.services[0].members[0].member_purpose,
-        FleetServiceMemberPurpose::PoolMember
-    );
+    assert_configured_service_projection(&directory.services[0], &published.services[0]);
 
     std::assert_matches!(
         directory_for_root(&authority, &topology, &joining, principal(6)),
@@ -798,6 +794,44 @@ fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
             FleetSubnetRootStatus::Active
         ]
     );
+}
+
+fn assert_configured_service_projection(
+    directory: &FleetDirectoryService,
+    registry: &FleetServiceBinding,
+) {
+    // Intentionally exhaustive: Fleet discovery is configured topology, not
+    // runtime health, readiness, replication or load-balancer evidence.
+    let FleetDirectoryService {
+        service,
+        role,
+        component_spec,
+        mode,
+        placement,
+        members,
+    } = directory;
+    assert_eq!(service, &registry.service);
+    assert_eq!(role, &registry.role);
+    assert_eq!(component_spec, &registry.component_spec);
+    assert_eq!(mode, &registry.mode);
+    assert_eq!(placement, &registry.placement);
+    assert_eq!(members.len(), registry.members.len());
+    for (directory_member, registry_member) in members.iter().zip(&registry.members) {
+        let FleetDirectoryServiceComponent {
+            member_purpose,
+            component,
+            fleet_subnet_root,
+            canister_id,
+            group_placement,
+            member_path,
+        } = directory_member;
+        assert_eq!(member_purpose, &registry_member.member_purpose);
+        assert_eq!(component, &registry_member.component);
+        assert_eq!(fleet_subnet_root, &registry_member.fleet_subnet_root);
+        assert_eq!(canister_id, &registry_member.canister_id);
+        assert_eq!(group_placement, &registry_member.group_placement);
+        assert_eq!(member_path, &registry_member.member_path);
+    }
 }
 
 #[test]

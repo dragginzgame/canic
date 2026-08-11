@@ -174,7 +174,7 @@ Date: 2026-08-11
   one placement and the exact 2,000-instance reduction in the other;
   substituted limit authority rejects.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.47` is released and `0.101.48` is open.
+- Implementation started: yes; `0.101.48` is released and `0.101.49` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -189,6 +189,31 @@ Date: 2026-08-11
   qualification. Application-data replication remains a separate later design
   and is not an implementation blocker for 0.101 topology, purpose or
   discovery contracts.
+
+## Remaining Release-Batch Plan
+
+The 0.101 line predates current
+[delivery cadence governance](../../governance/delivery-cadence.md) and has
+already exceeded the normal 6-10-release planning range. Historical tags stay
+immutable. The remaining work is consolidated prospectively into five
+outcome-based batches; individual checklist proofs, CI fallout and changelog
+repairs do not create additional release boundaries.
+
+| Batch | Bounded outcome and owner | Included direct evidence and fallout | Focused validation | Status |
+| --- | --- | --- | --- | --- |
+| Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in open `0.101.49` |
+| Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Pending |
+| Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Pending |
+| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and size/capacity report | Pending |
+| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Pending |
+
+`Q1` is complete in the open `0.101.49` batch. In addition to the packed and
+spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
+the second Project Hub, restarts the Coordinator after every durable advance,
+replays the same command without duplicate placement or membership and keeps
+the Hub, its new Instance and that Instance's Ledger on the selected root's
+Subnet. `Q2` begins only after this outcome is released; individual fallout
+inside a batch does not create another patch boundary.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -480,8 +505,12 @@ Fleet policy writer.
 
 ## Slice 5 — Recovery and Qualification
 
-- [ ] Exercise deterministic interruption boundaries for fresh provisioning
-  and scale-out.
+- [x] Exercise deterministic Coordinator interruption boundaries for fresh
+  provisioning and scale-out. Fresh root acceptance/provisioning already
+  reconciles exact lost-response intent. Scale-out now reloads durable state
+  with affected-root synchronization, selected-root synchronization,
+  selected-root publication and runtime activation each in flight, then
+  requires the exact typed reconcile call before recording the response.
 - [ ] Prove backup/restore cross-document consistency.
 - [ ] Prove Component Topology, group flattening, admission,
   active-release-set, Wasm Store, effective member limits, placement,
@@ -491,6 +520,12 @@ Fleet policy writer.
   root journey now retains distinct member-operation, Component, Canister,
   placement-provenance and placement-receipt identities through Registry
   commitment and Directory derivation; reordered placement evidence rejects.
+- [x] Prove the durable Coordinator path can atomically add one same-Spec
+  ActivePool member while retaining packed and spread placements. The initial
+  two members span two roots; ordinal 2 packs onto the first root, both roots
+  cross the canonical Directory barrier, the selected runtime activates, the
+  placement ledger settles and exact terminal status replays after restart.
+  The next placement on that full root rejects before durable mutation.
 - [ ] Prove two Fleets remain isolated when their roots share one physical
   Subnet.
 - [x] Prove cross-root peer provisioning requires the exact current raw-caller
@@ -502,9 +537,11 @@ Fleet policy writer.
   effect paths used by grouped provisioning.
 - [ ] Prove the first excess value for every frozen initial scale bound rejects
   before mutation or network effects.
-- [ ] Prove configured Replica discovery never claims data readiness,
+- [x] Prove configured Replica discovery never claims data readiness,
   promotion or failover and configured PoolMember discovery never claims
-  health, load-balancer eligibility or consistency.
+  health, load-balancer eligibility or consistency. Fleet Registry and Fleet
+  Directory service DTOs carry only exhaustively checked configured topology;
+  application policy owns every runtime observation and decision.
 - [x] Prove local Project Hub -> Project Instance -> Ledger/Machine
   provisioning, exact immediate-parent bindings and Coordinator-free retry.
 - [x] Prove two deployments reuse one Project Hub group with distinct
@@ -539,15 +576,19 @@ Fleet policy writer.
 - [ ] The same database group is reused inside a nested project-data-cell
   group to provision same-Spec database A, B and C Replicas plus one Project
   Hub PoolMember on at least two other roots.
-- [ ] One project-data-cell scale-out resumes exactly across forced
-  interruption.
+- [x] One project-data-cell scale-out resumes exactly across forced
+  interruption. A two-Subnet PocketIC journey restarts the Coordinator after
+  every durable advance and exact replay retains one new Hub placement,
+  Instance and Ledger on the selected root's Subnet.
 - [ ] The local Project Hubs provision at least three Project Instance
   children across their project roots; every Project Instance creates one
   Ledger and exactly one creates its optional Machine.
 - [x] Two deployments reuse one Project Hub group on different roots with
   distinct protected effective spawn-grant ceilings and no duplicated Spec.
 - [ ] A same-Spec ActivePool packs multiple stable placements on one root,
-  spans at least two roots and publishes one atomic scale-out addition.
+  spans at least two roots and publishes one atomic scale-out addition. The
+  complete durable Coordinator journey now passes; real disposable-environment
+  Canister placement remains to qualify this completion criterion.
 - [ ] The initial supported Fleet/service envelope is measured and does not
   claim ten-thousand-Subnet qualification.
 - [ ] All design criteria and required journeys pass.

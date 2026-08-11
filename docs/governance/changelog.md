@@ -6,6 +6,10 @@ notes.
 
 These rules are intended to be followed by automated agents.
 
+Release-batch scope and push cadence are governed by
+[delivery cadence governance](delivery-cadence.md). This document records
+those batches; it does not turn each implementation slice into a release.
+
 ---
 
 # 1. Purpose
@@ -115,11 +119,14 @@ Terminology:
 
 - Code slice: a small focused change suitable for review and targeted
   validation. It does not imply a version.
+- Release batch: one substantive end-to-end outcome containing its compatible
+  implementation slices, direct evidence, propagation and cleanup.
 - Unreleased batch: one or more related incomplete or deliberately unassigned
-  slices collected before they enter an open patch draft.
+  slices collected before they enter the current release batch or open patch
+  draft.
 - Open patch draft: the newest versioned changelog entry with no matching
-  immutable `v<version>` tag. Compatible completed work is added to this entry
-  until the tag exists.
+  immutable `v<version>` tag. Compatible work for the complete release batch
+  is added to this entry until the batch is complete and the tag exists.
 - Published patch release: a versioned release prepared by the human-owned
   release flow.
 
@@ -203,8 +210,9 @@ Do not use plain backticked path text for detailed-breakdown links.
 During ordinary development:
 
 1. Keep code slices focused and reviewable.
-2. Let small compatible slices accumulate until they form a coherent batch;
-   do not create a patch entry for each mechanical edit.
+2. Group compatible slices into the current planned release batch; do not
+   create a patch entry or recommend a release for each focused proof,
+   mechanical edit or CI repair.
 3. When a meaningful code or behavior batch is complete, update its changelog
    by default without waiting for a separate maintainer request.
 4. Treat the newest versioned entry without a matching immutable `v<version>`

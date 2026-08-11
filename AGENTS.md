@@ -26,6 +26,17 @@ with this file, the code is wrong.
   versions in any `Cargo.toml`, release-script default versions, install URLs,
   and the matching `Cargo.lock` package versions.
 
+## Delivery Cadence
+- Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy
+  for implementation slices, release batches, continuation and push-readiness
+  handoffs.
+- A focused implementation slice is not a patch release. Continue the current
+  planned release batch until its direct implementation, adversarial/recovery
+  evidence, propagation and cleanup are complete.
+- Do not recommend a push merely because one focused test or CI repair passes.
+  The normal minor-line planning target is roughly 6-10 substantive release
+  batches, with any justified exception recorded in the design/status tracker.
+
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog
   policy. Do not duplicate its rules here.
@@ -118,9 +129,10 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
   test/Clippy commands unless the maintainer explicitly requests that exact
   broad gate.
 - The maintainer owns full deployment and publish validation. After targeted
-  checks pass, agents should state whether the current change set is ready to
-  push and whether its changelog/version surfaces are ready to publish; an
-  unrun full suite is not, by itself, a blocker.
+  checks pass, agents should state whether the complete planned release batch,
+  not merely the latest slice, is ready to push and whether its
+  changelog/version surfaces are ready to publish; an unrun full suite is not,
+  by itself, a blocker.
 - Unit tests live next to code; integration tests live in `tests/`.
 - Canister creation/install/upgrade/inter-canister tests must use PocketIC.
 - Do not add production `cfg(test)` behavior to fake IC management.
@@ -134,7 +146,8 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 ## Checklist
 - Preserve dirty worktree state and keep edits scoped.
 - Treat focused code slices as development work and group them into coherent
-  batches. Follow `docs/governance/changelog.md` for automatic open-patch
-  updates; do not allocate one patch version per slice.
+  release batches. Follow `docs/governance/delivery-cadence.md` and
+  `docs/governance/changelog.md` for open-batch and open-patch updates; do not
+  allocate one patch version per slice.
 - Respect CLI/host/backup ownership boundaries.
 - Run targeted checks only, following the Testing policy above.

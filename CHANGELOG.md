@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.49` qualifies scale-out recovery through a three-member ActivePool
+  that packs and spreads stable placements plus a real two-Subnet Project Hub
+  cell whose Instance and Ledger stay on its selected root; every Coordinator
+  boundary replays exactly after restart and the nearest density violation
+  rejects without mutation.
+
 - `0.101.48` proves packed same-root placements retain distinct protected
   Directory identity and replaces hidden Git/Make validation with one explicit
   workflow.

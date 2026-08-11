@@ -16,6 +16,7 @@ use crate::view::fleet_coordinator::{
     FleetComponentProvisioningRootProvisionDisposition, FleetComponentRuntimeActivationDisposition,
 };
 use std::{
+    collections::{BTreeMap, BTreeSet},
     future::Future,
     task::{Context, Poll, Waker},
 };
@@ -52,8 +53,8 @@ use canic_core::{
             RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningPhase,
             RootComponentProvisioningResult, RootComponentProvisioningStatusResponse,
-            RootComponentPublicationEvidence, RootProvisionedGroupMember,
-            RootProvisionedGroupPlacement,
+            RootComponentPublicationEvidence, RootComponentPublicationRequest,
+            RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
         error::ErrorCode,
         fleet_registry::{
@@ -320,6 +321,28 @@ fn repeated_scale_out_coordinator_config() -> ConfigModel {
             ),
     )
     .expect("valid repeated scale-out Coordinator config")
+}
+
+fn packed_active_pool_coordinator_config() -> ConfigModel {
+    parse_config_model(
+        &SCALE_OUT_COORDINATOR_CONFIG
+            .replace("maximum_instances = 3", "maximum_instances = 6")
+            .replace("initial_placements = 1", "initial_placements = 2")
+            .replace("maximum_placements = 2", "maximum_placements = 4")
+            .replace(
+                "placement.maximum_per_root = 1",
+                "placement.maximum_per_root = 2",
+            )
+            .replace(
+                "placement.minimum_distinct_roots = 1",
+                "placement.minimum_distinct_roots = 2",
+            )
+            .replace(
+                "placement.maximum_members_per_root = 1",
+                "placement.maximum_members_per_root = 2",
+            ),
+    )
+    .expect("valid packed ActivePool Coordinator config")
 }
 
 fn init_args(coordinator: Principal) -> FleetCoordinatorInitArgs {
@@ -861,7 +884,7 @@ fn initial_service_publication_commits_registry_receipt_and_phase_atomically() {
     let before = FleetCoordinatorRegistryStore::export();
     let source_version = provisioned.fleet_registry.clone();
 
-    assert_service_publication_cursor(&config, &provisioned, request, &before);
+    assert_service_publication_cursor(&config, &provisioned, &request, &before);
     assert_invalid_service_publication_time(&provisioned, &request, &before);
     let (published, durable) = commit_initial_service_publication(
         &request,
@@ -913,7 +936,7 @@ fn directory_confirmation_intent_preserves_service_publication_receipts() {
     let request = root_provision_advance_request(&status);
     let before_replay = FleetCoordinatorRegistryStore::export();
     let replay = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-        advance_component_provisioning_root_acceptance_for_test(&config, request, 162)
+        advance_component_provisioning_root_acceptance_for_test(&config, &request, 162)
         .expect("completed root acceptance remains observational");
     assert!(matches!(
         replay,
@@ -925,10 +948,10 @@ fn directory_confirmation_intent_preserves_service_publication_receipts() {
 fn assert_service_publication_cursor(
     config: &ConfigModel,
     provisioned: &FleetComponentProvisioningStatusResponse,
-    request: FleetComponentProvisioningAdvanceRequest,
+    request: &FleetComponentProvisioningAdvanceRequest,
     before: &FleetCoordinatorRegistryData,
 ) {
-    let mut completed_root_retry = request;
+    let mut completed_root_retry = *request;
     completed_root_retry.expected_provisioned_root_count -= 1;
     let final_root = before
         .current
@@ -960,7 +983,7 @@ fn assert_service_publication_cursor(
     assert_eq!(FleetCoordinatorRegistryStore::export(), before.clone());
     assert!(matches!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
-            advance_component_provisioning_root_for_test(config, &request, 160)
+            advance_component_provisioning_root_for_test(config, request, 160)
             .expect("exact publication cursor"),
         FleetComponentProvisioningRootProvisionDisposition::Publish
     ));
@@ -1289,6 +1312,117 @@ fn scale_out_publishes_all_new_pool_members_in_one_atomic_registry_append() {
 }
 
 #[test]
+fn active_pool_scale_out_packs_one_root_and_commits_one_atomic_addition() {
+    let config = packed_active_pool_coordinator_config();
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    activate_two_roots_with_config_and_admission(principal(200), &config, 3);
+    let initial_registry = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let initial_plan = fresh_component_plan(&config, &initial_registry);
+    let mut fresh = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(
+            &config,
+            FleetComponentProvisioningPrepareRequest {
+                operation_id: [101; 32],
+                plan: initial_plan,
+            },
+            100,
+        )
+        .expect("prepare two-root ActivePool plan");
+    fresh = drive_root_acceptance(&config, fresh, 110);
+    fresh = drive_root_provisioning(&config, fresh, 120);
+    fresh = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        publish_component_provisioning_services(&root_provision_advance_request(&fresh), 200)
+        .expect("publish initial ActivePool");
+    fresh = drive_directory_confirmation(fresh, 210);
+    fresh = drive_runtime_activation(fresh, 300);
+    assert_eq!(
+        fresh.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+
+    let source_registry = FleetCoordinatorWorkflow::registry().expect("initial ActivePool");
+    let source_version = FleetCoordinatorWorkflow::version().expect("initial Registry version");
+    assert_eq!(source_registry.services[0].members.len(), 2);
+    let selected_root = source_registry.fleet_subnet_roots[0].fleet_subnet_root;
+    let plan = scale_out_plan_on_root(&config, &source_registry, 2, 3, 0);
+    let request = FleetComponentProvisioningPrepareRequest {
+        operation_id: [203; 32],
+        plan,
+    };
+    let terminal = drive_terminal_scale_out(&config, request.clone(), 1_000);
+    assert_eq!(
+        terminal.phase,
+        FleetComponentProvisioningPhase::RuntimesActivated
+    );
+
+    let registry = FleetCoordinatorWorkflow::registry().expect("scaled ActivePool");
+    let version = FleetCoordinatorWorkflow::version().expect("scaled Registry version");
+    assert_eq!(version.revision, source_version.revision + 1);
+    assert_eq!(registry.services[0].members.len(), 3);
+    let selected_root_members = registry.services[0]
+        .members
+        .iter()
+        .filter(|member| member.fleet_subnet_root == selected_root)
+        .count();
+    assert_eq!(selected_root_members, 2);
+    assert_eq!(
+        registry.services[0]
+            .members
+            .iter()
+            .map(|member| member.fleet_subnet_root)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        2
+    );
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    let current = durable.current.as_ref().expect("Coordinator state");
+    assert_eq!(current.service_publication_receipts.len(), 2);
+    assert_eq!(
+        current.component_group_deployments[0]
+            .placements
+            .iter()
+            .filter(|placement| placement.fleet_subnet_root == selected_root)
+            .count(),
+        2
+    );
+    FleetCoordinatorRegistryStore::import(durable.clone());
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: request.operation_id,
+                plan_hash: terminal.plan_hash,
+            },
+        )
+        .expect("replay terminal packed ActivePool scale-out"),
+        terminal
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
+    assert_packed_root_limit_rejects_without_mutation(&config, &registry, &durable);
+}
+
+fn assert_packed_root_limit_rejects_without_mutation(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    durable: &FleetCoordinatorRegistryData,
+) {
+    let invalid_plan = scale_out_plan_on_root(config, registry, 3, 4, 0);
+    let invalid = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        prepare_component_provisioning_for_test(
+            config,
+            FleetComponentProvisioningPrepareRequest {
+                operation_id: [204; 32],
+                plan: invalid_plan,
+            },
+            2_000,
+        )
+        .expect_err("a third placement cannot enter the already-full root");
+    assert_eq!(invalid.class(), InternalErrorClass::Ops);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), *durable);
+}
+
+#[test]
 fn scale_out_confirms_affected_and_selected_roots_before_runtime_activation() {
     let config = scale_out_coordinator_config();
     drive_terminal_fresh_install(&config);
@@ -1331,6 +1465,7 @@ fn scale_out_confirms_affected_and_selected_roots_before_runtime_activation() {
     );
     assert_eq!(first_call.0, affected_only_root);
     let durable_intent = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_intent.clone());
     let replay = expect_scale_out_synchronization_call(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
             advance_component_directory_confirmation(&first_request, 9_999)
@@ -1557,7 +1692,7 @@ fn assert_retired_scale_out_replays(scenario: &RepeatedScaleOutScenario) {
     );
     assert_eq!(
         poll_ready(FleetCoordinatorWorkflow::advance_component_provisioning(
-            root_provision_advance_request(first),
+            &root_provision_advance_request(first),
         ))
         .expect("retired terminal advance replay"),
         *first
@@ -1731,6 +1866,18 @@ fn drive_prepared_scale_out(
     mut status: FleetComponentProvisioningStatusResponse,
     started_at_ns: u64,
 ) -> FleetComponentProvisioningStatusResponse {
+    let source_registry = FleetCoordinatorWorkflow::registry().expect("source Fleet Registry");
+    let mut existing_service_members = BTreeMap::<Principal, u32>::new();
+    for member in source_registry
+        .services
+        .iter()
+        .flat_map(|service| &service.members)
+    {
+        let count = existing_service_members
+            .entry(member.fleet_subnet_root)
+            .or_default();
+        *count = count.checked_add(1).expect("bounded service-member count");
+    }
     status = drive_root_acceptance(config, status, started_at_ns);
     status = drive_root_provisioning(config, status, started_at_ns + 10);
     status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -1746,38 +1893,75 @@ fn drive_prepared_scale_out(
         .and_then(|record| record.plan.batches.first())
         .map(|batch| batch.root.fleet_subnet_root)
         .expect("selected scale-out root");
-    let affected_roots = FleetCoordinatorRegistryStore::export()
+    let expected_synchronization_roots = FleetCoordinatorRegistryStore::export()
         .current
         .as_ref()
         .and_then(|current| current.component_scale_out.as_ref())
-        .map(|record| {
-            record
-                .plan
-                .directory_confirmation_roots
-                .iter()
-                .copied()
-                .filter(|root| *root != selected_root)
-                .collect::<Vec<_>>()
-        })
-        .expect("scale-out Directory roots");
-    for affected_root in affected_roots {
+        .map(|record| record.plan.directory_confirmation_roots.clone())
+        .expect("canonical scale-out synchronization roots");
+    let mut synchronized_roots = Vec::new();
+    let mut selected_root_published = false;
+    let mut now = started_at_ns + 101;
+    while status.phase != FleetComponentProvisioningPhase::DirectoriesConfirmed {
         let request = root_provision_advance_request(&status);
-        let call = expect_scale_out_synchronization_call(
-            crate::ops::fleet_coordinator::FleetCoordinatorOps::
-                advance_component_directory_confirmation(&request, started_at_ns + 101)
-                .expect("persist affected-root synchronization"),
-        );
-        assert_eq!(call.0, affected_root);
-        let response = terminal_scale_out_synchronization_response(&call, 1, started_at_ns + 102);
-        status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-            record_component_scale_out_directory_synchronization(
-                &request,
-                response,
-                started_at_ns + 103,
-            )
-            .expect("record affected-root synchronization");
+        let disposition = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&request, now)
+            .expect("advance scale-out Directory barrier");
+        status = match disposition {
+            FleetComponentDirectoryConfirmationDisposition::Invoke(
+                FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
+                    fleet_subnet_root,
+                    request: synchronization,
+                },
+            ) => {
+                assert_eq!(
+                    Some(fleet_subnet_root),
+                    expected_synchronization_roots
+                        .get(synchronized_roots.len())
+                        .copied()
+                );
+                synchronized_roots.push(fleet_subnet_root);
+                let affected_component_count = existing_service_members
+                    .get(&fleet_subnet_root)
+                    .copied()
+                    .unwrap_or_default();
+                let response = terminal_scale_out_synchronization_response(
+                    &(fleet_subnet_root, synchronization),
+                    affected_component_count,
+                    now + 1,
+                );
+                crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                    record_component_scale_out_directory_synchronization(
+                        &request,
+                        response,
+                        now + 2,
+                    )
+                    .expect("record scale-out root synchronization")
+            }
+            FleetComponentDirectoryConfirmationDisposition::Invoke(
+                FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+                    fleet_subnet_root,
+                    ..
+                },
+            ) => {
+                assert_eq!(fleet_subnet_root, selected_root);
+                assert!(!selected_root_published);
+                selected_root_published = true;
+                let response = terminal_directory_response(fleet_subnet_root, now + 1);
+                crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                    record_component_scale_out_directory_publication(
+                        &request,
+                        response,
+                        now + 2,
+                    )
+                    .expect("record selected-root Directory publication")
+            }
+            _ => panic!("scale-out Directory barrier returned an unexpected disposition"),
+        };
+        now += 10;
     }
-    status = confirm_selected_scale_out_root(status, selected_root, started_at_ns + 110);
+    assert_eq!(synchronized_roots, expected_synchronization_roots);
+    assert!(selected_root_published);
     drive_runtime_activation(status, started_at_ns + 200)
 }
 
@@ -1825,14 +2009,14 @@ fn drive_root_acceptance(
         let request = root_provision_advance_request(&status);
         let call = expect_root_acceptance_call(
             crate::ops::fleet_coordinator::FleetCoordinatorOps::
-                advance_component_provisioning_root_acceptance_for_test(config, request, now)
+                advance_component_provisioning_root_acceptance_for_test(config, &request, now)
                 .expect("persist root acceptance intent"),
             false,
         );
         status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
             record_component_provisioning_root_acceptance_for_test(
                 config,
-                request,
+                &request,
                 accepted_root_response(&call.request, now + 1),
                 now + 2,
             )
@@ -2091,7 +2275,7 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
             advance_component_provisioning_root_acceptance_for_test(
                 &config,
-                first_request,
+                &first_request,
                 103,
             )
             .expect("journal first root intent"),
@@ -2104,7 +2288,7 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
             advance_component_provisioning_root_acceptance_for_test(
                 &config,
-                first_request,
+                &first_request,
                 999,
             )
             .expect("reconcile first root intent"),
@@ -2117,7 +2301,7 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
     let invalid_time = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_acceptance_for_test(
             &config,
-            first_request,
+            &first_request,
             early_response,
             105,
         )
@@ -2132,7 +2316,7 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
     let first_status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_acceptance_for_test(
             &config,
-            first_request,
+            &first_request,
             first_response.clone(),
             105,
         )
@@ -2142,7 +2326,7 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
         FleetComponentProvisioningPhase::AcceptingRoots,
         1,
     );
-    assert_first_root_acceptance_replays(&config, first_request, first_response, &first_status);
+    assert_first_root_acceptance_replays(&config, &first_request, first_response, &first_status);
 
     accept_second_root_and_reject_substitution(&config, plan_hash);
     assert_corrupt_root_acceptance_fails_closed(&config, plan_hash);
@@ -2287,7 +2471,7 @@ fn accept_every_planned_root(config: &ConfigModel, plan_hash: [u8; 32]) {
             crate::ops::fleet_coordinator::FleetCoordinatorOps::
                 advance_component_provisioning_root_acceptance_for_test(
                     config,
-                    request,
+                    &request,
                     110 + u64::from(index) * 3,
                 )
                 .expect("persist root acceptance intent"),
@@ -2296,7 +2480,7 @@ fn accept_every_planned_root(config: &ConfigModel, plan_hash: [u8; 32]) {
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
             record_component_provisioning_root_acceptance_for_test(
                 config,
-                request,
+                &request,
                 accepted_root_response(&call.request, 111 + u64::from(index) * 3),
                 112 + u64::from(index) * 3,
             )
@@ -2382,6 +2566,7 @@ fn root_provision_advance_request(
         expected_provisioned_root_count: status.provisioned_root_count,
         expected_current_root: status.current_root,
         expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+        expected_current_synchronization: status.current_synchronization,
         expected_current_publication: status.current_publication,
         expected_runtime_activated_root_count: status.runtime_activated_root_count,
         expected_current_activation: status.current_activation,
@@ -2485,7 +2670,7 @@ fn assert_first_root_intent_is_durable(
 
 fn assert_first_root_acceptance_replays(
     config: &ConfigModel,
-    request: FleetComponentProvisioningAdvanceRequest,
+    request: &FleetComponentProvisioningAdvanceRequest,
     response: RootComponentProvisioningStatusResponse,
     expected_status: &FleetComponentProvisioningStatusResponse,
 ) {
@@ -2519,6 +2704,7 @@ fn root_acceptance_advance_request(
         expected_provisioned_root_count: 0,
         expected_current_root: None,
         expected_directory_confirmed_root_count: 0,
+        expected_current_synchronization: None,
         expected_current_publication: None,
         expected_runtime_activated_root_count: 0,
         expected_current_activation: None,
@@ -2806,6 +2992,26 @@ fn expect_scale_out_synchronization_call(
     }
 }
 
+fn expect_scale_out_publication_call(
+    disposition: FleetComponentDirectoryConfirmationDisposition,
+) -> (Principal, RootComponentPublicationRequest) {
+    match disposition {
+        FleetComponentDirectoryConfirmationDisposition::Invoke(
+            FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+                fleet_subnet_root,
+                request,
+            },
+        )
+        | FleetComponentDirectoryConfirmationDisposition::Reconcile(
+            FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
+                fleet_subnet_root,
+                request,
+            },
+        ) => (fleet_subnet_root, request),
+        _ => panic!("scale-out Directory barrier must publish the selected root"),
+    }
+}
+
 fn confirm_selected_scale_out_root(
     mut status: FleetComponentProvisioningStatusResponse,
     selected_root: Principal,
@@ -2824,6 +3030,18 @@ fn confirm_selected_scale_out_root(
     assert_eq!(synchronization_call.0, selected_root);
     let synchronization_response =
         terminal_scale_out_synchronization_response(&synchronization_call, 0, started_at_ns + 1);
+    let durable_synchronization_intent = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_synchronization_intent.clone());
+    let synchronization_replay = expect_scale_out_synchronization_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&synchronization_request, 9_999)
+            .expect("reconcile selected-root synchronization after restart"),
+    );
+    assert_eq!(synchronization_replay, synchronization_call);
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_synchronization_intent
+    );
     status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_scale_out_directory_synchronization(
             &synchronization_request,
@@ -2832,29 +3050,85 @@ fn confirm_selected_scale_out_root(
         )
         .expect("record selected-root synchronization");
     assert_eq!(status.directory_confirmed_root_count, confirmed_before);
+    assert!(status.current_synchronization.is_some());
     assert!(status.current_publication.is_none());
+    let durable_synchronization = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_synchronization.clone());
+    let FleetComponentDirectoryConfirmationDisposition::Current(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&synchronization_request, 9_999)
+            .expect("replay committed selected-root synchronization after restart")
+    else {
+        panic!("an exact pre-synchronization command must replay committed progress")
+    };
+    assert_eq!(*replayed, status);
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_synchronization
+    );
+    assert_conflicting_synchronization_cursor_rejects(&status);
 
     let publication_request = root_provision_advance_request(&status);
-    let FleetComponentDirectoryConfirmationDisposition::Invoke(
-        FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
-            fleet_subnet_root: publication_root,
-            ..
-        },
-    ) = crate::ops::fleet_coordinator::FleetCoordinatorOps::
-        advance_component_directory_confirmation(&publication_request, started_at_ns + 10)
-        .expect("persist selected-root publication")
-    else {
-        panic!("selected root must publish its prepared batch");
-    };
-    assert_eq!(publication_root, selected_root);
+    let publication_call = expect_scale_out_publication_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&publication_request, started_at_ns + 10)
+            .expect("persist selected-root publication"),
+    );
+    assert_eq!(publication_call.0, selected_root);
     let publication_response = terminal_directory_response(selected_root, started_at_ns + 11);
-    crate::ops::fleet_coordinator::FleetCoordinatorOps::
+    let durable_publication_intent = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_publication_intent.clone());
+    let publication_replay = expect_scale_out_publication_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&publication_request, 9_999)
+            .expect("reconcile selected-root publication after restart"),
+    );
+    assert_eq!(publication_replay, publication_call);
+    assert_eq!(
+        FleetCoordinatorRegistryStore::export(),
+        durable_publication_intent
+    );
+    let status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_scale_out_directory_publication(
             &publication_request,
             publication_response,
             started_at_ns + 12,
         )
-        .expect("record selected-root publication")
+        .expect("record selected-root publication");
+    let durable_publication = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_publication.clone());
+    let FleetComponentDirectoryConfirmationDisposition::Current(replayed) =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_directory_confirmation(&publication_request, 9_999)
+            .expect("replay committed selected-root publication after restart")
+    else {
+        panic!("an exact pre-publication command must replay committed progress")
+    };
+    assert_eq!(*replayed, status);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_publication);
+    status
+}
+
+fn assert_conflicting_synchronization_cursor_rejects(
+    status: &FleetComponentProvisioningStatusResponse,
+) {
+    let mut request = root_provision_advance_request(status);
+    let mut cursor = request
+        .expected_current_synchronization
+        .expect("scale-out synchronization cursor");
+    cursor.fleet_subnet_root = principal(250);
+    request.expected_current_synchronization = Some(cursor);
+    let durable = FleetCoordinatorRegistryStore::export();
+    let Err(invalid) = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        advance_component_directory_confirmation(&request, 9_999)
+    else {
+        panic!("a substituted synchronization root must reject")
+    };
+    assert_eq!(
+        invalid.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
 }
 
 fn activate_selected_scale_out_root(
@@ -2875,7 +3149,10 @@ fn activate_selected_scale_out_root(
     };
     assert_eq!(call.fleet_subnet_root, selected_root);
     assert_ne!(call.fleet_subnet_root, affected_only_root);
+    let response =
+        next_runtime_activation_response(selected_root, started_at_ns, started_at_ns + 1);
     let durable_intent = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable_intent.clone());
     let FleetComponentRuntimeActivationDisposition::Reconcile(replayed) =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_runtime_activation(
             &request, 9_999,
@@ -2888,8 +3165,6 @@ fn activate_selected_scale_out_root(
     assert_eq!(replayed.request, call.request);
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
-    let response =
-        next_runtime_activation_response(selected_root, started_at_ns, started_at_ns + 1);
     status =
         crate::ops::fleet_coordinator::FleetCoordinatorOps::record_component_runtime_activation(
             &request,
@@ -3364,7 +3639,7 @@ fn accept_second_root_and_reject_substitution(config: &ConfigModel, plan_hash: [
     let request = root_acceptance_advance_request(plan_hash, 1);
     let call = expect_root_acceptance_call(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
-            advance_component_provisioning_root_acceptance_for_test(config, request, 106)
+            advance_component_provisioning_root_acceptance_for_test(config, &request, 106)
             .expect("journal second root intent"),
         false,
     );
@@ -3374,7 +3649,7 @@ fn accept_second_root_and_reject_substitution(config: &ConfigModel, plan_hash: [
     let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_acceptance_for_test(
             config,
-            request,
+            &request,
             substituted,
             108,
         )
@@ -3388,7 +3663,7 @@ fn accept_second_root_and_reject_substitution(config: &ConfigModel, plan_hash: [
     let complete = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_acceptance_for_test(
             config,
-            request,
+            &request,
             accepted_root_response(&call.request, 107),
             109,
         )
@@ -3610,8 +3885,24 @@ fn scale_out_plan(
     previous_placements: u32,
     requested_placements: u32,
 ) -> FleetComponentProvisioningPlan {
+    scale_out_plan_on_root(
+        config,
+        registry,
+        previous_placements,
+        requested_placements,
+        1,
+    )
+}
+
+fn scale_out_plan_on_root(
+    config: &ConfigModel,
+    registry: &FleetRegistry,
+    previous_placements: u32,
+    requested_placements: u32,
+    root_index: usize,
+) -> FleetComponentProvisioningPlan {
     let (deployment, component_group, entries) = project_cell_plan_entries(config);
-    let root = &registry.fleet_subnet_roots[1];
+    let root = &registry.fleet_subnet_roots[root_index];
     let mut plan = component_plan(
         config,
         registry,

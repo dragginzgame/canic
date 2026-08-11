@@ -101,7 +101,7 @@ service = "projects"
 component_group = "grouped_projects"
 service_purpose = "pool_member"
 initial_placements = 1
-maximum_placements = 1
+maximum_placements = 2
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 

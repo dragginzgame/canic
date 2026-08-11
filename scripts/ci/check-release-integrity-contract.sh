@@ -21,6 +21,7 @@ DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
+RELEASE_CADENCE="$ROOT/scripts/dev/report-release-cadence.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
@@ -44,7 +45,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CADENCE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -167,6 +168,14 @@ for mode in patch minor major; do
     rg -F "CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target does not bind mutation to completed validation"
 done
+patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
+rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||
+    fail "the patch release flow omits its read-only cadence advisory"
+cadence_output="$(bash "$RELEASE_CADENCE")"
+rg -F 'normal planning range: 6-10' <<<"$cadence_output" >/dev/null ||
+    fail "the release cadence tool does not report the governed planning range"
+rg -F 'next release ordinal:' <<<"$cadence_output" >/dev/null ||
+    fail "the release cadence tool does not report the next release ordinal"
 rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
 release_push_recipe="$(sed -n '/^release-push:/,/^$/p' "$MAKEFILE")"
