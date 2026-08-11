@@ -70,7 +70,7 @@ mod tests {
             },
         },
         ids::{
-            CanisterRole, ComponentBinding, ComponentInstanceId, ManagedCanisterBinding,
+            CanisterRole, ComponentBinding, ComponentInstanceId, FleetId, ManagedCanisterBinding,
             ReleaseSetDigest, SubnetId,
         },
     };
@@ -747,6 +747,173 @@ mod tests {
     }
 
     #[test]
+    fn co_located_fleets_keep_roots_stores_pools_and_registries_isolated() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let first_store_fixture = build_root_store_fixture();
+        let second_store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let subnet = pic
+            .topology()
+            .get_app_subnets()
+            .into_iter()
+            .next()
+            .expect("co-located Fleet application Subnet");
+        let first_coordinator = pic.create_canister_on_subnet(None, None, subnet);
+        let second_coordinator = pic.create_canister_on_subnet(None, None, subnet);
+        pic.add_cycles(first_coordinator, COORDINATOR_INSTALL_CYCLES);
+        pic.add_cycles(second_coordinator, COORDINATOR_INSTALL_CYCLES);
+        let first = install_bootstrapped_root_for_fleet_on_subnet(
+            &pic,
+            root_wasm.clone(),
+            first_coordinator,
+            first_store_fixture,
+            subnet,
+            0xa1,
+        );
+        let second = install_bootstrapped_root_for_fleet_on_subnet(
+            &pic,
+            root_wasm,
+            second_coordinator,
+            second_store_fixture,
+            subnet,
+            0xb2,
+        );
+        install_fixture_coordinator(&pic, first_coordinator, coordinator_wasm.clone(), &first);
+        install_fixture_coordinator(&pic, second_coordinator, coordinator_wasm, &second);
+
+        assert_co_located_physical_authority(&pic, subnet, &first, &second);
+        assert_foreign_root_cannot_write_store(&pic, &first, &second);
+
+        let (first_joined, _) = join_and_synchronize_root(&pic, first_coordinator, &first);
+        let foreign_sync = FleetSubnetRootRegistrySyncRequest {
+            expected_registry: first_joined,
+            store_bootstrap: second.request.clone(),
+        };
+        let rejected: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
+            .update_candid(
+                second.root_id,
+                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
+                (foreign_sync,),
+            )
+            .expect("foreign-Fleet Registry synchronization transport");
+        assert_eq!(
+            rejected
+                .expect_err("another Fleet's Registry must not enter the co-located root")
+                .code,
+            canic::dto::error::ErrorCode::Forbidden
+        );
+        let _ = join_and_synchronize_root(&pic, second_coordinator, &second);
+        assert_isolated_coordinator_registry(&pic, first_coordinator, &first, &second);
+        assert_isolated_coordinator_registry(&pic, second_coordinator, &second, &first);
+    }
+
+    #[cfg(test)]
+    fn assert_co_located_physical_authority(
+        pic: &PocketIc,
+        subnet: Principal,
+        first: &BootstrappedRootFixture,
+        second: &BootstrappedRootFixture,
+    ) {
+        assert_ne!(first.root_id, second.root_id);
+        assert_ne!(first.response.wasm_store, second.response.wasm_store);
+        assert_ne!(
+            first.init_args.authority.binding.authority.binding.fleet,
+            second.init_args.authority.binding.authority.binding.fleet
+        );
+        for fixture in [first, second] {
+            assert_eq!(pic.get_subnet(fixture.root_id), Some(subnet));
+            assert_eq!(pic.get_subnet(fixture.response.wasm_store), Some(subnet));
+            assert_root_local_physical_inventory(pic, fixture);
+        }
+        let first_pool = first
+            .init_args
+            .canister_pool_imports
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let second_pool = second
+            .init_args
+            .canister_pool_imports
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(first_pool.is_disjoint(&second_pool));
+    }
+
+    #[cfg(test)]
+    fn assert_foreign_root_cannot_write_store(
+        pic: &PocketIc,
+        owner: &BootstrappedRootFixture,
+        foreign: &BootstrappedRootFixture,
+    ) {
+        let payload = b"co-located Fleet Store authority";
+        let payload_hash = wasm_hash(payload);
+        let request = TemplateChunkSetPrepareInput {
+            template_id: TemplateId::owned("canary:co-located-fleet".to_string()),
+            version: TemplateVersion::from(format!(
+                "{}-fleet-isolation",
+                env!("CARGO_PKG_VERSION")
+            )),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes: payload.len() as u64,
+            chunk_hashes: vec![payload_hash],
+        };
+        let rejected: Result<TemplateChunkSetInfoResponse, Error> = pic
+            .update_candid_as(
+                owner.response.wasm_store,
+                foreign.root_id,
+                CANIC_WASM_STORE_PREPARE,
+                (request.clone(),),
+            )
+            .expect("foreign root Store update transport");
+        assert_eq!(
+            rejected
+                .expect_err("another Fleet's co-located root must not write this Store")
+                .code,
+            canic::dto::error::ErrorCode::Unauthorized
+        );
+        let accepted: Result<TemplateChunkSetInfoResponse, Error> = pic
+            .update_candid_as(
+                owner.response.wasm_store,
+                owner.root_id,
+                CANIC_WASM_STORE_PREPARE,
+                (request,),
+            )
+            .expect("owning root Store update transport");
+        accepted.expect("owning root retains Store update authority");
+    }
+
+    #[cfg(test)]
+    fn assert_isolated_coordinator_registry(
+        pic: &PocketIc,
+        coordinator: Principal,
+        owned: &BootstrappedRootFixture,
+        foreign: &BootstrappedRootFixture,
+    ) {
+        let registry: Result<FleetRegistry, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query isolated Coordinator Registry transport");
+        let registry = registry.expect("query isolated Coordinator Registry");
+        assert_eq!(
+            registry.authority.binding.fleet,
+            owned.init_args.authority.binding.authority.binding.fleet
+        );
+        assert_eq!(registry.fleet_subnet_roots.len(), 1);
+        assert_eq!(
+            registry.fleet_subnet_roots[0].fleet_subnet_root,
+            owned.root_id
+        );
+        assert!(
+            registry
+                .fleet_subnet_roots
+                .iter()
+                .all(|entry| entry.fleet_subnet_root != foreign.root_id)
+        );
+    }
+
+    #[test]
     fn prepared_root_freezes_one_exact_provisioned_group_result_without_publishing_directories() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_prepared_grouped_provisioning();
@@ -764,7 +931,8 @@ mod tests {
 
         let reserved = advance_grouped_provisioning(&fixture, advance_request(&accepted));
         assert_grouped_provisioning_progress(&reserved, 1, 0, 0, 0);
-        let claimed = advance_grouped_provisioning(&fixture, advance_request(&reserved));
+        let claim_request = advance_request(&reserved);
+        let claimed = advance_grouped_provisioning(&fixture, claim_request);
         assert_grouped_provisioning_progress(&claimed, 1, 1, 0, 0);
 
         let (canister_id, claim) = one_grouped_workload(&fixture);
@@ -782,6 +950,7 @@ mod tests {
                     .clone(),
             }
         );
+        assert_grouped_claim_replay(&fixture, claim_request, &claimed, canister_id, &claim);
 
         let install_request = advance_request(&claimed);
         let installed = advance_grouped_provisioning(&fixture, install_request);
@@ -3778,6 +3947,13 @@ mod tests {
                 .iter()
                 .all(|canister| { pic.get_subnet(*canister) == Some(expected_subnet) })
         );
+        for canister in &fixture.init_args.canister_pool_imports {
+            let live = pic
+                .canister_status(*canister, Some(fixture.root_id))
+                .expect("observe root-owned prepaid pool asset");
+            assert_eq!(live.settings.controllers, vec![fixture.root_id]);
+            assert_eq!(live.module_hash, None);
+        }
     }
 
     #[cfg(test)]
@@ -4055,6 +4231,21 @@ mod tests {
             panic!("grouped provisioning must own one exact workload")
         };
         workload.clone()
+    }
+
+    #[cfg(test)]
+    fn assert_grouped_claim_replay(
+        fixture: &PreparedGroupedProvisioningFixture,
+        request: RootComponentProvisioningAdvanceRequest,
+        expected: &RootComponentProvisioningStatusResponse,
+        expected_canister_id: Principal,
+        expected_claim: &CanisterPoolClaim,
+    ) {
+        let replayed = advance_grouped_provisioning(fixture, request);
+        assert_eq!(&replayed, expected);
+        let (canister_id, claim) = one_grouped_workload(fixture);
+        assert_eq!(canister_id, expected_canister_id);
+        assert_eq!(&claim, expected_claim);
     }
 
     #[cfg(test)]
@@ -6200,6 +6391,7 @@ mod tests {
         coordinator_subnet: Option<Principal>,
         root_subnet: Option<Principal>,
         maximum_root_instances: Option<u32>,
+        fleet_id: Option<FleetId>,
     }
 
     #[cfg(test)]
@@ -6222,6 +6414,36 @@ mod tests {
                 coordinator_subnet: Some(coordinator_subnet),
                 root_subnet: Some(placement_subnet),
                 maximum_root_instances: Some(1),
+                fleet_id: None,
+            },
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(pic, fixture.root_id);
+        fixture
+    }
+
+    #[cfg(test)]
+    fn install_bootstrapped_root_for_fleet_on_subnet(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement_subnet: Principal,
+        fleet_id_byte: u8,
+    ) -> BootstrappedRootFixture {
+        let coordinator_subnet = pic
+            .get_subnet(coordinator)
+            .expect("PocketIC Coordinator placement Subnet identity");
+        let fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                coordinator_subnet: Some(coordinator_subnet),
+                root_subnet: Some(placement_subnet),
+                maximum_root_instances: Some(1),
+                fleet_id: Some(FleetId::from_generated_bytes([fleet_id_byte; 32])),
             },
             create_prepaid_pool_assets,
         );
@@ -6248,6 +6470,7 @@ mod tests {
                 coordinator_subnet: None,
                 root_subnet: None,
                 maximum_root_instances: None,
+                fleet_id: None,
             },
             pool_setup,
         )
@@ -6303,6 +6526,7 @@ mod tests {
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        bind_fixture_fleet_id(&mut init_args, placement.fleet_id);
         if let Some(maximum_root_instances) = placement.maximum_root_instances {
             for admission in &mut init_args.authority.binding.component_admissions {
                 admission.maximum_root_instances = maximum_root_instances;
@@ -6350,6 +6574,31 @@ mod tests {
             request,
             response,
         }
+    }
+
+    const fn bind_fixture_fleet_id(
+        init_args: &mut FleetSubnetRootInitArgs,
+        fleet_id: Option<FleetId>,
+    ) {
+        let Some(fleet_id) = fleet_id else {
+            return;
+        };
+        init_args
+            .authority
+            .binding
+            .authority
+            .binding
+            .fleet
+            .fleet
+            .fleet_id = fleet_id;
+        init_args
+            .authority
+            .wasm_store_authority
+            .authority
+            .binding
+            .fleet
+            .fleet
+            .fleet_id = fleet_id;
     }
 
     fn bootstrap_root_store_release_set(

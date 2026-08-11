@@ -174,7 +174,7 @@ Date: 2026-08-11
   one placement and the exact 2,000-instance reduction in the other;
   substituted limit authority rejects.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.48` is released and `0.101.49` is open.
+- Implementation started: yes; `0.101.49` is released and `0.101.50` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -201,19 +201,20 @@ repairs do not create additional release boundaries.
 
 | Batch | Bounded outcome and owner | Included direct evidence and fallout | Focused validation | Status |
 | --- | --- | --- | --- | --- |
-| Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in open `0.101.49` |
-| Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Pending |
+| Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in released `0.101.49` |
+| Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in open `0.101.50` |
 | Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Pending |
 | Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and size/capacity report | Pending |
 | Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Pending |
 
-`Q1` is complete in the open `0.101.49` batch. In addition to the packed and
+`Q1` is complete in the released `0.101.49` batch. In addition to the packed and
 spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
 the second Project Hub, restarts the Coordinator after every durable advance,
 replays the same command without duplicate placement or membership and keeps
 the Hub, its new Instance and that Instance's Ledger on the selected root's
-Subnet. `Q2` begins only after this outcome is released; individual fallout
-inside a batch does not create another patch boundary.
+Subnet. `Q2` is complete in the open `0.101.50` batch with direct co-located-
+Fleet, Store-controller, pool-replay and first-excess evidence. Individual
+fallout inside a batch does not create another patch boundary.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -526,17 +527,31 @@ Fleet policy writer.
   cross the canonical Directory barrier, the selected runtime activates, the
   placement ledger settles and exact terminal status replays after restart.
   The next placement on that full root rejects before durable mutation.
-- [ ] Prove two Fleets remain isolated when their roots share one physical
-  Subnet.
+- [x] Prove two Fleets remain isolated when their roots share one physical
+  Subnet. A focused PocketIC journey installs two Coordinators, roots, sibling
+  Stores and disjoint root-owned prepaid inventories on one application
+  Subnet. Each Store ends root-controller-only; foreign Store mutation and
+  foreign-Fleet Registry synchronization reject while both independent
+  Registry joins succeed.
 - [x] Prove cross-root peer provisioning requires the exact current raw-caller
   Registry member, matching Directory projection and independent
   requester-Spec-to-target-Spec grant, while stale, forwarded, child and
   caller-supplied identities reject.
-- [ ] Prove independent host Store installation/adoption and ordinary
+- [x] Prove independent host Store installation/adoption and ordinary
   prepaid-Canister claim/retry remain the sole infrastructure and Component
-  effect paths used by grouped provisioning.
-- [ ] Prove the first excess value for every frozen initial scale bound rejects
-  before mutation or network effects.
+  effect paths used by grouped provisioning. Host journals retain separate
+  root and Store creation/install/verification tracks plus the exact adoption
+  receipt; live adoption observes the final root-only controller set. Grouped
+  provisioning delegates to the ordinary root-local claim/install journals,
+  and exact claim replay returns the same sole workload asset.
+- [x] Prove the first excess value for every currently frozen initial scale
+  bound rejects before mutation or network effects. Exact tests cover Fleet
+  Component maxima, group graph/declaration/inclusion/flattening bounds,
+  deployment/member/reduction and service-target bounds, plan root/
+  confirmation/placement/entry counts, placement envelopes and protected
+  initial root Component/group-placement capacity. Q4 still owns measurement
+  and freezing of the supported Registry/Directory/Toko operating envelope;
+  those values are not invented by Q2.
 - [x] Prove configured Replica discovery never claims data readiness,
   promotion or failover and configured PoolMember discovery never claims
   health, load-balancer eligibility or consistency. Fleet Registry and Fleet

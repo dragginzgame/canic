@@ -945,6 +945,18 @@ fn plan_count_bounds_reject_the_first_excess_before_identity_validation() {
             && maximum == MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES
     );
 
+    let mut excessive_confirmation_roots = plan.clone();
+    excessive_confirmation_roots.directory_confirmation_roots =
+        vec![principal(1); MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS + 1];
+    crate::assert_err_variant!(
+        validate(&config, &registry, &excessive_confirmation_roots),
+        Err(ComponentProvisioningPlanOpsError::ConfirmationRootBoundExceeded {
+            actual,
+            maximum,
+        }) if actual == maximum + 1
+            && maximum == MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CONFIRMATION_ROOTS
+    );
+
     let mut excessive_placements = plan.clone();
     excessive_placements.batches.truncate(1);
     excessive_placements.batches[0].placements = vec![

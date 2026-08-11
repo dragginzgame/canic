@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.50` qualifies complete Fleet isolation on one shared physical Subnet,
+  exact sibling-Store and prepaid-pool authority, and fail-closed first-excess
+  scale boundaries before platform effects.
+
 - `0.101.49` qualifies scale-out recovery through a three-member ActivePool
   that packs and spreads stable placements plus a real two-Subnet Project Hub
   cell whose Instance and Ledger stay on its selected root; every Coordinator

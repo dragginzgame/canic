@@ -197,6 +197,12 @@ pub(super) fn adopt_sibling_wasm_store(
         )
         .expect("adopt sibling Wasm Store transport");
     let adopted = adopted.expect("adopt sibling Wasm Store application");
+    assert_eq!(adopted.authority, request.authority);
+    assert_eq!(adopted.final_controllers, vec![root]);
+    let live = pic
+        .canister_status(request.authority.wasm_store, Some(root))
+        .expect("observe adopted sibling Wasm Store controllers");
+    assert_eq!(live.settings.controllers, vec![root]);
     let status: Result<Option<FleetSubnetWasmStoreAdoptionResponse>, Error> = pic
         .query_candid(
             root,

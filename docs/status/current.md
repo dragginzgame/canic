@@ -14,24 +14,28 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.48`.
-- The latest published release is `v0.101.48` at
-  `61199ea43bccba95bba93502542d1b85fc099348`.
-- Open `0.101.49` completes the consolidated scale-out recovery and ActivePool
-  qualification batch. Its durable three-member ActivePool packs and spreads
-  same-Spec members, commits one atomic Registry revision, crosses the exact
-  Directory/activation barriers and rejects a further over-dense placement
-  without mutation. Service membership remains explicitly topology-only.
-- A real two-application-Subnet PocketIC journey also scales Project Hubs from
-  one root to two while restarting the Coordinator after every durable step.
-  Exact command replay creates no duplicate placement or membership; the new
-  Hub creates an Instance and that Instance creates its Ledger, all on the
-  selected root's physical Subnet. A separate synchronization cursor closes
-  response-loss ambiguity before first Directory publication.
+- The workspace package version is `0.101.49`.
+- The latest published release is `v0.101.49` at
+  `74c9678484b6b3bc49a19c952c0a0700e4b5ad45`.
+- Open `0.101.50` completes the consolidated Fleet-isolation and physical-
+  effect-boundary batch. Two independent Fleets now exercise separate
+  Coordinators, roots, sibling Stores, root-only controller sets, prepaid
+  inventories and Registries while sharing one physical PocketIC application
+  Subnet; foreign Store writes and Registry synchronization both fail closed.
+- Grouped provisioning now explicitly replays the ordinary operation-bound
+  prepaid-pool claim before installation and observes the same sole workload
+  asset. Frozen structural, configuration, deployment, service, plan,
+  Directory-confirmation and initial root-capacity ceilings have exact first-
+  excess tests that reject before plan persistence or platform effects.
 - Delivery cadence now targets roughly 6-10 substantive release batches per
   minor. Because 0.101 already predates and exceeds that range, its remaining
   work is prospectively grouped into five batches in the design status rather
   than continuing one-proof patch releases.
+- Released `0.101.49` qualifies scale-out recovery through a three-member
+  ActivePool that packs and spreads stable placements plus a real two-Subnet
+  Project Hub cell. The new Hub, Instance and Ledger stay on the selected
+  root; every Coordinator boundary replays exactly after restart and the
+  nearest density violation rejects without mutation.
 - Released `0.101.48` proves that two placements of one deployment packed onto
   one root retain distinct protected Component Group Directories and reject
   reordered placement evidence. It also removes repository Git hooks and
