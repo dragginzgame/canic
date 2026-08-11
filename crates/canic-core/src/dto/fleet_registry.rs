@@ -86,6 +86,9 @@ pub struct FleetServiceComponentBinding {
 }
 
 /// Complete configured member set for one logical Fleet service.
+///
+/// This is topology intent only. It deliberately carries no health, readiness,
+/// replication progress, promotion, consistency or load-balancer eligibility.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetServiceBinding {
@@ -471,6 +474,9 @@ pub struct FleetDirectoryServiceComponent {
 }
 
 /// One complete configured service projected from the canonical Fleet Registry.
+///
+/// This is topology discovery only. Applications own health, readiness,
+/// replication progress, promotion, consistency and load-balancer policy.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetDirectoryService {

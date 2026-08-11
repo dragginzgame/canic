@@ -67,8 +67,8 @@ use canic_core::{
             FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
             FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
             FleetComponentProvisioningStatusResponse, FleetComponentPublicationRootProgress,
-            FleetSubnetRootProvisioningBatch, RootComponentActivationRequest,
-            RootComponentDirectorySynchronizationRequest,
+            FleetComponentSynchronizationRootProgress, FleetSubnetRootProvisioningBatch,
+            RootComponentActivationRequest, RootComponentDirectorySynchronizationRequest,
             RootComponentDirectorySynchronizationResponse,
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningPhase, RootComponentProvisioningStatusResponse,
@@ -574,13 +574,13 @@ impl FleetCoordinatorOps {
     }
 
     pub(crate) fn advance_component_provisioning_root_acceptance(
-        request: FleetComponentProvisioningAdvanceRequest,
+        request: &FleetComponentProvisioningAdvanceRequest,
         started_at_ns: u64,
     ) -> Result<FleetComponentProvisioningRootAcceptanceDisposition, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_operation_record(&current, &request)?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
         let progress = component_provisioning_root_acceptance_progress(record)?;
-        match classify_root_acceptance_advance(&request, &progress)? {
+        match classify_root_acceptance_advance(request, &progress)? {
             RootAcceptanceAdvance::Current => {
                 return component_provisioning_status_response(record)
                     .map(FleetComponentProvisioningRootAcceptanceDisposition::Current);
@@ -633,15 +633,15 @@ impl FleetCoordinatorOps {
     }
 
     pub(crate) fn record_component_provisioning_root_acceptance(
-        request: FleetComponentProvisioningAdvanceRequest,
+        request: &FleetComponentProvisioningAdvanceRequest,
         response: RootComponentProvisioningStatusResponse,
         recorded_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
-        let record = require_component_provisioning_operation_record(&current, &request)?;
+        let record = require_component_provisioning_operation_record(&current, request)?;
         let mut progress = component_provisioning_root_acceptance_progress(record)?;
         if progress.accepted_root_count > request.expected_accepted_root_count {
-            return replay_recorded_root_acceptance(record, &request, &response, &progress);
+            return replay_recorded_root_acceptance(record, request, &response, &progress);
         }
         if progress.accepted_root_count != request.expected_accepted_root_count {
             return Err(InternalError::conflict(
@@ -873,7 +873,7 @@ impl FleetCoordinatorOps {
     #[cfg(test)]
     pub(crate) fn advance_component_provisioning_root_acceptance_for_test(
         config: &ConfigModel,
-        request: FleetComponentProvisioningAdvanceRequest,
+        request: &FleetComponentProvisioningAdvanceRequest,
         started_at_ns: u64,
     ) -> Result<FleetComponentProvisioningRootAcceptanceDisposition, InternalError> {
         require_test_component_deployment_configuration(config)?;
@@ -883,7 +883,7 @@ impl FleetCoordinatorOps {
     #[cfg(test)]
     pub(crate) fn record_component_provisioning_root_acceptance_for_test(
         config: &ConfigModel,
-        request: FleetComponentProvisioningAdvanceRequest,
+        request: &FleetComponentProvisioningAdvanceRequest,
         response: RootComponentProvisioningStatusResponse,
         recorded_at_ns: u64,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
@@ -3105,6 +3105,17 @@ fn component_provisioning_status_response(
         }
         _ => None,
     };
+    let current_synchronization = match (
+        &record.plan.operation,
+        directory
+            .as_ref()
+            .and_then(|progress| progress.current.as_ref()),
+    ) {
+        (FleetComponentProvisioningOperation::ScaleOut { .. }, Some(current)) => {
+            confirmation_synchronization_progress(current)
+        }
+        _ => None,
+    };
     Ok(FleetComponentProvisioningStatusResponse {
         operation_id: record.operation_id,
         plan_hash: record.plan_hash,
@@ -3128,6 +3139,7 @@ fn component_provisioning_status_response(
         directory_confirmed_root_count: directory
             .as_ref()
             .map_or(0, |progress| progress.confirmed_root_count),
+        current_synchronization,
         current_publication: directory
             .as_ref()
             .and_then(|progress| progress.current.as_ref())
@@ -3282,6 +3294,7 @@ fn component_scale_out_receipt_response(
         current_root: None,
         provisioning_in_flight_root: None,
         directory_confirmed_root_count: receipt.directory_confirmation_root_count,
+        current_synchronization: None,
         current_publication: None,
         publication_in_flight_root: None,
         runtime_activated_root_count: receipt.root_batch_count,
@@ -4563,6 +4576,7 @@ fn classify_directory_confirmation_advance(
     if progress.complete {
         let current_is_exact = request.expected_directory_confirmed_root_count
             == progress.confirmed_root_count
+            && request.expected_current_synchronization.is_none()
             && request.expected_current_publication.is_none();
         let replays_terminal_call = terminal_directory_confirmation_replay(request, progress)?;
         return if current_is_exact || replays_terminal_call {
@@ -4591,22 +4605,28 @@ fn classify_directory_confirmation_advance(
             "Directory confirmation root cursor differs from durable progress",
         ));
     }
+    let actual_synchronization = progress
+        .current
+        .as_ref()
+        .and_then(confirmation_synchronization_progress);
+    if request.expected_current_synchronization != actual_synchronization {
+        if synchronization_progress_replays(
+            request.expected_current_synchronization,
+            actual_synchronization,
+        ) {
+            return Ok(DirectoryConfirmationAdvance::Current);
+        }
+        return Err(InternalError::conflict(
+            "Directory synchronization Component cursor differs from durable progress",
+        ));
+    }
     let actual_current = progress
         .current
         .as_ref()
         .and_then(confirmation_publication_response)
         .map(root_publication_progress);
     if request.expected_current_publication != actual_current {
-        let replays_last = match (&request.expected_current_publication, &actual_current) {
-            (Some(expected), Some(actual)) => {
-                expected.fleet_subnet_root == actual.fleet_subnet_root
-                    && expected.component_count == actual.component_count
-                    && expected.published_component_count.checked_add(1)
-                        == Some(actual.published_component_count)
-            }
-            _ => false,
-        };
-        if replays_last {
+        if publication_progress_replays(request.expected_current_publication, actual_current) {
             return Ok(DirectoryConfirmationAdvance::Current);
         }
         return Err(InternalError::conflict(
@@ -4637,7 +4657,78 @@ fn terminal_directory_confirmation_replay(
         .ok_or_else(|| receipt_invariant("terminal Directory confirmation lacks a root receipt"))?;
     let terminal_progress =
         confirmation_publication_response(terminal).map(root_publication_progress);
-    Ok(request.expected_current_publication == terminal_progress)
+    let terminal_synchronization = confirmation_synchronization_progress(terminal);
+    let synchronization_replays = request.expected_current_synchronization
+        == terminal_synchronization
+        || synchronization_progress_replays(
+            request.expected_current_synchronization,
+            terminal_synchronization,
+        );
+    let publication_replays = request.expected_current_publication == terminal_progress
+        || publication_progress_replays(request.expected_current_publication, terminal_progress);
+    Ok(synchronization_replays && publication_replays)
+}
+
+const fn root_synchronization_progress(
+    response: &RootComponentDirectorySynchronizationResponse,
+) -> FleetComponentSynchronizationRootProgress {
+    FleetComponentSynchronizationRootProgress {
+        fleet_subnet_root: response.fleet_subnet_root,
+        affected_component_count: response.affected_component_count,
+        synchronized_component_count: response.synchronized_component_count,
+        complete: response.complete,
+    }
+}
+
+fn confirmation_synchronization_progress(
+    confirmation: &FleetComponentDirectoryConfirmationRecord,
+) -> Option<FleetComponentSynchronizationRootProgress> {
+    match confirmation {
+        FleetComponentDirectoryConfirmationRecord::FreshPublication { .. } => None,
+        FleetComponentDirectoryConfirmationRecord::ScaleOut {
+            synchronization, ..
+        } => Some(root_synchronization_progress(synchronization)),
+    }
+}
+
+fn synchronization_progress_replays(
+    expected: Option<FleetComponentSynchronizationRootProgress>,
+    actual: Option<FleetComponentSynchronizationRootProgress>,
+) -> bool {
+    let Some(actual) = actual else {
+        return false;
+    };
+    let Some(expected) = expected else {
+        return actual.synchronized_component_count <= 1;
+    };
+    if expected.fleet_subnet_root != actual.fleet_subnet_root
+        || expected.affected_component_count != actual.affected_component_count
+    {
+        return false;
+    }
+    let component_advances = !expected.complete
+        && expected.synchronized_component_count.checked_add(1)
+            == Some(actual.synchronized_component_count);
+    let terminal_advances = !expected.complete
+        && actual.complete
+        && expected.synchronized_component_count == actual.synchronized_component_count;
+    component_advances || terminal_advances
+}
+
+fn publication_progress_replays(
+    expected: Option<FleetComponentPublicationRootProgress>,
+    actual: Option<FleetComponentPublicationRootProgress>,
+) -> bool {
+    let Some(actual) = actual else {
+        return false;
+    };
+    let Some(expected) = expected else {
+        return actual.published_component_count == 1;
+    };
+    expected.fleet_subnet_root == actual.fleet_subnet_root
+        && expected.component_count == actual.component_count
+        && expected.published_component_count.checked_add(1)
+            == Some(actual.published_component_count)
 }
 
 const fn root_publication_progress(

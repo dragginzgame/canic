@@ -12,6 +12,7 @@ versioning, releases, and deployment-adjacent automation.
 - Build: `make build`
 - Repository invariants: `make check-invariants`
 - Complete local validation: `make validate`
+- Release-cadence advisory: `make release-cadence`
 
 Primitive targets perform only the operation they name. They do not configure
 Git hooks, format before checking, or invoke unrelated invariant, feature,
@@ -31,13 +32,19 @@ release-surface integrations, never the PocketIC suites.
 A code slice is a small, focused implementation unit chosen for reviewability
 and safety. It is not a release patch by default.
 
+Release grouping, continuation and handoff readiness are governed by
+[delivery cadence governance](delivery-cadence.md). The normal planning target
+is roughly 6-10 substantive release batches for a complete minor line, not one
+release per implementation slice.
+
 Default development cadence:
 
-- Prefer roughly 20 minutes of coherent development work per batch when the
-  task is open-ended.
+- Choose batch boundaries by complete outcomes rather than elapsed time.
 - Keep individual code slices focused by concern, module, or invariant.
-- Combine multiple compatible slices into one coherent batch or open patch
-  draft when that makes review and publishing less noisy.
+- Combine compatible implementation, direct evidence, propagation and cleanup
+  slices into the current planned release batch and open patch draft.
+- Keep routine compile, lint, fixture and documentation fallout in that batch;
+  do not turn it into another patch release.
 - Maintain the changelog by default when a meaningful code or behavior batch
   is complete. Reuse an existing untagged patch draft; otherwise prepare the
   next patch draft according to the [changelog policy](changelog.md).
@@ -104,6 +111,10 @@ Release bumps are human-owned. The normal human release path is `make patch`,
 `make minor`, or `make major`, followed by review of generated changes. Once
 reviewed, humans finish the release with `make release-stage`,
 `make release-commit`, and `make release-push`.
+Before patch validation and version mutation, `make patch` prints the
+read-only `make release-cadence` advisory. The advisory reports when the
+current minor is outside its normal planning range but never blocks or expands
+the maintainer's release authority.
 The Make version targets run the same explicit `make validate` workflow before
 changing package versions; any failed target leaves the version unchanged. The
 underlying bump script rejects direct invocation without the private validation

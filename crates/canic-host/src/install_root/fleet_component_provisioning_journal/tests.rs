@@ -245,6 +245,7 @@ fn status(
         current_root: None,
         provisioning_in_flight_root: None,
         directory_confirmed_root_count: 0,
+        current_synchronization: None,
         current_publication: None,
         publication_in_flight_root: None,
         runtime_activated_root_count: 0,

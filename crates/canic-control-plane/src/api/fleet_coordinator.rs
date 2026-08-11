@@ -113,7 +113,7 @@ impl FleetCoordinatorApi {
     pub async fn advance_component_provisioning(
         request: FleetComponentProvisioningAdvanceRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, Error> {
-        FleetCoordinatorWorkflow::advance_component_provisioning(request)
+        FleetCoordinatorWorkflow::advance_component_provisioning(&request)
             .await
             .map_err(Into::into)
     }

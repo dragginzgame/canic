@@ -1,6 +1,6 @@
 .PHONY: help version tags patch minor major \
         release-patch release-minor release-major \
-        release-stage release-commit release-push package publish \
+        release-stage release-commit release-push release-cadence package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
@@ -50,6 +50,7 @@ help:
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
 	@echo "  release-push     Atomically push the verified release commit and tag"
+	@echo "  release-cadence  Report the current minor's advisory release-batch count"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
@@ -131,6 +132,7 @@ tags:
 	@git tag --sort=-version:refname | head -10
 
 patch:
+	@$(MAKE) --no-print-directory release-cadence
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh patch
@@ -182,6 +184,9 @@ release-commit:
 release-push:
 	@bash scripts/ci/check-release-push-ready.sh
 	@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh
+
+release-cadence:
+	@bash scripts/dev/report-release-cadence.sh
 
 package: ensure-clean
 	$(CARGO_ENV) cargo package

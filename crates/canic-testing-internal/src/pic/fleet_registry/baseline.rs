@@ -544,6 +544,7 @@ mod tests {
     #[cfg(test)]
     struct ActiveCrossRootPeerFixture {
         pic: PocketIc,
+        coordinator: Principal,
         requester_root: BootstrappedRootFixture,
         target_root: BootstrappedRootFixture,
         requester: ComponentBinding,
@@ -996,6 +997,274 @@ mod tests {
             fleet_registry_version(&fixture.pic, fixture.coordinator),
             registry_before
         );
+    }
+
+    #[test]
+    fn project_cell_scale_out_resumes_after_coordinator_restart_without_duplicates() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_active_cross_root_peer();
+        let registry: Result<FleetRegistry, Error> = fixture
+            .pic
+            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query pre-scale-out Fleet Registry transport");
+        let registry = registry.expect("query pre-scale-out Fleet Registry");
+        let plan = project_cell_scale_out_plan(&fixture, &registry);
+        let prepare_request = FleetComponentProvisioningPrepareRequest {
+            operation_id: [0xd8; 32],
+            plan,
+        };
+        let prepared: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .update_candid(
+                fixture.coordinator,
+                CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (prepare_request.clone(),),
+            )
+            .expect("prepare project-cell scale-out transport");
+        let prepared = prepared.expect("prepare project-cell scale-out");
+        assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
+
+        let activated = drive_scale_out_with_coordinator_restarts(&fixture, prepared);
+        assert_eq!(
+            activated.phase,
+            FleetComponentProvisioningPhase::RuntimesActivated
+        );
+        assert_eq!(activated.accepted_root_count, 1);
+        assert_eq!(activated.provisioned_root_count, 1);
+        assert_eq!(activated.directory_confirmed_root_count, 2);
+        assert_eq!(activated.runtime_activated_root_count, 1);
+        let published = activated
+            .published_fleet_registry
+            .as_ref()
+            .expect("scale-out publishes one Fleet Registry revision");
+        assert_eq!(
+            published.revision,
+            fixture.service_registry.revision + 1,
+            "the complete PoolMember addition must publish atomically"
+        );
+
+        let target = scale_out_root_status(&fixture, &activated);
+        let result = target.result.expect("scaled root retains its exact result");
+        let [placement] = result.placements.as_slice() else {
+            panic!("project-cell scale-out must materialize one placement")
+        };
+        assert_eq!(placement.group_placement.ordinal, 1);
+        let [member] = placement.members.as_slice() else {
+            panic!("project-cell scale-out must materialize one Project Hub")
+        };
+        let target_hub = member.binding.clone();
+        let target_subnet = *fixture
+            .target_root
+            .init_args
+            .authority
+            .binding
+            .placement_subnet
+            .as_principal();
+        assert_eq!(
+            fixture.pic.get_subnet(target_hub.canister_id),
+            Some(target_subnet)
+        );
+        assert_project_service_members(&fixture, &target_hub, 2);
+        assert_project_service_members(&fixture, &fixture.requester, 2);
+
+        let instance =
+            resolve_project_instance(&fixture.pic, target_hub.canister_id, "scaled-project-alpha");
+        let ledger =
+            create_project_descendant(&fixture.pic, instance, "create_project_ledger", [0xd9; 32])
+                .expect("scaled Project Instance creates its Ledger");
+        assert_eq!(fixture.pic.get_subnet(instance), Some(target_subnet));
+        assert_eq!(fixture.pic.get_subnet(ledger), Some(target_subnet));
+
+        let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .update_candid(
+                fixture.coordinator,
+                CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (prepare_request,),
+            )
+            .expect("replay terminal project-cell scale-out prepare transport");
+        assert_eq!(
+            replayed.expect("replay terminal project-cell scale-out prepare"),
+            activated,
+            "terminal retry must not create another placement or Component"
+        );
+    }
+
+    #[cfg(test)]
+    fn project_cell_scale_out_plan(
+        fixture: &ActiveCrossRootPeerFixture,
+        registry: &FleetRegistry,
+    ) -> FleetComponentProvisioningPlan {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load project-cell scale-out configuration");
+        let deployments = config
+            .model()
+            .compile_component_group_deployment_topology()
+            .expect("compile project-cell scale-out topology");
+        let deployment = deployments
+            .get(
+                &"grouped_projects"
+                    .parse()
+                    .expect("grouped projects deployment ID"),
+            )
+            .expect("grouped projects deployment");
+        let entries = deployment
+            .members
+            .iter()
+            .map(|member| ComponentGroupPlanEntry {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                spec_hash: member.component_spec_hash,
+                purpose: member.purpose.clone(),
+                labels: member.labels.clone(),
+                limits: member.limits.clone(),
+            })
+            .collect();
+        let mut directory_confirmation_roots =
+            vec![fixture.requester_root.root_id, fixture.target_root.root_id];
+        directory_confirmation_roots.sort();
+        FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry: fixture.service_registry.clone(),
+            configuration_digest: config
+                .model()
+                .compile_component_deployment_configuration_digest()
+                .expect("compile project-cell scale-out configuration digest"),
+            operation: FleetComponentProvisioningOperation::ScaleOut {
+                deployment: deployment.deployment.clone(),
+                previous_placements: 1,
+                requested_placements: 2,
+            },
+            directory_confirmation_roots,
+            batches: vec![FleetSubnetRootProvisioningBatch {
+                root: fixture.target_root.init_args.authority.binding.clone(),
+                active_release_set: fixture.target_root.init_args.authority.initial_release_set,
+                placements: vec![ComponentGroupPlacementPlan {
+                    group_placement: ComponentGroupPlacementId {
+                        deployment: deployment.deployment.clone(),
+                        ordinal: 1,
+                    },
+                    component_group: deployment.component_group.clone(),
+                    entries,
+                }],
+            }],
+        }
+    }
+
+    #[cfg(test)]
+    fn drive_scale_out_with_coordinator_restarts(
+        fixture: &ActiveCrossRootPeerFixture,
+        mut status: FleetComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningStatusResponse {
+        while status.phase != FleetComponentProvisioningPhase::RuntimesActivated {
+            let request = coordinator_advance_request(&status);
+            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+                .pic
+                .update_candid(
+                    fixture.coordinator,
+                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+                    (request,),
+                )
+                .expect("advance project-cell scale-out transport");
+            let advanced = advanced.unwrap_or_else(|error| {
+                panic!(
+                    "advance project-cell scale-out from phase {:?}, root {:?}, synchronization {:?}, publication {:?}, activation {:?}: {error:?}",
+                    status.phase,
+                    status.current_root,
+                    status.current_synchronization,
+                    status.current_publication,
+                    status.current_activation,
+                )
+            });
+            fixture
+                .pic
+                .stop_canister(fixture.coordinator, None)
+                .expect("stop Coordinator after durable scale-out step");
+            fixture
+                .pic
+                .start_canister(fixture.coordinator, None)
+                .expect("restart Coordinator after durable scale-out step");
+            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
+                .pic
+                .update_candid(
+                    fixture.coordinator,
+                    CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
+                    (request,),
+                )
+                .expect("replay interrupted project-cell scale-out transport");
+            assert_eq!(
+                replayed.expect("replay interrupted project-cell scale-out"),
+                advanced
+            );
+            status = advanced;
+        }
+        status
+    }
+
+    #[cfg(test)]
+    fn scale_out_root_status(
+        fixture: &ActiveCrossRootPeerFixture,
+        status: &FleetComponentProvisioningStatusResponse,
+    ) -> RootComponentProvisioningStatusResponse {
+        let response: Result<RootComponentProvisioningStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                fixture.target_root.root_id,
+                fixture.coordinator,
+                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
+                (RootComponentProvisioningStatusRequest {
+                    operation_id: status.operation_id,
+                    plan_hash: status.plan_hash,
+                },),
+            )
+            .expect("query scaled root provisioning status transport");
+        response.expect("query scaled root provisioning status")
+    }
+
+    #[cfg(test)]
+    fn assert_project_service_members(
+        fixture: &ActiveCrossRootPeerFixture,
+        component: &ComponentBinding,
+        expected: usize,
+    ) {
+        let response: Result<ComponentRuntimeStatusResponse, Error> = fixture
+            .pic
+            .query_candid_as(
+                component.canister_id,
+                component.fleet_subnet_root,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )
+            .expect("query project service member runtime transport");
+        let runtime = response.expect("query project service member runtime");
+        let authority = runtime.authority.expect("active Project Hub authority");
+        let service = authority
+            .fleet
+            .services
+            .iter()
+            .find(|service| service.service.as_str() == "projects")
+            .expect("projects service Directory entry");
+        assert_eq!(service.members.len(), expected);
+    }
+
+    #[cfg(test)]
+    const fn coordinator_advance_request(
+        status: &FleetComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningAdvanceRequest {
+        FleetComponentProvisioningAdvanceRequest {
+            operation_id: status.operation_id,
+            plan_hash: status.plan_hash,
+            expected_phase: status.phase,
+            expected_accepted_root_count: status.accepted_root_count,
+            expected_provisioned_root_count: status.provisioned_root_count,
+            expected_current_root: status.current_root,
+            expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+            expected_current_synchronization: status.current_synchronization,
+            expected_current_publication: status.current_publication,
+            expected_runtime_activated_root_count: status.runtime_activated_root_count,
+            expected_current_activation: status.current_activation,
+        }
     }
 
     #[cfg(test)]
@@ -1461,6 +1730,7 @@ mod tests {
                 expected_provisioned_root_count: status.provisioned_root_count,
                 expected_current_root: status.current_root,
                 expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+                expected_current_synchronization: status.current_synchronization,
                 expected_current_publication: status.current_publication,
                 expected_runtime_activated_root_count: status.runtime_activated_root_count,
                 expected_current_activation: status.current_activation,
@@ -3433,6 +3703,8 @@ mod tests {
     fn setup_active_cross_root_peer() -> ActiveCrossRootPeerFixture {
         let root_wasm = build_test_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
+        let requester_store_fixture = build_root_store_fixture();
+        let target_store_fixture = build_root_store_fixture();
         let pic = build_two_application_subnet_pic();
         let mut application_subnets = pic.topology().get_app_subnets();
         application_subnets.sort();
@@ -3445,14 +3717,14 @@ mod tests {
             &pic,
             root_wasm.clone(),
             coordinator,
-            build_root_store_fixture(),
+            requester_store_fixture,
             *requester_subnet,
         );
         let target_root = install_bootstrapped_root_on_subnet(
             &pic,
             root_wasm,
             coordinator,
-            build_root_store_fixture(),
+            target_store_fixture,
             *target_subnet,
         );
         assert_root_local_physical_inventory(&pic, &requester_root);
@@ -3477,6 +3749,7 @@ mod tests {
         );
         ActiveCrossRootPeerFixture {
             pic,
+            coordinator,
             requester_root,
             target_root,
             requester,

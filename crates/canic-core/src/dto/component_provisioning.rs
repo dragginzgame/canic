@@ -47,6 +47,7 @@ pub struct FleetComponentProvisioningAdvanceRequest {
     pub expected_provisioned_root_count: u32,
     pub expected_current_root: Option<FleetComponentProvisioningRootProgress>,
     pub expected_directory_confirmed_root_count: u32,
+    pub expected_current_synchronization: Option<FleetComponentSynchronizationRootProgress>,
     pub expected_current_publication: Option<FleetComponentPublicationRootProgress>,
     pub expected_runtime_activated_root_count: u32,
     pub expected_current_activation: Option<FleetComponentActivationRootProgress>,
@@ -71,6 +72,16 @@ pub struct FleetComponentPublicationRootProgress {
     pub fleet_subnet_root: Principal,
     pub component_count: u32,
     pub published_component_count: u32,
+}
+
+/// Exact affected-service synchronization cursor copied from passive Coordinator status.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetComponentSynchronizationRootProgress {
+    pub fleet_subnet_root: Principal,
+    pub affected_component_count: u32,
+    pub synchronized_component_count: u32,
+    pub complete: bool,
 }
 
 /// Exact root-local runtime-activation cursor copied from passive Coordinator status.
@@ -124,6 +135,7 @@ pub struct FleetComponentProvisioningStatusResponse {
     pub current_root: Option<FleetComponentProvisioningRootProgress>,
     pub provisioning_in_flight_root: Option<Principal>,
     pub directory_confirmed_root_count: u32,
+    pub current_synchronization: Option<FleetComponentSynchronizationRootProgress>,
     pub current_publication: Option<FleetComponentPublicationRootProgress>,
     pub publication_in_flight_root: Option<Principal>,
     pub runtime_activated_root_count: u32,

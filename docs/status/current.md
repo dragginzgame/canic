@@ -14,11 +14,26 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.47`.
-- The latest published release is `v0.101.47` at
-  `c108df9ec666d56cdbb866de3f1d8d554ecbe1ef`.
-- Open `0.101.48` proves that two placements of one deployment packed onto one
-  root retain distinct protected Component Group Directories and reject
+- The workspace package version is `0.101.48`.
+- The latest published release is `v0.101.48` at
+  `61199ea43bccba95bba93502542d1b85fc099348`.
+- Open `0.101.49` completes the consolidated scale-out recovery and ActivePool
+  qualification batch. Its durable three-member ActivePool packs and spreads
+  same-Spec members, commits one atomic Registry revision, crosses the exact
+  Directory/activation barriers and rejects a further over-dense placement
+  without mutation. Service membership remains explicitly topology-only.
+- A real two-application-Subnet PocketIC journey also scales Project Hubs from
+  one root to two while restarting the Coordinator after every durable step.
+  Exact command replay creates no duplicate placement or membership; the new
+  Hub creates an Instance and that Instance creates its Ledger, all on the
+  selected root's physical Subnet. A separate synchronization cursor closes
+  response-loss ambiguity before first Directory publication.
+- Delivery cadence now targets roughly 6-10 substantive release batches per
+  minor. Because 0.101 already predates and exceeds that range, its remaining
+  work is prospectively grouped into five batches in the design status rather
+  than continuing one-proof patch releases.
+- Released `0.101.48` proves that two placements of one deployment packed onto
+  one root retain distinct protected Component Group Directories and reject
   reordered placement evidence. It also removes repository Git hooks and
   hidden Make target chaining: primitive commands perform their named
   operation, `make validate` owns complete local validation, and release push

@@ -341,7 +341,7 @@ fn validate_next_intent(
         intent.registry.component == target.component,
         intent.registry.revision > intent.previous_registry.revision,
         intent.registry.content_hash != intent.previous_registry.content_hash,
-        intent.directory_synchronized_at_ns > view.planned_at_ns,
+        intent.directory_synchronized_at_ns >= view.planned_at_ns,
         intent.directory_authority_hash != [0; 32],
         intent.started_at_ns == started_at_ns,
         started_at_ns >= view.planned_at_ns,

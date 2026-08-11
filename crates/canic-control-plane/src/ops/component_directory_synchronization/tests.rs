@@ -83,9 +83,9 @@ fn intent() -> RootComponentDirectorySynchronizationIntentView {
             revision: 5,
             content_hash: [15; 32],
         },
-        directory_synchronized_at_ns: 200,
+        directory_synchronized_at_ns: 100,
         directory_authority_hash: [16; 32],
-        started_at_ns: 200,
+        started_at_ns: 100,
     }
 }
 
@@ -116,7 +116,7 @@ fn synchronization_journals_intent_reconciles_and_replays_terminal_receipt() {
 
     let intent = intent();
     let first =
-        RootComponentDirectorySynchronizationOps::advance(&command, Some(intent.clone()), 200)
+        RootComponentDirectorySynchronizationOps::advance(&command, Some(intent.clone()), 100)
             .expect("persist first target intent");
     assert_eq!(
         first,
