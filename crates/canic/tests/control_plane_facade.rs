@@ -20,6 +20,8 @@ impl AsyncAccessPredicate for PublicAsyncPredicate {
     }
 }
 
+fn require_async_predicate<T: AsyncAccessPredicate>() {}
+
 // Confirms the public `canic` facade exposes the full control-plane enum surface.
 #[test]
 fn control_plane_facade_reexports_template_manifest_enums() {
@@ -31,6 +33,5 @@ fn control_plane_facade_reexports_template_manifest_enums() {
 fn control_plane_facade_exposes_root_membership_and_custom_async_access_contracts() {
     let _: fn(candid::Principal) -> Result<ManagedCanisterBinding, Error> =
         RootComponentMembershipApi::active_member;
-    fn require_async_predicate<T: AsyncAccessPredicate>() {}
     require_async_predicate::<PublicAsyncPredicate>();
 }
