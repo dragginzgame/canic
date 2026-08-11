@@ -2,6 +2,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 TEST_SCRATCH_PARENT="$ROOT/.tmp"
 TEST_SCRATCH="${CANIC_TEST_SCRATCH:-}"
 MAX_CARGO_CLEAN_ATTEMPTS=2
@@ -65,8 +66,15 @@ if [[ -n "$TEST_SCRATCH" ]]; then
     if ! validate_test_scratch; then
         status=1
     elif [[ -e "$TEST_SCRATCH" ]]; then
-        echo "==> clearing invocation-owned test scratch: ${TEST_SCRATCH##*/}"
-        if ! rm -rf -- "$TEST_SCRATCH"; then
+        CANIC_TEST_SCRATCH="$TEST_SCRATCH" bash "$POCKET_IC_STOPPER"
+        pocket_ic_cleanup_status=$?
+        if [[ "$pocket_ic_cleanup_status" -ne 0 ]]; then
+            echo "release cleanup retained scratch used by a live PocketIC server" >&2
+            status=1
+        else
+            echo "==> clearing invocation-owned test scratch: ${TEST_SCRATCH##*/}"
+        fi
+        if [[ "$pocket_ic_cleanup_status" -eq 0 ]] && ! rm -rf -- "$TEST_SCRATCH"; then
             echo "release cleanup failed to clear invocation-owned test scratch" >&2
             status=1
         fi

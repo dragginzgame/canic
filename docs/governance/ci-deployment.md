@@ -106,8 +106,12 @@ marker supplied by those targets.
 Once those compilation gates start, their wrapper allocates one private
 repository-owned `.tmp/test-runtime.<suffix>` directory and passes that exact
 ownership through every nested test target. The invocation clears only its own
-scratch on success, ordinary failure or handled interrupt; it never sweeps a
-shared path or another concurrent invocation's scratch. A successful gate then
+scratch on success, ordinary failure or handled interrupt. Before removing it,
+cleanup forcibly stops only a detached PocketIC server whose exact
+`--port-file` is a direct child of that invocation's scratch; this avoids the
+upstream server's late socket-teardown panic without touching another
+invocation's server. Cleanup never sweeps a shared path or another concurrent
+invocation's scratch. A successful gate then
 clears Cargo build artifacts before version mutation. An ordinary gate failure
 retains Cargo artifacts for diagnosis and a faster exact retry. Cargo cleanup
 after a successful gate retries once when its first filesystem pass fails;

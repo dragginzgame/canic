@@ -14,13 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.45`.
-- The latest published release is `v0.101.45` at
-  `8c861548114408b744ea728dc877dae2fe8e78cd`.
-- Open `0.101.46` lets the exact tagged release commit push even when later
+- The workspace package version is `0.101.46`.
+- The latest published release is `v0.101.46` at
+  `b1955f18d23eea84e77a28ef37f119c8880edceb`.
+- Open `0.101.47` stops only the detached PocketIC server bound to an
+  invocation's exact private scratch before deleting that scratch. This closes
+  PocketIC 15.0.0's late canister-HTTP socket teardown panic without stopping
+  another concurrent test invocation's server.
+- Released `0.101.46` lets the exact tagged release commit push even when later
   staged, unstaged or untracked work exists locally. The push identity and tag
   are derived from committed `HEAD`, so those changes remain local and a dirty
-  manifest cannot redirect the release.
+  manifest cannot redirect the release. It also records the provisional 0.110
+  Skynet design reservoir without approving implementation.
 - Released `0.101.45` gives each public test and release-gate invocation one
   private repository-owned scratch directory. Nested targets borrow the exact
   directory, only its creator removes it, and cleanup rejects shared,
@@ -48,11 +53,6 @@ Historical detail is archived at:
   one-per-root members. Developer refresh now installs and verifies
   PCRE2-enabled ripgrep and runs dependency audit through the isolated
   repository gate, avoiding contamination from Cargo's shared advisory cache.
-- Unreleased design work reserves 0.110 as one provisional Skynet Fleet
-  Observatory idea reservoir. It will probably be pushed forward in the
-  release sequence while prerequisite designs mature; it approves no runtime
-  implementation and keeps fictional presentation separate from harmful
-  real-world autonomy.
 - Released `0.101.42` qualifies the cross-root Fleet-service peer path
   across two physical PocketIC application Subnets. One real Project Hub
   Canister calls the remote root, exact retry returns the original reservation
