@@ -1,8 +1,14 @@
 //! Focused proofs for bounded Component Group graph compilation and flattening.
 
 use super::*;
-use crate::config::{Config, ConfigError};
-use std::fmt::Write as _;
+use crate::config::{
+    Config, ConfigError,
+    schema::{
+        ComponentGroupComponentConfig, ComponentGroupIncludeConfig, ComponentGroupSpecConfig,
+        ConfigModel,
+    },
+};
+use std::{collections::BTreeMap, fmt::Write as _};
 
 const CONFIG_PREFIX: &str = r#"
 [app]
@@ -78,6 +84,60 @@ fn repeated_component_group_source(member_count: usize) -> String {
         .expect("write member-count fixture");
     }
     source
+}
+
+fn config_model() -> ConfigModel {
+    Config::parse_toml(CONFIG_PREFIX).expect("valid Component Group test config")
+}
+
+fn component_member() -> ComponentGroupComponentConfig {
+    ComponentGroupComponentConfig {
+        component_spec: "a".parse().expect("Component Spec ID"),
+        service: None,
+        service_purpose: None,
+        labels: BTreeMap::new(),
+    }
+}
+
+fn group_with_component_members(member_count: usize) -> ComponentGroupSpecConfig {
+    let components = (0..member_count)
+        .map(|index| {
+            (
+                format!("m{index:03}")
+                    .parse()
+                    .expect("Component Group member ID"),
+                component_member(),
+            )
+        })
+        .collect();
+    ComponentGroupSpecConfig {
+        components,
+        groups: BTreeMap::new(),
+    }
+}
+
+fn group_with_inclusions(
+    inclusion_count: usize,
+    target: &ComponentGroupSpecId,
+) -> ComponentGroupSpecConfig {
+    let groups = (0..inclusion_count)
+        .map(|index| {
+            (
+                format!("i{index:03}")
+                    .parse()
+                    .expect("Component Group inclusion ID"),
+                ComponentGroupIncludeConfig {
+                    component_group: target.clone(),
+                    service_purpose: None,
+                    labels: BTreeMap::new(),
+                },
+            )
+        })
+        .collect();
+    ComponentGroupSpecConfig {
+        components: BTreeMap::new(),
+        groups,
+    }
 }
 
 #[test]
@@ -516,5 +576,104 @@ fn direct_member_bound_accepts_the_limit_and_rejects_its_first_excess() {
             ..
         }) if actual == MAX_COMPONENT_GROUP_MEMBERS + 1
             && maximum == MAX_COMPONENT_GROUP_MEMBERS
+    ));
+}
+
+#[test]
+fn graph_count_bounds_reject_their_first_excess_before_graph_validation() {
+    let mut excessive_groups = config_model();
+    for index in 0..=MAX_COMPONENT_GROUP_SPECS {
+        excessive_groups.component_groups.insert(
+            group(&format!("g{index:03}")),
+            ComponentGroupSpecConfig::default(),
+        );
+    }
+    assert!(matches!(
+        excessive_groups.compile_component_group_topology(),
+        Err(ComponentGroupTopologyError::GroupBoundExceeded {
+            actual,
+            maximum: MAX_COMPONENT_GROUP_SPECS,
+        }) if actual == MAX_COMPONENT_GROUP_SPECS + 1
+    ));
+
+    let mut excessive_members = config_model();
+    let full_groups = MAX_COMPONENT_GROUP_DECLARED_MEMBERS / MAX_COMPONENT_GROUP_MEMBERS;
+    for index in 0..full_groups {
+        excessive_members.component_groups.insert(
+            group(&format!("g{index:03}")),
+            group_with_component_members(MAX_COMPONENT_GROUP_MEMBERS),
+        );
+    }
+    excessive_members
+        .component_groups
+        .insert(group("z_excess"), group_with_component_members(1));
+    assert!(matches!(
+        excessive_members.compile_component_group_topology(),
+        Err(ComponentGroupTopologyError::DeclaredMemberBoundExceeded {
+            actual,
+            maximum: MAX_COMPONENT_GROUP_DECLARED_MEMBERS,
+        }) if actual == MAX_COMPONENT_GROUP_DECLARED_MEMBERS + 1
+    ));
+}
+
+#[test]
+fn inclusion_and_flattened_member_bounds_reject_their_first_excess() {
+    let target = group("zz_leaf");
+    let mut excessive_inclusions = config_model();
+    let full_groups = MAX_COMPONENT_GROUP_INCLUSIONS / MAX_COMPONENT_GROUP_MEMBERS;
+    for index in 0..full_groups {
+        excessive_inclusions.component_groups.insert(
+            group(&format!("g{index:03}")),
+            group_with_inclusions(MAX_COMPONENT_GROUP_MEMBERS, &target),
+        );
+    }
+    excessive_inclusions
+        .component_groups
+        .insert(group("z_excess"), group_with_inclusions(1, &target));
+    excessive_inclusions
+        .component_groups
+        .insert(target, group_with_component_members(1));
+    assert!(matches!(
+        excessive_inclusions.compile_component_group_topology(),
+        Err(ComponentGroupTopologyError::InclusionBoundExceeded {
+            actual,
+            maximum: MAX_COMPONENT_GROUP_INCLUSIONS,
+        }) if actual == MAX_COMPONENT_GROUP_INCLUSIONS + 1
+    ));
+
+    let mut excessive_flattening = config_model();
+    let mut top = ComponentGroupSpecConfig::default();
+    let full_groups = MAX_COMPONENT_GROUP_FLATTENED_MEMBERS / MAX_COMPONENT_GROUP_MEMBERS;
+    for index in 0..=full_groups {
+        let child = group(&format!("g{index:03}"));
+        top.groups.insert(
+            format!("i{index:03}")
+                .parse()
+                .expect("Component Group inclusion ID"),
+            ComponentGroupIncludeConfig {
+                component_group: child.clone(),
+                service_purpose: None,
+                labels: BTreeMap::new(),
+            },
+        );
+        let member_count = if index == full_groups {
+            1
+        } else {
+            MAX_COMPONENT_GROUP_MEMBERS
+        };
+        excessive_flattening
+            .component_groups
+            .insert(child, group_with_component_members(member_count));
+    }
+    excessive_flattening
+        .component_groups
+        .insert(group("a_top"), top);
+    assert!(matches!(
+        excessive_flattening.compile_component_group_topology(),
+        Err(ComponentGroupTopologyError::FlattenedMemberBoundExceeded {
+            actual,
+            maximum: MAX_COMPONENT_GROUP_FLATTENED_MEMBERS,
+            ..
+        }) if actual == MAX_COMPONENT_GROUP_FLATTENED_MEMBERS + 1
     ));
 }

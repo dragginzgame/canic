@@ -357,6 +357,44 @@ fn initial_group_placements_are_explicit_complete_and_durable() {
 }
 
 #[test]
+fn initial_group_placement_first_excess_rejects_before_plan_persistence() {
+    let root = temp_dir("fleet-install-component-group-capacity");
+    let config = group_config();
+    let release_build_id = prepare_finalized_release(&root, &config);
+    let fleet = fleet_binding(17);
+    let plan_path = fleet_install_plan_path(&root, &fleet, release_build_id);
+
+    let mut component_excess = request(&root, &config, fleet.clone(), release_build_id);
+    for (planned_root, ordinal) in component_excess.fleet_subnet_roots.iter_mut().zip([0, 1]) {
+        planned_root.component_admissions = vec![admission("alpha", 1), admission("beta", 1)];
+        planned_root.component_group_placements = vec![group_assignment(ordinal)];
+    }
+    component_excess.fleet_subnet_roots[0]
+        .limits
+        .maximum_component_instances = 1;
+    assert!(matches!(
+        compile_and_persist_fleet_install_plan(component_excess),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+    assert!(!plan_path.exists());
+
+    let mut placement_excess = request(&root, &config, fleet, release_build_id);
+    for (planned_root, ordinal) in placement_excess.fleet_subnet_roots.iter_mut().zip([0, 1]) {
+        planned_root.component_admissions = vec![admission("alpha", 1), admission("beta", 1)];
+        planned_root.component_group_placements = vec![group_assignment(ordinal)];
+    }
+    placement_excess.fleet_subnet_roots[0]
+        .limits
+        .maximum_group_placements = 0;
+    assert!(matches!(
+        compile_and_persist_fleet_install_plan(placement_excess),
+        Err(FleetInstallPlanError::InvalidComponentGroupPlacementAssignments { .. })
+    ));
+    assert!(!plan_path.exists());
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
 fn plan_requires_finalized_release_build_authority() {
     let root = temp_dir("fleet-install-plan-finalized-build");
     let config = config();

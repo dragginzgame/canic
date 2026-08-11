@@ -399,7 +399,10 @@ fn component_spec_instance_ceilings_are_fleet_bounded() {
     cfg.component_specs
         .get_mut(&default_component_spec_id())
         .expect("default Component Spec")
-        .maximum_instances = 3_000;
+        .maximum_instances = MAX_FLEET_COMPONENT_INSTANCES;
+    cfg.validate()
+        .expect("exact Fleet maximum Component-instance bound must validate");
+
     cfg.roles.insert(
         CanisterRole::from("aux"),
         RoleDeclaration {
@@ -407,12 +410,12 @@ fn component_spec_instance_ceilings_are_fleet_bounded() {
             package: "aux".to_string(),
         },
     );
-    cfg.component_specs.insert(
-        component_spec_id("aux"),
-        component_spec_config("aux", 3_000),
-    );
-    cfg.validate()
-        .expect_err("Fleet maximum Component-instance bound must reject");
+    cfg.component_specs
+        .insert(component_spec_id("aux"), component_spec_config("aux", 1));
+    assert!(matches!(
+        cfg.validate(),
+        Err(ConfigSchemaError::ValidationError(_))
+    ));
 }
 
 #[test]

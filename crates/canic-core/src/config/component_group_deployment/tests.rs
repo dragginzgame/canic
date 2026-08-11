@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::config::{ComponentDeploymentLabelValue, Config, ConfigError};
+use std::fmt::Write as _;
 
 const CONFIG_PREFIX: &str = r#"
 [app]
@@ -87,6 +88,45 @@ placement.maximum_per_root = {maximum_per_root}
 placement.minimum_distinct_roots = {minimum_distinct_roots}
 "#
     )
+}
+
+fn first_excess_deployment_member_source() -> String {
+    let mut source = String::new();
+    let child_group_count =
+        MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS / crate::config::MAX_COMPONENT_GROUP_MEMBERS;
+    for group_index in 0..child_group_count {
+        writeln!(
+            &mut source,
+            "[component_groups.a_top.groups.g{group_index:03}]\ncomponent_group = \"g{group_index:03}\""
+        )
+        .expect("write top-level inclusion");
+        for member_index in 0..crate::config::MAX_COMPONENT_GROUP_MEMBERS {
+            writeln!(
+                &mut source,
+                "[component_groups.g{group_index:03}.components.m{member_index:03}]\ncomponent_spec = \"a\""
+            )
+            .expect("write flattened deployment member");
+        }
+    }
+    source.push_str(
+        r#"
+[component_groups.z_small.components.a]
+component_spec = "a"
+[component_group_deployments.a_big]
+component_group = "a_top"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+[component_group_deployments.z_small]
+component_group = "z_small"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+"#,
+    );
+    source
 }
 
 #[test]
@@ -917,6 +957,108 @@ fn invalid_deployment_placement_envelopes_reject() {
         ConfigError::ComponentGroupDeploymentTopology(
             ComponentGroupDeploymentTopologyError::MinimumDistinctRootsExceedMaximumPlacements { .. }
         )
+    ));
+}
+
+#[test]
+fn deployment_count_and_flattened_member_bounds_reject_their_first_excess() {
+    let (mut excessive_deployments, _) =
+        parse(&deployment_envelope_source(1, 1, 1, 1)).expect("valid deployment template");
+    let template = excessive_deployments
+        .component_group_deployments
+        .values()
+        .next()
+        .expect("deployment template")
+        .clone();
+    excessive_deployments.component_group_deployments.clear();
+    for index in 0..=MAX_COMPONENT_GROUP_DEPLOYMENTS {
+        excessive_deployments.component_group_deployments.insert(
+            format!("d{index:04}")
+                .parse()
+                .expect("Component Group deployment ID"),
+            template.clone(),
+        );
+    }
+    assert!(matches!(
+        excessive_deployments.compile_component_group_deployment_topology(),
+        Err(ComponentGroupDeploymentTopologyError::DeploymentBoundExceeded {
+            actual,
+            maximum: MAX_COMPONENT_GROUP_DEPLOYMENTS,
+        }) if actual == MAX_COMPONENT_GROUP_DEPLOYMENTS + 1
+    ));
+
+    let source = format!(
+        "{CONFIG_PREFIX}\n{}",
+        first_excess_deployment_member_source()
+    );
+    let excessive_members =
+        Config::parse_toml(&source).expect_err("first excessive deployment member must reject");
+    assert!(matches!(
+        excessive_members,
+        ConfigError::ComponentGroupDeploymentTopology(
+            ComponentGroupDeploymentTopologyError::DeploymentMemberBoundExceeded {
+                actual,
+                maximum: MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS,
+            }
+        ) if actual == MAX_COMPONENT_GROUP_DEPLOYMENT_MEMBERS + 1
+    ));
+}
+
+#[test]
+fn member_limit_count_bounds_reject_their_first_excess_before_duplicates() {
+    let source = r#"
+[component_groups.cell.components.a]
+component_spec = "a"
+[component_group_deployments.cell]
+component_group = "cell"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+[[component_group_deployments.cell.member_limits]]
+member = ["a"]
+maximum_descendants = 1
+spawn_grants = [
+  { parent_role = "a", child_role = "child", maximum_instances_per_parent = 1 },
+]
+"#;
+    let (mut excessive_limits, _) = parse(source).expect("valid member-limit template");
+    let deployment = excessive_limits
+        .component_group_deployments
+        .values_mut()
+        .next()
+        .expect("deployment");
+    let limit = deployment.member_limits[0].clone();
+    deployment.member_limits = vec![limit; MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS + 1];
+    assert!(matches!(
+        excessive_limits.compile_component_group_deployment_topology(),
+        Err(ComponentGroupDeploymentTopologyError::MemberLimit(
+            ComponentDeploymentMemberLimitError::MemberLimitBoundExceeded {
+                actual,
+                maximum: MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS,
+                ..
+            }
+        )) if actual == MAX_COMPONENT_DEPLOYMENT_MEMBER_LIMITS + 1
+    ));
+
+    let (mut excessive_grants, _) = parse(source).expect("valid spawn-grant template");
+    let limit = &mut excessive_grants
+        .component_group_deployments
+        .values_mut()
+        .next()
+        .expect("deployment")
+        .member_limits[0];
+    let grant = limit.spawn_grants[0].clone();
+    limit.spawn_grants = vec![grant; MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS + 1];
+    assert!(matches!(
+        excessive_grants.compile_component_group_deployment_topology(),
+        Err(ComponentGroupDeploymentTopologyError::MemberLimit(
+            ComponentDeploymentMemberLimitError::SpawnGrantReductionBoundExceeded {
+                actual,
+                maximum: MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS,
+                ..
+            }
+        )) if actual == MAX_COMPONENT_DEPLOYMENT_SPAWN_GRANT_REDUCTIONS + 1
     ));
 }
 
