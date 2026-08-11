@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-10
+Date: 2026-08-11
 
 ## Status
 
@@ -167,9 +167,14 @@ Date: 2026-08-10
   Project Instance under its Hub and role-qualified Ledger and optional
   Machine children under that Instance. Exact retries preserve the original
   Canisters, Directory rows preserve immediate parents, all descendants remain
-  on the root's Subnet and the Coordinator Registry is unchanged.
+  on the root's Subnet and the Coordinator Registry is unchanged. A focused
+  canonical-plan proof now assigns two deployments of one Project Hub group to
+  distinct root/Subnet bindings while retaining one shared Component Spec and
+  Spec hash. The protected entries preserve the 10,000-instance Spec grant in
+  one placement and the exact 2,000-instance reduction in the other;
+  substituted limit authority rejects.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.42` is released and `0.101.43` is open.
+- Implementation started: yes; `0.101.43` is released and `0.101.44` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -499,7 +504,7 @@ Fleet policy writer.
   health, load-balancer eligibility or consistency.
 - [x] Prove local Project Hub -> Project Instance -> Ledger/Machine
   provisioning, exact immediate-parent bindings and Coordinator-free retry.
-- [ ] Prove two deployments reuse one Project Hub group with distinct
+- [x] Prove two deployments reuse one Project Hub group with distinct
   reduction-only 10,000/2,000 Hub-to-Instance ceilings on different roots.
 - [ ] Decompose the fresh-install Component provisioning journal into
   separately readable typed transition/schema, authority validation and
@@ -536,7 +541,7 @@ Fleet policy writer.
 - [ ] The local Project Hubs provision at least three Project Instance
   children across their project roots; every Project Instance creates one
   Ledger and exactly one creates its optional Machine.
-- [ ] Two deployments reuse one Project Hub group on different roots with
+- [x] Two deployments reuse one Project Hub group on different roots with
   distinct protected effective spawn-grant ceilings and no duplicated Spec.
 - [ ] A same-Spec ActivePool packs multiple stable placements on one root,
   spans at least two roots and publishes one atomic scale-out addition.

@@ -8,9 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Added a provisional 0.110 Skynet design reservoir that centralizes future
+  observability, safe simulation, Fleet evolution and eventual reuse of every
+  Skynet Canister without approving implementation or harmful autonomy.
+
 ## [0.101.x] - 2026-08-05 - Composable Component Deployment
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
+
+- `0.101.44` proves one reusable Project Hub group can retain distinct
+  protected 10,000- and 2,000-child ceilings on different root/Subnet
+  placements without duplicating its Component Spec.
 
 - `0.101.43` requires durable application-owned operation identities for
   dynamic child creation, qualifies the complete local Project hierarchy and
