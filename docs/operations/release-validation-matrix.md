@@ -50,23 +50,21 @@ supported. Unexplained lockfile churn is a blocker.
 Full release validation, not ordinary slice validation, includes:
 
 ```text
-cargo fmt --all -- --check
-make fmt-check
-make clippy
-make test
+make validate
 ```
+
+`make validate` explicitly and sequentially composes formatting checks,
+repository invariants, dependency and secret gates, the control-plane feature
+matrix, Cargo check, Clippy, and the complete workspace test target. The
+primitive targets remain independently runnable and do not invoke unrelated
+validation operations.
 
 ## Required Local RC Gates
 
 Before RC promotion, the maintainer runs or explicitly assigns:
 
 ```text
-make fmt-check
-bash scripts/ci/check-control-plane-feature-matrix.sh
-make dependency-risk-gate
-make gitleaks-scan
-make clippy
-make test
+make validate
 ```
 
 The maintainer records environment-specific gaps rather than treating an
@@ -173,9 +171,8 @@ environment and must never target mainnet as an incidental test default.
 Final release accounting includes:
 
 ```text
+make validate
 cargo build --release --workspace --locked
-make dependency-risk-gate
-make gitleaks-scan
 make package
 ```
 

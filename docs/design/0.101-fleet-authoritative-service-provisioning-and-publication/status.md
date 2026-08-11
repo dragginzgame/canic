@@ -174,7 +174,7 @@ Date: 2026-08-11
   one placement and the exact 2,000-instance reduction in the other;
   substituted limit authority rejects.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.46` is released and `0.101.47` is open.
+- Implementation started: yes; `0.101.47` is released and `0.101.48` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -486,8 +486,11 @@ Fleet policy writer.
 - [ ] Prove Component Topology, group flattening, admission,
   active-release-set, Wasm Store, effective member limits, placement,
   service-mode, purpose, label and authority boundaries.
-- [ ] Prove several placements of one deployment may share a root without
-  identity or Component Group Directory ambiguity.
+- [x] Prove several placements of one deployment may share a root without
+  identity or Component Group Directory ambiguity. One durable two-placement
+  root journey now retains distinct member-operation, Component, Canister,
+  placement-provenance and placement-receipt identities through Registry
+  commitment and Directory derivation; reordered placement evidence rejects.
 - [ ] Prove two Fleets remain isolated when their roots share one physical
   Subnet.
 - [x] Prove cross-root peer provisioning requires the exact current raw-caller

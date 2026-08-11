@@ -1611,14 +1611,30 @@ fn reservation_cursor_crosses_canonical_placements_without_reusing_identity() {
         provisioned.phase,
         RootComponentProvisioningPhase::Provisioned
     );
-    assert_eq!(
-        provisioned
-            .result
-            .expect("multi-placement result")
-            .placements
-            .len(),
-        2
+    let result = provisioned.result.as_ref().expect("multi-placement result");
+    let first_directory = derive_component_group_directory_from_view(&provisioned, result, 0)
+        .expect("first packed placement Directory");
+    let second_directory = derive_component_group_directory_from_view(&provisioned, result, 1)
+        .expect("second packed placement Directory");
+    assert_eq!(result.placements.len(), 2);
+    assert_eq!(first_directory.provenance.group_placement.ordinal, 0);
+    assert_eq!(second_directory.provenance.group_placement.ordinal, 1);
+    assert_ne!(
+        first_directory.provenance.placement_receipt_content_hash,
+        second_directory.provenance.placement_receipt_content_hash
     );
+    assert_ne!(
+        first_directory.members[0].binding.component,
+        second_directory.members[0].binding.component
+    );
+    assert_ne!(
+        first_directory.members[0].binding.canister_id,
+        second_directory.members[0].binding.canister_id
+    );
+
+    let mut reordered = result.clone();
+    reordered.placements.swap(0, 1);
+    assert!(derive_component_group_directory_from_view(&provisioned, &reordered, 0).is_err());
 }
 
 #[test]

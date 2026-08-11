@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-LIFECYCLE-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: lifecycle restoration and bootstrap boundary
 - Kind/profile: architecture invariant / `invariant` plus named manual review
@@ -154,7 +154,7 @@ Record all of the following in the result file:
 * audited paths
 * baseline report path
 * code snapshot identifier
-* method tag: `CANIC-LIFECYCLE-001/v1`
+* method tag: `CANIC-LIFECYCLE-001/v2`
 * comparability status: `comparable` | `partially comparable` | `not comparable`
 
 ### Comparability Rules

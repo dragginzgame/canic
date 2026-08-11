@@ -20,7 +20,6 @@ require_texts "$MATRIX" "$GUARD_LABEL" \
     "## Focused Replay, Auth, And Cost Gates" \
     "## Package And Install Gates" \
     "## Reporting Format" \
-    "cargo fmt --all -- --check" \
     "cargo test --locked -p canic --test changelog_governance -- --nocapture" \
     "git diff --check" \
     "bash scripts/ci/check-release-validation-matrix.sh" \
@@ -34,6 +33,7 @@ require_texts "$MATRIX" "$GUARD_LABEL" \
     "make gitleaks-scan" \
     "make clippy" \
     "make test" \
+    "make validate" \
     "make package"
 
 echo "release validation matrix guard passed"

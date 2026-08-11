@@ -14,10 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.46`.
-- The latest published release is `v0.101.46` at
-  `b1955f18d23eea84e77a28ef37f119c8880edceb`.
-- Open `0.101.47` stops only the detached PocketIC server bound to an
+- The workspace package version is `0.101.47`.
+- The latest published release is `v0.101.47` at
+  `c108df9ec666d56cdbb866de3f1d8d554ecbe1ef`.
+- Open `0.101.48` proves that two placements of one deployment packed onto one
+  root retain distinct protected Component Group Directories and reject
+  reordered placement evidence. It also removes repository Git hooks and
+  hidden Make target chaining: primitive commands perform their named
+  operation, `make validate` owns complete local validation, and release push
+  does not format, compile, test, validate, or clean.
+- Released `0.101.47` stops only the detached PocketIC server bound to an
   invocation's exact private scratch before deleting that scratch. This closes
   PocketIC 15.0.0's late canister-HTTP socket teardown panic without stopping
   another concurrent test invocation's server.

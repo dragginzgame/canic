@@ -40,7 +40,7 @@ retained-method owner below.
 | Candidate definition | Disposition | Active method | Kind/profile | Canonical owner and trigger |
 | --- | --- | --- | --- | --- |
 | `access-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns access-boundary placement; run after access or endpoint-auth changes. |
-| `bootstrap-lifecycle-symmetry.md` | `revise` | `CANIC-LIFECYCLE-001/v1` | invariant/manual | Lifecycle boundary; run after lifecycle, restore, bootstrap, timer, or start-macro changes. |
+| `bootstrap-lifecycle-symmetry.md` | `revise` | `CANIC-LIFECYCLE-001/v2` | invariant/manual | Lifecycle boundary; run after lifecycle, restore, bootstrap, timer, or start-macro changes. |
 | `capability-surface.md` | `revise` | `CANIC-CAPABILITY-SURFACE-001/v2` | trend/invariant | Public capability and generated endpoint surface; run after endpoint bundle/Candid changes. |
 | `change-friction.md` | `retain` | `CANIC-CHANGE-FRICTION-001/v2` | trend/manual | Reproducible empirical edit blast radius with an exhaustive map, frozen sample, and one score; run for hardening/refactor planning. |
 | `complexity-accretion.md` | `retain` | `CANIC-COMPLEXITY-001/v2` | trend/manual | Structural complexity with deterministic scope/counters/scoring; run after cross-cutting model/control-flow growth. |
