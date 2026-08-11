@@ -1,8 +1,8 @@
 //! Module: api::component_auth
 //!
-//! Responsibility: authenticate active Components at root-owned auth endpoints.
+//! Responsibility: expose active Component membership to root auth and application endpoints.
 //! Does not own: Component Registry state, proof state, or attestation policy.
-//! Boundary: resolves protected caller authority, then delegates to core auth workflow.
+//! Boundary: resolves protected local Registry authority before workflow delegation.
 
 use async_trait::async_trait;
 use canic_core::{
@@ -49,6 +49,25 @@ impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
 }
 
 ///
+/// RootComponentMembershipApi
+///
+/// Read-only application facade over one Fleet Subnet Root's active Component Registry.
+///
+
+pub struct RootComponentMembershipApi;
+
+impl RootComponentMembershipApi {
+    /// Resolve an exact active local Component Registry member by Canister principal.
+    ///
+    /// Root application endpoints may use this to derive local topology authority for a
+    /// transport caller. The caller-facing endpoint must independently authorize access to
+    /// the lookup, and cross-root callers require the Fleet-service peer authority path.
+    pub fn active_member(subject: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
+        crate::workflow::component_auth::active_component_member(subject)
+    }
+}
+
+///
 /// ComponentAuthApi
 ///
 /// Root-owned auth services admitted only for active Component callers.
@@ -75,5 +94,5 @@ impl ComponentAuthApi {
 }
 
 fn active_component_caller() -> Result<ManagedCanisterBinding, Error> {
-    crate::workflow::component_auth::active_component_member(IcOps::msg_caller())
+    RootComponentMembershipApi::active_member(IcOps::msg_caller())
 }

@@ -15,8 +15,8 @@ use crate::{
         parse_matches, render_usage, required_string, string_option_or_else, typed_option,
         value_arg,
     },
-    cli::defaults::local_environment,
-    cli::globals::internal_environment_arg,
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -83,6 +83,7 @@ pub enum InstallCommandError {
 struct InstallOptions {
     app: String,
     fleet: String,
+    icp: String,
     environment: String,
     profile: Option<CanisterBuildProfile>,
     fleet_input: PathBuf,
@@ -98,6 +99,7 @@ impl InstallOptions {
         Ok(Self {
             app: required_string(&matches, "app"),
             fleet: required_string(&matches, "fleet"),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
             fleet_input: PathBuf::from(required_string(&matches, FLEET_INPUT_ARG)),
@@ -119,6 +121,7 @@ impl InstallOptions {
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
+            icp_executable: self.icp,
             environment: self.environment,
             fleet_name: self.fleet,
             icp_root,
@@ -166,6 +169,7 @@ fn install_command() -> ClapCommand {
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Canister wasm build profile; defaults to release"),
         )
+        .arg(internal_icp_arg())
         .arg(internal_environment_arg())
         .after_help(INSTALL_HELP_AFTER)
 }

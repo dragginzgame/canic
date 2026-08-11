@@ -17,11 +17,12 @@ use super::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
         expected_registry_join_entry, plan_fleet_subnet_root_install,
     },
+    icp_context::InstallIcpContext,
     operations::{LiveRegistryEvidence, call_with_arg, query_live_registry, query_no_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::{IcpCli, LocalReplicaTarget},
+    icp::IcpCli,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use std::path::Path;
@@ -64,9 +65,7 @@ pub(super) struct VerifiedFleetRegistryActivation {
 }
 
 pub(super) struct ActivateFleetRegistryRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub coordinator: Principal,
@@ -80,7 +79,7 @@ pub(super) fn activate_and_verify_fleet_registry(
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        request.icp_root,
+        request.icp.root(),
         request.fleet_install_plan.plan.release_build_id,
     )?;
     let authority = FleetRegistryAuthority {
@@ -153,15 +152,15 @@ pub(super) fn activate_and_verify_fleet_registry(
         component_topology: component_topology.clone(),
         joining_registry,
     })?;
-    let icp = super::install_icp(request.icp_root, request.environment, request.local_replica);
+    let icp = request.icp.cli();
     let current = drive_activation(
-        &icp,
+        icp,
         request.coordinator,
         &component_topology,
         expected_roots,
         planned,
     )?;
-    let live = query_live_registry(&icp, request.coordinator)?;
+    let live = query_live_registry(icp, request.coordinator)?;
     require_exact_or_service_successor_registry(
         &component_topology,
         &current.journal.active_registry,

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.45` hardens fresh Fleet installation and managed-runtime authority,
+  and isolates concurrent test scratch so one release cannot disrupt another
+  PocketIC session.
+
 - `0.101.44` proves one reusable Project Hub group can retain distinct
   protected 10,000- and 2,000-child ceilings on different root/Subnet
   placements without duplicating its Component Spec.

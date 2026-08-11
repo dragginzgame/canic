@@ -46,6 +46,12 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
+    /// Root-local Component Registry membership lookup.
+    #[cfg(feature = "control-plane")]
+    pub mod component {
+        pub use canic_control_plane::api::component_auth::RootComponentMembershipApi;
+    }
+
     /// Immutable deployment policy and the current protected Component runtime view.
     pub mod deployment {
         pub use crate::__internal::core::api::{

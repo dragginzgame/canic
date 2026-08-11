@@ -100,6 +100,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
@@ -134,6 +135,7 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
@@ -167,6 +169,7 @@ fn install_truth_check_rejects_supplied_plan_fleet_name_mismatch() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),

@@ -9,10 +9,10 @@ use super::fleet_subnet_root_install_journal::{
     begin_component_registry_preparation, plan_fleet_subnet_root_install,
     record_component_registry_preparation_verified, record_component_registry_prepared,
 };
+use super::icp_context::InstallIcpContext;
 use super::operations::{call_with_arg, query_with_arg};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    icp::LocalReplicaTarget,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::Principal;
@@ -35,9 +35,7 @@ enum RootComponentRegistryPreparationError {
 }
 
 pub(super) struct PrepareFleetSubnetRootComponentRegistriesRequest<'a> {
-    pub icp_root: &'a Path,
-    pub environment: &'a str,
-    pub local_replica: Option<&'a LocalReplicaTarget>,
+    pub icp: &'a InstallIcpContext,
     pub config_path: &'a Path,
     pub fleet_install_plan: &'a PersistedFleetInstallPlan,
     pub coordinator: Principal,
@@ -50,7 +48,7 @@ pub(super) fn prepare_and_verify_fleet_subnet_root_component_registries(
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
     let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
-        request.icp_root,
+        request.icp.root(),
         request.fleet_install_plan.plan.release_build_id,
     )?;
 
@@ -72,21 +70,13 @@ pub(super) fn prepare_and_verify_fleet_subnet_root_component_registries(
             store_bootstrap: mirror_request.store_bootstrap,
             expected_fleet_registry: mirror_request.expected_registry,
         };
-        drive_component_registry_preparation(
-            request.icp_root,
-            request.environment,
-            request.local_replica,
-            current,
-            preparation_request,
-        )?;
+        drive_component_registry_preparation(request.icp, current, preparation_request)?;
     }
     Ok(())
 }
 
 fn drive_component_registry_preparation(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     mut current: ResolvedFleetSubnetRootInstall,
     request: RootComponentRegistryPreparationRequest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -94,7 +84,7 @@ fn drive_component_registry_preparation(
         .journal
         .fleet_subnet_root
         .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = icp_context.cli();
     for _ in 0..MAX_COMPONENT_REGISTRY_PREPARATION_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {
@@ -102,7 +92,7 @@ fn drive_component_registry_preparation(
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => {
                 let response = call_with_arg(
-                    &icp,
+                    icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
                     &request,
@@ -111,7 +101,7 @@ fn drive_component_registry_preparation(
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPrepared => {
                 let response = query_with_arg(
-                    &icp,
+                    icp,
                     root,
                     protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
                     &request,

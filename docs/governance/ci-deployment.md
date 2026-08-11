@@ -103,19 +103,23 @@ The Make version targets complete their required test and feature gates before
 changing package versions; any failed gate leaves the version unchanged. The
 underlying bump script rejects direct invocation without the private gate
 marker supplied by those targets.
-Once those compilation gates start, their wrapper confines temporary files to
-the repository-owned `.tmp/test-runtime` tree. A successful gate clears that
-tree and Cargo build artifacts before version mutation. An ordinary gate
-failure or handled interrupt clears only the repository-owned test scratch and
+Once those compilation gates start, their wrapper allocates one private
+repository-owned `.tmp/test-runtime.<suffix>` directory and passes that exact
+ownership through every nested test target. The invocation clears only its own
+scratch on success, ordinary failure or handled interrupt; it never sweeps a
+shared path or another concurrent invocation's scratch. A successful gate then
+clears Cargo build artifacts before version mutation. An ordinary gate failure
 retains Cargo artifacts for diagnosis and a faster exact retry. Cargo cleanup
 after a successful gate retries once when its first filesystem pass fails;
 failure of both bounded attempts prevents version mutation. Canic scripts must
 clean their own temporary files; release cleanup must not sweep unrelated
-global `/tmp` content.
+repository scratch or global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
-clean release commit/tag pair and repeats the same Cargo and repository-owned
-test-scratch cleanup. It explicitly sends both the current branch ref and the
-exact workspace-version tag ref in one atomic push, so the tag is still sent
+clean release commit/tag pair and repeats Cargo cleanup. Test scratch has
+already been removed by the invocation that owned it, so release push has no
+authority to sweep another process's scratch. It explicitly sends both the
+current branch ref and the exact workspace-version tag ref in one atomic push,
+so the tag is still sent
 when the branch commit is already present remotely. No fallible local cleanup
 step runs after a successful push, and atomic push prevents a branch-only or
 tag-only remote update. A transport interruption can still make the remote

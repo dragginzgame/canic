@@ -1,9 +1,8 @@
 use super::build_network::resolve_install_build_context;
 use super::build_snapshot::{InstallBuildTarget, resolve_install_snapshot};
 use super::commands::{
-    add_icp_environment_target, icp_canister_command, icp_canister_create_command,
-    icp_canister_install_binary_args_command, icp_e8s_text, read_created_canister,
-    write_candid_args,
+    icp_canister_command, icp_canister_create_command, icp_canister_install_binary_args_command,
+    icp_e8s_text, read_created_canister, write_candid_args,
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_workspace_canic_config_choices,
@@ -18,6 +17,7 @@ use super::deployment_truth_gate::{
     install_deployment_truth_gate_receipt,
 };
 use super::execution_preflight::current_install_execution_preflight_receipt;
+use super::icp_context::InstallIcpContext;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, InstallPhaseLabel,
 };
@@ -136,11 +136,11 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
     )
     .expect("write icp yaml");
 
+    let icp = InstallIcpContext::new("/opt/icp", &root, "staging");
     let context = resolve_install_build_context(
         &root,
-        &root,
         &root.join("canic.toml"),
-        "staging",
+        &icp,
         "root",
         Some(CanisterBuildProfile::Fast),
     )
@@ -283,6 +283,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
     InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.to_path_buf()),
@@ -388,6 +389,7 @@ package = "worker"
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),

@@ -23,6 +23,7 @@ DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
+TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
@@ -43,7 +44,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -128,10 +129,27 @@ rg -F 'cargo clean' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not clear Cargo build artifacts"
 rg -F 'MAX_CARGO_CLEAN_ATTEMPTS=2' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not bound its Cargo cleanup retry"
-rg -F '.tmp/test-runtime' "$RELEASE_CLEANUP" >/dev/null ||
-    fail "release cleanup does not clear repository-owned test scratch"
-rg -F 'export TMPDIR="$ROOT/.tmp/test-runtime"' "$RELEASE_GATES" >/dev/null ||
-    fail "release gates do not confine temporary files to repository-owned scratch"
+rg -F 'CANIC_TEST_SCRATCH' "$RELEASE_CLEANUP" >/dev/null ||
+    fail "release cleanup does not require exact invocation-owned test scratch"
+rg -F 'test-runtime\.[[:alnum:]]{6}' "$RELEASE_CLEANUP" >/dev/null ||
+    fail "release cleanup does not validate the private scratch basename"
+rg -F 'bash scripts/ci/run-with-test-scratch.sh make "${gate_targets[@]}"' "$RELEASE_GATES" >/dev/null ||
+    fail "release gates do not run inside invocation-owned test scratch"
+rg -F 'unset CANIC_TEST_SCRATCH' "$RELEASE_GATES" >/dev/null ||
+    fail "release gates may accidentally borrow caller-owned test scratch"
+rg -F 'mktemp -d "$TEST_SCRATCH_PARENT/test-runtime.XXXXXX"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
+    fail "test scratch runner does not allocate one private repository directory"
+rg -F 'CANIC_TEST_SCRATCH="$TEST_SCRATCH"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
+    fail "test scratch runner does not pass exact cleanup ownership"
+test_scratch_runner_count="$(rg -c 'bash scripts/ci/run-with-test-scratch\.sh' "$MAKEFILE")"
+[ "$test_scratch_runner_count" -eq 3 ] ||
+    fail "the three public temporary-file test targets do not share private scratch ownership"
+if rg -F 'TEST_TMPDIR' "$MAKEFILE" >/dev/null; then
+    fail "Make retains the superseded shared test-scratch variable"
+fi
+if rg -F 'TEST_SCRATCH="$TEST_SCRATCH_PARENT/test-runtime"' "$RELEASE_CLEANUP" >/dev/null; then
+    fail "release cleanup retains the shared test-scratch deletion path"
+fi
 rg -F 'git push --atomic origin' "$RELEASE_PUSH" >/dev/null ||
     fail "release push does not require one atomic remote update"
 rg -F '"HEAD:refs/heads/$branch"' "$RELEASE_PUSH" >/dev/null ||
@@ -322,12 +340,15 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 release_cleanup_fixture="$tmp_dir/release-cleanup"
 release_cleanup_bin="$release_cleanup_fixture/bin"
+foreign_test_scratch="$release_cleanup_fixture/.tmp/test-runtime.FOREIGN"
 mkdir -p \
     "$release_cleanup_fixture/scripts/ci" \
-    "$release_cleanup_fixture/.tmp/test-runtime" \
+    "$foreign_test_scratch" \
     "$release_cleanup_fixture/target" \
     "$release_cleanup_bin"
-cp "$RELEASE_CLEANUP" "$RELEASE_GATES" "$release_cleanup_fixture/scripts/ci/"
+touch "$foreign_test_scratch/live-owner"
+cp "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" \
+    "$release_cleanup_fixture/scripts/ci/"
 # shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
 printf '%s\n' \
     '#!/usr/bin/env bash' \
@@ -347,20 +368,29 @@ printf '%s\n' \
     'rm -rf -- "$PWD/target"' >"$release_cleanup_bin/cargo"
 chmod +x "$release_cleanup_bin/make" "$release_cleanup_bin/cargo"
 
-PATH="$release_cleanup_bin:$PATH" \
+assert_private_test_scratch_cleaned() {
+    local scratch name
+
+    scratch="$(cat "$release_cleanup_fixture/gate-tmpdir")"
+    name="${scratch##*/}"
+    [ "${scratch%/*}" = "$release_cleanup_fixture/.tmp" ] &&
+        [[ "$name" =~ ^test-runtime\.[[:alnum:]]{6}$ ]] ||
+        fail "release-gate wrapper did not select one private repository scratch directory"
+    [ ! -e "$scratch" ] ||
+        fail "release-gate wrapper retained its invocation-owned test scratch"
+    [ -f "$foreign_test_scratch/live-owner" ] ||
+        fail "release cleanup deleted another invocation's test scratch"
+}
+
+CANIC_TEST_SCRATCH="$foreign_test_scratch" PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" patch
 [ "$(cat "$release_cleanup_fixture/gate-targets")" = "test-bump" ] ||
     fail "patch release-gate wrapper did not select the patch gate"
-[ "$(cat "$release_cleanup_fixture/gate-tmpdir")" = "$release_cleanup_fixture/.tmp/test-runtime" ] ||
-    fail "release-gate wrapper did not confine temporary files to repository scratch"
+assert_private_test_scratch_cleaned
 [ ! -e "$release_cleanup_fixture/target" ] ||
     fail "successful release-gate cleanup retained Cargo artifacts"
-[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
-    fail "successful release-gate cleanup retained test scratch"
 
-mkdir -p \
-    "$release_cleanup_fixture/.tmp/test-runtime" \
-    "$release_cleanup_fixture/target"
+mkdir -p "$release_cleanup_fixture/target"
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 if FAKE_MAKE_STATUS=23 PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" major; then
@@ -376,26 +406,20 @@ fi
     fail "failed release-gate cleanup removed Cargo artifacts needed for retry"
 [ ! -e "$release_cleanup_fixture/cargo-clean-attempts" ] ||
     fail "failed release-gate cleanup invoked Cargo clean"
-[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
-    fail "failed release-gate cleanup retained test scratch"
+assert_private_test_scratch_cleaned
 
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
-mkdir -p \
-    "$release_cleanup_fixture/.tmp/test-runtime" \
-    "$release_cleanup_fixture/target"
+mkdir -p "$release_cleanup_fixture/target"
 FAKE_CARGO_FAILURES=1 PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor
 [ "$(cat "$release_cleanup_fixture/cargo-clean-attempts")" -eq 2 ] ||
     fail "release cleanup did not retry one transient Cargo failure exactly once"
 [ ! -e "$release_cleanup_fixture/target" ] ||
     fail "retried release cleanup retained Cargo artifacts"
-[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
-    fail "retried release cleanup retained test scratch"
+assert_private_test_scratch_cleaned
 
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
-mkdir -p \
-    "$release_cleanup_fixture/.tmp/test-runtime" \
-    "$release_cleanup_fixture/target"
+mkdir -p "$release_cleanup_fixture/target"
 if FAKE_CARGO_FAILURES=2 FAKE_CARGO_STATUS=19 PATH="$release_cleanup_bin:$PATH" \
     bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor; then
     fail "release-gate wrapper accepted a failed cleanup"
@@ -408,8 +432,35 @@ fi
     fail "release cleanup exceeded its bounded Cargo retry"
 [ -e "$release_cleanup_fixture/target" ] ||
     fail "failed fake Cargo cleanup unexpectedly removed its target fixture"
-[ ! -e "$release_cleanup_fixture/.tmp/test-runtime" ] ||
-    fail "Cargo cleanup failure prevented test-scratch cleanup"
+assert_private_test_scratch_cleaned
+
+borrowed_test_scratch="$release_cleanup_fixture/.tmp/test-runtime.BORROW"
+mkdir -p "$borrowed_test_scratch"
+CANIC_TEST_SCRATCH="$borrowed_test_scratch" \
+    bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
+    bash -c '[ "$TMPDIR" = "$CANIC_TEST_SCRATCH" ]'
+[ -d "$borrowed_test_scratch" ] ||
+    fail "nested test runner deleted scratch owned by its caller"
+CANIC_TEST_SCRATCH="$borrowed_test_scratch" \
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only
+[ ! -e "$borrowed_test_scratch" ] ||
+    fail "explicit scratch owner could not clear its private directory"
+
+touch "$release_cleanup_fixture/.tmp/path-escape-sentinel"
+if CANIC_TEST_SCRATCH="$release_cleanup_fixture/.tmp/test-runtime.BAD123/.." \
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only; then
+    fail "release cleanup accepted a non-direct scratch target"
+fi
+[ -f "$release_cleanup_fixture/.tmp/path-escape-sentinel" ] ||
+    fail "release cleanup followed an unowned scratch path"
+
+ln -s "$foreign_test_scratch" "$release_cleanup_fixture/.tmp/test-runtime.LINK12"
+if CANIC_TEST_SCRATCH="$release_cleanup_fixture/.tmp/test-runtime.LINK12" \
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only; then
+    fail "release cleanup accepted a symlinked scratch target"
+fi
+[ -f "$foreign_test_scratch/live-owner" ] ||
+    fail "release cleanup followed a symlink into another invocation's scratch"
 
 release_push_fixture="$tmp_dir/release-push"
 release_push_bin="$release_push_fixture/bin"

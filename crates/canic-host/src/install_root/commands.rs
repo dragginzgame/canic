@@ -5,7 +5,6 @@ use crate::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
     },
     fleet_install_plan::PlannedCanisterCreationFunding,
-    icp::{self, LocalReplicaTarget},
 };
 #[cfg(test)]
 use candid::CandidType;
@@ -18,6 +17,8 @@ use std::{
     process::Command,
 };
 use thiserror::Error as ThisError;
+
+use super::icp_context::InstallIcpContext;
 
 #[derive(Debug, ThisError)]
 pub(super) enum CreationResultReadError {
@@ -198,21 +199,17 @@ pub(super) fn open_creation_result_for_effect(_path: &Path, subject: &str) -> io
     ))
 }
 
-pub(super) fn icp_canister_command(icp_root: &Path) -> Command {
-    let mut command = icp::default_command_in(icp_root);
-    command.arg("canister");
-    command
+pub(super) fn icp_canister_command(icp: &InstallIcpContext) -> Command {
+    icp.cli().canister_command()
 }
 
 pub(super) fn icp_canister_create_command(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp: &InstallIcpContext,
     subnet: SubnetId,
     funding: &PlannedCanisterCreationFunding,
     controllers: &[Principal],
 ) -> Command {
-    let mut command = icp_canister_command(icp_root);
+    let mut command = icp_canister_command(icp);
     command.args(["create", "--detached", "--json", "--subnet"]);
     command.arg(subnet.to_string());
     match funding {
@@ -226,19 +223,17 @@ pub(super) fn icp_canister_create_command(
     for controller in controllers {
         command.args(["--controller", &controller.to_text()]);
     }
-    add_icp_environment_target(&mut command, environment, local_replica);
+    icp.add_target_args(&mut command);
     command
 }
 
 pub(super) fn icp_canister_install_binary_args_command(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
+    icp: &InstallIcpContext,
     canister: Principal,
     wasm_path: &Path,
     args_path: &Path,
 ) -> Command {
-    let mut command = icp_canister_command(icp_root);
+    let mut command = icp_canister_command(icp);
     command.args([
         "install",
         &canister.to_text(),
@@ -250,16 +245,8 @@ pub(super) fn icp_canister_install_binary_args_command(
     command.arg("--args-file");
     command.arg(args_path);
     command.args(["--args-format", "bin"]);
-    add_icp_environment_target(&mut command, environment, local_replica);
+    icp.add_target_args(&mut command);
     command
-}
-
-pub(super) fn add_icp_environment_target(
-    command: &mut Command,
-    environment: &str,
-    local_replica: Option<&LocalReplicaTarget>,
-) {
-    icp::add_target_args(command, Some(environment), local_replica);
 }
 
 pub(super) fn icp_e8s_text(e8s: u64) -> String {

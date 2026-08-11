@@ -29,10 +29,11 @@ finish() {
     trap - EXIT INT TERM
     if [[ "$gate_status" -eq 0 && "$command_status" -eq 0 ]]; then
         bash scripts/ci/cleanup-release-artifacts.sh
+        cleanup_status=$?
     else
-        bash scripts/ci/cleanup-release-artifacts.sh --scratch-only
+        echo "==> retaining Cargo build artifacts after unsuccessful release gates"
+        cleanup_status=0
     fi
-    cleanup_status=$?
 
     if [[ "$gate_status" -ne 0 ]]; then
         exit "$gate_status"
@@ -55,9 +56,7 @@ trap finish EXIT
 trap 'interrupt 130' INT
 trap 'interrupt 143' TERM
 
-mkdir -p "$ROOT/.tmp/test-runtime"
-export TMPDIR="$ROOT/.tmp/test-runtime"
-
-make "${gate_targets[@]}"
+unset CANIC_TEST_SCRATCH
+bash scripts/ci/run-with-test-scratch.sh make "${gate_targets[@]}"
 gate_status=$?
 exit "$gate_status"

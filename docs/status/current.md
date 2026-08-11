@@ -14,10 +14,19 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.43`.
-- The latest published release is `v0.101.43` at
-  `c190a54aa26a368fea7bf3a9e6200a7cc89daba9`.
-- Open `0.101.44` proves the protected composition boundary for differently
+- The workspace package version is `0.101.44`.
+- The latest published release is `v0.101.44` at
+  `2b485798f42e42f61c1c06b2b43096df13284162`.
+- Open `0.101.45` gives each public test and release-gate invocation one
+  private repository-owned scratch directory. Nested targets borrow the exact
+  directory, only its creator removes it, and cleanup rejects shared,
+  traversing or symlinked targets, preventing one completed release from
+  removing another session's live PocketIC files. It also preserves the exact
+  selected ICP executable through fresh installation, makes passive Root Store
+  status independent of application Wasm bytes, corrects managed physical
+  Subnet identity and exposes a supported same-root Component membership
+  authorization surface.
+- Released `0.101.44` proves the protected composition boundary for differently
   sized deployments of one reusable Project Hub group. One canonical plan
   assigns the shared Component Spec and Spec hash to distinct root/Subnet
   bindings while retaining a 10,000-instance Hub-to-Instance Spec ceiling in

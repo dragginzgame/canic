@@ -18,9 +18,11 @@ fn install_defaults_to_root_target() {
     assert_eq!(options.fleet, "demo-local");
     assert_eq!(options.app, "demo");
     assert_eq!(options.environment, local_environment());
+    assert_eq!(options.icp, default_icp());
     assert_eq!(options.profile, None);
     assert_eq!(install.root_canister, "root");
     assert_eq!(install.root_build_target, "root");
+    assert_eq!(install.icp_executable, default_icp());
     assert_eq!(install.icp_root, None);
     assert_eq!(install.build_profile, None);
     assert_eq!(
@@ -49,6 +51,25 @@ fn install_accepts_internal_environment() {
     .expect("parse internal environment");
 
     assert_eq!(options.environment, "local");
+}
+
+#[test]
+fn install_accepts_internal_icp_executable() {
+    let options = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
+        OsString::from("/opt/icp"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+    ])
+    .expect("parse internal ICP executable");
+    let install = options
+        .clone()
+        .into_install_root_options_with_icp_root(None);
+
+    assert_eq!(options.icp, "/opt/icp");
+    assert_eq!(install.icp_executable, "/opt/icp");
 }
 
 #[test]

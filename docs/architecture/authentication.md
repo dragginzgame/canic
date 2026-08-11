@@ -580,6 +580,12 @@ Issuance flow:
 - `canic_get_role_attestation` is a query call by the same still-active caller
 - retrieval is caller-bound and returns the embedded root proof
 
+The query retrieval step requires a Root data certificate. It is therefore a
+client/direct-query proof path, not a synchronous application-Canister update
+path: an inter-Canister call reached from a replicated update does not receive
+the Root data certificate needed to assemble the proof. Retrying that call or
+substituting a placement value cannot make the certificate available.
+
 Verifier behavior:
 
 - hash the canonical `RoleAttestation` payload
@@ -600,6 +606,32 @@ Current issuance rule:
   protocol
 - standalone capability proof DTOs are not part of the active protocol
 - delegated tokens are the supported reusable endpoint-auth path
+
+### Online Same-Root Membership Authorization
+
+An application that needs current same-root topology authorization rather than
+a portable signed proof may perform one online lookup against its Fleet Subnet
+Root. The Root application exposes a narrow update endpoint, first admits only
+an active local Component caller, and resolves the subject through
+`RootComponentMembershipApi::active_member`. The receiving Component supplies
+only its observed `AccessContext::transport_caller()` from a custom async
+access predicate; it never accepts a caller-supplied role or binding.
+
+This path is deliberately narrower than role attestation:
+
+- it is read-only against the Root's current protected Component Registry;
+- Root failure, inactive membership, or a disallowed application role fails
+  closed before the receiving endpoint body runs;
+- the decision is local to one Root and adds one inter-Canister round trip;
+- it does not grant sibling call permission by itself; the application still
+  owns the admitted-role policy; and
+- cross-root service calls continue to use the Fleet-service peer authority
+  model rather than treating a local Registry lookup as Fleet-wide proof.
+
+Like any online authorization lookup, the result describes Registry state at
+lookup time. A mutation requiring exact serialization with revocation must be
+owned by the Root workflow rather than relying on a decision that another
+Canister consumes after the call returns.
 
 ## 10. Configuration
 

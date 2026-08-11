@@ -43,6 +43,7 @@ mod fleet_subnet_root_registry_join;
 mod fleet_subnet_root_registry_mirror_activation;
 mod fleet_subnet_root_registry_sync;
 mod fleet_subnet_root_store_bootstrap;
+mod icp_context;
 mod identity;
 mod operations;
 mod options;
@@ -81,6 +82,7 @@ use fleet_subnet_root_registry_sync::{
     SynchronizeFleetSubnetRootsRequest, synchronize_and_verify_fleet_subnet_roots,
 };
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
+use icp_context::InstallIcpContext;
 use identity::resolve_install_identity;
 pub use options::InstallRootOptions;
 use output::print_install_timing_summary;
@@ -92,16 +94,6 @@ use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
-
-fn install_icp(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&crate::icp::LocalReplicaTarget>,
-) -> crate::icp::IcpCli {
-    crate::icp::IcpCli::new("icp", Some(environment.to_string()))
-        .with_cwd(icp_root)
-        .with_local_replica(local_replica.cloned())
-}
 
 #[cfg(test)]
 mod tests;
@@ -228,9 +220,16 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
     let _build_cache_cleanup = DefaultCanisterBuildCacheCleanup::for_install(&workspace_root);
     let config_path = current_install_config_path(&icp_root, &options)?;
-    let (build_context, install_snapshot) =
-        current_install_build_inputs(&workspace_root, &icp_root, &config_path, &options)
-            .map_err(InstallRootError::in_phase(InstallRootPhase::BuildInputs))?;
+    let icp_context =
+        InstallIcpContext::new(&options.icp_executable, &icp_root, &options.environment);
+    let (build_context, install_snapshot) = current_install_build_inputs(
+        &workspace_root,
+        &icp_root,
+        &config_path,
+        &icp_context,
+        &options,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::BuildInputs))?;
     let (app_id, fleet_name) =
         resolve_install_identity(&options, &config_path, &install_snapshot.app_id)
             .map_err(InstallRootError::in_phase(InstallRootPhase::Identity))?;
@@ -254,7 +253,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     print_install_identity(&app_id, &fleet_name);
     let prepared = prepare_install_deployment_truth(
         &options,
-        &icp_root,
+        &icp_context,
         &config_path,
         &fleet_name,
         &execution_context,
@@ -295,10 +294,9 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         prepared.build_phase,
         emitted_manifest.phase,
     )?;
+    let icp_context = icp_context.with_local_replica(build_context.local_replica);
     install_current_fleet_infrastructure(
-        &icp_root,
-        environment,
-        build_context.local_replica.as_ref(),
+        &icp_context,
         &config_path,
         &planned_install,
         &mut timings,
@@ -309,34 +307,23 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
 }
 
 fn install_current_fleet_infrastructure(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     planned: &PlannedCurrentFleetInstall,
     timings: &mut CurrentInstallTimingSummary,
 ) -> Result<(), InstallRootError> {
-    let (coordinator, coordinator_duration) = install_current_fleet_coordinator(
-        icp_root,
-        environment,
-        local_replica,
-        config_path,
-        &planned.plan,
-    )?;
+    let (coordinator, coordinator_duration) =
+        install_current_fleet_coordinator(icp_context, config_path, &planned.plan)?;
     timings.create_canisters = coordinator_duration;
     let roots_duration = install_current_fleet_subnet_roots(
-        icp_root,
-        environment,
-        local_replica,
+        icp_context,
         config_path,
         planned,
         coordinator.coordinator,
     )?;
     timings.create_canisters += roots_duration;
     bootstrap_and_verify_fleet_subnet_root_stores(
-        icp_root,
-        environment,
-        local_replica,
+        icp_context,
         config_path,
         &planned.plan,
         coordinator.coordinator,
@@ -344,9 +331,7 @@ fn install_current_fleet_infrastructure(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     let joining_version = register_and_verify_fleet_subnet_roots_joining(
-        icp_root,
-        environment,
-        local_replica,
+        icp_context,
         config_path,
         &planned.plan,
         coordinator.coordinator,
@@ -354,9 +339,7 @@ fn install_current_fleet_infrastructure(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     synchronize_and_verify_fleet_subnet_roots(SynchronizeFleetSubnetRootsRequest {
-        icp_root,
-        environment,
-        local_replica,
+        icp: icp_context,
         config_path,
         fleet_install_plan: &planned.plan,
         coordinator: coordinator.coordinator,
@@ -365,9 +348,7 @@ fn install_current_fleet_infrastructure(
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     let active = activate_and_verify_fleet_registry(ActivateFleetRegistryRequest {
-        icp_root,
-        environment,
-        local_replica,
+        icp: icp_context,
         config_path,
         fleet_install_plan: &planned.plan,
         coordinator: coordinator.coordinator,
@@ -377,9 +358,7 @@ fn install_current_fleet_infrastructure(
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     activate_and_verify_fleet_subnet_root_registry_mirrors(
         ActivateFleetSubnetRootRegistryMirrorsRequest {
-            icp_root,
-            environment,
-            local_replica,
+            icp: icp_context,
             config_path,
             fleet_install_plan: &planned.plan,
             coordinator: coordinator.coordinator,
@@ -391,17 +370,13 @@ fn install_current_fleet_infrastructure(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     prepare_current_fleet_subnet_root_component_registries(
-        icp_root,
-        environment,
-        local_replica,
+        icp_context,
         config_path,
         planned,
         coordinator.coordinator,
     )?;
     install_fleet_components_and_publish_catalog(InstallFleetComponentsRequest {
-        icp_root,
-        environment,
-        local_replica,
+        icp: icp_context,
         config_path,
         fleet_name: planned.session.fleet_name.clone(),
         fleet_install_plan: &planned.plan,
@@ -413,18 +388,14 @@ fn install_current_fleet_infrastructure(
 }
 
 fn prepare_current_fleet_subnet_root_component_registries(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     planned: &PlannedCurrentFleetInstall,
     coordinator: canic_core::cdk::types::Principal,
 ) -> Result<(), InstallRootError> {
     prepare_and_verify_fleet_subnet_root_component_registries(
         PrepareFleetSubnetRootComponentRegistriesRequest {
-            icp_root,
-            environment,
-            local_replica,
+            icp: icp_context,
             config_path,
             fleet_install_plan: &planned.plan,
             coordinator,
@@ -593,37 +564,25 @@ fn persist_current_pre_root_receipts(
 }
 
 fn install_current_fleet_coordinator(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     plan: &PersistedFleetInstallPlan,
 ) -> Result<(coordinator_install::VerifiedFleetCoordinator, Duration), InstallRootError> {
     let started = Instant::now();
-    let coordinator = install_and_verify_fleet_coordinator(
-        icp_root,
-        environment,
-        local_replica,
-        config_path,
-        plan,
-    )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    let coordinator = install_and_verify_fleet_coordinator(icp_context, config_path, plan)
+        .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     Ok((coordinator, started.elapsed()))
 }
 
 fn install_current_fleet_subnet_roots(
-    icp_root: &Path,
-    environment: &str,
-    local_replica: Option<&crate::icp::LocalReplicaTarget>,
+    icp_context: &InstallIcpContext,
     config_path: &Path,
     planned: &PlannedCurrentFleetInstall,
     coordinator: canic_core::cdk::types::Principal,
 ) -> Result<Duration, InstallRootError> {
     let started = Instant::now();
     install_and_verify_fleet_subnet_roots(
-        icp_root,
-        environment,
-        local_replica,
+        icp_context,
         config_path,
         &planned.plan,
         coordinator,
@@ -651,6 +610,7 @@ fn current_install_build_inputs(
     workspace_root: &std::path::Path,
     icp_root: &std::path::Path,
     config_path: &std::path::Path,
+    icp: &InstallIcpContext,
     options: &InstallRootOptions,
 ) -> Result<
     (
@@ -661,9 +621,8 @@ fn current_install_build_inputs(
 > {
     let mut context = resolve_install_build_context(
         workspace_root,
-        icp_root,
         config_path,
-        &options.environment,
+        icp,
         &options.root_build_target,
         options.build_profile,
     )?;

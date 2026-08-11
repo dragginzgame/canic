@@ -143,7 +143,7 @@ pub fn apply_global_environment(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "blob-storage" | "cycles" | "inspect" | "medic" | "status" | "token" => true,
+        "blob-storage" | "cycles" | "inspect" | "install" | "medic" | "status" | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
