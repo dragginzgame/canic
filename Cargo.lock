@@ -489,6 +489,7 @@ dependencies = [
 name = "canic"
 version = "0.101.43"
 dependencies = [
+ "async-trait",
  "candid",
  "candid_parser",
  "canic-control-plane",

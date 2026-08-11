@@ -57,6 +57,17 @@ impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
 pub struct ComponentAuthApi;
 
 impl ComponentAuthApi {
+    /// Resolve an exact active Component Registry member by Canister principal.
+    ///
+    /// Root application endpoints use this to authorize the original transport
+    /// caller after an application Canister delegates the registry lookup to
+    /// Root. The caller-facing endpoint must still enforce its own admission.
+    pub fn active_component_member(
+        subject: candid::Principal,
+    ) -> Result<ManagedCanisterBinding, Error> {
+        crate::workflow::component_auth::active_component_member(subject)
+    }
+
     /// Prepare a role attestation for the exact active Component Registry caller.
     pub fn prepare_role_attestation(
         request: RoleAttestationRequest,
@@ -75,5 +86,5 @@ impl ComponentAuthApi {
 }
 
 fn active_component_caller() -> Result<ManagedCanisterBinding, Error> {
-    crate::workflow::component_auth::active_component_member(IcOps::msg_caller())
+    ComponentAuthApi::active_component_member(IcOps::msg_caller())
 }

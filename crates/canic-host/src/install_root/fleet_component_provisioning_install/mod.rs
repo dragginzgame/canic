@@ -52,6 +52,7 @@ const ADVANCES_PER_PLACEMENT: usize = 4;
 const ADVANCES_PER_ROOT: usize = 8;
 
 pub(super) struct InstallFleetComponentsRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -102,9 +103,12 @@ pub(super) fn install_fleet_components_and_publish_catalog(
             environment: request.environment.to_string(),
             compiled,
         })?;
-    let icp = IcpCli::new("icp", Some(request.environment.to_string()))
-        .with_cwd(request.icp_root)
-        .with_local_replica(request.local_replica.cloned());
+    let icp = IcpCli::new(
+        request.icp_executable,
+        Some(request.environment.to_string()),
+    )
+    .with_cwd(request.icp_root)
+    .with_local_replica(request.local_replica.cloned());
     let mut remote_advances = 0_usize;
 
     loop {
@@ -230,6 +234,7 @@ fn publish_catalog(
         .as_ref()
         .ok_or(FleetComponentProvisioningInstallError::MissingCatalogIntent)?;
     publish_installed_fleet_catalog(PublishInstalledFleetCatalogRequest {
+        icp_executable: request.icp_executable,
         icp_root: request.icp_root,
         environment: &catalog_entry.environment,
         local_replica: request.local_replica,

@@ -51,6 +51,7 @@ enum RootRegistrySyncError {
 }
 
 pub(super) struct SynchronizeFleetSubnetRootsRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -65,6 +66,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     request: SynchronizeFleetSubnetRootsRequest<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let SynchronizeFleetSubnetRootsRequest {
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -127,7 +129,14 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
             &joining_registry,
             expected_registry_join_entry(&current.journal)?,
         )?;
-        drive_root_sync(icp_root, environment, local_replica, current, request)?;
+        drive_root_sync(
+            icp_executable,
+            icp_root,
+            environment,
+            local_replica,
+            current,
+            request,
+        )?;
     }
     let expected_joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &joining_registry)?;
@@ -135,7 +144,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
         return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
     }
 
-    let coordinator_icp = super::install_icp(icp_root, environment, local_replica);
+    let coordinator_icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_no_arg(
         &coordinator_icp,
         coordinator,
@@ -168,6 +177,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
 }
 
 fn drive_root_sync(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -178,7 +188,7 @@ fn drive_root_sync(
         .journal
         .fleet_subnet_root
         .expect("Registry synchronization follows root verification");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     for _ in 0..MAX_SYNC_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistryJoinVerified => {

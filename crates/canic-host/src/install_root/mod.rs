@@ -94,11 +94,12 @@ use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 
 fn install_icp(
+    executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&crate::icp::LocalReplicaTarget>,
 ) -> crate::icp::IcpCli {
-    crate::icp::IcpCli::new("icp", Some(environment.to_string()))
+    crate::icp::IcpCli::new(executable, Some(environment.to_string()))
         .with_cwd(icp_root)
         .with_local_replica(local_replica.cloned())
 }
@@ -296,6 +297,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         emitted_manifest.phase,
     )?;
     install_current_fleet_infrastructure(
+        &options.icp_executable,
         &icp_root,
         environment,
         build_context.local_replica.as_ref(),
@@ -309,6 +311,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
 }
 
 fn install_current_fleet_infrastructure(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&crate::icp::LocalReplicaTarget>,
@@ -317,6 +320,7 @@ fn install_current_fleet_infrastructure(
     timings: &mut CurrentInstallTimingSummary,
 ) -> Result<(), InstallRootError> {
     let (coordinator, coordinator_duration) = install_current_fleet_coordinator(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -325,6 +329,7 @@ fn install_current_fleet_infrastructure(
     )?;
     timings.create_canisters = coordinator_duration;
     let roots_duration = install_current_fleet_subnet_roots(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -334,6 +339,7 @@ fn install_current_fleet_infrastructure(
     )?;
     timings.create_canisters += roots_duration;
     bootstrap_and_verify_fleet_subnet_root_stores(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -344,6 +350,7 @@ fn install_current_fleet_infrastructure(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     let joining_version = register_and_verify_fleet_subnet_roots_joining(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -354,6 +361,7 @@ fn install_current_fleet_infrastructure(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     synchronize_and_verify_fleet_subnet_roots(SynchronizeFleetSubnetRootsRequest {
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -365,6 +373,7 @@ fn install_current_fleet_infrastructure(
     })
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     let active = activate_and_verify_fleet_registry(ActivateFleetRegistryRequest {
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -377,6 +386,7 @@ fn install_current_fleet_infrastructure(
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     activate_and_verify_fleet_subnet_root_registry_mirrors(
         ActivateFleetSubnetRootRegistryMirrorsRequest {
+            icp_executable,
             icp_root,
             environment,
             local_replica,
@@ -391,6 +401,7 @@ fn install_current_fleet_infrastructure(
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     prepare_current_fleet_subnet_root_component_registries(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -399,6 +410,7 @@ fn install_current_fleet_infrastructure(
         coordinator.coordinator,
     )?;
     install_fleet_components_and_publish_catalog(InstallFleetComponentsRequest {
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -413,6 +425,7 @@ fn install_current_fleet_infrastructure(
 }
 
 fn prepare_current_fleet_subnet_root_component_registries(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&crate::icp::LocalReplicaTarget>,
@@ -422,6 +435,7 @@ fn prepare_current_fleet_subnet_root_component_registries(
 ) -> Result<(), InstallRootError> {
     prepare_and_verify_fleet_subnet_root_component_registries(
         PrepareFleetSubnetRootComponentRegistriesRequest {
+            icp_executable,
             icp_root,
             environment,
             local_replica,
@@ -593,6 +607,7 @@ fn persist_current_pre_root_receipts(
 }
 
 fn install_current_fleet_coordinator(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&crate::icp::LocalReplicaTarget>,
@@ -601,6 +616,7 @@ fn install_current_fleet_coordinator(
 ) -> Result<(coordinator_install::VerifiedFleetCoordinator, Duration), InstallRootError> {
     let started = Instant::now();
     let coordinator = install_and_verify_fleet_coordinator(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -612,6 +628,7 @@ fn install_current_fleet_coordinator(
 }
 
 fn install_current_fleet_subnet_roots(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&crate::icp::LocalReplicaTarget>,
@@ -621,6 +638,7 @@ fn install_current_fleet_subnet_roots(
 ) -> Result<Duration, InstallRootError> {
     let started = Instant::now();
     install_and_verify_fleet_subnet_roots(
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -663,6 +681,7 @@ fn current_install_build_inputs(
         workspace_root,
         icp_root,
         config_path,
+        &options.icp_executable,
         &options.environment,
         &options.root_build_target,
         options.build_profile,

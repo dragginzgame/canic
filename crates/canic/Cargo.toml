@@ -31,6 +31,7 @@ auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
 auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
 
 [dependencies]
+async-trait = { workspace = true }
 candid = { workspace = true }
 canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }

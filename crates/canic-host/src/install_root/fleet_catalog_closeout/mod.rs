@@ -39,6 +39,7 @@ use thiserror::Error as ThisError;
 ///
 
 pub(super) struct PublishInstalledFleetCatalogRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -74,9 +75,12 @@ pub(super) fn publish_installed_fleet_catalog(
 ) -> Result<CommittedFleetCatalog, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
-    let icp = IcpCli::new("icp", Some(request.environment.to_string()))
-        .with_cwd(request.icp_root)
-        .with_local_replica(request.local_replica.cloned());
+    let icp = IcpCli::new(
+        request.icp_executable,
+        Some(request.environment.to_string()),
+    )
+    .with_cwd(request.icp_root)
+    .with_local_replica(request.local_replica.cloned());
     let registry = query_registry(&icp, request.coordinator)?;
 
     validate_terminal_fleet_registry(

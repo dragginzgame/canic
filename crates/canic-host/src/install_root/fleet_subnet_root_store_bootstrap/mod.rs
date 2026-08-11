@@ -103,6 +103,7 @@ enum RootStoreBootstrapError {
 }
 
 pub(super) fn bootstrap_and_verify_fleet_subnet_root_stores(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -134,13 +135,21 @@ pub(super) fn bootstrap_and_verify_fleet_subnet_root_stores(
             component_topology: component_topology.clone(),
             root_plan,
         })?;
-        drive_store_bootstrap(icp_root, environment, local_replica, release_set, current)?;
+        drive_store_bootstrap(
+            icp_executable,
+            icp_root,
+            environment,
+            local_replica,
+            release_set,
+            current,
+        )?;
     }
 
     Ok(())
 }
 
 fn drive_store_bootstrap(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -156,12 +165,19 @@ fn drive_store_bootstrap(
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::InfrastructureVerified => begin_store_adoption(&current)?,
             FleetSubnetRootInstallPhase::StoreAdoptionInFlight => {
-                let evidence = adopt_store(icp_root, environment, local_replica, &current)?;
+                let evidence = adopt_store(
+                    icp_executable,
+                    icp_root,
+                    environment,
+                    local_replica,
+                    &current,
+                )?;
                 record_store_adopted(&current, evidence)?
             }
             FleetSubnetRootInstallPhase::StoreAdopted => begin_store_staging(&current)?,
             FleetSubnetRootInstallPhase::StoreStaging => {
                 stage_release_set(
+                    icp_executable,
                     icp_root,
                     environment,
                     local_replica,
@@ -174,6 +190,7 @@ fn drive_store_bootstrap(
             FleetSubnetRootInstallPhase::StoreStaged => begin_store_bootstrap(&current)?,
             FleetSubnetRootInstallPhase::StoreBootstrapInFlight => {
                 let evidence = call_store_bootstrap(
+                    icp_executable,
                     icp_root,
                     environment,
                     local_replica,
@@ -184,6 +201,7 @@ fn drive_store_bootstrap(
             }
             FleetSubnetRootInstallPhase::StoreBootstrapped => {
                 let evidence = query_store_bootstrap_status(
+                    icp_executable,
                     icp_root,
                     environment,
                     local_replica,
@@ -206,6 +224,7 @@ fn drive_store_bootstrap(
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
                 let observed = query_store_bootstrap_status(
+                    icp_executable,
                     icp_root,
                     environment,
                     local_replica,
@@ -224,6 +243,7 @@ fn drive_store_bootstrap(
 }
 
 fn adopt_store(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -237,7 +257,7 @@ fn adopt_store(
         operation_id: current.journal.install_operation_id,
         authority: expected_wasm_store_authority(&current.journal)?,
     };
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     let updated = call_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
         &icp,
         root,
@@ -280,6 +300,7 @@ pub(super) fn canonical_manifest_bytes(
 }
 
 fn stage_release_set(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -291,7 +312,7 @@ fn stage_release_set(
         .journal
         .fleet_subnet_root
         .expect("Store staging follows verified root installation");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     let version = TemplateVersion::owned(release_set.manifest.release_build_id.to_string());
     let manifest_template_id = TemplateId::owned(format!(
         "{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{}",
@@ -447,6 +468,7 @@ fn stage_chunk_set(
 }
 
 fn call_store_bootstrap(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -458,7 +480,7 @@ fn call_store_bootstrap(
         .fleet_subnet_root
         .expect("Store bootstrap follows verified root installation");
     call_with_arg(
-        &super::install_icp(icp_root, environment, local_replica),
+        &super::install_icp(icp_executable, icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP,
         &request,
@@ -467,6 +489,7 @@ fn call_store_bootstrap(
 }
 
 fn query_store_bootstrap_status(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -478,7 +501,7 @@ fn query_store_bootstrap_status(
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
     query_with_arg(
-        &super::install_icp(icp_root, environment, local_replica),
+        &super::install_icp(icp_executable, icp_root, environment, local_replica),
         root,
         protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
         &request,

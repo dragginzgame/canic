@@ -116,7 +116,10 @@ pub async fn status(
     let (authority, root) = validated_root_authority()?;
     let manifest = load_and_validate_manifest(&authority, request)?;
     let module_hashes = artifact_module_hashes(&manifest)?;
-    let staged = exact_staged_manifests(&manifest)?;
+    // Bootstrap already verified every staged chunk before publishing the release set. Status is
+    // a bounded verification of the protected manifest metadata against the live Store catalog;
+    // re-reading and hashing every staged payload here makes its query cost scale with Wasm bytes.
+    let staged = exact_staged_manifest_metadata(&manifest)?;
     let (wasm_store, live_catalog) = WasmStorePublicationWorkflow::single_store_catalog().await?;
     let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;
 
@@ -291,6 +294,16 @@ fn validate_artifact_shape(
 fn exact_staged_manifests(
     manifest: &RootStoreReleaseSetManifest,
 ) -> Result<Vec<TemplateManifestResponse>, InternalError> {
+    let staged = exact_staged_manifest_metadata(manifest)?;
+    for observed in &staged {
+        TemplateChunkedOps::validate_staged_release(observed)?;
+    }
+    Ok(staged)
+}
+
+fn exact_staged_manifest_metadata(
+    manifest: &RootStoreReleaseSetManifest,
+) -> Result<Vec<TemplateManifestResponse>, InternalError> {
     let mut artifacts = BTreeMap::new();
     for entry in &manifest.entries {
         let payload_hash = decode_sha256(&entry.artifact.wasm_gz_sha256_hex)?;
@@ -326,7 +339,6 @@ fn exact_staged_manifests(
                     "staged artifact for role '{role}' differs from the protected root release set"
                 )));
             }
-            TemplateChunkedOps::validate_staged_release(&observed)?;
             Ok(observed)
         })
         .collect()

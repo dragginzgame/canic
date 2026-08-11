@@ -206,12 +206,6 @@ pub(super) fn add_local_network_target(command: &mut Command) {
     command.arg(LOCAL_ICP_TARGET);
 }
 
-/// Build a base `icp` command rooted at one workspace directory.
-#[must_use]
-pub fn default_command_in(cwd: &Path) -> Command {
-    IcpCli::new("icp", None).command_in(cwd)
-}
-
 /// Add the selected ICP environment through ICP CLI's named-environment selector.
 pub fn add_target_args(
     command: &mut Command,

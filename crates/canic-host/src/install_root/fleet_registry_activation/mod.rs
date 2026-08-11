@@ -64,6 +64,7 @@ pub(super) struct VerifiedFleetRegistryActivation {
 }
 
 pub(super) struct ActivateFleetRegistryRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -153,7 +154,12 @@ pub(super) fn activate_and_verify_fleet_registry(
         component_topology: component_topology.clone(),
         joining_registry,
     })?;
-    let icp = super::install_icp(request.icp_root, request.environment, request.local_replica);
+    let icp = super::install_icp(
+        request.icp_executable,
+        request.icp_root,
+        request.environment,
+        request.local_replica,
+    );
     let current = drive_activation(
         &icp,
         request.coordinator,

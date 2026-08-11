@@ -140,6 +140,7 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
         &root,
         &root,
         &root.join("canic.toml"),
+        "/opt/icp",
         "staging",
         "root",
         Some(CanisterBuildProfile::Fast),
@@ -283,6 +284,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
     InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.to_path_buf()),
@@ -388,6 +390,7 @@ package = "worker"
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
+        icp_executable: "icp".to_string(),
         environment: "local".to_string(),
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),

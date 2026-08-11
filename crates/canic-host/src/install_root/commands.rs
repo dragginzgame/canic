@@ -198,13 +198,14 @@ pub(super) fn open_creation_result_for_effect(_path: &Path, subject: &str) -> io
     ))
 }
 
-pub(super) fn icp_canister_command(icp_root: &Path) -> Command {
-    let mut command = icp::default_command_in(icp_root);
+pub(super) fn icp_canister_command(icp_executable: &str, icp_root: &Path) -> Command {
+    let mut command = icp::IcpCli::new(icp_executable, None).command_in(icp_root);
     command.arg("canister");
     command
 }
 
 pub(super) fn icp_canister_create_command(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -212,7 +213,7 @@ pub(super) fn icp_canister_create_command(
     funding: &PlannedCanisterCreationFunding,
     controllers: &[Principal],
 ) -> Command {
-    let mut command = icp_canister_command(icp_root);
+    let mut command = icp_canister_command(icp_executable, icp_root);
     command.args(["create", "--detached", "--json", "--subnet"]);
     command.arg(subnet.to_string());
     match funding {
@@ -231,6 +232,7 @@ pub(super) fn icp_canister_create_command(
 }
 
 pub(super) fn icp_canister_install_binary_args_command(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -238,7 +240,7 @@ pub(super) fn icp_canister_install_binary_args_command(
     wasm_path: &Path,
     args_path: &Path,
 ) -> Command {
-    let mut command = icp_canister_command(icp_root);
+    let mut command = icp_canister_command(icp_executable, icp_root);
     command.args([
         "install",
         &canister.to_text(),

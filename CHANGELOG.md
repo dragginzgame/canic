@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Root Store status now verifies protected release-set metadata and the exact
+  live Store catalog without re-reading every staged Wasm payload; bootstrap
+  retains full staged-chunk and payload-hash validation before publication.
+- Fresh installs preserve the selected top-level `--icp` executable through
+  every nested host operation instead of falling back to a different binary
+  on `PATH`.
+- Managed runtime environments now retain the Component Registry's physical
+  placement Subnet, and the application facade exposes exact active Component
+  lookup plus async access-predicate types for fail-closed internal endpoint
+  authorization.
+
 ## [0.101.x] - 2026-08-05 - Composable Component Deployment
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)

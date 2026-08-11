@@ -35,6 +35,7 @@ enum RootComponentRegistryPreparationError {
 }
 
 pub(super) struct PrepareFleetSubnetRootComponentRegistriesRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -73,6 +74,7 @@ pub(super) fn prepare_and_verify_fleet_subnet_root_component_registries(
             expected_fleet_registry: mirror_request.expected_registry,
         };
         drive_component_registry_preparation(
+            request.icp_executable,
             request.icp_root,
             request.environment,
             request.local_replica,
@@ -84,6 +86,7 @@ pub(super) fn prepare_and_verify_fleet_subnet_root_component_registries(
 }
 
 fn drive_component_registry_preparation(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -94,7 +97,7 @@ fn drive_component_registry_preparation(
         .journal
         .fleet_subnet_root
         .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     for _ in 0..MAX_COMPONENT_REGISTRY_PREPARATION_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified => {

@@ -88,6 +88,7 @@ enum RootInstallStateError {
 }
 
 pub(super) fn install_and_verify_fleet_subnet_roots(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -126,6 +127,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
             root_plan,
         })?;
         roots.push(drive_root_install(
+            icp_executable,
             icp_root,
             environment,
             local_replica,
@@ -144,6 +146,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
 }
 
 fn drive_root_install(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -156,15 +159,20 @@ fn drive_root_install(
             FleetSubnetRootInstallPhase::Planned => {
                 prepare_creation_result(&create_result_path(&current.path), "Fleet Subnet Root")?;
                 let installation_controller = active_installation_controller(&super::install_icp(
+                    icp_executable,
                     icp_root,
                     environment,
                     local_replica,
                 ))?;
                 begin_root_creation(&current, installation_controller)?
             }
-            FleetSubnetRootInstallPhase::RootCreationInFlight => {
-                recover_or_create_root(icp_root, environment, local_replica, &current)?
-            }
+            FleetSubnetRootInstallPhase::RootCreationInFlight => recover_or_create_root(
+                icp_executable,
+                icp_root,
+                environment,
+                local_replica,
+                &current,
+            )?,
             FleetSubnetRootInstallPhase::RootCreated => {
                 prepare_creation_result(
                     &wasm_store_create_result_path(&current.path),
@@ -172,11 +180,16 @@ fn drive_root_install(
                 )?;
                 begin_wasm_store_creation(&current)?
             }
-            FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => {
-                recover_or_create_wasm_store(icp_root, environment, local_replica, &current)?
-            }
+            FleetSubnetRootInstallPhase::WasmStoreCreationInFlight => recover_or_create_wasm_store(
+                icp_executable,
+                icp_root,
+                environment,
+                local_replica,
+                &current,
+            )?,
             FleetSubnetRootInstallPhase::WasmStoreCreated => begin_wasm_store_install(&current)?,
             FleetSubnetRootInstallPhase::WasmStoreInstallInFlight => recover_or_install_wasm_store(
+                icp_executable,
                 icp_root,
                 environment,
                 local_replica,
@@ -185,15 +198,20 @@ fn drive_root_install(
             )?,
             FleetSubnetRootInstallPhase::WasmStoreInstalled => begin_root_install(&current)?,
             FleetSubnetRootInstallPhase::RootInstallInFlight => recover_or_install_root(
+                icp_executable,
                 icp_root,
                 environment,
                 local_replica,
                 root_artifact,
                 &current,
             )?,
-            FleetSubnetRootInstallPhase::RootInstalled => {
-                verify_and_record_infrastructure(icp_root, environment, local_replica, &current)?
-            }
+            FleetSubnetRootInstallPhase::RootInstalled => verify_and_record_infrastructure(
+                icp_executable,
+                icp_root,
+                environment,
+                local_replica,
+                &current,
+            )?,
             FleetSubnetRootInstallPhase::InfrastructureVerified
             | FleetSubnetRootInstallPhase::StoreAdoptionInFlight
             | FleetSubnetRootInstallPhase::StoreAdopted
@@ -215,6 +233,7 @@ fn drive_root_install(
             | FleetSubnetRootInstallPhase::ComponentRegistryPrepared
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => {
                 let (authority, _) = verify_live_infrastructure(
+                    icp_executable,
                     icp_root,
                     environment,
                     local_replica,
@@ -228,6 +247,7 @@ fn drive_root_install(
 }
 
 fn recover_or_create_root(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -239,6 +259,7 @@ fn recover_or_create_root(
         .installation_controller
         .expect("root creation intent retains its installation controller");
     let evidence = execute_or_observe_creation(CreationEffectRequest {
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -265,6 +286,7 @@ fn recover_or_create_root(
 }
 
 fn recover_or_install_root(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -278,6 +300,7 @@ fn recover_or_install_root(
     let args_path = current.path.with_file_name(ROOT_INSTALL_ARGS_FILE);
     let module_hash = execute_or_observe_install(
         InstallEffectRequest {
+            icp_executable,
             icp_root,
             environment,
             local_replica,
@@ -294,6 +317,7 @@ fn recover_or_install_root(
 }
 
 fn recover_or_create_wasm_store(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -302,6 +326,7 @@ fn recover_or_create_wasm_store(
     let result_path = wasm_store_create_result_path(&current.path);
     let controllers = temporary_store_controllers(&current.journal);
     let evidence = execute_or_observe_creation(CreationEffectRequest {
+        icp_executable,
         icp_root,
         environment,
         local_replica,
@@ -342,6 +367,7 @@ fn temporary_store_controllers(journal: &FleetSubnetRootInstallJournal) -> Vec<P
 }
 
 fn recover_or_install_wasm_store(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -355,6 +381,7 @@ fn recover_or_install_wasm_store(
     let args_path = current.path.with_file_name(WASM_STORE_INSTALL_ARGS_FILE);
     let module_hash = execute_or_observe_install(
         InstallEffectRequest {
+            icp_executable,
             icp_root,
             environment,
             local_replica,
@@ -371,18 +398,25 @@ fn recover_or_install_wasm_store(
 }
 
 fn verify_and_record_infrastructure(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
-    let (root_authority, wasm_store_authority) =
-        verify_live_infrastructure(icp_root, environment, local_replica, &current.journal)?;
+    let (root_authority, wasm_store_authority) = verify_live_infrastructure(
+        icp_executable,
+        icp_root,
+        environment,
+        local_replica,
+        &current.journal,
+    )?;
     record_infrastructure_verified(current, root_authority, wasm_store_authority)
         .map_err(Into::into)
 }
 
 fn verify_live_infrastructure(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -391,7 +425,7 @@ fn verify_live_infrastructure(
     let fleet_subnet_root = journal
         .fleet_subnet_root
         .expect("installed root journal retains its principal");
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     require_expected_controllers(
         &icp,
         fleet_subnet_root,

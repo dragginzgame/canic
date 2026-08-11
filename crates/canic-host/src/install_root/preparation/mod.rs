@@ -52,7 +52,7 @@ pub(super) fn prepare_install_deployment_truth(
 ) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
     ensure_current_install_executor_capabilities(execution_context)?;
-    ensure_icp_environment_ready(icp_root, &options.environment)?;
+    ensure_icp_environment_ready(&options.icp_executable, icp_root, &options.environment)?;
     let build =
         build_install_targets_with_phase(options, build_context, icp_root, install_snapshot)?;
     timings.build_all = build.duration;

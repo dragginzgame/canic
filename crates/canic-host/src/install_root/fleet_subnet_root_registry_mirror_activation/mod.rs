@@ -54,6 +54,7 @@ enum RootRegistryMirrorActivationError {
 }
 
 pub(super) struct ActivateFleetSubnetRootRegistryMirrorsRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -118,6 +119,7 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
             },
         };
         drive_root_mirror_activation(
+            request.icp_executable,
             request.icp_root,
             request.environment,
             request.local_replica,
@@ -129,6 +131,7 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
 }
 
 fn drive_root_mirror_activation(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -139,7 +142,7 @@ fn drive_root_mirror_activation(
         .journal
         .fleet_subnet_root
         .ok_or(RootRegistryMirrorActivationError::LiveEvidenceMismatch)?;
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     for _ in 0..MAX_MIRROR_ACTIVATION_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::RegistrySyncVerified => {

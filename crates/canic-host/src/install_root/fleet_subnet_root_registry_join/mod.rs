@@ -47,6 +47,7 @@ enum RootRegistryJoinError {
 }
 
 pub(super) fn register_and_verify_fleet_subnet_roots_joining(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -92,6 +93,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
             entry,
         )?;
         drive_registry_join(
+            icp_executable,
             icp_root,
             environment,
             local_replica,
@@ -106,7 +108,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
     let joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &expected_registry)?;
     let live = query_live_registry(
-        &super::install_icp(icp_root, environment, local_replica),
+        &super::install_icp(icp_executable, icp_root, environment, local_replica),
         coordinator,
     )?;
     if exact_registry_matches(&authority, &component_topology, &expected_registry, &live)? {
@@ -125,6 +127,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
 }
 
 fn drive_registry_join(
+    icp_executable: &str,
     icp_root: &Path,
     environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
@@ -134,7 +137,7 @@ fn drive_registry_join(
     expected_after: &FleetRegistry,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator = current.journal.authority.binding.coordinator;
-    let icp = super::install_icp(icp_root, environment, local_replica);
+    let icp = super::install_icp(icp_executable, icp_root, environment, local_replica);
     let expected_after_version = FleetRegistryOps::version(
         &current.journal.authority,
         component_topology,

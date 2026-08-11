@@ -29,6 +29,7 @@ pub(in crate::install_root) struct CreationEffectEvidence {
 }
 
 pub(in crate::install_root) struct CreationEffectRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -55,6 +56,7 @@ pub(in crate::install_root) fn execute_or_observe_creation(
     if matches!(request.action, EffectAction::Execute) {
         let result = open_creation_result_for_effect(request.result_path, request.subject)?;
         let mut command = icp_canister_create_command(
+            request.icp_executable,
             request.icp_root,
             request.environment,
             request.local_replica,
@@ -69,7 +71,12 @@ pub(in crate::install_root) fn execute_or_observe_creation(
 
     let canister = read_created_canister(request.result_path)?;
     if let Some(canister) = canister {
-        let icp = install_icp(request.icp_root, request.environment, request.local_replica);
+        let icp = install_icp(
+            request.icp_executable,
+            request.icp_root,
+            request.environment,
+            request.local_replica,
+        );
         require_uninstalled_created_canister(
             &icp,
             canister,
@@ -98,6 +105,7 @@ mod tests {
         let funding = PlannedCanisterCreationFunding::Cycles { cycles: 1 };
 
         let evidence = execute_or_observe_creation(CreationEffectRequest {
+            icp_executable: "icp",
             icp_root: &root,
             environment: "local",
             local_replica: None,
@@ -122,6 +130,7 @@ mod tests {
         let funding = PlannedCanisterCreationFunding::Cycles { cycles: 1 };
 
         let result = execute_or_observe_creation(CreationEffectRequest {
+            icp_executable: "icp",
             icp_root: &root,
             environment: "local",
             local_replica: None,

@@ -75,6 +75,7 @@ enum InstallRejectionReceiptError {
 }
 
 pub(in crate::install_root) struct InstallEffectRequest<'a> {
+    pub icp_executable: &'a str,
     pub icp_root: &'a Path,
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
@@ -94,7 +95,12 @@ where
     T: CandidType,
     F: FnOnce() -> Result<T, Box<dyn std::error::Error>>,
 {
-    let icp = install_icp(request.icp_root, request.environment, request.local_replica);
+    let icp = install_icp(
+        request.icp_executable,
+        request.icp_root,
+        request.environment,
+        request.local_replica,
+    );
     let prior_rejection = match observe_module_hash(&icp, request.canister)? {
         Some(module_hash) if module_hash == request.expected_module_hash => {
             return Ok(module_hash);
@@ -134,6 +140,7 @@ where
     }
     write_bytes(request.args_path, &args)?;
     let mut command = icp_canister_install_binary_args_command(
+        request.icp_executable,
         request.icp_root,
         request.environment,
         request.local_replica,
