@@ -597,7 +597,7 @@ mod tests {
                 .expect("payload digest")
                 .to_vec(),
             payload_size_bytes: artifact.wasm_gz_size_bytes,
-            store_binding: WASM_STORE_BOOTSTRAP_BINDING.clone(),
+            store_binding: WASM_STORE_BOOTSTRAP_BINDING,
             chunking_mode: TemplateChunkingMode::Chunked,
             manifest_state: TemplateManifestState::Approved,
             approved_at: Some(1),
