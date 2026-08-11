@@ -24,6 +24,7 @@ BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
+POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH_READY="$ROOT/scripts/ci/check-release-push-ready.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
@@ -45,7 +46,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -139,6 +140,12 @@ rg -F 'MAX_CARGO_CLEAN_ATTEMPTS=2' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not bound its Cargo cleanup retry"
 rg -F 'CANIC_TEST_SCRATCH' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not require exact invocation-owned test scratch"
+rg -F 'bash "$POCKET_IC_STOPPER"' "$RELEASE_CLEANUP" >/dev/null ||
+    fail "release cleanup can remove scratch before its PocketIC server exits"
+rg -F 'is_owned_port_file' "$POCKET_IC_STOPPER" >/dev/null ||
+    fail "PocketIC cleanup does not bind termination to an owned port file"
+rg -F 'kill -KILL "$pid"' "$POCKET_IC_STOPPER" >/dev/null ||
+    fail "PocketIC cleanup does not stop its detached server before scratch removal"
 rg -F 'test-runtime\.[[:alnum:]]{6}' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not validate the private scratch basename"
 rg -F 'bash scripts/ci/run-with-test-scratch.sh make "${gate_targets[@]}"' "$RELEASE_GATES" >/dev/null ||
@@ -355,7 +362,7 @@ mkdir -p \
     "$release_cleanup_fixture/target" \
     "$release_cleanup_bin"
 touch "$foreign_test_scratch/live-owner"
-cp "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" \
+cp "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" \
     "$release_cleanup_fixture/scripts/ci/"
 # shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
 printf '%s\n' \
@@ -469,6 +476,31 @@ if CANIC_TEST_SCRATCH="$release_cleanup_fixture/.tmp/test-runtime.LINK12" \
 fi
 [ -f "$foreign_test_scratch/live-owner" ] ||
     fail "release cleanup followed a symlink into another invocation's scratch"
+
+owned_server_scratch="$release_cleanup_fixture/.tmp/test-runtime.SERVER"
+owned_server_port="$owned_server_scratch/pocket_ic_12345.port"
+foreign_server_port="$foreign_test_scratch/pocket_ic_67890.port"
+mkdir -p "$owned_server_scratch"
+touch "$owned_server_port" "$foreign_server_port"
+bash -c 'exec -a pocket-ic bash -c "while :; do sleep 1; done" -- --port-file "$1"' \
+    _ "$owned_server_port" &
+owned_server_pid=$!
+bash -c 'exec -a pocket-ic bash -c "while :; do sleep 1; done" -- --port-file "$1"' \
+    _ "$foreign_server_port" &
+foreign_server_pid=$!
+sleep 0.1
+CANIC_TEST_SCRATCH="$owned_server_scratch" \
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh" --scratch-only
+wait "$owned_server_pid" 2>/dev/null || :
+if kill -0 "$owned_server_pid" 2>/dev/null; then
+    fail "release cleanup retained its invocation-owned PocketIC server"
+fi
+kill -0 "$foreign_server_pid" 2>/dev/null ||
+    fail "release cleanup stopped another invocation's PocketIC server"
+[ ! -e "$owned_server_scratch" ] ||
+    fail "release cleanup retained scratch after its PocketIC server stopped"
+kill -KILL "$foreign_server_pid" 2>/dev/null || :
+wait "$foreign_server_pid" 2>/dev/null || :
 
 release_push_fixture="$tmp_dir/release-push"
 release_push_bin="$release_push_fixture/bin"
