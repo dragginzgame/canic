@@ -46,9 +46,11 @@ pub mod canister {
         pub use crate::__internal::core::api::topology::children::CanisterChildrenApi;
     }
 
-    /// Immutable plan-derived Component deployment policy.
+    /// Immutable deployment policy and the current protected Component runtime view.
     pub mod deployment {
-        pub use crate::__internal::core::api::component_deployment::ComponentDeploymentApi;
+        pub use crate::__internal::core::api::{
+            component_deployment::ComponentDeploymentApi, component_runtime::ComponentRuntimeApi,
+        };
     }
 
     pub mod placement {

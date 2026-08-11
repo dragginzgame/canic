@@ -10,6 +10,10 @@ maintenance tasks.
 - `gh-ci.sh` is an optional maintainer helper for inspecting GitHub Actions CI
   with an authenticated local GitHub CLI session. It is not required for normal
   Canic development or CI.
+- `skynet-fleet-input.sh` emits strict operator-owned Fleet input for the Skynet
+  demo across 8–32 distinct workload Subnets. It validates only safe textual
+  construction; Canic remains the authority that resolves and validates the
+  resulting Subnet principals and complete install plan.
 - `update-icp-cli-pin.sh` resolves the latest stable ICP CLI release in the
   currently supported major line, records the official Linux/macOS archive
   checksums in `tool-versions.env`, and aligns installation guidance. It
