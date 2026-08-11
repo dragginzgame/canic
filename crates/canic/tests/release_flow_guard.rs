@@ -262,7 +262,7 @@ esac
         .arg(workspace_root().join("scripts/ci/bump-version.sh"))
         .arg("patch")
         .current_dir(&root)
-        .env("CANIC_RELEASE_GATES_PASSED", "1")
+        .env("CANIC_RELEASE_VALIDATED", "1")
         .env("PATH", path)
         .output()
         .expect("bump script should run");
@@ -300,9 +300,9 @@ fn make_release_targets_are_sequential_and_push_is_guarded() {
         "release-patch must invoke each phase sequentially"
     );
 
-    let release_push = "release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@bash scripts/ci/cleanup-release-artifacts.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh";
+    let release_push = "release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh";
     assert!(
         makefile.contains(release_push),
-        "release-push must validate and clean before an atomic push"
+        "release-push must perform only readiness checking and the atomic push"
     );
 }

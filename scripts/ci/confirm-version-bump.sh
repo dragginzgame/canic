@@ -14,7 +14,7 @@ esac
 CURRENT_VERSION="$(cargo get workspace.package.version)"
 
 cat >&2 <<MSG
-This will run the $BUMP_TYPE release gate and bump Canic from $CURRENT_VERSION.
+This will run make validate and bump Canic from $CURRENT_VERSION ($BUMP_TYPE).
 Type '$BUMP_TYPE' to continue:
 MSG
 

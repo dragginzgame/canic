@@ -359,15 +359,16 @@ For each release:
    and consume any remaining in-scope `Unreleased` notes.
 3. Confirm the root bullet and detailed minor-line section agree.
 4. The maintainer commits the completed implementation and changelog batch.
-5. The maintainer runs the governed version target, which performs its gates
-   before updating package and release version files.
+5. The maintainer runs the governed version target, which performs the explicit
+   `make validate` workflow before updating package and release version files.
 6. The maintainer reviews, stages, commits, tags, and pushes through the
    governed release targets.
 
 Order must be preserved.
 The normal human patch flow is `make patch`, review, `make release-stage`,
 `make release-commit`, and `make release-push`; `make release-patch` is the
-one-shot equivalent from a clean release-ready commit.
+one-shot equivalent from a clean release-ready commit. `make release-push`
+performs no hidden formatting, compilation, testing, validation, or cleanup.
 
 ---
 

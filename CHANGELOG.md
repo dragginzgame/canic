@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.48` proves packed same-root placements retain distinct protected
+  Directory identity and replaces hidden Git/Make validation with one explicit
+  workflow.
+
 - `0.101.47` stops each test invocation's detached PocketIC server before
   deleting its private scratch, preventing late upstream socket-cleanup panics
   without affecting concurrent servers.

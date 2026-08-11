@@ -221,15 +221,6 @@ require_python() {
     green "python3 ready: $(python3 --version 2>&1)"
 }
 
-configure_git_hooks_if_present() {
-    if [ -d .git ] && [ -d .githooks ]; then
-        yellow "Git hooks:"
-        cyan_command "git config --local core.hooksPath .githooks"
-        git config --local core.hooksPath .githooks
-        chmod +x .githooks/* 2>/dev/null || true
-    fi
-}
-
 main() {
     if [ "${1:-}" = "--ensure-ripgrep" ]; then
         require_command cargo
@@ -282,8 +273,6 @@ main() {
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked canic-cli --version $CANIC_CLI_VERSION"
     cargo_toolchain install --quiet --locked canic-cli --version "$CANIC_CLI_VERSION"
-
-    configure_git_hooks_if_present
 
     echo >&2
     green "Canic setup complete."

@@ -3,14 +3,14 @@
         release-stage release-commit release-push package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
-        test test-wasm test-bump build check clippy fmt fmt-check clean clean-wasm \
+        test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        control-plane-feature-gate \
+        check-invariants control-plane-feature-gate \
         dependency-risk-gate gitleaks-scan \
         install install-dev update-dev test-fleet-install \
-        ensure-clean ensure-hooks test-unit test-unit-fast workspace-test-inventory-gate \
+        ensure-clean test-unit test-unit-fast workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
-        test-canisters fmt-core cloc
+        test-canisters cloc
 
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
@@ -37,20 +37,19 @@ help:
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain"
 	@echo "  update-dev       Pin the latest stable ICP CLI and synchronize development tools"
-	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
-	@echo "  patch            Run release gate, then bump patch version files (0.0.x)"
-	@echo "  minor            Confirm, run release gate, then bump minor version files (0.x.0)"
-	@echo "  major            Confirm, run full release gate, then bump major version files (x.0.0)"
+	@echo "  patch            Validate, then bump patch version files (0.0.x)"
+	@echo "  minor            Confirm, validate, then bump minor version files (0.x.0)"
+	@echo "  major            Confirm, validate, then bump major version files (x.0.0)"
 	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
 	@echo "  release-minor    Confirm, bump, stage, commit, tag, and push a minor release"
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
-	@echo "  release-push     Clear build/test artifacts, then atomically push the verified release"
+	@echo "  release-push     Atomically push the verified release commit and tag"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
@@ -67,7 +66,9 @@ help:
 	@echo "  test-runtime-fast  Run the fast deterministic runtime test lane"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
+	@echo "  check-invariants Run repository structure and governance invariants"
 	@echo "  clippy           Run clippy checks"
+	@echo "  validate         Run formatting, invariant, feature, check, clippy, and test gates"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean Cargo artifacts; each test invocation cleans its own scratch"
@@ -79,15 +80,9 @@ help:
 	@echo "  cloc             Show runtime vs test Rust LOC across canic crates"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make patch       # Bump patch version"
-	@echo "  make release-patch # Bump, stage, commit, tag, and push patch release"
-	@echo "  make release-stage # Stage a reviewed manual bump"
-	@echo "  make release-commit # Commit and tag the staged bump"
-	@echo "  make release-push  # Push the verified release commit and tag atomically"
-	@echo "  make test-fleet-install # Install the reference fleet using fast wasm"
+	@echo "  make validate    # Run the complete local validation workflow"
 	@echo "  make test        # Run workspace tests"
-	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
-	@echo "  make build       # Build project"
+	@echo "  make release-patch # Validate, bump, commit, tag, and push a patch release"
 
 #
 # Installing
@@ -125,19 +120,8 @@ update-dev:
 	"$(GITLEAKS_INSTALL_DIR)/gitleaks" version
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
-# Optional explicit install target (idempotent)
-ensure-hooks:
-	@if [ -d .git ]; then \
-		git config --local core.hooksPath .githooks || true; \
-		chmod +x .githooks/* 2>/dev/null || true; \
-		echo "✅ Git hooks configured (core.hooksPath -> .githooks)"; \
-	else \
-		echo "⚠️  Not a git repo, skipping hooks setup"; \
-	fi
-
-
 #
-# Version management (always format first)
+# Version management (validate the source candidate before mutation)
 #
 
 version:
@@ -148,23 +132,20 @@ tags:
 
 patch:
 	@$(MAKE) ensure-clean
-	@$(MAKE) fmt
-	+@bash scripts/ci/run-release-gates.sh patch
-	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh patch
+	+@$(MAKE) --no-print-directory validate
+	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
 	@$(MAKE) ensure-clean
-	@$(MAKE) fmt
-	+@bash scripts/ci/run-release-gates.sh minor
-	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh minor
+	+@$(MAKE) --no-print-directory validate
+	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
 	@$(MAKE) ensure-clean
-	@$(MAKE) fmt
-	+@bash scripts/ci/run-release-gates.sh major
-	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh major
+	+@$(MAKE) --no-print-directory validate
+	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh major
 
 release-patch:
 	@$(MAKE) patch
@@ -200,7 +181,6 @@ release-commit:
 
 release-push:
 	@bash scripts/ci/check-release-push-ready.sh
-	@bash scripts/ci/cleanup-release-artifacts.sh
 	@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh
 
 package: ensure-clean
@@ -226,21 +206,35 @@ test-fleet-install:
 	$(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/test-fleet-install.sh
 
-test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        test-unit
+test: test-unit
 
 # Fast iteration path for wasm work.
 # Runs only the three classified fast integration targets and skips every
 # PocketIC suite.
-test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        test-unit-fast
+test-wasm: test-unit-fast
 
-# Version-bump gate.
-# Keeps the secret scan, control-plane feature matrix, Clippy, and complete
-# workspace test target, while leaving the local ICP CLI deployment path explicit.
-test-bump: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        gitleaks-scan dependency-risk-gate \
-        control-plane-feature-gate clippy test
+# Complete local validation is deliberately explicit. Primitive development
+# targets retain only the operation named by that target.
+validate:
+	+@$(MAKE) --no-print-directory fmt-check
+	+@$(MAKE) --no-print-directory check-invariants
+	+@$(MAKE) --no-print-directory dependency-risk-gate
+	+@$(MAKE) --no-print-directory gitleaks-scan
+	+@$(MAKE) --no-print-directory control-plane-feature-gate
+	+@$(MAKE) --no-print-directory check
+	+@$(MAKE) --no-print-directory clippy
+	+@$(MAKE) --no-print-directory test
+
+check-invariants:
+	bash scripts/ci/run-layering-guards.sh
+	+@$(MAKE) --no-print-directory blob-storage-inventory-gate
+	+@$(MAKE) --no-print-directory blob-storage-cashier-inventory-gate
+	bash scripts/ci/test-dependency-risk-inventory.sh
+	bash scripts/ci/check-release-validation-matrix.sh
+	bash scripts/ci/check-release-integrity-contract.sh
+	bash scripts/ci/check-audit-method-catalog.sh
+	bash scripts/ci/check-recovery-runbooks.sh
+	bash scripts/ci/check-release-package-install-validation.sh
 
 dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh
@@ -300,22 +294,18 @@ test-canisters: test-fleet-install
 build:
 	$(CARGO_ENV) cargo build --workspace --release
 
-check: ensure-hooks fmt
+check:
 	$(CARGO_ENV) cargo check --workspace
 
 clippy:
 	CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-fmt: ensure-hooks fmt-core
-
-fmt-core:
+fmt:
 	cargo sort --workspace
 	cargo sort-derives
 	cargo fmt --all
 
-fmt-check: ensure-hooks fmt-check-core
-
-fmt-check-core:
+fmt-check:
 	cargo sort --workspace --check
 	cargo sort-derives --check
 	cargo fmt --all -- --check

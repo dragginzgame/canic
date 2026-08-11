@@ -34,7 +34,8 @@ to avoid PocketIC startup races under parallel harness execution.
 - Never run workspace PocketIC tests with parallel rust test threads.
 - Use `make test` (or explicitly pass `-- --test-threads=1`).
 - Keep a writable temp directory with enough free space. PocketIC allocates runtime
-  state under `TMPDIR`; this repo's `make test` sets `TMPDIR=.tmp/test-runtime`.
+  state under `TMPDIR`; this repo's `make test` assigns one private
+  `.tmp/test-runtime.<suffix>` directory per invocation.
 - If you run tests manually and `/tmp` is near full, set `TMPDIR` yourself to avoid
   startup crashes and state-init panics.
 - Known failure signatures when this rule is violated include:

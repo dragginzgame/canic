@@ -3,8 +3,8 @@ set -euo pipefail
 
 BUMP_TYPE=${1:-patch}
 
-if [[ "${CANIC_RELEASE_GATES_PASSED:-}" != "1" ]]; then
-  echo "❌ Refusing to bump before release gates pass." >&2
+if [[ "${CANIC_RELEASE_VALIDATED:-}" != "1" ]]; then
+  echo "❌ Refusing to bump before make validate passes." >&2
   echo "Use make patch, make minor, or make major." >&2
   exit 1
 fi

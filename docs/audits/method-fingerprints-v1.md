@@ -28,7 +28,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
 | `CANIC-AUTH-TRUST-001` | `2` | `150d075dd9749d6c2b849837ce422753fa1a438a8656e50eac0370f555e769c5` | `docs/audits/recurring/invariants/token-trust-chain.md` |
-| `CANIC-LIFECYCLE-001` | `1` | `df4fd68b78e1fab92bf17f85ac6adec235e978c52783f5151b2c57411b0e4913` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
+| `CANIC-LIFECYCLE-001` | `2` | `89202cda4ed08ced7d9f70fd98ff1e68e04bc1877a528a489060242f5acd8059` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
 | `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` |
@@ -53,6 +53,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-AUTH-EQUIVALENCE-001` | `1` | `7784678597a51e59b521aaefc15806f20e2c03bc2ac49ba91b8c824f88d2461b` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` | `CANIC-AUTH-EQUIVALENCE-001/v2` |
 | `CANIC-AUTH-REPLAY-001` | `1` | `2a4726ca049194175f1230c9de54442746d462d460f2adea77b8b1df57f8868c` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` | `CANIC-AUTH-REPLAY-001/v2` |
 | `CANIC-AUTH-TRUST-001` | `1` | `5cb6143aee5fec2e4ff5f7c8649fc70e120f5233be19b913e90cff9ae38341d6` | `docs/audits/recurring/invariants/token-trust-chain.md` | `CANIC-AUTH-TRUST-001/v2` |
+| `CANIC-LIFECYCLE-001` | `1` | `df4fd68b78e1fab92bf17f85ac6adec235e978c52783f5151b2c57411b0e4913` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` | `CANIC-LIFECYCLE-001/v2` |
 | `CANIC-BUILD-INTEGRITY-001` | `1` | `57f0a380b1722927498ddd0f41b5490e8726cab943c2d3df02ecac73897a5311` | `docs/audits/recurring/system/build-integrity.md` | `CANIC-BUILD-INTEGRITY-001/v2` |
 | `CANIC-CAPABILITY-SURFACE-001` | `1` | `d7de4f8b7115b5e4861bde23aaebe9b2ddee3c83a07f7730b61122b3f3fff898` | `docs/audits/recurring/system/capability-surface.md` | `CANIC-CAPABILITY-SURFACE-001/v2` |
 | `CANIC-CHANGE-FRICTION-001` | `1` | `00646b257428623f7ef4efce4dffdcd93f3bdc75cd7e2dbc02faad32cb2ce8d6` | `docs/audits/recurring/system/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v2` |
@@ -86,7 +87,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `5d7e2f15bdd195c63276d37beffce6a88fea2b593abfd7a1d6ede7274e6aa3c6` | `docs/audits/META-AUDIT.md` |
-| `0e35c7892cf8618a624d280fb860c9cf75376d639eb2e381c0036ea4bd1e0f82` | `docs/audits/METHODS.md` |
+| `68cc56bb74431f89ed9a7e10360e346313cff382feaee576cc3511103650aa24` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |
@@ -100,7 +101,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
 | `632d6d9422006a03c8842106d4b75a4da18814d2707991ba8ac7ec5e71a4ad2f` | `scripts/ci/check-audit-method-catalog.sh` |
-| `52afc739170ee0434295a8d5a2cc66147233a9bd2365ffd4e0ce91349cb23601` | `scripts/ci/instruction-audit-report.sh` |
+| `2c3fa449fd04d317e5aa871ce9256922b956cc130c5c89a1a831a748349a28b1` | `scripts/ci/instruction-audit-report.sh` |
 | `6986f3624cae4a48374fe110dd0a1c0f8fb91445e27d7f0f22f6eadad31fbc29` | `scripts/ci/run-layering-guards.sh` |
 | `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
 | `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |

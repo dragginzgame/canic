@@ -21,6 +21,9 @@ repo helper binaries:
 make install-dev
 ```
 
+Developer setup installs tools only. Canic does not install or configure Git
+hooks; run `make validate` explicitly when complete local validation is wanted.
+
 ## ICP CLI Compatibility
 
 Canic shells out to the installed `icp` binary for local replica and canister

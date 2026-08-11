@@ -22,7 +22,6 @@ DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
-RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH_READY="$ROOT/scripts/ci/check-release-push-ready.sh"
@@ -31,7 +30,6 @@ POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
 WORKSPACE_TEST_RUNNER="$ROOT/scripts/ci/run-workspace-tests.sh"
-PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
     "$ROOT/scripts/ci/install-gitleaks.sh"
@@ -46,7 +44,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -82,12 +80,59 @@ rg -F 'run: bash scripts/ci/check-dependency-risk-inventory.sh' "$CI" >/dev/null
     fail "the dependency risk inventory gate is not active in CI"
 rg -F 'bash scripts/ci/test-dependency-risk-inventory.sh' "$CI" >/dev/null ||
     fail "the dependency risk rejection tests are not active in CI"
-rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan' "$MAKEFILE" >/dev/null ||
-    fail "the patch-release gate does not require the dedicated secret scan"
-rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate' "$MAKEFILE" >/dev/null ||
-    fail "the patch-release gate does not require dependency risk validation"
-rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate \\\n[[:space:]]+control-plane-feature-gate clippy test$' "$MAKEFILE" >/dev/null ||
-    fail "the patch/minor release gate does not require the complete workspace test target"
+mapfile -t validate_targets < <(
+    sed -n '/^validate:/,/^$/p' "$MAKEFILE" |
+        sed -n 's/.*--no-print-directory \([^[:space:]]*\)$/\1/p'
+)
+expected_validate_targets=(
+    fmt-check
+    check-invariants
+    dependency-risk-gate
+    gitleaks-scan
+    control-plane-feature-gate
+    check
+    clippy
+    test
+)
+[ "${validate_targets[*]}" = "${expected_validate_targets[*]}" ] ||
+    fail "make validate does not own the complete ordered local validation workflow"
+
+invariant_recipe="$(sed -n '/^check-invariants:/,/^$/p' "$MAKEFILE")"
+# shellcheck disable=SC2016 # These are literal Make recipe fragments, not shell expansions.
+for invariant_command in \
+    'bash scripts/ci/run-layering-guards.sh' \
+    '$(MAKE) --no-print-directory blob-storage-inventory-gate' \
+    '$(MAKE) --no-print-directory blob-storage-cashier-inventory-gate' \
+    'bash scripts/ci/test-dependency-risk-inventory.sh' \
+    'bash scripts/ci/check-release-validation-matrix.sh' \
+    'bash scripts/ci/check-release-integrity-contract.sh' \
+    'bash scripts/ci/check-audit-method-catalog.sh' \
+    'bash scripts/ci/check-recovery-runbooks.sh' \
+    'bash scripts/ci/check-release-package-install-validation.sh'; do
+    rg -F "$invariant_command" <<<"$invariant_recipe" >/dev/null ||
+        fail "make check-invariants omits $invariant_command"
+done
+
+declare -A primitive_recipes=(
+    [build]=$'build:\n\t$(CARGO_ENV) cargo build --workspace --release'
+    [check]=$'check:\n\t$(CARGO_ENV) cargo check --workspace'
+    [clippy]=$'clippy:\n\tCARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings'
+    [fmt]=$'fmt:\n\tcargo sort --workspace\n\tcargo sort-derives\n\tcargo fmt --all'
+    [fmt-check]=$'fmt-check:\n\tcargo sort --workspace --check\n\tcargo sort-derives --check\n\tcargo fmt --all -- --check'
+    [test]=$'test: test-unit'
+    [test-wasm]=$'test-wasm: test-unit-fast'
+)
+for primitive_target in "${!primitive_recipes[@]}"; do
+    primitive_recipe="$(sed -n "/^$primitive_target:/,/^$/p" "$MAKEFILE")"
+    [ "$primitive_recipe" = "${primitive_recipes[$primitive_target]}" ] ||
+        fail "make $primitive_target contains hidden or unexpected work"
+done
+
+[ ! -e "$ROOT/.githooks" ] || fail "repository Git hooks remain present"
+if rg -n 'core\.hooksPath|\.githooks|ensure-hooks' \
+    "$MAKEFILE" "$DEV_INSTALL" "$ROOT/scripts/app/README.md" >/dev/null; then
+    fail "active setup or Make surfaces still configure repository Git hooks"
+fi
 bash "$WORKSPACE_TEST_INVENTORY_GATE" >/dev/null ||
     fail "the workspace integration-test inventory is incomplete or invalid"
 rg -F 'bash scripts/ci/check-workspace-test-inventory.sh' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
@@ -101,12 +146,6 @@ if rg -F '${TMPDIR' "$ROOT/scripts/ci/install-pocketic.sh" >/dev/null; then
 fi
 if rg --multiline 'test(-wasm)?:[^\n]*(\\\n[^\n]*)?workspace-test-inventory-gate' "$MAKEFILE" >/dev/null; then
     fail "the public test targets duplicate the workspace runner inventory guard"
-fi
-rg -F 'make fmt-check-core' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "the pre-commit hook does not enforce formatting"
-if rg -F 'make fmt-core' "$PRE_COMMIT_HOOK" >/dev/null ||
-    rg -F 'git add' "$PRE_COMMIT_HOOK" >/dev/null; then
-    fail "the pre-commit hook may mutate the worktree or broaden the staged index"
 fi
 example_build_count="$(rg -c 'run: cargo build -p canic --examples --locked' "$CI")"
 [ "$example_build_count" -eq 1 ] ||
@@ -122,11 +161,18 @@ CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
 for mode in patch minor major; do
-    rg -F "bash scripts/ci/run-release-gates.sh $mode" "$MAKEFILE" >/dev/null ||
-        fail "the $mode version target does not use release-gate cleanup"
+    mode_recipe="$(sed -n "/^$mode:/,/^$/p" "$MAKEFILE")"
+    rg -F '$(MAKE) --no-print-directory validate' <<<"$mode_recipe" >/dev/null ||
+        fail "the $mode version target does not run the explicit validation workflow"
+    rg -F "CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
+        fail "the $mode version target does not bind mutation to completed validation"
 done
-rg --multiline 'release-push:\n\t@bash scripts/ci/check-release-push-ready\.sh\n\t@bash scripts/ci/cleanup-release-artifacts\.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release\.sh' "$MAKEFILE" >/dev/null ||
-    fail "release push does not clean before its final atomic network update"
+rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
+    fail "direct release version mutation is not guarded by completed validation"
+release_push_recipe="$(sed -n '/^release-push:/,/^$/p' "$MAKEFILE")"
+expected_release_push_recipe=$'release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh'
+[ "$release_push_recipe" = "$expected_release_push_recipe" ] ||
+    fail "release push is not limited to readiness and the atomic network update"
 for release_push_script in "$RELEASE_PUSH_READY" "$RELEASE_PUSH"; do
     rg -F 'git show HEAD:Cargo.toml' "$release_push_script" >/dev/null ||
         fail "release push does not derive its version from committed HEAD"
@@ -148,10 +194,6 @@ rg -F 'kill -KILL "$pid"' "$POCKET_IC_STOPPER" >/dev/null ||
     fail "PocketIC cleanup does not stop its detached server before scratch removal"
 rg -F 'test-runtime\.[[:alnum:]]{6}' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not validate the private scratch basename"
-rg -F 'bash scripts/ci/run-with-test-scratch.sh make "${gate_targets[@]}"' "$RELEASE_GATES" >/dev/null ||
-    fail "release gates do not run inside invocation-owned test scratch"
-rg -F 'unset CANIC_TEST_SCRATCH' "$RELEASE_GATES" >/dev/null ||
-    fail "release gates may accidentally borrow caller-owned test scratch"
 rg -F 'mktemp -d "$TEST_SCRATCH_PARENT/test-runtime.XXXXXX"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
     fail "test scratch runner does not allocate one private repository directory"
 rg -F 'CANIC_TEST_SCRATCH="$TEST_SCRATCH"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
@@ -362,14 +404,8 @@ mkdir -p \
     "$release_cleanup_fixture/target" \
     "$release_cleanup_bin"
 touch "$foreign_test_scratch/live-owner"
-cp "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" \
+cp "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" \
     "$release_cleanup_fixture/scripts/ci/"
-# shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
-printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'printf "%s\n" "$*" >"$PWD/gate-targets"' \
-    'printf "%s\n" "$TMPDIR" >"$PWD/gate-tmpdir"' \
-    'exit "${FAKE_MAKE_STATUS:-0}"' >"$release_cleanup_bin/make"
 # shellcheck disable=SC2016 # Preserve expansion for the generated fixture.
 printf '%s\n' \
     '#!/usr/bin/env bash' \
@@ -381,73 +417,52 @@ printf '%s\n' \
     'printf "%s\n" "$attempt" >"$attempt_file"' \
     '[ "$attempt" -gt "${FAKE_CARGO_FAILURES:-0}" ] || exit "${FAKE_CARGO_STATUS:-19}"' \
     'rm -rf -- "$PWD/target"' >"$release_cleanup_bin/cargo"
-chmod +x "$release_cleanup_bin/make" "$release_cleanup_bin/cargo"
+chmod +x "$release_cleanup_bin/cargo"
 
-assert_private_test_scratch_cleaned() {
+assert_owned_test_scratch_cleaned() {
     local scratch name
 
-    scratch="$(cat "$release_cleanup_fixture/gate-tmpdir")"
+    scratch="$(cat "$release_cleanup_fixture/test-tmpdir")"
     name="${scratch##*/}"
     [ "${scratch%/*}" = "$release_cleanup_fixture/.tmp" ] &&
         [[ "$name" =~ ^test-runtime\.[[:alnum:]]{6}$ ]] ||
-        fail "release-gate wrapper did not select one private repository scratch directory"
+        fail "test runner did not select one private repository scratch directory"
     [ ! -e "$scratch" ] ||
-        fail "release-gate wrapper retained its invocation-owned test scratch"
+        fail "test runner retained its invocation-owned test scratch"
     [ -f "$foreign_test_scratch/live-owner" ] ||
-        fail "release cleanup deleted another invocation's test scratch"
+        fail "test cleanup deleted another invocation's test scratch"
 }
 
-CANIC_TEST_SCRATCH="$foreign_test_scratch" PATH="$release_cleanup_bin:$PATH" \
-    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" patch
-[ "$(cat "$release_cleanup_fixture/gate-targets")" = "test-bump" ] ||
-    fail "patch release-gate wrapper did not select the patch gate"
-assert_private_test_scratch_cleaned
-[ ! -e "$release_cleanup_fixture/target" ] ||
-    fail "successful release-gate cleanup retained Cargo artifacts"
-
-mkdir -p "$release_cleanup_fixture/target"
-rm -f "$release_cleanup_fixture/cargo-clean-attempts"
-if FAKE_MAKE_STATUS=23 PATH="$release_cleanup_bin:$PATH" \
-    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" major; then
-    fail "release-gate wrapper accepted a failed validation gate"
-else
-    release_gate_status=$?
-fi
-[ "$release_gate_status" -eq 23 ] ||
-    fail "release-gate wrapper did not preserve the validation failure"
-[ "$(cat "$release_cleanup_fixture/gate-targets")" = "control-plane-feature-gate clippy test" ] ||
-    fail "major release-gate wrapper did not select the full release gates"
-[ -e "$release_cleanup_fixture/target" ] ||
-    fail "failed release-gate cleanup removed Cargo artifacts needed for retry"
-[ ! -e "$release_cleanup_fixture/cargo-clean-attempts" ] ||
-    fail "failed release-gate cleanup invoked Cargo clean"
-assert_private_test_scratch_cleaned
+PATH="$release_cleanup_bin:$PATH" \
+    bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
+    bash -c 'printf "%s\n" "$TMPDIR" >"$1"' _ "$release_cleanup_fixture/test-tmpdir"
+assert_owned_test_scratch_cleaned
 
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 mkdir -p "$release_cleanup_fixture/target"
 FAKE_CARGO_FAILURES=1 PATH="$release_cleanup_bin:$PATH" \
-    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh"
 [ "$(cat "$release_cleanup_fixture/cargo-clean-attempts")" -eq 2 ] ||
     fail "release cleanup did not retry one transient Cargo failure exactly once"
 [ ! -e "$release_cleanup_fixture/target" ] ||
     fail "retried release cleanup retained Cargo artifacts"
-assert_private_test_scratch_cleaned
+[ -f "$foreign_test_scratch/live-owner" ] ||
+    fail "explicit Cargo cleanup deleted another invocation's test scratch"
 
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 mkdir -p "$release_cleanup_fixture/target"
 if FAKE_CARGO_FAILURES=2 FAKE_CARGO_STATUS=19 PATH="$release_cleanup_bin:$PATH" \
-    bash "$release_cleanup_fixture/scripts/ci/run-release-gates.sh" minor; then
-    fail "release-gate wrapper accepted a failed cleanup"
+    bash "$release_cleanup_fixture/scripts/ci/cleanup-release-artifacts.sh"; then
+    fail "explicit cleanup accepted a failed Cargo cleanup"
 else
     release_cleanup_status=$?
 fi
 [ "$release_cleanup_status" -eq 1 ] ||
-    fail "release-gate wrapper did not preserve the cleanup failure"
+    fail "explicit cleanup did not preserve the Cargo cleanup failure"
 [ "$(cat "$release_cleanup_fixture/cargo-clean-attempts")" -eq 2 ] ||
     fail "release cleanup exceeded its bounded Cargo retry"
 [ -e "$release_cleanup_fixture/target" ] ||
     fail "failed fake Cargo cleanup unexpectedly removed its target fixture"
-assert_private_test_scratch_cleaned
 
 borrowed_test_scratch="$release_cleanup_fixture/.tmp/test-runtime.BORROW"
 mkdir -p "$borrowed_test_scratch"

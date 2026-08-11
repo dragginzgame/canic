@@ -10,8 +10,13 @@ versioning, releases, and deployment-adjacent automation.
 - Lint: `make clippy`
 - Test: `make test`
 - Build: `make build`
-- Merge verification normally includes `make fmt-check`, `make clippy`, and
-  `make test` unless the task or maintainer explicitly narrows scope.
+- Repository invariants: `make check-invariants`
+- Complete local validation: `make validate`
+
+Primitive targets perform only the operation they name. They do not configure
+Git hooks, format before checking, or invoke unrelated invariant, feature,
+lint, build, or test targets. `make validate` is the explicit composition
+boundary for the complete local workflow.
 
 `make test` executes every top-level integration test recorded in the guarded
 workspace test inventory. New integration targets must declare their release
@@ -99,34 +104,29 @@ Release bumps are human-owned. The normal human release path is `make patch`,
 `make minor`, or `make major`, followed by review of generated changes. Once
 reviewed, humans finish the release with `make release-stage`,
 `make release-commit`, and `make release-push`.
-The Make version targets complete their required test and feature gates before
-changing package versions; any failed gate leaves the version unchanged. The
-underlying bump script rejects direct invocation without the private gate
+The Make version targets run the same explicit `make validate` workflow before
+changing package versions; any failed target leaves the version unchanged. The
+underlying bump script rejects direct invocation without the private validation
 marker supplied by those targets.
-Once those compilation gates start, their wrapper allocates one private
-repository-owned `.tmp/test-runtime.<suffix>` directory and passes that exact
-ownership through every nested test target. The invocation clears only its own
-scratch on success, ordinary failure or handled interrupt. Before removing it,
-cleanup forcibly stops only a detached PocketIC server whose exact
-`--port-file` is a direct child of that invocation's scratch; this avoids the
-upstream server's late socket-teardown panic without touching another
-invocation's server. Cleanup never sweeps a shared path or another concurrent
-invocation's scratch. A successful gate then
-clears Cargo build artifacts before version mutation. An ordinary gate failure
-retains Cargo artifacts for diagnosis and a faster exact retry. Cargo cleanup
-after a successful gate retries once when its first filesystem pass fails;
-failure of both bounded attempts prevents version mutation. Canic scripts must
-clean their own temporary files; release cleanup must not sweep unrelated
-repository scratch or global `/tmp` content.
+
+The test target allocates one private repository-owned
+`.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success,
+ordinary failure or handled interrupt. Before removing it, cleanup forcibly
+stops only a detached PocketIC server whose exact `--port-file` is a direct
+child of that invocation's scratch; this avoids the upstream server's late
+socket-teardown panic without touching another invocation's server. Cleanup
+never sweeps a shared path or another concurrent invocation's scratch. Canic
+scripts must clean their own temporary files; explicit cleanup must not sweep
+unrelated repository scratch or global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
-release commit/tag pair from committed `HEAD` and repeats Cargo cleanup. Local
+release commit/tag pair from committed `HEAD`. It does not format, compile,
+test, validate, or clean. Local
 staged, unstaged and untracked changes neither block the push nor join it; they
 remain local. The release version is read from `HEAD`'s committed `Cargo.toml`,
 so a later local manifest edit cannot redirect tag selection. Test scratch has
-already been removed by the invocation that owned it, so release push has no
-authority to sweep another process's scratch. It explicitly sends both the
-current branch ref and the exact workspace-version tag ref in one atomic push,
-so the tag is still sent
+already been removed by the test invocation that owned it. Release push
+explicitly sends both the current branch ref and the exact workspace-version
+tag ref in one atomic push, so the tag is still sent
 when the branch commit is already present remotely. No fallible local cleanup
 step runs after a successful push, and atomic push prevents a branch-only or
 tag-only remote update. A transport interruption can still make the remote
@@ -136,7 +136,7 @@ For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.
 Minor and major release bumps require interactive command-line confirmation
-before running their release gates.
+before running `make validate`.
 
 Tags are immutable.
 
