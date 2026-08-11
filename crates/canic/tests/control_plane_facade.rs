@@ -20,7 +20,7 @@ impl AsyncAccessPredicate for PublicAsyncPredicate {
     }
 }
 
-fn require_async_predicate<T: AsyncAccessPredicate>() {}
+const fn require_async_predicate<T: AsyncAccessPredicate>() {}
 
 // Confirms the public `canic` facade exposes the full control-plane enum surface.
 #[test]

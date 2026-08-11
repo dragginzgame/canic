@@ -18,16 +18,14 @@ workspace_version() {
             print $3
             exit
         }
-    ' Cargo.toml
+    '
 }
 
-version="$(workspace_version)"
+committed_manifest="$(git show HEAD:Cargo.toml 2>/dev/null)" ||
+    fail "HEAD does not contain Cargo.toml"
+version="$(printf '%s\n' "$committed_manifest" | workspace_version)"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] ||
-    fail "Cargo.toml does not declare a valid workspace release version"
-
-if [ -n "$(git status --porcelain=v1 --untracked-files=all)" ]; then
-    fail "the worktree or index is not clean"
-fi
+    fail "HEAD Cargo.toml does not declare a valid workspace release version"
 
 branch="$(git symbolic-ref --quiet --short HEAD)" ||
     fail "HEAD is detached"

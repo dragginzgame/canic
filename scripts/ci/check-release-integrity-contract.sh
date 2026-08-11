@@ -24,6 +24,7 @@ BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 RELEASE_GATES="$ROOT/scripts/ci/run-release-gates.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
+RELEASE_PUSH_READY="$ROOT/scripts/ci/check-release-push-ready.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
@@ -44,7 +45,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CLEANUP" "$RELEASE_GATES" "$TEST_SCRATCH_RUNNER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$PRE_COMMIT_HOOK"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -125,6 +126,13 @@ for mode in patch minor major; do
 done
 rg --multiline 'release-push:\n\t@bash scripts/ci/check-release-push-ready\.sh\n\t@bash scripts/ci/cleanup-release-artifacts\.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release\.sh' "$MAKEFILE" >/dev/null ||
     fail "release push does not clean before its final atomic network update"
+for release_push_script in "$RELEASE_PUSH_READY" "$RELEASE_PUSH"; do
+    rg -F 'git show HEAD:Cargo.toml' "$release_push_script" >/dev/null ||
+        fail "release push does not derive its version from committed HEAD"
+done
+if rg -F 'git status --porcelain' "$RELEASE_PUSH_READY" >/dev/null; then
+    fail "release push still rejects unrelated local worktree or index changes"
+fi
 rg -F 'cargo clean' "$RELEASE_CLEANUP" >/dev/null ||
     fail "release cleanup does not clear Cargo build artifacts"
 rg -F 'MAX_CARGO_CLEAN_ATTEMPTS=2' "$RELEASE_CLEANUP" >/dev/null ||
@@ -468,12 +476,16 @@ mkdir -p "$release_push_fixture/scripts/ci" "$release_push_bin"
 cp "$RELEASE_PUSH" "$release_push_fixture/scripts/ci/"
 printf '%s\n' \
     '[workspace.package]' \
-    'version = "0.101.10"' >"$release_push_fixture/Cargo.toml"
+    'version = "9.9.9"' >"$release_push_fixture/Cargo.toml"
+printf '%s\n' \
+    '[workspace.package]' \
+    'version = "0.101.10"' >"$release_push_fixture/committed-Cargo.toml"
 # shellcheck disable=SC2016 # Preserve argument handling for the generated fixture.
 printf '%s\n' \
     '#!/usr/bin/env bash' \
     'case "${1:-}" in' \
     'symbolic-ref) printf "main\n" ;;' \
+    'show) cat "$PWD/committed-Cargo.toml" ;;' \
     'push) printf "%s\n" "$@" >"$PWD/push-arguments" ;;' \
     '*) exit 2 ;;' \
     'esac' >"$release_push_bin/git"

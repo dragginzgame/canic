@@ -9,7 +9,8 @@ fi
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT" || exit 1
 
-workspace_version="$(awk '
+committed_manifest="$(git show HEAD:Cargo.toml)"
+workspace_version="$(printf '%s\n' "$committed_manifest" | awk '
     /^\[workspace.package\]/ { in_section = 1; next }
     /^\[/ && in_section { exit }
     in_section && $1 == "version" {
@@ -17,7 +18,7 @@ workspace_version="$(awk '
         print $3
         exit
     }
-' Cargo.toml)"
+')"
 branch="$(git symbolic-ref --quiet --short HEAD)"
 tag="v$workspace_version"
 

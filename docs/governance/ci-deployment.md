@@ -115,7 +115,10 @@ failure of both bounded attempts prevents version mutation. Canic scripts must
 clean their own temporary files; release cleanup must not sweep unrelated
 repository scratch or global `/tmp` content.
 Before its final atomic network update, `make release-push` verifies the exact
-clean release commit/tag pair and repeats Cargo cleanup. Test scratch has
+release commit/tag pair from committed `HEAD` and repeats Cargo cleanup. Local
+staged, unstaged and untracked changes neither block the push nor join it; they
+remain local. The release version is read from `HEAD`'s committed `Cargo.toml`,
+so a later local manifest edit cannot redirect tag selection. Test scratch has
 already been removed by the invocation that owned it, so release push has no
 authority to sweep another process's scratch. It explicitly sends both the
 current branch ref and the exact workspace-version tag ref in one atomic push,

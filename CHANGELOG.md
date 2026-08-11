@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.46` lets an exact tagged release commit push while later local edits
+  remain untouched and unpushed, with release identity derived only from
+  committed `HEAD`.
+
 - `0.101.45` hardens fresh Fleet installation and managed-runtime authority,
   and isolates concurrent test scratch so one release cannot disrupt another
   PocketIC session.
