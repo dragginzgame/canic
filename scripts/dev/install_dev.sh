@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$ROOT_DIR/tool-versions.env"
-CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.101.51}"
+CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.101.52}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.97.1}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
@@ -273,6 +273,10 @@ main() {
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked canic-cli --version $CANIC_CLI_VERSION"
     cargo_toolchain install --quiet --locked canic-cli --version "$CANIC_CLI_VERSION"
+
+    yellow "Git formatting hook:"
+    cyan_command "bash scripts/dev/install-git-hooks.sh"
+    bash "$ROOT_DIR/scripts/dev/install-git-hooks.sh"
 
     echo >&2
     green "Canic setup complete."
