@@ -71,15 +71,9 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
     assert_eq!(json["subnets"][0]["status"], "active");
     assert_eq!(json["subnets"][0]["pooled_canisters"], 2);
     assert_eq!(json["subnets"][0]["total_canisters"], 7);
-    let report_keys = json
-        .as_object()
-        .expect("report object")
-        .keys()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    assert_eq!(
-        report_keys,
-        [
+    assert_serialized_field_order(
+        &report,
+        &[
             "schema_version",
             "canonical_network_id",
             "fleet_id",
@@ -89,17 +83,11 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
             "registry_revision",
             "total_canisters",
             "subnets",
-        ]
+        ],
     );
-    let row_keys = json["subnets"][0]
-        .as_object()
-        .expect("row object")
-        .keys()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    assert_eq!(
-        row_keys,
-        [
+    assert_serialized_field_order(
+        &report.subnets[0],
+        &[
             "subnet",
             "coordinator_canisters",
             "root",
@@ -108,8 +96,21 @@ fn complete_evidence_groups_a_colocated_coordinator_and_root() {
             "component_canisters",
             "pooled_canisters",
             "total_canisters",
-        ]
+        ],
     );
+}
+
+fn assert_serialized_field_order<T: serde::Serialize>(value: &T, expected: &[&str]) {
+    let json = serde_json::to_string(value).expect("serialize ordered JSON fields");
+    let mut search_start = 0;
+
+    for field in expected {
+        let needle = format!("\"{field}\":");
+        let relative_position = json[search_start..]
+            .find(&needle)
+            .unwrap_or_else(|| panic!("missing ordered JSON field {field}: {json}"));
+        search_start += relative_position + needle.len();
+    }
 }
 
 #[test]
