@@ -86,7 +86,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `4b27a4c4cbbeec2097e690ae6c1c178c60317d92b1fee611bfd50967a2725add` | `crates/canic-tests/tests/instruction_audit_support/report.rs` |
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
-| `5d7e2f15bdd195c63276d37beffce6a88fea2b593abfd7a1d6ede7274e6aa3c6` | `docs/audits/META-AUDIT.md` |
+| `0eb8e77d81af93338dcc6051255ddfcf71790dfacd67edb5ec4eae64e9ef393d` | `docs/audits/META-AUDIT.md` |
 | `68cc56bb74431f89ed9a7e10360e346313cff382feaee576cc3511103650aa24` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
