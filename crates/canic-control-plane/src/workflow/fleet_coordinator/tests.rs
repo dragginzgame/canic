@@ -1312,7 +1312,7 @@ fn scale_out_publishes_all_new_pool_members_in_one_atomic_registry_append() {
 }
 
 #[test]
-fn active_pool_scale_out_packs_one_root_and_commits_one_atomic_addition() {
+fn active_pool_scale_out_and_restore_preserve_cross_document_authority() {
     let config = packed_active_pool_coordinator_config();
     FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
     activate_two_roots_with_config_and_admission(principal(200), &config, 3);
@@ -1386,20 +1386,84 @@ fn active_pool_scale_out_packs_one_root_and_commits_one_atomic_addition() {
             .count(),
         2
     );
+    assert_restored_service_and_placement_authority(
+        &config, &request, &terminal, &registry, &durable,
+    );
+    assert_packed_root_limit_rejects_without_mutation(&config, &registry, &durable);
+}
+
+fn assert_restored_service_and_placement_authority(
+    config: &ConfigModel,
+    request: &FleetComponentProvisioningPrepareRequest,
+    terminal: &FleetComponentProvisioningStatusResponse,
+    expected_registry: &FleetRegistry,
+    durable: &FleetCoordinatorRegistryData,
+) {
+    let expected_deployments = durable
+        .current
+        .as_ref()
+        .expect("Coordinator state")
+        .component_group_deployments
+        .clone();
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
     FleetCoordinatorRegistryStore::import(durable.clone());
+
+    assert_eq!(
+        FleetCoordinatorWorkflow::registry().expect("restored Registry"),
+        *expected_registry
+    );
+    let restored = FleetCoordinatorRegistryStore::export();
+    assert_eq!(
+        restored
+            .current
+            .as_ref()
+            .expect("restored Coordinator state")
+            .component_group_deployments,
+        expected_deployments
+    );
     assert_eq!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
-            &config,
+            config,
             FleetComponentProvisioningStatusRequest {
                 operation_id: request.operation_id,
                 plan_hash: terminal.plan_hash,
             },
         )
-        .expect("replay terminal packed ActivePool scale-out"),
-        terminal
+        .expect("replay terminal packed ActivePool scale-out after restore"),
+        *terminal
     );
-    assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
-    assert_packed_root_limit_rejects_without_mutation(&config, &registry, &durable);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), *durable);
+
+    let mut invalid_ordinal = durable.clone();
+    invalid_ordinal
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .component_group_deployments[0]
+        .next_placement_ordinal += 1;
+    FleetCoordinatorRegistryStore::import(invalid_ordinal.clone());
+    let invalid = FleetCoordinatorWorkflow::registry()
+        .expect_err("restored next ordinal cannot diverge from placement receipts");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), invalid_ordinal);
+
+    let mut invalid_service = durable.clone();
+    invalid_service
+        .current
+        .as_mut()
+        .expect("Coordinator state")
+        .registry
+        .services[0]
+        .members[0]
+        .group_placement
+        .ordinal += 1;
+    FleetCoordinatorRegistryStore::import(invalid_service.clone());
+    let invalid = FleetCoordinatorWorkflow::registry()
+        .expect_err("restored service member cannot diverge from publication authority");
+    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(FleetCoordinatorRegistryStore::export(), invalid_service);
+
+    FleetCoordinatorRegistryStore::import(durable.clone());
 }
 
 fn assert_packed_root_limit_rejects_without_mutation(

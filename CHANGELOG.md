@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.51` separates provisioning-journal and initial-placement policy
+  ownership, shares only mechanical durable-document operations across host
+  install journals, and proves restored Coordinator service/placement state
+  remains exact or fails closed.
+
 - `0.101.50` qualifies complete Fleet isolation on one shared physical Subnet,
   exact sibling-Store and prepaid-pool authority, and fail-closed first-excess
   scale boundaries before platform effects.

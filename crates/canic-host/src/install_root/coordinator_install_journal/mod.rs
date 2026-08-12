@@ -10,8 +10,10 @@ mod tests;
 
 use crate::{
     durable_io::{
-        RegularFileLockError, RegularFileReadError, create_new_bytes_with_parents,
-        lock_regular_file_with_parents, read_optional_regular_bytes, write_bytes,
+        BoundedRegularFileReadError, CanonicalJsonEncodeError, CanonicalJsonStyle,
+        ExactReplaceError, RegularFileLockError, RegularFileReadError,
+        create_new_bytes_with_parents, encode_canonical_json, lock_regular_file_with_parents,
+        read_optional_bounded_regular_bytes, replace_bytes_exact,
     },
     fleet_install_plan::{PersistedFleetInstallPlan, PlannedCanisterCreationFunding},
     release_set::{
@@ -427,19 +429,8 @@ fn transition(
     next.phase = requested;
     apply(&mut next);
     let bytes = encode_journal(&current.path, &next)?;
-    if let Err(source) = write_bytes(&current.path, &bytes) {
-        match load_optional_journal(&current.path)? {
-            Some(observed) if observed == next => {
-                return Ok(resolved(next, current.path.clone(), true));
-            }
-            _ => {
-                return Err(FleetCoordinatorInstallJournalError::Io {
-                    path: current.path.clone(),
-                    source,
-                });
-            }
-        }
-    }
+    replace_bytes_exact(&current.path, &bytes)
+        .map_err(|error| replace_error(&current.path, error))?;
     let durable = load_required_journal(&current.path)?;
     if durable != next {
         return Err(invalid(
@@ -459,36 +450,37 @@ fn load_required_journal(
 fn load_optional_journal(
     path: &Path,
 ) -> Result<Option<FleetCoordinatorInstallJournal>, FleetCoordinatorInstallJournalError> {
-    let bytes = match read_optional_regular_bytes(path) {
-        Ok(bytes) => bytes,
-        Err(RegularFileReadError::NotRegular) => {
-            return Err(FleetCoordinatorInstallJournalError::UnsafeFile {
-                path: path.to_path_buf(),
-            });
-        }
-        Err(RegularFileReadError::Io(source)) => {
-            return Err(FleetCoordinatorInstallJournalError::Io {
-                path: path.to_path_buf(),
-                source,
-            });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(FleetCoordinatorInstallJournalError::Io {
-                path: path.to_path_buf(),
-                source: io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "Coordinator install journal reads are unsupported",
-                ),
-            });
-        }
-    };
+    let bytes =
+        match read_optional_bounded_regular_bytes(path, MAX_COORDINATOR_INSTALL_JOURNAL_BYTES) {
+            Ok(bytes) => bytes,
+            Err(BoundedRegularFileReadError::TooLarge) => {
+                return Err(invalid(path, "journal exceeds its byte bound"));
+            }
+            Err(BoundedRegularFileReadError::Read(RegularFileReadError::NotRegular)) => {
+                return Err(FleetCoordinatorInstallJournalError::UnsafeFile {
+                    path: path.to_path_buf(),
+                });
+            }
+            Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))) => {
+                return Err(FleetCoordinatorInstallJournalError::Io {
+                    path: path.to_path_buf(),
+                    source,
+                });
+            }
+            #[cfg(not(unix))]
+            Err(BoundedRegularFileReadError::Read(RegularFileReadError::UnsupportedPlatform)) => {
+                return Err(FleetCoordinatorInstallJournalError::Io {
+                    path: path.to_path_buf(),
+                    source: io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "Coordinator install journal reads are unsupported",
+                    ),
+                });
+            }
+        };
     let Some(bytes) = bytes else {
         return Ok(None);
     };
-    if bytes.len() > MAX_COORDINATOR_INSTALL_JOURNAL_BYTES {
-        return Err(invalid(path, "journal exceeds its byte bound"));
-    }
     let journal = serde_json::from_slice::<FleetCoordinatorInstallJournal>(&bytes)
         .map_err(|error| invalid(path, error.to_string()))?;
     validate_journal(path, &journal)?;
@@ -670,11 +662,42 @@ fn encode_journal(
     journal: &FleetCoordinatorInstallJournal,
 ) -> Result<Vec<u8>, FleetCoordinatorInstallJournalError> {
     validate_journal(path, journal)?;
-    let bytes = serde_json::to_vec(journal).map_err(|error| invalid(path, error.to_string()))?;
-    if bytes.len() > MAX_COORDINATOR_INSTALL_JOURNAL_BYTES {
-        return Err(invalid(path, "journal exceeds its byte bound"));
+    encode_canonical_json(
+        journal,
+        CanonicalJsonStyle::Compact,
+        MAX_COORDINATOR_INSTALL_JOURNAL_BYTES,
+    )
+    .map_err(|error| match error {
+        CanonicalJsonEncodeError::Serialization(error) => invalid(path, error.to_string()),
+        CanonicalJsonEncodeError::TooLarge => invalid(path, "journal exceeds its byte bound"),
+    })
+}
+
+fn replace_error(path: &Path, error: ExactReplaceError) -> FleetCoordinatorInstallJournalError {
+    match error {
+        ExactReplaceError::Write(source)
+        | ExactReplaceError::Read(RegularFileReadError::Io(source)) => {
+            FleetCoordinatorInstallJournalError::Io {
+                path: path.to_path_buf(),
+                source,
+            }
+        }
+        ExactReplaceError::Read(RegularFileReadError::NotRegular) => {
+            FleetCoordinatorInstallJournalError::UnsafeFile {
+                path: path.to_path_buf(),
+            }
+        }
+        #[cfg(not(unix))]
+        ExactReplaceError::Read(RegularFileReadError::UnsupportedPlatform) => {
+            FleetCoordinatorInstallJournalError::Io {
+                path: path.to_path_buf(),
+                source: io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Coordinator install journal reads are unsupported",
+                ),
+            }
+        }
     }
-    Ok(bytes)
 }
 
 fn same_immutable_authority(

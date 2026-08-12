@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::{
-    fleet_catalog::CommittedFleetCatalog,
+    fleet_catalog::{CommittedFleetCatalog, FleetCatalogEntryV1},
     fleet_install_plan::{
         FleetInstallPlan, PersistedFleetInstallPlan, PlannedCanisterCreationFunding,
         PlannedFleetCoordinator,
@@ -10,6 +10,9 @@ use crate::{
     install_root::fleet_component_provisioning_plan::CompiledFleetComponentProvisioningPlan,
     test_support::temp_dir,
 };
+use std::path::Path;
+
+use candid::Principal;
 use canic_core::{
     dto::{
         component_provisioning::{

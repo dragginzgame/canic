@@ -4,6 +4,7 @@
 //! Does not own: placement selection, Canister creation, installation, or Registry mutation.
 //! Boundary: callers supply exact resolved placement/funding input before external effects.
 
+mod initial_placement_policy;
 mod model;
 mod persistence;
 #[cfg(test)]
