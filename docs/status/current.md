@@ -14,15 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.49`.
-- The latest published release is `v0.101.49` at
-  `74c9678484b6b3bc49a19c952c0a0700e4b5ad45`.
-- Open `0.101.50` completes the consolidated Fleet-isolation and physical-
-  effect-boundary batch. Two independent Fleets now exercise separate
+- The workspace package version is `0.101.50`.
+- The latest published release is `v0.101.50` at
+  `dae57ea1a9c44738d6d18cf20616fd6c2530b2fa`.
+- Open `0.101.51` completes the durable-document and policy-ownership batch.
+  The fresh-install Component provisioning journal now has separate schema,
+  typed-transition, authority-validation and persistence owners; initial
+  placement policy is pure and no longer lives in plan-file persistence; and
+  the four host installation journals share only bounded canonical encoding,
+  no-follow reads and exact replacement reconciliation through `durable_io`.
+  A Coordinator restore proof preserves exact service members, placement-to-
+  root mappings and next ordinals, while independently corrupted service or
+  ordinal state fails closed without mutation.
+- Released `0.101.50` completes the consolidated Fleet-isolation and physical-
+  effect-boundary batch. Two independent Fleets exercise separate
   Coordinators, roots, sibling Stores, root-only controller sets, prepaid
   inventories and Registries while sharing one physical PocketIC application
   Subnet; foreign Store writes and Registry synchronization both fail closed.
-- Grouped provisioning now explicitly replays the ordinary operation-bound
+- Grouped provisioning explicitly replays the ordinary operation-bound
   prepaid-pool claim before installation and observes the same sole workload
   asset. Frozen structural, configuration, deployment, service, plan,
   Directory-confirmation and initial root-capacity ceilings have exact first-

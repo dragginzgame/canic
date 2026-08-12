@@ -1,15 +1,24 @@
 //! Module: durable_io
 //!
-//! Responsibility: solely own atomic durable regular-file publication for `canic-host`.
-//! Does not own: serialization, path selection, ephemeral protocol files, open command-result
-//! descriptors, backup persistence, or multi-file transactions.
+//! Responsibility: own atomic durable regular-file publication and narrow canonical-document
+//! mechanics for `canic-host`.
+//! Does not own: domain schemas or transitions, path selection, ephemeral protocol files, open
+//! command-result descriptors, backup persistence, or multi-file transactions.
 //! Boundary: reads reject links/special files; writes own sibling staging, publication, cleanup,
-//! and filesystem syncs behind replace and create-new modes.
+//! and filesystem syncs behind replace and create-new modes; document helpers add only bounded
+//! encoding, reads and exact replacement reconciliation.
+
+mod document;
 
 #[cfg(test)]
 mod tests;
 
 use std::{fs, io, path::Path};
+
+pub(crate) use document::{
+    BoundedRegularFileReadError, CanonicalJsonEncodeError, CanonicalJsonStyle, ExactReplaceError,
+    encode_canonical_json, read_optional_bounded_regular_bytes, replace_bytes_exact,
+};
 
 #[derive(Debug)]
 pub(crate) enum RegularFileReadError {

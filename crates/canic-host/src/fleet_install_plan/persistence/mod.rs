@@ -14,6 +14,7 @@ use crate::{
         RegularFileLockError, RegularFileReadError, create_new_bytes_with_parents,
         lock_regular_file_with_parents, read_optional_regular_bytes,
     },
+    fleet_install_plan::initial_placement_policy,
     fleet_install_plan::model::{
         FleetInstallPlan, FleetInstallPlanError, FleetInstallPlanRequest,
         PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet,
@@ -23,7 +24,6 @@ use crate::{
     release_set::{FleetSubnetRootReleaseSetManifest, load_persisted_application_artifact_union},
 };
 use std::{
-    collections::BTreeMap,
     io,
     path::{Path, PathBuf},
 };
@@ -31,13 +31,7 @@ use std::{
 use candid::Principal;
 use canic_core::{
     bootstrap::compiled::ConfigModel,
-    control_plane_support::config::{
-        ComponentDeploymentPurpose, ComponentGroupDeploymentSpec, FleetServiceTopology,
-    },
-    ids::{
-        ComponentGroupDeploymentId, ComponentSpecId, FleetBinding, FleetServiceId,
-        FleetSubnetRootReleaseSet, ReleaseBuildId, SubnetId,
-    },
+    ids::{FleetBinding, FleetSubnetRootReleaseSet, ReleaseBuildId, SubnetId},
 };
 use sha2::{Digest, Sha256};
 
@@ -339,245 +333,8 @@ fn validate_initial_component_group_assignments(
     config: &ConfigModel,
     roots: &[PlannedFleetSubnetRoot],
 ) -> Result<(), FleetInstallPlanError> {
-    let configuration = config
-        .compile_component_deployment_configuration()
-        .map_err(|error| invalid_assignments(error.to_string()))?;
-    let deployments = &configuration
-        .deployment_topology
-        .component_group_deployments;
-    let mut assignments = BTreeMap::<
-        (ComponentGroupDeploymentId, u32),
-        (SubnetId, &ComponentGroupDeploymentSpec),
-    >::new();
-    let mut service_roots = BTreeMap::<FleetServiceId, BTreeMap<SubnetId, u32>>::new();
-
-    for root in roots {
-        let assignments_are_sorted = root.component_group_placements.is_sorted();
-        let assignments_are_unique = root
-            .component_group_placements
-            .windows(2)
-            .all(|window| window[0] != window[1]);
-        let assignments_are_canonical = [assignments_are_sorted, assignments_are_unique]
-            .into_iter()
-            .all(std::convert::identity);
-        if !assignments_are_canonical {
-            return Err(invalid_assignments(format!(
-                "root {} assignments are not strictly canonical",
-                root.placement_subnet
-            )));
-        }
-        if root.component_group_placements.len() > root.limits.maximum_group_placements as usize {
-            return Err(invalid_assignments(format!(
-                "root {} exceeds maximum_group_placements",
-                root.placement_subnet
-            )));
-        }
-        validate_root_initial_assignment_capacity(
-            root,
-            deployments,
-            &mut assignments,
-            &mut service_roots,
-        )?;
-    }
-
-    for deployment in deployments {
-        validate_deployment_assignment(deployment, &assignments)?;
-    }
-    validate_service_assignments(&configuration.fleet_service_topology, &service_roots)
-}
-
-fn validate_root_initial_assignment_capacity<'a>(
-    root: &PlannedFleetSubnetRoot,
-    deployments: &'a [ComponentGroupDeploymentSpec],
-    assignments: &mut BTreeMap<
-        (ComponentGroupDeploymentId, u32),
-        (SubnetId, &'a ComponentGroupDeploymentSpec),
-    >,
-    service_roots: &mut BTreeMap<FleetServiceId, BTreeMap<SubnetId, u32>>,
-) -> Result<(), FleetInstallPlanError> {
-    let mut component_counts = BTreeMap::<ComponentSpecId, u32>::new();
-    let mut component_count = 0_u32;
-    for assignment in &root.component_group_placements {
-        let deployment = deployments
-            .binary_search_by(|candidate| candidate.deployment.cmp(&assignment.deployment))
-            .ok()
-            .map(|index| &deployments[index])
-            .ok_or_else(|| {
-                invalid_assignments(format!(
-                    "root {} references unknown deployment '{}'",
-                    root.placement_subnet, assignment.deployment
-                ))
-            })?;
-        if assignment.ordinal >= deployment.initial_placements {
-            return Err(invalid_assignments(format!(
-                "deployment '{}' ordinal {} is outside its initial placement set",
-                assignment.deployment, assignment.ordinal
-            )));
-        }
-        if assignments
-            .insert(
-                (assignment.deployment.clone(), assignment.ordinal),
-                (root.placement_subnet, deployment),
-            )
-            .is_some()
-        {
-            return Err(invalid_assignments(format!(
-                "deployment '{}' ordinal {} is assigned more than once",
-                assignment.deployment, assignment.ordinal
-            )));
-        }
-        component_count = component_count
-            .checked_add(
-                u32::try_from(deployment.members.len())
-                    .map_err(|_| invalid_assignments("deployment member count does not fit u32"))?,
-            )
-            .ok_or_else(|| invalid_assignments("root Component count overflowed"))?;
-        for member in &deployment.members {
-            let count = component_counts
-                .entry(member.component_spec.clone())
-                .or_default();
-            *count = count
-                .checked_add(1)
-                .ok_or_else(|| invalid_assignments("root Component Spec count overflowed"))?;
-            if let ComponentDeploymentPurpose::FleetServiceMember { service, .. } = &member.purpose
-            {
-                let count = service_roots
-                    .entry(service.clone())
-                    .or_default()
-                    .entry(root.placement_subnet)
-                    .or_default();
-                *count = count
-                    .checked_add(1)
-                    .ok_or_else(|| invalid_assignments("Fleet-service member count overflowed"))?;
-            }
-        }
-    }
-    if component_count > root.limits.maximum_component_instances {
-        return Err(invalid_assignments(format!(
-            "root {} initial Components exceed protected root capacity",
-            root.placement_subnet
-        )));
-    }
-    validate_initial_pool_capacity(root, component_count)?;
-    for (component_spec, count) in component_counts {
-        let admission = root
-            .component_admissions
-            .binary_search_by(|admission| admission.component_spec.cmp(&component_spec))
-            .ok()
-            .map(|index| &root.component_admissions[index])
-            .ok_or_else(|| {
-                invalid_assignments(format!(
-                    "root {} does not admit Component Spec '{}'",
-                    root.placement_subnet, component_spec
-                ))
-            })?;
-        if count > admission.maximum_root_instances {
-            return Err(invalid_assignments(format!(
-                "root {} exceeds admission for Component Spec '{}'",
-                root.placement_subnet, component_spec
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn validate_initial_pool_capacity(
-    root: &PlannedFleetSubnetRoot,
-    component_count: u32,
-) -> Result<(), FleetInstallPlanError> {
-    let imported_assets = u32::try_from(root.canister_pool_imports.len())
-        .map_err(|_| invalid_assignments("root Canister pool import count does not fit u32"))?;
-    let automatic_ready_target = root.limits.canister_pool.minimum_size.max(imported_assets);
-    if component_count > automatic_ready_target {
-        return Err(invalid_assignments(format!(
-            "root {} initial atomic Component batch requires {component_count} Ready prepaid Canisters but its configured minimum/import target is {automatic_ready_target}",
-            root.placement_subnet
-        )));
-    }
-    Ok(())
-}
-
-fn validate_deployment_assignment(
-    deployment: &ComponentGroupDeploymentSpec,
-    assignments: &BTreeMap<
-        (ComponentGroupDeploymentId, u32),
-        (SubnetId, &ComponentGroupDeploymentSpec),
-    >,
-) -> Result<(), FleetInstallPlanError> {
-    let matching = assignments
-        .iter()
-        .filter(|((candidate, _), _)| candidate == &deployment.deployment)
-        .collect::<Vec<_>>();
-    let ordinals_are_exact = matching
-        .iter()
-        .map(|((_, ordinal), _)| *ordinal)
-        .eq(0..deployment.initial_placements);
-    let assignment_count_is_exact = matching.len() == deployment.initial_placements as usize;
-    let assignment_set_is_complete = [assignment_count_is_exact, ordinals_are_exact]
-        .into_iter()
-        .all(std::convert::identity);
-    if !assignment_set_is_complete {
-        return Err(invalid_assignments(format!(
-            "deployment '{}' does not assign every initial ordinal exactly once",
-            deployment.deployment
-        )));
-    }
-    let mut root_counts = BTreeMap::<SubnetId, u32>::new();
-    for (_, (root, _)) in matching {
-        let count = root_counts.entry(*root).or_default();
-        *count = count
-            .checked_add(1)
-            .ok_or_else(|| invalid_assignments("deployment root count overflowed"))?;
-    }
-    let density_is_valid = root_counts
-        .values()
-        .all(|count| *count <= deployment.placement.maximum_per_root);
-    let required_roots = deployment
-        .initial_placements
-        .min(deployment.placement.minimum_distinct_roots) as usize;
-    let spread_is_valid = root_counts.len() >= required_roots;
-    let placement_is_valid = [density_is_valid, spread_is_valid]
-        .into_iter()
-        .all(std::convert::identity);
-    if !placement_is_valid {
-        return Err(invalid_assignments(format!(
-            "deployment '{}' violates its root density or spread policy",
-            deployment.deployment
-        )));
-    }
-    Ok(())
-}
-
-fn validate_service_assignments(
-    topology: &FleetServiceTopology,
-    service_roots: &BTreeMap<FleetServiceId, BTreeMap<SubnetId, u32>>,
-) -> Result<(), FleetInstallPlanError> {
-    for target in &topology.targets {
-        let roots = service_roots
-            .get(&target.service)
-            .cloned()
-            .unwrap_or_default();
-        let density_is_valid = roots
-            .values()
-            .all(|count| *count <= target.placement.maximum_members_per_root);
-        let members = roots.values().try_fold(0_u32, |total, count| {
-            total
-                .checked_add(*count)
-                .ok_or_else(|| invalid_assignments("Fleet-service member count overflowed"))
-        })?;
-        let required_roots = members.min(target.placement.minimum_distinct_roots) as usize;
-        let spread_is_valid = roots.len() >= required_roots;
-        let placement_is_valid = [density_is_valid, spread_is_valid]
-            .into_iter()
-            .all(std::convert::identity);
-        if !placement_is_valid {
-            return Err(invalid_assignments(format!(
-                "Fleet service '{}' violates its root density or spread policy",
-                target.service
-            )));
-        }
-    }
-    Ok(())
+    initial_placement_policy::validate_initial_component_group_assignments(config, roots)
+        .map_err(|error| invalid_assignments(error.to_string()))
 }
 
 fn invalid_assignments(reason: impl Into<String>) -> FleetInstallPlanError {

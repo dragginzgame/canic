@@ -174,7 +174,7 @@ Date: 2026-08-11
   one placement and the exact 2,000-instance reduction in the other;
   substituted limit authority rejects.
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.49` is released and `0.101.50` is open.
+- Implementation started: yes; `0.101.50` is released and `0.101.51` is open.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -202,8 +202,8 @@ repairs do not create additional release boundaries.
 | Batch | Bounded outcome and owner | Included direct evidence and fallout | Focused validation | Status |
 | --- | --- | --- | --- | --- |
 | Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in released `0.101.49` |
-| Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in open `0.101.50` |
-| Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Pending |
+| Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
+| Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in open `0.101.51` |
 | Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and size/capacity report | Pending |
 | Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Pending |
 
@@ -212,9 +212,13 @@ spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
 the second Project Hub, restarts the Coordinator after every durable advance,
 replays the same command without duplicate placement or membership and keeps
 the Hub, its new Instance and that Instance's Ledger on the selected root's
-Subnet. `Q2` is complete in the open `0.101.50` batch with direct co-located-
-Fleet, Store-controller, pool-replay and first-excess evidence. Individual
-fallout inside a batch does not create another patch boundary.
+Subnet. `Q2` is complete in the released `0.101.50` batch with direct co-
+located-Fleet, Store-controller, pool-replay and first-excess evidence. `Q3`
+is complete in the open `0.101.51` batch: restored Coordinator state retains
+one exact service/placement authority, the provisioning journal has separated
+typed owners, placement policy is pure and the four host installation
+journals share only mechanical durable-document operations. Individual fallout
+inside a batch does not create another patch boundary.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -512,7 +516,11 @@ Fleet policy writer.
   with affected-root synchronization, selected-root synchronization,
   selected-root publication and runtime activation each in flight, then
   requires the exact typed reconcile call before recording the response.
-- [ ] Prove backup/restore cross-document consistency.
+- [x] Prove backup/restore cross-document consistency. A complete packed and
+  spread ActivePool snapshot is cleared, restored and revalidated with its
+  exact Fleet Registry service members, placement IDs/root mappings, terminal
+  replay evidence and next ordinal. Independent next-ordinal and Registry-
+  member substitutions fail closed without mutating restored state.
 - [ ] Prove Component Topology, group flattening, admission,
   active-release-set, Wasm Store, effective member limits, placement,
   service-mode, purpose, label and authority boundaries.
@@ -561,16 +569,23 @@ Fleet policy writer.
   provisioning, exact immediate-parent bindings and Coordinator-free retry.
 - [x] Prove two deployments reuse one Project Hub group with distinct
   reduction-only 10,000/2,000 Hub-to-Instance ceilings on different roots.
-- [ ] Decompose the fresh-install Component provisioning journal into
+- [x] Decompose the fresh-install Component provisioning journal into
   separately readable typed transition/schema, authority validation and
-  durable-document persistence owners without changing canonical bytes or
-  retry behavior.
-- [ ] Move initial Component Group placement compilation and semantic policy
+  durable-document persistence owners. The maintained schema version, pretty-
+  JSON-plus-newline encoding, file and lock names, byte bound and exact retry
+  behavior remain unchanged.
+- [x] Move initial Component Group placement compilation and semantic policy
   out of generic Fleet-install-plan persistence into one focused pure owner.
-- [ ] Inventory every host installation journal and consolidate mechanically
+  Plan persistence now maps its typed policy rejection without owning density,
+  spread, admission, pool or root-capacity rules.
+- [x] Inventory every host installation journal and consolidate mechanically
   identical no-follow read, lock, canonical encode, atomic publication and
   exact-retry plumbing behind a narrow durable-I/O owner while retaining
-  distinct typed domain state machines.
+  distinct typed domain state machines. Coordinator, root-install, Registry-
+  activation and Component-provisioning journals now reuse bounded canonical
+  encoding, no-follow reads and exact replacement reconciliation; their locks,
+  paths, schemas, authority checks, create conflict rules and phase machines
+  remain domain-owned.
 - [ ] Audit every 0.101-touched module for mixed layer ownership, long or mixed
   authority predicates, forwarding namespaces, dead re-exports, unused
   dependencies and completed implementation scaffolding; split or delete each
