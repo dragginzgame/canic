@@ -41,9 +41,9 @@ help:
 	@echo "Version Management:"
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
-	@echo "  patch            Validate, then bump patch version files (0.0.x)"
-	@echo "  minor            Confirm, validate, then bump minor version files (0.x.0)"
-	@echo "  major            Confirm, validate, then bump major version files (x.0.0)"
+	@echo "  patch            Format, validate, then bump patch version files (0.0.x)"
+	@echo "  minor            Confirm, format, validate, then bump minor version files (0.x.0)"
+	@echo "  major            Confirm, format, validate, then bump major version files (x.0.0)"
 	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
 	@echo "  release-minor    Confirm, bump, stage, commit, tag, and push a minor release"
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
@@ -122,7 +122,7 @@ update-dev:
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 #
-# Version management (validate the source candidate before mutation)
+# Version management (format and validate the source candidate before mutation)
 #
 
 version:
@@ -133,18 +133,21 @@ tags:
 
 patch:
 	@$(MAKE) --no-print-directory release-cadence
+	+@$(MAKE) --no-print-directory fmt
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
+	+@$(MAKE) --no-print-directory fmt
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
+	+@$(MAKE) --no-print-directory fmt
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh major
