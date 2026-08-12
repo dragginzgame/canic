@@ -64,6 +64,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
         &root,
         CanisterArtifactBuildOutput {
             package_name: "app-package".to_string(),
+            package_version: "0.101.51".to_string(),
             artifact_root,
             wasm_path,
             wasm_gz_path,
@@ -265,6 +266,7 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
 
     CanisterArtifactBuildOutput {
         package_name: format!("canister_demo_{role}"),
+        package_version: "0.101.51".to_string(),
         artifact_root,
         wasm_path,
         wasm_gz_path,

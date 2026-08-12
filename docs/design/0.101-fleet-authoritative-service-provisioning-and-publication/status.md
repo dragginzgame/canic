@@ -181,8 +181,8 @@ Date: 2026-08-12
   Subnet. The exact supported envelope and Wasm measurements are recorded in
   [qualification.md](qualification.md).
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.51` is released, Q4 is complete, and Q5
-  is active in open `0.101.52`.
+- Implementation started: yes; `0.101.52` is released and Q5 closeout is
+  complete in open `0.101.53`.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -191,11 +191,11 @@ Date: 2026-08-12
   separate runtime and Registry membership activation, revision-bound
   current-Directory convergence and inventory-bound Fleet Subnet Root runtime
   activation.
-- Open closeout gate: Q5 is active and must complete the whole-program hard cut, sediment
-  removal, generated/configuration/stable-memory review and final
-  responsibility/size accounting. Application-data replication remains a
-  separate later design and is not an implementation blocker for 0.101
-  topology, purpose or discovery contracts.
+- Closeout gate: Q5 completed the whole-program hard cut, sediment removal,
+  generated/configuration/stable-memory review and final responsibility/size
+  accounting in [closeout.md](closeout.md). Application-data replication
+  remains a separate later design and is not an implementation blocker for
+  0.101 topology, purpose or discovery contracts.
 
 ## Remaining Release-Batch Plan
 
@@ -211,8 +211,8 @@ repairs do not create additional release boundaries.
 | Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in released `0.101.49` |
 | Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
 | Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in released `0.101.51` |
-| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in open `0.101.52` |
-| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, install execution/performance cleanup, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue and installer guards followed by maintainer-owned complete release validation | Active in open `0.101.52` |
+| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in released `0.101.52` |
+| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, install execution/performance cleanup, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue and installer guards followed by maintainer-owned complete release validation | Complete in open `0.101.53` |
 
 `Q1` is complete in the released `0.101.49` batch. In addition to the packed and
 spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
@@ -226,32 +226,51 @@ one exact service/placement authority, the provisioning journal has separated
 typed owners, placement policy is pure and the four host installation
 journals share only mechanical durable-document operations. Individual fallout
 inside a batch does not create another patch boundary. `Q4` is complete in the
-open `0.101.52` batch: the three-Subnet Toko-shaped journey and shared-Subnet
-second Fleet pass with exact restart/replay, protected 10,000/2,000 Project Hub
-limits and the measured envelope in [qualification.md](qualification.md).
-`Q5` is active in the same open draft. Its first cleanup reconciles current
-installation, recovery, layering and release-authority documentation; archives
-the oversized session handoff; and removes CI guard dependencies on incidental
-job counts, step adjacency and exact Make recipe text. Fresh install now checks
+released `0.101.52` batch: the three-Subnet Toko-shaped journey and shared-
+Subnet second Fleet pass with exact restart/replay, protected 10,000/2,000
+Project Hub limits and the measured envelope in
+[qualification.md](qualification.md).
+`Q5` is complete in the open `0.101.53` draft. Its cleanup
+reconciles current installation, recovery, layering and release-authority
+documentation; archives the oversized session handoff; and removes CI guard
+dependencies on incidental job counts, step adjacency and exact Make recipe
+text. Fresh install now checks
 live authority before compilation, retains its dedicated Cargo target for exact
 retry, preserves the complete post-build safety gate and presents interactive
 activity plus grouped padded summaries instead of unbounded receipt and finding
 streams. Compatible configured roles now share Cargo workspace/profile builds
 and workspace metadata/catalog validation while retaining package-selected role
-graphs. Cold and retained-cache install measurement remains a Q5 follow-up.
+graphs. The exact nine-role Toko fixture materializes all eleven configured and
+infrastructure artifacts in 186.98s on its first fixture-specific fast build
+and 60.54s on exact retained-cache retry. Network-mutating operator install
+timing is not inferred from that artifact build; the Q4 PocketIC journey owns
+the actual multi-Subnet runtime evidence.
 The same cleanup audited rendered CLI help and reduced verbose install, App, build,
 deploy and evidence after-help blocks to representative examples plus concise
 scope or safety notes. The removed install prose no longer invents a whole-
 Fleet update flow that the CLI does not expose. `canic build <app>` now exposes
-the complete artifact build directly: it builds every attached role once per
-Cargo workspace/profile, then reports Fleet Coordinator and Wasm Store builds
-as a distinct Infrastructure Wasm phase. The optional role selector remains
-focused on App custom builds and role-scoped provenance. Retained-cache
+the complete artifact build directly: it batches the configured Fleet Subnet
+Root with every attached Component role once per Cargo workspace/profile, then
+builds Fleet Coordinator and Wasm Store. Its output classifies Components as
+application artifacts and all three platform canisters as infrastructure. The
+optional role selector remains focused on configured custom builds and role-
+scoped provenance. Retained-cache
 measurement exposed Coordinator's unconditional debug-Candid build as 82.00s
 of the 111.30s Infrastructure phase. Coordinator now joins Wasm Store in owning
 a checked-in canonical DID, and ordinary builds copy and embed both contracts;
 the repeated smoke reduces Infrastructure to 8.51s and the complete six-
-artifact build from 147.15s to 44.94s.
+artifact build from 147.15s to 44.94s. The closeout ownership pass has also
+extracted Coordinator root-deletion entry operations, identity/retry lookup,
+cycle-target and hash authority, and durable-history validation from the
+accumulated Registry/provisioning module without changing its stable or public
+contracts.
+Canonical provisioning-plan byte encoding is now a separate focused owner from
+semantic authority validation, with unchanged frozen plan and root-batch hash
+vectors. The control-plane feature gate independently compiles the Coordinator,
+Fleet Subnet Root and Wasm Store roles instead of inferring root isolation from
+the combined host consumer. The final [closeout report](closeout.md) accounts
+for production growth, every remaining large owner, stable memory, generated
+surfaces, permitted terminology and freshly executed focused evidence.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -362,8 +381,10 @@ Fleet policy writer.
 - [x] Remove singleton-Spec and sole-root-admission service assumptions.
 - [x] Validate worst-case Spec demand, placement density/spread and the
   zero-placement/non-Authority versus singleton-Authority count rules.
-- [ ] Measure and freeze the initial supported root, Component, placement,
-  service-member, plan, Registry and Directory envelope.
+- [x] Measure and freeze the initial supported root, Component, placement,
+  service-member, plan, Registry and Directory envelope. The Q4 report records
+  the executed topology and canonical byte sizes while retaining the existing
+  first-excess protocol ceilings.
 
 ## Slice 2 — Root Plans and Provisioning
 
@@ -386,19 +407,21 @@ Fleet policy writer.
   once and the terminal transition preserves that same accounting authority.
 - [x] Extend the complete current root-limit contract without dropping
   Registry, Store, prepaid-pool or cycles-funding authority.
-- [ ] Reuse canonical root-local `ComponentInstanceId` allocation,
+- [x] Reuse canonical root-local `ComponentInstanceId` allocation,
   prepaid-Canister claim and platform lifecycle, failing closed when no Ready
-  imported, recycled or automatically created asset exists. Root-local
-  identity allocation, ordinary prepaid-Canister claim and exact Store-backed
-  install plus Registry-commit recovery are complete; later lifecycle phases
-  remain.
-- [ ] Reuse 0.100's bounded root-owned Cycles Ledger refill and permanent
+  imported, recycled or automatically created asset exists. The grouped root
+  journey uses the ordinary identity, claim, Store-backed install, Registry
+  commit, Directory and runtime-activation journals through terminal replay.
+- [x] Reuse 0.100's bounded root-owned Cycles Ledger refill and permanent
   uncertain-expiry fence; keep raw management `create_canister` and Component
-  paid fallback absent.
-- [ ] Add authenticated minimum-balance/fixed-top-up policy and bounded
-  overfunding warnings without inventing an absolute maximum balance.
-- [ ] Add non-IC ledger funding/configuration only with the same exact-Subnet,
-  guaranteed-response and expired-uncertainty fences as the 0.100 mainnet path.
+  paid fallback absent. Grouped provisioning consumes only Ready pool assets;
+  root maintenance remains the single automatic refill authority.
+- Deferred beyond 0.101: authenticated minimum-balance/fixed-top-up policy and
+  bounded overfunding warnings are owned by the accepted 0.111 Canister-estate
+  design rather than this topology release.
+- Deferred beyond 0.101: any non-IC ledger funding design must separately prove
+  exact-Subnet, guaranteed-response and expired-uncertainty fences before it
+  can become a maintained funding path.
 - [x] Derive a cross-root top-level requester from the raw caller's exact
   current Fleet Registry service binding and matching Fleet Directory, then
   independently require the compiled peer-Component grant.
@@ -554,9 +577,12 @@ Fleet policy writer.
   exact Fleet Registry service members, placement IDs/root mappings, terminal
   replay evidence and next ordinal. Independent next-ordinal and Registry-
   member substitutions fail closed without mutating restored state.
-- [ ] Prove Component Topology, group flattening, admission,
+- [x] Prove Component Topology, group flattening, admission,
   active-release-set, Wasm Store, effective member limits, placement,
-  service-mode, purpose, label and authority boundaries.
+  service-mode, purpose, label and authority boundaries. Focused compiler,
+  canonical-plan and Store-backed root journeys cover the individual
+  rejection boundaries; the Q4 topology qualification composes them through
+  exact protected runtime authority.
 - [x] Prove several placements of one deployment may share a root without
   identity or Component Group Directory ambiguity. One durable two-placement
   root journey now retains distinct member-operation, Component, Canister,
@@ -629,19 +655,19 @@ Fleet policy writer.
   those contracts without debug recompilation; explicit refresh regenerates
   either DID, missing canonical contracts fail closed, and generated fallback
   wrappers extract without treating ignored sidecars as source truth.
-- [ ] Audit every 0.101-touched module for mixed layer ownership, long or mixed
+- [x] Audit every 0.101-touched module for mixed layer ownership, long or mixed
   authority predicates, forwarding namespaces, dead re-exports, unused
   dependencies and completed implementation scaffolding; split or delete each
   confirmed concentration.
-- [ ] Hard-cut every obsolete phase, field, endpoint, protocol adapter, stable
+- [x] Hard-cut every obsolete phase, field, endpoint, protocol adapter, stable
   record/index, feature edge, fixture, example and active-document reference;
   do not retain aliases, fallback decoders, migration or compatibility paths.
-- [ ] Recheck Candid, generated surfaces, CLI/configuration guidance, stable-
+- [x] Recheck Candid, generated surfaces, CLI/configuration guidance, stable-
   memory ownership and Wasm dependency isolation after removal.
-- [ ] Publish the final stale-occurrence inventory and responsibility/size
+- [x] Publish the final stale-occurrence inventory and responsibility/size
   diff, with an evidence-backed explanation for every remaining large module
   or mechanically duplicated path that cannot safely be reduced.
-- [ ] Complete all mandatory sediment-removal and design closeout checks.
+- [x] Complete all mandatory sediment-removal and design closeout checks.
 
 ## Completion
 
@@ -664,12 +690,14 @@ Fleet policy writer.
   real disposable multi-Subnet journey.
 - [x] The initial supported Fleet/service envelope is measured and does not
   claim ten-thousand-Subnet qualification.
-- [ ] All design criteria and required journeys pass.
-- [ ] No Tree identity, runtime Group Canister, nested Component declaration,
+- [x] All design criteria and required journeys pass.
+- [x] No Tree identity, runtime Group Canister, nested Component declaration,
   Component Child group/service target, delegated lifecycle authority,
-  singleton-Spec restriction, adoption, prior-release transition or
-  compatibility path survives.
-- [ ] The mandatory cleanup report accounts for production growth, deleted
+  singleton-Spec restriction, application/prior-release adoption,
+  prior-release transition or compatibility path survives. Fresh-install
+  adoption of the separately installed sibling Wasm Store remains the required
+  0.100 infrastructure-controller transition.
+- [x] The mandatory cleanup report accounts for production growth, deleted
   authority paths, module ownership, durable-I/O consolidation, generated
   surfaces, stable allocations and every permitted historical-only residue.
-- [ ] Current status and changelog record the final evidence.
+- [x] Current status and changelog record the final evidence.

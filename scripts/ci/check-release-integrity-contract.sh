@@ -12,6 +12,8 @@ ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
 ICP_MODEL="$ROOT/crates/canic-host/src/icp/model.rs"
 ICP_PROOF="$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
 DEV_INSTALL="$ROOT/scripts/dev/install_dev.sh"
+GIT_HOOK_INSTALLER="$ROOT/scripts/dev/install-git-hooks.sh"
+PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
 ICP_UPDATE="$ROOT/scripts/dev/update-icp-cli-pin.sh"
 INSTALLING="$ROOT/INSTALLING.md"
 README="$ROOT/README.md"
@@ -45,7 +47,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CADENCE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CADENCE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -132,11 +134,28 @@ for primitive_target in "${!primitive_commands[@]}"; do
     fi
 done
 
-[ ! -e "$ROOT/.githooks" ] || fail "repository Git hooks remain present"
-if rg -n 'core\.hooksPath|\.githooks|ensure-hooks' \
-    "$MAKEFILE" "$DEV_INSTALL" "$ROOT/scripts/app/README.md" >/dev/null; then
-    fail "active setup or Make surfaces still configure repository Git hooks"
+[ -x "$PRE_COMMIT_HOOK" ] || fail "formatting pre-commit hook is not executable"
+hook_file_count="$(find "$ROOT/.githooks" -maxdepth 1 -type f | wc -l)"
+[ "$hook_file_count" -eq 1 ] || fail "repository must own exactly one Git hook"
+rg -F 'make fmt' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "pre-commit hook does not run the complete formatter"
+rg -F 'git diff --cached --name-only -z --diff-filter=ACMR' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "pre-commit hook does not reject partially staged formatting inputs"
+rg -F 'git diff --binary --no-ext-diff' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "pre-commit hook does not snapshot tracked working-tree content"
+rg -F 'cmp -s "$before" "$after"' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "pre-commit hook does not reject formatter mutations"
+if rg -n 'git[[:space:]]+add|make[[:space:]]+(fmt-check|validate|test|clippy|build)|cargo[[:space:]]+(test|clippy|build)|git[[:space:]]+(commit|push)' \
+    "$PRE_COMMIT_HOOK" >/dev/null; then
+    fail "pre-commit hook exceeds its formatting-only boundary"
 fi
+rg -F 'core.hooksPath .githooks' "$GIT_HOOK_INSTALLER" >/dev/null ||
+    fail "Git hook installer does not configure the repository hook path"
+rg -F 'scripts/dev/install-git-hooks.sh' "$DEV_INSTALL" >/dev/null ||
+    fail "maintainer toolchain setup does not install the formatting hook"
+install_hooks_recipe="$(sed -n '/^install-hooks:/,/^$/p' "$MAKEFILE")"
+rg -F 'bash scripts/dev/install-git-hooks.sh' <<<"$install_hooks_recipe" >/dev/null ||
+    fail "make install-hooks does not use the canonical hook installer"
 bash "$WORKSPACE_TEST_INVENTORY_GATE" >/dev/null ||
     fail "the workspace integration-test inventory is incomplete or invalid"
 rg -F 'bash scripts/ci/check-workspace-test-inventory.sh' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
@@ -163,18 +182,13 @@ CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
 for mode in patch minor major; do
     mode_recipe="$(sed -n "/^$mode:/,/^$/p" "$MAKEFILE")"
-    rg -F '$(MAKE) --no-print-directory fmt' <<<"$mode_recipe" >/dev/null ||
-        fail "the $mode version target does not format before validation"
+    if rg -F '$(MAKE) --no-print-directory fmt' <<<"$mode_recipe" >/dev/null; then
+        fail "the $mode version target must not mutate formatting"
+    fi
     rg -F '$(MAKE) --no-print-directory validate' <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target does not run the explicit validation workflow"
     rg -F "CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target does not bind mutation to completed validation"
-    fmt_line="$(grep -nF "\$(MAKE) --no-print-directory fmt" <<<"$mode_recipe" | cut -d: -f1)"
-    clean_line="$(grep -nF "\$(MAKE) ensure-clean" <<<"$mode_recipe" | cut -d: -f1)"
-    validate_line="$(grep -nF "\$(MAKE) --no-print-directory validate" <<<"$mode_recipe" | cut -d: -f1)"
-    if ((fmt_line >= clean_line || clean_line >= validate_line)); then
-        fail "the $mode version target must format, require clean source, then validate"
-    fi
 done
 patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||

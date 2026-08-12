@@ -402,6 +402,7 @@ maximum_instances = 1
             role: role.to_string(),
             output: CanisterArtifactBuildOutput {
                 package_name: format!("{role}-package"),
+                package_version: "0.101.51".to_string(),
                 artifact_root,
                 wasm_path,
                 wasm_gz_path,

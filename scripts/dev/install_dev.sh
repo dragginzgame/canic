@@ -221,6 +221,19 @@ require_python() {
     green "python3 ready: $(python3 --version 2>&1)"
 }
 
+configure_git_formatting_hook_if_present() {
+    local hook_installer="$ROOT_DIR/scripts/dev/install-git-hooks.sh"
+    local pre_commit_hook="$ROOT_DIR/.githooks/pre-commit"
+
+    if [ ! -f "$hook_installer" ] || [ ! -f "$pre_commit_hook" ]; then
+        return 0
+    fi
+
+    yellow "Git formatting hook:"
+    cyan_command "bash scripts/dev/install-git-hooks.sh"
+    bash "$hook_installer"
+}
+
 main() {
     if [ "${1:-}" = "--ensure-ripgrep" ]; then
         require_command cargo
@@ -274,9 +287,7 @@ main() {
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked canic-cli --version $CANIC_CLI_VERSION"
     cargo_toolchain install --quiet --locked canic-cli --version "$CANIC_CLI_VERSION"
 
-    yellow "Git formatting hook:"
-    cyan_command "bash scripts/dev/install-git-hooks.sh"
-    bash "$ROOT_DIR/scripts/dev/install-git-hooks.sh"
+    configure_git_formatting_hook_if_present
 
     echo >&2
     green "Canic setup complete."

@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.53` keeps shared configured builds efficient while classifying the
+  Fleet Subnet Root with Coordinator and Wasm Store infrastructure, reports
+  exact package versions without fabricated per-role timings, and adds one
+  formatting-only pre-commit hook that never stages or duplicates validation,
+  while closing the whole-program cleanup with focused root-deletion and
+  canonical-plan encoding owners, explicit role-feature isolation and a final
+  responsibility/residue report.
+
 - `0.101.52` qualifies the complete three-Subnet Toko-shaped topology,
   interrupted scale-out and protected deployment limits while retaining an
   independent second Fleet on a shared physical Subnet, then begins Q5 by

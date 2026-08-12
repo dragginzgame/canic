@@ -67,15 +67,16 @@ Declared roles can compile as source work. Attached roles are the roles that
 can become build artifacts, deployment truth, install targets, and local
 deployment plans.
 
-Build every attached role plus the canonical Fleet Coordinator and Wasm Store:
+Build the configured Fleet Subnet Root, every attached Component role, and the
+canonical Fleet Coordinator and Wasm Store:
 
 ```text
 canic build <app>
 ```
 
-The command reports Application Wasm and Infrastructure Wasm separately.
-Select one attached App role when a focused build or role-scoped provenance is
-needed:
+The command reports Component artifacts under Application Wasm and all three
+platform canisters under Infrastructure Wasm. Select one deployable configured
+role when a focused build or role-scoped provenance is needed:
 
 ```text
 canic build <app> <role>
@@ -83,7 +84,7 @@ canic build <app> <role>
 
 ## Build With Provenance
 
-Build the selected attached role and save stable build provenance:
+Build the selected deployable role and save stable build provenance:
 
 ```text
 canic build demo app --provenance artifacts/canic/app-build-provenance.json

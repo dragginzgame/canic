@@ -3,7 +3,6 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     process::Command,
-    time::{Duration, Instant},
 };
 
 use crate::{
@@ -59,20 +58,13 @@ pub fn build_workspace_configured_canister_artifacts(
 ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(&context.config_path)?;
     let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
-    let (outputs, finalization_elapsed) =
-        build_workspace_canister_artifacts_from_specs_with_timings(context, &specs)?;
+    let outputs = build_workspace_canister_artifacts_from_specs(context, &specs)?;
 
     Ok(roles
         .iter()
         .cloned()
-        .zip(outputs.into_iter().zip(finalization_elapsed))
-        .map(
-            |(role, (output, finalization_elapsed))| ConfiguredCanisterArtifactBuildOutput {
-                role,
-                output,
-                finalization_elapsed,
-            },
-        )
+        .zip(outputs)
+        .map(|(role, output)| ConfiguredCanisterArtifactBuildOutput { role, output })
         .collect())
 }
 
@@ -148,24 +140,14 @@ pub fn build_workspace_canister_artifacts_from_specs(
     context: &WorkspaceBuildContext,
     specs: &[CanisterArtifactBuildSpec],
 ) -> Result<Vec<CanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
-    Ok(build_workspace_canister_artifacts_from_specs_with_timings(context, specs)?.0)
-}
-
-fn build_workspace_canister_artifacts_from_specs_with_timings(
-    context: &WorkspaceBuildContext,
-    specs: &[CanisterArtifactBuildSpec],
-) -> Result<(Vec<CanisterArtifactBuildOutput>, Vec<Duration>), Box<dyn std::error::Error>> {
     if specs.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok(Vec::new());
     }
 
-    let mut finalization_elapsed = Vec::with_capacity(specs.len());
     for spec in specs {
-        let started_at = Instant::now();
         prepare_canister_artifact_output(spec)?;
-        finalization_elapsed.push(started_at.elapsed());
     }
-    let workspace_groups = group_canister_specs_by_workspace(specs);
+    let workspace_groups = group_build_specs_by_workspace(specs);
 
     for (cargo_workspace_root, group) in &workspace_groups {
         run_canister_build_batch(context, cargo_workspace_root, group, context.profile)?;
@@ -182,10 +164,9 @@ fn build_workspace_canister_artifacts_from_specs_with_timings(
         }
     }
 
-    let outputs = specs
+    specs
         .iter()
-        .zip(&mut finalization_elapsed)
-        .map(|(spec, elapsed)| {
+        .map(|spec| {
             let release_wasm_path =
                 built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
             let debug_wasm_path = export_candid.then(|| {
@@ -195,22 +176,17 @@ fn build_workspace_canister_artifacts_from_specs_with_timings(
                     spec.package_name.as_str(),
                 )
             });
-            let started_at = Instant::now();
-            let output = finish_canister_artifact_output(
+            finish_canister_artifact_output(
                 context,
                 spec,
                 &release_wasm_path,
                 debug_wasm_path.as_deref(),
-            )?;
-            *elapsed += started_at.elapsed();
-            Ok(output)
+            )
         })
-        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
-
-    Ok((outputs, finalization_elapsed))
+        .collect()
 }
 
-fn group_canister_specs_by_workspace(
+fn group_build_specs_by_workspace(
     specs: &[CanisterArtifactBuildSpec],
 ) -> BTreeMap<PathBuf, Vec<&CanisterArtifactBuildSpec>> {
     let mut groups = BTreeMap::<PathBuf, Vec<&CanisterArtifactBuildSpec>>::new();
@@ -260,6 +236,7 @@ fn finish_canister_artifact_output(
 
     Ok(CanisterArtifactBuildOutput {
         package_name: spec.package_name.clone(),
+        package_version: spec.package_version.clone(),
         artifact_root: spec.artifact_root.clone(),
         wasm_path: spec.wasm_path.clone(),
         wasm_gz_path: spec.wasm_gz_path.clone(),
@@ -330,6 +307,7 @@ fn resolve_canister_artifact_build_spec_from_validation(
     Ok(CanisterArtifactBuildSpec {
         role: canister_name.to_string(),
         package_name: evidence.role_package_name,
+        package_version: evidence.role_package_version,
         package_manifest_path: evidence.role_manifest_path,
         cargo_workspace_root: evidence.cargo_workspace_root,
         wasm_path: artifact_root.join(format!("{canister_name}.wasm")),
@@ -488,7 +466,7 @@ mod tests {
             build_spec("remote", "canister-remote", "/remote"),
         ];
 
-        let groups = group_canister_specs_by_workspace(&specs);
+        let groups = group_build_specs_by_workspace(&specs);
 
         assert_eq!(groups.len(), 2);
         assert_eq!(groups[Path::new("/workspace")].len(), 2);
@@ -554,6 +532,11 @@ mod tests {
             .expect("resolve configured demo build specs");
 
         assert_eq!(specs.len(), roles.len());
+        assert!(
+            specs
+                .iter()
+                .all(|spec| spec.package_version == env!("CARGO_PKG_VERSION"))
+        );
         assert!(specs.iter().all(|spec| {
             spec.cargo_workspace_root
                 .canonicalize()
@@ -586,6 +569,7 @@ mod tests {
         CanisterArtifactBuildSpec {
             role: role.to_string(),
             package_name: package_name.to_string(),
+            package_version: "0.101.51".to_string(),
             package_manifest_path: PathBuf::from(cargo_workspace_root)
                 .join(role)
                 .join("Cargo.toml"),

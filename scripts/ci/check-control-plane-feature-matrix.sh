@@ -23,6 +23,9 @@ run_check \
     "control-plane Fleet Coordinator feature build" \
     --locked -p canic-control-plane --no-default-features --features fleet-coordinator-canister
 run_check \
+    "control-plane Fleet Subnet Root feature build" \
+    --locked -p canic-control-plane --no-default-features --features root-control-plane
+run_check \
     "control-plane wasm-store feature build" \
     --locked -p canic-control-plane --no-default-features --features wasm-store-canister
 run_check \

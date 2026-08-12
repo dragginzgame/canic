@@ -49,6 +49,7 @@ const WASM_STORE_FAST_PROFILE: &[(&str, &str)] = &[
 struct BootstrapWasmStoreSource {
     manifest_path: PathBuf,
     package_name: String,
+    package_version: String,
     canonical_did_path: Option<PathBuf>,
 }
 
@@ -97,6 +98,7 @@ pub fn build_bootstrap_wasm_store_artifact(
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,
+        package_version: source.package_version,
         artifact_root,
         wasm_path,
         wasm_gz_path,
@@ -149,6 +151,7 @@ fn resolve_bootstrap_wasm_store_source(
     Ok(BootstrapWasmStoreSource {
         manifest_path: wrapper_root.join("Cargo.toml"),
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
+        package_version: canic_package.version.clone(),
         canonical_did_path: None,
     })
 }
@@ -201,6 +204,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: package.manifest_path.clone(),
             package_name: package.name.clone(),
+            package_version: package.version.clone(),
             canonical_did_path: Some(source_root.join(CANONICAL_WASM_STORE_DID_FILE)),
         }));
     }
@@ -230,6 +234,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: sibling_manifest,
             package_name: "canic-wasm-store".to_string(),
+            package_version: canic_package.version.clone(),
             canonical_did_path: Some(source_root.join(CANONICAL_WASM_STORE_DID_FILE)),
         }));
     }
