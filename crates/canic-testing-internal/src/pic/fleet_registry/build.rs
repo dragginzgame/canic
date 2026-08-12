@@ -22,7 +22,7 @@ use super::fixture::progress;
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 #[cfg(test)]
-const TOKO_ROOT_CANISTER_PACKAGE: &str = "toko_root_stub";
+const TOKO_TOPOLOGY_FIXTURE: &str = "toko_topology";
 #[cfg(test)]
 const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
 static BUILD_ONCE: Once = Once::new();
@@ -56,12 +56,12 @@ pub(super) fn build_test_toko_root_wasm() -> Vec<u8> {
         build_internal_test_wasm_canisters_with_env(
             &workspace_root,
             &target_dir,
-            &[TOKO_ROOT_CANISTER_PACKAGE],
+            &[ROOT_CANISTER_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env],
         );
     });
-    read_built_wasm(&target_dir, TOKO_ROOT_CANISTER_PACKAGE)
+    read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
 }
 
 // Build a mainnet-qualified root and exact Cycles Ledger boundary stub.
@@ -295,7 +295,7 @@ pub(super) fn toko_root_canister_config_path(workspace_root: &Path) -> PathBuf {
     workspace_root
         .join("canisters")
         .join("test")
-        .join(TOKO_ROOT_CANISTER_PACKAGE)
+        .join(TOKO_TOPOLOGY_FIXTURE)
         .join("canic.toml")
 }
 

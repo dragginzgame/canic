@@ -4819,15 +4819,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "toko_root_stub"
-version = "0.101.51"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "toml"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"

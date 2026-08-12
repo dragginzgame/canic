@@ -82,13 +82,13 @@ These are the exact optimized test artifacts used by the passing journey.
 | Role | Raw bytes | Gzip bytes |
 | --- | ---: | ---: |
 | Fleet Coordinator | 4,201,595 | 1,047,435 |
-| Fleet Subnet Root | 9,963,759 | 2,314,066 |
+| Fleet Subnet Root | 10,005,988 | 2,324,610 |
 | Wasm Store | 845,038 | 843,765 |
-| database A | 3,636,636 | 869,142 |
-| Project Hub | 4,422,476 | 1,041,051 |
-| Project Instance | 4,186,536 | 995,816 |
-| Project Ledger | 3,639,920 | 869,307 |
-| Project Machine | 3,639,920 | 869,302 |
+| database A | 3,636,636 | 869,132 |
+| Project Hub | 4,422,476 | 1,040,959 |
+| Project Instance | 4,186,664 | 995,809 |
+| Project Ledger | 3,639,920 | 869,320 |
+| Project Machine | 3,639,920 | 869,318 |
 
 Database B and C are separate qualified packages and were installed throughout
 the journey. Their behavior and dependency shape are intentionally identical
@@ -103,7 +103,7 @@ The qualifying command was:
 cargo test --locked -p canic-testing-internal pic::fleet_registry::baseline::tests::toko_topology_qualifies_scale_out_descendants_packing_and_fleet_isolation --lib -- --exact --nocapture
 ```
 
-Result: `1 passed; 0 failed; 24 filtered out`, completed in 106.49 seconds.
+Result: `1 passed; 0 failed; 24 filtered out`, completed in 158.65 seconds.
 
 ## Scope limits
 
