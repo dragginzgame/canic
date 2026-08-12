@@ -15,16 +15,10 @@ use clap::Command as ClapCommand;
 
 const APP_HELP_AFTER: &str = "\
 Examples:
-  canic app check demo
-  canic app create demo
   canic app list
+  canic app create demo
 
-Mutation notes:
-  adoption, check, config, list, role inspect, and role list are read-only.
-  create, delete, role attach, role declare, and role rename mutate local
-  workspace files. Mutating commands expose --dry-run where supported.
-
-Use `canic app <command> --help` for command-specific examples and safety notes.";
+Leaf help identifies read-only commands and mutations that support --dry-run.";
 const APP_LIST_HELP_AFTER: &str = "\
 Examples:
   canic app list
@@ -43,14 +37,10 @@ app name exactly. --dry-run validates and prints the target without
 prompting or deleting files.";
 const APP_ROLE_HELP_AFTER: &str = "\
 Examples:
-  canic app role attach demo store --component-spec default
   canic app role inspect demo app
-  canic app role rename demo hub router
+  canic app role attach demo store --component-spec default
 
-Mutation notes:
-  inspect and list are read-only.
-  attach, declare, and rename update canic.toml; rename may also update
-  matching package metadata. All mutations support --dry-run.";
+Inspect and list are read-only; mutations support --dry-run.";
 const APP_ROLE_LIST_HELP_AFTER: &str = "\
 Examples:
   canic app role list demo";
@@ -80,18 +70,10 @@ app config, package manifests, topology, deployments, or controllers.";
 const APP_ADOPTION_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic app adoption report demo --profile brownfield
-  canic app adoption report demo --profile minimal --json
   canic app adoption report demo --profile partial --deployment-check check.json
 
-Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
-minimal. --json emits the raw experimental adoption report payload.
---evidence-envelope emits the stable CI/GitOps evidence envelope with the raw
-adoption payload nested inside. The report is read-only; --output writes only
-the requested report artifact. Evidence inputs are JSON files and are
-read-only. Use either --inventory or --deployment-check, not both. Use either
---package-metadata or --cargo-metadata, not both. Deployment-check evidence
-also supplies plan role artifacts when present. --build-provenance is
-fingerprinted only in envelope output.";
+Read-only. Choose at most one deployment-evidence input and one
+package-metadata input.";
 pub(super) const JSON_ARG: &str = "json";
 pub(super) const EVIDENCE_ENVELOPE_ARG: &str = "evidence-envelope";
 

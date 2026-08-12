@@ -25,7 +25,7 @@ pub fn assert_canonical_role_contract_build(target: &str, marker: Option<&str>) 
     assert!(
         target != "wasm32-unknown-unknown"
             || marker == Some(canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE),
-        "authoritative Canic wasm builds must use `canic build <app> <role>`; direct `cargo build --target wasm32-unknown-unknown` is unsupported"
+        "authoritative Canic wasm builds must use `canic build <app>` or `canic build <app> <role>`; direct `cargo build --target wasm32-unknown-unknown` is unsupported"
     );
 }
 

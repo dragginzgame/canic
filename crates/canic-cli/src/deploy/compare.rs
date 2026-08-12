@@ -22,10 +22,8 @@ Examples:
   canic deploy inspect compare --left staging-check.json --right prod-check.json
   canic deploy inspect compare --left staging-check.json --right prod-check.json --text
 
-Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
-state, install code, or mutate deployments. Each input check's embedded
-diff/report is revalidated against its plan and inventory before comparison
-status is rendered.";
+Read-only: revalidates and compares two existing DeploymentCheckV1 artifacts
+without querying live state.";
 
 const LEFT_ARG: &str = "left";
 const RIGHT_ARG: &str = "right";

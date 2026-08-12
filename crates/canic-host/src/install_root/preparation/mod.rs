@@ -1,10 +1,13 @@
 use super::build_network::ensure_icp_environment_ready;
 use super::build_snapshot::ValidatedInstallSnapshot;
+use super::build_targets::{progress_bar, wasm_artifact_size};
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
+    run_install_early_authority_preflight,
 };
 use super::icp_context::InstallIcpContext;
 use super::operations::{BuildInstallTargetsOperation, InstallPhaseLabel};
+use super::output::{TerminalActivity, TerminalStyle};
 use super::phase_receipts::CompletedInstallPhase;
 use super::plan_artifacts::{PreparedPlanArtifacts, prepare_plan_artifacts_with_phase};
 use super::timing::InstallTimingSummary;
@@ -18,6 +21,7 @@ use crate::{
         build_workspace_canister_artifact,
     },
     release_set::{CanicInfrastructureArtifactBuildOutput, CanicInfrastructureRole},
+    table::{ColumnAlign, render_bordered_table},
 };
 use std::{
     path::Path,
@@ -55,6 +59,14 @@ pub(super) fn prepare_install_deployment_truth(
     let icp_root = icp.root();
     ensure_current_install_executor_capabilities(execution_context)?;
     ensure_icp_environment_ready(icp)?;
+    run_install_early_authority_preflight(
+        options,
+        &build_context.workspace_root,
+        icp_root,
+        config_path,
+        fleet_name,
+        execution_context,
+    )?;
     let build =
         build_install_targets_with_phase(options, build_context, icp_root, install_snapshot)?;
     timings.build_all = build.duration;
@@ -139,11 +151,51 @@ fn qualify_infrastructure_outputs(
         .iter()
         .find(|output| output.role == options.root_canister)
         .ok_or("complete install build has no Fleet Subnet Root output")?;
-    println!("Building 2 built-in infrastructure canisters");
-    println!();
+    let style = TerminalStyle::detected();
+    style.print_section("Build infrastructure Wasm", "2 built-in canisters");
+    let coordinator_started_at = Instant::now();
+    let coordinator_activity =
+        TerminalActivity::start(format!("{}  fleet_coordinator", progress_bar(1, 2, 12)));
     let coordinator =
         build_workspace_canister_artifact(&build_context.with_role("fleet_coordinator"))?;
+    coordinator_activity.finish();
+    let coordinator_elapsed = coordinator_started_at.elapsed();
+
+    let wasm_store_started_at = Instant::now();
+    let wasm_store_activity =
+        TerminalActivity::start(format!("{}  wasm_store", progress_bar(2, 2, 12)));
     let wasm_store = build_workspace_canister_artifact(&build_context.with_role("wasm_store"))?;
+    wasm_store_activity.finish();
+    let wasm_store_elapsed = wasm_store_started_at.elapsed();
+
+    let rows = [
+        [
+            "fleet_coordinator".to_string(),
+            style.success("done"),
+            wasm_artifact_size(&coordinator.wasm_path, &coordinator.wasm_gz_path)?,
+            format!("{:.2}s", coordinator_elapsed.as_secs_f64()),
+        ],
+        [
+            "wasm_store".to_string(),
+            style.success("done"),
+            wasm_artifact_size(&wasm_store.wasm_path, &wasm_store.wasm_gz_path)?,
+            format!("{:.2}s", wasm_store_elapsed.as_secs_f64()),
+        ],
+    ];
+    println!(
+        "{}",
+        render_bordered_table(
+            &["CANISTER", "STATUS", "WASM", "ELAPSED"],
+            &rows,
+            &[
+                ColumnAlign::Left,
+                ColumnAlign::Left,
+                ColumnAlign::Right,
+                ColumnAlign::Right,
+            ],
+        )
+    );
+    println!();
 
     Ok(vec![
         CanicInfrastructureArtifactBuildOutput {

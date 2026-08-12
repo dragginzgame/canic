@@ -34,6 +34,9 @@ fn workspace_resolution_prefers_the_canonical_fleet_coordinator_package() {
             .manifest_path
             .ends_with("crates/canic-fleet-coordinator/Cargo.toml")
     );
+    assert!(source.canonical_did_path.as_deref().is_some_and(|path| {
+        path.ends_with("crates/canic-fleet-coordinator/fleet_coordinator.did")
+    }));
 }
 
 #[test]
@@ -49,7 +52,7 @@ fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
         icp_root: root.clone(),
         config_path: workspace_root.join("canic.toml"),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
 

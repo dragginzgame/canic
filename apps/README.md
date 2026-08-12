@@ -39,6 +39,8 @@ The test Canisters are wired through `icp.yaml`; custom build steps invoke the
 same host artifact builder used by `canic install`.
 
 - Inspect the source topology: `canic app config test --verbose`
+- Build the complete App and Canic infrastructure artifact set:
+  `canic build test --profile fast`
 - Build one role: `canic build test app --profile fast`
 - Install the managed test Fleet:
   `canic install test test-local --fleet-input <path> --profile fast`

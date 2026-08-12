@@ -177,8 +177,6 @@ impl InstallReceiptScope<'_> {
         self,
         receipt: &DeploymentReceiptV1,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let path = write_install_deployment_truth_receipt(self.icp_root, self.fleet, receipt)?;
-        println!("Deployment truth receipt JSON: {}", path.display());
-        Ok(path)
+        write_install_deployment_truth_receipt(self.icp_root, self.fleet, receipt)
     }
 }

@@ -22,7 +22,7 @@ pub struct WorkspaceBuildContext {
     pub icp_root: PathBuf,
     pub config_path: PathBuf,
     pub local_replica: Option<LocalReplicaTarget>,
-    pub refresh_canonical_wasm_store_did: bool,
+    pub refresh_canonical_infrastructure_did: bool,
     pub release_build_id: Option<ReleaseBuildId>,
 }
 

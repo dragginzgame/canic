@@ -6,7 +6,7 @@
 
 use crate::{
     canister_build::{
-        CanisterArtifactBuildSpec, WorkspaceBuildContext, resolve_canister_artifact_build_spec,
+        CanisterArtifactBuildSpec, WorkspaceBuildContext, resolve_canister_artifact_build_specs,
     },
     release_build::PlannedReleaseBuild,
     release_set::{
@@ -66,12 +66,12 @@ pub(super) fn resolve_install_snapshot(
     roles.push(root_build_target.to_string());
     roles.extend(release_roles.iter().cloned());
 
-    let mut targets = Vec::with_capacity(roles.len());
-    for role in roles {
-        let target_context = context.with_role(&role);
-        let spec = resolve_canister_artifact_build_spec(&target_context, config.model())?;
-        targets.push(InstallBuildTarget { role, spec });
-    }
+    let specs = resolve_canister_artifact_build_specs(context, config.model(), &roles)?;
+    let targets = roles
+        .into_iter()
+        .zip(specs)
+        .map(|(role, spec)| InstallBuildTarget { role, spec })
+        .collect::<Vec<_>>();
 
     let root_target = targets
         .first()

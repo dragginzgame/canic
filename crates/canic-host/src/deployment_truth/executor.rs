@@ -266,6 +266,20 @@ pub fn deployment_execution_preflight_from_check(
     )
 }
 
+/// Return only authority blockers that are knowable before artifact compilation.
+///
+/// Artifact safety remains part of the complete execution preflight. This
+/// narrower view lets mutating callers reject stale or unsafe live authority
+/// before paying for a complete Wasm build.
+#[must_use]
+pub fn deployment_authority_blockers_from_check(check: &DeploymentCheckV1) -> Vec<SafetyFindingV1> {
+    let authority_plan = build_authority_reconciliation_plan(check);
+    deployment_authority_blockers(
+        &authority_plan,
+        allow_initial_install_unknown_authority(check),
+    )
+}
+
 #[must_use]
 pub fn deployment_execution_preflight(
     plan: &DeploymentPlanV1,
@@ -406,13 +420,35 @@ fn deployment_execution_blockers(
         });
     }
     blockers.extend(safety_report.hard_failures.clone());
-    blockers.extend(
-        authority_plan
-            .hard_failures
-            .iter()
-            .filter(|failure| failure.code != AUTHORITY_UNSAFE_BLOCKED_CODE)
-            .cloned(),
-    );
+    blockers.extend(deployment_authority_blockers(
+        authority_plan,
+        allow_unknown_authority,
+    ));
+
+    for capability in missing_capabilities {
+        blockers.push(SafetyFindingV1 {
+            code: DeploymentExecutionPreflightBlockerCode::EXECUTOR_CAPABILITY_MISSING
+                .as_str()
+                .to_string(),
+            message: format!("executor backend is missing required capability: {capability:?}"),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("{capability:?}")),
+        });
+    }
+
+    blockers
+}
+
+fn deployment_authority_blockers(
+    authority_plan: &AuthorityReconciliationPlanV1,
+    allow_unknown_authority: bool,
+) -> Vec<SafetyFindingV1> {
+    let mut blockers = authority_plan
+        .hard_failures
+        .iter()
+        .filter(|failure| failure.code != AUTHORITY_UNSAFE_BLOCKED_CODE)
+        .cloned()
+        .collect::<Vec<_>>();
 
     for action in &authority_plan.canister_actions {
         match action.state {
@@ -461,17 +497,6 @@ fn deployment_execution_blockers(
                 });
             }
         }
-    }
-
-    for capability in missing_capabilities {
-        blockers.push(SafetyFindingV1 {
-            code: DeploymentExecutionPreflightBlockerCode::EXECUTOR_CAPABILITY_MISSING
-                .as_str()
-                .to_string(),
-            message: format!("executor backend is missing required capability: {capability:?}"),
-            severity: SafetySeverityV1::HardFailure,
-            subject: Some(format!("{capability:?}")),
-        });
     }
 
     blockers

@@ -709,9 +709,6 @@ mod tests {
         assert_eq!(
             catalog_roles,
             vec![
-                CanisterRole::new("database_a"),
-                CanisterRole::new("database_b"),
-                CanisterRole::new("database_c"),
                 CanisterRole::new("issuer"),
                 CanisterRole::new("project_hub"),
                 CanisterRole::new("project_instance"),

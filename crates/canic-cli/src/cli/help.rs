@@ -41,7 +41,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "build",
-        about: "Build one Canic canister artifact",
+        about: "Build Canic App and infrastructure artifacts",
     },
     CommandSpec {
         name: "cycles",

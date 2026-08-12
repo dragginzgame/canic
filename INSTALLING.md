@@ -411,14 +411,16 @@ qualified infrastructure artifacts. Ordinary Component and descendant
 artifacts stay outside the root Wasm, are built once as the Fleet-wide
 application union, and are projected into an exact admitted release set for
 each root. Visible canister Candid files are generated under
-`.icp/local/canisters/<role>/<role>.did`. The checked-in exception is
-`crates/canic-wasm-store/wasm_store.did`, the canonical interface for the
-implicit root-local Store.
+`.icp/local/canisters/<role>/<role>.did`. Fleet Coordinator and Wasm Store own
+checked-in canonical interfaces at
+`crates/canic-fleet-coordinator/fleet_coordinator.did` and
+`crates/canic-wasm-store/wasm_store.did`.
 
-Local builds extract Candid from a debug Wasm and may embed public
-`candid:service` metadata into the local Wasm for inspection. Builds targeting
-`ICP_ENVIRONMENT=ic` skip `.did` generation and Candid metadata embedding so
-production Wasm artifacts do not carry local interface metadata.
+Local App-role builds extract Candid from debug Wasm. Infrastructure builds
+copy their canonical contracts without a second debug compile. Both may embed
+public `candid:service` metadata into local Wasm for inspection. Builds
+targeting `ICP_ENVIRONMENT=ic` skip `.did` generation and Candid metadata
+embedding so production Wasm artifacts do not carry local interface metadata.
 
 Canic-managed Candid includes both application methods and Canic runtime
 methods such as readiness, metadata, topology, and management endpoints. When

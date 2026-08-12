@@ -36,16 +36,10 @@ const BUILD_PROFILE_ARG: &str = "build-profile";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo-local --app demo
-  canic deploy plan demo-local --app demo --json
   canic deploy plan demo-local --app demo --out deployment-plan.json
 
-Builds a deterministic planning report from local App and workspace config. The command
-does not install, upgrade, create canisters, write deployment truth, update
-installed Fleet catalog records, or call live IC state. Future-apply preview rows
-are proposed operation labels only; they are not executed and are not apply
-operation objects. JSON output is a DeploymentPlanReport, not an EvidenceEnvelope,
-deployment truth, or authorization to mutate. --out writes JSON only and fails if
-the requested path already exists or its parent directory is missing.";
+Read-only: reports deterministic local desired state without contacting the IC
+or authorizing mutation.";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::deploy) struct DeployPlanOptions {

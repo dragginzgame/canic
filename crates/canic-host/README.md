@@ -72,9 +72,11 @@ the host does not fall back to the removed single-root installer.
 
 Build profile selection:
 
-- `canic build <app> <role> --profile debug` builds raw debug wasm
-- `canic build <app> <role> --profile fast` builds the middle shrunk local/test/demo lane
-- `canic build <app> <role> --profile release` builds the shipping/install lane
+- `canic build <app> --profile debug|fast|release` batches every attached role,
+  then builds Fleet Coordinator and Wasm Store infrastructure separately
+- `canic build <app> <role> --profile debug` builds one raw debug wasm
+- `canic build <app> <role> --profile fast` builds one shrunk local/test/demo artifact
+- `canic build <app> <role> --profile release` builds one shipping/install artifact
 
 If omitted, CLI builds default to `release`.
 

@@ -33,15 +33,9 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
 const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic deploy inspect plan demo
   canic deploy plan demo --app demo
 
-Use `canic deploy inspect --help` for raw plan, inventory, diff, report,
-comparison, local catalog, and resume-safety JSON artifacts.
-Use `canic deploy plan <fleet> --app <app>` for the operator planning report.
-Use `canic inspect` for live runtime-observed canister status.
-Fresh Fleet installation and registration have one mutation entrypoint:
-`canic install <app> <fleet> --fleet-input <path>`.";
+Deploy commands are read-only; fresh Fleet creation uses `canic install`.";
 
 pub fn deploy_command() -> ClapCommand {
     DEPLOY_COMMANDS

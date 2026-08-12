@@ -169,7 +169,7 @@ fn create_command_preserves_exact_icp_e8s() {
 }
 
 #[test]
-fn install_timing_summary_uses_standard_table_format() {
+fn install_timing_summary_uses_padded_bordered_table_format() {
     let timings = InstallTimingSummary {
         create_canisters: Duration::from_millis(1200),
         build_all: Duration::from_millis(2340),
@@ -180,23 +180,23 @@ fn install_timing_summary_uses_standard_table_format() {
     let table = render_install_timing_summary(&timings, Duration::from_millis(3900));
 
     assert_eq!(
-        table.lines().take(2).collect::<Vec<_>>(),
-        vec!["PHASE              ELAPSED", "----------------   -------"]
+        table.lines().take(3).collect::<Vec<_>>(),
+        vec![
+            "+------------------+---------+",
+            "| PHASE            | ELAPSED |",
+            "+==================+=========+",
+        ]
     );
+    assert!(table.contains("| create_canisters |   1.20s |"));
     assert!(
-        table.lines().any(
-            |line| line.split_whitespace().collect::<Vec<_>>() == ["create_canisters", "1.20s"]
-        )
+        table
+            .lines()
+            .any(|line| line.contains("install_root") && line.contains("0.02s"))
     );
     assert!(
         table
             .lines()
-            .any(|line| line.split_whitespace().collect::<Vec<_>>() == ["install_root", "0.02s"])
-    );
-    assert!(
-        table
-            .lines()
-            .any(|line| line.split_whitespace().collect::<Vec<_>>() == ["total", "3.90s"])
+            .any(|line| line.contains("total") && line.contains("3.90s"))
     );
 }
 

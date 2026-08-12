@@ -13,12 +13,9 @@ const DEPLOY_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
   canic deploy inspect plan demo
-  canic deploy inspect resume-report --receipt receipt.json demo
 
-These commands print raw deployment-truth JSON artifacts without installing,
-resuming, or mutating state. Use `canic deploy check <fleet>` for the
-compact operator summary. Use `canic inspect` for live runtime-observed
-canister status from `canic_runtime_status`.";
+Raw, read-only artifacts. Use `canic deploy check` for a compact summary or
+`canic inspect` for live runtime status.";
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
 where

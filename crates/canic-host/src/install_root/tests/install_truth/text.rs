@@ -103,18 +103,39 @@ package = "worker"
         artifact_gate_role_phase_receipts(&check),
     );
     let lines = install_deployment_truth_gate_lines(&check, &receipt);
+    let text = lines.join("\n");
+    let display_summary = deployment_truth_display_summary(&check);
 
-    assert!(lines.iter().any(|line| {
-        line.contains("Deployment truth receipt:") && line.contains("status=Complete")
-    }));
-    assert!(lines.iter().any(|line| line.contains(
-        "Deployment truth warning: inventory:observation_gap:live_canister_status.root"
-    )));
-    assert!(lines.iter().any(|line| {
-        line.contains("Deployment truth role receipt: phase=materialize_artifacts role=root")
-    }));
+    assert!(text.contains("operation: local:local:demo:check:materialize_artifacts"));
+    assert!(text.contains("Complete"));
+    assert!(text.contains("materialize_artifacts"));
+    assert!(text.contains("observation_gap"));
+    assert!(text.contains("live_canister_status.root"));
+    assert!(text.contains("pending until emit_manifest"));
+    assert!(!text.contains("Deployment truth role receipt:"));
+    assert!(display_summary.contains("pending manifest checks"));
+    assert_ne!(display_summary, check.report.summary);
 
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn repeated_authority_blockers_render_as_one_bounded_group() {
+    let findings = (0..6)
+        .map(|index| SafetyFindingV1 {
+            code: "authority_observation_missing".to_string(),
+            message: "expected canister authority was not observed".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("role_{index}")),
+        })
+        .collect::<Vec<_>>();
+    let finding_refs = findings.iter().collect::<Vec<_>>();
+
+    let summary = deployment_truth_findings_summary(&finding_refs);
+
+    assert_eq!(summary.matches("authority_observation_missing").count(), 1);
+    assert!(summary.contains("role_0, role_1, role_2, role_3, +2"));
+    assert!(!summary.contains("role_4"));
 }
 
 #[test]
@@ -213,12 +234,10 @@ package = "worker"
         artifact_gate_role_phase_receipts(&check),
     );
     let lines = install_deployment_truth_gate_lines(&check, &receipt);
+    let text = lines.join("\n");
 
-    assert!(lines.iter().any(|line| {
-        line.contains(
-            "Deployment truth warning: plan:plan_assumption:fleet_catalog.coordinator_principal.missing",
-        )
-    }));
+    assert!(text.contains("plan_assumption"));
+    assert!(text.contains("fleet_catalog.coordinator_principal.missing"));
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

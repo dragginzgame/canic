@@ -1,17 +1,20 @@
 use super::deployment_truth_gate::{
-    enforce_install_deployment_truth_gate, install_deployment_truth_gate_receipt,
-    print_install_deployment_truth_gate,
+    deployment_truth_findings_summary, enforce_install_deployment_truth_gate,
+    install_deployment_truth_gate_receipt, print_install_deployment_truth_gate,
 };
 use super::execution_preflight::current_install_execution_preflight_receipt;
+use super::output::TerminalStyle;
 use super::phase_receipts::receipt_with_execution_context;
 use super::{
+    InstallRootBlockKind, InstallRootBlockedError,
     capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, clock::current_unix_timestamp_label,
     options::InstallRootOptions,
 };
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentExecutionContextV1,
     DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentReceiptV1,
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, missing_executor_capabilities,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    deployment_authority_blockers_from_check, missing_executor_capabilities,
 };
 use crate::release_set::artifact_root_path;
 use std::path::{Path, PathBuf};
@@ -114,6 +117,42 @@ pub(super) fn run_install_deployment_truth_safety_gate(
         check: deployment_truth_check,
         receipts: vec![deployment_receipt, preflight_receipt],
     })
+}
+
+pub(super) fn run_install_early_authority_preflight(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    fleet_name: &str,
+    execution_context: &DeploymentExecutionContextV1,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let artifact_root = exact_execution_artifact_root(execution_context)?;
+    let check = super::truth_check::current_install_deployment_truth_check_at_with_plan(
+        options,
+        super::truth_check::CurrentInstallTruthScope::new(
+            workspace_root,
+            icp_root,
+            config_path,
+            fleet_name,
+            current_unix_timestamp_label()?,
+            &artifact_root,
+        ),
+        options.deployment_plan_override.as_ref(),
+    )?;
+    let blockers = deployment_authority_blockers_from_check(&check);
+    if blockers.is_empty() {
+        TerminalStyle::detected().print_section("Preflight", "authority safe for planned install");
+        println!();
+        return Ok(());
+    }
+
+    let blocker_refs = blockers.iter().collect::<Vec<_>>();
+    let details = deployment_truth_findings_summary(&blocker_refs);
+    Err(Box::new(InstallRootBlockedError::new(
+        InstallRootBlockKind::DeploymentExecutionPreflight,
+        format!("deployment authority preflight blocked install before artifact build: {details}"),
+    )))
 }
 
 fn exact_execution_artifact_root(

@@ -19,11 +19,7 @@ fn current_install_records_gates_before_activation_mutation() {
     );
 
     let prepare = include_str!("../../preparation/mod.rs");
-    assert_before(
-        prepare,
-        "ensure_current_install_executor_capabilities(execution_context)?",
-        "run_install_deployment_truth_safety_gate(",
-    );
+    assert_prebuild_gate_order(prepare);
     assert_before(
         install,
         "emit_manifest_with_phase(",
@@ -93,6 +89,24 @@ fn current_install_records_gates_before_activation_mutation() {
     assert!(
         root_install.contains("install_and_verify_fleet_subnet_roots("),
         "root wrapper must invoke the journalled multi-root install and verification workflow"
+    );
+}
+
+fn assert_prebuild_gate_order(prepare: &str) {
+    assert_before(
+        prepare,
+        "ensure_current_install_executor_capabilities(execution_context)?",
+        "run_install_early_authority_preflight(",
+    );
+    assert_before(
+        prepare,
+        "run_install_early_authority_preflight(",
+        "build_install_targets_with_phase(",
+    );
+    assert_before(
+        prepare,
+        "build_install_targets_with_phase(",
+        "run_install_deployment_truth_safety_gate(",
     );
 }
 

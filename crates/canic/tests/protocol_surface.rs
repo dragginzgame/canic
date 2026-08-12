@@ -332,6 +332,34 @@ fn wasm_store_canonical_did_parses() {
 }
 
 #[test]
+fn fleet_coordinator_canonical_did_parses() {
+    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
+    let did = read_text(&did_path);
+    let (env, actor) = CandidSource::Text(&did)
+        .load()
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
+
+    let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
+    let service = env
+        .as_service(&actor)
+        .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
+
+    for endpoint in [
+        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
+        canic::protocol::CANIC_FLEET_REGISTRY,
+        canic::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
+        canic::protocol::CANIC_FLEET_REGISTRY_VERSION,
+        canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
+    ] {
+        assert!(
+            service.iter().any(|(name, _)| name == endpoint),
+            "parsed Fleet Coordinator service must include {endpoint}"
+        );
+    }
+}
+
+#[test]
 fn fleet_activation_status_is_a_controller_query_on_the_shared_runtime_surface() {
     assert_eq!(
         canic::protocol::CANIC_FLEET_ACTIVATION_STATUS,

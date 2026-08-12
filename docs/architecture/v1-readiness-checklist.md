@@ -87,7 +87,13 @@ The first role attached to a new Component Spec becomes its Component. A later
 role attached to that Spec becomes a direct child; use `--kind` to select
 `singleton`, `replica`, `shard`, or `instance`.
 
-Build an attached role and write stable build provenance:
+Build every attached App role plus Canic's Fleet Coordinator and Wasm Store:
+
+```text
+canic build <app>
+```
+
+Build one attached role and write stable build provenance:
 
 ```text
 canic build <app> <role> --provenance <path>

@@ -33,13 +33,10 @@ use std::{
 const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic deploy check demo --json
   canic deploy check demo --evidence-envelope --build-provenance build-provenance.json
 
-Prints a compact operator-facing deployment check without installing or
-mutating state. Use --json for the local DeploymentCheckV1 payload. Use
---evidence-envelope for the stable CI/GitOps evidence envelope.
---build-provenance is fingerprinted only in envelope output.";
+Read-only: prints a compact summary or a machine-readable form selected by the
+output flags.";
 
 const CHECK_COMMAND_NAME: &str = "check";
 const JSON_ARG: &str = "json";

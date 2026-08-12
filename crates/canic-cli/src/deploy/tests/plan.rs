@@ -92,7 +92,8 @@ fn deploy_plan_is_top_level_deploy_command() {
 
     let help = usage();
     assert!(help.contains("canic deploy plan demo"));
-    assert!(help.contains("operator planning report"));
+    assert!(help.contains("Deploy commands are read-only"));
+    assert!(help.contains("fresh Fleet creation uses `canic install`"));
 }
 
 #[test]
@@ -100,22 +101,12 @@ fn deploy_plan_help_documents_no_mutation_contract() {
     let help = deploy_plan::usage();
 
     assert!(help.contains("canic deploy plan <fleet> --app <app>"));
-    assert!(help.contains("canic deploy plan demo-local --app demo --json"));
     assert!(help.contains("canic deploy plan demo-local --app demo --out deployment-plan.json"));
-    assert!(help.contains("does not install, upgrade, create canisters"));
-    assert!(help.contains("write deployment truth"));
-    assert!(help.contains("installed Fleet catalog records"));
-    assert!(help.contains("call live IC state"));
-    assert!(help.contains("proposed operation labels only"));
-    assert!(help.contains("not executed"));
-    assert!(help.contains("operation objects"));
-    assert!(help.contains("DeploymentPlanReport"));
-    assert!(help.contains("EvidenceEnvelope"));
-    assert!(help.contains("authorization"));
-    assert!(help.contains("mutate"));
-    assert!(help.contains("--out writes JSON only"));
-    assert!(help.contains("requested path"));
-    assert!(help.contains("exists"));
+    assert!(help.contains("Read-only"));
+    assert!(help.contains("deterministic local desired state"));
+    assert!(help.contains("without contacting the IC"));
+    assert!(help.contains("or authorizing mutation"));
+    assert_eq!(help.matches("  canic deploy plan ").count(), 2);
 }
 
 #[test]

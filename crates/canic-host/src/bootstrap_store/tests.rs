@@ -97,6 +97,23 @@ fn bootstrap_wasm_store_rejects_competing_canic_packages() {
 }
 
 #[test]
+fn workspace_wasm_store_source_owns_a_canonical_did() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let metadata = cargo_metadata(&workspace_root, true).expect("resolve workspace metadata");
+    let canic_package = resolved_canic_package(&metadata).expect("resolve exact Canic package");
+    let source = resolve_canonical_bootstrap_wasm_store_source(&metadata, canic_package)
+        .expect("resolve canonical Wasm Store source")
+        .expect("canonical Wasm Store package");
+
+    assert!(
+        source
+            .canonical_did_path
+            .as_deref()
+            .is_some_and(|path| path.ends_with("crates/canic-wasm-store/wasm_store.did"))
+    );
+}
+
+#[test]
 fn packaged_patch_table_never_uses_another_cached_version() {
     let root = temp_dir("canic-generated-wasm-store-exact-siblings");
     let canic_manifest = root.join("registry/canic-0.98.2/Cargo.toml");

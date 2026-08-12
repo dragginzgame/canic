@@ -212,7 +212,7 @@ repairs do not create additional release boundaries.
 | Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
 | Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in released `0.101.51` |
 | Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in open `0.101.52` |
-| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Active in open `0.101.52` |
+| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, install execution/performance cleanup, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue and installer guards followed by maintainer-owned complete release validation | Active in open `0.101.52` |
 
 `Q1` is complete in the released `0.101.49` batch. In addition to the packed and
 spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
@@ -232,7 +232,26 @@ limits and the measured envelope in [qualification.md](qualification.md).
 `Q5` is active in the same open draft. Its first cleanup reconciles current
 installation, recovery, layering and release-authority documentation; archives
 the oversized session handoff; and removes CI guard dependencies on incidental
-job counts, step adjacency and exact Make recipe text.
+job counts, step adjacency and exact Make recipe text. Fresh install now checks
+live authority before compilation, retains its dedicated Cargo target for exact
+retry, preserves the complete post-build safety gate and presents interactive
+activity plus grouped padded summaries instead of unbounded receipt and finding
+streams. Compatible configured roles now share Cargo workspace/profile builds
+and workspace metadata/catalog validation while retaining package-selected role
+graphs. Cold and retained-cache install measurement remains a Q5 follow-up.
+The same cleanup audited rendered CLI help and reduced verbose install, App, build,
+deploy and evidence after-help blocks to representative examples plus concise
+scope or safety notes. The removed install prose no longer invents a whole-
+Fleet update flow that the CLI does not expose. `canic build <app>` now exposes
+the complete artifact build directly: it builds every attached role once per
+Cargo workspace/profile, then reports Fleet Coordinator and Wasm Store builds
+as a distinct Infrastructure Wasm phase. The optional role selector remains
+focused on App custom builds and role-scoped provenance. Retained-cache
+measurement exposed Coordinator's unconditional debug-Candid build as 82.00s
+of the 111.30s Infrastructure phase. Coordinator now joins Wasm Store in owning
+a checked-in canonical DID, and ordinary builds copy and embed both contracts;
+the repeated smoke reduces Infrastructure to 8.51s and the complete six-
+artifact build from 147.15s to 44.94s.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -605,6 +624,11 @@ Fleet policy writer.
   carries only current state, stale 0.100 install boundaries and removed CLI
   examples are gone, and CI documentation guards reject the superseded claims
   instead of requiring them.
+- [x] Give both built-in infrastructure source crates checked-in canonical
+  Candid contracts. Ordinary Coordinator and Wasm Store builds copy and embed
+  those contracts without debug recompilation; explicit refresh regenerates
+  either DID, missing canonical contracts fail closed, and generated fallback
+  wrappers extract without treating ignored sidecars as source truth.
 - [ ] Audit every 0.101-touched module for mixed layer ownership, long or mixed
   authority predicates, forwarding namespaces, dead re-exports, unused
   dependencies and completed implementation scaffolding; split or delete each

@@ -6,6 +6,12 @@ pub(super) fn extract_candid(
     debug_wasm_path: &Path,
     did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let candid = extract_candid_bytes(debug_wasm_path)?;
+    write_bytes(did_path, &candid)?;
+    Ok(())
+}
+
+pub fn extract_candid_bytes(debug_wasm_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let output = Command::new("candid-extractor")
         .arg(debug_wasm_path)
         .output()
@@ -25,8 +31,7 @@ pub(super) fn extract_candid(
         .into());
     }
 
-    write_bytes(did_path, &output.stdout)?;
-    Ok(())
+    Ok(output.stdout)
 }
 
 // Remove stale ICP-generated Candid sidecars so local surface scans match the

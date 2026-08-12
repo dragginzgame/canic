@@ -53,12 +53,11 @@ fn deploy_compare_help_documents_passive_artifact_scope() {
     let help = deploy_compare::usage();
 
     assert!(help.contains("Compare two deployment truth check artifacts"));
-    assert!(help.contains("DeploymentCheckV1 JSON artifacts"));
-    assert!(help.contains("does not query live"));
-    assert!(help.contains("install code"));
-    assert!(help.contains("mutate deployments"));
-    assert!(help.contains("embedded"));
-    assert!(help.contains("revalidated"));
+    assert!(help.contains("Read-only"));
+    assert!(help.contains("revalidates and compares"));
+    assert!(help.contains("DeploymentCheckV1 artifacts"));
+    assert!(help.contains("without querying live state"));
+    assert_eq!(help.matches("  canic deploy inspect compare ").count(), 2);
 }
 
 #[test]

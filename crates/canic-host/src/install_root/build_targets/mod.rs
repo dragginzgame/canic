@@ -1,11 +1,13 @@
 use super::build_snapshot::InstallBuildTarget;
+use super::output::{TerminalActivity, TerminalStyle};
 use crate::canister_build::{
     CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext,
-    build_workspace_canister_artifact_from_spec, workspace_build_context_once,
+    build_workspace_canister_artifacts_from_specs, workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
-use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
-use std::{fs, path::Path, time::Instant};
+use crate::should_export_candid_artifacts;
+use crate::table::{ColumnAlign, render_bordered_table};
+use std::{collections::BTreeSet, fs, path::Path, time::Instant};
 
 pub(super) fn run_canic_build_targets(
     context: &WorkspaceBuildContext,
@@ -24,57 +26,73 @@ pub(super) fn run_canic_build_targets(
     }
 
     fs::create_dir_all(context.artifact_root())?;
-    println!("Building {} configured canisters", targets.len());
-    println!();
-    let headers = ["CANISTER", "PROGRESS", "WASM", "ELAPSED"];
-    let planned_rows = targets
+    let style = TerminalStyle::detected();
+    style.print_section(
+        "Build application Wasm",
+        &format!("{} configured canisters", targets.len()),
+    );
+    let headers = ["CANISTER", "STATUS", "WASM"];
+    let alignments = [ColumnAlign::Left, ColumnAlign::Left, ColumnAlign::Right];
+
+    let cargo_workspace_count = targets
         .iter()
-        .map(|target| {
-            [
-                target.role.clone(),
-                progress_bar(targets.len(), targets.len(), 10),
-                "000.00 MiB (gz 000.00 MiB)".to_string(),
-                "0.00s".to_string(),
-            ]
-        })
+        .map(|target| &target.spec.cargo_workspace_root)
+        .collect::<BTreeSet<_>>()
+        .len();
+    let cargo_pass_count = cargo_workspace_count
+        * if should_export_candid_artifacts(context.build_network)
+            && context.profile != crate::canister_build::CanisterBuildProfile::Debug
+        {
+            2
+        } else {
+            1
+        };
+    let started_at = Instant::now();
+    let activity = TerminalActivity::start(format!(
+        "{} | {} across {}",
+        counted_label(targets.len(), "canister", "canisters"),
+        counted_label(cargo_pass_count, "Cargo pass", "Cargo passes"),
+        counted_label(cargo_workspace_count, "workspace", "workspaces")
+    ));
+    let specs = targets
+        .iter()
+        .map(|target| target.spec.clone())
         .collect::<Vec<_>>();
-    let alignments = [
-        ColumnAlign::Left,
-        ColumnAlign::Left,
-        ColumnAlign::Right,
-        ColumnAlign::Right,
-    ];
-    let widths = table_widths(&headers, &planned_rows);
-    println!("{}", render_table_row(&headers, &widths, &alignments));
-    println!("{}", render_separator(&widths));
+    let build = build_workspace_canister_artifacts_from_specs(context, &specs);
+    activity.finish();
+    let built_outputs = build.map_err(|err| format!("configured artifact build failed: {err}"))?;
+    if built_outputs.len() != targets.len() {
+        return Err("configured artifact batch returned an incomplete output set".into());
+    }
+    let elapsed = started_at.elapsed();
 
     let mut outputs = Vec::with_capacity(targets.len());
-    for (index, target) in targets.iter().enumerate() {
-        let started_at = Instant::now();
-        let target_context = context.with_role(&target.role);
-        let output = build_workspace_canister_artifact_from_spec(&target_context, &target.spec)
-            .map_err(|err| format!("artifact build failed for {}: {err}", target.role))?;
-        let elapsed = started_at.elapsed();
+    let mut rows = Vec::with_capacity(targets.len());
+    for (target, output) in targets.iter().zip(built_outputs) {
         let artifact_size = wasm_artifact_size(&output.wasm_path, &output.wasm_gz_path)?;
 
-        let row = [
-            target.role.clone(),
-            progress_bar(index + 1, targets.len(), 10),
-            artifact_size,
-            format!("{:.2}s", elapsed.as_secs_f64()),
-        ];
-        println!("{}", render_table_row(&row, &widths, &alignments));
+        rows.push([target.role.clone(), style.success("done"), artifact_size]);
         outputs.push(CurrentCanisterArtifactBuildOutput {
             role: target.role.clone(),
             output,
         });
     }
 
+    println!("{}", render_bordered_table(&headers, &rows, &alignments));
+    style.print_section(
+        "Application Wasm ready",
+        &format!(
+            "{} in {:.2}s via {}",
+            counted_label(targets.len(), "canister", "canisters"),
+            elapsed.as_secs_f64(),
+            counted_label(cargo_pass_count, "Cargo pass", "Cargo passes")
+        ),
+    );
     println!();
     Ok(outputs)
 }
 
-fn wasm_artifact_size(
+pub(super) fn wasm_artifact_size(
     wasm_path: &Path,
     wasm_gz_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -85,7 +103,7 @@ fn wasm_artifact_size(
     Ok(wasm_size_label(wasm_bytes, gzip_bytes))
 }
 
-fn progress_bar(current: usize, total: usize, width: usize) -> String {
+pub(super) fn progress_bar(current: usize, total: usize, width: usize) -> String {
     if total == 0 || width == 0 {
         return "[] 0/0".to_string();
     }
@@ -95,6 +113,21 @@ fn progress_bar(current: usize, total: usize, width: usize) -> String {
     format!(
         "[{}{}] {current}/{total}",
         "#".repeat(filled),
-        " ".repeat(width - filled)
+        ".".repeat(width - filled)
     )
+}
+
+fn counted_label(count: usize, singular: &str, plural: &str) -> String {
+    format!("{count} {}", if count == 1 { singular } else { plural })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn progress_bar_matches_current_canister_ordinal() {
+        assert_eq!(progress_bar(1, 2, 12), "[######......] 1/2");
+        assert_eq!(progress_bar(2, 2, 12), "[############] 2/2");
+    }
 }

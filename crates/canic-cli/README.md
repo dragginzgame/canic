@@ -51,6 +51,7 @@ catalog inspection separate:
 canic app create <app>
 canic scaffold canister <app> <role>
 canic app role attach <app> <role> --component-spec <component-spec>
+canic build <app>
 canic build <app> <role> --provenance artifacts/<role>-provenance.json
 canic deploy check <fleet> --evidence-envelope
 canic evidence gate --policy policy.toml --envelope evidence.json
@@ -70,8 +71,16 @@ topology mutation in that list is the explicit `app role attach` command.
 The installed binary also includes the artifact builder:
 
 ```bash
+canic build <app>
 canic build <app> <role>
 ```
+
+The App-only form batches every attached role, then builds the canonical Fleet
+Coordinator and Wasm Store under a separate Infrastructure Wasm section.
+Supplying a role keeps the focused build used by ICP custom builds and role-
+scoped provenance. The App table reports each role's artifact-finalization
+time; the section completion reports the shared Cargo batch and finalization
+wall time once.
 
 To archive CI-friendly build provenance next to an artifact, request an
 explicit provenance file:

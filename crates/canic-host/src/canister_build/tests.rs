@@ -64,7 +64,7 @@ fn build_context_distinguishes_environment_from_build_network() {
         icp_root: "/workspace".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
 
@@ -88,7 +88,7 @@ fn release_build_artifacts_use_one_immutable_identity_namespace() {
         icp_root: "/project".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: Some(release_build_id),
     };
 
@@ -115,7 +115,7 @@ fn unqualified_artifacts_keep_the_local_icp_build_surface() {
         icp_root: "/project".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
 
@@ -136,7 +136,7 @@ fn build_context_applies_exact_child_build_network() {
         icp_root: "/project".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: Some(canic_core::ids::ReleaseBuildId::from_nonce(
             canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
         )),
@@ -188,7 +188,7 @@ fn unqualified_build_context_removes_an_ambient_release_build_id() {
         icp_root: "/project".into(),
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
     let mut command = std::process::Command::new("cargo");

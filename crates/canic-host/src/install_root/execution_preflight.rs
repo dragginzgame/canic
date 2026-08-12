@@ -1,4 +1,4 @@
-use super::deployment_truth_gate::deployment_truth_finding_label;
+use super::deployment_truth_gate::deployment_truth_findings_summary;
 use super::operations::InstallPhaseLabel;
 use super::phase_receipts::receipt_with_execution_context;
 use super::{
@@ -48,11 +48,8 @@ pub(super) fn current_install_execution_preflight_receipt(
     validate_deployment_execution_preflight_for_check(check, &preflight)?;
     let blockers = preflight.blockers.clone();
     if !blockers.is_empty() {
-        let details = blockers
-            .iter()
-            .map(deployment_truth_finding_label)
-            .collect::<Vec<_>>()
-            .join("; ");
+        let blocker_refs = blockers.iter().collect::<Vec<_>>();
+        let details = deployment_truth_findings_summary(&blocker_refs);
         return Err(Box::new(InstallRootBlockedError::new(
             InstallRootBlockKind::DeploymentExecutionPreflight,
             format!("deployment execution preflight blocked install: {details}"),

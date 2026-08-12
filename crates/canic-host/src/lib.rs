@@ -4,6 +4,7 @@ use std::process::Command;
 
 pub mod adoption;
 mod artifact_io;
+mod bootstrap_candid;
 mod bootstrap_coordinator;
 mod bootstrap_store;
 mod build_profile;
@@ -39,6 +40,7 @@ pub mod role_contract;
 pub mod state_manifest;
 mod subnet_catalog;
 pub mod table;
+pub mod terminal;
 #[cfg(test)]
 mod test_support;
 mod workspace_discovery;

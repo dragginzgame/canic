@@ -30,7 +30,7 @@ pub(super) fn resolve_install_build_context(
         icp_root: icp_root.to_path_buf(),
         config_path: config_path.to_path_buf(),
         local_replica: local_replica_icp_target(icp, build_network),
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     })
 }

@@ -1,5 +1,6 @@
 use crate::{
     artifact_io::{embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact},
+    bootstrap_candid::materialize_infrastructure_candid,
     canister_build::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterBuildProfile, WorkspaceBuildContext,
@@ -48,7 +49,7 @@ const WASM_STORE_FAST_PROFILE: &[(&str, &str)] = &[
 struct BootstrapWasmStoreSource {
     manifest_path: PathBuf,
     package_name: String,
-    source_root: PathBuf,
+    canonical_did_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -148,7 +149,7 @@ fn resolve_bootstrap_wasm_store_source(
     Ok(BootstrapWasmStoreSource {
         manifest_path: wrapper_root.join("Cargo.toml"),
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
-        source_root: wrapper_root.clone(),
+        canonical_did_path: None,
     })
 }
 
@@ -200,7 +201,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: package.manifest_path.clone(),
             package_name: package.name.clone(),
-            source_root,
+            canonical_did_path: Some(source_root.join(CANONICAL_WASM_STORE_DID_FILE)),
         }));
     }
 
@@ -229,7 +230,7 @@ fn resolve_canonical_bootstrap_wasm_store_source(
         return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: sibling_manifest,
             package_name: "canic-wasm-store".to_string(),
-            source_root,
+            canonical_did_path: Some(source_root.join(CANONICAL_WASM_STORE_DID_FILE)),
         }));
     }
 
@@ -520,56 +521,26 @@ fn ensure_wasm_store_did(
     source: &BootstrapWasmStoreSource,
     artifact_did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let source_did_path = source.source_root.join(CANONICAL_WASM_STORE_DID_FILE);
-
-    // Ordinary artifact builds must treat the checked-in bootstrap `.did` as
-    // canonical source, not as a cache file that gets rewritten on unrelated
-    // workspace changes. Regeneration is explicit.
-    if source_did_path.is_file() && !context.refresh_canonical_wasm_store_did {
-        fs::copy(source_did_path, artifact_did_path)?;
-        return Ok(());
-    }
-
-    let debug_context = context.with_profile(CanisterBuildProfile::Debug);
-    run_wasm_store_cargo_build(&debug_context, &source.manifest_path)?;
-
     let target_root = canister_build_target_root(&context.workspace_root);
     let debug_wasm_path = target_root
         .join("wasm32-unknown-unknown")
         .join(CanisterBuildProfile::Debug.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
-    let output = Command::new("candid-extractor")
-        .arg(&debug_wasm_path)
-        .output()?;
 
-    if !output.status.success() {
-        return Err(format!(
-            "candid-extractor failed for bootstrap wasm_store: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-
-    if source_did_path
-        .parent()
-        .expect("bootstrap wasm_store did path must have parent")
-        .exists()
-    {
-        fs::write(&source_did_path, &output.stdout)?;
-    }
-    fs::copy(source_did_path, artifact_did_path)?;
-    if context.profile == CanisterBuildProfile::Debug {
-        let artifact_root = artifact_did_path
-            .parent()
-            .expect("artifact did path must have parent");
-        let wasm_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm"));
-        let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
-        if wasm_path.is_file() && wasm_gz_path.is_file() {
-            fs::write(artifact_root.join(".build-profile"), "debug")?;
-        }
-    }
-
-    Ok(())
+    materialize_infrastructure_candid(
+        WASM_STORE_ROLE,
+        source.canonical_did_path.as_deref(),
+        artifact_did_path,
+        context.refresh_canonical_infrastructure_did,
+        &debug_wasm_path,
+        || {
+            if context.profile != CanisterBuildProfile::Debug {
+                let debug_context = context.with_profile(CanisterBuildProfile::Debug);
+                run_wasm_store_cargo_build(&debug_context, &source.manifest_path)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 #[cfg(test)]
