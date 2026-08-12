@@ -3,7 +3,7 @@ name = "delegation_root_stub"
 
 [roles.root]
 kind = "root"
-package = "."
+package = "../delegation_root_stub"
 
 [roles.database_a]
 kind = "canister"
