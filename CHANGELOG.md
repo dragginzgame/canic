@@ -15,8 +15,15 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 - `0.101.52` qualifies the complete three-Subnet Toko-shaped topology,
   interrupted scale-out and protected deployment limits while retaining an
   independent second Fleet on a shared physical Subnet, then begins Q5 by
-  reconciling current operator/governance semantics and removing incidental CI
-  guard coupling.
+  reconciling current operator/governance semantics, removing incidental CI
+  guard coupling, failing unsafe installs before compilation, retaining reusable
+  Cargo build work, batching compatible configured builds and rendering compact
+  terminal progress and tables, while trimming operator help to maintained
+  command boundaries and representative examples and adding one whole-App
+  `canic build <app>` batch command with separately reported application and
+  infrastructure Wasm, with canonical checked-in Candid eliminating routine
+  debug recompilation for both built-in infrastructure canisters and honest
+  per-role artifact-finalization timing alongside the shared App Cargo batch.
 
 - `0.101.51` separates provisioning-journal and initial-placement policy
   ownership, shares only mechanical durable-document operations across host

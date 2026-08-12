@@ -56,8 +56,18 @@ root endpoint bundle. Every other configured role selects the non-root
 lifecycle and endpoint bundle. There is no separate public root startup macro.
 
 Ordinary roles may be declared before topology placement so `cargo check` can
-run during early development. `canic build <app> <role>` is stricter: the
-role must be attached to topology before Canic writes deploy artifacts.
+run during early development. `canic build <app>` batches every attached role,
+then builds Canic's canonical `fleet_coordinator` and `wasm_store`
+infrastructure in a separately reported phase. `canic build <app> <role>`
+selects one App role. Both forms reject declared-only App roles before Canic
+writes deploy artifacts.
+
+Complete App builds report shared Cargo compilation once at section level.
+Each App-role table row separately reports `FINALIZE`: the time spent preparing,
+shrinking, extracting and embedding local Candid, and writing that role's Wasm
+and gzip artifacts outside the shared compilation. Infrastructure canisters
+build separately, so their row-level `ELAPSED` value covers their complete
+individual build.
 
 Build provenance is opt-in:
 
@@ -100,15 +110,28 @@ and artifact hashes.
 ## Candid Extraction
 
 `canic::finish!()` emits the `ic_cdk::export_candid!()` pointer only for debug
-builds. Host builds use that debug-only pointer to run `candid-extractor` for
-local development artifacts.
+builds. Host builds use that pointer to extract App-role Candid for local
+development artifacts.
 
 For `ICP_ENVIRONMENT=local`, Canic:
 
-- builds a debug Wasm for Candid extraction;
+- builds App-role debug Wasm for Candid extraction;
 - writes `.icp/local/canisters/<role>/<role>.did`;
 - embeds public `candid:service` metadata into the local Wasm artifact for
   local `icp canister metadata` inspection.
+
+Fleet Coordinator and Wasm Store are deliberate exceptions to debug
+extraction during ordinary builds. Their published source crates own checked-in
+canonical DIDs, which local infrastructure builds copy and embed directly:
+
+- `crates/canic-fleet-coordinator/fleet_coordinator.did`
+- `crates/canic-wasm-store/wasm_store.did`
+
+After an intentional infrastructure endpoint change, the low-level artifact
+builder's `--refresh-canonical-did` option extracts the selected debug Wasm and
+rewrites that role's canonical contract. A generated downstream wrapper with no
+canonical source package also extracts Candid, but never treats its generated
+sidecar as source truth.
 
 For `ICP_ENVIRONMENT=ic`, Canic intentionally skips Candid extraction, removes
 the generated `.did` sidecar path, and does not embed `candid:service`

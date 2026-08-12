@@ -46,14 +46,25 @@ fn deploy_catalog_help_documents_network_scoped_fleet_authority() {
     let list_help = deploy_catalog::list_usage();
     let inspect_help = deploy_catalog::inspect_usage();
 
-    assert!(help.contains(".canic/networks/<network-id>/fleets"));
     assert!(help.contains("canic deploy inspect catalog list"));
-    assert!(help.contains("read-only local-state reports"));
+    assert!(help.contains("canonical local network catalog"));
     assert!(help.contains("live Fleets"));
-    assert!(help.contains("infer Fleets from App names"));
     assert!(list_help.contains("--json"));
     assert!(list_help.contains("--output <path>"));
     assert!(inspect_help.contains("operator-facing label, not an App identity"));
+    assert_eq!(help.matches("  canic deploy inspect catalog ").count(), 2);
+    assert_eq!(
+        list_help
+            .matches("  canic deploy inspect catalog list")
+            .count(),
+        1
+    );
+    assert_eq!(
+        inspect_help
+            .matches("  canic deploy inspect catalog inspect")
+            .count(),
+        1
+    );
 }
 
 #[test]

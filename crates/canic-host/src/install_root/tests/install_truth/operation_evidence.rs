@@ -51,6 +51,7 @@ fn build_target(role: &str) -> InstallBuildTarget {
             package_manifest_path: PathBuf::from("/workspace/apps")
                 .join(role)
                 .join("Cargo.toml"),
+            cargo_workspace_root: PathBuf::from("/workspace"),
             wasm_path: artifact_root.join(format!("{role}.wasm")),
             wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
             did_path: artifact_root.join(format!("{role}.did")),
@@ -69,7 +70,7 @@ fn test_build_context() -> WorkspaceBuildContext {
         icp_root: PathBuf::from("/workspace/.icp"),
         config_path: PathBuf::from("/workspace/apps/demo/canic.toml"),
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     }
 }

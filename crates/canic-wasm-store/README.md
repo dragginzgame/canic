@@ -43,5 +43,9 @@ built crate, run the host artifact builder from the Canic workspace with:
 
 ```bash
 CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
-  wasm_store release . . apps/test/canic.toml --refresh-wasm-store-did
+  wasm_store debug . . apps/test/canic.toml --refresh-canonical-did
+git diff --exit-code -- crates/canic-wasm-store/wasm_store.did
 ```
+
+The second command is the drift check: it succeeds only when the checked-in
+contract already matches the current debug Wasm export.

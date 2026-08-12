@@ -81,7 +81,7 @@ pub(super) fn evidence_gate_command() -> ClapCommand {
                 .multiple(false),
         )
         .after_help(
-            "Examples:\n  canic evidence gate --policy ci/canic-policy.toml --envelope artifacts/canic/build-provenance.json\n  canic evidence gate --policy ci/canic-policy.toml --manifest ci/canic-evidence.toml --json --output artifacts/canic/policy-gate-report.json\n\nReads exactly one policy file and either one existing EvidenceEnvelopeV1 or one project evidence manifest. The gate is passive: it does not run builds, deploy, discover live state, mutate inputs, or turn policy success into deployment truth.",
+            "Examples:\n  canic evidence gate --policy ci/canic-policy.toml --envelope artifacts/canic/build-provenance.json\n\nRead-only: evaluates existing evidence without building, deploying, or discovering live state.",
         )
 }
 

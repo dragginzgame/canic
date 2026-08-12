@@ -107,13 +107,14 @@ fn parses_gate_json_options() {
 }
 
 #[test]
-fn gate_help_shows_v1_manifest_and_envelope_examples() {
+fn gate_help_is_compact_and_documents_read_only_scope() {
     let text = gate_usage();
 
     assert!(text.contains("Usage: canic evidence gate"));
     assert!(text.contains("canic evidence gate --policy ci/canic-policy.toml --envelope"));
-    assert!(text.contains("canic evidence gate --policy ci/canic-policy.toml --manifest"));
-    assert!(text.contains("does not run builds, deploy, discover live state"));
+    assert!(text.contains("Read-only"));
+    assert!(text.contains("without building, deploying, or discovering live state"));
+    assert_eq!(text.matches("  canic evidence gate ").count(), 1);
 }
 
 #[test]

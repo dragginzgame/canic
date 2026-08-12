@@ -1,9 +1,11 @@
 use super::timing::{InstallTimingLabel, InstallTimingSummary};
-use crate::table::{ColumnAlign, render_table};
+use crate::table::{ColumnAlign, render_bordered_table};
 use std::time::Duration;
 
+pub(super) use crate::terminal::{TerminalActivity, TerminalStyle};
+
 pub(super) fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration) {
-    println!("Install timing summary:");
+    TerminalStyle::detected().print_section("Install complete", "timing summary");
     println!("{}", render_install_timing_summary(timings, total));
 }
 
@@ -21,7 +23,7 @@ pub(super) fn render_install_timing_summary(
         timing_row(InstallTimingLabel::INSTALL_ROOT, timings.install_root),
         timing_row(InstallTimingLabel::TOTAL, total),
     ];
-    render_table(
+    render_bordered_table(
         &["PHASE", "ELAPSED"],
         &rows,
         &[ColumnAlign::Left, ColumnAlign::Right],

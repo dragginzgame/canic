@@ -43,6 +43,43 @@ current installation and recovery guidance, clarifying layer and release
 authority, and making documentation/CI guards protect maintained semantics
 instead of incidental wording or workflow shape.
 
+Fresh installation now performs its live authority gate before artifact
+compilation and retains the dedicated `target/canic-wasm` Cargo target across
+attempts. Interactive installs replace per-finding and per-receipt text streams
+with ANSI-aware ASCII activity lines and padded summary tables, while redirected
+output remains deterministic and append-only. The complete post-build artifact
+and execution gates still re-observe deployment truth before mutation.
+Configured artifacts now share one Cargo invocation per Cargo workspace and
+profile, and their package validation shares workspace metadata/catalog
+evidence while retaining each role's package-selected graph. For the common
+local one-workspace topology this reduces configured-role Cargo build processes
+from two per role to two total: release and debug/Candid.
+
+Rendered CLI help has also been compacted around routine operator decisions.
+Install, App, build, deploy and evidence pages retain their real arguments,
+options, representative examples and safety boundary without duplicating
+configuration snippets, artifact internals, cache maintenance or policy prose.
+The stale reference to an existing-Fleet update flow is removed; `canic
+install` now states only its maintained fresh-Fleet boundary.
+
+`canic build <app>` now selects every attached role and reuses the same
+workspace/profile Cargo batching as installation, then builds the canonical
+Fleet Coordinator and Wasm Store under a separate Infrastructure Wasm section.
+Supplying the optional role keeps the focused custom-build and role-provenance
+surface. Complete builds render bounded TTY-safe activity lines and padded
+Application/Infrastructure tables instead of requiring a shell loop or
+printing repeated Cargo logs. Section and total completion lines report elapsed
+wall time. App rows now report real per-role artifact-finalization time, while
+shared Cargo compilation remains reported once at section level. Each phase-
+ready summary is followed by one blank line before the next section.
+
+Fleet Coordinator now follows the same canonical-Candid model as Wasm Store.
+Each published infrastructure source crate owns a checked-in DID; ordinary
+local builds copy and embed it without a second debug compile, while one
+explicit maintainer refresh path regenerates either contract. Generated
+downstream wrappers extract when no canonical source package is available and
+do not promote their generated sidecar to source truth.
+
 ## Current Decision
 
 Continue Q5 whole-program hard-cut and closeout in the existing open draft.
@@ -55,7 +92,9 @@ The remaining closeout must account for:
   residue;
 - Candid and generated surfaces, configuration guidance, and stable-memory
   ownership;
-- module responsibility and retained production size; and
+- module responsibility and retained production size;
+- cold and retained-cache Toko install measurement after removing routine
+  infrastructure debug-Candid builds; and
 - the final targeted evidence required by the active design checklist.
 
 Application-data replication, grouped removal, scale-in, replacement, and
@@ -79,9 +118,34 @@ scripts; documentation-example `rustfmt --check`; current-document, release-
 validation, package/install, recovery, layering, and release-integrity guards;
 changelog governance and reference-surface tests; and `git diff --check`.
 
+The installer-efficiency slice passes focused `canic-host` install,
+authority-preflight, deployment-truth, cache, table and terminal-output tests;
+focused `canic-cli` install-help tests; and package Clippy with warnings denied.
+Configured-build grouping, exact multi-package Cargo command and shared
+workspace-evidence tests also pass without weakening per-role graph selection.
+The rendered-help and whole-App build cleanup passes the complete `canic-cli`
+library suite: 563 tests passed and one disposable-environment restore test
+remained intentionally ignored.
+Focused whole-App build selection, role-provenance rejection and host batch-
+command tests pass. A real fast-profile build of the checked-in `demo` App
+materializes four attached role artifacts plus Coordinator and Wasm Store
+infrastructure successfully. The retained-cache smoke reported 35.84s for the
+application batch, 82.00s for Coordinator, 29.31s for Wasm Store and 147.15s
+total before canonical Coordinator Candid. Repeating that smoke after the
+change reported 36.43s for Application Wasm, 3.36s for Coordinator, 5.15s for
+Wasm Store, 8.51s for Infrastructure Wasm and 44.94s total. The canonical-
+infrastructure-Candid slice refreshes and parses the Coordinator contract
+through the maintained debug export, and focused host tests prove ordinary
+Coordinator and Wasm Store builds use checked-in contracts without a debug
+compile. A repeated fast smoke reports 4.66s root finalization and roughly
+2.3-2.4s for each smaller App role inside one 37.87s shared Application Wasm
+section.
+
 ## Next Action
 
 Continue Q5 from the active design checklist. Prefer deleting confirmed
 sediment and duplicate authority over documenting it, keep changes inside the
 existing `0.101.52` draft, and update this handoff only with the current
-decision, remaining work, or evidence needed by the next session.
+decision, remaining work, or evidence needed by the next session. For installer
+efficiency, next measure cold and retained-cache Toko installs after configured-
+build batching and canonical infrastructure Candid.

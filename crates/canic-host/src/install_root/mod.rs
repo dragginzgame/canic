@@ -1,5 +1,4 @@
 use crate::{
-    canister_build::cache::DefaultCanisterBuildCacheCleanup,
     deployment_truth::DeploymentReceiptV1,
     fleet_install_input::{ResolvedFleetInstallInput, load_and_resolve_fleet_install_input},
     fleet_install_plan::{
@@ -85,7 +84,7 @@ use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_st
 use icp_context::InstallIcpContext;
 use identity::resolve_install_identity;
 pub use options::InstallRootOptions;
-use output::print_install_timing_summary;
+use output::{TerminalStyle, print_install_timing_summary};
 use phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
 };
@@ -218,7 +217,6 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
 // Execute fresh Fleet planning and the Coordinator-first installation workflow.
 pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError> {
     let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
-    let _build_cache_cleanup = DefaultCanisterBuildCacheCleanup::for_install(&workspace_root);
     let config_path = current_install_config_path(&icp_root, &options)?;
     let icp_context =
         InstallIcpContext::new(&options.icp_executable, &icp_root, &options.environment);
@@ -543,8 +541,10 @@ fn plan_current_fleet_install_session(
 }
 
 fn print_install_identity(app: &str, fleet_name: &str) {
-    println!("Installing Fleet {fleet_name}");
-    println!("Source App {app}");
+    TerminalStyle::detected().print_section(
+        &format!("Install Fleet {fleet_name}"),
+        &format!("source App {app}"),
+    );
     println!();
 }
 
@@ -598,11 +598,27 @@ fn persist_pre_root_receipts(
     build_phase: CompletedInstallPhase,
     manifest_phase: CompletedInstallPhase,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut paths = Vec::with_capacity(prepared_receipts.len() + 2);
     for receipt in prepared_receipts {
-        receipt_scope.write_receipt(receipt)?;
+        paths.push(receipt_scope.write_receipt(receipt)?);
     }
-    write_completed_install_phase_receipt(receipt_scope, build_phase)?;
-    write_completed_install_phase_receipt(receipt_scope, manifest_phase)?;
+    paths.push(write_completed_install_phase_receipt(
+        receipt_scope,
+        build_phase,
+    )?);
+    paths.push(write_completed_install_phase_receipt(
+        receipt_scope,
+        manifest_phase,
+    )?);
+    let receipt_root = paths.first().and_then(|path| path.parent()).map_or_else(
+        || "deployment receipt directory".to_string(),
+        |path| path.display().to_string(),
+    );
+    TerminalStyle::detected().print_section(
+        "Receipts",
+        &format!("{} written to {receipt_root}", paths.len()),
+    );
+    println!();
     Ok(())
 }
 

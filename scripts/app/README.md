@@ -98,11 +98,15 @@ Downstream repos that consume Canic from crates.io should use the installed CLI
 surface instead:
 
 ```bash
+canic build <app>
 canic build <app> <role>
 ```
 
 That builder:
-- builds the requested Rust canister crate for `wasm32-unknown-unknown`
+- builds every attached role in one Cargo pass per workspace/profile, or only
+  the requested role when a role is supplied
+- builds the canonical `fleet_coordinator` and `wasm_store` infrastructure
+  after the App batch when no focused role is supplied
 - keeps `wasm_store` out of downstream `icp.yaml`; normal installation builds
   it as a separately qualified Canic infrastructure artifact
 - resolves the canonical `canic-fleet-coordinator` source from the current
@@ -114,23 +118,22 @@ That builder:
 - copies the resulting WASM into `.icp/local/canisters/<role>/<role>.wasm`
 - copies the uncompressed WASM to `ICP_WASM_OUTPUT_PATH` when invoked by ICP
   CLI custom builds
-- runs `candid-extractor` to produce `.icp/local/canisters/<role>/<role>.did`
+- extracts App-role Candid from debug Wasm and copies canonical infrastructure
+  Candid into `.icp/local/canisters/<role>/<role>.did`
 
-The visible reference canister `.did` files now live only under `.icp/local`.
-They are generated build artifacts, not committed source files.
+Visible App-role `.did` files live only under `.icp/local` as generated build
+artifacts. Canic-owned infrastructure keeps checked-in canonical contracts:
 
-The one checked-in Candid exception is:
+- `crates/canic-fleet-coordinator/fleet_coordinator.did`
 - `crates/canic-wasm-store/wasm_store.did`
 
-That file remains the canonical published interface for the implicit bootstrap
-`wasm_store` crate and the packaged downstream CLI path.
-
-Ordinary bootstrap builds copy that checked-in DID into `.icp/local`; they do
-not rewrite the checked-in source file. Maintainers refresh it explicitly with
-the low-level builder's `--refresh-wasm-store-did` argument.
+Ordinary infrastructure builds copy those contracts into `.icp/local`; they
+do not rewrite source files or compile debug Wasm for Candid. Maintainers use
+the low-level builder's `--refresh-canonical-did` argument for an intentional
+Coordinator or Wasm Store contract refresh.
 
 Profile selection for the builder is:
-- `canic build <app> <role> --profile debug|fast|release` when using the
+- `canic build <app> [role] --profile debug|fast|release` when using the
   installed CLI
 - explicit role, profile, workspace-root, ICP-root, and config-path arguments
   for the low-level `build_artifact` example
@@ -146,8 +149,8 @@ descendant `.wasm.gz` files stay outside the root Wasm. Normal installation
 builds their exact Fleet-wide union once, then projects and stages only the
 release set admitted to each root.
 
-For normal fleet work, use the fleet-aware installer instead of a per-role
-builder command:
+For fresh Fleet creation, use the fleet-aware installer after building or let
+the installer build its complete release set itself:
 
 ```bash
 canic install test test-local --fleet-input <path>
@@ -157,7 +160,7 @@ In split repos where the Rust workspace lives under `backend/` but `icp.yaml`
 and `.icp` live at the repo root, pass the roots to the installed CLI:
 
 ```bash
-canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <app> <role>
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <app>
 ```
 
 The first root drives Cargo and config discovery; the second root owns emitted
@@ -167,7 +170,7 @@ If canister crates live under a different directory such as
 `backend/src/canisters`, point the command at the real config:
 
 ```bash
-canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <app> <role>
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <app>
 ```
 
 The builder infers the canister root from that config location.

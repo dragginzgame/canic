@@ -13,6 +13,7 @@ use super::current_execution::{
     current_install_executor_missing_capabilities,
 };
 use super::deployment_truth_gate::{
+    deployment_truth_display_summary, deployment_truth_findings_summary,
     enforce_install_deployment_truth_gate, install_deployment_truth_gate_lines,
     install_deployment_truth_gate_receipt,
 };
@@ -199,7 +200,7 @@ maximum_instances = 2
         icp_root: root.clone(),
         config_path,
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     };
 

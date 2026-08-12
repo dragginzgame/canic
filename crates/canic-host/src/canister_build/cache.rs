@@ -1,11 +1,11 @@
 //! Module: canic_host::canister_build::cache
 //!
-//! Responsibility: isolate and bound transient Cargo state created by canister artifact builds.
+//! Responsibility: isolate reusable Cargo state created by canister artifact builds.
 //! Does not own: canonical `.icp` artifacts, build profiles, or deployment orchestration.
-//! Boundary: resolves one Wasm target directory and removes only its default disposable cache.
+//! Boundary: resolves one dedicated Wasm target directory while respecting explicit Cargo input.
 
 use std::{
-    env, fs,
+    env,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -21,73 +21,49 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
 
 #[must_use]
 pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
-    env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .map_or_else(
-            || workspace_root.join(DEFAULT_WASM_TARGET_RELATIVE),
-            |path| {
-                if path.is_absolute() {
-                    path
-                } else {
-                    workspace_root.join(path)
-                }
-            },
-        )
+    resolve_canister_build_target_root(
+        workspace_root,
+        env::var_os("CARGO_TARGET_DIR").map(PathBuf::from),
+    )
 }
 
-/// Removes the default transient Wasm target when an install invocation exits.
-pub struct DefaultCanisterBuildCacheCleanup {
-    path: Option<PathBuf>,
-}
-
-impl DefaultCanisterBuildCacheCleanup {
-    #[must_use]
-    pub fn for_install(workspace_root: &Path) -> Self {
-        let path = if env::var_os("CARGO_TARGET_DIR").is_some() {
-            None
-        } else {
-            Some(workspace_root.join(DEFAULT_WASM_TARGET_RELATIVE))
-        };
-        Self { path }
-    }
-}
-
-impl Drop for DefaultCanisterBuildCacheCleanup {
-    fn drop(&mut self) {
-        let Some(path) = self.path.take() else {
-            return;
-        };
-        match fs::remove_dir_all(&path) {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => eprintln!(
-                "warning: failed to clear transient Wasm build cache {}: {err}",
-                path.display()
-            ),
-        }
-    }
+fn resolve_canister_build_target_root(
+    workspace_root: &Path,
+    configured_target: Option<PathBuf>,
+) -> PathBuf {
+    configured_target.map_or_else(
+        || workspace_root.join(DEFAULT_WASM_TARGET_RELATIVE),
+        |path| {
+            if path.is_absolute() {
+                path
+            } else {
+                workspace_root.join(path)
+            }
+        },
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::temp_dir;
 
     #[test]
-    fn cleanup_removes_only_the_selected_transient_cache() {
-        let root = temp_dir("canic-wasm-cache-cleanup");
-        let cache = root.join(DEFAULT_WASM_TARGET_RELATIVE);
-        let retained = root.join("target/retained.txt");
-        fs::create_dir_all(&cache).expect("create transient cache");
-        fs::write(cache.join("artifact"), b"cache").expect("write transient cache file");
-        fs::write(&retained, b"retained").expect("write retained file");
+    fn default_target_is_a_dedicated_reusable_workspace_cache() {
+        let root = Path::new("/workspace");
 
-        drop(DefaultCanisterBuildCacheCleanup {
-            path: Some(cache.clone()),
-        });
+        assert_eq!(
+            resolve_canister_build_target_root(root, None),
+            Path::new("/workspace/target/canic-wasm")
+        );
+    }
 
-        assert!(!cache.exists());
-        assert!(retained.is_file());
-        fs::remove_dir_all(root).expect("remove test root");
+    #[test]
+    fn configured_relative_target_remains_workspace_relative() {
+        let root = Path::new("/workspace");
+
+        assert_eq!(
+            resolve_canister_build_target_root(root, Some(PathBuf::from("custom-target"))),
+            Path::new("/workspace/custom-target")
+        );
     }
 }

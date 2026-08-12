@@ -150,15 +150,15 @@ fn install_usage_explains_app_config() {
     assert!(!text.contains("--app"));
     assert!(text.contains("--profile"));
     assert!(text.contains("--fleet-input"));
-    assert!(normalized.contains("separate operator-owned placement"));
-    assert!(normalized.contains("fresh local creation"));
-    assert!(normalized.contains("existing-Fleet update flow"));
-    assert!(normalized.contains("canic medic fleet"));
-    assert!(text.contains("[app]"));
-    assert!(text.contains("name = \"test\""));
+    assert!(normalized.contains("fresh Fleet"));
+    assert!(normalized.contains("App config"));
+    assert!(normalized.contains("required operator-owned Fleet input"));
+    assert!(!normalized.contains("existing-Fleet update flow"));
+    assert!(!normalized.contains("CARGO_TARGET_DIR"));
+    assert_eq!(text.matches("  canic install ").count(), 1);
 }
 
-// Ensure existing-deployment install failures point at diagnostics and upgrade flow.
+// Ensure existing-deployment install failures point at diagnostics and the command boundary.
 #[test]
 fn install_existing_deployment_errors_get_action_hint() {
     let err = install_error_with_context(
@@ -173,7 +173,8 @@ fn install_existing_deployment_errors_get_action_hint() {
 
     assert!(message.contains("canic --environment academic info list demo"));
     assert!(message.contains("canic --environment academic medic fleet demo"));
-    assert!(message.contains("existing-Fleet update flow"));
+    assert!(message.contains("`canic install` is for fresh Fleet creation"));
+    assert!(message.contains("not code-only updates"));
 
     std::assert_matches!(
         install_error_with_context(

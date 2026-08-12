@@ -177,14 +177,9 @@ fn install_truth_gate_blocks_observed_controller_drift() {
         artifact_gate_role_phase_receipts(&check),
     );
     let lines = install_deployment_truth_gate_lines(&check, &receipt);
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.contains("Deployment truth blocker: diff:expected_controller_missing"))
-    );
-    assert!(lines.iter().any(|line| {
-        line.contains("Deployment truth receipt:") && line.contains("status=FailedBeforeMutation")
-    }));
+    let text = lines.join("\n");
+    assert!(text.contains("expected_controller_missing"));
+    assert!(text.contains("FailedBeforeMutation"));
     let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
     let blocked = err
         .downcast_ref::<InstallRootBlockedError>()

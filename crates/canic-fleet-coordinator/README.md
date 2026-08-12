@@ -18,3 +18,19 @@ host contract own the built-in identity; a package-local `canic.toml` would
 incorrectly model it as an App-owned role. The complete runtime is the
 maintained `fleet-coordinator-canister` feature bundle plus the standard Canic
 lifecycle entrypoints.
+
+## Canonical DID ownership
+
+[`fleet_coordinator.did`](fleet_coordinator.did) is the checked-in canonical
+interface for this crate. Ordinary local artifact builds copy it into
+`.icp/local/canisters/fleet_coordinator/fleet_coordinator.did` and embed it as
+local Wasm metadata without compiling a second debug Wasm.
+
+After an intentional endpoint change, refresh and check the contract from the
+Canic workspace with:
+
+```bash
+CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
+  fleet_coordinator debug . . apps/test/canic.toml --refresh-canonical-did
+git diff --exit-code -- crates/canic-fleet-coordinator/fleet_coordinator.did
+```

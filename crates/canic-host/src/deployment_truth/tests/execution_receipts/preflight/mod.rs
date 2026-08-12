@@ -303,6 +303,31 @@ fn deployment_execution_preflight_blocks_safety_authority_and_capability_gaps() 
 }
 
 #[test]
+fn early_authority_preflight_ignores_artifact_failures_but_keeps_authority_blockers() {
+    let mut check = sample_unknown_unsafe_check();
+    check.report.status = SafetyStatusV1::Blocked;
+    check.report.hard_failures.push(SafetyFindingV1 {
+        code: DEPLOYMENT_ARTIFACT_MISSING_CODE.to_string(),
+        message: "planned artifact was not observed".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+
+    let blockers = deployment_authority_blockers_from_check(&check);
+
+    assert!(
+        blockers
+            .iter()
+            .all(|finding| finding.code != DEPLOYMENT_ARTIFACT_MISSING_CODE)
+    );
+    assert!(
+        blockers
+            .iter()
+            .any(|finding| finding.code == AUTHORITY_UNSAFE_BLOCKED_CODE)
+    );
+}
+
+#[test]
 fn deployment_execution_preflight_uses_authority_subject_when_action_identity_is_missing() {
     let check = sample_check(sample_plan(), sample_matching_inventory());
     let mut authority = build_authority_reconciliation_plan(&check);

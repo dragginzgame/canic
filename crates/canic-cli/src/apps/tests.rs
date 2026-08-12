@@ -1268,11 +1268,9 @@ fn app_usage_lists_subcommands_and_examples() {
     assert!(!text.contains("use"));
     assert!(!text.contains("search"));
     assert!(text.contains("Examples:"));
-    assert!(text.contains("Mutation notes:"));
-    assert!(
-        text.contains("adoption, check, config, list, role inspect, and role list are read-only")
-    );
-    assert!(text.contains("Mutating commands expose --dry-run where supported"));
+    assert!(text.contains("Leaf help identifies read-only commands"));
+    assert!(text.contains("mutations that support --dry-run"));
+    assert_eq!(text.matches("  canic app ").count(), 2);
 }
 
 // Ensure app adoption help lists the read-only report command.
@@ -1300,9 +1298,9 @@ fn app_role_usage_lists_subcommands_and_examples() {
     assert!(text.contains("list"));
     assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
-    assert!(text.contains("Mutation notes:"));
-    assert!(text.contains("attach, declare, and rename update canic.toml"));
-    assert!(text.contains("rename may also update"));
+    assert!(text.contains("Inspect and list are read-only"));
+    assert!(text.contains("mutations support --dry-run"));
+    assert_eq!(text.matches("  canic app role ").count(), 2);
 }
 
 // Ensure app check help explains read-only ICP config checks.
@@ -1425,6 +1423,7 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("--output <path>"));
     assert!(text.contains("brownfield"));
     assert!(text.contains("read-only"));
+    assert_eq!(text.matches("  canic app adoption report ").count(), 2);
 }
 
 // Render precomputed config rows for focused table tests.

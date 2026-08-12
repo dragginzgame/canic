@@ -36,28 +36,18 @@ const DEPLOY_CATALOG_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
   canic deploy inspect catalog inspect demo-local
-  canic --environment local deploy inspect catalog list --json --output catalog.json
 
-Catalog commands are read-only local-state reports. Environment profiles resolve
-one canonical network catalog under .canic/networks/<network-id>/fleets and do
-not query live Fleets, create deployment truth, mutate topology, change
-controllers, install Wasm, or infer Fleets from App names.";
+Reads the canonical local network catalog without querying live Fleets.";
 const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
-  canic deploy inspect catalog list --json
-  canic --environment local deploy inspect catalog list --json --output catalog.json
 
-Lists Fleets from the resolved canonical network catalog only. This does not
-refresh live state or infer Fleets from App names.";
+Reads the canonical local network catalog without refreshing live state.";
 const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog inspect demo-local
-  canic deploy inspect catalog inspect demo-local --json
-  canic --environment local deploy inspect catalog inspect demo-local --json --output demo-local.json
 
-Inspects one Fleet from the resolved canonical network catalog only. The Fleet
-argument is an operator-facing label, not an App identity.";
+The Fleet argument is an operator-facing label, not an App identity.";
 const JSON_ARG: &str = "json";
 
 const LIST_COMMAND: CatalogCommand = CatalogCommand {

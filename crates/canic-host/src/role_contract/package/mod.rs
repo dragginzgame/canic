@@ -104,6 +104,7 @@ pub struct RoleCargoGraphEvidence {
     pub role: CanisterRole,
     pub role_package_name: String,
     pub role_manifest_path: PathBuf,
+    pub cargo_workspace_root: PathBuf,
     pub canic_version: String,
     pub canic_manifest_path: PathBuf,
     pub default_features_enabled: bool,
@@ -144,6 +145,32 @@ pub fn validate_declared_role_package(
     role: &CanisterRole,
     mode: PackageValidationMode,
 ) -> RolePackageValidation {
+    let mut cache = PackageValidationCache::default();
+    validate_declared_role_package_with_cache(config_path, config, role, mode, &mut cache)
+}
+
+pub fn validate_declared_role_packages(
+    config_path: &Path,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+    roles: &[CanisterRole],
+    mode: PackageValidationMode,
+) -> Vec<RolePackageValidation> {
+    let mut cache = PackageValidationCache::default();
+    roles
+        .iter()
+        .map(|role| {
+            validate_declared_role_package_with_cache(config_path, config, role, mode, &mut cache)
+        })
+        .collect()
+}
+
+fn validate_declared_role_package_with_cache(
+    config_path: &Path,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+    role: &CanisterRole,
+    mode: PackageValidationMode,
+    cache: &mut PackageValidationCache,
+) -> RolePackageValidation {
     let Some(declaration) = config.roles.get(role) else {
         return RolePackageValidation::Unsupported(RoleContractFinding::RoleUnknown {
             role: role.clone(),
@@ -157,7 +184,7 @@ pub fn validate_declared_role_package(
         });
     }
 
-    validate_package_manifest(&manifest_path, app, role, mode, None)
+    validate_package_manifest_with_cache(&manifest_path, app, role, mode, None, cache)
 }
 
 #[must_use]
@@ -336,9 +363,26 @@ fn validate_package_manifest(
     mode: PackageValidationMode,
     built_in: Option<BuiltInRoleKind>,
 ) -> RolePackageValidation {
-    let Ok(metadata) =
-        cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())
-    else {
+    let mut cache = PackageValidationCache::default();
+    validate_package_manifest_with_cache(
+        manifest_path,
+        expected_app,
+        expected_role,
+        mode,
+        built_in,
+        &mut cache,
+    )
+}
+
+fn validate_package_manifest_with_cache(
+    manifest_path: &Path,
+    expected_app: &str,
+    expected_role: &CanisterRole,
+    mode: PackageValidationMode,
+    built_in: Option<BuiltInRoleKind>,
+    cache: &mut PackageValidationCache,
+) -> RolePackageValidation {
+    let Ok((metadata, catalog)) = cache.evidence_for_manifest(manifest_path, mode) else {
         let finding = if let Some(role) = built_in {
             RoleContractFinding::BuiltInPackageUnavailable { role }
         } else {
@@ -351,7 +395,7 @@ fn validate_package_manifest(
         return RolePackageValidation::Unsupported(finding);
     };
 
-    let selected = match exact_manifest_package(&metadata, manifest_path, expected_role) {
+    let selected = match exact_manifest_package(metadata, manifest_path, expected_role) {
         Ok(selected) => selected,
         Err(finding) => return RolePackageValidation::Unsupported(finding),
     };
@@ -361,7 +405,7 @@ fn validate_package_manifest(
         PackageBuildContract::CompiledConfig
     };
     let declaration = match validate_role_declaration(
-        &metadata,
+        metadata,
         selected,
         expected_app,
         expected_role,
@@ -373,13 +417,6 @@ fn validate_package_manifest(
     if let Err(finding) = validate_catalog() {
         return RolePackageValidation::Unsupported(finding);
     }
-    let Ok(catalog) =
-        cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline())
-    else {
-        return unsupported_shape(
-            "unable to inspect the Cargo package catalog for the selected role package".to_string(),
-        );
-    };
     let Ok(tree) = cargo_tree_for_package(
         manifest_path,
         &declaration.package.id,
@@ -393,14 +430,63 @@ fn validate_package_manifest(
                 .to_string(),
         );
     };
-    let graph = match correlate_package_tree(&catalog, &metadata, declaration.package, &tree) {
+    let graph = match correlate_package_tree(catalog, metadata, declaration.package, &tree) {
         Ok(graph) => graph,
         Err(reason) => return unsupported_shape(reason),
     };
 
-    match validate_resolved_package(&metadata, &graph, &declaration, expected_app, expected_role) {
+    match validate_resolved_package(metadata, &graph, &declaration, expected_app, expected_role) {
         Ok(evidence) => RolePackageValidation::Supported(evidence),
         Err(finding) => RolePackageValidation::Unsupported(finding),
+    }
+}
+
+#[derive(Default)]
+struct PackageValidationCache {
+    workspaces: Vec<CachedCargoWorkspace>,
+}
+
+struct CachedCargoWorkspace {
+    mode: PackageValidationMode,
+    metadata: CargoMetadata,
+    catalog: CargoMetadata,
+}
+
+impl PackageValidationCache {
+    fn evidence_for_manifest(
+        &mut self,
+        manifest_path: &Path,
+        mode: PackageValidationMode,
+    ) -> Result<(&CargoMetadata, &CargoMetadata), Box<dyn std::error::Error>> {
+        if let Some(index) = self.workspace_index(manifest_path, mode) {
+            let workspace = &self.workspaces[index];
+            return Ok((&workspace.metadata, &workspace.catalog));
+        }
+
+        let metadata =
+            cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())?;
+        let catalog =
+            cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline())?;
+        self.workspaces.push(CachedCargoWorkspace {
+            mode,
+            metadata,
+            catalog,
+        });
+        let workspace = self
+            .workspaces
+            .last()
+            .expect("package validation cache just received one workspace");
+        Ok((&workspace.metadata, &workspace.catalog))
+    }
+
+    fn workspace_index(&self, manifest_path: &Path, mode: PackageValidationMode) -> Option<usize> {
+        let manifest_path = normalized_manifest_path(manifest_path);
+        self.workspaces.iter().position(|workspace| {
+            workspace.mode == mode
+                && workspace.metadata.packages.iter().any(|package| {
+                    normalized_manifest_path(&package.manifest_path) == manifest_path
+                })
+        })
     }
 }
 
@@ -508,6 +594,7 @@ fn validate_resolved_package(
         role: expected_role.clone(),
         role_package_name: selected.name.clone(),
         role_manifest_path: selected.manifest_path.clone(),
+        cargo_workspace_root: graph.workspace_root.clone(),
         canic_version: canic_package.version.clone(),
         canic_manifest_path: canic_package.manifest_path.clone(),
         default_features_enabled,

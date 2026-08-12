@@ -5,6 +5,50 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+#[test]
+fn package_validation_cache_reuses_workspace_evidence_for_member_manifests() {
+    let cache = PackageValidationCache {
+        workspaces: vec![CachedCargoWorkspace {
+            mode: PackageValidationMode::Build,
+            metadata: CargoMetadata {
+                packages: vec![
+                    package("root", "root@1", "/workspace/root/Cargo.toml"),
+                    package("hub", "hub@1", "/workspace/hub/Cargo.toml"),
+                ],
+                resolve: None,
+                workspace_root: PathBuf::from("/workspace"),
+            },
+            catalog: CargoMetadata {
+                packages: Vec::new(),
+                resolve: None,
+                workspace_root: PathBuf::from("/workspace"),
+            },
+        }],
+    };
+
+    assert_eq!(
+        cache.workspace_index(
+            Path::new("/workspace/root/Cargo.toml"),
+            PackageValidationMode::Build,
+        ),
+        Some(0)
+    );
+    assert_eq!(
+        cache.workspace_index(
+            Path::new("/workspace/hub/Cargo.toml"),
+            PackageValidationMode::Build,
+        ),
+        Some(0)
+    );
+    assert_eq!(
+        cache.workspace_index(
+            Path::new("/workspace/hub/Cargo.toml"),
+            PackageValidationMode::Passive,
+        ),
+        None
+    );
+}
+
 fn validate_test_role_package(
     config_path: &Path,
     role: &CanisterRole,

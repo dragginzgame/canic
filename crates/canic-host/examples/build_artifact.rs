@@ -23,19 +23,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     else {
         return Err(
-            "usage: cargo run -p canic-host --example build_artifact -- <canister-name> <debug|fast|release> <workspace-root> <icp-root> <config-path> [--refresh-wasm-store-did] [--release-build-id <id>]"
+            "usage: cargo run -p canic-host --example build_artifact -- <canister-name> <debug|fast|release> <workspace-root> <icp-root> <config-path> [--refresh-canonical-did] [--release-build-id <id>]"
                 .into(),
         );
     };
-    let mut refresh_canonical_wasm_store_did = false;
+    let mut refresh_canonical_infrastructure_did = false;
     let mut release_build_id = None;
     while let Some(argument) = args.next() {
         match argument.as_str() {
-            "--refresh-wasm-store-did" if canister_name == "wasm_store" => {
-                refresh_canonical_wasm_store_did = true;
+            "--refresh-canonical-did"
+                if matches!(canister_name.as_str(), "fleet_coordinator" | "wasm_store") =>
+            {
+                refresh_canonical_infrastructure_did = true;
             }
-            "--refresh-wasm-store-did" => {
-                return Err("--refresh-wasm-store-did requires canister-name wasm_store".into());
+            "--refresh-canonical-did" => {
+                return Err(
+                    "--refresh-canonical-did requires fleet_coordinator or wasm_store".into(),
+                );
             }
             "--release-build-id" => {
                 if release_build_id.is_some() {
@@ -65,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         workspace_root,
         icp_root,
         local_replica: None,
-        refresh_canonical_wasm_store_did,
+        refresh_canonical_infrastructure_did,
         release_build_id,
     };
     print_workspace_build_context_once(&context)?;

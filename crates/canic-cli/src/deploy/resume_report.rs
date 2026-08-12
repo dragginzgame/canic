@@ -23,14 +23,9 @@ const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect resume-report demo
   canic deploy inspect resume-report --receipt receipt.json demo
-  canic --environment local deploy inspect resume-report --receipt receipt.json --profile fast demo
 
-Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
-and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
-latest receipt under
-.canic/networks/<canonical-network-id>/fleets/<fleet-id>/deployment-receipts/.
-The Fleet name is resolved through the canonical catalog. It does not resume,
-install, or mutate state.";
+Read-only: uses --receipt or the latest Fleet receipt without resuming or
+mutating the deployment.";
 
 const RECEIPT_ARG: &str = "receipt";
 

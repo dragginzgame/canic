@@ -11,6 +11,7 @@ pub use descriptor::{
     StateDescriptorRegistry, materialize_state_manifest, validate_state_descriptor_registry,
 };
 
+pub(crate) use package::validate_declared_role_packages;
 pub use package::{
     PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
     declared_role_manifest_path, validate_built_in_fleet_coordinator_package,

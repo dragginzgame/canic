@@ -67,7 +67,15 @@ Declared roles can compile as source work. Attached roles are the roles that
 can become build artifacts, deployment truth, install targets, and local
 deployment plans.
 
-The visible artifact build remains attached-role strict:
+Build every attached role plus the canonical Fleet Coordinator and Wasm Store:
+
+```text
+canic build <app>
+```
+
+The command reports Application Wasm and Infrastructure Wasm separately.
+Select one attached App role when a focused build or role-scoped provenance is
+needed:
 
 ```text
 canic build <app> <role>

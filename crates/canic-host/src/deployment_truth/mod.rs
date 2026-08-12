@@ -23,6 +23,7 @@ mod tests;
 mod text;
 
 pub use authority::build_authority_reconciliation_plan;
+pub(crate) use executor::deployment_authority_blockers_from_check;
 pub use executor::{
     CURRENT_CLI_EXECUTOR_CAPABILITIES, CurrentCliDeploymentExecutor,
     DeploymentExecutionPreflightError, DeploymentExecutor, TESTKIT_PREFLIGHT_CAPABILITIES,

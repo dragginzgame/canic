@@ -1,8 +1,8 @@
 //! Module: canic_cli::build
 //!
-//! Responsibility: build one role artifact and optionally emit build provenance.
+//! Responsibility: build a complete App-plus-infrastructure artifact set or one selected App role.
 //! Does not own: canister build execution, app config schema, or evidence envelope schemas.
-//! Boundary: resolves CLI build context, validates attached roles, and delegates artifact creation.
+//! Boundary: resolves CLI build context and delegates configuration-backed artifact creation.
 
 use crate::{
     cli::{
@@ -20,37 +20,38 @@ use crate::{
 use canic_core::ids::BuildNetwork;
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
-    CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
+    CanisterBuildProfile, ConfiguredCanisterArtifactBuildOutput, WorkspaceBuildContext,
+    build_workspace_canister_artifact, build_workspace_configured_canister_artifacts,
     copy_icp_wasm_output, print_workspace_build_context_once,
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
+    format::wasm_size_label,
     icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
     install_root::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
     release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, workspace_root},
+    table::{ColumnAlign, render_bordered_table},
+    terminal::{TerminalActivity, TerminalStyle},
 };
 use clap::Command as ClapCommand;
 use std::{
     env,
     ffi::OsString,
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 use thiserror::Error as ThisError;
 
 const BUILD_HELP_AFTER: &str = "\
 Examples:
-  canic build demo app
+  canic build demo --profile fast
   canic build demo app --provenance artifacts/app-provenance.json
-  canic --environment local build demo root
 
-The selected app must have a matching canic.toml, and the selected role must
-be attached to topology before an artifact build is allowed.
-The command writes .icp/local/canisters/<role>/<role>.wasm and .wasm.gz.
-Use --provenance <path> to additionally write a stable EvidenceEnvelopeV1
-containing canic.build_provenance.v1.";
+Builds every attached App role plus Canic infrastructure by default. Pass a
+role for one focused App artifact.";
 
 ///
 /// BuildCommandError
@@ -94,7 +95,7 @@ pub enum BuildCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BuildOptions {
     app: String,
-    role: String,
+    role: Option<String>,
     environment: String,
     profile: Option<CanisterBuildProfile>,
     workspace: Option<String>,
@@ -113,7 +114,7 @@ impl BuildOptions {
 
         Ok(Self {
             app: required_string(&matches, "app"),
-            role: required_string(&matches, "role"),
+            role: string_option(&matches, "role"),
             environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
             workspace: string_option(&matches, "workspace"),
@@ -124,7 +125,7 @@ impl BuildOptions {
     }
 }
 
-/// Build one Canic canister artifact through the installed CLI.
+/// Build configured Canic App artifacts through the installed CLI.
 pub fn run<I>(args: I) -> Result<(), BuildCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -134,23 +135,34 @@ where
         return Ok(());
     }
 
+    let started_at = Instant::now();
     let options = BuildOptions::parse(args)?;
-    let context = resolve_build_context(&options)?;
-    print_workspace_build_context_once(&context)?;
-    validate_attached_role(&options, &context.config_path)?;
-    let output = build_workspace_canister_artifact(&context)?;
-    copy_icp_wasm_output(&options.role, &output)?;
-    write_build_provenance_if_requested(&options, &context, output.clone())?;
-    println!("{}", output.wasm_gz_path.display());
+    let config_path = resolve_build_config_path(&options)?.canonicalize()?;
+    let roles = selected_build_roles(&options, &config_path)?;
+    let context = resolve_build_context(&options, config_path, &roles[0])?;
+
+    if let Some(role) = &options.role {
+        print_workspace_build_context_once(&context)?;
+        let output = build_workspace_canister_artifact(&context)?;
+        copy_icp_wasm_output(role, &output)?;
+        write_build_provenance_if_requested(&options, &context, output.clone())?;
+        TerminalStyle::detected().print_section(
+            "Build complete",
+            &build_completion_detail(1, "role", "roles", started_at.elapsed()),
+        );
+        println!("{}", output.wasm_gz_path.display());
+    } else {
+        build_app(&options, &context, &roles, started_at)?;
+    }
     Ok(())
 }
 
 fn build_command() -> ClapCommand {
     ClapCommand::new("build")
         .bin_name("canic build")
-        .about("Build one Canic canister artifact")
+        .about("Build Canic App and infrastructure artifacts")
         .disable_help_flag(true)
-        .override_usage("canic build [OPTIONS] <app> <role>")
+        .override_usage("canic build [OPTIONS] <app> [role]")
         .arg(
             value_arg("app")
                 .value_name("app")
@@ -160,8 +172,8 @@ fn build_command() -> ClapCommand {
         .arg(
             value_arg("role")
                 .value_name("role")
-                .required(true)
-                .help("Config-defined canister role to build"),
+                .required(false)
+                .help("Build only this attached canister role"),
         )
         .arg(
             value_arg("workspace")
@@ -197,6 +209,7 @@ fn build_command() -> ClapCommand {
                 .long("provenance")
                 .value_name("file")
                 .num_args(1)
+                .requires("role")
                 .help("Write an EvidenceEnvelopeV1 build provenance artifact to this file"),
         )
         .arg(internal_environment_arg())
@@ -207,26 +220,207 @@ fn usage() -> String {
     render_usage(build_command)
 }
 
-fn validate_attached_role(
+fn selected_build_roles(
     options: &BuildOptions,
     config_path: &Path,
-) -> Result<(), BuildCommandError> {
-    let roles = AppConfigSnapshot::load(config_path)?.role_lifecycle();
-    let Some(row) = roles.iter().find(|row| row.role == options.role) else {
+) -> Result<Vec<String>, BuildCommandError> {
+    let config = AppConfigSnapshot::load(config_path)?;
+    let roles = config.role_lifecycle();
+    let Some(role) = &options.role else {
+        let selected = config.deployable_roles();
+        if selected.is_empty() {
+            return Err(BuildCommandError::Usage(format!(
+                "App {} has no attached roles to build",
+                options.app
+            )));
+        }
+        return Ok(selected);
+    };
+    let Some(row) = roles.iter().find(|row| row.role == *role) else {
         return Err(BuildCommandError::Usage(format!(
             "role {}.{} is not declared in {}",
             options.app,
-            options.role,
+            role,
             config_path.display()
         )));
     };
     if !row.attached {
         return Err(BuildCommandError::Usage(format!(
             "role {}.{} is declared but not attached to topology; run `canic app role attach {} {} --component-spec <component-spec>` before building an artifact",
-            options.app, options.role, options.app, options.role
+            options.app, role, options.app, role
         )));
     }
+    Ok(vec![role.clone()])
+}
+
+fn build_app(
+    options: &BuildOptions,
+    context: &WorkspaceBuildContext,
+    roles: &[String],
+    started_at: Instant,
+) -> Result<(), BuildCommandError> {
+    let style = TerminalStyle::detected();
+    style.print_section(
+        "Application Wasm",
+        &format!("{} | {} attached roles", options.app, roles.len()),
+    );
+    let application_started_at = Instant::now();
+    let activity = TerminalActivity::start(format!(
+        "{} configured roles | {} profile | shared Cargo batch",
+        roles.len(),
+        context.profile.target_dir_name()
+    ));
+    let build = build_workspace_configured_canister_artifacts(context, roles);
+    activity.finish();
+    let outputs = build?;
+    println!("{}", render_app_build_table(&outputs, style)?);
+    style.print_section(
+        "Application Wasm ready",
+        &build_completion_detail(
+            outputs.len(),
+            "role",
+            "roles",
+            application_started_at.elapsed(),
+        ),
+    );
+    println!();
+
+    let infrastructure = build_infrastructure(context, style)?;
+    style.print_section(
+        "Build complete",
+        &build_completion_detail(
+            outputs.len() + infrastructure.len(),
+            "artifact",
+            "artifacts",
+            started_at.elapsed(),
+        ),
+    );
+    println!(
+        "Artifacts: {}",
+        context.icp_root.join(".icp/local/canisters").display()
+    );
     Ok(())
+}
+
+fn build_infrastructure(
+    context: &WorkspaceBuildContext,
+    style: TerminalStyle,
+) -> Result<Vec<TimedCanisterArtifactBuildOutput>, BuildCommandError> {
+    const ROLES: [&str; 2] = ["fleet_coordinator", "wasm_store"];
+
+    style.print_section("Infrastructure Wasm", "2 built-in canisters");
+    let section_started_at = Instant::now();
+    let mut outputs = Vec::with_capacity(ROLES.len());
+    for (index, role) in ROLES.iter().enumerate() {
+        let activity = TerminalActivity::start(format!(
+            "[{}/{}] {role} | {} profile",
+            index + 1,
+            ROLES.len(),
+            context.profile.target_dir_name()
+        ));
+        let started_at = Instant::now();
+        let build = build_workspace_canister_artifact(&context.with_role(*role));
+        activity.finish();
+        outputs.push(TimedCanisterArtifactBuildOutput {
+            role: (*role).to_string(),
+            output: build?,
+            elapsed: started_at.elapsed(),
+        });
+    }
+
+    println!("{}", render_infrastructure_build_table(&outputs, style)?);
+    style.print_section(
+        "Infrastructure Wasm ready",
+        &build_completion_detail(
+            outputs.len(),
+            "canister",
+            "canisters",
+            section_started_at.elapsed(),
+        ),
+    );
+    println!();
+    Ok(outputs)
+}
+
+fn build_completion_detail(
+    item_count: usize,
+    singular: &str,
+    plural: &str,
+    elapsed: Duration,
+) -> String {
+    let noun = if item_count == 1 { singular } else { plural };
+    format!(
+        "{item_count} {noun} | {:.2}s elapsed",
+        elapsed.as_secs_f64()
+    )
+}
+
+struct TimedCanisterArtifactBuildOutput {
+    role: String,
+    output: canic_host::canister_build::CanisterArtifactBuildOutput,
+    elapsed: Duration,
+}
+
+fn render_app_build_table(
+    outputs: &[ConfiguredCanisterArtifactBuildOutput],
+    style: TerminalStyle,
+) -> Result<String, BuildCommandError> {
+    let rows = outputs
+        .iter()
+        .map(|built| {
+            let wasm = std::fs::metadata(&built.output.wasm_path)?.len();
+            let gzip = std::fs::metadata(&built.output.wasm_gz_path)
+                .ok()
+                .map(|metadata| metadata.len());
+            Ok([
+                built.role.clone(),
+                style.success("done"),
+                wasm_size_label(Some(wasm), gzip),
+                format!("{:.2}s", built.finalization_elapsed.as_secs_f64()),
+            ])
+        })
+        .collect::<Result<Vec<_>, BuildCommandError>>()?;
+    Ok(render_bordered_table(
+        &["ROLE", "STATUS", "WASM", "FINALIZE"],
+        &rows,
+        &[
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+        ],
+    ))
+}
+
+fn render_infrastructure_build_table(
+    outputs: &[TimedCanisterArtifactBuildOutput],
+    style: TerminalStyle,
+) -> Result<String, BuildCommandError> {
+    let rows = outputs
+        .iter()
+        .map(|built| {
+            let wasm = std::fs::metadata(&built.output.wasm_path)?.len();
+            let gzip = std::fs::metadata(&built.output.wasm_gz_path)
+                .ok()
+                .map(|metadata| metadata.len());
+            Ok([
+                built.role.clone(),
+                style.success("done"),
+                wasm_size_label(Some(wasm), gzip),
+                format!("{:.2}s", built.elapsed.as_secs_f64()),
+            ])
+        })
+        .collect::<Result<Vec<_>, BuildCommandError>>()?;
+    Ok(render_bordered_table(
+        &["CANISTER", "STATUS", "WASM", "ELAPSED"],
+        &rows,
+        &[
+            ColumnAlign::Left,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Right,
+        ],
+    ))
 }
 
 fn write_build_provenance_if_requested(
@@ -237,10 +431,13 @@ fn write_build_provenance_if_requested(
     let Some(path) = &options.provenance else {
         return Ok(());
     };
+    let role = options.role.as_ref().ok_or_else(|| {
+        BuildCommandError::Usage("--provenance requires one selected role".to_string())
+    })?;
 
     let request = BuildProvenanceRequest {
         app: options.app.clone(),
-        role: options.role.clone(),
+        role: role.clone(),
         environment: options.environment.clone(),
         build_network: context.build_network,
         profile: context.profile,
@@ -261,8 +458,10 @@ fn build_command_provenance(options: &BuildOptions, workspace_root: &Path) -> Co
         "canic".to_string(),
         "build".to_string(),
         options.app.clone(),
-        options.role.clone(),
     ];
+    if let Some(role) = &options.role {
+        argv_normalized.push(role.clone());
+    }
     if let Some(profile) = options.profile {
         argv_normalized.push("--profile".to_string());
         argv_normalized.push(profile.target_dir_name().to_string());
@@ -346,8 +545,9 @@ fn normalize_build_path(path: &str) -> Result<PathBuf, BuildCommandError> {
 
 fn resolve_build_context(
     options: &BuildOptions,
+    config_path: PathBuf,
+    selected_role: &str,
 ) -> Result<WorkspaceBuildContext, BuildCommandError> {
-    let config_path = resolve_build_config_path(options)?.canonicalize()?;
     let workspace_root = match &options.workspace {
         Some(workspace) => normalize_build_path(workspace)?.canonicalize()?,
         None => workspace_root()?,
@@ -361,7 +561,7 @@ fn resolve_build_context(
     let profile = options.profile.unwrap_or(CanisterBuildProfile::Release);
 
     Ok(WorkspaceBuildContext {
-        role: options.role.clone(),
+        role: selected_role.to_string(),
         profile,
         environment: options.environment.clone(),
         build_network,
@@ -369,7 +569,7 @@ fn resolve_build_context(
         icp_root,
         config_path,
         local_replica: None,
-        refresh_canonical_wasm_store_did: false,
+        refresh_canonical_infrastructure_did: false,
         release_build_id: None,
     })
 }
@@ -392,12 +592,12 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn build_parses_required_app_and_role() {
+    fn build_parses_app_and_optional_role() {
         let options = BuildOptions::parse([OsString::from("demo"), OsString::from("app")])
             .expect("parse build options");
 
         assert_eq!(options.app, "demo");
-        assert_eq!(options.role, "app");
+        assert_eq!(options.role.as_deref(), Some("app"));
         assert_eq!(options.environment, "local");
         assert_eq!(options.profile, None);
         assert_eq!(options.workspace, None);
@@ -474,7 +674,7 @@ mod tests {
         .expect("parse build options");
 
         assert_eq!(options.app, "demo");
-        assert_eq!(options.role, "root");
+        assert_eq!(options.role.as_deref(), Some("root"));
         assert_eq!(options.profile, Some(CanisterBuildProfile::Fast));
         assert_eq!(options.workspace.as_deref(), Some("backend"));
         assert_eq!(options.icp_root.as_deref(), Some("."));
@@ -501,9 +701,22 @@ mod tests {
     }
 
     #[test]
-    fn build_requires_role() {
+    fn build_accepts_whole_app_selection() {
+        let options =
+            BuildOptions::parse([OsString::from("demo")]).expect("parse whole-App build options");
+
+        assert_eq!(options.app, "demo");
+        assert_eq!(options.role, None);
+    }
+
+    #[test]
+    fn whole_app_build_rejects_role_provenance_output() {
         std::assert_matches!(
-            BuildOptions::parse([OsString::from("demo")]),
+            BuildOptions::parse([
+                OsString::from("demo"),
+                OsString::from("--provenance"),
+                OsString::from("build-provenance.json")
+            ]),
             Err(BuildCommandError::Usage(_))
         );
     }
@@ -522,13 +735,69 @@ mod tests {
     }
 
     #[test]
-    fn build_usage_lists_app_and_role() {
+    fn build_usage_lists_app_and_optional_role() {
         let text = usage();
 
-        assert!(text.contains("Usage: canic build [OPTIONS] <app> <role>"));
+        assert!(text.contains("Usage: canic build [OPTIONS] <app> [role]"));
+        assert!(text.contains("canic build demo --profile fast"));
         assert!(text.contains("canic build demo app"));
         assert!(text.contains("--provenance <file>"));
-        assert!(text.contains("be attached to topology"));
+        assert!(text.contains("Builds every attached App role plus Canic infrastructure"));
+        assert_eq!(text.matches("  canic build ").count(), 2);
+    }
+
+    #[test]
+    fn whole_app_build_table_renders_padded_role_artifacts() {
+        let root = temp_dir("canic-cli-build-table");
+        let outputs = [ConfiguredCanisterArtifactBuildOutput {
+            role: "app".to_string(),
+            output: test_artifact_output(&root, "app", 2048, 512),
+            finalization_elapsed: Duration::from_millis(1750),
+        }];
+
+        let table = render_app_build_table(&outputs, TerminalStyle::detected())
+            .expect("render build table");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(table.starts_with('+'));
+        assert!(table.contains("| ROLE | STATUS |"));
+        assert!(table.contains("| FINALIZE |"));
+        assert!(table.contains("| app  |"));
+        assert!(table.contains("done"));
+        assert!(table.contains("2.00 KiB (gz 512.00 B)"));
+        assert!(table.contains("1.75s"));
+    }
+
+    #[test]
+    fn build_completion_reports_role_count_and_elapsed_time() {
+        assert_eq!(
+            build_completion_detail(1, "role", "roles", Duration::from_millis(1250)),
+            "1 role | 1.25s elapsed"
+        );
+        assert_eq!(
+            build_completion_detail(6, "artifact", "artifacts", Duration::from_secs(25)),
+            "6 artifacts | 25.00s elapsed"
+        );
+    }
+
+    #[test]
+    fn infrastructure_build_table_separates_built_in_canisters() {
+        let root = temp_dir("canic-cli-infrastructure-build-table");
+        let output = test_artifact_output(&root, "fleet_coordinator", 4096, 1024);
+        let outputs = [TimedCanisterArtifactBuildOutput {
+            role: "fleet_coordinator".to_string(),
+            output,
+            elapsed: Duration::from_millis(2750),
+        }];
+
+        let table = render_infrastructure_build_table(&outputs, TerminalStyle::detected())
+            .expect("render infrastructure table");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(table.contains("| CANISTER"));
+        assert!(table.contains("fleet_coordinator"));
+        assert!(table.contains("4.00 KiB (gz 1.00 KiB)"));
+        assert!(table.contains("2.75s"));
     }
 
     #[test]
@@ -570,7 +839,7 @@ mod tests {
         let options = build_options(&root, "demo", "app");
 
         let config_path = resolve_build_config_path(&options).expect("resolve config");
-        validate_attached_role(&options, &config_path).expect_err("declared-only role should fail");
+        selected_build_roles(&options, &config_path).expect_err("declared-only role should fail");
 
         fs::remove_dir_all(root).expect("remove temp root");
     }
@@ -582,7 +851,10 @@ mod tests {
         let options = build_options(&root, "demo", "app");
 
         let config_path = resolve_build_config_path(&options).expect("resolve config");
-        validate_attached_role(&options, &config_path).expect("attached role should pass");
+        assert_eq!(
+            selected_build_roles(&options, &config_path).expect("attached role should pass"),
+            ["app"]
+        );
 
         fs::remove_dir_all(root).expect("remove temp root");
     }
@@ -599,16 +871,51 @@ mod tests {
         fs::remove_dir_all(root).expect("remove temp root");
     }
 
+    #[test]
+    fn whole_app_build_selects_every_attached_role() {
+        let root = temp_dir("canic-cli-build-whole-app");
+        let config_path = write_build_config(&root, true);
+        let mut options = build_options(&root, "demo", "app");
+        options.role = None;
+
+        let roles = selected_build_roles(&options, &config_path).expect("select attached roles");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(roles, ["root", "app"]);
+    }
+
     fn build_options(root: &std::path::Path, app: &str, role: &str) -> BuildOptions {
         BuildOptions {
             app: app.to_string(),
-            role: role.to_string(),
+            role: Some(role.to_string()),
             environment: "local".to_string(),
             profile: None,
             workspace: Some(root.display().to_string()),
             icp_root: None,
             config: None,
             provenance: None,
+        }
+    }
+
+    fn test_artifact_output(
+        root: &Path,
+        role: &str,
+        wasm_size: usize,
+        gzip_size: usize,
+    ) -> canic_host::canister_build::CanisterArtifactBuildOutput {
+        let artifact_root = root.join(role);
+        fs::create_dir_all(&artifact_root).expect("create artifact root");
+        let wasm_path = artifact_root.join(format!("{role}.wasm"));
+        let wasm_gz_path = artifact_root.join(format!("{role}.wasm.gz"));
+        fs::write(&wasm_path, vec![0_u8; wasm_size]).expect("write wasm");
+        fs::write(&wasm_gz_path, vec![0_u8; gzip_size]).expect("write gzip");
+        canic_host::canister_build::CanisterArtifactBuildOutput {
+            package_name: format!("canister_{role}"),
+            artifact_root: artifact_root.clone(),
+            wasm_path,
+            wasm_gz_path,
+            did_path: artifact_root.join(format!("{role}.did")),
+            transforms: Vec::new(),
         }
     }
 

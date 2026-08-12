@@ -11,6 +11,7 @@ use crate::{
     artifact_io::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
     },
+    bootstrap_candid::materialize_infrastructure_candid,
     bootstrap_store::{
         append_profile_config_args, generated_wasm_store_wrapper_patch_table,
         registry_package_version_suffix, render_profile, require_package_manifest_identity,
@@ -38,6 +39,7 @@ use std::{
 
 const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 const CANONICAL_PACKAGE_NAME: &str = "canic-fleet-coordinator";
+const CANONICAL_FLEET_COORDINATOR_DID_FILE: &str = "fleet_coordinator.did";
 const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-fleet-coordinator";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-fleet-coordinator";
 const GENERATED_WRAPPER_CRATE_NAME: &str = "canister_fleet_coordinator";
@@ -62,6 +64,7 @@ const COORDINATOR_FAST_PROFILE: &[(&str, &str)] = &[
 struct BootstrapFleetCoordinatorSource {
     manifest_path: PathBuf,
     package_name: String,
+    canonical_did_path: Option<PathBuf>,
 }
 
 /// Build the dedicated Fleet Coordinator wrapper selected from the exact Canic dependency graph.
@@ -85,13 +88,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     write_wasm_artifact(&built_wasm_path, &wasm_path)?;
     let mut transforms = vec![maybe_shrink_wasm_artifact(&wasm_path)?];
     if should_export_candid_artifacts(context.build_network) {
-        let debug_context = context.with_profile(CanisterBuildProfile::Debug);
-        run_coordinator_cargo_build(&debug_context, &source.manifest_path)?;
-        let debug_wasm_path = canister_build_target_root(&context.workspace_root)
-            .join("wasm32-unknown-unknown")
-            .join(CanisterBuildProfile::Debug.target_dir_name())
-            .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
-        extract_candid(&debug_wasm_path, &did_path)?;
+        ensure_fleet_coordinator_did(context, &source, &did_path)?;
         transforms.push(embed_candid_metadata(&wasm_path, &did_path)?);
     } else {
         remove_optional_file(&did_path)?;
@@ -126,6 +123,7 @@ fn resolve_bootstrap_fleet_coordinator_source(
     Ok(BootstrapFleetCoordinatorSource {
         manifest_path,
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
+        canonical_did_path: None,
     })
 }
 
@@ -151,9 +149,14 @@ fn resolve_canonical_fleet_coordinator_source(
         );
     }
     if let [package] = matches.as_slice() {
+        let source_root = package
+            .manifest_path
+            .parent()
+            .expect("manifest path must have parent");
         return Ok(Some(BootstrapFleetCoordinatorSource {
             manifest_path: package.manifest_path.clone(),
             package_name: package.name.clone(),
+            canonical_did_path: Some(source_root.join(CANONICAL_FLEET_COORDINATOR_DID_FILE)),
         }));
     }
 
@@ -175,9 +178,13 @@ fn resolve_canonical_fleet_coordinator_source(
             CANONICAL_PACKAGE_NAME,
             &canic_package.version,
         )?;
+        let source_root = sibling_manifest
+            .parent()
+            .expect("manifest path must have parent");
         return Ok(Some(BootstrapFleetCoordinatorSource {
-            manifest_path: sibling_manifest,
+            manifest_path: sibling_manifest.clone(),
             package_name: CANONICAL_PACKAGE_NAME.to_string(),
+            canonical_did_path: Some(source_root.join(CANONICAL_FLEET_COORDINATOR_DID_FILE)),
         }));
     }
 
@@ -304,15 +311,28 @@ fn append_coordinator_profile_config_args(command: &mut Command, profile: Canist
     }
 }
 
-fn extract_candid(wasm_path: &Path, did_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("candid-extractor").arg(wasm_path).output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "candid-extractor failed for Fleet Coordinator: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-    fs::write(did_path, output.stdout)?;
-    Ok(())
+fn ensure_fleet_coordinator_did(
+    context: &WorkspaceBuildContext,
+    source: &BootstrapFleetCoordinatorSource,
+    artifact_did_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let debug_wasm_path = canister_build_target_root(&context.workspace_root)
+        .join("wasm32-unknown-unknown")
+        .join(CanisterBuildProfile::Debug.target_dir_name())
+        .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
+
+    materialize_infrastructure_candid(
+        FLEET_COORDINATOR_ROLE,
+        source.canonical_did_path.as_deref(),
+        artifact_did_path,
+        context.refresh_canonical_infrastructure_did,
+        &debug_wasm_path,
+        || {
+            if context.profile != CanisterBuildProfile::Debug {
+                let debug_context = context.with_profile(CanisterBuildProfile::Debug);
+                run_coordinator_cargo_build(&debug_context, &source.manifest_path)?;
+            }
+            Ok(())
+        },
+    )
 }
