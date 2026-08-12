@@ -101,6 +101,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
 | `632d6d9422006a03c8842106d4b75a4da18814d2707991ba8ac7ec5e71a4ad2f` | `scripts/ci/check-audit-method-catalog.sh` |
+| `8544007b36dda75ba6d5ca9d505e1c6e8d225a109c7e2ccf300f45d273da40d4` | `scripts/ci/check-release-integrity-contract.sh` |
 | `2c3fa449fd04d317e5aa871ce9256922b956cc130c5c89a1a831a748349a28b1` | `scripts/ci/instruction-audit-report.sh` |
 | `6986f3624cae4a48374fe110dd0a1c0f8fb91445e27d7f0f22f6eadad31fbc29` | `scripts/ci/run-layering-guards.sh` |
 | `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |

@@ -163,10 +163,18 @@ CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
 for mode in patch minor major; do
     mode_recipe="$(sed -n "/^$mode:/,/^$/p" "$MAKEFILE")"
+    rg -F '$(MAKE) --no-print-directory fmt' <<<"$mode_recipe" >/dev/null ||
+        fail "the $mode version target does not format before validation"
     rg -F '$(MAKE) --no-print-directory validate' <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target does not run the explicit validation workflow"
     rg -F "CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh $mode" <<<"$mode_recipe" >/dev/null ||
         fail "the $mode version target does not bind mutation to completed validation"
+    fmt_line="$(grep -nF "\$(MAKE) --no-print-directory fmt" <<<"$mode_recipe" | cut -d: -f1)"
+    clean_line="$(grep -nF "\$(MAKE) ensure-clean" <<<"$mode_recipe" | cut -d: -f1)"
+    validate_line="$(grep -nF "\$(MAKE) --no-print-directory validate" <<<"$mode_recipe" | cut -d: -f1)"
+    if ((fmt_line >= clean_line || clean_line >= validate_line)); then
+        fail "the $mode version target must format, require clean source, then validate"
+    fi
 done
 patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||

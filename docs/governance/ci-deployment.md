@@ -115,8 +115,11 @@ Before patch validation and version mutation, `make patch` prints the
 read-only `make release-cadence` advisory. The advisory reports when the
 current minor is outside its normal planning range but never blocks or expands
 the maintainer's release authority.
-The Make version targets run the same explicit `make validate` workflow before
-changing package versions; any failed target leaves the version unchanged. The
+The Make version targets run `make fmt`, require the resulting source tree to
+be clean, and then run the same explicit `make validate` workflow before
+changing package versions. If formatting changes committed source, the clean-
+tree gate stops the release so the correction can be reviewed and committed
+separately before retrying. Any failed target leaves the version unchanged. The
 underlying bump script rejects direct invocation without the private validation
 marker supplied by those targets.
 
