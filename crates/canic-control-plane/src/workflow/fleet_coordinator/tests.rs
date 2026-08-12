@@ -2154,9 +2154,18 @@ fn drive_runtime_activation(
             panic!("runtime activation must invoke the next root");
         };
         let response = next_runtime_activation_response(call.fleet_subnet_root, now, now + 1);
-        status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        let advanced = crate::ops::fleet_coordinator::FleetCoordinatorOps::
             record_component_runtime_activation(&request, &response, now + 2)
             .expect("record runtime activation response");
+        let FleetComponentRuntimeActivationDisposition::Current(replayed) =
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_runtime_activation(&request, now + 3)
+                .expect("replay recorded runtime activation response")
+        else {
+            panic!("recorded runtime activation response must replay as current")
+        };
+        assert_eq!(*replayed, advanced);
+        status = advanced;
         now += 3;
     }
     status

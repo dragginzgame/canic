@@ -4507,7 +4507,9 @@ fn classify_runtime_activation_advance(
             .expected_current_activation
             .zip(actual)
             .is_some_and(|(expected, actual)| activation_progress_advances(expected, actual));
-        return if replays_last {
+        let replays_first = request.expected_current_activation.is_none()
+            && actual.is_some_and(first_component_activation_progress);
+        return if replays_last || replays_first {
             Ok(RuntimeActivationAdvance::Current)
         } else {
             Err(InternalError::conflict(
@@ -4520,6 +4522,12 @@ fn classify_runtime_activation_advance(
     } else {
         Ok(RuntimeActivationAdvance::Begin)
     }
+}
+
+const fn first_component_activation_progress(actual: FleetComponentActivationRootProgress) -> bool {
+    actual.component_count > 0
+        && actual.activated_component_count == 1
+        && !actual.root_runtime_active
 }
 
 const fn runtime_activation_request_is_current(

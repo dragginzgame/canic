@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
+- `0.101.52` qualifies the complete three-Subnet Toko-shaped topology,
+  interrupted scale-out and protected deployment limits while retaining an
+  independent second Fleet on a shared physical Subnet.
+
 - `0.101.51` separates provisioning-journal and initial-placement policy
   ownership, shares only mechanical durable-document operations across host
   install journals, and proves restored Coordinator service/placement state

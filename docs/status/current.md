@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-11
+Last updated: 2026-08-12
 
 ## Purpose
 
@@ -14,10 +14,20 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.101.50`.
-- The latest published release is `v0.101.50` at
-  `dae57ea1a9c44738d6d18cf20616fd6c2530b2fa`.
-- Open `0.101.51` completes the durable-document and policy-ownership batch.
+- The workspace package version is `0.101.51`.
+- The latest published release is `v0.101.51` at
+  `c20ed1a57148e860e46742c991de872de9edefc8`.
+- Open `0.101.52` completes Q4 real-topology qualification. One three-
+  application-Subnet PocketIC Fleet now provisions database A/B/C Authority
+  Components on one root, same-Spec Replicas and Project Hub PoolMembers on
+  two project roots, packed and spread Project Hub ActivePool placements, two
+  restart/replayed scale-outs and seven dynamic descendants. A second Fleet
+  remains independent while sharing one physical Subnet. The measured
+  qualification report records 3 roots, 7 placements, 15 top-level Components,
+  15 service members, a 4,464-byte initial plan, 4,769-byte final Registry and
+  2,854-byte maximum Directory value without claiming live-mainnet or
+  ten-thousand-Subnet qualification.
+- Released `0.101.51` completes the durable-document and policy-ownership batch.
   The fresh-install Component provisioning journal now has separate schema,
   typed-transition, authority-validation and persistence owners; initial
   placement policy is pure and no longer lives in plan-file persistence; and

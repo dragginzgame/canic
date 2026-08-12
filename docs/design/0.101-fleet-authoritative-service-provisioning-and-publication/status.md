@@ -1,6 +1,6 @@
 # Canic 0.101 Implementation Status
 
-Date: 2026-08-11
+Date: 2026-08-12
 
 ## Status
 
@@ -173,8 +173,16 @@ Date: 2026-08-11
   Spec hash. The protected entries preserve the 10,000-instance Spec grant in
   one placement and the exact 2,000-instance reduction in the other;
   substituted limit authority rejects.
+- Q4 qualification: the disposable three-application-Subnet Toko journey is
+  complete. It provisions database A/B/C Authority and Replica members,
+  differently limited reused Project Hub deployments, packed and spread
+  ActivePool members, two interrupted scale-outs, three Project Instances,
+  three Ledgers, one Machine and an isolated second Fleet sharing one physical
+  Subnet. The exact supported envelope and Wasm measurements are recorded in
+  [qualification.md](qualification.md).
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.50` is released and `0.101.51` is open.
+- Implementation started: yes; `0.101.51` is released and Q4 is complete in
+  open `0.101.52`.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -183,12 +191,11 @@ Date: 2026-08-11
   separate runtime and Registry membership activation, revision-bound
   current-Directory convergence and inventory-bound Fleet Subnet Root runtime
   activation.
-- Open design gate: implementation must measure and freeze the exact initial
-  root, Component, placement, service-member, plan, Registry and Directory
-  envelope. The first implementation does not claim ten-thousand-Subnet
-  qualification. Application-data replication remains a separate later design
-  and is not an implementation blocker for 0.101 topology, purpose or
-  discovery contracts.
+- Open closeout gate: Q5 must complete the whole-program hard cut, sediment
+  removal, generated/configuration/stable-memory review and final
+  responsibility/size accounting. Application-data replication remains a
+  separate later design and is not an implementation blocker for 0.101
+  topology, purpose or discovery contracts.
 
 ## Remaining Release-Batch Plan
 
@@ -203,8 +210,8 @@ repairs do not create additional release boundaries.
 | --- | --- | --- | --- | --- |
 | Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in released `0.101.49` |
 | Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
-| Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in open `0.101.51` |
-| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and size/capacity report | Pending |
+| Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in released `0.101.51` |
+| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in open `0.101.52` |
 | Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Pending |
 
 `Q1` is complete in the released `0.101.49` batch. In addition to the packed and
@@ -214,11 +221,14 @@ replays the same command without duplicate placement or membership and keeps
 the Hub, its new Instance and that Instance's Ledger on the selected root's
 Subnet. `Q2` is complete in the released `0.101.50` batch with direct co-
 located-Fleet, Store-controller, pool-replay and first-excess evidence. `Q3`
-is complete in the open `0.101.51` batch: restored Coordinator state retains
+is complete in released `0.101.51`: restored Coordinator state retains
 one exact service/placement authority, the provisioning journal has separated
 typed owners, placement policy is pure and the four host installation
 journals share only mechanical durable-document operations. Individual fallout
-inside a batch does not create another patch boundary.
+inside a batch does not create another patch boundary. `Q4` is complete in the
+open `0.101.52` batch: the three-Subnet Toko-shaped journey and shared-Subnet
+second Fleet pass with exact restart/replay, protected 10,000/2,000 Project Hub
+limits and the measured envelope in [qualification.md](qualification.md).
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -602,24 +612,24 @@ Fleet policy writer.
 
 ## Completion
 
-- [ ] The Toko journey provisions database A, B and C Authorities on one root.
-- [ ] The same database group is reused inside a nested project-data-cell
+- [x] The Toko journey provisions database A, B and C Authorities on one root.
+- [x] The same database group is reused inside a nested project-data-cell
   group to provision same-Spec database A, B and C Replicas plus one Project
   Hub PoolMember on at least two other roots.
 - [x] One project-data-cell scale-out resumes exactly across forced
-  interruption. A two-Subnet PocketIC journey restarts the Coordinator after
-  every durable advance and exact replay retains one new Hub placement,
-  Instance and Ledger on the selected root's Subnet.
-- [ ] The local Project Hubs provision at least three Project Instance
+  interruption. The three-Subnet qualification journey restarts the
+  Coordinator after every durable advance; exact replay retains the new cell,
+  its service members and every later local descendant on the selected root's
+  Subnet.
+- [x] The local Project Hubs provision at least three Project Instance
   children across their project roots; every Project Instance creates one
   Ledger and exactly one creates its optional Machine.
 - [x] Two deployments reuse one Project Hub group on different roots with
   distinct protected effective spawn-grant ceilings and no duplicated Spec.
-- [ ] A same-Spec ActivePool packs multiple stable placements on one root,
-  spans at least two roots and publishes one atomic scale-out addition. The
-  complete durable Coordinator journey now passes; real disposable-environment
-  Canister placement remains to qualify this completion criterion.
-- [ ] The initial supported Fleet/service envelope is measured and does not
+- [x] A same-Spec ActivePool packs multiple stable placements on one root,
+  spans at least two roots and publishes one atomic scale-out addition in the
+  real disposable multi-Subnet journey.
+- [x] The initial supported Fleet/service envelope is measured and does not
   claim ten-thousand-Subnet qualification.
 - [ ] All design criteria and required journeys pass.
 - [ ] No Tree identity, runtime Group Canister, nested Component declaration,

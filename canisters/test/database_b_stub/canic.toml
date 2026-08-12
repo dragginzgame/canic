@@ -1,0 +1,15 @@
+[app]
+name = "delegation_root_stub"
+
+[roles.root]
+kind = "root"
+package = "../delegation_root_stub"
+
+[roles.database_b]
+kind = "canister"
+package = "."
+
+[component_specs.database_b]
+component_role = "database_b"
+maximum_instances = 11
+initial_cycles = "1T"
