@@ -64,6 +64,7 @@ const COORDINATOR_FAST_PROFILE: &[(&str, &str)] = &[
 struct BootstrapFleetCoordinatorSource {
     manifest_path: PathBuf,
     package_name: String,
+    package_version: String,
     canonical_did_path: Option<PathBuf>,
 }
 
@@ -100,6 +101,7 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,
+        package_version: source.package_version,
         artifact_root,
         wasm_path,
         wasm_gz_path,
@@ -123,6 +125,7 @@ fn resolve_bootstrap_fleet_coordinator_source(
     Ok(BootstrapFleetCoordinatorSource {
         manifest_path,
         package_name: GENERATED_WRAPPER_PACKAGE_NAME.to_string(),
+        package_version: canic_package.version.clone(),
         canonical_did_path: None,
     })
 }
@@ -156,6 +159,7 @@ fn resolve_canonical_fleet_coordinator_source(
         return Ok(Some(BootstrapFleetCoordinatorSource {
             manifest_path: package.manifest_path.clone(),
             package_name: package.name.clone(),
+            package_version: package.version.clone(),
             canonical_did_path: Some(source_root.join(CANONICAL_FLEET_COORDINATOR_DID_FILE)),
         }));
     }
@@ -184,6 +188,7 @@ fn resolve_canonical_fleet_coordinator_source(
         return Ok(Some(BootstrapFleetCoordinatorSource {
             manifest_path: sibling_manifest.clone(),
             package_name: CANONICAL_PACKAGE_NAME.to_string(),
+            package_version: canic_package.version.clone(),
             canonical_did_path: Some(source_root.join(CANONICAL_FLEET_COORDINATOR_DID_FILE)),
         }));
     }

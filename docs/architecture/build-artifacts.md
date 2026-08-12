@@ -56,18 +56,18 @@ root endpoint bundle. Every other configured role selects the non-root
 lifecycle and endpoint bundle. There is no separate public root startup macro.
 
 Ordinary roles may be declared before topology placement so `cargo check` can
-run during early development. `canic build <app>` batches every attached role,
-then builds Canic's canonical `fleet_coordinator` and `wasm_store`
-infrastructure in a separately reported phase. `canic build <app> <role>`
-selects one App role. Both forms reject declared-only App roles before Canic
+run during early development. `canic build <app>` batches the configured Fleet
+Subnet Root with every attached Component role, then builds Canic's canonical
+`fleet_coordinator` and `wasm_store`. `canic build <app> <role>` selects one
+deployable configured role. Both forms reject declared-only roles before Canic
 writes deploy artifacts.
 
-Complete App builds report shared Cargo compilation once at section level.
-Each App-role table row separately reports `FINALIZE`: the time spent preparing,
-shrinking, extracting and embedding local Candid, and writing that role's Wasm
-and gzip artifacts outside the shared compilation. Infrastructure canisters
-build separately, so their row-level `ELAPSED` value covers their complete
-individual build.
+Complete App builds classify Component artifacts under Application Wasm and
+the Fleet Coordinator, Fleet Subnet Root and Wasm Store under Infrastructure
+Wasm. The configured root retains the shared Cargo build for efficiency and
+uses `shared` rather than a fabricated per-role duration; Coordinator and Store
+row-level `ELAPSED` values cover their dedicated builds. Both tables show each
+resolved Cargo package version as the second column.
 
 Build provenance is opt-in:
 

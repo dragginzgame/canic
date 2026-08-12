@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+partially_staged=()
+while IFS= read -r -d '' path; do
+    if ! git diff --quiet --no-ext-diff -- "$path"; then
+        partially_staged+=("$path")
+    fi
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+
+if [ "${#partially_staged[@]}" -ne 0 ]; then
+    echo "Pre-commit formatting requires staged files to match their working copies:" >&2
+    printf '  %s\n' "${partially_staged[@]}" >&2
+    echo "Finish or discard those files' unstaged edits, then commit again." >&2
+    exit 1
+fi
+
+before="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-before.XXXXXX")"
+after="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-after.XXXXXX")"
+format_log="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-format.XXXXXX")"
+trap 'rm -f -- "$before" "$after" "$format_log"' EXIT
+
+git diff --binary --no-ext-diff >"$before"
+
+if ! make fmt >"$format_log" 2>&1; then
+    cat "$format_log" >&2
+    echo "Pre-commit formatting failed; inspect the output above." >&2
+    exit 1
+fi
+
+git diff --binary --no-ext-diff >"$after"
+if ! cmp -s "$before" "$after"; then
+    echo "Formatting changed working-tree files." >&2
+    echo "Review and stage the formatted changes, then commit again." >&2
+    git status --short >&2
+    exit 1
+fi
+
+echo "Pre-commit formatting passed."

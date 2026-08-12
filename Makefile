@@ -7,7 +7,7 @@
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         check-invariants control-plane-feature-gate \
         dependency-risk-gate gitleaks-scan \
-        install install-dev update-dev test-fleet-install \
+        install install-dev install-hooks update-dev test-fleet-install \
         ensure-clean test-unit test-unit-fast workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
         test-canisters cloc
@@ -36,14 +36,15 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain"
+	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
 	@echo "  update-dev       Pin the latest stable ICP CLI and synchronize development tools"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
-	@echo "  patch            Format, validate, then bump patch version files (0.0.x)"
-	@echo "  minor            Confirm, format, validate, then bump minor version files (0.x.0)"
-	@echo "  major            Confirm, format, validate, then bump major version files (x.0.0)"
+	@echo "  patch            Validate, then bump patch version files (0.0.x)"
+	@echo "  minor            Confirm, validate, then bump minor version files (0.x.0)"
+	@echo "  major            Confirm, validate, then bump major version files (x.0.0)"
 	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
 	@echo "  release-minor    Confirm, bump, stage, commit, tag, and push a minor release"
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
@@ -97,6 +98,10 @@ install:
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
+# Configure the one repository-owned hook without installing the full toolchain.
+install-hooks:
+	bash scripts/dev/install-git-hooks.sh
+
 # Pin the latest stable ICP CLI, then synchronize local development tools.
 update-dev:
 	bash scripts/dev/update-icp-cli-pin.sh
@@ -122,7 +127,7 @@ update-dev:
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 #
-# Version management (format and validate the source candidate before mutation)
+# Version management (validate the source candidate before mutation)
 #
 
 version:
@@ -133,21 +138,18 @@ tags:
 
 patch:
 	@$(MAKE) --no-print-directory release-cadence
-	+@$(MAKE) --no-print-directory fmt
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
-	+@$(MAKE) --no-print-directory fmt
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
-	+@$(MAKE) --no-print-directory fmt
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh major

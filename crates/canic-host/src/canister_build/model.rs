@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
@@ -27,6 +27,7 @@ impl CanisterArtifactSource {
 pub struct CanisterArtifactBuildSpec {
     pub(crate) role: String,
     pub(crate) package_name: String,
+    pub(crate) package_version: String,
     pub(crate) package_manifest_path: PathBuf,
     pub(crate) cargo_workspace_root: PathBuf,
     pub(crate) artifact_root: PathBuf,
@@ -45,6 +46,7 @@ pub struct CanisterArtifactBuildSpec {
 #[derive(Clone, Debug)]
 pub struct CanisterArtifactBuildOutput {
     pub package_name: String,
+    pub package_version: String,
     pub artifact_root: PathBuf,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
@@ -57,8 +59,6 @@ pub struct CanisterArtifactBuildOutput {
 pub struct ConfiguredCanisterArtifactBuildOutput {
     pub role: String,
     pub output: CanisterArtifactBuildOutput,
-    /// Per-role preparation and artifact finalization outside shared Cargo compilation.
-    pub finalization_elapsed: Duration,
 }
 
 /// One optional artifact-changing tool invocation owned by the host builder.

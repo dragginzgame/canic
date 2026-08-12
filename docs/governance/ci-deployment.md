@@ -19,6 +19,16 @@ Git hooks, format before checking, or invoke unrelated invariant, feature,
 lint, build, or test targets. `make validate` is the explicit composition
 boundary for the complete local workflow.
 
+The repository owns one `pre-commit` hook, configured by `make install-dev` or
+`make install-hooks`. It runs only `make fmt`. It never stages files or runs
+tests, Clippy, builds, validation, versioning, commits, or pushes. A partially
+staged file rejects before formatting because formatting the working copy
+cannot prove the staged snapshot. If formatting changes tracked working-tree
+content, the hook rejects so the maintainer can review and stage the result.
+Pre-existing unrelated unstaged changes do not reject when formatting leaves
+them byte-for-byte unchanged. `make fmt-check` remains in validation and CI so
+hook bypass does not weaken the release boundary.
+
 `make test` executes every top-level integration test recorded in the guarded
 workspace test inventory. New integration targets must declare their release
 lane, execution class and suite before the gate accepts them. Ordinary tests
@@ -115,13 +125,12 @@ Before patch validation and version mutation, `make patch` prints the
 read-only `make release-cadence` advisory. The advisory reports when the
 current minor is outside its normal planning range but never blocks or expands
 the maintainer's release authority.
-The Make version targets run `make fmt`, require the resulting source tree to
-be clean, and then run the same explicit `make validate` workflow before
-changing package versions. If formatting changes committed source, the clean-
-tree gate stops the release so the correction can be reviewed and committed
-separately before retrying. Any failed target leaves the version unchanged. The
-underlying bump script rejects direct invocation without the private validation
-marker supplied by those targets.
+The Make version targets require a clean source tree and then run the same
+explicit `make validate` workflow before changing package versions. They do
+not mutate source formatting; the pre-commit hook handles routine formatting,
+while validation's `make fmt-check` catches bypassed hooks. Any failed target
+leaves the version unchanged. The underlying bump script rejects direct
+invocation without the private validation marker supplied by those targets.
 
 The test target allocates one private repository-owned
 `.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success,

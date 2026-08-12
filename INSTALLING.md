@@ -21,8 +21,17 @@ repo helper binaries:
 make install-dev
 ```
 
-Developer setup installs tools only. Canic does not install or configure Git
-hooks; run `make validate` explicitly when complete local validation is wanted.
+Developer setup also configures Canic's single repository-owned `pre-commit`
+hook. The hook runs only `make fmt`; it never stages files or runs tests,
+Clippy, builds, or release validation. If formatting changes a file, the commit
+stops so the formatted result can be reviewed and staged explicitly. To
+configure only the hook without reinstalling tools, run:
+
+```bash
+make install-hooks
+```
+
+Run `make validate` explicitly when complete local validation is wanted.
 
 ## ICP CLI Compatibility
 
