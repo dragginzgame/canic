@@ -11,16 +11,13 @@ wins and both must be corrected.
 endpoints/macros
     ->
 workflow
-    ->
-policy
-    ->
-ops
-    ->
-model
+    +-> policy
+    +-> ops -> model
 ```
 
 Rules:
 - Dependencies are one-way only.
+- The two workflow branches are independent; policy does not call ops.
 - Lower layers must not depend on higher layers.
 - `dto` is a transfer format for endpoints/workflow/ops.
 - `model` and `policy` must not depend on `dto`.

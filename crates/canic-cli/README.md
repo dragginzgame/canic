@@ -145,17 +145,13 @@ root-local limits, and creation funding. See
 [`fleet-install-input.md`](../../docs/architecture/fleet-install-input.md) for
 the bounded schema.
 
-The 0.100 implementation is still in progress. The current command builds,
-creates, installs, and verifies the Coordinator, every planned Fleet Subnet
-Root, each root's exact local Store, and every root's Registry `Joining` row,
-then stages and independently verifies the exact all-`Joining` snapshot and
-Coordinator acknowledgement at every root. It atomically commits and
-independently verifies the complete Coordinator Registry as `Active`, then
-atomically activates and independently verifies every root's exact matching
-Registry Mirror/Fleet Directory. Every root remains runtime-`Prepared`, and
-installation stops before Component creation, runtime activation and terminal
-Fleet-catalog publication. That stop is an explicit safety boundary rather
-than a partially successful Fleet.
+The command builds, creates, installs, and verifies the Coordinator, every
+planned Fleet Subnet Root, each root's exact local Store, the complete active
+Registry, and every root's exact Mirror and Directories. It then provisions
+and activates configured initial Components, seals root inventory, activates
+every selected root, and publishes the terminal Coordinator-anchored Fleet
+catalog. An interruption before that boundary is not a partially successful
+Fleet; rerun the exact command for same-release reconciliation.
 
 The following commands require a terminal installed Fleet:
 
@@ -192,7 +188,7 @@ The selected install config must include an App source identity:
 name = "test"
 ```
 
-At 0.100 closeout, only complete activation publishes a terminal Fleet row
+Only complete activation publishes a terminal Fleet row
 under `.canic/networks/<canonical-network-id>/fleets/catalog.json`. That row is
 Coordinator-anchored and binds the Fleet ID, Fleet name, App, canonical
 network, and verified terminal evidence. `canic app config <name>` shows

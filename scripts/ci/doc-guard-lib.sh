@@ -7,7 +7,7 @@ fi
 
 guard_path() {
     local path="$1"
-    printf '%s\n' "${path#$ROOT/}"
+    printf '%s\n' "${path#"$ROOT"/}"
 }
 
 require_file() {
@@ -35,7 +35,7 @@ require_text() {
     local needle="$2"
     local label="$3"
 
-    if ! grep -Fq "$needle" "$path"; then
+    if ! grep -Fq -- "$needle" "$path"; then
         echo "missing required $label text in $(guard_path "$path"): $needle" >&2
         exit 1
     fi
@@ -49,6 +49,28 @@ require_texts() {
 
     for needle in "$@"; do
         require_text "$path" "$needle" "$label"
+    done
+}
+
+forbid_text() {
+    local path="$1"
+    local needle="$2"
+    local label="$3"
+
+    if grep -Fq -- "$needle" "$path"; then
+        echo "forbidden $label text in $(guard_path "$path"): $needle" >&2
+        exit 1
+    fi
+}
+
+forbid_texts() {
+    local path="$1"
+    local label="$2"
+    shift 2
+    local needle=""
+
+    for needle in "$@"; do
+        forbid_text "$path" "$needle" "$label"
     done
 }
 

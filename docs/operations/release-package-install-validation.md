@@ -48,8 +48,8 @@ not add new release behavior.
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
 | Packaged downstream wasm store | `make test-packaged-downstream-wasm-store` | Can the special packaged downstream `wasm_store` bootstrap paths build from packaged Canic crates outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Tag CI and RC validation. |
-| Local Fleet install | `make test-fleet-install` | Can an exact-input Coordinator-anchored multi-root Fleet reach terminal activation? | Required after the 0.100 closeout rewrite; the current stale recipe is not RC evidence. |
-| Local Canister tests | `make test-canisters` | Can the terminal Fleet create and resolve Components through current Registry/Directory authority? | Required after the 0.100 closeout rewrite; the current stale recipe is not RC evidence. |
+| Local Fleet install | `make test-fleet-install` | Can an exact-input Coordinator-anchored single-root local Fleet reach terminal activation? | RC/final release in a selected local ICP environment. |
+| Local Canister tests | `make test-canisters` | Can the terminal local Fleet resolve and call the maintained test application surface? | RC/final release after the local Fleet install. |
 
 The retained probe details remain documented in:
 
@@ -109,9 +109,8 @@ If a package/install gate is not run locally, the RC audit must record:
 
 ## Release Flow Boundary
 
-Automated agents must not change release versions, install URLs, package
-versions, workspace dependency versions, or release-script default versions
-during ordinary development slices.
+Automated agents must never change release versions, install URLs, package
+versions, workspace dependency versions, or release-script default versions.
 
 Human-owned release flow remains:
 
@@ -131,9 +130,7 @@ commit.
 ## Required RC Gates
 
 Use these gates when validating package/install readiness before RC promotion
-or final release, assigning environment-specific gates when needed. The final
-two target names remain blocked until their Make recipes use the required
-Fleet input and complete Coordinator-anchored journey:
+or final release, assigning environment-specific gates when needed:
 
 ```text
 bash scripts/ci/check-release-package-install-validation.sh
@@ -148,7 +145,8 @@ make test-canisters
 
 The local ICP/canister gates may be assigned to CI or a dedicated RC
 environment when too expensive or environment-specific for an ordinary docs
-slice. They must not be run or credited in their current single-root form.
+slice. Credit them only as single-root local installation/application evidence;
+use the active focused PocketIC qualification for multi-root claims.
 
 ## Non-Goals
 
@@ -166,10 +164,7 @@ slice. They must not be run or credited in their current single-root form.
 
 ## Outcome Summary
 
-Release blockers: none found in this checklist.
-
-The current package/install validation inventory remains sufficient for
-release-line accounting unless package, install, artifact, or smoke-test
-behavior changes. Remaining work belongs to assigned package/install gate
-execution, final release accounting, or focused defect handling if a concrete
-release blocker is found.
+This checklist does not issue a release verdict. Record each required gate as
+`PASS`, `FAIL`, `BLOCKED`, `SKIPPED`, or `NOT_APPLICABLE` in the dated
+release-line closeout, including the owner and target environment for every
+unexecuted environment-specific gate.

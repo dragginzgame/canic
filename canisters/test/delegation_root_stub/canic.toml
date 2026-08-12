@@ -5,18 +5,6 @@ name = "delegation_root_stub"
 kind = "root"
 package = "."
 
-[roles.database_a]
-kind = "canister"
-package = "../database_a_stub"
-
-[roles.database_b]
-kind = "canister"
-package = "../database_b_stub"
-
-[roles.database_c]
-kind = "canister"
-package = "../database_c_stub"
-
 [roles.issuer]
 kind = "canister"
 package = "../delegation_issuer_stub"
@@ -54,24 +42,9 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[component_specs.database_a]
-component_role = "database_a"
-maximum_instances = 11
-initial_cycles = "1T"
-
-[component_specs.database_b]
-component_role = "database_b"
-maximum_instances = 11
-initial_cycles = "1T"
-
-[component_specs.database_c]
-component_role = "database_c"
-maximum_instances = 11
-initial_cycles = "1T"
-
 [component_specs.issuer]
 component_role = "issuer"
-maximum_instances = 3
+maximum_instances = 2
 initial_cycles = "1T"
 
 [component_specs.issuer.auth]
@@ -81,12 +54,8 @@ role_attestation_cache = true
 
 [component_specs.projects]
 component_role = "project_hub"
-maximum_instances = 15
+maximum_instances = 2
 initial_cycles = "1T"
-
-[component_specs.projects.limits]
-maximum_descendants = 20_000
-maximum_registry_bytes = 16_777_216
 
 [component_specs.projects.provisions.issuer]
 maximum_instances_per_requester_per_root = 1
@@ -108,7 +77,7 @@ delegated_token_verifier = true
 role_attestation_cache = true
 
 [component_specs.projects.spawn_grants.project_hub.project_instance]
-maximum_instances_per_parent = 10_000
+maximum_instances_per_parent = 20_000
 
 [component_specs.projects.children.project_ledger]
 kind = "singleton"
@@ -124,38 +93,9 @@ maximum_instances_per_parent = 1
 [component_specs.projects.spawn_grants.project_instance.project_machine]
 maximum_instances_per_parent = 1
 
-[component_groups.databases.components.database_a]
-component_spec = "database_a"
-service = "database_a"
-
-[component_groups.databases.components.database_b]
-component_spec = "database_b"
-service = "database_b"
-
-[component_groups.databases.components.database_c]
-component_spec = "database_c"
-service = "database_c"
-
 [component_groups.grouped_projects.components.project_hub]
 component_spec = "projects"
 service = "projects"
-
-[component_groups.project_data_cell.groups.databases]
-component_group = "databases"
-service_purpose = "replica"
-
-[component_groups.project_data_cell.components.project_hub]
-component_spec = "projects"
-service = "project_hubs"
-service_purpose = "pool_member"
-
-[component_group_deployments.authoritative_databases]
-component_group = "databases"
-service_purpose = "authority"
-initial_placements = 1
-maximum_placements = 1
-placement.maximum_per_root = 1
-placement.minimum_distinct_roots = 1
 
 [component_group_deployments.grouped_projects]
 component_group = "grouped_projects"
@@ -165,68 +105,7 @@ maximum_placements = 2
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 
-[[component_group_deployments.grouped_projects.member_limits]]
-member = ["project_hub"]
-spawn_grants = [
-  { parent_role = "project_hub", child_role = "project_instance", maximum_instances_per_parent = 10_000 },
-]
-
-[component_group_deployments.packed_projects]
-component_group = "grouped_projects"
-service_purpose = "pool_member"
-initial_placements = 2
-maximum_placements = 3
-placement.maximum_per_root = 2
-placement.minimum_distinct_roots = 1
-
-[[component_group_deployments.packed_projects.member_limits]]
-member = ["project_hub"]
-spawn_grants = [
-  { parent_role = "project_hub", child_role = "project_instance", maximum_instances_per_parent = 2_000 },
-]
-
-[component_group_deployments.project_data_cells]
-component_group = "project_data_cell"
-initial_placements = 1
-maximum_placements = 10
-placement.maximum_per_root = 1
-placement.minimum_distinct_roots = 1
-
-[services.fleet.targets.database_a]
-role = "database_a"
-component_spec = "database_a"
-mode = "authority_replica"
-authority_deployment = "authoritative_databases"
-authority_member = ["database_a"]
-placement.maximum_members_per_root = 1
-placement.minimum_distinct_roots = 1
-
-[services.fleet.targets.database_b]
-role = "database_b"
-component_spec = "database_b"
-mode = "authority_replica"
-authority_deployment = "authoritative_databases"
-authority_member = ["database_b"]
-placement.maximum_members_per_root = 1
-placement.minimum_distinct_roots = 1
-
-[services.fleet.targets.database_c]
-role = "database_c"
-component_spec = "database_c"
-mode = "authority_replica"
-authority_deployment = "authoritative_databases"
-authority_member = ["database_c"]
-placement.maximum_members_per_root = 1
-placement.minimum_distinct_roots = 1
-
 [services.fleet.targets.projects]
-role = "project_hub"
-component_spec = "projects"
-mode = "active_pool"
-placement.maximum_members_per_root = 2
-placement.minimum_distinct_roots = 1
-
-[services.fleet.targets.project_hubs]
 role = "project_hub"
 component_spec = "projects"
 mode = "active_pool"

@@ -46,8 +46,11 @@ when a higher-level prose rule suggests a different shape.
 The dependency direction is:
 
 ```text
-endpoints -> workflow -> policy -> ops -> model
+endpoints -> workflow -> policy
+                     +-> ops -> model
 ```
+
+The workflow branches are independent. Policy never calls ops.
 
 Audits must verify actual ownership, not directory names alone:
 

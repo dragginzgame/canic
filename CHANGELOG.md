@@ -14,7 +14,9 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
 
 - `0.101.52` qualifies the complete three-Subnet Toko-shaped topology,
   interrupted scale-out and protected deployment limits while retaining an
-  independent second Fleet on a shared physical Subnet.
+  independent second Fleet on a shared physical Subnet, then begins Q5 by
+  reconciling current operator/governance semantics and removing incidental CI
+  guard coupling.
 
 - `0.101.51` separates provisioning-journal and initial-placement policy
   ownership, shares only mechanical durable-document operations across host

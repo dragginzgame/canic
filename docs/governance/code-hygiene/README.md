@@ -11,8 +11,11 @@ The goal is to keep the codebase easy to navigate while preserving Canic's
 layering:
 
 ```text
-endpoints -> workflow -> policy -> ops -> model
+endpoints -> workflow -> policy
+                     +-> ops -> model
 ```
+
+The workflow branches are independent. Policy never calls ops.
 
 If this directory conflicts with `AGENTS.md`, `AGENTS.md` wins. Command,
 versioning, release, and deployment policy remains owned by
@@ -35,7 +38,7 @@ example-crate/
 └── src/
     ├── lib.rs
     ├── diagnostic.rs
-    ├── project/
+    ├── app/
     │   ├── admission.rs
     │   ├── mod.rs
     │   ├── snapshot.rs
@@ -107,9 +110,9 @@ paragraph, so put a blank doc line after the one-line module name.
 Example:
 
 ```rust
-//! Module: workflow::project::install
+//! Module: workflow::app::install
 //!
-//! Responsibility: orchestrate project canister install steps.
+//! Responsibility: orchestrate App canister install steps.
 //! Does not own: authorization, stable records, or pure placement policy.
 //! Boundary: calls ops and policy after endpoints authenticate input.
 ```
@@ -131,9 +134,9 @@ intended:
 
 ```rust
 ///
-/// ProjectInstallRequest
+/// AppInstallRequest
 ///
-/// Boundary DTO accepted by the project install workflow.
+/// Boundary DTO accepted by the App install workflow.
 ///
 ```
 

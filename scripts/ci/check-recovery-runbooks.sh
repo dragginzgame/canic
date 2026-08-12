@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=./scripts/ci/doc-guard-lib.sh
 source "$ROOT/scripts/ci/doc-guard-lib.sh"
 
 GUARD_LABEL="recovery runbook"
@@ -24,20 +25,27 @@ require_texts "$RUNBOOK" "$GUARD_LABEL" \
     "### Payload Or Caller Mismatch" \
     "### Expired Authorization Or Replay Metadata" \
     "### Delegation Caller Or Issuer Mismatch" \
-    "### Project-Local Pending ICP Refill" \
+    "### ICP Project Root Pending ICP Refill" \
     "### ICP Refill Recovery-Required State" \
     "### Cost-Boundary Refusal" \
     "### Durable-Publication Ambiguity" \
-    "### Upgrade Interrupted Near Replay-Sensitive Operation" \
+    "### Same-Release Restart Or Upgrade Near Replay-Sensitive Operation" \
     "### Receipt Mismatch Or Unexpected Receipt State" \
     "## Validation Gates" \
     "## Outcome Summary" \
     "same operation ID, same actor, same payload" \
     "Do not change payload, caller, issuer, or target while reusing an operation ID." \
+    "These runbooks never authorize a cross-release upgrade or state transition." \
     "bash scripts/ci/check-recovery-runbooks.sh" \
     "cargo test --locked -p canic-core replay_policy --lib -- --nocapture" \
     "cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture" \
     "cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture" \
-    "Release blockers: none found in these runbooks."
+    "The runbooks remain the operator procedure; they do not issue a release"
+
+forbid_texts "$RUNBOOK" "$GUARD_LABEL" \
+    "Project-Local" \
+    "project-local" \
+    "upgraded binary" \
+    "Release blockers: none found"
 
 echo "recovery/retry runbooks guard passed"

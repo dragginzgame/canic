@@ -11,6 +11,11 @@ It qualifies Canic's topology, placement, protected policy, lifecycle and
 discovery contracts. It does not qualify application-level database
 replication, failover, health or readiness.
 
+The Toko topology has its own checked-in root configuration and Wasm build
+target. The smaller delegation-root fixture retains its original topology, so
+the qualification cannot silently broaden unrelated grouped, cross-root or
+restart journeys through shared build-time configuration.
+
 The journey uses three distinct PocketIC application Subnets for one Fleet:
 
 - root 0 owns database A, B and C Authority Components;
@@ -19,11 +24,11 @@ The journey uses three distinct PocketIC application Subnets for one Fleet:
 - the same Project Hub group is also reused by an ActivePool deployment that
   packs two stable placements on root 1, retains one differently configured
   placement, and atomically scales one further placement onto root 2;
-- the four ActivePool members finish split two per project root;
+- the four ActivePool members finish split two per application root;
 - the 10,000-child deployment retains the unreduced Spec grant, while all
   three packed-deployment runtimes retain the exact 2,000-child reduction;
 - the two project-data-cell Hubs create three Project Instances split across
-  the project roots, every Instance creates one Ledger, and exactly one creates
+  the application roots, every Instance creates one Ledger, and exactly one creates
   a Machine;
 - all seven dynamic descendants remain on their owning root's physical
   Subnet, preserve their exact immediate parent and do not mutate the Fleet
@@ -77,13 +82,13 @@ These are the exact optimized test artifacts used by the passing journey.
 | Role | Raw bytes | Gzip bytes |
 | --- | ---: | ---: |
 | Fleet Coordinator | 4,201,595 | 1,047,435 |
-| Fleet Subnet Root | 10,005,988 | 2,324,586 |
-| Wasm Store | 847,124 | 845,839 |
-| database A | 3,636,636 | 869,122 |
-| Project Hub | 4,422,476 | 1,041,015 |
-| Project Instance | 4,186,536 | 995,832 |
+| Fleet Subnet Root | 9,963,759 | 2,314,066 |
+| Wasm Store | 845,038 | 843,765 |
+| database A | 3,636,636 | 869,142 |
+| Project Hub | 4,422,476 | 1,041,051 |
+| Project Instance | 4,186,536 | 995,816 |
 | Project Ledger | 3,639,920 | 869,307 |
-| Project Machine | 3,639,920 | 869,296 |
+| Project Machine | 3,639,920 | 869,302 |
 
 Database B and C are separate qualified packages and were installed throughout
 the journey. Their behavior and dependency shape are intentionally identical
@@ -98,7 +103,7 @@ The qualifying command was:
 cargo test --locked -p canic-testing-internal pic::fleet_registry::baseline::tests::toko_topology_qualifies_scale_out_descendants_packing_and_fleet_isolation --lib -- --exact --nocapture
 ```
 
-Result: `1 passed; 0 failed; 24 filtered out`, completed in 112.16 seconds.
+Result: `1 passed; 0 failed; 24 filtered out`, completed in 106.49 seconds.
 
 ## Scope limits
 

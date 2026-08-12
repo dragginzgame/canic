@@ -62,7 +62,7 @@ A verifier validates a delegated token using only:
 - configured chain-key root verifier policy
 - configured network label paired with the effective raw IC root public key
 - issuer proof embedded in the token
-- local project id and configured role
+- protected Fleet identity and configured role
 - IC canister time
 
 A verifier must not require:
@@ -269,7 +269,7 @@ Strict canonical rules:
 - role grants must already be strictly sorted by role and duplicate-free
 - scopes inside each grant must already be strictly sorted and duplicate-free
 - role and scope strings must be non-empty ASCII strings using only `[a-z0-9_:-]`
-- project audience strings must be non-empty ASCII strings using only `[a-z0-9_:-.]`
+- Fleet audience strings must be non-empty ASCII strings using only `[a-z0-9_:-.]`
 - token `ext` payloads are optional opaque bytes and must not exceed 4096 bytes
 - no verifier-role or verifier-principal audience exists
 - verifier rejects noncanonical vectors rather than normalizing them
@@ -475,7 +475,7 @@ Verifier steps:
    - token does not outlive cert
    - token TTL does not exceed `cert.max_token_ttl_ns`
    - `claims.aud` is subset of `cert.aud`
-   - local project accepts both `claims.aud` and `cert.aud`
+   - the protected Fleet accepts both `claims.aud` and `cert.aud`
    - `claims.grants` is subset of `cert.grants`
 6. Verify issuer canister-signature proof:
    - proof variant is `IssuerProof::IcCanisterSignatureV1`
@@ -779,7 +779,7 @@ Expected failures:
 - token expired or not yet valid
 - token TTL exceeds cert or config policy
 - audience subset failure
-- local project does not accept token or cert audience
+- protected Fleet does not accept token or cert audience
 - missing local role
 - local role missing from token grants
 - required scope missing from local-role grant

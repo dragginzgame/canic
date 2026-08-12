@@ -6,10 +6,13 @@ use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
 #[cfg(test)]
-use super::build::{build_three_application_subnet_pic, build_two_application_subnet_pic};
+use super::build::{
+    build_test_toko_root_wasm, build_three_application_subnet_pic,
+    build_two_application_subnet_pic, toko_root_canister_config_path,
+};
 use candid::Principal;
 use ic_testkit::pic::{CandidCallExt, PocketIc};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const PREPAID_POOL_ASSET_COUNT: usize = 10;
@@ -289,8 +292,11 @@ mod tests {
     };
 
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
+    #[cfg(test)]
     const DATABASE_A_PACKAGE: &str = "database_a_stub";
+    #[cfg(test)]
     const DATABASE_B_PACKAGE: &str = "database_b_stub";
+    #[cfg(test)]
     const DATABASE_C_PACKAGE: &str = "database_c_stub";
     const PROJECT_HUB_PACKAGE: &str = "project_hub_stub";
     const PROJECT_INSTANCE_PACKAGE: &str = "project_instance_stub";
@@ -540,6 +546,7 @@ mod tests {
         init_args: FleetSubnetRootInitArgs,
         request: RootStoreBootstrapRequest,
         response: RootStoreBootstrapResponse,
+        configuration: RootFixtureConfiguration,
     }
 
     #[cfg(test)]
@@ -575,17 +582,24 @@ mod tests {
     struct RootStoreFixture {
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
+        configuration: RootFixtureConfiguration,
     }
 
-    struct ComponentFixtureWasms {
-        database_a: Vec<u8>,
-        database_b: Vec<u8>,
-        database_c: Vec<u8>,
-        issuer: Vec<u8>,
-        project_hub: Vec<u8>,
-        project_instance: Vec<u8>,
-        project_ledger: Vec<u8>,
-        project_machine: Vec<u8>,
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum RootFixtureConfiguration {
+        Delegation,
+        #[cfg(test)]
+        Toko,
+    }
+
+    impl RootFixtureConfiguration {
+        fn config_path(self, workspace_root: &Path) -> PathBuf {
+            match self {
+                Self::Delegation => root_canister_config_path(workspace_root),
+                #[cfg(test)]
+                Self::Toko => toko_root_canister_config_path(workspace_root),
+            }
+        }
     }
 
     #[cfg(test)]
@@ -848,7 +862,7 @@ mod tests {
     #[test]
     fn toko_qualification_config_reuses_database_specs_in_nested_project_cells() {
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+        let config = AppConfigSnapshot::load(&toko_root_canister_config_path(&workspace_root))
             .expect("load Toko qualification configuration");
         let deployments = config
             .model()
@@ -957,7 +971,7 @@ mod tests {
         let registry = query_fleet_registry(&fixture.pic, fixture.coordinator);
         let plan = toko_initial_provisioning_plan(&fixture, &registry);
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+        let config = AppConfigSnapshot::load(&toko_root_canister_config_path(&workspace_root))
             .expect("load Toko qualification configuration");
         let initial_plan_bytes =
             ComponentProvisioningPlanOps::canonical_bytes(config.model(), &registry, &plan)
@@ -4169,26 +4183,12 @@ mod tests {
 
     #[cfg(test)]
     fn setup_toko_topology_qualification() -> TokoTopologyFixture {
-        let root_wasm = build_test_root_wasm();
+        let root_wasm = build_test_toko_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
         let store_wasm = build_test_wasm_store_wasm();
-        let components = build_test_component_wasms();
-        let wasm_footprints = BTreeMap::from([
-            ("coordinator", wasm_footprint(&coordinator_wasm)),
-            ("fleet_subnet_root", wasm_footprint(&root_wasm)),
-            ("wasm_store", wasm_footprint(&store_wasm)),
-            ("database_a", wasm_footprint(&components.database_a)),
-            ("project_hub", wasm_footprint(&components.project_hub)),
-            (
-                "project_instance",
-                wasm_footprint(&components.project_instance),
-            ),
-            ("project_ledger", wasm_footprint(&components.project_ledger)),
-            (
-                "project_machine",
-                wasm_footprint(&components.project_machine),
-            ),
-        ]);
+        let components = build_toko_component_wasms();
+        let wasm_footprints =
+            toko_wasm_footprints(&root_wasm, &coordinator_wasm, &store_wasm, components);
         let pic = build_three_application_subnet_pic();
         let mut application_subnets = pic.topology().get_app_subnets();
         application_subnets.sort();
@@ -4210,7 +4210,7 @@ mod tests {
                 &pic,
                 root_wasm.clone(),
                 coordinator,
-                build_root_store_fixture(),
+                build_toko_root_store_fixture(),
                 *authority_subnet,
                 qualification_admissions(1, 1),
             ),
@@ -4218,7 +4218,7 @@ mod tests {
                 &pic,
                 root_wasm.clone(),
                 coordinator,
-                build_root_store_fixture(),
+                build_toko_root_store_fixture(),
                 *first_project_subnet,
                 qualification_admissions(1, 10),
             ),
@@ -4226,16 +4226,16 @@ mod tests {
                 &pic,
                 root_wasm.clone(),
                 coordinator,
-                build_root_store_fixture(),
+                build_toko_root_store_fixture(),
                 *second_project_subnet,
                 qualification_admissions(1, 4),
             ),
         ];
-        let second_root = install_bootstrapped_root_for_fleet_on_subnet(
+        let second_root = install_qualification_root_for_fleet_on_subnet(
             &pic,
             root_wasm,
             second_coordinator,
-            build_root_store_fixture(),
+            build_toko_root_store_fixture(),
             *first_project_subnet,
             0xf2,
         );
@@ -4274,8 +4274,52 @@ mod tests {
     }
 
     #[cfg(test)]
+    fn toko_wasm_footprints(
+        root_wasm: &[u8],
+        coordinator_wasm: &[u8],
+        store_wasm: &[u8],
+        components: &BTreeMap<CanisterRole, Vec<u8>>,
+    ) -> BTreeMap<&'static str, (usize, usize)> {
+        BTreeMap::from([
+            ("coordinator", wasm_footprint(coordinator_wasm)),
+            ("fleet_subnet_root", wasm_footprint(root_wasm)),
+            ("wasm_store", wasm_footprint(store_wasm)),
+            (
+                "database_a",
+                wasm_footprint(component_fixture_wasm(components, "database_a")),
+            ),
+            (
+                "project_hub",
+                wasm_footprint(component_fixture_wasm(components, "project_hub")),
+            ),
+            (
+                "project_instance",
+                wasm_footprint(component_fixture_wasm(components, "project_instance")),
+            ),
+            (
+                "project_ledger",
+                wasm_footprint(component_fixture_wasm(components, "project_ledger")),
+            ),
+            (
+                "project_machine",
+                wasm_footprint(component_fixture_wasm(components, "project_machine")),
+            ),
+        ])
+    }
+
+    #[cfg(test)]
     fn wasm_footprint(wasm: &[u8]) -> (usize, usize) {
         (wasm.len(), gzip(wasm).len())
+    }
+
+    #[cfg(test)]
+    fn component_fixture_wasm<'a>(
+        wasms: &'a BTreeMap<CanisterRole, Vec<u8>>,
+        role: &'static str,
+    ) -> &'a [u8] {
+        wasms
+            .get(&CanisterRole::new(role))
+            .unwrap_or_else(|| panic!("missing fixture Wasm for role {role}"))
     }
 
     #[cfg(test)]
@@ -4532,7 +4576,7 @@ mod tests {
         registry: &FleetRegistry,
     ) -> FleetComponentProvisioningPlan {
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+        let config = AppConfigSnapshot::load(&toko_root_canister_config_path(&workspace_root))
             .expect("load Toko provisioning configuration");
         let deployments = config
             .model()
@@ -4672,7 +4716,7 @@ mod tests {
         target_root: usize,
     ) -> FleetComponentProvisioningPlan {
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+        let config = AppConfigSnapshot::load(&toko_root_canister_config_path(&workspace_root))
             .expect("load Toko scale-out configuration");
         let deployments = config
             .model()
@@ -6163,7 +6207,7 @@ mod tests {
             .parent()
             .and_then(Path::parent)
             .expect("workspace root");
-        let config_path = root_canister_config_path(workspace_root);
+        let config_path = fixture.configuration.config_path(workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load root config");
         let coordinator_args = FleetCoordinatorInitArgs {
             configured_app: fixture
@@ -7341,6 +7385,7 @@ mod tests {
         root_subnet: Option<Principal>,
         component_admission_limits: Option<RootComponentAdmissionLimits>,
         fleet_id: Option<FleetId>,
+        configuration: RootFixtureConfiguration,
     }
 
     #[cfg_attr(
@@ -7376,6 +7421,7 @@ mod tests {
                 root_subnet: Some(placement_subnet),
                 component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                 fleet_id: None,
+                configuration: RootFixtureConfiguration::Delegation,
             },
             create_prepaid_pool_assets,
         );
@@ -7405,6 +7451,7 @@ mod tests {
                 root_subnet: Some(placement_subnet),
                 component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                 fleet_id: Some(FleetId::from_generated_bytes([fleet_id_byte; 32])),
+                configuration: RootFixtureConfiguration::Delegation,
             },
             create_prepaid_pool_assets,
         );
@@ -7436,6 +7483,37 @@ mod tests {
                     component_admission_limits,
                 )),
                 fleet_id: None,
+                configuration: RootFixtureConfiguration::Toko,
+            },
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(pic, fixture.root_id);
+        fixture
+    }
+
+    #[cfg(test)]
+    fn install_qualification_root_for_fleet_on_subnet(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement_subnet: Principal,
+        fleet_id_byte: u8,
+    ) -> BootstrappedRootFixture {
+        let coordinator_subnet = pic
+            .get_subnet(coordinator)
+            .expect("PocketIC Coordinator placement Subnet identity");
+        let fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                coordinator_subnet: Some(coordinator_subnet),
+                root_subnet: Some(placement_subnet),
+                component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
+                fleet_id: Some(FleetId::from_generated_bytes([fleet_id_byte; 32])),
+                configuration: RootFixtureConfiguration::Toko,
             },
             create_prepaid_pool_assets,
         );
@@ -7463,6 +7541,7 @@ mod tests {
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
+                configuration: RootFixtureConfiguration::Delegation,
             },
             pool_setup,
         )
@@ -7483,11 +7562,13 @@ mod tests {
             .parent()
             .and_then(Path::parent)
             .expect("workspace root");
-        let config_path = root_canister_config_path(workspace_root);
+        let config_path = placement.configuration.config_path(workspace_root);
         let RootStoreFixture {
             manifest,
             artifacts,
+            configuration,
         } = store_fixture;
+        assert_eq!(configuration, placement.configuration);
         let manifest_bytes = serde_json::to_vec(&manifest).expect("canonical root release set");
         let digest = ReleaseSetDigest::from_bytes(
             wasm_hash(&manifest_bytes)
@@ -7575,6 +7656,7 @@ mod tests {
             init_args,
             request,
             response,
+            configuration,
         }
     }
 
@@ -7731,54 +7813,43 @@ mod tests {
             .parent()
             .and_then(Path::parent)
             .expect("workspace root");
-        let config_path = root_canister_config_path(workspace_root);
-        let (manifest, artifacts) = exact_root_store_fixture(&config_path);
+        let configuration = RootFixtureConfiguration::Delegation;
+        let config_path = configuration.config_path(workspace_root);
+        let (manifest, artifacts) =
+            exact_root_store_fixture(&config_path, build_test_component_wasms());
         RootStoreFixture {
             manifest,
             artifacts,
+            configuration,
+        }
+    }
+
+    #[cfg(test)]
+    fn build_toko_root_store_fixture() -> RootStoreFixture {
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let configuration = RootFixtureConfiguration::Toko;
+        let config_path = configuration.config_path(workspace_root);
+        let (manifest, artifacts) =
+            exact_root_store_fixture(&config_path, build_toko_component_wasms());
+        RootStoreFixture {
+            manifest,
+            artifacts,
+            configuration,
         }
     }
 
     fn exact_root_store_fixture(
         config_path: &Path,
+        real_modules: &BTreeMap<CanisterRole, Vec<u8>>,
     ) -> (RootStoreReleaseSetManifest, BTreeMap<CanisterRole, Vec<u8>>) {
         let config = AppConfigSnapshot::load(config_path).expect("load root fixture config");
         let topology = config.component_topology();
         let release_build_id = managed_test_init_identity().release_build_id;
         let mut entries = Vec::new();
         let mut artifacts = BTreeMap::new();
-        let fixture_wasms = build_test_component_wasms();
-        let real_modules = BTreeMap::from([
-            (
-                CanisterRole::new("database_a"),
-                fixture_wasms.database_a.clone(),
-            ),
-            (
-                CanisterRole::new("database_b"),
-                fixture_wasms.database_b.clone(),
-            ),
-            (
-                CanisterRole::new("database_c"),
-                fixture_wasms.database_c.clone(),
-            ),
-            (CanisterRole::new("issuer"), fixture_wasms.issuer.clone()),
-            (
-                CanisterRole::new("project_hub"),
-                fixture_wasms.project_hub.clone(),
-            ),
-            (
-                CanisterRole::new("project_instance"),
-                fixture_wasms.project_instance.clone(),
-            ),
-            (
-                CanisterRole::new("project_ledger"),
-                fixture_wasms.project_ledger.clone(),
-            ),
-            (
-                CanisterRole::new("project_machine"),
-                fixture_wasms.project_machine.clone(),
-            ),
-        ]);
         for spec in &topology.component_specs {
             entries.push(root_store_entry(
                 config.model(),
@@ -7786,7 +7857,7 @@ mod tests {
                 RootStoreReleaseSetEntryKind::Component,
                 &spec.component_role,
                 release_build_id,
-                &real_modules,
+                real_modules,
                 &mut artifacts,
             ));
             entries.extend(spec.children.iter().map(|child| {
@@ -7796,7 +7867,7 @@ mod tests {
                     RootStoreReleaseSetEntryKind::ComponentChild,
                     &child.role,
                     release_build_id,
-                    &real_modules,
+                    real_modules,
                     &mut artifacts,
                 )
             }));
@@ -7853,44 +7924,82 @@ mod tests {
         }
     }
 
-    fn build_test_component_wasms() -> &'static ComponentFixtureWasms {
-        static WASMS: OnceLock<ComponentFixtureWasms> = OnceLock::new();
+    fn build_test_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
+        static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
         WASMS.get_or_init(|| {
             let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-            let target_dir = test_target_dir(&workspace_root, "fleet-registry-sync");
             let config_path = root_canister_config_path(&workspace_root);
-            let canonical_config_path = config_path.to_str().expect("root config path UTF-8");
-            build_internal_test_wasm_canisters_with_env(
+            build_component_fixture_wasms(
                 &workspace_root,
-                &target_dir,
+                &config_path,
+                "fleet-registry-sync",
                 &[
-                    DATABASE_A_PACKAGE,
-                    DATABASE_B_PACKAGE,
-                    DATABASE_C_PACKAGE,
-                    ISSUER_PACKAGE,
-                    PROJECT_HUB_PACKAGE,
-                    PROJECT_INSTANCE_PACKAGE,
-                    PROJECT_LEDGER_PACKAGE,
-                    PROJECT_MACHINE_PACKAGE,
+                    ("issuer", ISSUER_PACKAGE),
+                    ("project_hub", PROJECT_HUB_PACKAGE),
+                    ("project_instance", PROJECT_INSTANCE_PACKAGE),
+                    ("project_ledger", PROJECT_LEDGER_PACKAGE),
+                    ("project_machine", PROJECT_MACHINE_PACKAGE),
                 ],
-                CanicWasmBuildProfile::Fast,
-                &[(
-                    canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
-                    canonical_config_path,
-                )],
-            );
-            let profile = CanicWasmBuildProfile::Fast.target_dir_name();
-            ComponentFixtureWasms {
-                database_a: read_wasm(&target_dir, DATABASE_A_PACKAGE, profile),
-                database_b: read_wasm(&target_dir, DATABASE_B_PACKAGE, profile),
-                database_c: read_wasm(&target_dir, DATABASE_C_PACKAGE, profile),
-                issuer: read_wasm(&target_dir, ISSUER_PACKAGE, profile),
-                project_hub: read_wasm(&target_dir, PROJECT_HUB_PACKAGE, profile),
-                project_instance: read_wasm(&target_dir, PROJECT_INSTANCE_PACKAGE, profile),
-                project_ledger: read_wasm(&target_dir, PROJECT_LEDGER_PACKAGE, profile),
-                project_machine: read_wasm(&target_dir, PROJECT_MACHINE_PACKAGE, profile),
-            }
+            )
         })
+    }
+
+    #[cfg(test)]
+    fn build_toko_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
+        static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
+        WASMS.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let config_path = toko_root_canister_config_path(&workspace_root);
+            build_component_fixture_wasms(
+                &workspace_root,
+                &config_path,
+                "toko-fleet-registry-sync",
+                &[
+                    ("database_a", DATABASE_A_PACKAGE),
+                    ("database_b", DATABASE_B_PACKAGE),
+                    ("database_c", DATABASE_C_PACKAGE),
+                    ("issuer", ISSUER_PACKAGE),
+                    ("project_hub", PROJECT_HUB_PACKAGE),
+                    ("project_instance", PROJECT_INSTANCE_PACKAGE),
+                    ("project_ledger", PROJECT_LEDGER_PACKAGE),
+                    ("project_machine", PROJECT_MACHINE_PACKAGE),
+                ],
+            )
+        })
+    }
+
+    fn build_component_fixture_wasms(
+        workspace_root: &Path,
+        config_path: &Path,
+        target_scope: &str,
+        roles_and_packages: &[(&'static str, &'static str)],
+    ) -> BTreeMap<CanisterRole, Vec<u8>> {
+        let target_dir = test_target_dir(workspace_root, target_scope);
+        let canonical_config_path = config_path.to_str().expect("root config path UTF-8");
+        let packages = roles_and_packages
+            .iter()
+            .map(|(_, package)| *package)
+            .collect::<Vec<_>>();
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &packages,
+            CanicWasmBuildProfile::Fast,
+            &[(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                canonical_config_path,
+            )],
+        );
+        let profile = CanicWasmBuildProfile::Fast.target_dir_name();
+        roles_and_packages
+            .iter()
+            .map(|(role, package)| {
+                (
+                    CanisterRole::new(role),
+                    read_wasm(&target_dir, package, profile),
+                )
+            })
+            .collect()
     }
 
     fn gzip(bytes: &[u8]) -> Vec<u8> {

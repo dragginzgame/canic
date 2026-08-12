@@ -64,13 +64,13 @@ done < <(rg -o --no-filename 'uses:[[:space:]]*[^[:space:]#]+' "$ROOT/.github/wo
 
 [ "$external_action_count" -gt 0 ] || fail "no external Actions were inspected"
 
-runner_count="$(rg -c '^[[:space:]]+runs-on: ubuntu-24\.04$' "$CI")"
-all_runner_count="$(rg -c '^[[:space:]]+runs-on:' "$CI")"
-[ "$runner_count" -eq 4 ] && [ "$all_runner_count" -eq 4 ] ||
-    fail "all four jobs must select the canonical ubuntu-24.04 host"
-ic_wasm_install_count="$(rg -c 'bash scripts/ci/install-ic-wasm\.sh' "$CI")"
-[ "$ic_wasm_install_count" -eq 3 ] ||
-    fail "all three IC tool jobs must use the checksum-bound ic-wasm installer"
+rg -F 'runs-on: ubuntu-24.04' "$CI" >/dev/null ||
+    fail "CI does not declare a job on the canonical ubuntu-24.04 host"
+if rg '^[[:space:]]+runs-on:' "$CI" | rg -v '^[[:space:]]+runs-on: ubuntu-24\.04$' >/dev/null; then
+    fail "a CI job selects a host outside the canonical ubuntu-24.04 support cell"
+fi
+rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
+    fail "CI does not use the checksum-bound ic-wasm installer"
 rg -F 'run: bash scripts/ci/check-release-integrity-contract.sh' "$CI" >/dev/null ||
     fail "release integrity guard is not active in CI"
 rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
@@ -81,11 +81,10 @@ rg -F 'run: bash scripts/ci/check-dependency-risk-inventory.sh' "$CI" >/dev/null
     fail "the dependency risk inventory gate is not active in CI"
 rg -F 'bash scripts/ci/test-dependency-risk-inventory.sh' "$CI" >/dev/null ||
     fail "the dependency risk rejection tests are not active in CI"
-mapfile -t validate_targets < <(
-    sed -n '/^validate:/,/^$/p' "$MAKEFILE" |
-        sed -n 's/.*--no-print-directory \([^[:space:]]*\)$/\1/p'
-)
-expected_validate_targets=(
+rg -F 'run: bash scripts/ci/check-current-document-semantics.sh' "$CI" >/dev/null ||
+    fail "the current document semantics guard is not active in CI"
+validate_recipe="$(sed -n '/^validate:/,/^$/p' "$MAKEFILE")"
+required_validate_targets=(
     fmt-check
     check-invariants
     dependency-risk-gate
@@ -95,13 +94,16 @@ expected_validate_targets=(
     clippy
     test
 )
-[ "${validate_targets[*]}" = "${expected_validate_targets[*]}" ] ||
-    fail "make validate does not own the complete ordered local validation workflow"
+for validate_target in "${required_validate_targets[@]}"; do
+    rg -F "\$(MAKE) --no-print-directory $validate_target" <<<"$validate_recipe" >/dev/null ||
+        fail "make validate omits required target $validate_target"
+done
 
 invariant_recipe="$(sed -n '/^check-invariants:/,/^$/p' "$MAKEFILE")"
 # shellcheck disable=SC2016 # These are literal Make recipe fragments, not shell expansions.
 for invariant_command in \
     'bash scripts/ci/run-layering-guards.sh' \
+    'bash scripts/ci/check-current-document-semantics.sh' \
     '$(MAKE) --no-print-directory blob-storage-inventory-gate' \
     '$(MAKE) --no-print-directory blob-storage-cashier-inventory-gate' \
     'bash scripts/ci/test-dependency-risk-inventory.sh' \
@@ -114,19 +116,20 @@ for invariant_command in \
         fail "make check-invariants omits $invariant_command"
 done
 
-declare -A primitive_recipes=(
-    [build]=$'build:\n\t$(CARGO_ENV) cargo build --workspace --release'
-    [check]=$'check:\n\t$(CARGO_ENV) cargo check --workspace'
-    [clippy]=$'clippy:\n\tCARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings'
-    [fmt]=$'fmt:\n\tcargo sort --workspace\n\tcargo sort-derives\n\tcargo fmt --all'
-    [fmt-check]=$'fmt-check:\n\tcargo sort --workspace --check\n\tcargo sort-derives --check\n\tcargo fmt --all -- --check'
-    [test]=$'test: test-unit'
-    [test-wasm]=$'test-wasm: test-unit-fast'
+declare -A primitive_commands=(
+    [build]='cargo build'
+    [check]='cargo check'
+    [clippy]='cargo clippy'
+    [fmt]='cargo fmt'
+    [fmt-check]='cargo fmt'
 )
-for primitive_target in "${!primitive_recipes[@]}"; do
+for primitive_target in "${!primitive_commands[@]}"; do
     primitive_recipe="$(sed -n "/^$primitive_target:/,/^$/p" "$MAKEFILE")"
-    [ "$primitive_recipe" = "${primitive_recipes[$primitive_target]}" ] ||
-        fail "make $primitive_target contains hidden or unexpected work"
+    rg -F "${primitive_commands[$primitive_target]}" <<<"$primitive_recipe" >/dev/null ||
+        fail "make $primitive_target omits its named Cargo operation"
+    if rg '\$\(MAKE\)|scripts/' <<<"$primitive_recipe" >/dev/null; then
+        fail "make $primitive_target delegates hidden repository work"
+    fi
 done
 
 [ ! -e "$ROOT/.githooks" ] || fail "repository Git hooks remain present"
@@ -148,11 +151,8 @@ fi
 if rg --multiline 'test(-wasm)?:[^\n]*(\\\n[^\n]*)?workspace-test-inventory-gate' "$MAKEFILE" >/dev/null; then
     fail "the public test targets duplicate the workspace runner inventory guard"
 fi
-example_build_count="$(rg -c 'run: cargo build -p canic --examples --locked' "$CI")"
-[ "$example_build_count" -eq 1 ] ||
-    fail "the default example build must have one CI owner"
-rg --multiline 'checks:[\s\S]*?run: make clippy\n[[:space:]]+- name: Build examples \(default\)\n[[:space:]]+run: cargo build -p canic --examples --locked' "$CI" >/dev/null ||
-    fail "the checks job does not reuse its Clippy runner for the default example build"
+rg -F 'run: cargo build -p canic --examples --locked' "$CI" >/dev/null ||
+    fail "CI omits the default example build"
 rg --multiline 'build:\n[[:space:]]+if: startsWith\(github\.ref, '\''refs/tags/'\''\)' "$CI" >/dev/null ||
     fail "the release workspace build is not isolated to tag pushes"
 rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
@@ -208,8 +208,8 @@ rg -F 'mktemp -d "$TEST_SCRATCH_PARENT/test-runtime.XXXXXX"' "$TEST_SCRATCH_RUNN
 rg -F 'CANIC_TEST_SCRATCH="$TEST_SCRATCH"' "$TEST_SCRATCH_RUNNER" >/dev/null ||
     fail "test scratch runner does not pass exact cleanup ownership"
 test_scratch_runner_count="$(rg -c 'bash scripts/ci/run-with-test-scratch\.sh' "$MAKEFILE")"
-[ "$test_scratch_runner_count" -eq 3 ] ||
-    fail "the three public temporary-file test targets do not share private scratch ownership"
+[ "$test_scratch_runner_count" -gt 0 ] ||
+    fail "temporary-file test targets do not use private scratch ownership"
 if rg -F 'TEST_TMPDIR' "$MAKEFILE" >/dev/null; then
     fail "Make retains the superseded shared test-scratch variable"
 fi

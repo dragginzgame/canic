@@ -24,24 +24,20 @@ output, and release artifacts. Unstated impact is not permission to change it.
 
 Use the narrowest checks that exercise changed files and behavior.
 
-Documentation/audit-governance slices use applicable guards plus:
+Documentation/audit-governance slices use only the guards that directly own
+the changed documents, plus the changelog test when its surfaces change and a
+whitespace check:
 
 ```text
-bash scripts/ci/check-release-validation-matrix.sh
-bash scripts/ci/check-release-integrity-contract.sh
-bash scripts/ci/check-audit-method-catalog.sh
-bash scripts/ci/check-recovery-runbooks.sh
-bash scripts/ci/check-release-package-install-validation.sh
-cargo test --locked -p canic --test changelog_governance -- --nocapture
-make dependency-risk-gate
-make gitleaks-scan
+bash scripts/ci/check-<affected-document>.sh
+cargo test --locked -p canic --test changelog_governance -- --nocapture  # when applicable
 git diff --check
 ```
 
-The changelog test applies when changelog/status/governance surfaces change.
-Do not run workspace-wide tests, Clippy, broad PocketIC, package, or deployment
-gates for an ordinary focused slice unless the maintainer explicitly requests
-them or the changed invariant requires them.
+Do not add the full dependency inventory, full-history secret scan,
+workspace-wide tests, Clippy, broad PocketIC, package, or deployment gates to
+an ordinary documentation slice unless that slice changes the corresponding
+invariant or the maintainer explicitly requests them.
 
 Rust code slices add targeted formatting, check/Clippy, and tests for the
 changed package and behavior. Direct Cargo commands use `--locked` when
@@ -72,32 +68,21 @@ unexecuted gate as a pass.
 
 ## Required CI Gates
 
-The active workflow is the source of truth. At the current matrix it includes:
+The active workflow is the source of truth. Do not reproduce its step-by-step
+command inventory here. The maintained outcome categories are:
 
-```text
-cargo check --workspace --locked
-bash scripts/ci/run-layering-guards.sh
-bash scripts/ci/check-control-plane-feature-matrix.sh
-bash scripts/ci/check-blob-storage-inventory-gate.sh
-bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
-bash scripts/ci/check-release-validation-matrix.sh
-bash scripts/ci/check-release-integrity-contract.sh
-bash scripts/ci/check-audit-method-catalog.sh
-bash scripts/ci/check-recovery-runbooks.sh
-bash scripts/ci/check-release-package-install-validation.sh
-bash scripts/ci/check-dependency-risk-inventory.sh
-bash scripts/ci/run-secret-scan.sh
-make fmt-check
-make clippy
-make test-unit
-cargo build -p canic --examples --locked
-cargo build --release --workspace --locked
-```
+- MSRV workspace checking for pull requests and `main`;
+- pinned internal-toolchain formatting, lint, default-example, layering,
+  feature, dependency, secret, audit, release-contract, and current-document
+  checks for pull requests and `main`;
+- the classified unit/PocketIC test runner for pull requests and `main`; and
+- the locked release workspace build for version tags.
 
 CI also validates workflow syntax, installs declared ICP/Wasm helpers, and
-runs the pinned full-history secret scanner with fully redacted findings.
-Audit definitions must not claim a guard runs in CI unless the current
-workflow contains it.
+runs the pinned full-history secret scanner with fully redacted findings. The
+release-integrity guard checks security and release outcomes without freezing
+job counts or step adjacency. Audit definitions must not claim a guard runs in
+CI unless the current workflow contains it.
 
 The sole support declaration is the
 [supported host and target matrix](../governance/supported-platforms.md). A
@@ -158,13 +143,17 @@ make test-fleet-install
 make test-canisters
 ```
 
-These target names are reserved for maintainer-owned, environment-specific RC
-gates. They are not valid 0.100 evidence yet: the current Make recipes still
-invoke install without the required Fleet input and query the removed
-single-root Registry surface. Do not run or cite them until they are rewritten
-for an exact operator Fleet input and the complete Coordinator-anchored
-multi-root journey. The replacement gates must require the named local ICP
-environment and must never target mainnet as an incidental test default.
+These are maintained, environment-specific RC gates. `test-fleet-install`
+derives an exact operator Fleet input from the selected local ICP environment,
+requires exactly one Application Subnet, and drives that single-root Fleet to
+terminal installation. `test-canisters` reuses the terminal Fleet and calls the
+test application Canister. Neither target is multi-root qualification evidence.
+
+The current multi-root topology proof is the focused three-Subnet PocketIC
+journey recorded in the active 0.101
+[qualification report](../design/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md).
+Local ICP gates must require the named environment and must never target
+mainnet as an incidental test default.
 
 ## Final Release And Artifact Gates
 

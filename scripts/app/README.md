@@ -54,7 +54,7 @@ If you want the raw debug wasm lane instead, run:
 canic build test app --profile debug
 ```
 
-The current 0.100 flow:
+The maintained installation flow:
 
 - compiles the complete Component Topology and immutable multi-root install
   plan before effects
@@ -66,12 +66,16 @@ The current 0.100 flow:
   planned root
 - stages each root's release set and verifies exactly one root-local Store
 - registers and independently verifies every root as Registry `Joining`
-- stops explicitly before snapshot synchronization, acknowledgement, root
-  activation, Component creation, and terminal Fleet-catalog publication
+- activates the complete Registry and synchronizes every root's exact Mirror
+  and Directories
+- provisions and activates configured initial Components through root-local
+  journals
+- seals initial inventory, activates every selected root, and publishes the
+  terminal Coordinator-anchored Fleet catalog
 
-The stop is the current implementation boundary. It is not a ready reference
-topology, and terminal `canic info`, application calls, backup, and restore are
-not valid follow-up steps yet.
+An interrupted transaction is not a ready Fleet. Rerun the exact command for
+same-release reconciliation; terminal `canic info`, application calls, backup,
+and restore become valid only after catalog publication.
 
 ## Build Canisters
 
@@ -169,12 +173,12 @@ canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config 
 The builder infers the canister root from that config location.
 
 The builder also tries Cargo workspace metadata first, so nested paths like
-`src/canisters/project/ledger` work without extra config when package names
+`src/canisters/example/ledger` work without extra config when package names
 still follow `canister_<role>`. If a package name does not follow that
 convention, declare the mapping in `Cargo.toml`:
 
 ```toml
 [package.metadata.canic]
-app = "project"
-role = "project_ledger"
+app = "example"
+role = "ledger"
 ```

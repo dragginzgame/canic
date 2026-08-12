@@ -31,7 +31,7 @@ operations. Canic releases that support the ICP CLI stable line require
 `icp-cli >=1.2.0, <2.0.0`; the maintainer toolchain currently pins `1.3.0`.
 
 ICP CLI requires custom connected-network definitions to declare an
-explicit `root-key`. Canic's maintained project configuration uses the managed
+explicit `root-key`. Canic's maintained workspace configuration uses the managed
 local network and the built-in `ic` network, so no repository configuration
 change is required. Downstream projects with custom connected networks must add
 that key to their own ICP configuration.
@@ -283,15 +283,13 @@ canic install test test-local \
 
 The Fleet input is required. Its schema is documented in
 [`docs/architecture/fleet-install-input.md`](docs/architecture/fleet-install-input.md).
-The in-progress 0.100 installer currently verifies the Coordinator, every
-planned Fleet Subnet Root, each root's local Store, and every root's Registry
-`Joining` row, private snapshot candidate and Coordinator acknowledgement,
-then atomically commits and independently verifies the complete Coordinator
-Registry as `Active`. Roots remain runtime-`Prepared`; installation stops
-before final all-`Active` root synchronization, mirror/Directory activation,
-Component creation, and terminal Fleet-catalog publication.
-`canic info list`, `canic info env`, Medic's live Fleet checks, backup, and
-restore require that later terminal Fleet state.
+On success, installation drives the complete Coordinator-anchored transaction:
+it installs and verifies the Coordinator, roots, and root-local Stores; joins
+and activates the Fleet Registry; synchronizes each root's Mirror and
+Directories; provisions and activates the configured initial Components; and
+publishes the terminal Fleet catalog only after all selected roots are active.
+Rerunning the exact command in the same release reconciles an interrupted
+journal. Changed authority or unresolved paid effects fail closed.
 
 Build one artifact without installing:
 
@@ -333,15 +331,15 @@ declared config. Live commands continue to select an installed Fleet.
 
 ```bash
 canic app config test
-canic info list test
-canic status
-canic --environment local fleet list
 canic app create demo --yes
 canic app delete demo
+canic info list test
+canic --environment local info subnets test
+canic status
 ```
 
-Use `canic medic` when local project state, replica ownership, or a named
-deployment does not look right:
+Use `canic medic` when local workspace state, replica ownership, or a named
+Fleet does not look right:
 
 ```bash
 canic medic
@@ -352,8 +350,8 @@ For a terminal installed Fleet, use `canic info list <fleet>`,
 `canic info env <fleet>`, and `canic medic fleet <fleet>` before changing
 topology when local state looks wrong. `info list` shows live registered
 Canisters, `info env` prints sourceable `CANIC_<ROLE>` canister ID exports, and
-`app config` shows configured source intent. These live commands do not
-reconstruct or bypass an incomplete 0.100 installation journal.
+`app config` shows configured source intent. Live commands require the terminal
+catalog and do not reconstruct or bypass an incomplete installation journal.
 
 Named-fleet commands default to the local ICP CLI environment. Pass top-level
 `--environment <name>` for one command against another configured ICP CLI
@@ -365,8 +363,8 @@ from the restarted local replica; rerun
 `canic install <app> <fleet> --fleet-input <path>` with the exact intended
 operator input to recreate it.
 
-App configs live under project-root `apps/`. Commands launched from nested
-directories discover the outer project root and keep ICP project config plus
+App configs live under workspace-root `apps/`. Commands launched from nested
+directories discover the outer workspace root and keep ICP project config plus
 `.icp/` and `.canic/` state there.
 
 ## Backup And Restore
@@ -447,11 +445,10 @@ Canic-owned methods.
   verification.
 - Each canister crate must declare its App-scoped role with
   `[package.metadata.canic] app = "<app>"` and `role = "<role>"`.
-- If a fresh 0.100 install stops after verifying each root-local Store and
-  `Joining` Registry row, that is the current explicit
-  snapshot-synchronization boundary, not a successful terminal Fleet. Inspect
-  the install error and implementation status; do not use a legacy single-root
-  Registry path to bypass it.
+- If fresh installation stops before terminal Fleet-catalog publication,
+  inspect the typed error and rerun the exact command for same-release journal
+  reconciliation. Do not change Fleet input or use a removed single-root path
+  to bypass the interrupted transaction.
 - If a test manually installs one root and its application canisters, it is not
   validating the current managed-Fleet path. A current PocketIC journey must
   start at the Coordinator, install all planned roots and Stores, join them
