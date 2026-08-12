@@ -2,11 +2,11 @@
 
 #[cfg(test)]
 use super::build::build_mainnet_refill_wasms;
-#[cfg(test)]
-use super::build::build_two_application_subnet_pic;
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
+#[cfg(test)]
+use super::build::{build_three_application_subnet_pic, build_two_application_subnet_pic};
 use candid::Principal;
 use ic_testkit::pic::{CandidCallExt, PocketIc};
 use std::path::Path;
@@ -70,8 +70,8 @@ mod tests {
             },
         },
         ids::{
-            CanisterRole, ComponentBinding, ComponentInstanceId, FleetId, ManagedCanisterBinding,
-            ReleaseSetDigest, SubnetId,
+            CanisterRole, ComponentBinding, ComponentInstanceId, ComponentSpecId, FleetId,
+            ManagedCanisterBinding, ReleaseSetDigest, SubnetId,
         },
     };
     use canic::{
@@ -115,7 +115,7 @@ mod tests {
                 RootComponentProvisioningStatusRequest, RootComponentProvisioningStatusResponse,
             },
             component_registry::{PeerComponentRequester, RootPeerComponentAllocationRequest},
-            fleet_registry::FleetRegistryVersion,
+            fleet_registry::{FleetRegistryVersion, FleetServiceMode},
             placement::index::PlacementIndexStatusResponse,
         },
         ids::ComponentGroupPlacementId,
@@ -139,7 +139,13 @@ mod tests {
     };
     use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
     #[cfg(test)]
-    use canic_core::control_plane_support::ops::component_provisioning_plan::ComponentProvisioningPlanOps;
+    use canic_core::control_plane_support::config::{
+        ComponentDeploymentPurpose, ComponentGroupDeploymentSpec, FleetServiceMemberPurpose,
+    };
+    #[cfg(test)]
+    use canic_core::control_plane_support::ops::{
+        component_provisioning_plan::ComponentProvisioningPlanOps, fleet_registry::FleetRegistryOps,
+    };
     use canic_host::release_set::AppConfigSnapshot;
     use flate2::{Compression, write::GzEncoder};
     use std::{
@@ -283,6 +289,9 @@ mod tests {
     };
 
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
+    const DATABASE_A_PACKAGE: &str = "database_a_stub";
+    const DATABASE_B_PACKAGE: &str = "database_b_stub";
+    const DATABASE_C_PACKAGE: &str = "database_c_stub";
     const PROJECT_HUB_PACKAGE: &str = "project_hub_stub";
     const PROJECT_INSTANCE_PACKAGE: &str = "project_instance_stub";
     const PROJECT_LEDGER_PACKAGE: &str = "project_ledger_stub";
@@ -552,12 +561,26 @@ mod tests {
         service_registry: FleetRegistryVersion,
     }
 
+    #[cfg(test)]
+    struct TokoTopologyFixture {
+        pic: PocketIc,
+        coordinator: Principal,
+        roots: Vec<BootstrappedRootFixture>,
+        initial_registry: FleetRegistryVersion,
+        second_coordinator: Principal,
+        second_root: BootstrappedRootFixture,
+        wasm_footprints: BTreeMap<&'static str, (usize, usize)>,
+    }
+
     struct RootStoreFixture {
         manifest: RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
     }
 
     struct ComponentFixtureWasms {
+        database_a: Vec<u8>,
+        database_b: Vec<u8>,
+        database_c: Vec<u8>,
         issuer: Vec<u8>,
         project_hub: Vec<u8>,
         project_instance: Vec<u8>,
@@ -672,6 +695,9 @@ mod tests {
         assert_eq!(
             catalog_roles,
             vec![
+                CanisterRole::new("database_a"),
+                CanisterRole::new("database_b"),
+                CanisterRole::new("database_c"),
                 CanisterRole::new("issuer"),
                 CanisterRole::new("project_hub"),
                 CanisterRole::new("project_instance"),
@@ -805,8 +831,214 @@ mod tests {
             canic::dto::error::ErrorCode::Forbidden
         );
         let _ = join_and_synchronize_root(&pic, second_coordinator, &second);
-        assert_isolated_coordinator_registry(&pic, first_coordinator, &first, &second);
-        assert_isolated_coordinator_registry(&pic, second_coordinator, &second, &first);
+        assert_isolated_coordinator_registry(
+            &pic,
+            first_coordinator,
+            std::slice::from_ref(&first),
+            &second,
+        );
+        assert_isolated_coordinator_registry(
+            &pic,
+            second_coordinator,
+            std::slice::from_ref(&second),
+            &first,
+        );
+    }
+
+    #[test]
+    fn toko_qualification_config_reuses_database_specs_in_nested_project_cells() {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load Toko qualification configuration");
+        let deployments = config
+            .model()
+            .compile_component_group_deployment_topology()
+            .expect("compile Toko qualification deployments");
+        let authoritative = deployments
+            .get(
+                &"authoritative_databases"
+                    .parse()
+                    .expect("Authority deployment ID"),
+            )
+            .expect("Authority database deployment");
+        let project_cells = deployments
+            .get(
+                &"project_data_cells"
+                    .parse()
+                    .expect("project-cell deployment ID"),
+            )
+            .expect("nested project-cell deployment");
+
+        assert_eq!(authoritative.members.len(), 3);
+        assert_eq!(project_cells.members.len(), 4);
+        for database in ["database_a", "database_b", "database_c"] {
+            let authority = authoritative
+                .members
+                .iter()
+                .find(|member| member.component_spec.as_str() == database)
+                .expect("Authority database member");
+            let replica = project_cells
+                .members
+                .iter()
+                .find(|member| member.component_spec.as_str() == database)
+                .expect("nested Replica database member");
+            assert_eq!(authority.component_spec_hash, replica.component_spec_hash);
+            assert_eq!(authority.member_path.as_slice().len(), 1);
+            assert_eq!(replica.member_path.as_slice().len(), 2);
+            assert!(matches!(
+                &authority.purpose,
+                ComponentDeploymentPurpose::FleetServiceMember {
+                    service,
+                    member_purpose: FleetServiceMemberPurpose::Authority,
+                } if service.as_str() == database
+            ));
+            assert!(matches!(
+                &replica.purpose,
+                ComponentDeploymentPurpose::FleetServiceMember {
+                    service,
+                    member_purpose: FleetServiceMemberPurpose::Replica,
+                } if service.as_str() == database
+            ));
+        }
+
+        let hub = project_cells
+            .members
+            .iter()
+            .find(|member| member.component_spec.as_str() == "projects")
+            .expect("project-cell Hub member");
+        assert_eq!(hub.limits.maximum_descendants, 20_000);
+        assert_eq!(hub.limits.maximum_registry_bytes, 16_777_216);
+        assert!(matches!(
+            &hub.purpose,
+            ComponentDeploymentPurpose::FleetServiceMember {
+                service,
+                member_purpose: FleetServiceMemberPurpose::PoolMember,
+            } if service.as_str() == "project_hubs"
+        ));
+
+        let packed = deployments
+            .get(&"packed_projects".parse().expect("packed deployment ID"))
+            .expect("packed ActivePool deployment");
+        assert_eq!(packed.initial_placements, 2);
+        assert_eq!(packed.maximum_placements, 3);
+        assert_eq!(packed.placement.maximum_per_root, 2);
+        assert_eq!(packed.component_group.as_str(), "grouped_projects");
+        assert_eq!(packed.members[0].limits.spawn_grant_reductions.len(), 1);
+        assert_eq!(
+            packed.members[0].limits.spawn_grant_reductions[0].maximum_instances_per_parent,
+            2_000
+        );
+
+        let grouped = deployments
+            .get(&"grouped_projects".parse().expect("grouped deployment ID"))
+            .expect("grouped Project Hub deployment");
+        assert_eq!(grouped.component_group, packed.component_group);
+        assert!(grouped.members[0].limits.spawn_grant_reductions.is_empty());
+
+        let topology = config.component_topology();
+        let projects = topology
+            .component_specs
+            .iter()
+            .find(|spec| spec.component_spec.as_str() == "projects")
+            .expect("Project Hub Component Spec");
+        let instance_grant = projects
+            .spawn_grant(
+                &CanisterRole::new("project_hub"),
+                &CanisterRole::new("project_instance"),
+            )
+            .expect("Project Hub to Project Instance grant");
+        assert_eq!(instance_grant.maximum_instances_per_parent, 10_000);
+    }
+
+    #[test]
+    fn toko_topology_qualifies_scale_out_descendants_packing_and_fleet_isolation() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_toko_topology_qualification();
+        let registry = query_fleet_registry(&fixture.pic, fixture.coordinator);
+        let plan = toko_initial_provisioning_plan(&fixture, &registry);
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load Toko qualification configuration");
+        let initial_plan_bytes =
+            ComponentProvisioningPlanOps::canonical_bytes(config.model(), &registry, &plan)
+                .expect("encode Toko initial provisioning plan")
+                .len();
+        let prepared =
+            prepare_fleet_provisioning(&fixture.pic, fixture.coordinator, [0xf1; 32], plan);
+        let activated = drive_coordinator_provisioning(
+            &fixture.pic,
+            fixture.coordinator,
+            prepared,
+            FleetComponentProvisioningPhase::RuntimesActivated,
+        );
+
+        assert_eq!(activated.root_batch_count, 3);
+        assert_eq!(activated.accepted_root_count, 3);
+        assert_eq!(activated.provisioned_root_count, 3);
+        assert_eq!(activated.directory_confirmed_root_count, 3);
+        assert_eq!(activated.runtime_activated_root_count, 3);
+        let published = query_fleet_registry(&fixture.pic, fixture.coordinator);
+        assert_toko_initial_service_topology(&fixture, &published);
+
+        let project_cell_plan =
+            toko_scale_out_plan(&fixture, &published, "project_data_cells", 1, 2, 1, 2);
+        let project_cell_prepare = FleetComponentProvisioningPrepareRequest {
+            operation_id: [0xf2; 32],
+            plan: project_cell_plan,
+        };
+        let project_cell = prepare_fleet_provisioning_request(
+            &fixture.pic,
+            fixture.coordinator,
+            &project_cell_prepare,
+        );
+        let project_cell = drive_coordinator_provisioning_with_restarts(
+            &fixture.pic,
+            fixture.coordinator,
+            project_cell,
+        );
+        assert_terminal_scale_out(&project_cell, 3);
+
+        let after_project_cell = query_fleet_registry(&fixture.pic, fixture.coordinator);
+        let packed_plan =
+            toko_scale_out_plan(&fixture, &after_project_cell, "packed_projects", 2, 3, 2, 2);
+        let packed_prepare = FleetComponentProvisioningPrepareRequest {
+            operation_id: [0xf3; 32],
+            plan: packed_plan,
+        };
+        let packed =
+            prepare_fleet_provisioning_request(&fixture.pic, fixture.coordinator, &packed_prepare);
+        let packed =
+            drive_coordinator_provisioning_with_restarts(&fixture.pic, fixture.coordinator, packed);
+        assert_terminal_scale_out(&packed, 2);
+        let packed_replay =
+            prepare_fleet_provisioning_request(&fixture.pic, fixture.coordinator, &packed_prepare);
+        assert_eq!(packed_replay, packed);
+
+        let final_registry = query_fleet_registry(&fixture.pic, fixture.coordinator);
+        assert_toko_scaled_service_topology(&fixture, &final_registry);
+        provision_toko_project_trees(&fixture, &final_registry);
+        report_toko_qualification_metrics(
+            &fixture,
+            config.model(),
+            &final_registry,
+            initial_plan_bytes,
+        );
+        assert_eq!(
+            fixture.pic.get_subnet(fixture.roots[1].root_id),
+            fixture.pic.get_subnet(fixture.second_root.root_id)
+        );
+        assert_isolated_coordinator_registry(
+            &fixture.pic,
+            fixture.coordinator,
+            &fixture.roots,
+            &fixture.second_root,
+        );
+        assert_isolated_coordinator_registry(
+            &fixture.pic,
+            fixture.second_coordinator,
+            std::slice::from_ref(&fixture.second_root),
+            &fixture.roots[0],
+        );
     }
 
     #[cfg(test)]
@@ -889,7 +1121,7 @@ mod tests {
     fn assert_isolated_coordinator_registry(
         pic: &PocketIc,
         coordinator: Principal,
-        owned: &BootstrappedRootFixture,
+        owned: &[BootstrappedRootFixture],
         foreign: &BootstrappedRootFixture,
     ) {
         let registry: Result<FleetRegistry, Error> = pic
@@ -898,13 +1130,19 @@ mod tests {
         let registry = registry.expect("query isolated Coordinator Registry");
         assert_eq!(
             registry.authority.binding.fleet,
-            owned.init_args.authority.binding.authority.binding.fleet
+            owned[0].init_args.authority.binding.authority.binding.fleet
         );
-        assert_eq!(registry.fleet_subnet_roots.len(), 1);
-        assert_eq!(
-            registry.fleet_subnet_roots[0].fleet_subnet_root,
-            owned.root_id
-        );
+        assert_eq!(registry.fleet_subnet_roots.len(), owned.len());
+        let registered = registry
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| entry.fleet_subnet_root)
+            .collect::<std::collections::BTreeSet<_>>();
+        let expected = owned
+            .iter()
+            .map(|fixture| fixture.root_id)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(registered, expected);
         assert!(
             registry
                 .fleet_subnet_roots
@@ -1151,7 +1389,7 @@ mod tests {
                 .expect("Project Instance creates its optional Machine");
 
         assert_project_singleton_and_parent_guards(&fixture.pic, hub.canister_id, instance);
-        let entries = project_directory_entries(&fixture, &hub);
+        let entries = project_directory_entries(&fixture.pic, fixture.root.root_id, &hub);
         assert_project_child(
             &entries,
             instance,
@@ -1161,7 +1399,11 @@ mod tests {
         );
         assert_project_child(&entries, ledger, instance, "project_ledger", &hub);
         assert_project_child(&entries, machine, instance, "project_machine", &hub);
-        assert_project_tree_subnet(&fixture, [instance, ledger, machine]);
+        assert_project_tree_subnet(
+            &fixture.pic,
+            fixture.root.root_id,
+            &[instance, ledger, machine],
+        );
         assert_eq!(
             fleet_registry_version(&fixture.pic, fixture.coordinator),
             registry_before
@@ -1324,14 +1566,22 @@ mod tests {
     #[cfg(test)]
     fn drive_scale_out_with_coordinator_restarts(
         fixture: &ActiveCrossRootPeerFixture,
+        status: FleetComponentProvisioningStatusResponse,
+    ) -> FleetComponentProvisioningStatusResponse {
+        drive_coordinator_provisioning_with_restarts(&fixture.pic, fixture.coordinator, status)
+    }
+
+    #[cfg(test)]
+    fn drive_coordinator_provisioning_with_restarts(
+        pic: &PocketIc,
+        coordinator: Principal,
         mut status: FleetComponentProvisioningStatusResponse,
     ) -> FleetComponentProvisioningStatusResponse {
         while status.phase != FleetComponentProvisioningPhase::RuntimesActivated {
             let request = coordinator_advance_request(&status);
-            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
-                .pic
+            let advanced: Result<FleetComponentProvisioningStatusResponse, Error> = pic
                 .update_candid(
-                    fixture.coordinator,
+                    coordinator,
                     CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
                     (request,),
                 )
@@ -1346,18 +1596,13 @@ mod tests {
                     status.current_activation,
                 )
             });
-            fixture
-                .pic
-                .stop_canister(fixture.coordinator, None)
+            pic.stop_canister(coordinator, None)
                 .expect("stop Coordinator after durable scale-out step");
-            fixture
-                .pic
-                .start_canister(fixture.coordinator, None)
+            pic.start_canister(coordinator, None)
                 .expect("restart Coordinator after durable scale-out step");
-            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = fixture
-                .pic
+            let replayed: Result<FleetComponentProvisioningStatusResponse, Error> = pic
                 .update_candid(
-                    fixture.coordinator,
+                    coordinator,
                     CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
                     (request,),
                 )
@@ -1493,13 +1738,13 @@ mod tests {
 
     #[cfg(test)]
     fn project_directory_entries(
-        fixture: &PreparedGroupedProvisioningFixture,
+        pic: &PocketIc,
+        root: Principal,
         hub: &ComponentBinding,
     ) -> Vec<ComponentDirectoryChildEntry> {
-        let head: Result<ComponentDirectoryHead, Error> = fixture
-            .pic
+        let head: Result<ComponentDirectoryHead, Error> = pic
             .query_candid(
-                fixture.root.root_id,
+                root,
                 CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
                 (ComponentDirectoryHeadRequest {
                     component: hub.component,
@@ -1507,10 +1752,9 @@ mod tests {
             )
             .expect("query Project Hub Directory head transport");
         let head = head.expect("query Project Hub Directory head");
-        let page: Result<ComponentDirectoryPageResponse, Error> = fixture
-            .pic
+        let page: Result<ComponentDirectoryPageResponse, Error> = pic
             .query_candid_as(
-                fixture.root.root_id,
+                root,
                 hub.canister_id,
                 CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
                 (ComponentDirectoryPageRequest {
@@ -1547,21 +1791,17 @@ mod tests {
     }
 
     #[cfg(test)]
-    fn assert_project_tree_subnet(
-        fixture: &PreparedGroupedProvisioningFixture,
-        descendants: [Principal; 3],
-    ) {
-        let root_subnet = fixture
-            .pic
-            .get_subnet(fixture.root.root_id)
-            .expect("Project root Subnet");
+    fn assert_project_tree_subnet(pic: &PocketIc, root: Principal, descendants: &[Principal]) {
+        let root_subnet = pic.get_subnet(root).expect("Project root Subnet");
         for descendant in descendants {
-            assert_eq!(fixture.pic.get_subnet(descendant), Some(root_subnet));
-            let observed: Result<Principal, Error> = fixture
-                .pic
-                .query_candid(descendant, "canister_id", ())
+            assert_eq!(pic.get_subnet(*descendant), Some(root_subnet));
+            let observed: Result<Principal, Error> = pic
+                .query_candid(*descendant, "canister_id", ())
                 .expect("query live Project descendant transport");
-            assert_eq!(observed.expect("query live Project descendant"), descendant);
+            assert_eq!(
+                observed.expect("query live Project descendant"),
+                *descendant
+            );
         }
     }
 
@@ -3928,6 +4168,132 @@ mod tests {
     }
 
     #[cfg(test)]
+    fn setup_toko_topology_qualification() -> TokoTopologyFixture {
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_wasm = build_test_wasm_store_wasm();
+        let components = build_test_component_wasms();
+        let wasm_footprints = BTreeMap::from([
+            ("coordinator", wasm_footprint(&coordinator_wasm)),
+            ("fleet_subnet_root", wasm_footprint(&root_wasm)),
+            ("wasm_store", wasm_footprint(&store_wasm)),
+            ("database_a", wasm_footprint(&components.database_a)),
+            ("project_hub", wasm_footprint(&components.project_hub)),
+            (
+                "project_instance",
+                wasm_footprint(&components.project_instance),
+            ),
+            ("project_ledger", wasm_footprint(&components.project_ledger)),
+            (
+                "project_machine",
+                wasm_footprint(&components.project_machine),
+            ),
+        ]);
+        let pic = build_three_application_subnet_pic();
+        let mut application_subnets = pic.topology().get_app_subnets();
+        application_subnets.sort();
+        let [
+            authority_subnet,
+            first_project_subnet,
+            second_project_subnet,
+        ] = application_subnets.as_slice()
+        else {
+            panic!("Toko qualification requires exactly three application Subnets")
+        };
+        let coordinator = pic.create_canister_on_subnet(None, None, *authority_subnet);
+        let second_coordinator = pic.create_canister_on_subnet(None, None, *first_project_subnet);
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        pic.add_cycles(second_coordinator, COORDINATOR_INSTALL_CYCLES);
+
+        let roots = vec![
+            install_qualification_root_on_subnet(
+                &pic,
+                root_wasm.clone(),
+                coordinator,
+                build_root_store_fixture(),
+                *authority_subnet,
+                qualification_admissions(1, 1),
+            ),
+            install_qualification_root_on_subnet(
+                &pic,
+                root_wasm.clone(),
+                coordinator,
+                build_root_store_fixture(),
+                *first_project_subnet,
+                qualification_admissions(1, 10),
+            ),
+            install_qualification_root_on_subnet(
+                &pic,
+                root_wasm.clone(),
+                coordinator,
+                build_root_store_fixture(),
+                *second_project_subnet,
+                qualification_admissions(1, 4),
+            ),
+        ];
+        let second_root = install_bootstrapped_root_for_fleet_on_subnet(
+            &pic,
+            root_wasm,
+            second_coordinator,
+            build_root_store_fixture(),
+            *first_project_subnet,
+            0xf2,
+        );
+        install_fixture_coordinator(&pic, coordinator, coordinator_wasm.clone(), &roots[0]);
+        install_fixture_coordinator(&pic, second_coordinator, coordinator_wasm, &second_root);
+
+        let root_refs = roots.iter().collect::<Vec<_>>();
+        let (joining_version, sync_requests) =
+            join_and_synchronize_roots(&pic, coordinator, &root_refs);
+        let initial_registry = activate_registry_and_prepare_component_registries(
+            &pic,
+            coordinator,
+            &root_refs,
+            joining_version,
+            &sync_requests,
+        );
+        let (second_joining, second_sync) =
+            join_and_synchronize_root(&pic, second_coordinator, &second_root);
+        let _ = activate_registry_and_prepare_component_registry(
+            &pic,
+            second_coordinator,
+            &second_root,
+            second_joining,
+            second_sync,
+        );
+
+        TokoTopologyFixture {
+            pic,
+            coordinator,
+            roots,
+            initial_registry,
+            second_coordinator,
+            second_root,
+            wasm_footprints,
+        }
+    }
+
+    #[cfg(test)]
+    fn wasm_footprint(wasm: &[u8]) -> (usize, usize) {
+        (wasm.len(), gzip(wasm).len())
+    }
+
+    #[cfg(test)]
+    fn qualification_admissions(
+        database_instances: u32,
+        project_instances: u32,
+    ) -> BTreeMap<ComponentSpecId, u32> {
+        let component_spec = |value: &str| value.parse().expect("qualification Component Spec ID");
+        BTreeMap::from([
+            (component_spec("database_a"), database_instances),
+            (component_spec("database_b"), database_instances),
+            (component_spec("database_c"), database_instances),
+            (component_spec("issuer"), 1),
+            (component_spec("projects"), project_instances),
+        ])
+    }
+
+    #[cfg(test)]
     fn assert_root_local_physical_inventory(pic: &PocketIc, fixture: &BootstrappedRootFixture) {
         let expected_subnet = *fixture
             .init_args
@@ -4158,6 +4524,589 @@ mod tests {
             plan_hash,
             batch,
         }
+    }
+
+    #[cfg(test)]
+    fn toko_initial_provisioning_plan(
+        fixture: &TokoTopologyFixture,
+        registry: &FleetRegistry,
+    ) -> FleetComponentProvisioningPlan {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load Toko provisioning configuration");
+        let deployments = config
+            .model()
+            .compile_component_group_deployment_topology()
+            .expect("compile Toko provisioning deployments");
+        let deployment = |name: &str| {
+            let id = name.parse().expect("Toko deployment ID");
+            deployments.get(&id).expect("Toko deployment")
+        };
+        let authority = planned_group_placement(deployment("authoritative_databases"), 0);
+        let mut first_project_placements = vec![
+            planned_group_placement(deployment("packed_projects"), 0),
+            planned_group_placement(deployment("packed_projects"), 1),
+            planned_group_placement(deployment("project_data_cells"), 0),
+        ];
+        first_project_placements.sort_by(|left, right| {
+            left.group_placement
+                .deployment
+                .cmp(&right.group_placement.deployment)
+                .then(
+                    left.group_placement
+                        .ordinal
+                        .cmp(&right.group_placement.ordinal),
+                )
+        });
+        let mut batches = vec![
+            root_provisioning_batch(&fixture.roots[0], vec![authority]),
+            root_provisioning_batch(&fixture.roots[1], first_project_placements),
+            root_provisioning_batch(
+                &fixture.roots[2],
+                vec![planned_group_placement(deployment("grouped_projects"), 0)],
+            ),
+        ];
+        batches.sort_by_key(|batch| batch.root.fleet_subnet_root);
+        let mut directory_confirmation_roots = fixture
+            .roots
+            .iter()
+            .map(|root| root.root_id)
+            .collect::<Vec<_>>();
+        directory_confirmation_roots.sort();
+
+        FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry: fixture.initial_registry.clone(),
+            configuration_digest: config
+                .model()
+                .compile_component_deployment_configuration_digest()
+                .expect("compile Toko configuration digest"),
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            directory_confirmation_roots,
+            batches,
+        }
+    }
+
+    #[cfg(test)]
+    fn planned_group_placement(
+        deployment: &ComponentGroupDeploymentSpec,
+        ordinal: u32,
+    ) -> ComponentGroupPlacementPlan {
+        let entries = deployment
+            .members
+            .iter()
+            .map(|member| ComponentGroupPlanEntry {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                spec_hash: member.component_spec_hash,
+                purpose: member.purpose.clone(),
+                labels: member.labels.clone(),
+                limits: member.limits.clone(),
+            })
+            .collect();
+        ComponentGroupPlacementPlan {
+            group_placement: ComponentGroupPlacementId {
+                deployment: deployment.deployment.clone(),
+                ordinal,
+            },
+            component_group: deployment.component_group.clone(),
+            entries,
+        }
+    }
+
+    #[cfg(test)]
+    fn root_provisioning_batch(
+        root: &BootstrappedRootFixture,
+        placements: Vec<ComponentGroupPlacementPlan>,
+    ) -> FleetSubnetRootProvisioningBatch {
+        FleetSubnetRootProvisioningBatch {
+            root: root.init_args.authority.binding.clone(),
+            active_release_set: root.init_args.authority.initial_release_set,
+            placements,
+        }
+    }
+
+    #[cfg(test)]
+    fn prepare_fleet_provisioning(
+        pic: &PocketIc,
+        coordinator: Principal,
+        operation_id: [u8; 32],
+        plan: FleetComponentProvisioningPlan,
+    ) -> FleetComponentProvisioningStatusResponse {
+        let prepared: Result<FleetComponentProvisioningStatusResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (FleetComponentProvisioningPrepareRequest { operation_id, plan },),
+            )
+            .expect("prepare Fleet provisioning transport");
+        let prepared = prepared.expect("prepare Fleet provisioning");
+        assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
+        prepared
+    }
+
+    #[cfg(test)]
+    fn prepare_fleet_provisioning_request(
+        pic: &PocketIc,
+        coordinator: Principal,
+        request: &FleetComponentProvisioningPrepareRequest,
+    ) -> FleetComponentProvisioningStatusResponse {
+        let prepared: Result<FleetComponentProvisioningStatusResponse, Error> = pic
+            .update_candid(
+                coordinator,
+                CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
+                (request.clone(),),
+            )
+            .expect("prepare Fleet scale-out transport");
+        prepared.expect("prepare Fleet scale-out")
+    }
+
+    #[cfg(test)]
+    fn toko_scale_out_plan(
+        fixture: &TokoTopologyFixture,
+        registry: &FleetRegistry,
+        deployment_name: &str,
+        previous_placements: u32,
+        requested_placements: u32,
+        ordinal: u32,
+        target_root: usize,
+    ) -> FleetComponentProvisioningPlan {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load Toko scale-out configuration");
+        let deployments = config
+            .model()
+            .compile_component_group_deployment_topology()
+            .expect("compile Toko scale-out deployments");
+        let deployment_id = deployment_name
+            .parse()
+            .expect("Toko scale-out deployment ID");
+        let deployment = deployments
+            .get(&deployment_id)
+            .expect("Toko scale-out deployment");
+        let root = &fixture.roots[target_root];
+        let batch =
+            root_provisioning_batch(root, vec![planned_group_placement(deployment, ordinal)]);
+        let mut confirmation_roots = std::collections::BTreeSet::from([root.root_id]);
+        for member in &deployment.members {
+            let ComponentDeploymentPurpose::FleetServiceMember { service, .. } = &member.purpose
+            else {
+                continue;
+            };
+            let existing = fleet_service(registry, service.as_str());
+            confirmation_roots.extend(
+                existing
+                    .members
+                    .iter()
+                    .map(|binding| binding.fleet_subnet_root),
+            );
+        }
+
+        FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry: fleet_registry_version(&fixture.pic, fixture.coordinator),
+            configuration_digest: config
+                .model()
+                .compile_component_deployment_configuration_digest()
+                .expect("compile Toko scale-out configuration digest"),
+            operation: FleetComponentProvisioningOperation::ScaleOut {
+                deployment: deployment.deployment.clone(),
+                previous_placements,
+                requested_placements,
+            },
+            directory_confirmation_roots: confirmation_roots.into_iter().collect(),
+            batches: vec![batch],
+        }
+    }
+
+    #[cfg(test)]
+    fn query_fleet_registry(pic: &PocketIc, coordinator: Principal) -> FleetRegistry {
+        let registry: Result<FleetRegistry, Error> = pic
+            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
+            .expect("query Fleet Registry transport");
+        registry.expect("query Fleet Registry")
+    }
+
+    #[cfg(test)]
+    fn assert_toko_initial_service_topology(
+        fixture: &TokoTopologyFixture,
+        registry: &FleetRegistry,
+    ) {
+        for database in ["database_a", "database_b", "database_c"] {
+            let service = fleet_service(registry, database);
+            assert_eq!(service.mode, FleetServiceMode::AuthorityReplica);
+            assert_eq!(service.members.len(), 2);
+            assert!(service.members.iter().any(|member| {
+                member.member_purpose == FleetServiceMemberPurpose::Authority
+                    && member.fleet_subnet_root == fixture.roots[0].root_id
+            }));
+            assert!(service.members.iter().any(|member| {
+                member.member_purpose == FleetServiceMemberPurpose::Replica
+                    && member.fleet_subnet_root == fixture.roots[1].root_id
+            }));
+        }
+        let project_hubs = fleet_service(registry, "project_hubs");
+        assert_eq!(project_hubs.mode, FleetServiceMode::ActivePool);
+        assert_eq!(project_hubs.members.len(), 1);
+        assert_eq!(
+            project_hubs.members[0].fleet_subnet_root,
+            fixture.roots[1].root_id
+        );
+        let projects = fleet_service(registry, "projects");
+        assert_eq!(projects.mode, FleetServiceMode::ActivePool);
+        assert_eq!(projects.members.len(), 3);
+        assert_eq!(
+            projects
+                .members
+                .iter()
+                .filter(|member| member.fleet_subnet_root == fixture.roots[1].root_id)
+                .count(),
+            2
+        );
+        assert!(
+            projects
+                .members
+                .iter()
+                .any(|member| member.fleet_subnet_root == fixture.roots[2].root_id)
+        );
+        for service in &registry.services {
+            for member in &service.members {
+                assert_eq!(
+                    fixture.pic.get_subnet(member.canister_id),
+                    fixture.pic.get_subnet(member.fleet_subnet_root)
+                );
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_terminal_scale_out(
+        status: &FleetComponentProvisioningStatusResponse,
+        expected_confirmation_roots: u32,
+    ) {
+        assert_eq!(
+            status.phase,
+            FleetComponentProvisioningPhase::RuntimesActivated
+        );
+        assert_eq!(status.accepted_root_count, 1);
+        assert_eq!(status.provisioned_root_count, 1);
+        assert_eq!(
+            status.directory_confirmed_root_count,
+            expected_confirmation_roots
+        );
+        assert_eq!(status.runtime_activated_root_count, 1);
+        assert!(status.published_fleet_registry.is_some());
+    }
+
+    #[cfg(test)]
+    fn assert_toko_scaled_service_topology(
+        fixture: &TokoTopologyFixture,
+        registry: &FleetRegistry,
+    ) {
+        for database in ["database_a", "database_b", "database_c"] {
+            let service = fleet_service(registry, database);
+            assert_eq!(service.members.len(), 3);
+            for (root_index, purpose) in [
+                (0, FleetServiceMemberPurpose::Authority),
+                (1, FleetServiceMemberPurpose::Replica),
+                (2, FleetServiceMemberPurpose::Replica),
+            ] {
+                assert!(service.members.iter().any(|member| {
+                    member.fleet_subnet_root == fixture.roots[root_index].root_id
+                        && member.member_purpose == purpose
+                }));
+            }
+        }
+
+        let project_hubs = fleet_service(registry, "project_hubs");
+        assert_eq!(project_hubs.members.len(), 2);
+        assert_eq!(
+            project_hubs
+                .members
+                .iter()
+                .map(|member| member.fleet_subnet_root)
+                .collect::<std::collections::BTreeSet<_>>(),
+            std::collections::BTreeSet::from([fixture.roots[1].root_id, fixture.roots[2].root_id,])
+        );
+
+        let projects = fleet_service(registry, "projects");
+        assert_eq!(projects.members.len(), 4);
+        for root in [&fixture.roots[1], &fixture.roots[2]] {
+            assert_eq!(
+                projects
+                    .members
+                    .iter()
+                    .filter(|member| member.fleet_subnet_root == root.root_id)
+                    .count(),
+                2
+            );
+        }
+        assert_project_service_runtime_limits(fixture, projects);
+        for service in &registry.services {
+            for member in &service.members {
+                assert_eq!(
+                    fixture.pic.get_subnet(member.canister_id),
+                    fixture.pic.get_subnet(member.fleet_subnet_root)
+                );
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_project_service_runtime_limits(
+        fixture: &TokoTopologyFixture,
+        service: &canic::dto::fleet_registry::FleetServiceBinding,
+    ) {
+        let mut deployment_counts = BTreeMap::<String, usize>::new();
+        for member in &service.members {
+            let runtime = active_service_runtime(&fixture.pic, member);
+            let ProtectedComponentDeployment::GroupMember {
+                group_placement,
+                limits,
+                ..
+            } = runtime.deployment.as_ref()
+            else {
+                panic!("Project Hub service member must retain grouped deployment authority")
+            };
+            *deployment_counts
+                .entry(group_placement.deployment.to_string())
+                .or_default() += 1;
+            match group_placement.deployment.as_str() {
+                "grouped_projects" => assert!(limits.spawn_grant_reductions.is_empty()),
+                "packed_projects" => {
+                    assert_eq!(limits.spawn_grant_reductions.len(), 1);
+                    assert_eq!(
+                        limits.spawn_grant_reductions[0].maximum_instances_per_parent,
+                        2_000
+                    );
+                }
+                deployment => panic!("unexpected Project Hub deployment {deployment}"),
+            }
+        }
+        assert_eq!(deployment_counts.get("grouped_projects"), Some(&1));
+        assert_eq!(deployment_counts.get("packed_projects"), Some(&3));
+    }
+
+    #[cfg(test)]
+    fn provision_toko_project_trees(fixture: &TokoTopologyFixture, registry: &FleetRegistry) {
+        let registry_before = fleet_registry_version(&fixture.pic, fixture.coordinator);
+        let service = fleet_service(registry, "project_hubs");
+        let mut hubs = service
+            .members
+            .iter()
+            .map(|member| active_service_component(&fixture.pic, member))
+            .collect::<Vec<_>>();
+        hubs.sort_by_key(|hub| hub.fleet_subnet_root);
+        let [first_hub, second_hub] = hubs.as_slice() else {
+            panic!("Toko qualification requires two project-data-cell Hubs")
+        };
+        let first_tree = provision_qualified_project_tree(
+            &fixture.pic,
+            first_hub,
+            &[
+                ("qualification-project-alpha", [0xf4; 32]),
+                ("qualification-project-beta", [0xf5; 32]),
+            ],
+            None,
+        );
+        let second_tree = provision_qualified_project_tree(
+            &fixture.pic,
+            second_hub,
+            &[("qualification-project-gamma", [0xf6; 32])],
+            Some([0xf7; 32]),
+        );
+        let first_entries = assert_qualified_project_tree(&fixture.pic, &first_tree);
+        let second_entries = assert_qualified_project_tree(&fixture.pic, &second_tree);
+        assert_eq!(
+            first_entries
+                .iter()
+                .chain(&second_entries)
+                .filter(|entry| entry.binding.role.as_str() == "project_machine")
+                .count(),
+            1
+        );
+        assert_eq!(
+            fleet_registry_version(&fixture.pic, fixture.coordinator),
+            registry_before,
+            "dynamic descendants must not mutate Fleet Registry topology"
+        );
+    }
+
+    #[cfg(test)]
+    struct QualifiedProjectTree {
+        hub: ComponentBinding,
+        instances: Vec<Principal>,
+        ledgers: Vec<Principal>,
+        machine: Option<Principal>,
+    }
+
+    #[cfg(test)]
+    fn provision_qualified_project_tree(
+        pic: &PocketIc,
+        hub: &ComponentBinding,
+        projects: &[(&str, [u8; 32])],
+        machine_operation_id: Option<[u8; 32]>,
+    ) -> QualifiedProjectTree {
+        let instances = projects
+            .iter()
+            .map(|(project, _)| resolve_project_instance(pic, hub.canister_id, project))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            resolve_project_instance(pic, hub.canister_id, projects[0].0),
+            instances[0]
+        );
+        let ledgers = instances
+            .iter()
+            .zip(projects)
+            .map(|(instance, (_, operation_id))| {
+                create_project_descendant(pic, *instance, "create_project_ledger", *operation_id)
+                    .expect("Project Instance creates its Ledger")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            create_project_descendant(pic, instances[0], "create_project_ledger", projects[0].1,)
+                .expect("Ledger exact retry"),
+            ledgers[0]
+        );
+        let machine = machine_operation_id.map(|operation_id| {
+            create_project_descendant(pic, instances[0], "create_project_machine", operation_id)
+                .expect("one Project Instance creates its optional Machine")
+        });
+        QualifiedProjectTree {
+            hub: hub.clone(),
+            instances,
+            ledgers,
+            machine,
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_qualified_project_tree(
+        pic: &PocketIc,
+        tree: &QualifiedProjectTree,
+    ) -> Vec<ComponentDirectoryChildEntry> {
+        let entries = project_directory_entries(pic, tree.hub.fleet_subnet_root, &tree.hub);
+        for instance in &tree.instances {
+            assert_project_child(
+                &entries,
+                *instance,
+                tree.hub.canister_id,
+                "project_instance",
+                &tree.hub,
+            );
+        }
+        for (instance, ledger) in tree.instances.iter().zip(&tree.ledgers) {
+            assert_project_child(&entries, *ledger, *instance, "project_ledger", &tree.hub);
+        }
+        if let Some(machine) = tree.machine {
+            assert_project_child(
+                &entries,
+                machine,
+                tree.instances[0],
+                "project_machine",
+                &tree.hub,
+            );
+        }
+        let mut descendants = tree.instances.clone();
+        descendants.extend(&tree.ledgers);
+        descendants.extend(tree.machine);
+        assert_project_tree_subnet(pic, tree.hub.fleet_subnet_root, &descendants);
+        entries
+    }
+
+    #[cfg(test)]
+    fn active_service_component(
+        pic: &PocketIc,
+        member: &canic::dto::fleet_registry::FleetServiceComponentBinding,
+    ) -> ComponentBinding {
+        let runtime = active_service_runtime(pic, member);
+        let ManagedCanisterBinding::Component(binding) = runtime.binding else {
+            panic!("Fleet-service member must remain a top-level Component")
+        };
+        assert_eq!(binding.component, member.component);
+        binding
+    }
+
+    #[cfg(test)]
+    fn active_service_runtime(
+        pic: &PocketIc,
+        member: &canic::dto::fleet_registry::FleetServiceComponentBinding,
+    ) -> ComponentRuntimeStatusResponse {
+        let response: Result<ComponentRuntimeStatusResponse, Error> = pic
+            .query_candid_as(
+                member.canister_id,
+                member.fleet_subnet_root,
+                CANIC_COMPONENT_RUNTIME_STATUS,
+                (),
+            )
+            .expect("query active Fleet-service member transport");
+        let runtime = response.expect("query active Fleet-service member");
+        assert_eq!(runtime.phase, ComponentRuntimePhase::Active);
+        runtime
+    }
+
+    #[cfg(test)]
+    fn report_toko_qualification_metrics(
+        fixture: &TokoTopologyFixture,
+        config: &canic_core::bootstrap::compiled::ConfigModel,
+        registry: &FleetRegistry,
+        initial_plan_bytes: usize,
+    ) {
+        let topology = config
+            .compile_component_topology()
+            .expect("compile Toko qualification Component topology");
+        let registry_bytes =
+            FleetRegistryOps::canonical_bytes(&registry.authority, &topology, registry)
+                .expect("encode final Toko Fleet Registry")
+                .len();
+        let maximum_directory_bytes = fixture
+            .roots
+            .iter()
+            .map(|root| {
+                let directory = FleetRegistryOps::directory_for_root(
+                    &registry.authority,
+                    &topology,
+                    registry,
+                    root.root_id,
+                )
+                .expect("derive Toko Fleet Directory");
+                encode_one(directory)
+                    .expect("encode Toko Fleet Directory")
+                    .len()
+            })
+            .max()
+            .expect("Toko qualification has roots");
+        let service_members = registry
+            .services
+            .iter()
+            .map(|service| service.members.len())
+            .sum::<usize>();
+        eprintln!(
+            "Toko qualification envelope: roots={} deployments=4 placements=7 top_level_components=15 services={} service_members={} initial_plan_bytes={} final_registry_bytes={} maximum_directory_candid_bytes={}",
+            registry.fleet_subnet_roots.len(),
+            registry.services.len(),
+            service_members,
+            initial_plan_bytes,
+            registry_bytes,
+            maximum_directory_bytes,
+        );
+        for (role, (raw_bytes, gzip_bytes)) in &fixture.wasm_footprints {
+            eprintln!(
+                "Toko qualification Wasm: role={role} raw_bytes={raw_bytes} gzip_bytes={gzip_bytes}"
+            );
+        }
+    }
+
+    #[cfg(test)]
+    fn fleet_service<'a>(
+        registry: &'a FleetRegistry,
+        service: &str,
+    ) -> &'a canic::dto::fleet_registry::FleetServiceBinding {
+        registry
+            .services
+            .iter()
+            .find(|binding| binding.service.as_str() == service)
+            .unwrap_or_else(|| panic!("missing Fleet service {service}"))
     }
 
     #[cfg(test)]
@@ -6390,8 +7339,20 @@ mod tests {
     struct BootstrappedRootPlacement {
         coordinator_subnet: Option<Principal>,
         root_subnet: Option<Principal>,
-        maximum_root_instances: Option<u32>,
+        component_admission_limits: Option<RootComponentAdmissionLimits>,
         fleet_id: Option<FleetId>,
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the exact-Subnet PocketIC variants are test-only while shared fixture installation retains the optional field"
+        )
+    )]
+    enum RootComponentAdmissionLimits {
+        Uniform(u32),
+        Exact(BTreeMap<ComponentSpecId, u32>),
     }
 
     #[cfg(test)]
@@ -6413,7 +7374,7 @@ mod tests {
             BootstrappedRootPlacement {
                 coordinator_subnet: Some(coordinator_subnet),
                 root_subnet: Some(placement_subnet),
-                maximum_root_instances: Some(1),
+                component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                 fleet_id: None,
             },
             create_prepaid_pool_assets,
@@ -6442,8 +7403,39 @@ mod tests {
             BootstrappedRootPlacement {
                 coordinator_subnet: Some(coordinator_subnet),
                 root_subnet: Some(placement_subnet),
-                maximum_root_instances: Some(1),
+                component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                 fleet_id: Some(FleetId::from_generated_bytes([fleet_id_byte; 32])),
+            },
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(pic, fixture.root_id);
+        fixture
+    }
+
+    #[cfg(test)]
+    fn install_qualification_root_on_subnet(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement_subnet: Principal,
+        component_admission_limits: BTreeMap<ComponentSpecId, u32>,
+    ) -> BootstrappedRootFixture {
+        let coordinator_subnet = pic
+            .get_subnet(coordinator)
+            .expect("PocketIC Coordinator placement Subnet identity");
+        let fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                coordinator_subnet: Some(coordinator_subnet),
+                root_subnet: Some(placement_subnet),
+                component_admission_limits: Some(RootComponentAdmissionLimits::Exact(
+                    component_admission_limits,
+                )),
+                fleet_id: None,
             },
             create_prepaid_pool_assets,
         );
@@ -6469,7 +7461,7 @@ mod tests {
             BootstrappedRootPlacement {
                 coordinator_subnet: None,
                 root_subnet: None,
-                maximum_root_instances: None,
+                component_admission_limits: None,
                 fleet_id: None,
             },
             pool_setup,
@@ -6527,9 +7519,19 @@ mod tests {
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
         bind_fixture_fleet_id(&mut init_args, placement.fleet_id);
-        if let Some(maximum_root_instances) = placement.maximum_root_instances {
+        if let Some(component_admission_limits) = placement.component_admission_limits {
             for admission in &mut init_args.authority.binding.component_admissions {
-                admission.maximum_root_instances = maximum_root_instances;
+                admission.maximum_root_instances = match &component_admission_limits {
+                    RootComponentAdmissionLimits::Uniform(limit) => *limit,
+                    RootComponentAdmissionLimits::Exact(limits) => {
+                        *limits.get(&admission.component_spec).unwrap_or_else(|| {
+                            panic!(
+                                "missing qualification admission for Component Spec '{}'",
+                                admission.component_spec
+                            )
+                        })
+                    }
+                };
             }
             let config = AppConfigSnapshot::load(&config_path).expect("reload root config");
             init_args.authority.binding.component_topology_digest = config
@@ -6747,6 +7749,18 @@ mod tests {
         let mut artifacts = BTreeMap::new();
         let fixture_wasms = build_test_component_wasms();
         let real_modules = BTreeMap::from([
+            (
+                CanisterRole::new("database_a"),
+                fixture_wasms.database_a.clone(),
+            ),
+            (
+                CanisterRole::new("database_b"),
+                fixture_wasms.database_b.clone(),
+            ),
+            (
+                CanisterRole::new("database_c"),
+                fixture_wasms.database_c.clone(),
+            ),
             (CanisterRole::new("issuer"), fixture_wasms.issuer.clone()),
             (
                 CanisterRole::new("project_hub"),
@@ -6850,6 +7864,9 @@ mod tests {
                 &workspace_root,
                 &target_dir,
                 &[
+                    DATABASE_A_PACKAGE,
+                    DATABASE_B_PACKAGE,
+                    DATABASE_C_PACKAGE,
                     ISSUER_PACKAGE,
                     PROJECT_HUB_PACKAGE,
                     PROJECT_INSTANCE_PACKAGE,
@@ -6864,6 +7881,9 @@ mod tests {
             );
             let profile = CanicWasmBuildProfile::Fast.target_dir_name();
             ComponentFixtureWasms {
+                database_a: read_wasm(&target_dir, DATABASE_A_PACKAGE, profile),
+                database_b: read_wasm(&target_dir, DATABASE_B_PACKAGE, profile),
+                database_c: read_wasm(&target_dir, DATABASE_C_PACKAGE, profile),
                 issuer: read_wasm(&target_dir, ISSUER_PACKAGE, profile),
                 project_hub: read_wasm(&target_dir, PROJECT_HUB_PACKAGE, profile),
                 project_instance: read_wasm(&target_dir, PROJECT_INSTANCE_PACKAGE, profile),

@@ -100,6 +100,20 @@ pub(super) fn build_two_application_subnet_pic() -> PocketIc {
     pic
 }
 
+// Build one independent PocketIC instance with three physical application Subnets.
+#[cfg(test)]
+pub(super) fn build_three_application_subnet_pic() -> PocketIc {
+    progress("starting three-application-Subnet PocketIC instance");
+    let pic = PocketIcBuilder::new()
+        .with_ii_subnet()
+        .with_application_subnet()
+        .with_application_subnet()
+        .with_application_subnet()
+        .build();
+    progress("three-application-Subnet PocketIC instance ready");
+    pic
+}
+
 // Build the test canisters once for the shared Fleet Registry fixtures.
 fn build_canisters_once(workspace_root: &Path) {
     let _serial_guard = CANISTER_BUILD_SERIAL

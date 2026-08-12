@@ -1276,6 +1276,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
+name = "database_a_stub"
+version = "0.101.51"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
+name = "database_b_stub"
+version = "0.101.51"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
+name = "database_c_stub"
+version = "0.101.51"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "delegation_issuer_stub"
 version = "0.101.51"
 dependencies = [
