@@ -41,7 +41,7 @@ It is also separate from:
   canister-runtime support. `canic-host` runs on the operator machine and may
   call Cargo, `icp`, and the local filesystem.
 
-Current 0.100 installation flow:
+Maintained installation flow:
 
 - compile the App's complete Component Topology and resolve the required
   operator Fleet input before effects
@@ -61,9 +61,10 @@ Current 0.100 installation flow:
   Registry as all-`Active`
 - atomically activate and independently verify every root's exact all-`Active`
   Registry Mirror and Registry-derived Fleet Directory
-- seal each root's exact empty initial Component inventory, independently
-  activate its runtime, and publish the terminal Coordinator-anchored Fleet
-  catalog only after every root is reverified
+- provision and activate configured initial Components through root-local
+  journals, then seal each root's exact initial inventory
+- independently activate every selected root and publish the terminal
+  Coordinator-anchored Fleet catalog only after every root is reverified
 
 The local driver permits one clean local `icp` restart attempt when
 `icp ping local` fails. Exact journals own same-release interruption recovery;
@@ -87,8 +88,8 @@ package must declare the App-scoped role it implements in Cargo metadata:
 
 ```toml
 [package.metadata.canic]
-app = "project"
-role = "project_ledger"
+app = "example"
+role = "ledger"
 ```
 
 For `canic install`, the implicit environment default is always `local`; use

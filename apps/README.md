@@ -40,17 +40,15 @@ same host artifact builder used by `canic install`.
 
 - Inspect the source topology: `canic app config test --verbose`
 - Build one role: `canic build test app --profile fast`
-- Exercise the current install boundary:
+- Install the managed test Fleet:
   `canic install test test-local --fleet-input <path> --profile fast`
 - Create/build test canisters manually: `icp deploy -e test`
 
-The 0.100 installer currently verifies the Coordinator, all planned roots,
-each root-local Store, and every root's Registry `Joining` row before stopping
-at the snapshot-synchronization boundary. It does not yet create the
-configured `app`, `user_hub`, `user_shard`,
-`scale_hub`, or `scale` Components/descendants. Once the terminal
-Coordinator/Registry/Component lifecycle is implemented, the demo's intended
-sharding walkthrough is `demo_user_hub_plan("alice")`,
+The installer provisions and activates the configured top-level `app`, `test`,
+`user_hub`, and `scale_hub` Components before terminal Fleet publication.
+`user_shard` and `scale_replica` descendants are created only by later
+application/runtime requests. The demo sharding walkthrough is
+`demo_user_hub_plan("alice")`,
 `demo_user_hub_assign("alice")`, then
 `demo_user_shard_describe("alice")` on the returned shard.
 

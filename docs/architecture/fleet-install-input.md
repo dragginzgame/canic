@@ -183,20 +183,16 @@ release-set manifest for every planned root. The durable plan contains exact
 Subnets and positive funding—not unresolved selectors—and is published before
 any Canister creation effect.
 
-## Current Implementation Boundary
+## Installation Boundary
 
-The in-progress 0.100 installer uses that immutable authority to create,
-install, and independently verify the Coordinator, every planned Fleet Subnet
-Root, one exact topology-admitted local Store per root, and every exact
-Registry `Joining` row. It currently stops after all roots reach
-`RegistrySyncVerified` only long enough to atomically commit and independently
-verify the complete Coordinator Registry as `Active`, with an exact private
-snapshot candidate and Coordinator acknowledgement retained at every root.
-It then atomically replaces each private candidate with the exact all-`Active`
-Registry Mirror and Registry-derived Fleet Directory and independently
-reverifies every result. Every root remains runtime-`Prepared`; Component
-creation, runtime activation and terminal Fleet-catalog publication remain
-fenced.
+The installer uses that immutable authority to create, install, and
+independently verify the Coordinator, every planned Fleet Subnet Root, one
+exact topology-admitted local Store per root, and every Registry row. It then
+commits the complete active Registry, installs each root's exact Mirror and
+Registry-derived Directories, provisions the configured initial Components
+through root-local journals, activates their runtime and Registry membership,
+seals initial inventory, activates every selected root, and publishes the
+terminal Coordinator-anchored Fleet catalog.
 
 Repeating an exact input is same-release journal recovery. Changing placement,
 admissions, limits, funding, topology, or release-build authority after
@@ -206,8 +202,8 @@ path. Every pre-1.0 release transition starts from empty Fleet state.
 Successful terminal publication is Coordinator-anchored.
 `canic info subnets <fleet> [--json]` resolves that terminal authority and
 reports exact Fleet-owned Canister counts by occupied physical Subnet. It
-fails closed while installation remains before the terminal catalog boundary
-or when current Coordinator/root evidence is incomplete. Root rows expose
+fails closed before the terminal catalog boundary or when current
+Coordinator/root evidence is incomplete. Root rows expose
 pooled Canisters separately and include them in their exact totals.
 
 Each root's controller-only `canic_pool_list` query supplies the detailed,

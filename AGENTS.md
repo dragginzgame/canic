@@ -19,12 +19,6 @@ with this file, the code is wrong.
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for
   commands, git boundaries, versioning, release, network selection, and
   automation language rules. Do not duplicate its rules here.
-- Automated agents must never change Cargo package versions unless the
-  maintainer explicitly asks for a version bump, release-preparation version
-  change, or exact version correction. This includes
-  `workspace.package.version`, workspace `canic*` dependency versions, package
-  versions in any `Cargo.toml`, release-script default versions, install URLs,
-  and the matching `Cargo.lock` package versions.
 
 ## Delivery Cadence
 - Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy
@@ -70,7 +64,8 @@ with this file, the code is wrong.
   breadcrumbs.
 
 ## Layering
-Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model`.
+Dependency direction is strict: endpoints call workflow; workflow may call
+policy and ops independently; ops may call model. Policy never calls ops.
 - `dto/` is passive boundary data only.
 - `model/` owns authoritative state and storage invariants.
 - `ops/` owns deterministic state access, conversion, and approved single-step

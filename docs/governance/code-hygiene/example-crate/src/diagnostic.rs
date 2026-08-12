@@ -14,7 +14,7 @@ use std::fmt::{self, Display};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StyleDiagnosticCode {
-    EmptyProjectId,
+    EmptyAppId,
 
     EmptyWorkflowStep,
 
@@ -24,7 +24,7 @@ pub enum StyleDiagnosticCode {
 impl Display for StyleDiagnosticCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
-            Self::EmptyProjectId => "empty project id",
+            Self::EmptyAppId => "empty App id",
             Self::EmptyWorkflowStep => "empty workflow step",
             Self::MissingSubnetLabel => "missing subnet label",
         };
@@ -53,13 +53,10 @@ impl StyleDiagnostic {
         Self { code, message }
     }
 
-    /// Return the diagnostic code for an empty project identifier.
+    /// Return the diagnostic code for an empty App identifier.
     #[must_use]
-    pub const fn empty_project_id() -> Self {
-        Self::new(
-            StyleDiagnosticCode::EmptyProjectId,
-            "project id must not be empty",
-        )
+    pub const fn empty_app_id() -> Self {
+        Self::new(StyleDiagnosticCode::EmptyAppId, "App id must not be empty")
     }
 
     /// Return the diagnostic code for an empty workflow step label.

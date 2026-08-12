@@ -254,17 +254,11 @@ canic replica start --background
 canic install example example-local --fleet-input deployments/example-local.toml --profile fast
 ```
 
-The 0.100 implementation currently creates and verifies the Coordinator, the
-planned Fleet Subnet Roots, each root's exact local Store, and every root's
-Registry `Joining` row, private snapshot candidate and Coordinator
-acknowledgement, then atomically commits and independently verifies the
-complete Coordinator Registry as `Active`. Every root remains
-runtime-`Prepared` while installation atomically activates and independently
-verifies every exact matching Registry Mirror/Fleet Directory. Installation
-then stops before Component creation, runtime activation and terminal
-Fleet-catalog publication.
-`canic info list example-local` becomes applicable only after that Fleet
-reaches the terminal catalog boundary.
+On success, installation verifies the Coordinator, planned roots, root-local
+Stores, Registry, Mirrors, and Directories; provisions and activates the
+configured initial Components; activates every selected root; and publishes
+the terminal Fleet catalog. `canic info list example-local` becomes applicable
+only after that terminal boundary.
 
 Build one role without installing:
 
@@ -299,9 +293,10 @@ A managed-fleet PocketIC test should validate the same path as local install:
 9. Resolve the child from the revision-bound Component Directory and call its
    application method directly.
 
-The current implementation reaches step 5 and deliberately stops before step
-6. Installing one root, `hub`, and `registry` manually in the same PocketIC
-instance only tests individual lifecycle adapters; it does not validate the
+Fresh installation covers steps 1-7. Steps 8-9 are post-install application
+behavior and are exercised through managed-Fleet PocketIC journeys. Installing
+one root, `hub`, and `registry` manually in the same PocketIC instance only
+tests individual lifecycle adapters; it does not validate the
 Coordinator-anchored managed-Fleet journey.
 
 ## Candid Surface

@@ -17,13 +17,14 @@ These runbooks cover manual retry and recovery decisions for:
 - replay receipt conflicts;
 - replay receipt pending and recovery-required states;
 - operation-ID reuse;
-- project-local pending ICP refill operations;
+- pending ICP refill operations under the selected ICP project root;
 - delegated-auth caller and issuer binding failures;
 - delegated-token prepare and issue replay;
 - ICP refill and value-transfer replay;
 - cost-boundary refusals;
 - durable-publication ambiguity;
-- canister upgrade or publication failures near replay-sensitive boundaries.
+- same-release canister restart/upgrade or publication failures near
+  replay-sensitive boundaries.
 
 These runbooks do not change runtime behavior, Candid, CLI output, JSON/output
 formats, package manifests, dependencies, lockfiles, fixtures, snapshots, or
@@ -66,8 +67,13 @@ recovery-required state. Use a new operation ID only when the original operation
 is known not to have crossed an external-effect boundary, or after a maintainer
 has decided that a new logical operation is safe.
 
-Project-local `pending_send` records are host-side retry aids. They are not
-canister stable state, and server correctness must not depend on them.
+`pending_send` records under the selected ICP project root are host-side retry
+aids. They are not canister stable state, and server correctness must not
+depend on them.
+
+These runbooks never authorize a cross-release upgrade or state transition.
+Every pre-1.0 release transition starts from empty Fleet state; the restart and
+upgrade guidance below applies only within one release.
 
 ## Runbook Template
 
@@ -94,7 +100,7 @@ Each runbook uses the same fields:
 | Symptom | The client process exits, the network drops, or the response is lost before the operator knows whether the update completed. |
 | Likely cause | Transport uncertainty after the caller submitted a replay-sensitive operation. |
 | Safety invariant | Retry only the same operation ID, same actor, same payload, and same target. |
-| Safe operator action | Re-run the exact same command or request with the same operation ID. For CLI-generated ICP refill operations, reuse the matching project-local `pending_send` entry when present. |
+| Safe operator action | Re-run the exact same command or request with the same operation ID. For CLI-generated ICP refill operations, reuse the matching `pending_send` entry under the selected ICP project root when present. |
 | Unsafe operator action | Generating a new operation ID for the same uncertain operation, changing arguments, changing caller identity, or changing target canister. |
 | Diagnostic, log, or public error to check | Operation ID printed by the CLI, `.canic/operations/pending.json` for live CLI refill, public conflict messages such as "already in progress" or "previously failed", and replay logs for `operation_in_progress` or `recovery_required`. |
 | Retry/idempotency rule | A same-input retry is safe. A changed-input retry is a new operation and must not reuse the old operation ID. |
@@ -171,23 +177,23 @@ Each runbook uses the same fields:
 | Relevant validation command | `cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture` |
 | Escalation criteria | Escalate if the verified caller/issuer binding cannot be reconstructed from available logs or request records. |
 
-### Project-Local Pending ICP Refill
+### ICP Project Root Pending ICP Refill
 
 | Field | Guidance |
 | --- | --- |
 | Symptom | Live `canic cycles convert` was interrupted after a generated operation ID was created, returned a resumable outcome, or a later run reports `operation_id_source=pending_log`. |
 | Likely cause | The CLI wrote `.canic/operations/pending.json` before sending the refill request and retained the matching `pending_send` operation because no typed terminal outcome was durably recorded. |
 | Safety invariant | The pending log may help the operator retry the same operation, but the canister-side replay receipt remains authoritative. |
-| Safe operator action | Retry the same CLI refill from the same project root, environment, deployment, source subaccount, and amount. The deployment root is both the derived source and target. Preserve the pending log until the CLI verifies the matching typed terminal outcome and durably marks it completed. |
+| Safe operator action | Retry the same CLI refill from the same ICP project root, environment, Fleet, source subaccount, and amount. The Fleet root is both the derived source and target. Preserve the pending log until the CLI verifies the matching typed terminal outcome and durably marks it completed. |
 | Unsafe operator action | Deleting or editing the pending log to hide an uncertain send, or reusing the pending operation ID with a different root, source subaccount, or amount. |
 | Diagnostic, log, or public error to check | `.canic/operations/pending.json`, `operation_id_source=pending_log`, and the canister-side replay result. |
 | Retry/idempotency rule | The matching `pending_send` entry is safe to reuse for the same refill input. It is not a general operation-ID registry. |
 | Relevant validation command | `cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture` |
 | Escalation criteria | Escalate if the local pending log and canister-side replay state disagree in a way that makes the refill outcome uncertain. |
 
-Do not upgrade a root while a refill remains resumable. Root post-upgrade
-admission rejects any non-terminal refill so the currently installed binary
-can settle it under the contract that created it.
+Do not perform even a same-release root upgrade while a refill remains
+resumable. Root post-upgrade admission rejects any non-terminal refill so the
+same release can settle it under the contract that created it.
 
 ### ICP Refill Recovery-Required State
 
@@ -231,33 +237,33 @@ can settle it under the contract that created it.
 | Relevant validation command | `cargo test --locked -p canic-testing-internal prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture` |
 | Escalation criteria | Escalate if durable state and replay receipt state disagree and no existing test explains the case. |
 
-### Upgrade Interrupted Near Replay-Sensitive Operation
+### Same-Release Restart Or Upgrade Near Replay-Sensitive Operation
 
 | Field | Guidance |
 | --- | --- |
-| Symptom | Upgrade or restart happens while replay-sensitive work is pending, in flight, or near post-upgrade initialization. |
-| Likely cause | The canister restarted around replay receipt, cost-guard, lifecycle, or durable-publication state. |
+| Symptom | A same-release upgrade or restart happens while replay-sensitive work is pending, in flight, or near lifecycle restoration. |
+| Likely cause | The canister restarted within one release around replay receipt, cost-guard, lifecycle, or durable-publication state. |
 | Safety invariant | Post-upgrade initialization must restore Canic invariants before user hooks or async recovery work act on replay-sensitive state. |
 | Safe operator action | Check lifecycle readiness, replay receipt state, cost-guard intent state, and the relevant durable publication or workflow record before retrying. |
 | Unsafe operator action | Assuming restart cleared pending state, manually deleting state, or running user recovery before Canic invariants are restored. |
 | Diagnostic, log, or public error to check | Lifecycle boundary tests, stable replay receipt tests, stable-memory ABI guard, and upgrade/state compatibility audit. |
-| Retry/idempotency rule | Retry only after the upgraded binary reports readiness and the original replay state is understood. |
+| Retry/idempotency rule | Retry only after the same-release binary reports readiness and the original replay state is understood. Cross-release transition is reinstall-only. |
 | Relevant validation command | `cargo test --locked -p canic-tests --test lifecycle_boundary -- --test-threads=1 --nocapture` |
-| Escalation criteria | Escalate if the upgraded binary cannot decode supported replay state or lifecycle ordering is ambiguous. |
+| Escalation criteria | Escalate if the current release cannot decode its own replay state or lifecycle ordering is ambiguous. |
 
 ### Receipt Mismatch Or Unexpected Receipt State
 
 | Field | Guidance |
 | --- | --- |
 | Symptom | A replay receipt decodes to an unsupported schema, cannot decode, has an unexpected status, or does not match the operator's known operation. |
-| Likely cause | State compatibility drift, unsupported historical bytes, corrupted state, or an incorrect operation ID/caller/payload assumption. |
+| Likely cause | Current-schema drift, corrupted state, or an incorrect operation ID/caller/payload assumption. |
 | Safety invariant | Unknown receipt state must fail controlled and must not silently re-run the external effect. |
-| Safe operator action | Stop retries for that operation. Capture the operation ID, command kind, caller, payload hash if available, receipt status, and upgrade context for a focused defect investigation. |
+| Safe operator action | Stop retries for that operation. Capture the operation ID, command kind, caller, payload hash if available, receipt status, and same-release lifecycle context for a focused defect investigation. |
 | Unsafe operator action | Deleting the receipt, changing the operation ID, or manually marking the operation committed without proof. |
-| Diagnostic, log, or public error to check | Receipt decode errors, unsupported schema errors, stable replay tests, and upgrade/state compatibility audit entries. |
+| Diagnostic, log, or public error to check | Receipt decode errors, current-schema errors, stable replay tests, and lifecycle audit entries. |
 | Retry/idempotency rule | Unexpected receipt state is an escalation case, not a normal retry case. |
 | Relevant validation command | `cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture` |
-| Escalation criteria | Treat unsupported supported-version state, decode failure for current schema, or mismatched committed response as a release blocker candidate. |
+| Escalation criteria | Treat decode failure for current-release state or a mismatched committed response as a release blocker candidate. |
 
 ## Validation Gates
 
@@ -298,8 +304,6 @@ ordinary docs slice.
 - No release of a new replay semantic under the recovery label.
 
 ## Outcome Summary
-
-Release blockers: none found in these runbooks.
 
 The runbooks remain the operator procedure; they do not issue a release
 verdict. Current diagnostic and recovery sufficiency is established by dated

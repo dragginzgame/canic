@@ -1,7 +1,7 @@
 //! Module: workflow::route
 //!
 //! Responsibility: workflow step labels and step-kind classification.
-//! Does not own: project validation or execution side effects.
+//! Does not own: App validation or execution side effects.
 //! Boundary: validates step labels before workflow code receives them.
 
 use crate::diagnostic::StyleDiagnostic;
@@ -14,23 +14,23 @@ use crate::diagnostic::StyleDiagnostic;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkflowStepKind {
-    ProjectInstall,
+    AppInstall,
 
-    ProjectRead,
+    AppRead,
 }
 
 impl WorkflowStepKind {
-    /// Return whether this workflow step can mutate accepted project state.
+    /// Return whether this workflow step can mutate accepted App state.
     #[must_use]
     pub const fn is_write(self) -> bool {
-        matches!(self, Self::ProjectInstall)
+        matches!(self, Self::AppInstall)
     }
 }
 
 ///
 /// WorkflowStep
 ///
-/// Validated workflow step selected by a project owner before execution.
+/// Validated workflow step selected by an App owner before execution.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,16 +79,16 @@ mod tests {
 
     #[test]
     fn workflow_labels_are_normalized() {
-        let step = WorkflowStep::new(WorkflowStepKind::ProjectRead, " project-alpha ")
+        let step = WorkflowStep::new(WorkflowStepKind::AppRead, " app-alpha ")
             .expect("trimmed workflow labels should be valid");
 
-        assert_eq!(step.label(), "project-alpha");
+        assert_eq!(step.label(), "app-alpha");
         assert!(!step.kind().is_write());
     }
 
     #[test]
     fn empty_workflow_labels_return_typed_diagnostic() {
-        let err = WorkflowStep::new(WorkflowStepKind::ProjectRead, " ")
+        let err = WorkflowStep::new(WorkflowStepKind::AppRead, " ")
             .expect_err("empty workflow labels should fail");
 
         assert_eq!(err.code(), StyleDiagnosticCode::EmptyWorkflowStep);

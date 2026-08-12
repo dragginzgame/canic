@@ -21,7 +21,7 @@ configured root principal
 Root delegation proofs are IC chain-key threshold ECDSA proofs over a canonical
 delegation batch. A verifier validates locally from the token, configured root
 principal, configured chain-key root verifier policy, configured or runtime IC
-root public key for the issuer canister-signature proof, local project/role
+root public key for the issuer canister-signature proof, protected Fleet/role
 config, and current IC time.
 
 Delegated tokens are bearer tokens for the presenting principal. A valid token
@@ -381,7 +381,7 @@ Checks before authorization:
   `AUTH_TIME_SKEW_ALLOWANCE_NS` ahead of verifier time
 - token does not outlive certificate or `cert.max_token_ttl_ns`
 - `claims.aud` is a subset of `cert.aud`
-- local project accepts both token and cert audiences
+- the protected Fleet accepts both token and cert audiences
 - `claims.grants` is a subset of `cert.grants`
 - `claims.subject` equals the transport caller
 - configured local role is present in `claims.grants`

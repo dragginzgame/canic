@@ -181,8 +181,8 @@ Date: 2026-08-12
   Subnet. The exact supported envelope and Wasm measurements are recorded in
   [qualification.md](qualification.md).
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.51` is released and Q4 is complete in
-  open `0.101.52`.
+- Implementation started: yes; `0.101.51` is released, Q4 is complete, and Q5
+  is active in open `0.101.52`.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -191,7 +191,7 @@ Date: 2026-08-12
   separate runtime and Registry membership activation, revision-bound
   current-Directory convergence and inventory-bound Fleet Subnet Root runtime
   activation.
-- Open closeout gate: Q5 must complete the whole-program hard cut, sediment
+- Open closeout gate: Q5 is active and must complete the whole-program hard cut, sediment
   removal, generated/configuration/stable-memory review and final
   responsibility/size accounting. Application-data replication remains a
   separate later design and is not an implementation blocker for 0.101
@@ -212,7 +212,7 @@ repairs do not create additional release boundaries.
 | Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
 | Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in released `0.101.51` |
 | Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in open `0.101.52` |
-| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Pending |
+| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue guards followed by maintainer-owned complete release validation | Active in open `0.101.52` |
 
 `Q1` is complete in the released `0.101.49` batch. In addition to the packed and
 spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
@@ -229,6 +229,10 @@ inside a batch does not create another patch boundary. `Q4` is complete in the
 open `0.101.52` batch: the three-Subnet Toko-shaped journey and shared-Subnet
 second Fleet pass with exact restart/replay, protected 10,000/2,000 Project Hub
 limits and the measured envelope in [qualification.md](qualification.md).
+`Q5` is active in the same open draft. Its first cleanup reconciles current
+installation, recovery, layering and release-authority documentation; archives
+the oversized session handoff; and removes CI guard dependencies on incidental
+job counts, step adjacency and exact Make recipe text.
 
 0.101 creates a fresh Fleet with composable compile-time Component Groups.
 Nested group declarations flatten to direct Components under exact Fleet
@@ -596,6 +600,11 @@ Fleet policy writer.
   encoding, no-follow reads and exact replacement reconciliation; their locks,
   paths, schemas, authority checks, create conflict rules and phase machines
   remain domain-owned.
+- [x] Reconcile current installation, recovery, identity, layering and release-
+  authority documentation with maintained behavior. The compact handoff now
+  carries only current state, stale 0.100 install boundaries and removed CLI
+  examples are gone, and CI documentation guards reject the superseded claims
+  instead of requiring them.
 - [ ] Audit every 0.101-touched module for mixed layer ownership, long or mixed
   authority predicates, forwarding namespaces, dead re-exports, unused
   dependencies and completed implementation scaffolding; split or delete each
@@ -622,7 +631,7 @@ Fleet policy writer.
   its service members and every later local descendant on the selected root's
   Subnet.
 - [x] The local Project Hubs provision at least three Project Instance
-  children across their project roots; every Project Instance creates one
+  children across their application roots; every Project Instance creates one
   Ledger and exactly one creates its optional Machine.
 - [x] Two deployments reuse one Project Hub group on different roots with
   distinct protected effective spawn-grant ceilings and no duplicated Spec.

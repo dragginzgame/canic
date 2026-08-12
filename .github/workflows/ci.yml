@@ -119,9 +119,11 @@ jobs:
           icp --version
           ic-wasm --version
       - name: Layering guards
-        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         run: bash scripts/ci/run-layering-guards.sh
+      - name: Current document semantics guard
+        shell: bash
+        run: bash scripts/ci/check-current-document-semantics.sh
       - name: Control-plane feature matrix
         shell: bash
         run: bash scripts/ci/check-control-plane-feature-matrix.sh

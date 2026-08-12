@@ -41,6 +41,7 @@ members = [
     "canisters/test/project_machine_stub",
     "canisters/test/runtime_probe",
     "canisters/test/sharding_root_stub",
+    "canisters/test/toko_root_stub",
     "crates/canic",
     "crates/canic-backup",
     "crates/canic-cli",

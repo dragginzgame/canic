@@ -22,10 +22,14 @@ use super::fixture::progress;
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 #[cfg(test)]
+const TOKO_ROOT_CANISTER_PACKAGE: &str = "toko_root_stub";
+#[cfg(test)]
 const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
 static BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
 static MAINNET_REFILL_BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
+static TOKO_ROOT_BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 // Build the test root wasm.
@@ -33,6 +37,31 @@ pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
     build_canisters_once(&workspace_root);
     read_built_wasm(&test_target_dir(&workspace_root), "delegation_root_stub")
+}
+
+// Build the Toko-qualified root against its isolated canonical topology.
+#[cfg(test)]
+pub(super) fn build_test_toko_root_wasm() -> Vec<u8> {
+    let workspace_root = workspace_root();
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let target_dir = test_target_dir(&workspace_root).join("toko-root");
+    TOKO_ROOT_BUILD_ONCE.call_once_force(|_| {
+        let config_path = toko_root_canister_config_path(&workspace_root);
+        let canonical_config_env = (
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            config_path.to_str().expect("Toko config path UTF-8"),
+        );
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &[TOKO_ROOT_CANISTER_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[canonical_config_env],
+        );
+    });
+    read_built_wasm(&target_dir, TOKO_ROOT_CANISTER_PACKAGE)
 }
 
 // Build a mainnet-qualified root and exact Cycles Ledger boundary stub.
@@ -257,6 +286,16 @@ pub(super) fn root_canister_config_path(workspace_root: &Path) -> PathBuf {
         .join("canisters")
         .join("test")
         .join(ROOT_CANISTER_PACKAGE)
+        .join("canic.toml")
+}
+
+// Resolve the isolated Toko qualification topology.
+#[cfg(test)]
+pub(super) fn toko_root_canister_config_path(workspace_root: &Path) -> PathBuf {
+    workspace_root
+        .join("canisters")
+        .join("test")
+        .join(TOKO_ROOT_CANISTER_PACKAGE)
         .join("canic.toml")
 }
 
