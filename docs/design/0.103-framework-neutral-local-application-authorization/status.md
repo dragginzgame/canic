@@ -62,7 +62,7 @@ token or grant state.
 
 | Batch | Outcome | State |
 | --- | --- | --- |
-| B1 | Current auth/session inventory, generic integration contract and `E/A/D/B/R/M` baseline | Pending maintainer approval |
+| B1 | Current auth/session inventory, generic integration contract and `E/A/D/B/R/C/M` baseline | Pending maintainer approval |
 | B2 | Canonical scope, verified-authority projection and pure denial policy | Blocked on B1 |
 | B3 | Hard-cut scoped session state, index, bounds and lifecycle | Blocked on B2 |
 | B4 | Standard establish, clear and self-status operations | Blocked on B3 |
