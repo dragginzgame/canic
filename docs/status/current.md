@@ -1,11 +1,11 @@
 # Current Status
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 ## Purpose
 
 This is the compact handoff for new agent sessions. Read it first, then inspect
-only the active design, source, validation, or changelog material needed for the
+only the active design, source, validation or changelog material needed for the
 current task.
 
 Historical handoffs are archived at:
@@ -16,146 +16,166 @@ Historical handoffs are archived at:
 
 ## Current Release
 
-- Workspace package version: `0.101.52`.
-- Latest published release: `v0.101.52` at
-  `997e0109fae575f84d30b009a1240ef795c719d3`.
-- Open changelog draft: `0.101.53` in
-  [`docs/changelog/0.101.md`](../changelog/0.101.md).
+- Workspace package version: `0.101.53`.
+- Latest published release: `v0.101.53` at
+  `23c0328f78b215580d734ef01b52b35fa3e38ade`.
+- Root changelog: `Unreleased` records the clarified agent repository-scope
+  boundary, Clap-owned CLI parse diagnostics and proposed 0.103 design
+  reservation; no 0.102 patch version has been assigned.
 - Active design and checklist:
-  [0.101 Fleet-authoritative service provisioning and publication](../design/0.101-fleet-authoritative-service-provisioning-and-publication/status.md).
-- Release boundary: reinstall only. Same-release interruption recovery, exact
-  retry, backup, and restore remain required.
+  [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
+- Proposed adjacent design:
+  [0.103 framework-neutral local application authorization](../design/0.103-framework-neutral-local-application-authorization/status.md).
+- Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
+  pre-0.102. Every Canic-owned canister in a Fleet must come from one admitted
+  release set before activation. Same-release interruption recovery, exact
+  retry, backup and restore remain required.
 
 ## Current Progress
 
-Q4 real-topology qualification is complete. The focused three-application-
-Subnet PocketIC journey provisions 15 top-level Components across three roots,
-publishes 15 Fleet-service members, exercises packed and spread ActivePool
-scale-out with Coordinator restart/replay, creates seven dynamic descendants,
-and keeps a second Fleet independent while it shares one physical Subnet. The
-measured supported envelope is recorded in
-[`qualification.md`](../design/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md).
-Its dedicated root configuration and build target leave the smaller shared
-delegation fixture's canonical topology unchanged.
+0.101 is closed. Its Q5 whole-program cleanup, artifact classification, build
+identity, formatting hook and responsibility/residue report are released in
+0.101.53. Historical 0.101 design, status, closeout and changelog records remain
+intact apart from correcting their release truth.
 
-Published 0.101.52 also begins Q5 cleanup by compacting this handoff, reconciling
-current installation and recovery guidance, clarifying layer and release
-authority, and making documentation/CI guards protect maintained semantics
-instead of incidental wording or workflow shape.
+0.102 B1 is active as an evidence-only batch. The complete 0.102 design has
+been reread against the current source rather than its historical 0.98
+inventory. The present public error still carries a Candid `ErrorCode` plus
+owned message text, the maintained enum has 20 leaves, `InternalError` remains
+string-first, canonical infrastructure Candid retains the old shape and the
+host still matches typed enum variants.
 
-Fresh installation now performs its live authority gate before artifact
-compilation and retains the dedicated `target/canic-wasm` Cargo target across
-attempts. Interactive installs replace per-finding and per-receipt text streams
-with ANSI-aware ASCII activity lines and padded summary tables, while redirected
-output remains deterministic and append-only. The complete post-build artifact
-and execution gates still re-observe deployment truth before mutation.
-Configured artifacts now share one Cargo invocation per Cargo workspace and
-profile, and their package validation shares workspace metadata/catalog
-evidence while retaining each role's package-selected graph. For the common
-local one-workspace topology this reduces configured-role Cargo build processes
-from two per role to two total: release and debug/Candid.
+No public error shape, numeric code, stable state or runtime behavior has been
+changed. No 0.102 version has been assigned.
 
-Rendered CLI help has also been compacted around routine operator decisions.
-Install, App, build, deploy and evidence pages retain their real arguments,
-options, representative examples and safety boundary without duplicating
-configuration snippets, artifact internals, cache maintenance or policy prose.
-The stale reference to an existing-Fleet update flow is removed; `canic
-install` now states only its maintained fresh-Fleet boundary.
+An independent operator-maintenance slice hard-cuts top-level and build option
+failures to their exact Clap diagnostics and adds explicit pre-parse argv
+tracing for wrapper/executable investigation. It changes no canister runtime or
+0.102 diagnostic-code contract. Its exact parser and trace tests, recursive
+help ordering, package Clippy, current-document guard, changelog governance and
+reference-surface checks pass.
 
-`canic build <app>` now batches the configured Fleet Subnet Root with every
-attached Component role, then builds the canonical Fleet Coordinator and Wasm
-Store. Supplying the optional role keeps the focused custom-build and role-
-provenance surface. Complete builds render bounded TTY-safe activity lines and
-padded tables instead of requiring a shell loop or printing repeated Cargo
-logs. Components appear under Application Wasm; Coordinator, root and Store
-appear under Infrastructure Wasm. The root retains shared Cargo compilation
-without receiving a fabricated per-role duration, and both tables show exact
-resolved package versions.
+The allocation-policy proposal uses dense monotonic numbers with no semantic
+bands, compact unpadded `E<decimal>` rendering and nine host-only broad classes.
+It is not code authority until the maintainer approves it and reviews the
+complete producer-to-leaf table.
 
-Fleet Coordinator now follows the same canonical-Candid model as Wasm Store.
-Each published infrastructure source crate owns a checked-in DID; ordinary
-local builds copy and embed it without a second debug compile, while one
-explicit maintainer refresh path regenerates either contract. Generated
-downstream wrappers extract when no canonical source package is available and
-do not promote their generated sidecar to source truth.
+Maintainer review approved the architectural direction and required four P1
+corrections before mutation: permanent current/retired allocation history, a
+Fleet-atomic activation boundary, mechanically enforced registered producer
+identities distinct from raw decoded numbers, and a complete ownership audit of
+dynamic values currently embedded in public messages. The normative design and
+B1 contracts now include all four. This is design/evidence progress only.
+
+The proposed 0.103 line generalizes a requirement from the read-only IcyDB
+0.226 design without creating a repository dependency. It would hard-cut the
+current subject-only delegated session into bounded verified local
+Fleet/role/scope authority and expose one synchronous read-only
+`caller + scope` decision for application-owned framework adapters. IcyDB
+remains unchanged and read-only. No 0.103 implementation is authorized.
+
+Inserting that line moves every former provisional 0.103-0.111 Canic design to
+0.104-0.112. Their intended order and implementation status are unchanged;
+published package versions, historical changelogs, audit reports and archived
+handoffs retain their original evidence identities.
 
 ## Current Decision
 
-Q5 whole-program hard cut and closeout is complete in the existing open
-0.101.53 draft. The final
-[responsibility report](../design/0.101-fleet-authoritative-service-provisioning-and-publication/closeout.md)
-accounts for obsolete authority paths, generated/configuration/Candid
-surfaces, stable-memory ownership, retained production size and every permitted
-historical-only occurrence. Historical tags and changelogs remain immutable.
+Follow the six release batches in the active tracker. Evidence-only B1 may
+continue. It must produce the exact current producer/consumer,
+dynamic-public-context and durable-string inventories, a reproducible
+representative-Wasm baseline, a permanent current/retired allocation ledger,
+typed host disposition and explicit public projections with retrievable
+operation correlation. The design's numeric examples are not authority.
 
-Application-data replication, grouped removal, scale-in, replacement, and
-relocation remain later designs rather than 0.101 blockers.
+Do not begin mutating batches B2-B6 until the maintainer has reviewed the
+complete B1 inventories, initial allocation, host catalogue and projections.
+The public cut must install all Canic-owned Fleet canisters from one admitted
+release set before activation, with matching host/CLI callers and regenerated
+external bindings. Do not introduce a temporary dual protocol, generation
+name, compatibility decoder, diagnostic protocol version or message fallback.
+
+The independent 0.103 tracker is also planning-only. Its B1 inventory and
+measurement work may begin only after maintainer approval; its mutating B2-B7
+remain separately blocked.
 
 ## Validation
 
-Q4 qualification command:
+Freshly observed baseline identity:
 
 ```text
-cargo test --locked -p canic-testing-internal pic::fleet_registry::baseline::tests::toko_topology_qualifies_scale_out_descendants_packing_and_fleet_isolation --lib -- --exact --nocapture
+branch: main
+commit: 23c0328f78b215580d734ef01b52b35fa3e38ade
+tag: v0.101.53
+worktree: clean before 0.102 documentation work
 ```
 
-For the current semantic-cleanup slice, run only the directly affected
-documentation, recovery, release-validation, layering, workflow, and changelog
-checks plus `git diff --check`. Full deployment and publish validation remains
-maintainer-owned.
-
-The targeted cleanup checks pass: Actionlint; ShellCheck for the changed guard
-scripts; documentation-example `rustfmt --check`; current-document, release-
-validation, package/install, recovery, layering, and release-integrity guards;
-changelog governance and reference-surface tests; and `git diff --check`.
-
-The installer-efficiency slice passes focused `canic-host` install,
-authority-preflight, deployment-truth, cache, table and terminal-output tests;
-focused `canic-cli` install-help tests; and package Clippy with warnings denied.
-Configured-build grouping, exact multi-package Cargo command and shared
-workspace-evidence tests also pass without weakening per-role graph selection.
-The rendered-help and whole-App build cleanup passes the complete `canic-cli`
-library suite: 563 tests passed and one disposable-environment restore test
-remained intentionally ignored.
-Focused whole-App build selection, role-provenance rejection and host batch-
-command tests pass. A real fast-profile build of the checked-in `demo` App
-materializes one configured root, three Component artifacts, Coordinator and
-Wasm Store successfully. The retained-cache smoke reported 35.84s for the
-application batch, 82.00s for Coordinator, 29.31s for Wasm Store and 147.15s
-total before canonical Coordinator Candid. Repeating that smoke after the
-change reported 36.43s for Application Wasm, 3.36s for Coordinator, 5.15s for
-Wasm Store, 8.51s for Infrastructure Wasm and 44.94s total. The canonical-
-infrastructure-Candid slice refreshes and parses the Coordinator contract
-through the maintained debug export, and focused host tests prove ordinary
-Coordinator and Wasm Store builds use checked-in contracts without a debug
-compile. A repeated fast smoke retains one honest shared Application Wasm
-total and shows exact resolved package versions for every artifact.
-
-The open 0.101.53 draft moves routine formatting into one repository-owned
-pre-commit hook. The hook neither stages files nor duplicates validation;
-release preparation remains non-mutating and retains its formatting check. It
-also corrects complete-build presentation: the Fleet Subnet Root remains in the
-efficient shared configured batch but is reported with Coordinator and Wasm
-Store infrastructure, and every artifact shows its resolved package version.
-Q5's production cleanup has also separated the complete Coordinator root-
-deletion authority from the accumulated Registry/provisioning module while
-retaining its exact durable records, hash domains and workflow surface.
-Canonical provisioning-plan encoding is now separate from semantic authority
-validation, and its frozen plan and root-batch hash vectors remain unchanged.
-The feature gate now compiles the Fleet Subnet Root graph independently in
-addition to Coordinator, Store, empty and host-consumer graphs.
-
-The exact nine-role Toko fixture built all eight Components plus root,
-Coordinator and Store in 186.98s on first fixture-specific materialization and
-60.54s on exact retained-cache retry. The root stayed in the shared configured
-Cargo batch but rendered under infrastructure with `shared` timing. These are
-artifact-build measurements; the Q4 PocketIC journey remains the actual
-multi-Subnet installation and runtime evidence.
+The fresh retained `CANIC-WASM-001/v3` baseline passes at risk `5/10` over six
+Components plus Fleet Subnet Root, Fleet Coordinator and Wasm Store in both
+release and debug profiles. It uses immutable tag `v0.101.53`, a clean detached
+worktree, isolated local/offline build state and the checksum-pinned toolchain.
+Valid v2 evidence remains superseded and non-comparable. Previously recorded
+0.101 test and release claims remain historical evidence only.
 
 ## Next Action
 
-The open 0.101.53 batch is ready for maintainer-owned complete release
-validation. If that gate exposes fallout, keep the correction in this same
-batch; otherwise publish 0.101.53 as the final 0.101 closeout release. Do not
-start 0.102 or reopen deferred replication, scale-in, cross-Fleet estate or
-blob-service work inside this release.
+Continue B1 with the direct-constructor frontier and the new
+[dynamic public context inventory](../design/0.102-compact-diagnostic-codes/dynamic-public-context.md)
+before assigning numbers. The typed and explicitly expanded family ledgers
+began with a collision-free qualified subset of 685 symbolic identities. The
+first forty-nine Component Registry/root-retirement/Component-provisioning/
+Coordinator passes classify 1,625 effective sites and add 1,145 exact meanings
+plus one projection, bringing current qualified coverage to 1,831 identities: 1,800
+exact and 31 projections. That is
+not whole-program
+coverage, and the dynamic interpolation census is not yet complete. Its first
+twelve bounded slices now classify 117 values from the Canic memory-ledger
+facade, Wasm Store GC, shared manifest/capacity conversion, explicit Component Registry
+denials, typed Store publication causes, delegated-session bootstrap, Store
+publication binding/inventory and Store GC fence, reclamation, binding
+finalization and deletion plus the two publication management transports: 53
+are caller-derivable, thirteen are sensitive operator-only, twenty-eight have
+existing typed owners and twenty-three are caller-required but unowned. Those
+twenty-three require request-scoped Store capacity/release inspection, guarded
+delegated-session capacity status, exact closed-discriminator diagnostics or
+root-proxied live GC inspection, operation-scoped Store deletion progress or a
+narrow operation-scoped Store-publication attempt status.
+Component RPC and Runtime Introspection are closed with zero explicit
+dynamic-error rows. Every dynamic publication GC invalid-state field is now
+classified, as is the nested publication transport cause; their static
+invariant/cause branches remain allocation work. The transitive auth formatter
+remains open.
+
+The production-source scan finds 2,208 `InternalError::*` references in 101
+files after excluding external and inline test source. Component Registry ops
+and workflow alone contain 1,154. The Coordinator parent file reveals one
+generic receipt-invariant constructor with 235 static calls, expanding the
+effective frontier to 2,442 sites. One thousand six hundred twenty-five
+effective sites are classified, leaving 817 dispositions.
+Both Component Registry files
+are fully classified. Every remaining reference must
+be linked to an existing meaning, a newly justified meaning or a
+transparent/native/sediment disposition. A fresh range-owner manifest assigns
+all 800 Component Registry ops sites exactly once with zero gaps/overlaps, and
+the workflow source/table counts independently agree at 354. The 177-site
+Component provisioning ops file is mechanically closed by four consecutive
+range owners and its workflow by three. The Coordinator parent file's 154
+direct constructors are mechanically closed, while 219 of its 235 hidden
+receipt calls remain open. Continue those, then its dedicated root-deletion
+module and workflow before the pool/root/Store and runtime owners.
+
+In parallel, continue the dynamic-value ledger with remaining explicit runtime
+constructions, the transitive auth formatter and transitive Component Registry
+messages. Do not replace missing
+ownership with generic detail text or a global last-error field.
+
+All 31 currently known projections and five exact leaves reused as projections
+have proposed observability owners. Seventeen IC call families are mapped to
+their operation-specific durable authority or guarded runtime status, including
+the missing Store-publication attempt owner; a masked code must be attached to
+that same status/operation or correlated by an
+existing retrievable operation ID. Four current Cashier leaves are included in
+0.102 and retire without reuse in the 0.107 hard cut. The permanent ledger
+contract is recorded, but no current or retired number is allocated. B2 remains
+blocked until the complete site and dynamic-context manifests, allocation,
+catalogue and projection table receive maintainer approval.

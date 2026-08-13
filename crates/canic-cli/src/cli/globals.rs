@@ -5,7 +5,7 @@
 //! Boundary: translates public global flags into hidden per-command arguments.
 
 use crate::cli::{clap::value_arg, help::COMMAND_SPECS};
-use clap::{Arg, ArgAction, Command};
+use clap::Arg;
 use std::ffi::OsString;
 
 /// Captured passthrough tail argument id for top-level command dispatch.
@@ -45,38 +45,8 @@ pub fn internal_environment_arg() -> Arg {
         .hide(true)
 }
 
-/// Build the top-level dispatch parser used before command-specific parsing.
-pub fn top_level_dispatch_command() -> Command {
-    let command = Command::new("canic")
-        .disable_help_flag(true)
-        .disable_version_flag(true)
-        .arg(
-            Arg::new("version")
-                .short('V')
-                .long("version")
-                .action(ArgAction::SetTrue),
-        );
-    let command = command
-        .arg(icp_arg().global(true))
-        .arg(environment_arg().global(true));
-
-    COMMAND_SPECS.iter().fold(command, |command, spec| {
-        command.subcommand(dispatch_subcommand(spec.name))
-    })
-}
-
-fn dispatch_subcommand(name: &'static str) -> Command {
-    Command::new(name).arg(
-        Arg::new(DISPATCH_ARGS)
-            .num_args(0..)
-            .allow_hyphen_values(true)
-            .trailing_var_arg(true)
-            .value_parser(clap::value_parser!(OsString)),
-    )
-}
-
-/// Return a misplaced public global option after a subcommand, if present.
-pub fn command_local_global_option(args: &[OsString]) -> Option<&'static str> {
+/// Return a public top-level option placed after a subcommand, if present.
+pub fn misplaced_global_option(args: &[OsString]) -> Option<&'static str> {
     let mut index = 0;
     while index < args.len() {
         let arg = args[index].to_str()?;
@@ -213,9 +183,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn local_global_option_detects_command_tail_flags() {
+    fn misplaced_global_option_detects_command_tail_flags() {
         assert_eq!(
-            command_local_global_option(&[
+            misplaced_global_option(&[
                 OsString::from("status"),
                 OsString::from("--environment"),
                 OsString::from("ic")
@@ -223,7 +193,7 @@ mod tests {
             Some("--environment")
         );
         assert_eq!(
-            command_local_global_option(&[OsString::from("status"), OsString::from("--icp=icp")]),
+            misplaced_global_option(&[OsString::from("status"), OsString::from("--icp=icp")]),
             Some("--icp")
         );
     }

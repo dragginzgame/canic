@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Agent repository scope now permits bootstrapping a specifically authorized
+  named new repository at its exact target path, while keeping inspection,
+  review, audit, diagnosis, design and feedback requests for existing sibling
+  repositories strictly read-only unless separate mutation authority is given.
+- Top-level and build argument failures now retain Clap's exact diagnostic and
+  exit 2, while `CANIC_TRACE_ARGV=1` provides an opt-in pre-parse process and
+  argument-boundary trace for intermittent wrapper or executable-resolution
+  failures.
+- A proposed 0.103 design defines framework-neutral local application
+  authorization over verified scoped sessions, and moves the previous
+  provisional 0.103-0.111 design reservations to 0.104-0.112 without changing
+  published release or historical evidence identities.
+
 ## [0.101.x] - 2026-08-05 - Composable Component Deployment
 
 Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)

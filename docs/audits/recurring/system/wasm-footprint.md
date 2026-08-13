@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-WASM-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `revise`
 - Owner: canonical Canic-produced Wasm size and retained-size attribution
 - Kind/profile: `measured` and `trend`
@@ -33,7 +33,7 @@ this audit. It enters `build_workspace_canister_artifact`, applies Canic's
 profile, shrink, metadata, Candid, provenance, and gzip rules, and copies the
 result to the ICP-visible artifact path.
 
-V2 deliberately removes v1's direct Cargo Wasm build and its inferred
+V3 retains v2's removal of v1's direct Cargo Wasm build and inferred
 "pre-shrink" artifact. The supported builder does not expose that intermediate
 as a public audit artifact. The runner must not recreate it with direct
 `cargo build --target wasm32-unknown-unknown`, copy a target-directory Wasm,
@@ -46,11 +46,12 @@ The authoritative measured classes are therefore:
 - `ic-wasm`/`twiggy` analysis of the canonical release `.wasm`.
 
 No alias, fallback, reconstructed pre-transform path, or duplicate gzip path is
-part of v2.
+part of v3.
 
 ## Fixed Scope
 
-The default and release-baseline roster is the attached role set returned by:
+The configured part of the default and release-baseline roster is the attached
+role set returned by:
 
 ```text
 bash scripts/ci/list-config-canisters.sh \
@@ -61,18 +62,27 @@ At method admission the ordered roster is:
 
 ```text
 app
+test
 user_hub
-user_shard
 scale_hub
+user_shard
 scale_replica
 root
+fleet_coordinator
+wasm_store
 ```
 
-`root` is always classified as `bundle-canister`; all other roles are
-`leaf-canister`. There is no dedicated minimal role in this roster. Repeated
-retained hotspots across at least three leaves are the shared fan-in signal.
+`fleet_coordinator` and `wasm_store` are appended as the two separately built
+infrastructure roles after the configured role order. `root` is classified as
+Fleet Subnet Root infrastructure; the two appended roles are Fleet Coordinator
+and Wasm Store infrastructure. Every other role is an application Component.
+There is no dedicated minimal role in this roster. Repeated retained hotspots
+across at least three Components are the shared fan-in signal.
 
-V2 always captures both profiles:
+V3 corrects v2's stale six-role roster and its omission of the separately built
+Coordinator and Store. V2 results are non-comparable and cannot baseline v3.
+
+V3 always captures both profiles:
 
 - `release`, the shipping/install authority; and
 - `debug`, a diagnostic comparison built through the same authority.
@@ -97,7 +107,7 @@ Optional control:
 
 - `WASM_AUDIT_DATE=YYYY-MM-DD` pins the UTC report date.
 
-There is no skip-build or cache-reuse mode. Every retained v2 run builds fresh
+There is no skip-build or cache-reuse mode. Every retained v3 run builds fresh
 artifacts through the canonical builder with network access disabled. Build
 output may create `.icp/` in the disposable product worktree and an external
 temporary Cargo target. Any tracked product mutation or unexpected untracked
@@ -128,8 +138,8 @@ A predecessor is compatible only when all of these match exactly:
 - execution-path key; and
 - external-tool key.
 
-The first valid v2 run records `N/A` deltas. Later runs compare causally to the
-immediate compatible predecessor and retain the original v2 baseline identity
+The first valid v3 run records `N/A` deltas. Later runs compare causally to the
+immediate compatible predecessor and retain the original v3 baseline identity
 for cumulative release-line comparison. A missing or zero denominator is
 `N/A`, never an invented percentage.
 
@@ -168,11 +178,11 @@ For a complete run, add these disjoint inputs and cap at 10:
 
 | Input | Score |
 | --- | ---: |
-| no compatible v2 predecessor | 2 |
-| largest/smallest leaf release ratio is 1.10-1.2499 | 1 |
-| largest/smallest leaf release ratio is at least 1.25 | 2 |
-| root/max-leaf release ratio is 2.0-2.9999 | 1 |
-| root/max-leaf release ratio is at least 3.0 | 2 |
+| no compatible v3 predecessor | 2 |
+| largest/smallest Component release ratio is 1.10-1.2499 | 1 |
+| largest/smallest Component release ratio is at least 1.25 | 2 |
+| root/max-Component release ratio is 2.0-2.9999 | 1 |
+| root/max-Component release ratio is at least 3.0 | 2 |
 | largest compatible release growth is 5.0-9.9999% | 1 |
 | largest compatible release growth is at least 10.0% | 2 |
 | largest retained item is 10.0-24.9999% of its release Wasm | 1 |
@@ -202,7 +212,7 @@ Every report contains:
 4. release/debug comparison;
 5. `ic-wasm` structure evidence;
 6. `twiggy` shallow, retained, dominator, and monomorphization evidence;
-7. leaf spread, repeated fan-in signals, and separate root interpretation;
+7. Component spread, repeated fan-in signals, and separate infrastructure interpretation;
 8. findings or an explicit no-new-finding statement;
 9. checklist and command verification; and
 10. retained artifact links and hashed evidence manifest.
@@ -213,7 +223,8 @@ build cause instead of treating display strings as the authority.
 
 ## Method-Change Rule
 
-V1 is preserved as invalid history. If v2's artifact authority, fixed roster,
-profile pair, metric derivation, comparison key, or score changes, increment
+V1 is preserved as invalid history and v2 as valid superseded history. If v3's
+artifact authority, fixed roster, profile pair, metric derivation, comparison
+key or score changes, increment
 the method version and apply the post-freeze method-defect protocol. Compare
 only results produced by the corrected method.

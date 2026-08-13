@@ -3,12 +3,12 @@
 set -euo pipefail
 
 METHOD_ID="CANIC-WASM-001"
-METHOD_VERSION="2"
+METHOD_VERSION="3"
 METHOD_TAG="$METHOD_ID/v$METHOD_VERSION"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
-AUDIT_STEM="wasm-footprint-v2"
+AUDIT_STEM="wasm-footprint-v3"
 PROFILE_KEY="release+debug"
-EXPECTED_ROSTER_KEY="app,user_hub,user_shard,scale_hub,scale_replica,root"
+EXPECTED_ROSTER_KEY="app,test,user_hub,scale_hub,user_shard,scale_replica,root,fleet_coordinator,wasm_store"
 
 METHOD_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PRODUCT_ROOT_INPUT="${WASM_AUDIT_PRODUCT_ROOT:-}"
@@ -266,6 +266,7 @@ mapfile -t CANISTERS < <(
     bash "$METHOD_ROOT/scripts/ci/list-config-canisters.sh" \
         --config "$PRODUCT_CONFIG" --ci-order
 )
+CANISTERS+=(fleet_coordinator wasm_store)
 ROSTER_KEY="$(IFS=,; printf '%s' "${CANISTERS[*]}")"
 if [[ "$ROSTER_KEY" != "$EXPECTED_ROSTER_KEY" ]]; then
     echo "frozen Wasm audit roster drifted: expected $EXPECTED_ROSTER_KEY; found $ROSTER_KEY" >&2
@@ -339,7 +340,7 @@ while IFS= read -r candidate_method_path; do
     fi
 done < <(
     find "$METHOD_ROOT/docs/audits/reports" -type f \
-        -path '*/artifacts/wasm-footprint-v2*/method.json' -print 2>/dev/null | sort -r
+        -path '*/artifacts/wasm-footprint-v3*/method.json' -print 2>/dev/null | sort -r
 )
 
 build_profile release
@@ -396,11 +397,12 @@ for canister in "${CANISTERS[@]}"; do
     release_gzip="$RUN_TMP/artifacts/release/$canister.wasm.gz"
     debug_wasm="$RUN_TMP/artifacts/debug/$canister.wasm"
     debug_gzip="$RUN_TMP/artifacts/debug/$canister.wasm.gz"
-    if [[ "$canister" == "root" ]]; then
-        KIND["$canister"]="bundle-canister"
-    else
-        KIND["$canister"]="leaf-canister"
-    fi
+    case "$canister" in
+    fleet_coordinator) KIND["$canister"]="fleet-coordinator" ;;
+    root) KIND["$canister"]="fleet-subnet-root" ;;
+    wasm_store) KIND["$canister"]="wasm-store" ;;
+    *) KIND["$canister"]="component" ;;
+    esac
     RELEASE_BYTES["$canister"]="$(stat -c%s "$release_wasm")"
     RELEASE_GZIP_BYTES["$canister"]="$(stat -c%s "$release_gzip")"
     DEBUG_BYTES["$canister"]="$(stat -c%s "$debug_wasm")"
@@ -440,19 +442,19 @@ for canister in "${CANISTERS[@]}"; do
         >>"$SIZE_METRICS"
 done
 
-leaf_min=0
-leaf_max=0
+component_min=0
+component_max=0
 root_bytes="${RELEASE_BYTES[root]}"
 max_retained_percent="0.00"
 max_growth_percent="0.00"
 for canister in "${CANISTERS[@]}"; do
-    if [[ "${KIND[$canister]}" == "leaf-canister" ]]; then
+    if [[ "${KIND[$canister]}" == "component" ]]; then
         current_bytes="${RELEASE_BYTES[$canister]}"
-        if [[ "$leaf_min" -eq 0 || "$current_bytes" -lt "$leaf_min" ]]; then
-            leaf_min="$current_bytes"
+        if [[ "$component_min" -eq 0 || "$current_bytes" -lt "$component_min" ]]; then
+            component_min="$current_bytes"
         fi
-        if [[ "$current_bytes" -gt "$leaf_max" ]]; then
-            leaf_max="$current_bytes"
+        if [[ "$current_bytes" -gt "$component_max" ]]; then
+            component_max="$current_bytes"
         fi
     fi
     retained_percent="$(awk -v retained="${RETAINED_BYTES[$canister]}" -v total="${RELEASE_BYTES[$canister]}" 'BEGIN { printf "%.4f", (retained / total) * 100 }')"
@@ -465,27 +467,27 @@ for canister in "${CANISTERS[@]}"; do
     fi
 done
 
-leaf_spread_ratio="$(ratio "$leaf_min" "$leaf_max")"
-root_leaf_ratio="$(ratio "$leaf_max" "$root_bytes")"
+component_spread_ratio="$(ratio "$component_min" "$component_max")"
+root_component_ratio="$(ratio "$component_max" "$root_bytes")"
 RISK_SCORE=0
 declare -a RISK_DRIVERS=()
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
     RISK_SCORE=$((RISK_SCORE + 2))
-    RISK_DRIVERS+=("no compatible v2 predecessor: +2")
+    RISK_DRIVERS+=("no compatible v3 predecessor: +2")
 fi
-if awk -v value="$leaf_spread_ratio" 'BEGIN { exit !(value >= 1.25) }'; then
+if awk -v value="$component_spread_ratio" 'BEGIN { exit !(value >= 1.25) }'; then
     RISK_SCORE=$((RISK_SCORE + 2))
-    RISK_DRIVERS+=("leaf release spread >= 1.25: +2")
-elif awk -v value="$leaf_spread_ratio" 'BEGIN { exit !(value >= 1.10) }'; then
+    RISK_DRIVERS+=("Component release spread >= 1.25: +2")
+elif awk -v value="$component_spread_ratio" 'BEGIN { exit !(value >= 1.10) }'; then
     RISK_SCORE=$((RISK_SCORE + 1))
-    RISK_DRIVERS+=("leaf release spread 1.10-1.2499: +1")
+    RISK_DRIVERS+=("Component release spread 1.10-1.2499: +1")
 fi
-if awk -v value="$root_leaf_ratio" 'BEGIN { exit !(value >= 3.0) }'; then
+if awk -v value="$root_component_ratio" 'BEGIN { exit !(value >= 3.0) }'; then
     RISK_SCORE=$((RISK_SCORE + 2))
-    RISK_DRIVERS+=("root/max-leaf release ratio >= 3.0: +2")
-elif awk -v value="$root_leaf_ratio" 'BEGIN { exit !(value >= 2.0) }'; then
+    RISK_DRIVERS+=("root/max-Component release ratio >= 3.0: +2")
+elif awk -v value="$root_component_ratio" 'BEGIN { exit !(value >= 2.0) }'; then
     RISK_SCORE=$((RISK_SCORE + 1))
-    RISK_DRIVERS+=("root/max-leaf release ratio 2.0-2.9999: +1")
+    RISK_DRIVERS+=("root/max-Component release ratio 2.0-2.9999: +1")
 fi
 if awk -v value="$max_growth_percent" 'BEGIN { exit !(value >= 10.0) }'; then
     RISK_SCORE=$((RISK_SCORE + 2))
@@ -510,7 +512,7 @@ else
     RUN_RESULT="pass"
 fi
 if [[ "$BASELINE_REPORT" == "N/A" ]]; then
-    COMPARABILITY="first-v2-baseline"
+    COMPARABILITY="first-v3-baseline"
     ORIGINAL_BASELINE_REPORT="$REPORT_RELATIVE"
 else
     COMPARABILITY="comparable to immediate compatible predecessor"
@@ -592,7 +594,7 @@ EOF
 COMPLETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 mkdir -p "$DAY_DIR"
 cat >"$REPORT_PATH" <<EOF
-# Wasm Footprint Audit v2 - $RUN_DATE
+# Wasm Footprint Audit v3 - $RUN_DATE
 
 ## Verdict
 
@@ -601,17 +603,19 @@ cat >"$REPORT_PATH" <<EOF
 - Comparability: \`$COMPARABILITY\`.
 - Authoritative risk score: \`$RISK_SCORE/10\`.
 
-V2 completed fresh release and debug builds for all six attached roles through
-Canic's authoritative host artifact builder. It did not invoke direct Cargo
+V3 completed fresh release and debug builds for every frozen configured role
+plus Fleet Coordinator and Wasm Store through Canic's authoritative host
+artifact builder. It did not invoke direct Cargo
 Wasm compilation, infer a target-directory artifact, or recreate a pre-shrink
-metric. This closes the executable-method defect in
-\`CANIC-092-AUDIT-016\`; the measured result creates no new product finding.
+metric. It admits the current roster and separate infrastructure coverage after
+v2's frozen scope correctly detected product drift. Historical v2 evidence
+remains valid but is not comparable with v3.
 
 ## Scope And Identity
 
 - Definition: \`$DEFINITION_PATH\`.
 - Compared predecessor: \`$BASELINE_REPORT\`.
-- Original v2 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
+- Original v3 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
 - Release anchor: \`$RELEASE_ANCHOR\`.
 - Source commit: \`$PRODUCT_COMMIT\`.
 - Source tree: \`$SOURCE_TREE_HASH\`.
@@ -638,7 +642,7 @@ clean_worktree: true before; tracked-clean after; generated .icp only
 cargo_lock_hash: $CARGO_LOCK_HASH
 rust_toolchain: $RUSTC_VERSION; $CARGO_VERSION
 target_triple: wasm32-unknown-unknown
-feature_set: apps/test attached six-role roster
+feature_set: apps/test frozen configured roles plus Coordinator and Store
 audit_method_id: $METHOD_ID
 audit_method_version: $METHOD_VERSION
 audit_method_fingerprint: $METHOD_FINGERPRINT
@@ -672,9 +676,11 @@ done
 
 cat >>"$REPORT_PATH" <<EOF
 
-There is no dedicated minimal role in scope. Leaf release spread is
-\`$leaf_spread_ratio\`; \`root\` is interpreted separately as a bundle canister
-and is \`$root_leaf_ratio\` times the largest leaf. No v1 raw/shrunk delta is
+There is no dedicated minimal role in scope. Component release spread is
+\`$component_spread_ratio\`; \`root\` is interpreted separately as Fleet Subnet
+Root infrastructure and is \`$root_component_ratio\` times the largest
+Component. Coordinator and Store are independently reported infrastructure.
+No v1 raw/shrunk delta is
 reported because that obsolete duplicate artifact model was removed.
 
 ## Structure And Retained-Size Evidence
@@ -697,7 +703,7 @@ All canonical release artifacts were accepted by \`ic-wasm info\`, \`twiggy
 top\`, retained \`top\`, \`dominators\`, and \`monos\`. The builder's shrink step
 removes source-level names, so current attribution is structural rather than a
 claim about a particular crate. Repeated \`table[0]\`/element retention across
-leaves is a runtime fan-in signal; it is not sufficient by itself to assign a
+Components is a runtime fan-in signal; it is not sufficient by itself to assign a
 dependency owner. Bounded dominator and monomorphization evidence is retained
 in each role detail file.
 
@@ -727,9 +733,9 @@ nor duplicated here.
 
 ## Findings
 
-- \`CANIC-092-AUDIT-016\`: fixed by v2's root-independent executable identity
-  and sole authoritative artifact path.
-- New product findings: none. The first v2 measurement is a baseline, and no
+- Method revision: v3 admits the current configured roster and separate
+  Coordinator/Store infrastructure; valid v2 history cannot baseline v3.
+- New product findings: none. The first v3 measurement is a baseline, and no
   comparable regression exists to attribute.
 
 ## Required Checklist
@@ -737,24 +743,24 @@ nor duplicated here.
 | Requirement | Result | Evidence |
 | --- | --- | --- |
 | clean isolated product snapshot | PASS | linked worktree clean before; tracked-clean after |
-| canonical release artifacts | PASS | six roles built through host \`build_artifact\` |
-| canonical debug artifacts | PASS | same six roles and authority |
+| canonical release artifacts | PASS | complete nine-role roster built through host \`build_artifact\` |
+| canonical debug artifacts | PASS | same nine roles and authority |
 | builder gzip integrity | PASS | every gzip decodes to its paired canonical Wasm |
 | machine-readable sizes | PASS | \`size-metrics.tsv\` |
-| \`ic-wasm info\` | PASS | six release artifacts parsed |
+| \`ic-wasm info\` | PASS | nine release artifacts parsed |
 | \`twiggy top\` and retained \`top\` | PASS | compact hotspot columns retained |
 | \`twiggy dominators\` | PASS | bounded role excerpts retained |
 | \`twiggy monos\` | PASS | bounded role excerpts retained |
 | compatible predecessor selection | PASS | exact method/roster/profile/path/tool keys; \`$BASELINE_REPORT\` |
-| direct Cargo/pre-shrink fallback absent | PASS | v2 invokes only the host artifact authority |
+| direct Cargo/pre-shrink fallback absent | PASS | v3 invokes only the host artifact authority |
 | source mutation | PASS | no tracked mutation or unexpected untracked path |
 
 ## Verification Readout
 
 | Command/check | Result | Notes |
 | --- | --- | --- |
-| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | six ordered roles |
-| same authoritative command with \`debug\` | PASS | six ordered roles |
+| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | nine ordered roles |
+| same authoritative command with \`debug\` | PASS | nine ordered roles |
 | \`gzip -t\` plus decoded SHA-256 equality | PASS | release and debug artifacts |
 | \`ic-wasm <release.wasm> info\` | PASS | all roles |
 | \`twiggy top\|dominators\|monos <release.wasm>\` | PASS | all roles |

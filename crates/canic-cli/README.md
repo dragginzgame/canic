@@ -104,6 +104,18 @@ canic build \
   root
 ```
 
+When diagnosing whether a wrapper launched the expected executable with the
+expected argument boundaries, opt into a single invocation's pre-parse trace:
+
+```bash
+CANIC_TRACE_ARGV=1 canic --environment local build demo app --profile fast
+```
+
+The trace writes the process ID, resolved executable, argument count, and every
+indexed OS argument to stderr before Clap parses anything. It prints arguments
+verbatim, so do not enable it for commands containing secrets or retain the
+output in broadly visible CI logs.
+
 For a full local development setup, including ICP CLI, helper tools, and the
 `canic` CLI, use the root `INSTALLING.md` guide.
 

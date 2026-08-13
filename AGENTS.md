@@ -11,9 +11,17 @@ with this file, the code is wrong.
 - Automated edits are restricted to this Canic repository. Do not modify,
   format, generate files in, or otherwise mutate sibling or external
   repositories, even when a Canic design names a downstream integration.
-- Treat every repository outside the Canic repository root as read-only.
-  Record or report downstream work that remains instead of implementing it in
-  another repository.
+- Treat every repository outside the Canic repository root as read-only unless
+  the maintainer explicitly authorizes creation of a named new repository at an
+  exact target path. That exception permits creating and bootstrapping only the
+  named repository for the stated task; if the target already contains
+  meaningful repository state, stop and request confirmation before modifying
+  it.
+- A request to inspect, review, audit, diagnose, design for, or give feedback
+  about another repository never authorizes edits there. Record or report
+  downstream work that remains instead of implementing it unless the
+  maintainer separately gives explicit mutation authority for that existing
+  repository.
 
 ## CI, Git, and Deployment
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for

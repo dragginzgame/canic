@@ -4,11 +4,11 @@
 //! Does not own: command execution, command-specific help text, or global option forwarding.
 //! Boundary: defines the top-level command catalog shared by help and dispatch.
 
-use crate::cli::globals::{environment_arg, icp_arg};
-use clap::{Arg, ArgAction, Command};
+use crate::cli::globals::{DISPATCH_ARGS, environment_arg, icp_arg};
+use clap::{Arg, ColorChoice, Command};
 use std::ffi::OsString;
 
-const TOP_LEVEL_HELP_TEMPLATE: &str = "{name} {version}\n{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}Options:\n{options}{after-help}\n";
+const TOP_LEVEL_HELP_TEMPLATE: &str = "Canic Operator CLI v{version}\n{about-with-newline}\n{usage-heading} {usage}\n\n{before-help}\x1b[1mOptions:\x1b[0m\n{options}{after-help}\n";
 const COLOR_RESET: &str = "\x1b[0m";
 const COLOR_HEADING: &str = "\x1b[1m";
 const COLOR_COMMAND: &str = "\x1b[38;5;109m";
@@ -145,55 +145,48 @@ pub fn top_level_command() -> Command {
     let command = Command::new("canic")
         .version(env!("CARGO_PKG_VERSION"))
         .about("Operator CLI for Canic Apps, Fleets, backups, and ICP wallet workflows")
-        .disable_version_flag(true)
-        .arg(
-            Arg::new("version")
-                .short('V')
-                .long("version")
-                .action(ArgAction::SetTrue)
-                .help("Print version"),
-        )
-        .arg(icp_arg().global(true))
-        .arg(environment_arg().global(true))
+        .color(ColorChoice::Always)
+        .subcommand_required(true)
+        .arg(icp_arg())
+        .arg(environment_arg())
         .subcommand_help_heading("Commands")
         .help_template(TOP_LEVEL_HELP_TEMPLATE)
-        .before_help(command_section(COMMAND_SPECS).join("\n"))
-        .after_help("Run `canic <command> --help` for command-specific help.");
+        .before_help(format!(
+            "{}Commands:{}\n{}",
+            COLOR_HEADING,
+            COLOR_RESET,
+            command_section(COMMAND_SPECS).join("\n")
+        ))
+        .after_help(format!(
+            "\n{}Tip:{} Run {} for command-specific help.",
+            COLOR_TIP,
+            COLOR_RESET,
+            color(COLOR_COMMAND, "`canic <command> --help`")
+        ));
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
-        command.subcommand(Command::new(spec.name).about(spec.about))
+        command.subcommand(
+            Command::new(spec.name)
+                .about(spec.about)
+                .disable_help_flag(true)
+                .disable_version_flag(true)
+                .arg(
+                    Arg::new(DISPATCH_ARGS)
+                        .num_args(0..)
+                        .allow_hyphen_values(true)
+                        .trailing_var_arg(true)
+                        .value_parser(clap::value_parser!(OsString))
+                        .hide(true),
+                ),
+        )
     })
 }
 
 /// Render Canic's custom colorized top-level usage text.
+#[cfg(test)]
 pub fn usage() -> String {
-    let mut lines = vec![
-        color(
-            COLOR_HEADING,
-            &format!("Canic Operator CLI v{}", env!("CARGO_PKG_VERSION")),
-        ),
-        String::new(),
-        "Usage: canic [OPTIONS] <COMMAND>".to_string(),
-        String::new(),
-        color(COLOR_HEADING, "Commands:"),
-    ];
-    lines.extend(command_section(COMMAND_SPECS));
-    lines.extend([
-        String::new(),
-        color(COLOR_HEADING, "Options:"),
-        "      --icp <path>      Path to the icp executable for ICP-backed commands".to_string(),
-        "      --environment <name>  ICP environment for ICP-backed commands".to_string(),
-        "  -V, --version  Print version".to_string(),
-        "  -h, --help     Print help".to_string(),
-        String::new(),
-        format!(
-            "{}Tip:{} Run {} for command-specific help.",
-            COLOR_TIP,
-            COLOR_RESET,
-            color(COLOR_COMMAND, "`canic <command> --help`")
-        ),
-    ]);
-    lines.join("\n")
+    let help = top_level_command().render_help();
+    help.ansi().to_string()
 }
 
 fn command_section(specs: &[CommandSpec]) -> Vec<String> {
