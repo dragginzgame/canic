@@ -7,8 +7,8 @@ Date: 2026-08-13
 This document proposes the allocation policy for maintainer approval. It does
 not allocate a code and must not be imported by runtime code.
 [ledger-reconciliation.md](ledger-reconciliation.md) records the initial
-collision-free 685-identity family subset and the first forty-nine constructor/
-semantic-call passes, bringing current qualified coverage to 1,831 identities, while
+collision-free 685-identity family subset and the first seventy-three constructor/
+semantic-call passes, bringing current qualified coverage to 2,364 identities, while
 [projection-ledger.md](projection-ledger.md) aggregates every masked public
 mapping in that subset and its proposed numeric observation.
 [direct-constructor-frontier.md](direct-constructor-frontier.md) records the

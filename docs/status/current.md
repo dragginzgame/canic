@@ -19,10 +19,10 @@ Historical handoffs are archived at:
 - Workspace package version: `0.101.53`.
 - Latest published release: `v0.101.53` at
   `23c0328f78b215580d734ef01b52b35fa3e38ade`.
-- Root changelog: `0.102.0` is the open draft for the completed operator-
-  performance/CLI-diagnostics batch and the evidence-only design groundwork.
-  Workspace package versions remain `0.101.53`; no release version mutation or
-  tag has occurred.
+- Root changelog: `0.102.0` is ready for maintainer-owned full validation as an
+  explicitly requested checkpoint for the completed operator-performance/CLI-
+  diagnostics outcomes and evidence-only B1 snapshot. Package versions remain
+  `0.101.53`; no release version mutation or tag has occurred.
 - Active design and checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - Proposed adjacent design:
@@ -66,11 +66,13 @@ for another fresh Fleet and reports display-exact additive install phases.
 Exact interrupted Fleet recovery selects the same finalized build
 automatically. Reuse validates the recorded profile and matching Canic builder
 version, plus current topology, role/package identities, canonical manifests
-and artifact bytes before
-activation. A real fast-profile Demo App build completed in 110.31 seconds
-immediately after the code change and 25.49 seconds on the identical cache-hit
+and artifact bytes before activation. A real fast-profile Demo App build
+completed in 110.31 seconds
+immediately after the code change and 22.97 seconds on the latest cache-hit
 run, with one configured Cargo batch and one build each for Coordinator and
-Store. No package version or 0.102 diagnostic contract has changed.
+Store. Whole-App output is now infrastructure-first and reports instance scope,
+install-time root placement and its shared-batch duration. No package version
+or 0.102 diagnostic contract has changed.
 
 The allocation-policy proposal uses dense monotonic numbers with no semantic
 bands, compact unpadded `E<decimal>` rendering and nine host-only broad classes.
@@ -140,51 +142,51 @@ Continue B1 with the direct-constructor frontier and the new
 [dynamic public context inventory](../design/0.102-compact-diagnostic-codes/dynamic-public-context.md)
 before assigning numbers. The typed and explicitly expanded family ledgers
 began with a collision-free qualified subset of 685 symbolic identities. The
-first forty-nine Component Registry/root-retirement/Component-provisioning/
-Coordinator passes classify 1,625 effective sites and add 1,145 exact meanings
-plus one projection, bringing current qualified coverage to 1,831 identities: 1,800
-exact and 31 projections. That is
-not whole-program
-coverage, and the dynamic interpolation census is not yet complete. Its first
-twelve bounded slices now classify 117 values from the Canic memory-ledger
-facade, Wasm Store GC, shared manifest/capacity conversion, explicit Component Registry
+first seventy-three Component Registry/root-retirement/Component-provisioning/Coordinator/pool/Store passes classify 2,053 effective sites and add 1,678 exact
+meanings plus one projection, bringing current qualified coverage to 2,364
+identities: 2,333 exact and 31 projections. That is not whole-program coverage,
+and the dynamic interpolation census is not yet complete. Its first nineteen
+bounded slices classify 138 values from the Canic memory-ledger facade, Wasm
+Store GC, shared manifest/capacity conversion, explicit Component Registry
 denials, typed Store publication causes, delegated-session bootstrap, Store
 publication binding/inventory and Store GC fence, reclamation, binding
-finalization and deletion plus the two publication management transports: 53
-are caller-derivable, thirteen are sensitive operator-only, twenty-eight have
-existing typed owners and twenty-three are caller-required but unowned. Those
-twenty-three require request-scoped Store capacity/release inspection, guarded
+finalization and deletion, the two publication management transports and the
+Coordinator root-deletion closed labels, Coordinator initialization, pool asset
+principals, import routing evidence, root Store bootstrap and adoption state:
+66 are caller-derivable, sixteen are sensitive operator-only, thirty-one have
+existing typed owners and twenty-five are caller-required but unowned. Those
+twenty-five require request-scoped Store capacity/release inspection, guarded
 delegated-session capacity status, exact closed-discriminator diagnostics or
 root-proxied live GC inspection, operation-scoped Store deletion progress or a
 narrow operation-scoped Store-publication attempt status.
-Component RPC and Runtime Introspection are closed with zero explicit
-dynamic-error rows. Every dynamic publication GC invalid-state field is now
+Component RPC and Runtime Introspection have zero explicit dynamic-error rows.
+Every dynamic publication GC invalid-state field is now
 classified, as is the nested publication transport cause; their static
 invariant/cause branches remain allocation work. The transitive auth formatter
 remains open.
-
-The production-source scan finds 2,208 `InternalError::*` references in 101
-files after excluding external and inline test source. Component Registry ops
-and workflow alone contain 1,154. The Coordinator parent file reveals one
-generic receipt-invariant constructor with 235 static calls, expanding the
-effective frontier to 2,442 sites. One thousand six hundred twenty-five
-effective sites are classified, leaving 817 dispositions.
-Both Component Registry files
-are fully classified. Every remaining reference must
-be linked to an existing meaning, a newly justified meaning or a
-transparent/native/sediment disposition. A fresh range-owner manifest assigns
-all 800 Component Registry ops sites exactly once with zero gaps/overlaps, and
-the workflow source/table counts independently agree at 354. The 177-site
-Component provisioning ops file is mechanically closed by four consecutive
+The current-candidate constructor scan is pinned to `0750c309104b111fa6f5a1b3355c04fcb38faf71`;
+the post-baseline control-plane/core diff adds or removes no site. It finds 2,208
+`InternalError::*` references in 101 files after excluding external and inline
+test source. Component Registry ops and workflow alone contain 1,154. The Coordinator parent file reveals one
+generic receipt-invariant constructor with 292 static calls across the parent,
+root-deletion and deployment-ledger sources, expanding the effective frontier
+to 2,499 sites. Two thousand fifty-three effective sites are classified, leaving
+446 dispositions. Every remaining reference needs an existing/new exact meaning
+or a transparent/native/sediment disposition. A fresh range-owner manifest assigns all 800 Component Registry ops sites exactly
+once with zero gaps/overlaps, and the workflow source/table counts independently
+agree at 354. The 177-site Component provisioning ops file is mechanically closed by four consecutive
 range owners and its workflow by three. The Coordinator parent file's 154
-direct constructors are mechanically closed, while 219 of its 235 hidden
-receipt calls remain open. Continue those, then its dedicated root-deletion
-module and workflow before the pool/root/Store and runtime owners.
+direct and 235 parent-file hidden calls are closed, as are root deletion's 21
+direct and 10 hidden sites and deployment-ledger's two direct and 47 hidden
+sites. The 12-site Coordinator workflow, all 69 Canister pool ops and all 17
+pool workflow/refill references and the 23-site root Store bootstrap workflow
+are closed. Root bootstrap and Store adoption state are also closed. Continue
+with remaining Wasm Store and Mirror/Directory synchronization owners.
 
 In parallel, continue the dynamic-value ledger with remaining explicit runtime
 constructions, the transitive auth formatter and transitive Component Registry
-messages. Do not replace missing
-ownership with generic detail text or a global last-error field.
+messages. Do not replace missing ownership with generic detail text or a global
+last-error field.
 
 All 31 currently known projections and five exact leaves reused as projections
 have proposed observability owners. Seventeen IC call families are mapped to

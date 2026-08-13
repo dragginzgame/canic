@@ -56,18 +56,27 @@ root endpoint bundle. Every other configured role selects the non-root
 lifecycle and endpoint bundle. There is no separate public root startup macro.
 
 Ordinary roles may be declared before topology placement so `cargo check` can
-run during early development. `canic build <app>` batches the configured Fleet
-Subnet Root with every attached Component role, then builds Canic's canonical
-`fleet_coordinator` and `wasm_store`. `canic build <app> <role>` selects one
-deployable configured role. Both forms reject declared-only roles before Canic
-writes deploy artifacts.
+run during early development. `canic build <app>` builds Canic's canonical
+`fleet_coordinator` and `wasm_store` first, then batches the configured Fleet
+Subnet Root with every attached Component role. `canic build <app> <role>`
+selects one deployable configured role. Both forms reject declared-only roles
+before Canic writes deploy artifacts.
 
 Complete App builds classify Component artifacts under Application Wasm and
 the Fleet Coordinator, Fleet Subnet Root and Wasm Store under Infrastructure
-Wasm. The configured root retains the shared Cargo build for efficiency and
-uses `shared` rather than a fabricated per-role duration; Coordinator and Store
-row-level `ELAPSED` values cover their dedicated builds. Both tables show each
-resolved Cargo package version as the second column.
+Wasm, with Infrastructure rendered first. The infrastructure table also states
+whether one artifact is instantiated per Fleet or per Fleet Subnet. Coordinator
+and Store row-level `ELAPSED` values cover their dedicated builds. The root row
+shows the complete configured-batch duration with a `shared` qualifier instead
+of fabricating an isolated root duration. Both tables show each resolved Cargo
+package version as the second column.
+
+The configured root embeds the selected App configuration, so a changed App
+configuration requires a newly validated configured artifact set. It does not
+embed physical Subnet placement. The same admitted root Wasm can therefore be
+installed once for each Fleet Subnet in that release set; the operator-owned
+Fleet input selects those Subnets during install, and init authority binds each
+root instance to its exact Fleet, Subnet and sibling Store.
 
 One complete configured build issues one Cargo command per Cargo workspace and
 selected profile. Artifact copying, shrinking, Candid extraction, metadata

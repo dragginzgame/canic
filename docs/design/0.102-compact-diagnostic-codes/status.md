@@ -7,8 +7,10 @@ Date: 2026-08-13
 - State: evidence-only baseline and diagnostic inventory are active. No public
   error shape, numeric assignment, stable record or runtime behavior has
   changed.
-- Baseline: clean `main` tag `v0.101.53` at
-  `23c0328f78b215580d734ef01b52b35fa3e38ade`.
+- Evidence baseline: clean `main` tag `v0.101.53` at
+  `23c0328f78b215580d734ef01b52b35fa3e38ade`. The active constructor
+  reconciliation is pinned separately to current-candidate control-plane/core
+  source content at `0750c309104b111fa6f5a1b3355c04fcb38faf71`.
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
   pre-0.102. Every Canic-owned canister in a Fleet must be installed from one
   admitted release set before activation; matching host/CLI callers and
@@ -19,6 +21,10 @@ Date: 2026-08-13
   dynamic-public-context and durable-state inventories plus the initial
   allocation ledger, host catalogue and projection table receive maintainer
   approval.
+- Release checkpoint: at the maintainer's explicit request, `0.102.0` closes
+  the completed operator-performance and CLI-diagnostic outcomes together with
+  this reviewable B1 evidence snapshot. B1 remains active after the checkpoint;
+  no incomplete diagnostic behavior is represented as released.
 - Measurement gate: the fresh current-source canonical Wasm baseline passes;
   every later material cut and closeout must remain comparable with v3.
 
@@ -46,8 +52,9 @@ the final batch proves the complete absence and footprint properties.
 
 B1 is complete only when all of the following are reviewable together:
 
-1. the current public error constructors, internal conversions and host
-   consumers are inventoried from `v0.101.53` source;
+1. the initial `v0.101.53` public-error, internal-conversion and host-consumer
+   inventories are reconciled against one exact current release-candidate
+   source snapshot;
 2. every dynamic public-message interpolation is classified as
    caller-derivable, sensitive/operator-only, authoritatively typed or
    caller-required but unowned, and every unowned required value has a proposed
@@ -97,13 +104,13 @@ B1 is complete only when all of the following are reviewable together:
   `Conflict`, `ResourceExhausted` and `Unavailable` matches require semantic
   splits before the compact cut.
 - [dynamic-public-context.md](dynamic-public-context.md) now classifies the
-  first 117 individual values across the Canic memory-ledger facade, Wasm Store
+  first 138 individual values across the Canic memory-ledger facade, Wasm Store
   GC, shared manifest/capacity conversion, explicit Component Registry denials,
   typed Store publication causes, delegated-session bootstrap and Store
   publication binding/inventory plus Store GC fence, reclamation, binding
   finalization and deletion plus the two publication management transports.
-  Fifty-three are caller-derivable, thirteen are sensitive operator-only,
-  twenty-eight already have exact typed owners and twenty-three are caller-
+  Sixty-six are caller-derivable, sixteen are sensitive operator-only,
+  thirty-one already have exact typed owners and twenty-five are caller-
   required but unowned. They require request-scoped Store capacity/release
   inspection,
   guarded delegated-session capacity status, exact closed-discriminator
@@ -216,7 +223,21 @@ B1 is complete only when all of the following are reviewable together:
   [fleet-coordinator-constructor-leaves.md](fleet-coordinator-constructor-leaves.md)
   and
   [fleet-coordinator-receipt-invariant-frontier.md](fleet-coordinator-receipt-invariant-frontier.md)
-  classify 1,625 effective sites across top-level and direct-child allocation, install,
+  and
+  [fleet-coordinator-root-deletion-constructor-leaves.md](fleet-coordinator-root-deletion-constructor-leaves.md)
+  and
+  [fleet-coordinator-deployment-ledger-constructor-leaves.md](fleet-coordinator-deployment-ledger-constructor-leaves.md)
+  and
+  [fleet-coordinator-workflow-constructor-leaves.md](fleet-coordinator-workflow-constructor-leaves.md)
+  and
+  [canister-pool-constructor-leaves.md](canister-pool-constructor-leaves.md)
+  and
+  [canister-pool-workflow-constructor-leaves.md](canister-pool-workflow-constructor-leaves.md)
+  and
+  [root-store-bootstrap-constructor-leaves.md](root-store-bootstrap-constructor-leaves.md)
+  and
+  [root-bootstrap-store-state-constructor-leaves.md](root-bootstrap-store-state-constructor-leaves.md)
+  classify 2,053 effective sites across top-level and direct-child allocation, install,
   commitment and activation plus top-level draining, quiescence and recycling
   and subtree-removal orchestration/effect ops/workflow plus root draining,
   final-inventory and logical-removal persistence plus Store reclamation,
@@ -238,15 +259,29 @@ B1 is complete only when all of the following are reviewable together:
   result/Directory integrity, cursor advancement, member authority, hashing,
   commit mapping and complete Coordinator-authenticated provisioning
   orchestration plus Coordinator genesis/join/snapshot, Component provisioning,
-  service publication, Directory/runtime evidence and root lifecycle. The
-  forty-nine passes add 1,145 exact meanings and one Registry-
+  service publication, Directory/runtime evidence and root lifecycle plus the
+  dedicated root-deletion transition and durable-history owner plus Scale Out
+  reservation, activation, reconstruction and retired-receipt replay plus
+  Coordinator workflow admission, fences and transparent propagation. The
+  first Canister pool range closes Store/import initialization, reset,
+  recycling and claims plus autonomous creation through explicit rollover,
+  handoff, Store deletion and shared helpers plus maintenance, import and
+  recoverable refill workflow plus root Store manifest, artifact and catalog
+  bootstrap, root Subnet discovery and sibling Store adoption state. The
+  seventy-three passes add 1,678 exact meanings and one Registry-
   state projection while reusing existing policy and earlier-slice identities. The
   complete Component Registry and Component provisioning ops/workflow files are
   classified. The Coordinator parent file's 154 direct constructors are
-  mechanically closed, but 219 of its 235 receipt-invariant calls remain open.
+  mechanically and semantically closed across all 154 direct constructors and
+  all 235 parent-file receipt-invariant calls. The root-deletion module's 21
+  direct and 10 hidden calls and deployment ledger's 2 direct and 47 hidden
+  calls are also closed. All 292 shared-funnel calls and the 12-site Coordinator
+  workflow now have dispositions. All 69 Canister pool ops references are
+  classified across three consecutive ranges, as are all 17 pool workflow and
+  refill references.
 
-The currently qualified ledgers contain 1,800 provisional exact candidates and
-31 distinct additional safe projections: 1,831 symbolic identities. Their names
+The currently qualified ledgers contain 2,333 provisional exact candidates and
+31 distinct additional safe projections: 2,364 symbolic identities. Their names
 are collision-free and all known reuse inside that qualified subset has been
 deducted. They do not yet cover the direct-constructor frontier and therefore
 are not an allocation or authority for the next number.
@@ -256,13 +291,15 @@ win and do not authorize numeric assignments.
 
 ## Next Action
 
-Reconcile the effective constructor frontier, continuing with the remaining 219
-Coordinator receipt-invariant calls, its dedicated root-deletion module and
-workflow. Component Registry is mechanically closed at all 800 ops and 354
+Reconcile the effective constructor frontier, continuing with remaining Wasm
+Store and Mirror/Directory synchronization owners.
+Coordinator ops and workflow are
+closed, including all 292 hidden receipt calls. Component Registry
+is mechanically closed at all 800 ops and 354
 workflow constructors; Component provisioning is closed at all 177 ops and 56
 workflow constructors. The original 2,208-reference census is now an effective
-2,442-site frontier because one generic Coordinator adapter expands to 235
-static call-site meanings.
+2,499-site frontier because one generic Coordinator adapter expands to 292
+static call-site meanings across three files.
 Then proceed by authority and external-effect risk. In parallel
 within evidence-only B1, complete
 [dynamic-public-context.md](dynamic-public-context.md) and link every public

@@ -483,3 +483,99 @@ diagnostics; raw reject messages and Candid implementation prose are discarded.
 The infra and ops layers must preserve an exhaustive typed call cause until the
 publication workflow performs this classification. Parsing the current
 `InternalError` message would recreate the string authority that 0.102 removes.
+
+## Classified Slice 13: Coordinator Root-Deletion Closed Labels
+
+The dedicated Coordinator root-deletion owner has two generic helpers with
+dynamic message values. Both helpers receive only closed local discriminators;
+neither justifies public detail text.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-118` | `fleet_coordinator::root_deletion::find_root_deletion_record`; conflicting lookup | Coordinator root-deletion intent, readiness, execution, completion and status routes | one of four exact root-deletion record-family identity conflicts | static record-family `label` selected by the typed caller | 1 — caller-derivable | invoked endpoint and maintained lookup wrapper determine the record family | none | guarded root/operator context | discard the label; select the exact intent/readiness/execution/deletion identity-conflict diagnostic at the typed wrapper |
+| `DPC-119` | `fleet_coordinator::root_deletion::response_hash`; Candid encoding failure | Coordinator root-deletion intent, readiness, execution and completion routes | one of four exact root-deletion record-family encoding failures | static record-family `label` selected with the hash domain | 1 — caller-derivable | invoked endpoint and maintained hash domain determine the record family | none | guarded root/operator context | discard the label; select the exact intent/readiness/execution/deletion encoding diagnostic at the typed caller |
+| `DPC-120` | same encoding failure as `DPC-119` | same routes | same record-family encoding failure | dependency-owned Candid encoder cause | 2 — sensitive operator-only | no safe typed public owner | structured diagnostic log carrying the exact numeric code and cause outside the public response | prohibited public implementation detail | remove the cause from the public diagnostic; retain it only in structured operator logging |
+
+Slice totals are two caller-derivable values and one sensitive operator-only
+value. No value is already authoritatively typed or caller-required unowned.
+The generic helpers must accept a closed internal record-family discriminator
+or move to typed wrappers during B2; they must not choose a diagnostic by
+matching the current label text.
+
+## Classified Slice 14: Fleet Coordinator Workflow
+
+The Coordinator workflow introduces one direct dynamic value. Root-returned
+errors are transparent propagation and remain owned by their root producers.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-121` | `FleetCoordinatorWorkflow::initialize`; non-controller denial | Coordinator initialization | existing `ACCESS_CONTROLLER_REQUIRED` | transport caller principal | 1 — caller-derivable | IC ingress caller; the rejected caller already knows its principal | none | public to the affected caller; never catalogue identity | discard the interpolation and return only the exact controller-required code |
+
+The slice adds one caller-derivable value and no sensitive, typed or unowned
+value. It reuses the same disposition as the memory-ledger controller boundary
+without allocating another diagnostic identity.
+
+## Classified Slice 15: Canister Pool Inventory And Recycling
+
+The first Canister pool ops range has two interpolated principals. Each is
+copied directly from the request being rejected.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-122` | `CanisterPoolOps::initialize_imports`; existing-asset conflict | root pool initialization | provisional `CANISTER_POOL_IMPORT_ASSET_CONFLICT` | imported physical Canister principal | 1 — caller-derivable | exact import request | none | public to the controller that supplied it | discard the interpolation; request plus exact code identify the asset |
+| `DPC-123` | `CanisterPoolOps::register_recycled_pending`; workload-state conflict | Component removal/recycling | provisional `CANISTER_POOL_RECYCLE_WORKLOAD_REQUIRED` | physical workload Canister principal | 1 — caller-derivable | exact recycling request | none | public to the authenticated root workflow | discard the interpolation; request plus exact code identify the asset |
+
+The slice adds two caller-derivable values and no sensitive, typed or unowned
+value. The reset-failure reason stored by this owner is operational state, not
+an error-message interpolation, and remains in the durable-string ledger.
+
+## Classified Slice 16: Canister Pool Required Asset
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-124` | `required_asset`; inventory lookup miss | pool reset, claim, handoff, Store and recycling routes | provisional `CANISTER_POOL_ASSET_NOT_REGISTERED` | requested physical Canister principal | 1 — caller-derivable | exact caller request or retained operation being reconciled | none | public to the authenticated pool/root workflow | discard the interpolation; request/operation plus exact code identify the asset |
+
+The slice adds one caller-derivable value and no sensitive, typed or unowned
+value.
+
+## Classified Slice 17: Canister Pool Workflow Inputs And Routing
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-125` | `status`; page-limit denial | pool status | provisional `CANISTER_POOL_STATUS_LIMIT_INVALID` | maximum page limit 256 | 1 — caller-derivable | maintained endpoint contract | none | public | discard the interpolation; exact code and contract define the bound |
+| `DPC-126` | `validate_import_subnet`; missing route | pool import | provisional `CANISTER_POOL_IMPORT_SUBNET_ROUTE_MISSING` | requested physical Canister principal | 1 — caller-derivable | exact import request | none | public to the controller | discard the interpolation; request plus code identify the target |
+| `DPC-127` | `validate_import_subnet`; route mismatch | pool import | provisional `CANISTER_POOL_IMPORT_SUBNET_MISMATCH` | requested physical Canister principal | 1 — caller-derivable | exact import request | none | public to the controller | discard the interpolation; request plus code identify the target |
+| `DPC-128` | same route mismatch | pool import | same meaning | observed NNS Registry Subnet | 4 — caller-required but unowned | transient typed NNS route result | guarded `CanisterPoolImportRoutingStatusResponse.observed_subnet` bound to target and Registry version | guarded network topology | retain in the bounded routing status, not diagnostic text |
+| `DPC-129` | same route mismatch | pool import | same meaning | protected root placement Subnet | 4 — caller-required but unowned | protected Fleet Subnet Root binding, not currently exposed by an import-result owner | guarded `CanisterPoolImportRoutingStatusResponse.expected_subnet` on the same query | guarded Fleet placement authority | retain beside `DPC-128`; both values must use one Registry-versioned observation |
+
+The slice adds three caller-derivable and two caller-required unowned values.
+The proposed response is a narrow read-only routing inspection keyed by the
+requested Canister; it is not a generic last-error record and cannot become
+placement authority.
+
+## Classified Slice 18: Root Store Bootstrap
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-130` | `load_and_validate_manifest`; size bound | root Store bootstrap/status | provisional `ROOT_STORE_RELEASE_SET_MANIFEST_SIZE_INVALID` | maximum manifest bytes | 1 — caller-derivable | maintained root Store manifest contract | none | guarded root/host | discard interpolation; contract plus exact code owns the bound |
+| `DPC-131` | manifest JSON decoding | same routes | provisional `ROOT_STORE_RELEASE_SET_JSON_INVALID` | dependency parser cause | 2 — sensitive operator-only | no safe typed public owner | structured diagnostic log | prohibited public implementation detail | remove from public response; retain with exact code only in operator log |
+| `DPC-132` | manifest canonical encoding | same routes | provisional `ROOT_STORE_RELEASE_SET_CANONICALIZATION_FAILED` | dependency serializer cause | 2 — sensitive operator-only | no safe typed public owner | structured diagnostic log | prohibited public implementation detail | remove from public response; retain with exact code only in operator log |
+| `DPC-133` | protected Store capacity denial | same routes | provisional `ROOT_STORE_BYTE_CAPACITY_EXCEEDED` | deduplicated required payload bytes | 1 — caller-derivable | exact host-produced release-set manifest | none | guarded root/host | discard interpolation; caller can reproduce the canonical sum |
+| `DPC-134` | same capacity denial | same routes | same meaning | protected maximum Store bytes | 1 — caller-derivable | exact root plan/configuration supplied by the host | none | guarded root/host | discard interpolation; caller already owns the frozen limit |
+| `DPC-135` | staged-artifact authority mismatch | same routes | provisional `ROOT_STORE_STAGED_ARTIFACT_AUTHORITY_MISMATCH` | artifact role | 1 — caller-derivable | exact release-set manifest entry | none | guarded root/host | discard interpolation; manifest plus exact code identifies the role |
+
+The slice adds four caller-derivable and two sensitive operator-only values.
+The two currently stringified typed topology causes are not counted again here:
+they become transparent and remain decomposed by the existing transitive
+topology/configuration inventories.
+
+## Classified Slice 19: Root Bootstrap And Store Adoption State
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-136` | root Store-state begin-adoption adapter | root Store adoption | one of three exact adoption state diagnostics | `SiblingWasmStoreAdoptionError` variant | 3 — authoritatively typed | closed stable-state error enum | exact exhaustive mapping | guarded root/host | discard Debug text and map the variant directly |
+| `DPC-137` | root Store-state commit-adoption adapter | same route | one of four exact adoption state diagnostics | `SiblingWasmStoreAdoptionError` variant | 3 — authoritatively typed | closed stable-state error enum | exact exhaustive mapping | guarded root/host | discard Debug text and map the variant directly |
+| `DPC-138` | `root_set_subnet_id`; current-Subnet discovery error | root lifecycle bootstrap | exact nested IC/Registry discovery diagnostic | typed nested `InternalError` | 3 — authoritatively typed | maintained `IcWorkflow::try_get_current_subnet_pid` cause | transparent registered-code propagation | guarded root/operator | remove workflow prose and propagate the exact nested diagnostic |
+
+The slice adds three authoritatively typed values and no caller-derivable,
+sensitive or unowned value.
