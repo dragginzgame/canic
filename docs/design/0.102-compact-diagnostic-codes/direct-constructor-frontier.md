@@ -17,7 +17,15 @@ deleted rather than numbered.
 
 ## Method
 
-At immutable source baseline `v0.101.53`, the scan:
+The initial census used immutable source baseline `v0.101.53`. The current
+0.102.0 candidate reconciliation is pinned to the control-plane/core source
+content at `0750c309104b111fa6f5a1b3355c04fcb38faf71`; later working-tree Rust
+changes are confined to `canic-cli`, outside this frontier. A direct diff from
+the baseline confirms that the intervening control-plane/core changes add or
+remove no `InternalError` constructor reference. Any later change under the
+scanned roots requires a fresh count before allocation.
+
+For that exact source content, the scan:
 
 1. enumerates Rust source under `canic-core/src` and
    `canic-control-plane/src`;
@@ -90,6 +98,15 @@ Current site-level progress:
 | Coordinator Directory publication and root acceptance evidence | 24 | 622 |
 | Coordinator root-provision response/current-progress validation | 10 | 612 |
 | Coordinator Registry admission, snapshot and root-lifecycle gates | 14 | 598 |
+| Coordinator root-deletion transition and durable-history validation | 21 | 577 |
+| Coordinator deployment-ledger public plan boundaries | 2 | 575 |
+| Coordinator workflow admission, fences and root-error propagation | 12 | 563 |
+| Canister pool inventory initialization, reset and claims | 11 | 552 |
+| Canister pool autonomous creation intent through rollover | 32 | 520 |
+| Canister pool handoff, Store deletion, configuration and helpers | 26 | 494 |
+| Canister pool maintenance, import, handoff and refill workflow | 17 | 477 |
+| Root Store bootstrap manifest, artifact and live-catalog workflow | 23 | 454 |
+| Root bootstrap Subnet discovery and sibling Store adoption state | 8 | 446 |
 
 These dispositions are recorded in the Component Registry persistence and
 workflow ledgers and the Fleet Subnet Root workflow ledger linked from the
@@ -99,18 +116,19 @@ until the concrete constructor is linked in the site manifest.
 
 ### Expanded Semantic Frontier
 
-The Coordinator parent file reveals one shared `receipt_invariant` constructor
-with 235 production call sites in 102 functions. Replacing that one direct site
-with its call-site meanings expands the effective disposition frontier by 234:
+The Coordinator family reveals one shared `receipt_invariant` constructor with
+292 production call sites: 235 in the parent source, 10 in `root_deletion` and
+47 in `deployment_ledger`. Replacing that one direct site with its call-site
+meanings expands the effective disposition frontier by 291:
 
 | Frontier | Total | Classified | Open |
 | --- | ---: | ---: | ---: |
-| Mechanical direct constructors | 2,208 | 1,610 | 598 |
-| Coordinator receipt-invariant calls replacing one adapter site | 235 | 16 | 219 |
-| **Effective semantic disposition frontier** | **2,442** | **1,625** | **817** |
+| Mechanical direct constructors | 2,208 | 1,762 | 446 |
+| Coordinator receipt-invariant calls replacing one adapter site | 292 | 292 | 0 |
+| **Effective semantic disposition frontier** | **2,499** | **2,053** | **446** |
 
 The adapter is explicitly a no-code funnel. Semantic progress must use the
-2,442-site frontier until all 235 calls have exact dispositions; counting its
+2,499-site frontier until all 292 calls have exact dispositions; counting its
 single constructor as one diagnostic would be a false closure.
 
 The largest two files alone contain 1,154 references:
@@ -148,15 +166,15 @@ constructor site, not merely the enclosing file.
 | 354 | `crates/canic-control-plane/src/workflow/component_registry/mod.rs` | Fully classified |
 | 177 | `crates/canic-control-plane/src/ops/component_provisioning.rs` | Fully classified |
 | 56 | `crates/canic-control-plane/src/workflow/component_provisioning.rs` | Fully classified |
-| 154 | `crates/canic-control-plane/src/ops/fleet_coordinator/mod.rs` | Direct sites classified; receipt funnel 16/235 calls classified |
-| 69 | `crates/canic-control-plane/src/ops/canister_pool/mod.rs` | Site-level reconciliation open |
+| 154 | `crates/canic-control-plane/src/ops/fleet_coordinator/mod.rs` | Fully classified: 154 direct sites and all 235 receipt-funnel calls |
+| 69 | `crates/canic-control-plane/src/ops/canister_pool/mod.rs` | Fully classified across three consecutive range owners |
 | 69 | `crates/canic-control-plane/src/workflow/fleet_subnet_root.rs` | Fully classified |
 | 32 | `crates/canic-core/src/workflow/component_runtime.rs` | Site-level reconciliation open |
 | 32 | `crates/canic-core/src/workflow/runtime/auth/prepare/replay.rs` | Site-level reconciliation open |
 | 27 | `crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs` | Site-level reconciliation open |
 | 23 | `crates/canic-control-plane/src/ops/component_directory_synchronization/mod.rs` | Site-level reconciliation open |
-| 23 | `crates/canic-control-plane/src/workflow/bootstrap/root_store/mod.rs` | Site-level reconciliation open |
-| 21 | `crates/canic-control-plane/src/ops/fleet_coordinator/root_deletion/mod.rs` | Site-level reconciliation open |
+| 23 | `crates/canic-control-plane/src/workflow/bootstrap/root_store/mod.rs` | Fully classified, including 2 transparent typed topology adapters |
+| 21 | `crates/canic-control-plane/src/ops/fleet_coordinator/root_deletion/mod.rs` | Fully classified: 21 direct sites and all 10 hidden receipt-funnel calls |
 | 15 | `crates/canic-core/src/workflow/placement/allocation.rs` | Site-level reconciliation open |
 | 14 | `crates/canic-core/src/workflow/ic/icp_refill/replay.rs` | Site-level reconciliation open |
 | 14 | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs` | Site-level reconciliation open |
@@ -164,8 +182,8 @@ constructor site, not merely the enclosing file.
 | 13 | `crates/canic-control-plane/src/workflow/component_directory_synchronization/mod.rs` | Site-level reconciliation open |
 | 13 | `crates/canic-core/src/ops/component_provisioning_plan/mod.rs` | Site-level reconciliation open |
 | 13 | `crates/canic-core/src/ops/fleet_registry/mod.rs` | Site-level reconciliation open |
-| 12 | `crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs` | Site-level reconciliation open |
-| 11 | `crates/canic-control-plane/src/workflow/canister_pool/mod.rs` | Site-level reconciliation open |
+| 12 | `crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs` | Fully classified, including 6 transparent root-error propagation sites |
+| 11 | `crates/canic-control-plane/src/workflow/canister_pool/mod.rs` | Fully classified with its 6-site refill child |
 | 11 | `crates/canic-core/src/ops/auth/token/error.rs` | Site-level reconciliation open |
 | 11 | `crates/canic-core/src/workflow/runtime/fleet_activation.rs` | Site-level reconciliation open |
 | 10 | `crates/canic-core/src/workflow/runtime/intent.rs` | Site-level reconciliation open |
@@ -176,12 +194,12 @@ constructor site, not merely the enclosing file.
 | 7 | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs` | Site-level reconciliation open |
 | 7 | `crates/canic-core/src/ops/auth/token/verification.rs` | Site-level reconciliation open |
 | 7 | `crates/canic-core/src/workflow/runtime/auth/prepare/admission.rs` | Site-level reconciliation open |
-| 6 | `crates/canic-control-plane/src/workflow/canister_pool/refill.rs` | Site-level reconciliation open |
+| 6 | `crates/canic-control-plane/src/workflow/canister_pool/refill.rs` | Fully classified with parent Canister pool workflow |
 | 6 | `crates/canic-core/src/workflow/rpc/request/handler/authorize.rs` | Site-level reconciliation open |
 | 6 | `crates/canic-core/src/workflow/runtime/auth/mod.rs` | Site-level reconciliation open |
 | 6 | `crates/canic-core/src/workflow/runtime/root.rs` | Site-level reconciliation open |
 | 5 | `crates/canic-control-plane/src/ops/fleet_registry_mirror/mod.rs` | Site-level reconciliation open |
-| 5 | `crates/canic-control-plane/src/ops/storage/state/root_wasm_store.rs` | Site-level reconciliation open |
+| 5 | `crates/canic-control-plane/src/ops/storage/state/root_wasm_store.rs` | Fully classified with root bootstrap Subnet discovery |
 | 5 | `crates/canic-control-plane/src/workflow/component_rpc/lifecycle.rs` | Site-level reconciliation open |
 | 5 | `crates/canic-core/src/ops/fleet_service_binding/mod.rs` | Site-level reconciliation open |
 | 5 | `crates/canic-core/src/ops/storage/intent/mod.rs` | Site-level reconciliation open |
@@ -193,14 +211,14 @@ constructor site, not merely the enclosing file.
 | 4 | `crates/canic-core/src/ops/auth/delegation/errors.rs` | Site-level reconciliation open |
 | 4 | `crates/canic-core/src/workflow/cascade/topology.rs` | Site-level reconciliation open |
 | 4 | `crates/canic-core/src/workflow/ic/icp_refill/mod.rs` | Site-level reconciliation open |
-| 3 | `crates/canic-control-plane/src/workflow/bootstrap/root.rs` | Site-level reconciliation open |
+| 3 | `crates/canic-control-plane/src/workflow/bootstrap/root.rs` | Fully classified with sibling Store state facade |
 | 3 | `crates/canic-control-plane/src/workflow/runtime/fleet_activation/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-control-plane/src/workflow/wasm_store/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/placement/scaling/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/runtime/auth/prepare/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/runtime/authority_restore.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/runtime/mod.rs` | Site-level reconciliation open |
-| 2 | `crates/canic-control-plane/src/ops/fleet_coordinator/deployment_ledger/mod.rs` | Site-level reconciliation open |
+| 2 | `crates/canic-control-plane/src/ops/fleet_coordinator/deployment_ledger/mod.rs` | Fully classified: 2 direct sites and all 47 hidden receipt-funnel calls, including 2 test-only dispositions |
 | 2 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/inventory.rs` | Site-level reconciliation open |
 | 2 | `crates/canic-core/src/ops/auth/delegation/active.rs` | Site-level reconciliation open |
 | 2 | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/merkle.rs` | Site-level reconciliation open |

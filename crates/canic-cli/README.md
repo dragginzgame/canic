@@ -75,13 +75,16 @@ canic build <app>
 canic build <app> <role>
 ```
 
-The App-only form batches the configured Fleet Subnet Root with every attached
-Component role, then builds the canonical Fleet Coordinator and Wasm Store.
-The output classifies Components as application artifacts and all three
-platform canisters as infrastructure; the root row identifies that its timing
-came from the shared configured batch. Supplying a role keeps the focused build
-used by ICP custom builds and role-scoped provenance. Both tables show the exact
-resolved Cargo package version.
+The App-only form builds the canonical Fleet Coordinator and Wasm Store first,
+then batches the configured Fleet Subnet Root with every attached Component
+role. The final output presents infrastructure before application Wasm and
+shows whether each infrastructure artifact is instantiated per Fleet or per
+Fleet Subnet. The root row reports the duration of its shared configured batch,
+not a fabricated isolated duration. The root is App-config-bound but remains
+Subnet-unbound until operator-owned Fleet input selects placement during
+install. Supplying a role keeps the focused build used by ICP custom builds and
+role-scoped provenance. Both tables show the exact resolved Cargo package
+version.
 
 To archive CI-friendly build provenance next to an artifact, request an
 explicit provenance file:

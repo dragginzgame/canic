@@ -33,7 +33,10 @@ use canic_host::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, select_discovered_app_config_path,
     },
-    release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, workspace_root},
+    release_set::{
+        AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, display_workspace_path,
+        workspace_root,
+    },
     table::{ColumnAlign, render_bordered_table},
     terminal::{TerminalActivity, TerminalStyle},
 };
@@ -294,9 +297,23 @@ fn build_app(
 ) -> Result<(), BuildCommandError> {
     let style = TerminalStyle::detected();
     style.print_section(
-        "Configured Wasm",
-        &format!("{} | {} deployable roles", options.app, roles.len()),
+        "Build App",
+        &format!(
+            "{} | {} profile | {} network",
+            options.app,
+            context.profile.target_dir_name(),
+            context.build_network
+        ),
     );
+    println!(
+        "App config: {}",
+        display_workspace_path(&context.workspace_root, &context.config_path)
+    );
+    println!("Root Wasm: App-config-bound | Subnet-unbound until install");
+    println!();
+
+    let mut infrastructure = build_builtin_infrastructure(context)?;
+
     let configured_started_at = Instant::now();
     let activity = TerminalActivity::start(format!(
         "{} configured roles | {} profile | shared Cargo batch",
@@ -306,29 +323,40 @@ fn build_app(
     let build = build_workspace_configured_canister_artifacts(context, roles);
     activity.finish();
     let outputs = build?;
-    let configured_artifact_count = outputs.len();
+    let configured_elapsed = configured_started_at.elapsed();
     let artifacts = classify_configured_artifacts(outputs)?;
-    style.print_section(
-        "Application Wasm",
-        &format!(
-            "{} | {} Component artifacts",
-            options.app,
-            artifacts.application.len()
-        ),
+    infrastructure.insert(
+        1,
+        InfrastructureCanisterArtifactBuildOutput {
+            role: artifacts.fleet_subnet_root.role,
+            deployment_scope: InfrastructureDeploymentScope::FleetSubnet,
+            output: artifacts.fleet_subnet_root.output,
+            timing: InfrastructureArtifactTiming::SharedConfiguredBatch(configured_elapsed),
+        },
     );
-    println!("{}", render_app_build_table(&artifacts.application, style)?);
+
     style.print_section(
-        "Configured Wasm ready",
-        &build_completion_detail(
-            configured_artifact_count,
-            "artifact",
-            "artifacts",
-            configured_started_at.elapsed(),
-        ),
+        "Infrastructure Wasm",
+        "placement comes from Fleet input during install",
+    );
+    println!(
+        "{}",
+        render_infrastructure_build_table(&infrastructure, style)?
     );
     println!();
 
-    let infrastructure = build_infrastructure(context, artifacts.fleet_subnet_root, style)?;
+    style.print_section(
+        "Application Wasm",
+        &format!(
+            "{} | {} Component artifacts | {:.2}s shared batch",
+            options.app,
+            artifacts.application.len(),
+            configured_elapsed.as_secs_f64()
+        ),
+    );
+    println!("{}", render_app_build_table(&artifacts.application, style)?);
+    println!();
+
     style.print_section(
         "Build complete",
         &build_completion_detail(
@@ -345,24 +373,20 @@ fn build_app(
     Ok(())
 }
 
-fn build_infrastructure(
+fn build_builtin_infrastructure(
     context: &WorkspaceBuildContext,
-    fleet_subnet_root: ConfiguredCanisterArtifactBuildOutput,
-    style: TerminalStyle,
 ) -> Result<Vec<InfrastructureCanisterArtifactBuildOutput>, BuildCommandError> {
-    const ROLES: [&str; 2] = ["fleet_coordinator", "wasm_store"];
+    const BUILT_INS: [(&str, InfrastructureDeploymentScope); 2] = [
+        ("fleet_coordinator", InfrastructureDeploymentScope::Fleet),
+        ("wasm_store", InfrastructureDeploymentScope::FleetSubnet),
+    ];
 
-    style.print_section(
-        "Infrastructure Wasm",
-        "1 configured Fleet Subnet Root | 2 built-in canisters",
-    );
-    let section_started_at = Instant::now();
-    let mut outputs = Vec::with_capacity(ROLES.len() + 1);
-    for (index, role) in ROLES.iter().enumerate() {
+    let mut outputs = Vec::with_capacity(BUILT_INS.len());
+    for (index, (role, deployment_scope)) in BUILT_INS.iter().enumerate() {
         let activity = TerminalActivity::start(format!(
-            "[{}/{} built-in] {role} | {} profile",
+            "[{}/{} infrastructure] {role} | {} profile",
             index + 1,
-            ROLES.len(),
+            BUILT_INS.len(),
             context.profile.target_dir_name()
         ));
         let started_at = Instant::now();
@@ -370,29 +394,11 @@ fn build_infrastructure(
         activity.finish();
         outputs.push(InfrastructureCanisterArtifactBuildOutput {
             role: (*role).to_string(),
+            deployment_scope: *deployment_scope,
             output: build?,
             timing: InfrastructureArtifactTiming::Dedicated(started_at.elapsed()),
         });
     }
-    outputs.insert(
-        1,
-        InfrastructureCanisterArtifactBuildOutput {
-            role: fleet_subnet_root.role,
-            output: fleet_subnet_root.output,
-            timing: InfrastructureArtifactTiming::SharedConfiguredBatch,
-        },
-    );
-
-    println!("{}", render_infrastructure_build_table(&outputs, style)?);
-    style.print_section(
-        "Infrastructure Wasm ready",
-        &format!(
-            "{} canisters | 2 built-in artifacts in {:.2}s",
-            outputs.len(),
-            section_started_at.elapsed().as_secs_f64()
-        ),
-    );
-    println!();
     Ok(outputs)
 }
 
@@ -437,21 +443,39 @@ fn classify_configured_artifacts(
 }
 
 enum InfrastructureArtifactTiming {
-    SharedConfiguredBatch,
+    SharedConfiguredBatch(Duration),
     Dedicated(Duration),
 }
 
 impl InfrastructureArtifactTiming {
     fn label(&self) -> String {
         match self {
-            Self::SharedConfiguredBatch => "shared".to_string(),
+            Self::SharedConfiguredBatch(elapsed) => {
+                format!("{:.2}s shared", elapsed.as_secs_f64())
+            }
             Self::Dedicated(elapsed) => format!("{:.2}s", elapsed.as_secs_f64()),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum InfrastructureDeploymentScope {
+    Fleet,
+    FleetSubnet,
+}
+
+impl InfrastructureDeploymentScope {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Fleet => "1 / Fleet",
+            Self::FleetSubnet => "1 / Fleet Subnet",
         }
     }
 }
 
 struct InfrastructureCanisterArtifactBuildOutput {
     role: String,
+    deployment_scope: InfrastructureDeploymentScope,
     output: canic_host::canister_build::CanisterArtifactBuildOutput,
     timing: InfrastructureArtifactTiming,
 }
@@ -501,6 +525,7 @@ fn render_infrastructure_build_table(
             Ok([
                 built.role.clone(),
                 built.output.package_version.clone(),
+                built.deployment_scope.label().to_string(),
                 style.success("done"),
                 wasm_size_label(Some(wasm), gzip),
                 built.timing.label(),
@@ -508,9 +533,17 @@ fn render_infrastructure_build_table(
         })
         .collect::<Result<Vec<_>, BuildCommandError>>()?;
     Ok(render_bordered_table(
-        &["CANISTER", "VERSION", "STATUS", "WASM", "ELAPSED"],
+        &[
+            "CANISTER",
+            "VERSION",
+            "INSTANCES",
+            "STATUS",
+            "WASM",
+            "ELAPSED",
+        ],
         &rows,
         &[
+            ColumnAlign::Left,
             ColumnAlign::Left,
             ColumnAlign::Left,
             ColumnAlign::Left,
@@ -904,13 +937,17 @@ mod tests {
         let outputs = [
             InfrastructureCanisterArtifactBuildOutput {
                 role: "fleet_coordinator".to_string(),
+                deployment_scope: InfrastructureDeploymentScope::Fleet,
                 output: test_artifact_output(&root, "fleet_coordinator", 4096, 1024),
                 timing: InfrastructureArtifactTiming::Dedicated(Duration::from_millis(2750)),
             },
             InfrastructureCanisterArtifactBuildOutput {
                 role: "root".to_string(),
+                deployment_scope: InfrastructureDeploymentScope::FleetSubnet,
                 output: test_artifact_output(&root, "root", 2048, 512),
-                timing: InfrastructureArtifactTiming::SharedConfiguredBatch,
+                timing: InfrastructureArtifactTiming::SharedConfiguredBatch(Duration::from_secs(
+                    15,
+                )),
             },
         ];
 
@@ -920,11 +957,13 @@ mod tests {
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(table.contains("| CANISTER"));
         assert!(table.contains("| VERSION"));
+        assert!(table.contains("| INSTANCES"));
         assert!(table.contains("fleet_coordinator"));
         assert!(table.contains("root"));
+        assert!(table.contains("1 / Fleet Subnet"));
         assert!(table.contains("4.00 KiB (gz 1.00 KiB)"));
         assert!(table.contains("2.75s"));
-        assert!(table.contains("shared"));
+        assert!(table.contains("15.00s shared"));
     }
 
     #[test]

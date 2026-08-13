@@ -69,7 +69,7 @@ review, does not cover all direct constructors, and does not authorize
 
 ## Direct-Constructor Additions
 
-The first forty-nine site-level passes in
+The first seventy-three site-level passes in
 [component-registry-constructor-leaves.md](component-registry-constructor-leaves.md)
 and
 [component-registry-workflow-constructor-leaves.md](component-registry-workflow-constructor-leaves.md)
@@ -83,7 +83,21 @@ and
 [fleet-coordinator-constructor-leaves.md](fleet-coordinator-constructor-leaves.md)
 and
 [fleet-coordinator-receipt-invariant-frontier.md](fleet-coordinator-receipt-invariant-frontier.md)
-classify 1,625 effective top-level and direct-child allocation/install/activation plus
+and
+[fleet-coordinator-root-deletion-constructor-leaves.md](fleet-coordinator-root-deletion-constructor-leaves.md)
+and
+[fleet-coordinator-deployment-ledger-constructor-leaves.md](fleet-coordinator-deployment-ledger-constructor-leaves.md)
+and
+[fleet-coordinator-workflow-constructor-leaves.md](fleet-coordinator-workflow-constructor-leaves.md)
+and
+[canister-pool-constructor-leaves.md](canister-pool-constructor-leaves.md)
+and
+[canister-pool-workflow-constructor-leaves.md](canister-pool-workflow-constructor-leaves.md)
+and
+[root-store-bootstrap-constructor-leaves.md](root-store-bootstrap-constructor-leaves.md)
+and
+[root-bootstrap-store-state-constructor-leaves.md](root-bootstrap-store-state-constructor-leaves.md)
+classify 2,053 effective top-level and direct-child allocation/install/activation plus
 top-level draining/quiescence/recycling and subtree-removal orchestration
 and physical-effect references plus root draining, final-inventory and logical
 removal persistence, Store reclamation/publication-binding finalization and
@@ -108,19 +122,34 @@ canonical hashing and commit-error mapping. They also cover its complete
 Coordinator-authenticated orchestration: Registry/Store/Directory observation,
 claim/install/commit recovery, runtime activation, capacity and artifact gates.
 They also cover all 154 direct Coordinator parent-file constructors plus the
-first 16 of 235 hidden receipt-invariant calls: genesis/join/snapshot,
-provisioning, service publication, Directory/runtime response integrity and
-root-lifecycle authority.
+all 235 hidden receipt-invariant calls: genesis/join/snapshot,
+provisioning, permanent scale-out history, service publication, Directory and
+runtime barriers, retained intents, atomic publication and root-lifecycle
+authority. They also close the dedicated Coordinator root-deletion owner across
+all public transitions, exact-retry lookups and protected durable-history
+validation and the deployment ledger across reservation, terminal activation,
+exact reconstruction and retired Scale Out replay. The Coordinator workflow is
+closed across endpoint admission, Scale Out publication/cursor fences and
+transparent root-error propagation. The first Canister pool range is closed
+across Store/import initialization, reset transitions, recycling and claims
+plus autonomous creation intent, paid-attempt settlement, adoption, commit and
+explicit retry/cancel/rollover plus exclusive handoff, Store deletion,
+configuration, capacity and recycling helpers.
+The pool workflow is closed across maintenance, import, exclusive handoff and
+recoverable Cycles Ledger refill.
+Root Store bootstrap is closed across manifest/projection authority, staged
+artifacts, protected capacity and exact live-catalog verification. Root Subnet
+discovery and sibling Store adoption state are also closed.
 Together they add:
 
-- 1,145 exact Component Registry/provisioning/allocation/lifecycle meanings; and
+- 1,678 exact Component Registry/provisioning/allocation/lifecycle meanings; and
 - one safe projection, `COMPONENT_REGISTRY_STATE_INVALID`.
 
-The current qualified set is therefore **1,800 exact candidates plus 31
-additional safe projections: 1,831 collision-free identities**. This remains a
+The current qualified set is therefore **2,333 exact candidates plus 31
+additional safe projections: 2,364 collision-free identities**. This remains a
 qualified subset, not the final allocation. The effective frontier is now
-2,442 sites after replacing the Coordinator's one generic receipt adapter with
-235 call-site meanings; 817 effective dispositions remain open.
+2,499 sites after replacing the Coordinator's one generic receipt adapter with
+292 call-site meanings; 446 effective dispositions remain open.
 
 The Component Registry subset is mechanically closed: a whole-file range-owner
 manifest assigns all 800 ops constructors exactly once with zero uncovered or
@@ -129,16 +158,19 @@ sum independently agree at 354.
 The Component provisioning subset is likewise closed by consecutive range
 owners: 177 ops constructors and 56 workflow constructors, with each source
 count independently equal to its disposition-table sum.
-The Coordinator parent file's 154 direct constructors are mechanically closed,
-but semantic closure remains blocked by 219 of its 235 receipt-invariant calls.
+The Coordinator parent file is mechanically and semantically closed: all 154
+direct constructors and all 235 parent-file receipt-invariant calls have
+dispositions. Its 10 `root_deletion` and 47 `deployment_ledger` calls are also
+closed, so all 292 funnel calls now have exact dispositions. The 12-site
+Coordinator workflow is also closed.
 
-The forty-four latest slices' candidate-column extraction finds 1,258 exact-label
-occurrences. Two hundred eighteen intentionally reuse existing partition, physical-absence,
+The sixty-eight latest slices' candidate-column extraction finds 1,900 exact-label
+occurrences. Three hundred twenty-seven intentionally reuse existing partition, physical-absence,
 Registry-readiness or root-retirement identities, two adopt DPC names already
-reserved for the same exact denials and the other 1,038 do not
+reserved for the same exact denials and the other 1,571 do not
 occur in any preceding
 qualified ledger. That collision check independently matches the
-`795 + 32 + 5 + 22 + 50 + 28 + 40 + 24 + 9 + 22 + 0 + 7 + 7 + 15 + 30 + 12 + 28 + 3 + 19 + 50 + 11 + 7 + 11 + 40 + 22 + 8 + 19 + 57 + 53 + 56 + 62 + 28 + 10 + 34 + 10 + 23 + 21 + 15 + 1 + 14 + 51 + 30 + 19 + 15 + 16 = 1,831`
+`795 + 32 + 5 + 22 + 50 + 28 + 40 + 24 + 9 + 22 + 0 + 7 + 7 + 15 + 30 + 12 + 28 + 3 + 19 + 50 + 11 + 7 + 11 + 40 + 22 + 8 + 19 + 57 + 53 + 56 + 62 + 28 + 10 + 34 + 10 + 23 + 21 + 15 + 1 + 14 + 51 + 30 + 19 + 15 + 16 + 57 + 29 + 39 + 16 + 19 + 14 + 11 + 37 + 24 + 13 + 66 + 33 + 51 + 23 + 10 + 21 + 10 + 15 + 11 + 4 + 22 + 8 = 2,364`
 arithmetic without
 treating uppercase prose or static Rust enum names as candidate labels. The
 final allocation still requires the mechanical producer manifest rather than

@@ -311,14 +311,17 @@ remediation-significant even when their surrounding prose is disposable.
 [dynamic-public-context.md](dynamic-public-context.md) defines the required
 row shape and four classifications: caller-derivable, sensitive/operator-only,
 authoritatively typed, and caller-required but unowned. Its current-source
-census is not yet complete. Its first twelve bounded slices classify 117 dynamic
+census is not yet complete. Its first nineteen bounded slices classify 138 dynamic
 values from the Canic memory-ledger facade, Wasm Store GC, Store
 manifest/capacity conversion, explicit Component Registry denials, typed Store
 publication causes, delegated-session bootstrap and Store publication
 binding/inventory plus Store GC fence, reclamation, binding finalization and
-deletion plus the two Store-publication management transports: 53 are
-caller-derivable, thirteen are sensitive operator-only, twenty-eight already
-have typed owners and twenty-three are caller-required but unowned. The unowned
+deletion, the two Store-publication management transports and Coordinator root-
+deletion closed labels, the Coordinator initialization caller, pool asset
+principals, import routing evidence, root Store bootstrap and sibling adoption
+state: 66 are caller-derivable, sixteen are sensitive operator-only, thirty-one already
+have typed owners and twenty-five
+are caller-required but unowned. The unowned
 values
 require request-scoped Store capacity/release inspection, guarded
 delegated-session capacity status, exact closed-discriminator diagnostics or
