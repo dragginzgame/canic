@@ -113,26 +113,9 @@ fn build_workspace_canister_artifact_from_spec(
 
     let release_wasm_path =
         run_canister_build(context, &spec.package_manifest_path, &spec.package_name)?;
-    let debug_wasm_path = if should_export_candid_artifacts(context.build_network) {
-        if context.profile == CanisterBuildProfile::Debug {
-            Some(release_wasm_path.clone())
-        } else {
-            let debug_context = context.with_profile(CanisterBuildProfile::Debug);
-            Some(run_canister_build(
-                &debug_context,
-                &spec.package_manifest_path,
-                &spec.package_name,
-            )?)
-        }
-    } else {
-        None
-    };
-    finish_canister_artifact_output(
-        context,
-        spec,
-        &release_wasm_path,
-        debug_wasm_path.as_deref(),
-    )
+    let candid_wasm_path = should_export_candid_artifacts(context.build_network)
+        .then_some(release_wasm_path.as_path());
+    finish_canister_artifact_output(context, spec, &release_wasm_path, candid_wasm_path)
 }
 
 /// Build all admitted configured roles in one Cargo invocation per workspace and profile.
@@ -153,37 +136,33 @@ pub fn build_workspace_canister_artifacts_from_specs(
         run_canister_build_batch(context, cargo_workspace_root, group, context.profile)?;
     }
     let export_candid = should_export_candid_artifacts(context.build_network);
-    if export_candid && context.profile != CanisterBuildProfile::Debug {
-        for (cargo_workspace_root, group) in &workspace_groups {
-            run_canister_build_batch(
-                context,
-                cargo_workspace_root,
-                group,
-                CanisterBuildProfile::Debug,
-            )?;
-        }
-    }
 
-    specs
-        .iter()
-        .map(|spec| {
-            let release_wasm_path =
-                built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
-            let debug_wasm_path = export_candid.then(|| {
-                built_canister_wasm_path(
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(specs.len());
+        for spec in specs {
+            handles.push(scope.spawn(move || {
+                let release_wasm_path =
+                    built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
+                finish_canister_artifact_output(
                     context,
-                    CanisterBuildProfile::Debug,
-                    spec.package_name.as_str(),
+                    spec,
+                    &release_wasm_path,
+                    export_candid.then_some(release_wasm_path.as_path()),
                 )
-            });
-            finish_canister_artifact_output(
-                context,
-                spec,
-                &release_wasm_path,
-                debug_wasm_path.as_deref(),
-            )
-        })
-        .collect()
+                .map_err(|error| error.to_string())
+            }));
+        }
+
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .map_err(|_| "configured artifact finalization thread panicked".to_string())?
+                    .map_err(Into::into)
+            })
+            .collect()
+    })
 }
 
 fn group_build_specs_by_workspace(
@@ -211,20 +190,20 @@ fn finish_canister_artifact_output(
     context: &WorkspaceBuildContext,
     spec: &CanisterArtifactBuildSpec,
     release_wasm_path: &Path,
-    debug_wasm_path: Option<&Path>,
+    candid_wasm_path: Option<&Path>,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let mut transforms = Vec::new();
     write_wasm_artifact(release_wasm_path, &spec.wasm_path)?;
     transforms.push(maybe_shrink_wasm_artifact(&spec.wasm_path)?);
 
     if should_export_candid_artifacts(context.build_network) {
-        let debug_wasm_path = debug_wasm_path.ok_or_else(|| {
+        let candid_wasm_path = candid_wasm_path.ok_or_else(|| {
             format!(
-                "configured role {} is missing its debug Wasm for Candid extraction",
+                "configured role {} is missing its local Wasm for Candid extraction",
                 spec.role
             )
         })?;
-        extract_candid(debug_wasm_path, &spec.did_path)?;
+        extract_candid(candid_wasm_path, &spec.did_path)?;
         transforms.push(embed_candid_metadata(&spec.wasm_path, &spec.did_path)?);
     } else {
         remove_optional_file(&spec.did_path)?;

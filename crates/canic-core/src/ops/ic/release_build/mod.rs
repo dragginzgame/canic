@@ -17,8 +17,8 @@ use crate::{
 pub struct ReleaseBuildOps;
 
 impl ReleaseBuildOps {
-    pub fn embedded_release_build_id() -> Result<ReleaseBuildId, InternalError> {
-        ReleaseBuildInfra::embedded_release_build_id()
+    pub fn embedded_release_build_id(value: Option<&str>) -> Result<ReleaseBuildId, InternalError> {
+        ReleaseBuildInfra::embedded_release_build_id(value)
             .map_err(IcInfraError::from)
             .map_err(Into::into)
     }

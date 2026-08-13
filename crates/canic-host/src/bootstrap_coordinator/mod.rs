@@ -279,10 +279,27 @@ fn run_coordinator_cargo_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut command = coordinator_cargo_build_command(context, manifest_path);
+    let output = command.output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "Cargo failed to build the Fleet Coordinator: {}",
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .into())
+}
+
+fn coordinator_cargo_build_command(
+    context: &WorkspaceBuildContext,
+    manifest_path: &Path,
+) -> Command {
+    let local_candid = context.build_network == canic_core::ids::BuildNetwork::Local;
     let mut command = cargo_command();
     context.apply_to_command(&mut command);
     command.current_dir(&context.workspace_root).args([
-        "build",
+        if local_candid { "rustc" } else { "build" },
         "--manifest-path",
         &manifest_path.display().to_string(),
         "--target",
@@ -291,16 +308,16 @@ fn run_coordinator_cargo_build(
     configure_canister_cargo_command(&mut command, &context.workspace_root);
     append_coordinator_profile_config_args(&mut command, context.profile);
     command.args(context.profile.cargo_args());
-
-    let output = command.output()?;
-    if output.status.success() {
-        return Ok(());
+    if local_candid {
+        command.args([
+            "--lib",
+            "--",
+            "--cfg",
+            "canic_export_candid",
+            "--check-cfg=cfg(canic_export_candid)",
+        ]);
     }
-    Err(format!(
-        "cargo build failed for Fleet Coordinator: {}",
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .into())
+    command
 }
 
 fn append_coordinator_profile_config_args(command: &mut Command, profile: CanisterBuildProfile) {
@@ -321,9 +338,9 @@ fn ensure_fleet_coordinator_did(
     source: &BootstrapFleetCoordinatorSource,
     artifact_did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let debug_wasm_path = canister_build_target_root(&context.workspace_root)
+    let selected_wasm_path = canister_build_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown")
-        .join(CanisterBuildProfile::Debug.target_dir_name())
+        .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
 
     materialize_infrastructure_candid(
@@ -331,13 +348,7 @@ fn ensure_fleet_coordinator_did(
         source.canonical_did_path.as_deref(),
         artifact_did_path,
         context.refresh_canonical_infrastructure_did,
-        &debug_wasm_path,
-        || {
-            if context.profile != CanisterBuildProfile::Debug {
-                let debug_context = context.with_profile(CanisterBuildProfile::Debug);
-                run_coordinator_cargo_build(&debug_context, &source.manifest_path)?;
-            }
-            Ok(())
-        },
+        &selected_wasm_path,
+        || Ok(()),
     )
 }

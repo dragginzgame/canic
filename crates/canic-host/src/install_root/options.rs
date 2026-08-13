@@ -1,4 +1,5 @@
 use crate::{canister_build::CanisterBuildProfile, deployment_truth::DeploymentPlanV1};
+use canic_core::ids::ReleaseBuildId;
 use std::path::PathBuf;
 
 ///
@@ -14,6 +15,7 @@ pub struct InstallRootOptions {
     pub fleet_name: String,
     pub icp_root: Option<PathBuf>,
     pub build_profile: Option<CanisterBuildProfile>,
+    pub release_build_id: Option<ReleaseBuildId>,
     pub config_path: Option<String>,
     pub fleet_install_input_path: Option<PathBuf>,
     pub expected_app: Option<String>,

@@ -208,6 +208,7 @@ impl DeployTruthOptions {
             fleet_name: self.fleet,
             icp_root,
             build_profile: self.profile,
+            release_build_id: None,
             config_path: Some(format!("apps/{app}/canic.toml")),
             fleet_install_input_path: None,
             expected_app: Some(app),

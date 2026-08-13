@@ -30,7 +30,10 @@ use crate::{
 /// Bootstraps the root canister runtime and environment.
 ///
 
-pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalError> {
+pub fn init_root_canister(
+    args: FleetSubnetRootInitArgs,
+    embedded_release_build_id: Option<&str>,
+) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::bootstrap_registry().map_err(|err| {
         InternalError::invariant(
@@ -42,7 +45,8 @@ pub fn init_root_canister(args: FleetSubnetRootInitArgs) -> Result<(), InternalE
     rebuild_root_derived_storage_indexes()?;
     FleetActivationRuntimeOps::set_managed();
     crate::log::set_ready();
-    let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
+    let embedded_release_build_id =
+        ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
     let config = ConfigOps::get()?;
     let component_topology = ConfigOps::component_topology()?;
     let self_pid = IcOps::canister_self();

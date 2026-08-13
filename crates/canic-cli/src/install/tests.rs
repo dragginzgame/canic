@@ -20,11 +20,13 @@ fn install_defaults_to_root_target() {
     assert_eq!(options.environment, local_environment());
     assert_eq!(options.icp, default_icp());
     assert_eq!(options.profile, None);
+    assert_eq!(options.release_build_id, None);
     assert_eq!(install.root_canister, "root");
     assert_eq!(install.root_build_target, "root");
     assert_eq!(install.icp_executable, default_icp());
     assert_eq!(install.icp_root, None);
     assert_eq!(install.build_profile, None);
+    assert_eq!(install.release_build_id, None);
     assert_eq!(
         install.fleet_install_input_path,
         Some(PathBuf::from("deployments/demo-local.toml"))
@@ -89,6 +91,26 @@ fn install_accepts_build_profile() {
 }
 
 #[test]
+fn install_accepts_finalized_release_build_identity() {
+    let release_build_id = "11".repeat(32);
+    let options = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+        OsString::from("--release-build"),
+        OsString::from(&release_build_id),
+    ])
+    .expect("parse finalized release build");
+    let install = options.into_install_root_options_with_icp_root(None);
+
+    assert_eq!(
+        install.release_build_id.expect("release build").to_string(),
+        release_build_id
+    );
+}
+
+#[test]
 fn install_rejects_invalid_build_profile() {
     let err = InstallOptions::parse([
         OsString::from("--profile"),
@@ -149,13 +171,14 @@ fn install_usage_explains_app_config() {
     assert!(text.contains("<fleet>"));
     assert!(!text.contains("--app"));
     assert!(text.contains("--profile"));
+    assert!(text.contains("--release-build"));
     assert!(text.contains("--fleet-input"));
     assert!(normalized.contains("fresh Fleet"));
     assert!(normalized.contains("App config"));
     assert!(normalized.contains("required operator-owned Fleet input"));
     assert!(!normalized.contains("existing-Fleet update flow"));
     assert!(!normalized.contains("CARGO_TARGET_DIR"));
-    assert_eq!(text.matches("  canic install ").count(), 1);
+    assert_eq!(text.matches("  canic install ").count(), 2);
 }
 
 // Ensure existing-deployment install failures point at diagnostics and the command boundary.

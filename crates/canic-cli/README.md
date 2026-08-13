@@ -175,6 +175,20 @@ every selected root, and publishes the terminal Coordinator-anchored Fleet
 catalog. An interruption before that boundary is not a partially successful
 Fleet; rerun the exact command for same-release reconciliation.
 
+Once an install has finalized its release build, another fresh Fleet under the
+same ICP root can reuse those exact artifacts without running Cargo again:
+
+```bash
+canic install test test-second \
+  --fleet-input deployments/test-second.toml \
+  --release-build <release-build-id>
+```
+
+The install output prints the release-build ID. Exact interrupted retries reuse
+their recorded finalized build automatically. Explicit reuse revalidates the
+stored Canic builder version and profile, current App topology, package
+identities, manifests and bytes; it does not adopt or rebuild changed source.
+
 The following commands require a terminal installed Fleet:
 
 ```bash

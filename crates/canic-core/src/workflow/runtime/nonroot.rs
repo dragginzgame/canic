@@ -42,6 +42,7 @@ pub fn init_nonroot_canister(
     canister_role: CanisterRole,
     payload: CanisterInitPayload,
     application_init_args: Option<Vec<u8>>,
+    embedded_release_build_id: Option<&str>,
 ) -> Result<(), InternalError> {
     let CanisterInitPayload {
         install_id,
@@ -75,7 +76,8 @@ pub fn init_nonroot_canister(
     // --- Phase 1: Init base systems ---
     initialize_nonroot_base(&canister_role)?;
     FleetActivationRuntimeOps::set_managed();
-    let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
+    let embedded_release_build_id =
+        ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
     FleetActivationOps::initialize_nonroot_prepared(
         fleet,
         install_id,
@@ -94,12 +96,16 @@ pub fn init_nonroot_canister(
 }
 
 /// Initialize one host-installed sibling Wasm Store with reciprocal root authority.
-pub fn init_wasm_store_canister(input: FleetSubnetWasmStoreInitArgs) -> Result<(), InternalError> {
+pub fn init_wasm_store_canister(
+    input: FleetSubnetWasmStoreInitArgs,
+    embedded_release_build_id: Option<&str>,
+) -> Result<(), InternalError> {
     let canister_role = CanisterRole::WASM_STORE;
     let authority = input.authority.clone();
     initialize_nonroot_base(&canister_role)?;
     FleetActivationRuntimeOps::set_managed();
-    let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
+    let embedded_release_build_id =
+        ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
     FleetActivationOps::initialize_wasm_store_prepared(
         input,
         embedded_release_build_id,

@@ -21,17 +21,24 @@ pub fn init_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     payload: CanisterInitPayload,
     application_init_args: Option<Vec<u8>>,
+    embedded_release_build_id: Option<&str>,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
 ) {
     init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
-        workflow::runtime::init_nonroot_canister(role, payload, application_init_args)
+        workflow::runtime::init_nonroot_canister(
+            role,
+            payload,
+            application_init_args,
+            embedded_release_build_id,
+        )
     });
 }
 
 pub fn init_wasm_store_before_bootstrap(
     input: FleetSubnetWasmStoreInitArgs,
+    embedded_release_build_id: Option<&str>,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
@@ -41,7 +48,7 @@ pub fn init_wasm_store_before_bootstrap(
         config,
         config_source,
         config_path,
-        |_| workflow::runtime::init_wasm_store_canister(input),
+        |_| workflow::runtime::init_wasm_store_canister(input, embedded_release_build_id),
     );
 }
 

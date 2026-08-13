@@ -4,10 +4,15 @@ use std::time::Duration;
 pub(super) struct InstallTimingLabel(&'static str);
 
 impl InstallTimingLabel {
-    pub(super) const BUILD_ALL: Self = Self("build_all");
-    pub(super) const CREATE_CANISTERS: Self = Self("create_canisters");
+    pub(super) const ACTIVATE_FLEET: Self = Self("activate_fleet");
+    pub(super) const BUILD_CONFIGURED: Self = Self("build_configured");
+    pub(super) const BUILD_INFRASTRUCTURE: Self = Self("build_infrastructure");
     pub(super) const EMIT_MANIFEST: Self = Self("emit_manifest");
-    pub(super) const INSTALL_ROOT: Self = Self("install_root");
+    pub(super) const MATERIALIZE_ARTIFACTS: Self = Self("materialize_artifacts");
+    pub(super) const OTHER: Self = Self("planning_receipts_other");
+    pub(super) const POST_BUILD_GATE: Self = Self("post_build_gate");
+    pub(super) const PREFLIGHT: Self = Self("preflight");
+    pub(super) const REUSE_ARTIFACTS: Self = Self("reuse_artifacts");
     pub(super) const TOTAL: Self = Self("total");
 
     #[must_use]
@@ -22,8 +27,12 @@ impl InstallTimingLabel {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct InstallTimingSummary {
-    pub(super) create_canisters: Duration,
-    pub(super) build_all: Duration,
+    pub(super) activate_fleet: Duration,
+    pub(super) build_configured: Duration,
+    pub(super) build_infrastructure: Duration,
     pub(super) emit_manifest: Duration,
-    pub(super) install_root: Duration,
+    pub(super) materialize_artifacts: Duration,
+    pub(super) post_build_gate: Duration,
+    pub(super) preflight: Duration,
+    pub(super) reuse_artifacts: Duration,
 }

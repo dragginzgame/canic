@@ -39,6 +39,7 @@ use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
     current_install_release_build, latest_deployment_truth_receipt_path_from_root,
+    require_current_release_builder,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -53,7 +54,8 @@ use crate::deployment_truth::{
 use crate::icp::LocalReplicaTarget;
 use crate::test_support::{temp_dir, write_local_network_authority};
 use crate::{
-    release_build::finalize_release_build_from_manifest, release_set::RootReleaseSetBuildSnapshot,
+    release_build::{finalize_release_build_from_manifest, plan_release_build_for_profile},
+    release_set::RootReleaseSetBuildSnapshot,
 };
 use canic_core::{
     dto::fleet_activation::FleetActivationIdentity,
@@ -81,7 +83,7 @@ fn current_install_reuses_the_existing_session_release_build_before_rebuilding()
         "environments:\n  - name: proof\n    network: ic\n",
     )
     .expect("write ICP project");
-    let first = current_install_release_build(&root, "proof", "primary", "demo")
+    let first = current_install_release_build(&root, "proof", "primary", "demo", None, None)
         .expect("plan first release build");
     let release_build_id = first.record.release_build_id;
     let manifest = root.join("release-set.json");
@@ -99,7 +101,7 @@ fn current_install_reuses_the_existing_session_release_build_before_rebuilding()
     )
     .expect("publish Fleet install session");
 
-    let recovered = current_install_release_build(&root, "proof", "primary", "demo")
+    let recovered = current_install_release_build(&root, "proof", "primary", "demo", None, None)
         .expect("recover release build before rebuilding");
 
     assert_eq!(recovered.record, finalized.record);
@@ -108,6 +110,53 @@ fn current_install_reuses_the_existing_session_release_build_before_rebuilding()
             .expect("read release-build directory")
             .count(),
         1
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn current_install_reuses_only_the_requested_finalized_profile() {
+    let root = temp_dir("current-install-explicit-release-build");
+    fs::create_dir_all(&root).expect("create temp root");
+    fs::write(
+        root.join("icp.yaml"),
+        "environments:\n  - name: proof\n    network: ic\n",
+    )
+    .expect("write ICP project");
+    let planned = plan_release_build_for_profile(&root, CanisterBuildProfile::Fast)
+        .expect("plan fast release build");
+    let release_build_id = planned.record.release_build_id;
+    let manifest = root.join("release-set.json");
+    fs::write(&manifest, [8; 32]).expect("write release-set authority");
+    let finalized = finalize_release_build_from_manifest(&root, release_build_id, &manifest)
+        .expect("finalize release build");
+
+    let selected = current_install_release_build(
+        &root,
+        "proof",
+        "secondary",
+        "demo",
+        Some(release_build_id),
+        None,
+    )
+    .expect("select finalized release build");
+
+    assert_eq!(selected.record, finalized.record);
+    assert!(
+        require_current_release_builder("0.0.0").is_err(),
+        "a finalized build from a different Canic release must be rejected"
+    );
+    assert!(
+        current_install_release_build(
+            &root,
+            "proof",
+            "secondary",
+            "demo",
+            Some(release_build_id),
+            Some(CanisterBuildProfile::Release),
+        )
+        .is_err(),
+        "a conflicting requested profile must fail before a build"
     );
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -289,6 +338,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         fleet_name: "demo".to_string(),
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
+        release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
         expected_app: Some("demo".to_string()),
@@ -395,6 +445,7 @@ package = "worker"
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
+        release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
         expected_app: Some("demo".to_string()),

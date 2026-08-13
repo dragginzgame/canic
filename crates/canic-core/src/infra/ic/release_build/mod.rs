@@ -2,7 +2,7 @@
 //!
 //! Responsibility: expose the release-build identity embedded at compile time.
 //! Does not own: release-build planning, artifact hashing, or install admission.
-//! Boundary: qualified release builds supply one canonical ID through the build script.
+//! Boundary: the leaf Canister supplies its compile-time value to the runtime lifecycle adapter.
 
 use crate::ids::{ReleaseBuildId, ReleaseBuildIdParseError};
 use thiserror::Error as ThisError;
@@ -27,11 +27,7 @@ pub enum EmbeddedReleaseBuildError {
 pub struct ReleaseBuildInfra;
 
 impl ReleaseBuildInfra {
-    pub fn embedded_release_build_id() -> Result<ReleaseBuildId, EmbeddedReleaseBuildError> {
-        Self::release_build_id_from_env(option_env!("CANIC_RELEASE_BUILD_ID"))
-    }
-
-    fn release_build_id_from_env(
+    pub fn embedded_release_build_id(
         value: Option<&str>,
     ) -> Result<ReleaseBuildId, EmbeddedReleaseBuildError> {
         value
@@ -48,17 +44,17 @@ mod tests {
     #[test]
     fn embedded_release_build_identity_requires_canonical_text() {
         assert!(matches!(
-            ReleaseBuildInfra::release_build_id_from_env(None),
+            ReleaseBuildInfra::embedded_release_build_id(None),
             Err(EmbeddedReleaseBuildError::Missing)
         ));
         assert!(matches!(
-            ReleaseBuildInfra::release_build_id_from_env(Some("AB")),
+            ReleaseBuildInfra::embedded_release_build_id(Some("AB")),
             Err(EmbeddedReleaseBuildError::Invalid(_))
         ));
 
         let text = "ab".repeat(32);
         assert_eq!(
-            ReleaseBuildInfra::release_build_id_from_env(Some(&text))
+            ReleaseBuildInfra::embedded_release_build_id(Some(&text))
                 .expect("canonical release-build ID")
                 .to_string(),
             text

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Same-release fresh Fleet installation can reuse an exact finalized release
+  build without Cargo or artifact transforms, while new builds avoid
+  dependency-graph invalidation by Fleet identity, use one local
+  Candid-capable Cargo pass per workspace and report additive configured-build,
+  infrastructure, safety, activation and residual timings.
 - Agent repository scope now permits bootstrapping a specifically authorized
   named new repository at its exact target path, while keeping inspection,
   review, audit, diagnosis, design and feedback requests for existing sibling

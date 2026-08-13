@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::canister_build::CanisterBuildProfile;
 use crate::durable_io::{
     RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes, write_bytes,
 };
@@ -43,10 +44,12 @@ pub enum ReleaseBuildPlanState {
 /// Canonical durable owner of the random release-build nonce.
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReleaseBuildPlanRecord {
     pub nonce: ReleaseBuildNonce,
     pub release_build_id: ReleaseBuildId,
+    pub builder_version: String,
+    pub build_profile: CanisterBuildProfile,
     pub state: ReleaseBuildPlanState,
 }
 
@@ -134,9 +137,17 @@ pub enum ReleaseBuildPlanError {
 
 /// Create and durably publish one new random release-build plan.
 pub fn plan_release_build(root: &Path) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
+    plan_release_build_for_profile(root, CanisterBuildProfile::Release)
+}
+
+/// Create and durably publish a release-build plan for one exact Cargo profile.
+pub fn plan_release_build_for_profile(
+    root: &Path,
+    build_profile: CanisterBuildProfile,
+) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
     for _ in 0..RANDOM_ATTEMPTS {
         let nonce = random_nonce()?;
-        match plan_release_build_with_nonce(root, nonce) {
+        match plan_release_build_with_nonce(root, nonce, build_profile) {
             Ok(plan) => return Ok(plan),
             Err(ReleaseBuildPlanError::Io { source, .. })
                 if source.kind() == io::ErrorKind::AlreadyExists => {}
@@ -192,15 +203,18 @@ pub fn release_build_plan_path(root: &Path, release_build_id: ReleaseBuildId) ->
 fn plan_release_build_with_nonce(
     root: &Path,
     nonce: ReleaseBuildNonce,
+    build_profile: CanisterBuildProfile,
 ) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
     let release_build_id = ReleaseBuildId::from_nonce(nonce);
     let record = ReleaseBuildPlanRecord {
         nonce,
         release_build_id,
+        builder_version: env!("CARGO_PKG_VERSION").to_string(),
+        build_profile,
         state: ReleaseBuildPlanState::Planned,
     };
     let path = release_build_plan_path(root, release_build_id);
-    let bytes = encode_record(record);
+    let bytes = encode_record(&record);
     create_new_bytes_with_parents(&path, &bytes).map_err(|source| ReleaseBuildPlanError::Io {
         path: path.clone(),
         source,
@@ -231,7 +245,7 @@ fn finalize_release_build(
     record.state = ReleaseBuildPlanState::Finalized {
         release_set_manifest_digest,
     };
-    let bytes = encode_record(record);
+    let bytes = encode_record(&record);
     if let Err(source) = write_bytes(&path, &bytes) {
         // A final parent-sync error may still have published the complete new
         // record. Re-read the authority before projecting failure.
@@ -263,7 +277,7 @@ fn finalized_record(
             reason: "finalized release-build evidence remained planned".to_string(),
         });
     }
-    let bytes = encode_record(record);
+    let bytes = encode_record(&record);
     Ok(FinalizedReleaseBuild {
         record,
         plan_hash: domain_hash(PLAN_HASH_DOMAIN, &bytes),
@@ -291,7 +305,7 @@ fn validate_record_identity(
     Ok(())
 }
 
-fn encode_record(record: ReleaseBuildPlanRecord) -> Vec<u8> {
+fn encode_record(record: &ReleaseBuildPlanRecord) -> Vec<u8> {
     let state = match record.state {
         ReleaseBuildPlanState::Planned => Value::Array(vec![Value::Integer(0.into())]),
         ReleaseBuildPlanState::Finalized {
@@ -304,6 +318,8 @@ fn encode_record(record: ReleaseBuildPlanRecord) -> Vec<u8> {
     let value = Value::Array(vec![
         Value::Bytes(record.nonce.as_bytes().to_vec()),
         Value::Bytes(record.release_build_id.as_bytes().to_vec()),
+        Value::Text(record.builder_version.clone()),
+        Value::Text(record.build_profile.target_dir_name().to_string()),
         state,
     ]);
     let mut bytes = Vec::new();
@@ -318,7 +334,7 @@ fn decode_record(
 ) -> Result<ReleaseBuildPlanRecord, ReleaseBuildPlanError> {
     let value: Value =
         ciborium::de::from_reader(bytes).map_err(|error| invalid(path, error.to_string()))?;
-    let fields = exact_array(path, value, 3, "record")?;
+    let fields = exact_array(path, value, 5, "record")?;
     let nonce = ReleaseBuildNonce::from_random_bytes(exact_digest(path, &fields[0], "nonce")?);
     let release_build_id = exact_digest(path, &fields[1], "release_build_id")?
         .iter()
@@ -329,7 +345,17 @@ fn decode_record(
         })
         .parse()
         .expect("lowercase digest text is a canonical release-build ID");
-    let state_fields = exact_array_ref(path, &fields[2], "state")?;
+    let builder_version = fields[2]
+        .as_text()
+        .filter(|version| !version.trim().is_empty())
+        .ok_or_else(|| invalid(path, "builder_version must be nonempty text"))?
+        .to_string();
+    let build_profile = fields[3]
+        .as_text()
+        .ok_or_else(|| invalid(path, "build_profile must be text"))?
+        .parse()
+        .map_err(|error| invalid(path, error))?;
+    let state_fields = exact_array_ref(path, &fields[4], "state")?;
     let discriminant = state_fields
         .first()
         .and_then(Value::as_integer)
@@ -345,9 +371,11 @@ fn decode_record(
     let record = ReleaseBuildPlanRecord {
         nonce,
         release_build_id,
+        builder_version,
+        build_profile,
         state,
     };
-    if encode_record(record) != bytes {
+    if encode_record(&record) != bytes {
         return Err(invalid(path, "CBOR bytes are not canonical"));
     }
     Ok(record)
