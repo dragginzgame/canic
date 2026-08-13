@@ -52,7 +52,7 @@ retained-method owner below.
 | `ops-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns ops responsibility and side-effect placement. |
 | `publish-surface.md` | `revise` | `CANIC-PUBLISH-001/v1` | invariant/trend | Published package and downstream contract; run after features, packaging, docs.rs, examples, or public crate changes. |
 | `security-boundary-ordering.md` | `revise` | `CANIC-AUTH-ORDERING-001/v1` | invariant/manual | Cross-stage auth/replay/capability order; run after security-boundary sequencing changes. |
-| `wasm-footprint.md` | `revise` | `CANIC-WASM-001/v2` | measured/trend | Canonical release/debug Wasm metrics and structural retained-size evidence; run after Wasm-affecting changes or explicit size review. |
+| `wasm-footprint.md` | `revise` | `CANIC-WASM-001/v3` | measured/trend | Canonical release/debug Wasm metrics and structural retained-size evidence; run after Wasm-affecting changes or explicit size review. |
 | `workflow-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns workflow responsibility, records, conversions, effects, and typed error placement. |
 | `build-integrity.md` | `retain` | `CANIC-BUILD-INTEGRITY-001/v2` | invariant/measured | Build scripts, macros, generated code, unsafe inventory, and reproducibility; run before closeout and after build-pipeline changes. |
 | `release-integrity.md` | `retain` | `CANIC-RELEASE-INTEGRITY-001/v1` | invariant/manual | CI permissions, action pinning, secret scanning, artifact provenance/checksums, host/target matrix; run before closeout and after CI/release changes. |

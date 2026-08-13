@@ -107,6 +107,6 @@ proof that Skynet state and authority were safely detached.
 ## Future Design
 
 Prospective Skynet presentation and product ideas are centralized in the
-[provisional 0.110 design reservoir](../../docs/design/0.110-skynet-fleet-observatory/0.110-design.md).
+[provisional 0.111 design reservoir](../../docs/design/0.111-skynet-fleet-observatory/0.111-design.md).
 It is expected to move forward in the release sequence while its prerequisite
 Canic designs are completed, and it does not approve implementation by itself.

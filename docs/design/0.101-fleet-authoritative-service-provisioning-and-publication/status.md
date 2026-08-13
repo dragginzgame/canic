@@ -181,8 +181,7 @@ Date: 2026-08-12
   Subnet. The exact supported envelope and Wasm measurements are recorded in
   [qualification.md](qualification.md).
 - Release boundary: reinstall only.
-- Implementation started: yes; `0.101.52` is released and Q5 closeout is
-  complete in open `0.101.53`.
+- Implementation status: complete; Q5 closeout is released in `0.101.53`.
 - Dependency: completed 0.100 qualified independently host-installed
   Coordinator/root/Store infrastructure, Fleet Subnet Root, Component Spec,
   root-local Component identity, topology-admitted sibling Wasm Store,
@@ -212,7 +211,7 @@ repairs do not create additional release boundaries.
 | Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
 | Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in released `0.101.51` |
 | Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in released `0.101.52` |
-| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, install execution/performance cleanup, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue and installer guards followed by maintainer-owned complete release validation | Complete in open `0.101.53` |
+| Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, install execution/performance cleanup, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue and installer guards followed by maintainer-owned complete release validation | Complete in released `0.101.53` |
 
 `Q1` is complete in the released `0.101.49` batch. In addition to the packed and
 spread Coordinator proof, a real two-application-Subnet PocketIC journey adds
@@ -230,7 +229,7 @@ released `0.101.52` batch: the three-Subnet Toko-shaped journey and shared-
 Subnet second Fleet pass with exact restart/replay, protected 10,000/2,000
 Project Hub limits and the measured envelope in
 [qualification.md](qualification.md).
-`Q5` is complete in the open `0.101.53` draft. Its cleanup
+`Q5` is complete in released `0.101.53`. Its cleanup
 reconciles current installation, recovery, layering and release-authority
 documentation; archives the oversized session handoff; and removes CI guard
 dependencies on incidental job counts, step adjacency and exact Make recipe
@@ -417,7 +416,7 @@ Fleet policy writer.
   paid fallback absent. Grouped provisioning consumes only Ready pool assets;
   root maintenance remains the single automatic refill authority.
 - Deferred beyond 0.101: authenticated minimum-balance/fixed-top-up policy and
-  bounded overfunding warnings are owned by the accepted 0.111 Canister-estate
+  bounded overfunding warnings are owned by the accepted 0.112 Canister-estate
   design rather than this topology release.
 - Deferred beyond 0.101: any non-IC ledger funding design must separately prove
   exact-Subnet, guaranteed-response and expired-uncertainty fences before it

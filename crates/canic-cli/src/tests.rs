@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    cli::globals::{INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION},
+    cli::{
+        globals::{DISPATCH_ARGS, INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION},
+        help::usage,
+    },
     info::InfoCommandError,
 };
 
@@ -861,22 +864,88 @@ fn global_environment_is_forwarded_only_to_active_auth_renewal_status() {
 
 #[test]
 fn command_local_global_options_are_hard_rejected() {
-    std::assert_matches!(
-        run([
+    for args in [
+        [
             OsString::from("status"),
             OsString::from("--environment"),
-            OsString::from("local")
-        ]),
-        Err(CliError::Usage(_))
-    );
-    std::assert_matches!(
-        run([
+            OsString::from("local"),
+        ],
+        [
             OsString::from("status"),
             OsString::from("--icp"),
-            OsString::from("icp")
-        ]),
-        Err(CliError::Usage(_))
+            OsString::from("icp"),
+        ],
+    ] {
+        let cli_error = run(args).expect_err("command-local global must fail");
+        let CliError::Clap(clap_error) = &cli_error else {
+            panic!("expected Clap error, got {cli_error:?}");
+        };
+        assert_eq!(clap_error.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert!(render_cli_error(&cli_error).starts_with("error: unexpected argument"));
+        assert_eq!(cli_error_exit_code(&cli_error), 2);
+    }
+}
+
+#[test]
+fn top_level_clap_errors_retain_their_specific_diagnostic() {
+    let unknown = run([OsString::from("--definitely-invalid")])
+        .expect_err("unknown top-level option must fail");
+    let CliError::Clap(unknown_clap) = &unknown else {
+        panic!("expected Clap error, got {unknown:?}");
+    };
+    assert_eq!(unknown_clap.kind(), clap::error::ErrorKind::UnknownArgument);
+    let rendered = render_cli_error(&unknown);
+    assert!(rendered.starts_with("error: unexpected argument '--definitely-invalid' found"));
+    assert!(rendered.contains("Usage: canic [OPTIONS] <COMMAND>"));
+    assert_eq!(cli_error_exit_code(&unknown), 2);
+
+    let missing = run(std::iter::empty::<OsString>()).expect_err("missing command must fail");
+    let CliError::Clap(missing_clap) = &missing else {
+        panic!("expected Clap error, got {missing:?}");
+    };
+    assert_eq!(
+        missing_clap.kind(),
+        clap::error::ErrorKind::MissingSubcommand
     );
+    assert!(render_cli_error(&missing).starts_with("error: 'canic' requires a subcommand"));
+    assert_eq!(cli_error_exit_code(&missing), 2);
+}
+
+#[test]
+fn reported_build_shape_reaches_the_build_parser() {
+    let error = run([
+        OsString::from("--environment"),
+        OsString::from("toko"),
+        OsString::from("build"),
+        OsString::from("--profile"),
+        OsString::from("fast"),
+        OsString::from("--workspace"),
+        OsString::from("/missing/canic-workspace"),
+        OsString::from("--icp-root"),
+        OsString::from("/missing/icp-root"),
+        OsString::from("--config"),
+        OsString::from("/missing/canic.toml"),
+        OsString::from("demo"),
+        OsString::from("discovery_hub"),
+    ])
+    .expect_err("missing config must fail after dispatch");
+
+    assert!(matches!(error, CliError::Build(_)));
+}
+
+#[test]
+fn top_level_parser_defers_build_help_to_the_build_command() {
+    let matches = top_level_command()
+        .try_get_matches_from(["canic", "build", "--help"])
+        .expect("top-level dispatch must preserve command help");
+    let (_, build_matches) = matches.subcommand().expect("build subcommand");
+    let tail = build_matches
+        .get_many::<OsString>(DISPATCH_ARGS)
+        .expect("captured build tail")
+        .cloned()
+        .collect::<Vec<_>>();
+
+    assert_eq!(tail, [OsString::from("--help")]);
 }
 
 // Assert that a CLI argv slice returns successfully.

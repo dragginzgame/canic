@@ -30,13 +30,11 @@ mod test_support;
 mod token;
 
 use crate::cli::{
+    argv::trace_if_enabled,
     clap::parse_matches,
-    globals::{
-        DISPATCH_ARGS, apply_global_environment, apply_global_icp, command_local_global_option,
-        top_level_dispatch_command,
-    },
-    help::{first_arg_is_help, usage},
+    globals::{DISPATCH_ARGS, apply_global_environment, apply_global_icp, misplaced_global_option},
 };
+use clap::error::ErrorKind;
 pub use cli::top_level_command;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -49,9 +47,6 @@ const VERSION_TEXT: &str = concat!("canic ", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, ThisError)]
 pub enum CliError {
-    #[error("{0}")]
-    Usage(String),
-
     #[error("backup: {0}")]
     Backup(#[source] Box<backup::BackupCommandError>),
 
@@ -60,6 +55,9 @@ pub enum CliError {
 
     #[error("blob-storage: {0}")]
     BlobStorage(#[source] Box<blob_storage::BlobStorageCommandError>),
+
+    #[error(transparent)]
+    Clap(#[from] clap::Error),
 
     #[error("build: {0}")]
     Build(#[from] build::BuildCommandError),
@@ -154,7 +152,9 @@ impl From<token::TokenCommandError> for CliError {
 
 /// Run the CLI from process arguments.
 pub fn run_from_env() -> Result<(), CliError> {
-    run(std::env::args_os().skip(1))
+    let argv = std::env::args_os().collect::<Vec<_>>();
+    trace_if_enabled(&argv);
+    run(argv.into_iter().skip(1))
 }
 
 /// Run the CLI from an argument iterator.
@@ -163,29 +163,27 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if first_arg_is_help(&args) {
-        println!("{}", usage());
-        return Ok(());
+    if let Some(option) = misplaced_global_option(&args) {
+        let error = top_level_command().error(
+            ErrorKind::UnknownArgument,
+            format!("unexpected argument '{option}' found; put it before the command"),
+        );
+        return Err(CliError::Clap(error));
     }
-    if let Some(option) = command_local_global_option(&args) {
-        return Err(CliError::Usage(format!(
-            "{option} is a top-level option; put it before the command\n\n{}",
-            usage()
-        )));
-    }
-
-    let matches =
-        parse_matches(top_level_dispatch_command(), args).map_err(|_| CliError::Usage(usage()))?;
-    if matches.get_flag("version") {
-        println!("{}", version_text());
-        return Ok(());
-    }
+    let matches = match parse_matches(top_level_command(), args) {
+        Ok(matches) => matches,
+        Err(error) if !error.use_stderr() => {
+            let _ = error.print();
+            return Ok(());
+        }
+        Err(error) => return Err(CliError::Clap(error)),
+    };
     let global_icp = cli::clap::string_option(&matches, "icp");
     let global_environment = cli::clap::string_option(&matches, "environment");
 
-    let Some((command, subcommand_matches)) = matches.subcommand() else {
-        return Err(CliError::Usage(usage()));
-    };
+    let (command, subcommand_matches) = matches
+        .subcommand()
+        .unwrap_or_else(|| unreachable!("Clap requires one top-level command"));
     let mut tail = subcommand_matches
         .get_many::<OsString>(DISPATCH_ARGS)
         .map(|values| values.cloned().collect::<Vec<_>>())
@@ -227,6 +225,9 @@ pub const fn version_text() -> &'static str {
 pub fn render_cli_error(error: &CliError) -> String {
     match error {
         CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
+        CliError::Build(build::BuildCommandError::Clap(err)) | CliError::Clap(err) => {
+            err.to_string().trim_end().to_string()
+        }
         CliError::Deploy(err) if err.suppress_stderr() => String::new(),
         CliError::Inspect(err) if err.suppress_stderr() => String::new(),
         CliError::Medic(err) if err.suppress_stderr() => String::new(),
@@ -238,9 +239,10 @@ pub fn render_cli_error(error: &CliError) -> String {
 #[must_use]
 pub fn cli_error_exit_code(err: &CliError) -> i32 {
     match err {
-        CliError::Usage(_) => 2,
         CliError::Auth(err) => i32::from(err.exit_code()),
         CliError::BlobStorage(err) => i32::from(err.exit_code()),
+        CliError::Build(err) => err.exit_code(),
+        CliError::Clap(err) => err.exit_code(),
         CliError::Deploy(err) => i32::from(err.exit_code()),
         CliError::Info(err) => i32::from(err.exit_code()),
         CliError::Inspect(err) => i32::from(err.exit_code()),

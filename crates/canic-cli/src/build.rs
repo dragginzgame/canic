@@ -4,18 +4,19 @@
 //! Does not own: canister build execution, app config schema, or evidence envelope schemas.
 //! Boundary: resolves CLI build context and delegates configuration-backed artifact creation.
 
+#[cfg(test)]
+use crate::cli::clap::render_usage;
 use crate::{
     cli::{
         clap::{
-            parse_matches, render_usage, required_string, string_option, string_option_or_else,
-            typed_option, value_arg,
+            parse_matches, required_string, string_option, string_option_or_else, typed_option,
+            value_arg,
         },
         defaults::local_environment,
         globals::internal_environment_arg,
-        help::print_help_or_version,
     },
     evidence_support::current_evidence_timestamp,
-    output, version_text,
+    output,
 };
 use canic_core::ids::{BuildNetwork, CanisterRole};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
@@ -87,6 +88,9 @@ pub enum BuildCommandError {
     Build(#[from] Box<dyn std::error::Error>),
 
     #[error(transparent)]
+    Clap(#[from] clap::Error),
+
+    #[error(transparent)]
     AppConfig(#[from] AppConfigError),
 
     #[error(transparent)]
@@ -94,6 +98,26 @@ pub enum BuildCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+}
+
+impl BuildCommandError {
+    /// Return the shell exit code for this build failure.
+    #[must_use]
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Self::Clap(error) => error.exit_code(),
+            Self::Usage(_) => 2,
+            Self::AppConfig(_)
+            | Self::Build(_)
+            | Self::ConfigDiscovery(_)
+            | Self::FleetSubnetRootArtifactCount { .. }
+            | Self::Io(_)
+            | Self::Json(_)
+            | Self::NoConfigChoices
+            | Self::UnknownApp(_)
+            | Self::WorkspaceDiscovery(_) => 1,
+        }
+    }
 }
 
 /// Parsed `canic build` command options.
@@ -115,8 +139,7 @@ impl BuildOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches =
-            parse_matches(build_command(), args).map_err(|_| BuildCommandError::Usage(usage()))?;
+        let matches = parse_matches(build_command(), args)?;
 
         Ok(Self {
             app: required_string(&matches, "app"),
@@ -137,12 +160,15 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
-        return Ok(());
-    }
-
     let started_at = Instant::now();
-    let options = BuildOptions::parse(args)?;
+    let options = match BuildOptions::parse(args) {
+        Ok(options) => options,
+        Err(BuildCommandError::Clap(error)) if !error.use_stderr() => {
+            error.print()?;
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
     let config_path = resolve_build_config_path(&options)?.canonicalize()?;
     let roles = selected_build_roles(&options, &config_path)?;
     let context = resolve_build_context(&options, config_path, &roles[0])?;
@@ -166,8 +192,8 @@ where
 fn build_command() -> ClapCommand {
     ClapCommand::new("build")
         .bin_name("canic build")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Build Canic App and infrastructure artifacts")
-        .disable_help_flag(true)
         .override_usage("canic build [OPTIONS] <app> [role]")
         .arg(
             value_arg("app")
@@ -222,6 +248,7 @@ fn build_command() -> ClapCommand {
         .after_help(BUILD_HELP_AFTER)
 }
 
+#[cfg(test)]
 fn usage() -> String {
     render_usage(build_command)
 }
@@ -787,21 +814,43 @@ mod tests {
                 OsString::from("--provenance"),
                 OsString::from("build-provenance.json")
             ]),
-            Err(BuildCommandError::Usage(_))
+            Err(BuildCommandError::Clap(_))
         );
     }
 
     #[test]
     fn build_rejects_invalid_profile() {
-        std::assert_matches!(
-            BuildOptions::parse([
-                OsString::from("--profile"),
-                OsString::from("tiny"),
-                OsString::from("demo"),
-                OsString::from("app")
-            ]),
-            Err(BuildCommandError::Usage(_))
-        );
+        let error = BuildOptions::parse([
+            OsString::from("--profile"),
+            OsString::from("tiny"),
+            OsString::from("demo"),
+            OsString::from("app"),
+        ])
+        .expect_err("invalid profile must fail");
+        let BuildCommandError::Clap(error) = error else {
+            panic!("expected Clap error");
+        };
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+        assert!(error.to_string().starts_with("error: invalid value 'tiny'"));
+        assert_eq!(BuildCommandError::Clap(error).exit_code(), 2);
+    }
+
+    #[test]
+    fn build_help_and_version_are_clap_actions() {
+        for (arg, kind) in [
+            ("--help", clap::error::ErrorKind::DisplayHelp),
+            ("--version", clap::error::ErrorKind::DisplayVersion),
+        ] {
+            let error = BuildOptions::parse([OsString::from(arg)])
+                .expect_err("Clap display action must stop option parsing");
+            let BuildCommandError::Clap(error) = error else {
+                panic!("expected Clap display action");
+            };
+
+            assert_eq!(error.kind(), kind);
+            assert_eq!(error.exit_code(), 0);
+        }
     }
 
     #[test]
