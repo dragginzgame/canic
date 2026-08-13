@@ -5,6 +5,9 @@ daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-14/
 daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json:generic-api-key:8
 daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json:generic-api-key:9
 daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md:generic-api-key:55
+97038e812bf8f11cad985f706d2e63d11f10e1ab:docs/audits/reports/2026-08/2026-08-12/artifacts/wasm-footprint-v3/method.json:generic-api-key:8
+97038e812bf8f11cad985f706d2e63d11f10e1ab:docs/audits/reports/2026-08/2026-08-12/artifacts/wasm-footprint-v3/method.json:generic-api-key:9
+97038e812bf8f11cad985f706d2e63d11f10e1ab:docs/audits/reports/2026-08/2026-08-12/wasm-footprint-v3.md:generic-api-key:57
 1fff56b38aa2f096fd540c47ad6c1da28c117fb5:crates/canic-core/src/ops/auth/delegation/chain_key_batch.rs:generic-api-key:903
 583c474309f632f85e1bc1bb0fdea81589170fc4:docs/audits/reports/2026-06/2026-06-19/security-boundary-ordering.md:generic-api-key:168
 8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:426
