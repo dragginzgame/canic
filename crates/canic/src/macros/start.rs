@@ -450,8 +450,16 @@ macro_rules! finish {
         #[doc(hidden)]
         const __canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints: () = ();
 
-        #[cfg(canic_export_candid)]
-        $crate::__internal::cdk::export_candid!();
+        #[doc(hidden)]
+        mod __canic_candid_export {
+            #![allow(
+                unexpected_cfgs,
+                reason = "Canic host builds inject and register this destination-crate cfg"
+            )]
+
+            #[cfg(canic_export_candid)]
+            $crate::__internal::cdk::export_candid!();
+        }
     };
 }
 
