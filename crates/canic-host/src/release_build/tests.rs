@@ -6,7 +6,8 @@ use std::{fs, sync::Arc};
 fn planned_record_is_durable_canonical_and_bound_to_its_path() {
     let root = temp_dir("release-build-plan");
     let nonce = ReleaseBuildNonce::from_random_bytes([7; 32]);
-    let plan = plan_release_build_with_nonce(&root, nonce).expect("plan release build");
+    let plan = plan_release_build_with_nonce(&root, nonce, CanisterBuildProfile::Fast)
+        .expect("plan release build");
 
     assert_eq!(
         plan.record.release_build_id,
@@ -21,7 +22,9 @@ fn planned_record_is_durable_canonical_and_bound_to_its_path() {
         Err(ReleaseBuildPlanError::InvalidDocument { .. })
     );
     let bytes = fs::read(&plan.path).expect("read plan");
-    assert_eq!(bytes[0], 0x83);
+    assert_eq!(plan.record.builder_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(plan.record.build_profile, CanisterBuildProfile::Fast);
+    assert_eq!(bytes[0], 0x85);
     assert_eq!(bytes[1..3], [0x58, 0x20]);
     assert!(bytes.ends_with(&[0x81, 0x00]));
 
@@ -32,7 +35,8 @@ fn planned_record_is_durable_canonical_and_bound_to_its_path() {
 fn finalization_is_one_way_idempotent_and_hashes_exact_canonical_bytes() {
     let root = temp_dir("release-build-finalize");
     let nonce = ReleaseBuildNonce::from_random_bytes([11; 32]);
-    let plan = plan_release_build_with_nonce(&root, nonce).expect("plan release build");
+    let plan = plan_release_build_with_nonce(&root, nonce, CanisterBuildProfile::Release)
+        .expect("plan release build");
     let manifest_path = root.join("release-set.json");
     fs::write(&manifest_path, b"{\"exact\":\"manifest\"}").expect("write manifest");
 
@@ -55,7 +59,7 @@ fn finalization_is_one_way_idempotent_and_hashes_exact_canonical_bytes() {
             release_set_manifest_digest: Sha256::digest(b"{\"exact\":\"manifest\"}").into(),
         }
     );
-    let expected_hash = domain_hash(PLAN_HASH_DOMAIN, &encode_record(finalized.record));
+    let expected_hash = domain_hash(PLAN_HASH_DOMAIN, &encode_record(&finalized.record));
     assert_eq!(finalized.plan_hash, expected_hash);
 
     fs::write(&manifest_path, b"{\"different\":true}").expect("replace manifest");
@@ -70,8 +74,12 @@ fn finalization_is_one_way_idempotent_and_hashes_exact_canonical_bytes() {
 #[test]
 fn competing_finalization_has_one_durable_winner() {
     let root = Arc::new(temp_dir("release-build-finalize-race"));
-    let plan = plan_release_build_with_nonce(&root, ReleaseBuildNonce::from_random_bytes([12; 32]))
-        .expect("plan release build");
+    let plan = plan_release_build_with_nonce(
+        &root,
+        ReleaseBuildNonce::from_random_bytes([12; 32]),
+        CanisterBuildProfile::Release,
+    )
+    .expect("plan release build");
 
     let workers = [[1; 32], [2; 32]].map(|digest| {
         let root = Arc::clone(&root);
@@ -103,15 +111,16 @@ fn competing_finalization_has_one_durable_winner() {
 fn malformed_noncanonical_and_identity_mismatched_plans_fail_closed() {
     let root = temp_dir("release-build-reject");
     let nonce = ReleaseBuildNonce::from_random_bytes([13; 32]);
-    let plan = plan_release_build_with_nonce(&root, nonce).expect("plan release build");
+    let plan = plan_release_build_with_nonce(&root, nonce, CanisterBuildProfile::Debug)
+        .expect("plan release build");
     let canonical = fs::read(&plan.path).expect("read canonical plan");
     let other_id = ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([17; 32]));
 
     fs::write(
         &plan.path,
-        encode_record(ReleaseBuildPlanRecord {
+        encode_record(&ReleaseBuildPlanRecord {
             release_build_id: other_id,
-            ..plan.record
+            ..plan.record.clone()
         }),
     )
     .expect("write nonce-mismatched plan");
@@ -148,7 +157,8 @@ fn plan_and_manifest_symlinks_are_rejected() {
 
     let root = temp_dir("release-build-symlink");
     let nonce = ReleaseBuildNonce::from_random_bytes([19; 32]);
-    let plan = plan_release_build_with_nonce(&root, nonce).expect("plan release build");
+    let plan = plan_release_build_with_nonce(&root, nonce, CanisterBuildProfile::Release)
+        .expect("plan release build");
     let real_manifest = root.join("real-release-set.json");
     let linked_manifest = root.join("release-set.json");
     fs::write(&real_manifest, b"{}").expect("write real manifest");

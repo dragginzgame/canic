@@ -61,6 +61,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 $canister_role,
                 payload,
                 args,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
                 config,
                 config_source,
                 config_path,
@@ -153,6 +154,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
             let (config, config_source, config_path) = __canic_compiled_config();
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_wasm_store_before_bootstrap(
                 args,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
                 config,
                 config_source,
                 config_path,
@@ -354,6 +356,7 @@ macro_rules! __canic_root_lifecycle_core {
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 args,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
                 config,
                 config_source,
                 config_path,
@@ -439,15 +442,15 @@ macro_rules! __canic_require_finish {
 /// Place this macro at the end of the canister's crate root after
 /// `start!`, `start_local!`, `start_wasm_store!`, or
 /// `start_fleet_coordinator!` and after any extra endpoint definitions. In
-/// debug builds it exports Candid for local `.did` generation; in non-debug
-/// builds it only satisfies the required Canic finish marker.
+/// local-network builds it exports Candid from the exact selected Wasm; IC
+/// builds only satisfy the required Canic finish marker.
 #[macro_export]
 macro_rules! finish {
     () => {
         #[doc(hidden)]
         const __canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints: () = ();
 
-        #[cfg(debug_assertions)]
+        #[cfg(canic_export_candid)]
         $crate::__internal::cdk::export_candid!();
     };
 }

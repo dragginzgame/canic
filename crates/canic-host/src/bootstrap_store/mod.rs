@@ -527,9 +527,9 @@ fn ensure_wasm_store_did(
     artifact_did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let target_root = canister_build_target_root(&context.workspace_root);
-    let debug_wasm_path = target_root
+    let selected_wasm_path = target_root
         .join("wasm32-unknown-unknown")
-        .join(CanisterBuildProfile::Debug.target_dir_name())
+        .join(context.profile.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
 
     materialize_infrastructure_candid(
@@ -537,14 +537,8 @@ fn ensure_wasm_store_did(
         source.canonical_did_path.as_deref(),
         artifact_did_path,
         context.refresh_canonical_infrastructure_did,
-        &debug_wasm_path,
-        || {
-            if context.profile != CanisterBuildProfile::Debug {
-                let debug_context = context.with_profile(CanisterBuildProfile::Debug);
-                run_wasm_store_cargo_build(&debug_context, &source.manifest_path)?;
-            }
-            Ok(())
-        },
+        &selected_wasm_path,
+        || Ok(()),
     )
 }
 

@@ -55,6 +55,20 @@ tracing for wrapper/executable investigation. It changes no canister runtime or
 help ordering, package Clippy, current-document guard, changelog governance and
 reference-surface checks pass.
 
+A second independent operator-performance batch passes targeted validation. It
+keeps the release-build ID out of shared runtime dependency compilation,
+exports local Candid from the exact selected-profile leaf Wasm, finalizes role
+artifacts concurrently, admits explicit reuse of one finalized release build
+for another fresh Fleet and reports display-exact additive install phases.
+Exact interrupted Fleet recovery selects the same finalized build
+automatically. Reuse validates the recorded profile and matching Canic builder
+version, plus current topology, role/package identities, canonical manifests
+and artifact bytes before
+activation. A real fast-profile Demo App build completed in 110.31 seconds
+immediately after the code change and 25.49 seconds on the identical cache-hit
+run, with one configured Cargo batch and one build each for Coordinator and
+Store. No package version or 0.102 diagnostic contract has changed.
+
 The allocation-policy proposal uses dense monotonic numbers with no semantic
 bands, compact unpadded `E<decimal>` rendering and nine host-only broad classes.
 It is not code authority until the maintainer approves it and reviews the

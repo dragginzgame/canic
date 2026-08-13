@@ -20,6 +20,7 @@ use crate::{
     cli::help::print_help_or_version,
     version_text,
 };
+use canic_core::ids::ReleaseBuildId;
 use canic_host::canister_build::CanisterBuildProfile;
 use canic_host::icp::{IcpDiagnostic, classify_icp_diagnostic};
 use canic_host::icp_config::{IcpConfigError, resolve_current_canic_icp_root};
@@ -32,9 +33,11 @@ use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
 const FLEET_INPUT_ARG: &str = "fleet-input";
+const RELEASE_BUILD_ARG: &str = "release-build";
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic install toko toko-local --fleet-input deployments/toko-local.toml
+  canic install toko toko-test --fleet-input deployments/toko-test.toml --release-build <ID>
 
 Creates a fresh Fleet from the App config and required operator-owned Fleet input.";
 
@@ -71,6 +74,7 @@ struct InstallOptions {
     icp: String,
     environment: String,
     profile: Option<CanisterBuildProfile>,
+    release_build_id: Option<ReleaseBuildId>,
     fleet_input: PathBuf,
 }
 
@@ -87,6 +91,7 @@ impl InstallOptions {
             icp: string_option_or_else(&matches, "icp", default_icp),
             environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
+            release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
             fleet_input: PathBuf::from(required_string(&matches, FLEET_INPUT_ARG)),
         })
     }
@@ -111,6 +116,7 @@ impl InstallOptions {
             fleet_name: self.fleet,
             icp_root,
             build_profile: self.profile,
+            release_build_id: self.release_build_id,
             config_path: Some(config_path),
             fleet_install_input_path: Some(self.fleet_input),
             expected_app: Some(self.app),
@@ -145,6 +151,14 @@ fn install_command() -> ClapCommand {
                 .required(true)
                 .num_args(1)
                 .help("Operator-owned Fleet placement, admission, limit, and funding input TOML"),
+        )
+        .arg(
+            value_arg(RELEASE_BUILD_ARG)
+                .long(RELEASE_BUILD_ARG)
+                .value_name("ID")
+                .num_args(1)
+                .value_parser(clap::value_parser!(ReleaseBuildId))
+                .help("Reuse one finalized release build instead of compiling artifacts"),
         )
         .arg(
             value_arg("profile")

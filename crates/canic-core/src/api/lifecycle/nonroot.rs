@@ -24,6 +24,7 @@ impl LifecycleApi {
         role: CanisterRole,
         payload: CanisterInitPayload,
         application_init_args: Option<Vec<u8>>,
+        embedded_release_build_id: Option<&str>,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -32,6 +33,7 @@ impl LifecycleApi {
             role,
             payload,
             application_init_args,
+            embedded_release_build_id,
             config,
             config_source,
             config_path,
@@ -40,12 +42,14 @@ impl LifecycleApi {
 
     pub fn init_wasm_store_before_bootstrap(
         input: FleetSubnetWasmStoreInitArgs,
+        embedded_release_build_id: Option<&str>,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
     ) {
         lifecycle::init::nonroot::init_wasm_store_before_bootstrap(
             input,
+            embedded_release_build_id,
             config,
             config_source,
             config_path,

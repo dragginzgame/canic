@@ -40,6 +40,44 @@ fn workspace_resolution_prefers_the_canonical_fleet_coordinator_package() {
 }
 
 #[test]
+fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut context = WorkspaceBuildContext {
+        role: FLEET_COORDINATOR_ROLE.to_string(),
+        profile: CanisterBuildProfile::Fast,
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: workspace_root.clone(),
+        icp_root: workspace_root,
+        config_path: PathBuf::from("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let manifest = Path::new("/workspace/coordinator/Cargo.toml");
+
+    let local = coordinator_cargo_build_command(&context, manifest)
+        .get_args()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(local.first().map(String::as_str), Some("rustc"));
+    assert!(
+        local
+            .windows(2)
+            .any(|args| args == ["--cfg", "canic_export_candid"])
+    );
+    assert!(local.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
+
+    context.build_network = BuildNetwork::Ic;
+    let ic = coordinator_cargo_build_command(&context, manifest)
+        .get_args()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(ic.first().map(String::as_str), Some("build"));
+    assert!(!ic.contains(&"canic_export_candid".to_string()));
+}
+
+#[test]
 fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
     let root = temp_dir("canic-generated-fleet-coordinator-contract");
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -65,7 +103,6 @@ fn generated_fleet_coordinator_wrapper_satisfies_its_runtime_only_contract() {
             .join("src/lib.rs"),
     )
     .expect("read generated runtime");
-
     assert!(manifest.contains("app = \"fleet_coordinator\""));
     assert!(manifest.contains("role = \"fleet_coordinator\""));
     assert!(manifest.contains("default-features = false"));

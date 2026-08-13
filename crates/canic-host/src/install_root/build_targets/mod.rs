@@ -5,14 +5,13 @@ use crate::canister_build::{
     build_workspace_canister_artifacts_from_specs, workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
-use crate::should_export_candid_artifacts;
 use crate::table::{ColumnAlign, render_bordered_table};
 use std::{collections::BTreeSet, fs, path::Path, time::Instant};
 
 pub(super) fn run_canic_build_targets(
     context: &WorkspaceBuildContext,
     targets: &[InstallBuildTarget],
-) -> Result<Vec<CurrentCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
+) -> Result<CompletedConfiguredBuild, Box<dyn std::error::Error>> {
     if context.release_build_id.is_none() {
         return Err("complete install build is missing its durable release-build identity".into());
     }
@@ -28,7 +27,7 @@ pub(super) fn run_canic_build_targets(
     fs::create_dir_all(context.artifact_root())?;
     let style = TerminalStyle::detected();
     style.print_section(
-        "Build application Wasm",
+        "Build configured Wasm",
         &format!("{} configured canisters", targets.len()),
     );
     let headers = ["CANISTER", "STATUS", "WASM"];
@@ -39,14 +38,7 @@ pub(super) fn run_canic_build_targets(
         .map(|target| &target.spec.cargo_workspace_root)
         .collect::<BTreeSet<_>>()
         .len();
-    let cargo_pass_count = cargo_workspace_count
-        * if should_export_candid_artifacts(context.build_network)
-            && context.profile != crate::canister_build::CanisterBuildProfile::Debug
-        {
-            2
-        } else {
-            1
-        };
+    let cargo_pass_count = cargo_workspace_count;
     let started_at = Instant::now();
     let activity = TerminalActivity::start(format!(
         "{} | {} across {}",
@@ -80,7 +72,7 @@ pub(super) fn run_canic_build_targets(
 
     println!("{}", render_bordered_table(&headers, &rows, &alignments));
     style.print_section(
-        "Application Wasm ready",
+        "Configured Wasm ready",
         &format!(
             "{} in {:.2}s via {}",
             counted_label(targets.len(), "canister", "canisters"),
@@ -89,7 +81,15 @@ pub(super) fn run_canic_build_targets(
         ),
     );
     println!();
-    Ok(outputs)
+    Ok(CompletedConfiguredBuild {
+        outputs,
+        duration: elapsed,
+    })
+}
+
+pub(super) struct CompletedConfiguredBuild {
+    pub(super) outputs: Vec<CurrentCanisterArtifactBuildOutput>,
+    pub(super) duration: std::time::Duration,
 }
 
 pub(super) fn wasm_artifact_size(

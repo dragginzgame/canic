@@ -51,10 +51,14 @@ mod phase_receipts;
 mod plan_artifacts;
 mod preparation;
 mod receipt_io;
+mod reused_build;
 mod timing;
 mod truth_check;
 
-use crate::release_build::{PlannedReleaseBuild, ReleaseBuildPlanError, plan_release_build};
+use crate::release_build::{
+    PlannedReleaseBuild, ReleaseBuildPlanError, load_finalized_release_build,
+    plan_release_build_for_profile,
+};
 use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
@@ -91,7 +95,6 @@ use phase_receipts::{
 use plan_artifacts::emit_manifest_with_phase;
 use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
-use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 
 #[cfg(test)]
@@ -215,7 +218,7 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
 }
 
 // Execute fresh Fleet planning and the Coordinator-first installation workflow.
-pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError> {
+pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootError> {
     let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
     let config_path = current_install_config_path(&icp_root, &options)?;
     let icp_context =
@@ -228,11 +231,11 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &options,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::BuildInputs))?;
+    options.build_profile = Some(build_context.profile);
     let (app_id, fleet_name) =
         resolve_install_identity(&options, &config_path, &install_snapshot.app_id)
             .map_err(InstallRootError::in_phase(InstallRootPhase::Identity))?;
     let total_started_at = Instant::now();
-    let mut timings = CurrentInstallTimingSummary::default();
     let environment = options.environment.as_str();
     let artifact_root = if options.deployment_plan_override.is_some() {
         crate::release_set::artifact_root_path(&icp_root, options.artifact_environment())
@@ -259,7 +262,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &install_snapshot,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Preparation))?;
-    timings.build_all = prepared.timings.build_all;
+    let mut timings = prepared.timings;
     let emitted_manifest = emit_manifest_with_phase(
         &icp_root,
         &install_snapshot,
@@ -293,12 +296,9 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         emitted_manifest.phase,
     )?;
     let icp_context = icp_context.with_local_replica(build_context.local_replica);
-    install_current_fleet_infrastructure(
-        &icp_context,
-        &config_path,
-        &planned_install,
-        &mut timings,
-    )?;
+    let activation_started_at = Instant::now();
+    install_current_fleet_infrastructure(&icp_context, &config_path, &planned_install)?;
+    timings.activate_fleet = activation_started_at.elapsed();
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Ok(())
@@ -308,18 +308,15 @@ fn install_current_fleet_infrastructure(
     icp_context: &InstallIcpContext,
     config_path: &Path,
     planned: &PlannedCurrentFleetInstall,
-    timings: &mut CurrentInstallTimingSummary,
 ) -> Result<(), InstallRootError> {
-    let (coordinator, coordinator_duration) =
+    let (coordinator, _) =
         install_current_fleet_coordinator(icp_context, config_path, &planned.plan)?;
-    timings.create_canisters = coordinator_duration;
-    let roots_duration = install_current_fleet_subnet_roots(
+    let _ = install_current_fleet_subnet_roots(
         icp_context,
         config_path,
         planned,
         coordinator.coordinator,
     )?;
-    timings.create_canisters += roots_duration;
     bootstrap_and_verify_fleet_subnet_root_stores(
         icp_context,
         config_path,
@@ -653,8 +650,12 @@ fn current_install_build_inputs(
         &options.environment,
         &options.fleet_name,
         config.app_id(),
+        options.release_build_id,
+        options.build_profile,
     )?;
-    context = context.with_release_build_id(release_build.record.release_build_id);
+    context = context
+        .with_profile(release_build.record.build_profile)
+        .with_release_build_id(release_build.record.release_build_id);
     let mut snapshot = resolve_install_snapshot(&context, &options.root_build_target, false)?;
     snapshot.release_build = Some(release_build);
     Ok((context, snapshot))
@@ -665,6 +666,8 @@ fn current_install_release_build(
     environment: &str,
     fleet_name: &str,
     app_id: &str,
+    requested_release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+    requested_build_profile: Option<crate::canister_build::CanisterBuildProfile>,
 ) -> Result<PlannedReleaseBuild, Box<dyn std::error::Error>> {
     let canonical_network_id = resolve_canonical_network_id_from_root(icp_root, environment)?;
     let fleet_name = fleet_name.parse()?;
@@ -675,11 +678,59 @@ fn current_install_release_build(
         &fleet_name,
         &app,
     )? {
+        if requested_release_build_id
+            .is_some_and(|requested| requested != finalized.record.release_build_id)
+        {
+            return Err(
+                "requested release build differs from the interrupted Fleet install session".into(),
+            );
+        }
+        require_current_release_builder(&finalized.record.builder_version)?;
+        require_requested_build_profile(requested_build_profile, finalized.record.build_profile)?;
         return Ok(PlannedReleaseBuild {
             record: finalized.record,
             path: finalized.path,
         });
     }
 
-    plan_release_build(icp_root).map_err(Into::into)
+    if let Some(release_build_id) = requested_release_build_id {
+        let finalized = load_finalized_release_build(icp_root, release_build_id)?;
+        require_current_release_builder(&finalized.record.builder_version)?;
+        require_requested_build_profile(requested_build_profile, finalized.record.build_profile)?;
+        return Ok(PlannedReleaseBuild {
+            record: finalized.record,
+            path: finalized.path,
+        });
+    }
+
+    plan_release_build_for_profile(
+        icp_root,
+        requested_build_profile.unwrap_or(crate::canister_build::CanisterBuildProfile::Release),
+    )
+    .map_err(Into::into)
+}
+
+fn require_current_release_builder(recorded: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if recorded != env!("CARGO_PKG_VERSION") {
+        return Err(format!(
+            "finalized release build belongs to Canic {recorded}, not current Canic {}",
+            env!("CARGO_PKG_VERSION")
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn require_requested_build_profile(
+    requested: Option<crate::canister_build::CanisterBuildProfile>,
+    recorded: crate::canister_build::CanisterBuildProfile,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if requested.is_some_and(|requested| requested != recorded) {
+        return Err(format!(
+            "requested build profile differs from finalized release build profile {}",
+            recorded.target_dir_name()
+        )
+        .into());
+    }
+    Ok(())
 }

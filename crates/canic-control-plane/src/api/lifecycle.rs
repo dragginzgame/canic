@@ -78,6 +78,7 @@ impl LifecycleApi {
     /// Delegate root init-time runtime seeding to the current core implementation.
     pub fn init_root_canister_before_bootstrap(
         args: FleetSubnetRootInitArgs,
+        embedded_release_build_id: Option<&str>,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -88,6 +89,7 @@ impl LifecycleApi {
         crate::runtime::install::register_template_module_source_resolver();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
             args,
+            embedded_release_build_id,
             config,
             config_source,
             config_path,

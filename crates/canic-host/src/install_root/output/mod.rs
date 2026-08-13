@@ -13,16 +13,41 @@ pub(super) fn render_install_timing_summary(
     timings: &InstallTimingSummary,
     total: Duration,
 ) -> String {
-    let rows = [
-        timing_row(
-            InstallTimingLabel::CREATE_CANISTERS,
-            timings.create_canisters,
+    let phase_rows = [
+        (InstallTimingLabel::PREFLIGHT, timings.preflight),
+        (
+            InstallTimingLabel::BUILD_CONFIGURED,
+            timings.build_configured,
         ),
-        timing_row(InstallTimingLabel::BUILD_ALL, timings.build_all),
-        timing_row(InstallTimingLabel::EMIT_MANIFEST, timings.emit_manifest),
-        timing_row(InstallTimingLabel::INSTALL_ROOT, timings.install_root),
-        timing_row(InstallTimingLabel::TOTAL, total),
-    ];
+        (
+            InstallTimingLabel::BUILD_INFRASTRUCTURE,
+            timings.build_infrastructure,
+        ),
+        (
+            InstallTimingLabel::MATERIALIZE_ARTIFACTS,
+            timings.materialize_artifacts,
+        ),
+        (InstallTimingLabel::REUSE_ARTIFACTS, timings.reuse_artifacts),
+        (InstallTimingLabel::POST_BUILD_GATE, timings.post_build_gate),
+        (InstallTimingLabel::EMIT_MANIFEST, timings.emit_manifest),
+        (InstallTimingLabel::ACTIVATE_FLEET, timings.activate_fleet),
+    ]
+    .into_iter()
+    .map(|(label, duration)| (label, duration_centiseconds(duration)))
+    .filter(|(_, centiseconds)| *centiseconds != 0)
+    .collect::<Vec<_>>();
+    let total_centiseconds = duration_centiseconds(total);
+    let measured_centiseconds = phase_rows
+        .iter()
+        .map(|(_, centiseconds)| centiseconds)
+        .sum::<u128>();
+    let other_centiseconds = total_centiseconds.saturating_sub(measured_centiseconds);
+    let rows = phase_rows
+        .into_iter()
+        .chain((other_centiseconds != 0).then_some((InstallTimingLabel::OTHER, other_centiseconds)))
+        .chain([(InstallTimingLabel::TOTAL, total_centiseconds)])
+        .map(|(label, centiseconds)| timing_row(label, centiseconds))
+        .collect::<Vec<_>>();
     render_bordered_table(
         &["PHASE", "ELAPSED"],
         &rows,
@@ -30,9 +55,13 @@ pub(super) fn render_install_timing_summary(
     )
 }
 
-fn timing_row(label: InstallTimingLabel, duration: Duration) -> [String; 2] {
+const fn duration_centiseconds(duration: Duration) -> u128 {
+    duration.as_millis() / 10
+}
+
+fn timing_row(label: InstallTimingLabel, centiseconds: u128) -> [String; 2] {
     [
         label.as_str().to_string(),
-        format!("{:.2}s", duration.as_secs_f64()),
+        format!("{}.{:02}s", centiseconds / 100, centiseconds % 100),
     ]
 }

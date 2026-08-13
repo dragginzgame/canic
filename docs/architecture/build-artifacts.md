@@ -69,6 +69,28 @@ uses `shared` rather than a fabricated per-role duration; Coordinator and Store
 row-level `ELAPSED` values cover their dedicated builds. Both tables show each
 resolved Cargo package version as the second column.
 
+One complete configured build issues one Cargo command per Cargo workspace and
+selected profile. Artifact copying, shrinking, Candid extraction, metadata
+embedding and gzip materialization run concurrently after that shared Cargo
+command succeeds. A release-build identity is compiled only into each leaf
+canister; changing it does not invalidate `canic-core` and the rest of the
+shared dependency graph.
+
+A successful install finalizes its immutable release build beneath
+`.canic/release-builds/<release-build-id>/`. An exact interrupted install
+automatically reuses those finalized artifacts. A separate fresh Fleet in the
+same ICP root may select them explicitly:
+
+```text
+canic install <app> <fleet> --fleet-input <path> --release-build <id>
+```
+
+Reuse skips Cargo and artifact transforms. It remains fail-closed: the stored
+Canic builder version and profile, current App topology and role/package
+identities, canonical artifact manifests and exact artifact bytes must still
+validate before activation. If `--profile` is also supplied, it must name the
+finalized build's profile.
+
 Build provenance is opt-in:
 
 ```text
@@ -109,13 +131,15 @@ and artifact hashes.
 
 ## Candid Extraction
 
-`canic::finish!()` emits the `ic_cdk::export_candid!()` pointer only for debug
-builds. Host builds use that pointer to extract App-role Candid for local
+`canic::finish!()` emits the `ic_cdk::export_candid!()` pointer only when the
+canister build script selects the local build network. Host builds use that
+pointer to extract Candid from the exact selected-profile Wasm used for local
 development artifacts.
 
 For `ICP_ENVIRONMENT=local`, Canic:
 
-- builds App-role debug Wasm for Candid extraction;
+- builds each configured workspace once in the selected profile;
+- extracts App-role Candid from that exact selected Wasm;
 - writes `.icp/local/canisters/<role>/<role>.did`;
 - embeds public `candid:service` metadata into the local Wasm artifact for
   local `icp canister metadata` inspection.
@@ -128,16 +152,17 @@ canonical DIDs, which local infrastructure builds copy and embed directly:
 - `crates/canic-wasm-store/wasm_store.did`
 
 After an intentional infrastructure endpoint change, the low-level artifact
-builder's `--refresh-canonical-did` option extracts the selected debug Wasm and
-rewrites that role's canonical contract. A generated downstream wrapper with no
-canonical source package also extracts Candid, but never treats its generated
-sidecar as source truth.
+builder's `--refresh-canonical-did` option extracts the already-built selected
+local Wasm and rewrites that role's canonical contract without a second debug
+build. A generated downstream wrapper with no canonical source package also
+extracts Candid, but never treats its generated sidecar as source truth.
 
 For `ICP_ENVIRONMENT=ic`, Canic intentionally skips Candid extraction, removes
 the generated `.did` sidecar path, and does not embed `candid:service`
 metadata. This keeps production Wasm artifacts from carrying local interface
 metadata bloat. Running `candid-extractor` directly against an `ic` release
-Wasm is not the supported path; use the local/debug extraction path instead.
+Wasm is not the supported path; use the selected-profile local extraction path
+instead.
 
 `ic-wasm` remains optional. When it is present, Canic records its version and
 whether shrink or local Candid metadata embedding was applied. When it is

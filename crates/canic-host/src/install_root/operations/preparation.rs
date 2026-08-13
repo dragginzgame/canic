@@ -1,6 +1,6 @@
 use super::super::build_snapshot::InstallBuildTarget;
-use super::super::build_targets::run_canic_build_targets;
-use crate::canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext};
+use super::super::build_targets::{CompletedConfiguredBuild, run_canic_build_targets};
+use crate::canister_build::WorkspaceBuildContext;
 
 pub(in crate::install_root) struct BuildInstallTargetsOperation<'a> {
     context: &'a WorkspaceBuildContext,
@@ -41,7 +41,7 @@ impl<'a> BuildInstallTargetsOperation<'a> {
 
     pub(in crate::install_root) fn execute(
         &self,
-    ) -> Result<Vec<CurrentCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
+    ) -> Result<CompletedConfiguredBuild, Box<dyn std::error::Error>> {
         run_canic_build_targets(self.context, self.build_targets)
     }
 }

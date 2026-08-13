@@ -133,6 +133,10 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
+        println!("cargo:rustc-check-cfg=cfg(canic_export_candid)");
+        if std::env::var("ICP_ENVIRONMENT").as_deref().unwrap_or("local") == "local" {
+            println!("cargo:rustc-cfg=canic_export_candid");
+        }
         if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_none() {
             // Default builds ship the slimmer demo/reference surface; internal
             // observability and topology test endpoints opt back in explicitly.

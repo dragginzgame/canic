@@ -186,8 +186,14 @@ fn application_file_build_outputs(
 mod tests {
     use super::*;
     use crate::{
-        canister_build::{CanisterArtifactBuildOutput, CurrentCanisterArtifactBuildOutput},
-        install_root::build_snapshot::CompleteInstallBuildSnapshot,
+        canister_build::{
+            CanisterArtifactBuildOutput, CanisterArtifactBuildSpec,
+            CurrentCanisterArtifactBuildOutput,
+        },
+        install_root::{
+            build_snapshot::{CompleteInstallBuildSnapshot, InstallBuildTarget},
+            reused_build::load_reused_install_build,
+        },
         release_build::{ReleaseBuildPlanState, load_release_build_plan, plan_release_build},
         release_set::{
             ApplicationArtifactBuildTarget, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
@@ -287,8 +293,54 @@ mod tests {
                 .state,
             ReleaseBuildPlanState::Finalized { .. }
         ));
+        assert_finalized_release_is_reusable(&root, &snapshot, &finalized);
 
         fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    fn assert_finalized_release_is_reusable(
+        root: &Path,
+        snapshot: &ValidatedInstallSnapshot,
+        finalized: &FinalizedReleaseBuild,
+    ) {
+        let release_build_id = finalized.record.release_build_id;
+        let complete_build = snapshot
+            .complete_build
+            .as_ref()
+            .expect("complete build snapshot");
+        let reused = load_reused_install_build(root, complete_build, release_build_id)
+            .expect("reuse finalized release build");
+        assert_eq!(
+            reused
+                .outputs
+                .iter()
+                .map(|output| output.role.as_str())
+                .collect::<Vec<_>>(),
+            vec!["root", "app"]
+        );
+        assert_eq!(reused.infrastructure_outputs.len(), 3);
+        let repeated = emit_manifest_with_phase(
+            root,
+            snapshot,
+            &reused.outputs,
+            &reused.infrastructure_outputs,
+            None,
+        )
+        .expect("revalidate reused manifests and artifact bytes");
+        assert_eq!(
+            repeated
+                .finalized_release_build
+                .expect("repeated finalized release build")
+                .record,
+            finalized.record
+        );
+
+        let mut changed_app = complete_build.clone();
+        changed_app.targets[1].spec.package_name = "different-package".to_string();
+        assert!(
+            load_reused_install_build(root, &changed_app, release_build_id).is_err(),
+            "a finalized build from a different current App package must be rejected"
+        );
     }
 
     #[test]
@@ -357,7 +409,10 @@ maximum_instances = 1
         app_output: &CurrentCanisterArtifactBuildOutput,
     ) -> CompleteInstallBuildSnapshot {
         CompleteInstallBuildSnapshot {
-            targets: Vec::new(),
+            targets: vec![
+                install_build_target(root, root_output),
+                install_build_target(root, app_output),
+            ],
             manifest: RootReleaseSetBuildSnapshot {
                 icp_root: root.to_path_buf(),
                 manifest_path: root.join(".icp/local/canisters/root/root.release-set.json"),
@@ -382,6 +437,26 @@ maximum_instances = 1
                 wasm_relative_path: ".icp/local/canisters/app/app.wasm".to_string(),
                 wasm_gz_relative_path: ".icp/local/canisters/app/app.wasm.gz".to_string(),
             }],
+        }
+    }
+
+    fn install_build_target(
+        root: &Path,
+        output: &CurrentCanisterArtifactBuildOutput,
+    ) -> InstallBuildTarget {
+        InstallBuildTarget {
+            role: output.role.clone(),
+            spec: CanisterArtifactBuildSpec {
+                role: output.role.clone(),
+                package_name: output.output.package_name.clone(),
+                package_version: output.output.package_version.clone(),
+                package_manifest_path: root.join("Cargo.toml"),
+                cargo_workspace_root: root.to_path_buf(),
+                artifact_root: output.output.artifact_root.clone(),
+                wasm_path: output.output.wasm_path.clone(),
+                wasm_gz_path: output.output.wasm_gz_path.clone(),
+                did_path: output.output.did_path.clone(),
+            },
         }
     }
 

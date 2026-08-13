@@ -11,6 +11,7 @@ use crate::{
 
 pub fn init_root_canister_before_bootstrap(
     args: FleetSubnetRootInitArgs,
+    embedded_release_build_id: Option<&str>,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
@@ -33,7 +34,7 @@ pub fn init_root_canister_before_bootstrap(
         );
     }
 
-    if let Err(err) = workflow::runtime::init_root_canister(args) {
+    if let Err(err) = workflow::runtime::init_root_canister(args, embedded_release_build_id) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::Init,
             LifecycleMetricRole::Root,

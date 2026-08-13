@@ -171,10 +171,14 @@ fn create_command_preserves_exact_icp_e8s() {
 #[test]
 fn install_timing_summary_uses_padded_bordered_table_format() {
     let timings = InstallTimingSummary {
-        create_canisters: Duration::from_millis(1200),
-        build_all: Duration::from_millis(2340),
+        activate_fleet: Duration::from_millis(1200),
+        build_configured: Duration::from_millis(1800),
+        build_infrastructure: Duration::from_millis(540),
         emit_manifest: Duration::from_millis(10),
-        install_root: Duration::from_millis(20),
+        materialize_artifacts: Duration::ZERO,
+        post_build_gate: Duration::from_millis(20),
+        preflight: Duration::from_millis(100),
+        reuse_artifacts: Duration::ZERO,
     };
 
     let table = render_install_timing_summary(&timings, Duration::from_millis(3900));
@@ -182,22 +186,39 @@ fn install_timing_summary_uses_padded_bordered_table_format() {
     assert_eq!(
         table.lines().take(3).collect::<Vec<_>>(),
         vec![
-            "+------------------+---------+",
-            "| PHASE            | ELAPSED |",
-            "+==================+=========+",
+            "+-------------------------+---------+",
+            "| PHASE                   | ELAPSED |",
+            "+=========================+=========+",
         ]
     );
-    assert!(table.contains("| create_canisters |   1.20s |"));
+    assert!(table.contains("| activate_fleet          |   1.20s |"));
     assert!(
         table
             .lines()
-            .any(|line| line.contains("install_root") && line.contains("0.02s"))
+            .any(|line| line.contains("post_build_gate") && line.contains("0.02s"))
     );
+    assert!(table.contains("| planning_receipts_other |   0.23s |"));
     assert!(
         table
             .lines()
             .any(|line| line.contains("total") && line.contains("3.90s"))
     );
+}
+
+#[test]
+fn displayed_install_timing_rows_add_exactly_to_displayed_total() {
+    let timings = InstallTimingSummary {
+        build_configured: Duration::from_millis(16),
+        preflight: Duration::from_millis(16),
+        ..InstallTimingSummary::default()
+    };
+
+    let table = render_install_timing_summary(&timings, Duration::from_millis(35));
+
+    assert!(table.contains("| preflight               |   0.01s |"));
+    assert!(table.contains("| build_configured        |   0.01s |"));
+    assert!(table.contains("| planning_receipts_other |   0.01s |"));
+    assert!(table.contains("| total                   |   0.03s |"));
 }
 
 #[test]

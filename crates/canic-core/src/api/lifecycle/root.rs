@@ -11,12 +11,14 @@ pub struct LifecycleApi;
 impl LifecycleApi {
     pub fn init_root_canister_before_bootstrap(
         args: FleetSubnetRootInitArgs,
+        embedded_release_build_id: Option<&str>,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
     ) {
         lifecycle::init::root::init_root_canister_before_bootstrap(
             args,
+            embedded_release_build_id,
             config,
             config_source,
             config_path,
