@@ -457,6 +457,8 @@ macro_rules! finish {
                 reason = "Canic host builds inject and register this destination-crate cfg"
             )]
 
+            use super::*;
+
             #[cfg(canic_export_candid)]
             $crate::__internal::cdk::export_candid!();
         }

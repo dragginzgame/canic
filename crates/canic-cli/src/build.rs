@@ -9,7 +9,7 @@ use crate::cli::clap::render_usage;
 use crate::{
     cli::{
         clap::{
-            parse_matches, required_string, string_option, string_option_or_else, typed_option,
+            parse_matches, required_string, required_typed, string_option, string_option_or_else,
             value_arg,
         },
         defaults::local_environment,
@@ -51,8 +51,8 @@ use thiserror::Error as ThisError;
 
 const BUILD_HELP_AFTER: &str = "\
 Examples:
-  canic build demo --profile fast
-  canic build demo app --provenance artifacts/app-provenance.json
+  canic build demo
+  canic build demo app --profile release --provenance artifacts/app-provenance.json
 
 Builds the configured Fleet Subnet Root, every attached Component role, and
 Canic's built-in Coordinator and Wasm Store by default. Pass a role for one
@@ -130,7 +130,7 @@ struct BuildOptions {
     app: String,
     role: Option<String>,
     environment: String,
-    profile: Option<CanisterBuildProfile>,
+    profile: CanisterBuildProfile,
     workspace: Option<String>,
     icp_root: Option<String>,
     config: Option<String>,
@@ -148,7 +148,7 @@ impl BuildOptions {
             app: required_string(&matches, "app"),
             role: string_option(&matches, "role"),
             environment: string_option_or_else(&matches, "environment", local_environment),
-            profile: typed_option(&matches, "profile"),
+            profile: required_typed(&matches, "profile"),
             workspace: string_option(&matches, "workspace"),
             icp_root: string_option(&matches, "icp-root"),
             config: string_option(&matches, "config"),
@@ -237,7 +237,8 @@ fn build_command() -> ClapCommand {
                 .value_name("debug|fast|release")
                 .num_args(1)
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
-                .help("Canister wasm build profile; defaults to release"),
+                .default_value("fast")
+                .help("Canister wasm build profile"),
         )
         .arg(
             value_arg("provenance")
@@ -592,10 +593,8 @@ fn build_command_provenance(options: &BuildOptions, workspace_root: &Path) -> Co
     if let Some(role) = &options.role {
         argv_normalized.push(role.clone());
     }
-    if let Some(profile) = options.profile {
-        argv_normalized.push("--profile".to_string());
-        argv_normalized.push(profile.target_dir_name().to_string());
-    }
+    argv_normalized.push("--profile".to_string());
+    argv_normalized.push(options.profile.target_dir_name().to_string());
     if let Some(workspace) = &options.workspace {
         push_path_arg(
             &mut argv_normalized,
@@ -688,11 +687,9 @@ fn resolve_build_context(
             .map_err(|err| BuildCommandError::Build(Box::new(err)))?,
     };
     let build_network = resolve_build_network(&options.environment, &icp_root)?;
-    let profile = options.profile.unwrap_or(CanisterBuildProfile::Release);
-
     Ok(WorkspaceBuildContext {
         role: selected_role.to_string(),
-        profile,
+        profile: options.profile,
         environment: options.environment.clone(),
         build_network,
         workspace_root,
@@ -729,11 +726,24 @@ mod tests {
         assert_eq!(options.app, "demo");
         assert_eq!(options.role.as_deref(), Some("app"));
         assert_eq!(options.environment, "local");
-        assert_eq!(options.profile, None);
+        assert_eq!(options.profile, CanisterBuildProfile::Fast);
         assert_eq!(options.workspace, None);
         assert_eq!(options.icp_root, None);
         assert_eq!(options.config, None);
         assert_eq!(options.provenance, None);
+    }
+
+    #[test]
+    fn build_accepts_explicit_release_profile() {
+        let options = BuildOptions::parse([
+            OsString::from("demo"),
+            OsString::from("app"),
+            OsString::from("--profile"),
+            OsString::from("release"),
+        ])
+        .expect("parse explicit release build profile");
+
+        assert_eq!(options.profile, CanisterBuildProfile::Release);
     }
 
     #[test]
@@ -805,7 +815,7 @@ mod tests {
 
         assert_eq!(options.app, "demo");
         assert_eq!(options.role.as_deref(), Some("root"));
-        assert_eq!(options.profile, Some(CanisterBuildProfile::Fast));
+        assert_eq!(options.profile, CanisterBuildProfile::Fast);
         assert_eq!(options.workspace.as_deref(), Some("backend"));
         assert_eq!(options.icp_root.as_deref(), Some("."));
         assert_eq!(
@@ -891,8 +901,9 @@ mod tests {
         let text = usage();
 
         assert!(text.contains("Usage: canic build [OPTIONS] <app> [role]"));
-        assert!(text.contains("canic build demo --profile fast"));
-        assert!(text.contains("canic build demo app"));
+        assert!(text.contains("canic build demo"));
+        assert!(text.contains("canic build demo app --profile release"));
+        assert!(text.contains("[default: fast]"));
         assert!(text.contains("--provenance <file>"));
         assert!(text.contains("Builds the configured Fleet Subnet Root"));
         assert!(text.contains("every attached Component role"));
@@ -1042,6 +1053,12 @@ mod tests {
                 .argv_normalized
                 .contains(&"<redacted:absolute-outside-root>".to_string())
         );
+        assert!(
+            provenance
+                .argv_normalized
+                .windows(2)
+                .any(|args| args[0] == "--profile" && args[1] == "fast")
+        );
     }
 
     #[test]
@@ -1113,7 +1130,7 @@ mod tests {
             app: app.to_string(),
             role: Some(role.to_string()),
             environment: "local".to_string(),
-            profile: None,
+            profile: CanisterBuildProfile::Fast,
             workspace: Some(root.display().to_string()),
             icp_root: None,
             config: None,

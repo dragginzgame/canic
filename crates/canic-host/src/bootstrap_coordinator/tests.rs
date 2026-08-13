@@ -61,6 +61,7 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     assert_eq!(local.first().map(String::as_str), Some("rustc"));
+    assert!(local.contains(&"--locked".to_string()));
     assert!(
         local
             .windows(2)
@@ -74,6 +75,7 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     assert_eq!(ic.first().map(String::as_str), Some("build"));
+    assert!(ic.contains(&"--locked".to_string()));
     assert!(!ic.contains(&"canic_export_candid".to_string()));
 }
 

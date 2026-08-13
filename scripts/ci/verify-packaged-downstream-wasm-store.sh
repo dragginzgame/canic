@@ -17,7 +17,7 @@ CANONICAL_TARGET_DIR="$TMP_ROOT/cargo-target-canonical"
 PROOF_HOME="$TMP_ROOT/home"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
 VERSION="$(
-    cargo metadata --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
+    cargo metadata --locked --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
         jq -r '.packages[] | select(.name == "canic") | .version'
 )"
 
@@ -33,31 +33,54 @@ ensure_packaged_crate() {
     rm -f "$crate_archive"
     case "$crate_name" in
         canic-control-plane)
-            cargo package -p "$crate_name" --allow-dirty --no-verify \
+            cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
             ;;
         canic)
-            cargo package -p "$crate_name" --allow-dirty --no-verify \
+            cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
                 --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
                 --config "patch.crates-io.canic-macros.path=\"$ROOT/crates/canic-macros\"" >/dev/null
             ;;
         canic-host)
-            cargo package -p "$crate_name" --allow-dirty --no-verify \
+            cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
                 --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
             ;;
         canic-wasm-store)
-            cargo package -p "$crate_name" --allow-dirty --no-verify \
+            cargo package --locked -p "$crate_name" --allow-dirty --no-verify \
                 --config "patch.crates-io.canic.path=\"$ROOT/crates/canic\"" \
                 --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
                 --config "patch.crates-io.canic-macros.path=\"$ROOT/crates/canic-macros\"" >/dev/null
             ;;
         *)
-            cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
+            cargo package --locked -p "$crate_name" --allow-dirty --no-verify >/dev/null
             ;;
     esac
+}
+
+prepare_lockfile() {
+    local root="$1"
+    local filter_platform="${2:-}"
+
+    mkdir -p "$PROOF_HOME" "$PROOF_TMPDIR"
+    (
+        cd "$root"
+        HOME="$PROOF_HOME" \
+            CARGO_HOME="$HOST_CARGO_HOME" \
+            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
+            TMPDIR="$PROOF_TMPDIR" \
+            cargo +1.91.0 generate-lockfile --offline >/dev/null
+        if [ -n "$filter_platform" ]; then
+            HOME="$PROOF_HOME" \
+                CARGO_HOME="$HOST_CARGO_HOME" \
+                RUSTUP_HOME="$HOST_RUSTUP_HOME" \
+                TMPDIR="$PROOF_TMPDIR" \
+                cargo +1.91.0 metadata --offline --format-version=1 \
+                    --filter-platform "$filter_platform" >/dev/null
+        fi
+    )
 }
 
 populate_isolated_package_root() {
@@ -157,15 +180,122 @@ prepare_downstream_root() {
 name = "canic-packaged-downstream-probe"
 version = "0.0.0"
 edition = "2024"
+rust-version = "1.91.0"
 publish = false
+build = "build.rs"
+
+[package.metadata.canic]
+app = "packaged_probe"
+role = "app"
+
+[lib]
+name = "canic_packaged_downstream_probe"
+crate-type = ["cdylib"]
 
 [dependencies]
-canic = { path = "$package_root/canic-$VERSION" }
+candid = { version = "0.10", default-features = false }
+canic = { path = "$package_root/canic-$VERSION", default-features = false, features = ["metrics"] }
+ic-cdk = "0.20"
+
+[build-dependencies]
+canic = { path = "$package_root/canic-$VERSION", default-features = false }
+EOF
+
+    cat > "$downstream_root/build.rs" <<'EOF'
+fn main() {
+    canic::build!("canic.toml");
+}
+EOF
+
+    cat > "$downstream_root/canic.toml" <<'EOF'
+[app]
+name = "packaged_probe"
+
+[auth.delegated_tokens]
+enabled = false
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "."
+
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
 EOF
 
     cat > "$downstream_root/src/lib.rs" <<'EOF'
-pub fn packaged_downstream_probe() {}
+use candid::Principal;
+use canic::Error;
+
+async fn canic_setup() {}
+
+async fn canic_install(_: Option<Vec<u8>>) {}
+
+async fn canic_upgrade() {}
+
+canic::start!();
+
+#[canic::canic_query(public)]
+fn packaged_probe(subject: Principal) -> Result<Principal, Error> {
+    Ok(subject)
+}
+
+canic::finish!();
 EOF
+}
+
+run_packaged_canister_probe() {
+    local downstream_root="$1"
+    local target_dir="$2-canister"
+    local wasm_path="$target_dir/wasm32-unknown-unknown/debug/canic_packaged_downstream_probe.wasm"
+    local local_did="$downstream_root/packaged-probe.local.did"
+    local ic_did="$downstream_root/packaged-probe.ic.did"
+
+    mkdir -p "$PROOF_HOME" "$target_dir" "$PROOF_TMPDIR"
+
+    command -v candid-extractor >/dev/null || {
+        echo "packaged downstream Canister proof requires candid-extractor" >&2
+        exit 1
+    }
+    (
+        cd "$downstream_root"
+        CANIC_ROLE_CONTRACT_VALIDATED=1 \
+            ICP_ENVIRONMENT=local \
+            HOME="$PROOF_HOME" \
+            CARGO_HOME="$HOST_CARGO_HOME" \
+            CARGO_TARGET_DIR="$target_dir" \
+            RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
+            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
+            TMPDIR="$PROOF_TMPDIR" \
+            cargo +1.91.0 build --offline --locked --target wasm32-unknown-unknown >/dev/null
+    )
+    candid-extractor "$wasm_path" >"$local_did"
+    grep -Fq 'packaged_probe' "$local_did" || {
+        echo "packaged downstream local Wasm omitted its typed Candid endpoint" >&2
+        exit 1
+    }
+
+    (
+        cd "$downstream_root"
+        CANIC_ROLE_CONTRACT_VALIDATED=1 \
+            ICP_ENVIRONMENT=ic \
+            HOME="$PROOF_HOME" \
+            CARGO_HOME="$HOST_CARGO_HOME" \
+            CARGO_TARGET_DIR="$target_dir" \
+            RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
+            RUSTUP_HOME="$HOST_RUSTUP_HOME" \
+            TMPDIR="$PROOF_TMPDIR" \
+            cargo +1.91.0 build --offline --locked --target wasm32-unknown-unknown >/dev/null
+    )
+    if candid-extractor "$wasm_path" >"$ic_did" 2>/dev/null &&
+        grep -Fq 'packaged_probe' "$ic_did"; then
+        echo "packaged downstream IC Wasm unexpectedly retained local Candid export" >&2
+        exit 1
+    fi
 }
 
 run_probe() {
@@ -178,13 +308,13 @@ run_probe() {
     assert_packaged_tool_root "$tool_root" "$package_root"
 
     (
-        cd "$downstream_root"
+        cd "$tool_root"
         HOME="$PROOF_HOME" \
             CARGO_HOME="$HOST_CARGO_HOME" \
             CARGO_TARGET_DIR="$target_dir" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            cargo run --manifest-path "$tool_root/Cargo.toml" --offline -q -p canic-host \
+            cargo run --manifest-path "$tool_root/Cargo.toml" --offline --locked -q -p canic-host \
                 --example build_artifact -- wasm_store fast "$downstream_root" \
                 "$downstream_root" "$downstream_root/apps/canic.toml" >/dev/null
     )
@@ -235,7 +365,7 @@ assert_generated_probe_outputs() {
         echo "expected generated wrapper to patch sibling packaged Canic crates" >&2
         exit 1
     }
-    cargo metadata --no-deps --format-version=1 --manifest-path "$wrapper_manifest" |
+    cargo metadata --locked --no-deps --format-version=1 --manifest-path "$wrapper_manifest" |
         jq -e '
             any(
                 .packages[]
@@ -307,6 +437,9 @@ main() {
     populate_isolated_package_root "$GENERATED_PACKAGE_ROOT" no
     prepare_tool_root "$GENERATED_TOOL_ROOT"
     prepare_downstream_root "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_PACKAGE_ROOT"
+    prepare_lockfile "$GENERATED_TOOL_ROOT"
+    prepare_lockfile "$GENERATED_DOWNSTREAM_ROOT" wasm32-unknown-unknown
+    run_packaged_canister_probe "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
     run_probe "$GENERATED_TOOL_ROOT" "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT" "$GENERATED_TARGET_DIR"
     assert_generated_probe_outputs "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT"
 
@@ -314,10 +447,12 @@ main() {
     prepare_packaged_canic_patch_config "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_PACKAGE_ROOT"
     prepare_tool_root "$CANONICAL_TOOL_ROOT"
     prepare_downstream_root "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_PACKAGE_ROOT"
+    prepare_lockfile "$CANONICAL_TOOL_ROOT"
+    prepare_lockfile "$CANONICAL_DOWNSTREAM_ROOT" wasm32-unknown-unknown
     run_probe "$CANONICAL_TOOL_ROOT" "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_TARGET_DIR"
     assert_canonical_probe_outputs "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT"
 
-    echo "packaged downstream wasm_store probe passed"
+    echo "packaged downstream Canister and wasm_store probe passed"
 }
 
 main "$@"

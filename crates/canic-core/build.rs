@@ -1,5 +1,4 @@
 fn main() {
-    println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
     println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
 
     let network = std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| {

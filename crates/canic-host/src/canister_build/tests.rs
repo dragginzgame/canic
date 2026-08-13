@@ -202,3 +202,25 @@ fn unqualified_build_context_removes_an_ambient_release_build_id() {
         })
     );
 }
+
+#[test]
+fn configured_canister_build_uses_the_locked_resolver() {
+    let context = WorkspaceBuildContext {
+        role: "app".to_string(),
+        profile: super::CanisterBuildProfile::Fast,
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: "/workspace".into(),
+        icp_root: "/project".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let command = super::artifact::canister_cargo_build_command(
+        &context,
+        std::path::Path::new("/workspace/Cargo.toml"),
+        super::CanisterBuildProfile::Fast,
+    );
+    assert!(command.get_args().any(|argument| argument == "--locked"));
+}

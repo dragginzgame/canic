@@ -19,7 +19,7 @@ This checklist covers:
   surfaces;
 - packaged downstream CLI validation, including current shipped operator
   command surfaces;
-- packaged downstream `wasm_store` bootstrap validation;
+- packaged downstream Canister macro/Candid and `wasm_store` bootstrap validation;
 - local ICP install/canister validation;
 - release artifact verification expectations;
 - environment-specific gate ownership;
@@ -46,7 +46,7 @@ not add new release behavior.
 | Publishable crate package | `make package` | Can the workspace produce publishable package archives through `cargo package` from a clean worktree? | RC/final release. |
 | Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke and current retained operator CLI checks without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
-| Packaged downstream wasm store | `make test-packaged-downstream-wasm-store` | Can the special packaged downstream `wasm_store` bootstrap paths build from packaged Canic crates outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
+| Packaged downstream Canister and wasm store | `make test-packaged-downstream-wasm-store` | Can an ordinary typed Canister use packaged `build!`, `start!` and `finish!` under the MSRV/local/IC boundary, and can both `wasm_store` bootstrap paths build outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Tag CI and RC validation. |
 | Local Fleet install | `make test-fleet-install` | Can an exact-input Coordinator-anchored single-root local Fleet reach terminal activation? | RC/final release in a selected local ICP environment. |
 | Local Canister tests | `make test-canisters` | Can the terminal local Fleet resolve and call the maintained test application surface? | RC/final release after the local Fleet install. |
@@ -78,6 +78,9 @@ RC and final release reports should account for these artifact expectations:
   retained proof includes command help and the stable structured JSON error
   shape for an unresolved target, plus fixture status, live sync, live fund,
   and final status JSON output from a deployment with local Candid metadata.
+- Packaged Canister proof must compile one typed endpoint through packaged
+  `build!`, `start!` and `finish!` at the MSRV with warnings denied, extract
+  that endpoint from local Wasm and prove IC Wasm omits the local export.
 - Packaged `wasm_store` proof must exercise both the generated wrapper fallback
   and canonical packaged sibling paths, verifying packaged Canic sources are
   used instead of repository crate paths.

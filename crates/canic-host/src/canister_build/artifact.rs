@@ -24,7 +24,9 @@ use crate::{
 
 use super::{
     CanisterBuildProfile, WorkspaceBuildContext,
-    cache::{canister_build_target_root, configure_canister_cargo_command},
+    cache::{
+        canister_build_target_root, configure_canister_cargo_command, lock_canister_build_target,
+    },
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
@@ -36,6 +38,7 @@ use super::{
 pub fn build_workspace_canister_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
+    let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
     match CanisterArtifactSource::for_role(&context.role) {
         CanisterArtifactSource::FleetCoordinator => {
             return build_bootstrap_fleet_coordinator_artifact(context);
@@ -126,6 +129,7 @@ pub fn build_workspace_canister_artifacts_from_specs(
     if specs.is_empty() {
         return Ok(Vec::new());
     }
+    let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
 
     for spec in specs {
         prepare_canister_artifact_output(spec)?;
@@ -395,7 +399,7 @@ fn canister_cargo_batch_command(
     command
 }
 
-fn canister_cargo_build_command(
+pub(super) fn canister_cargo_build_command(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
     profile: CanisterBuildProfile,
@@ -411,6 +415,7 @@ fn canister_cargo_build_command(
         )
         .args([
             "build",
+            "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),
             "--target",

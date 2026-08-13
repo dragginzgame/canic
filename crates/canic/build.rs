@@ -1,31 +1,11 @@
+include!("src/build_support/cfg_catalog.rs");
+
 fn main() {
     // The exported endpoint macros use these cfg names when optional endpoint
     // groups are compiled out for a role-specific canister build.
-    println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
-    println!("cargo:rustc-check-cfg=cfg(canic_delegated_token_issuer)");
-    println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
-    println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
-    println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
-    println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
-    println!("cargo:rustc-check-cfg=cfg(canic_export_candid)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_icrc_standards)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metadata)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
-    println!("cargo:rustc-check-cfg=cfg(canic_memory_ledger_enabled)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_cycle_tracker)");
-    println!("cargo:rustc-check-cfg=cfg(canic_metrics_core)");
-    println!("cargo:rustc-check-cfg=cfg(canic_metrics_placement)");
-    println!("cargo:rustc-check-cfg=cfg(canic_metrics_platform)");
-    println!("cargo:rustc-check-cfg=cfg(canic_metrics_runtime)");
-    println!("cargo:rustc-check-cfg=cfg(canic_metrics_security)");
-    println!("cargo:rustc-check-cfg=cfg(canic_metrics_storage)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
-    println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
+    for custom_cfg in CANIC_CUSTOM_CFG_NAMES {
+        println!("cargo:rustc-check-cfg=cfg({custom_cfg})");
+    }
     println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_METRICS");
 

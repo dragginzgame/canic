@@ -300,6 +300,7 @@ fn coordinator_cargo_build_command(
     context.apply_to_command(&mut command);
     command.current_dir(&context.workspace_root).args([
         if local_candid { "rustc" } else { "build" },
+        "--locked",
         "--manifest-path",
         &manifest_path.display().to_string(),
         "--target",

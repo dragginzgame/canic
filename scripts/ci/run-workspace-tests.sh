@@ -65,7 +65,7 @@ run_test() {
     shift 2
     echo "==> $label"
     if [ "$PLAN_ONLY" -eq 1 ]; then
-        printf '==> plan: cargo test'
+        printf '==> plan: cargo test --locked'
         printf ' %q' "$@"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
@@ -79,10 +79,10 @@ run_test() {
     local started_at="$SECONDS"
     case "$execution" in
         parallel)
-            cargo test "$@" -- --nocapture
+            cargo test --locked "$@" -- --nocapture
             ;;
         pocketic-serial)
-            cargo test "$@" -- --test-threads=1 --nocapture
+            cargo test --locked "$@" -- --test-threads=1 --nocapture
             ;;
         *)
             echo "unknown test execution class: $execution" >&2

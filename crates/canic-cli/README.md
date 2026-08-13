@@ -75,6 +75,10 @@ canic build <app>
 canic build <app> <role>
 ```
 
+Standalone builds default to the fast Wasm profile for iteration. Use
+`--profile release` explicitly for production-optimized artifacts. Install and
+deployment planning retain their release defaults.
+
 The App-only form builds the canonical Fleet Coordinator and Wasm Store first,
 then batches the configured Fleet Subnet Root with every attached Component
 role. The final output presents infrastructure before application Wasm and

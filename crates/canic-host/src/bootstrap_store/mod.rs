@@ -468,24 +468,7 @@ fn run_wasm_store_cargo_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = cargo_command();
-    context.apply_to_command(&mut command);
-    command
-        .current_dir(&context.workspace_root)
-        .env(
-            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
-            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
-        )
-        .args([
-            "build",
-            "--manifest-path",
-            &manifest_path.display().to_string(),
-            "--target",
-            "wasm32-unknown-unknown",
-        ]);
-    configure_canister_cargo_command(&mut command, &context.workspace_root);
-    append_wasm_store_profile_config_args(&mut command, context.profile);
-    command.args(context.profile.cargo_args());
+    let mut command = wasm_store_cargo_build_command(context, manifest_path);
 
     let output = command.output()?;
     if output.status.success() {
@@ -497,6 +480,32 @@ fn run_wasm_store_cargo_build(
         String::from_utf8_lossy(&output.stderr)
     )
     .into())
+}
+
+fn wasm_store_cargo_build_command(
+    context: &WorkspaceBuildContext,
+    manifest_path: &Path,
+) -> Command {
+    let mut command = cargo_command();
+    context.apply_to_command(&mut command);
+    command
+        .current_dir(&context.workspace_root)
+        .env(
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        )
+        .args([
+            "build",
+            "--locked",
+            "--manifest-path",
+            &manifest_path.display().to_string(),
+            "--target",
+            "wasm32-unknown-unknown",
+        ]);
+    configure_canister_cargo_command(&mut command, &context.workspace_root);
+    append_wasm_store_profile_config_args(&mut command, context.profile);
+    command.args(context.profile.cargo_args());
+    command
 }
 
 fn append_wasm_store_profile_config_args(command: &mut Command, profile: CanisterBuildProfile) {

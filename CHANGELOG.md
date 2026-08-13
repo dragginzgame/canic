@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
 
-- `0.102.0` adds same-release finalized-artifact reuse, one-pass local Candid
-  builds and display-exact install timing, restores Clap-owned argument
+- `0.102.0` adds fast-default standalone builds, locked race-free artifacts,
+  same-release finalized-artifact reuse, one-pass local Candid builds and
+  display-exact install timing, restores Clap-owned argument
   diagnostics with opt-in argv tracing, aligns whole-App build output with
   infrastructure-first Fleet authority and install-time Subnet placement, and
   establishes evidence-only compact-diagnostic inventories plus a current Wasm

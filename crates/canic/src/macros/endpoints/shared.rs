@@ -157,9 +157,7 @@ macro_rules! canic_emit_canic_metadata_endpoints {
 #[macro_export]
 macro_rules! canic_bundle_discovery_endpoints {
     () => {
-        #[cfg(not(canic_disable_bundle_icrc_standards))]
         $crate::canic_emit_icrc_standards_endpoints!();
-        #[cfg(not(canic_disable_bundle_metadata))]
         $crate::canic_emit_canic_metadata_endpoints!();
     };
 }
@@ -219,7 +217,6 @@ macro_rules! canic_bundle_observability_endpoints {
         $crate::canic_emit_runtime_introspection_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_env))]
         $crate::canic_emit_env_observability_endpoints!();
-        #[cfg(not(canic_disable_bundle_observability_log))]
         $crate::canic_emit_log_observability_endpoints!();
     };
 }
