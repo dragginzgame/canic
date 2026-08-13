@@ -19,9 +19,10 @@ Historical handoffs are archived at:
 - Workspace package version: `0.101.53`.
 - Latest published release: `v0.101.53` at
   `23c0328f78b215580d734ef01b52b35fa3e38ade`.
-- Root changelog: `Unreleased` records the clarified agent repository-scope
-  boundary, Clap-owned CLI parse diagnostics and proposed 0.103 design
-  reservation; no 0.102 patch version has been assigned.
+- Root changelog: `0.102.0` is the open draft for the completed operator-
+  performance/CLI-diagnostics batch and the evidence-only design groundwork.
+  Workspace package versions remain `0.101.53`; no release version mutation or
+  tag has occurred.
 - Active design and checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - Proposed adjacent design:
@@ -45,8 +46,10 @@ owned message text, the maintained enum has 20 leaves, `InternalError` remains
 string-first, canonical infrastructure Candid retains the old shape and the
 host still matches typed enum variants.
 
-No public error shape, numeric code, stable state or runtime behavior has been
-changed. No 0.102 version has been assigned.
+No public error shape, numeric code, stable state or diagnostic runtime behavior
+has changed. The `0.102.0` changelog draft describes this evidence boundary and
+the independent completed operator batch; it does not claim implementation of
+the compact diagnostic protocol.
 
 An independent operator-maintenance slice hard-cuts top-level and build option
 failures to their exact Clap diagnostics and adds explicit pre-parse argv
