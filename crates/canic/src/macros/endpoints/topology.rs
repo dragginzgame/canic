@@ -64,11 +64,8 @@ macro_rules! canic_emit_topology_placement_endpoints {
 #[macro_export]
 macro_rules! canic_bundle_topology_views_endpoints {
     () => {
-        #[cfg(not(canic_disable_bundle_topology_state))]
         $crate::canic_emit_topology_state_endpoints!();
-        #[cfg(not(canic_disable_bundle_topology_children))]
         $crate::canic_emit_topology_children_endpoints!();
-        #[cfg(not(canic_disable_bundle_topology_placement))]
         $crate::canic_emit_topology_placement_endpoints!();
     };
 }

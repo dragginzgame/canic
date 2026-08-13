@@ -54,7 +54,7 @@ help:
 	@echo "  release-cadence  Report the current minor's advisory release-batch count"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
-	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
+	@echo "  test-packaged-downstream-wasm-store  Verify packaged Canister macros and wasm_store bootstrap paths"
 	@echo "  test-packaged-downstream-cli  Verify packaged CLI/support crates from an isolated downstream root"
 	@echo "  test-installed-canic-cli  Verify the installed canic binary with the v1 readiness smoke"
 	@echo ""
@@ -140,18 +140,21 @@ patch:
 	@$(MAKE) --no-print-directory release-cadence
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
+	@$(MAKE) ensure-clean
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
+	@$(MAKE) ensure-clean
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
 	@$(MAKE) ensure-clean
 	+@$(MAKE) --no-print-directory validate
+	@$(MAKE) ensure-clean
 	@CANIC_RELEASE_VALIDATED=1 scripts/ci/bump-version.sh major
 
 release-patch:
@@ -194,7 +197,7 @@ release-cadence:
 	@bash scripts/dev/report-release-cadence.sh
 
 package: ensure-clean
-	$(CARGO_ENV) cargo package
+	$(CARGO_ENV) cargo package --locked
 
 publish: ensure-clean
 	$(CARGO_ENV) scripts/ci/publish-workspace.sh
@@ -303,13 +306,13 @@ test-canisters: test-fleet-install
 #
 
 build:
-	$(CARGO_ENV) cargo build --workspace --release
+	$(CARGO_ENV) cargo build --locked --workspace --release
 
 check:
-	$(CARGO_ENV) cargo check --workspace
+	$(CARGO_ENV) cargo check --locked --workspace
 
 clippy:
-	CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings
+	CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
 fmt:
 	cargo sort --workspace

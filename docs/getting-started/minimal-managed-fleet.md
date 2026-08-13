@@ -49,7 +49,7 @@ app = "example"
 role = "hub"
 ```
 
-If you use `--profile fast` in local Canic commands, define the Cargo profile
+Because standalone `canic build` defaults to `fast`, define that Cargo profile
 in the workspace root:
 
 ```toml
@@ -263,7 +263,7 @@ only after that terminal boundary.
 Build one role without installing:
 
 ```bash
-canic build example hub --profile fast
+canic build example hub
 ```
 
 If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute

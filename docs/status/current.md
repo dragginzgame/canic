@@ -25,7 +25,7 @@ Historical handoffs are archived at:
   `0.101.53`; no release version mutation or tag has occurred.
 - Active design and checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Proposed adjacent design:
+- Evidence-only adjacent design:
   [0.103 framework-neutral local application authorization](../design/0.103-framework-neutral-local-application-authorization/status.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
   pre-0.102. Every Canic-owned canister in a Fleet must come from one admitted
@@ -66,7 +66,7 @@ for another fresh Fleet and reports display-exact additive install phases.
 Exact interrupted Fleet recovery selects the same finalized build
 automatically. Reuse validates the recorded profile and matching Canic builder
 version, plus current topology, role/package identities, canonical manifests
-and artifact bytes before activation. A real fast-profile Demo App build
+and artifact bytes before activation. A real default-fast-profile Demo App build
 completed in 110.31 seconds
 immediately after the code change and 22.97 seconds on the latest cache-hit
 run, with one configured Cargo batch and one build each for Coordinator and
@@ -86,12 +86,11 @@ identities distinct from raw decoded numbers, and a complete ownership audit of
 dynamic values currently embedded in public messages. The normative design and
 B1 contracts now include all four. This is design/evidence progress only.
 
-The proposed 0.103 line generalizes a requirement from the read-only IcyDB
-0.226 design without creating a repository dependency. It would hard-cut the
-current subject-only delegated session into bounded verified local
-Fleet/role/scope authority and expose one synchronous read-only
-`caller + scope` decision for application-owned framework adapters. IcyDB
-remains unchanged and read-only. No 0.103 implementation is authorized.
+The approved 0.103 direction hard-cuts the subject-only delegated session into
+bounded local Fleet/role/scope authority and exposes one synchronous
+`caller + scope` decision for application-owned adapters. It derives from
+read-only IcyDB requirements without adding a dependency. IcyDB remains
+read-only. B1 evidence may begin; no runtime implementation is authorized.
 
 Inserting that line moves every former provisional 0.103-0.111 Canic design to
 0.104-0.112. Their intended order and implementation status are unchanged;
@@ -114,9 +113,9 @@ release set before activation, with matching host/CLI callers and regenerated
 external bindings. Do not introduce a temporary dual protocol, generation
 name, compatibility decoder, diagnostic protocol version or message fallback.
 
-The independent 0.103 tracker is also planning-only. Its B1 inventory and
-measurement work may begin only after maintainer approval; its mutating B2-B7
-remain separately blocked.
+The 0.103 B1 must propagate a required signed presenter derived from the
+preparation caller, with no presenter-less or subject-equals-caller fallback,
+and resolve scope, replay, ownership and purity gates. B2-B7 remain blocked.
 
 ## Validation
 

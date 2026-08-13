@@ -120,18 +120,6 @@ pub const fn config_app_id(config: &ConfigModel) -> &str {
     config.app_id().as_str()
 }
 
-/// Return whether a validated config makes the requested App role deployable.
-#[must_use]
-pub fn config_role_is_deployable(config: &ConfigModel, app_id: &str, role_name: &str) -> bool {
-    if config.app_id().as_str() != app_id {
-        return false;
-    }
-
-    config
-        .deployable_roles()
-        .contains(&CanisterRole::owned(role_name.to_string()))
-}
-
 /// Return whether a validated config contains the requested canister role.
 #[must_use]
 pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
@@ -199,11 +187,10 @@ mod tests {
         assert!(!cfg.roles.contains_key("root"));
         assert!(cfg.component_specs.is_empty());
         assert!(!cfg.auth.delegated_tokens.enabled);
-        assert!(!config_role_is_deployable(
-            &cfg,
-            "standalone",
-            "sandbox_blank"
-        ));
+        assert!(
+            !cfg.deployable_roles()
+                .contains(&CanisterRole::from("sandbox_blank"))
+        );
     }
 
     #[test]
@@ -231,7 +218,7 @@ package = "root"
         )
         .expect("root infrastructure config parses");
 
-        assert!(config_role_is_deployable(&cfg, "demo", "root"));
+        assert!(cfg.deployable_roles().contains(&CanisterRole::from("root")));
         assert!(cfg.attached_roles().is_empty());
     }
 

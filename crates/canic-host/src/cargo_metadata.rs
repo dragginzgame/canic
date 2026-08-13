@@ -107,7 +107,7 @@ pub fn cargo_metadata(
     include_deps: bool,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
     let manifest_path = workspace_root.join("Cargo.toml");
-    let mut command = cargo_metadata_command(&manifest_path);
+    let mut command = workspace_cargo_metadata_command(&manifest_path);
     if !include_deps {
         command.arg("--no-deps");
     }
@@ -213,6 +213,12 @@ fn cargo_metadata_command(manifest_path: &Path) -> std::process::Command {
     command
 }
 
+fn workspace_cargo_metadata_command(manifest_path: &Path) -> std::process::Command {
+    let mut command = cargo_metadata_command(manifest_path);
+    command.arg("--locked");
+    command
+}
+
 fn run_cargo_metadata(
     mut command: std::process::Command,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
@@ -230,4 +236,16 @@ fn run_cargo_metadata(
 
 const fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workspace_metadata_uses_the_locked_resolver() {
+        let command = workspace_cargo_metadata_command(Path::new("/workspace/Cargo.toml"));
+
+        assert!(command.get_args().any(|argument| argument == "--locked"));
+    }
 }

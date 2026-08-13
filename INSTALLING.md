@@ -303,8 +303,11 @@ journal. Changed authority or unresolved paid effects fail closed.
 Build one artifact without installing:
 
 ```bash
-canic build test app --profile fast
+canic build test app
 ```
+
+Standalone `canic build` defaults to the fast Wasm profile. Use
+`--profile release` when producing production-optimized artifacts explicitly.
 
 For downstream repos where the Rust workspace and ICP project root differ, pass
 both paths explicitly:
@@ -314,8 +317,7 @@ canic --environment local build \
   --workspace /path/to/cargo-workspace \
   --icp-root /path/to/icp-project \
   --config /path/to/cargo-workspace/apps/<app>/canic.toml \
-  <app> root \
-  --profile fast
+  <app> root
 ```
 
 When passing `--config` explicitly, prefer an absolute path. This keeps path

@@ -106,34 +106,9 @@ macro_rules! __canic_build_internal {
         $body
 
         // Emit compile-time endpoint surface flags from validated config.
-        println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
-        println!("cargo:rustc-check-cfg=cfg(canic_delegated_token_issuer)");
-        println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
-        println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
-        println!("cargo:rustc-check-cfg=cfg(canic_role_declared)");
-        println!("cargo:rustc-check-cfg=cfg(canic_role_attached)");
-        println!("cargo:rustc-check-cfg=cfg(canic_role_declared_only)");
-        println!("cargo:rustc-check-cfg=cfg(canic_has_scaling)");
-        println!("cargo:rustc-check-cfg=cfg(canic_has_sharding)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_icrc_standards)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metadata)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
-        println!("cargo:rustc-check-cfg=cfg(canic_memory_ledger_enabled)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_cycle_tracker)");
-        println!("cargo:rustc-check-cfg=cfg(canic_metrics_core)");
-        println!("cargo:rustc-check-cfg=cfg(canic_metrics_placement)");
-        println!("cargo:rustc-check-cfg=cfg(canic_metrics_platform)");
-        println!("cargo:rustc-check-cfg=cfg(canic_metrics_runtime)");
-        println!("cargo:rustc-check-cfg=cfg(canic_metrics_security)");
-        println!("cargo:rustc-check-cfg=cfg(canic_metrics_storage)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_auth_attestation)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_state)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
-        println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
-        println!("cargo:rustc-check-cfg=cfg(canic_export_candid)");
+        for custom_cfg in $crate::__build::CANIC_CUSTOM_CFG_NAMES {
+            println!("cargo:rustc-check-cfg=cfg({custom_cfg})");
+        }
         if std::env::var("ICP_ENVIRONMENT").as_deref().unwrap_or("local") == "local" {
             println!("cargo:rustc-cfg=canic_export_candid");
         }
@@ -147,10 +122,6 @@ macro_rules! __canic_build_internal {
         )) {
             println!("cargo:rustc-cfg=canic_disable_bundle_metrics");
         }
-        if $cfg.auth.delegated_tokens.enabled {
-            println!("cargo:rustc-cfg=canic_delegated_tokens_enabled");
-        }
-
         let role_name = __canic_role_name.as_str();
         let mut memory_ledger = false;
         let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
@@ -171,16 +142,6 @@ macro_rules! __canic_build_internal {
                 $cfg_path.display()
             );
         }
-        println!("cargo:rustc-cfg=canic_role_declared");
-
-        let __canic_role_attached =
-            $crate::__build::config_role_is_deployable($cfg.as_ref(), app_name, role_name);
-        if __canic_role_attached {
-            println!("cargo:rustc-cfg=canic_role_attached");
-        } else {
-            println!("cargo:rustc-cfg=canic_role_declared_only");
-        }
-
         let metrics_tier_mask =
             $crate::__build::configured_role_metrics_tier_mask($cfg.as_ref(), &role_id);
         let metrics_core = metrics_tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
@@ -285,13 +246,6 @@ macro_rules! __canic_build_internal {
             .expect("canonicalize source canic config path");
 
         println!("cargo:rustc-env=CANIC_CANISTER_ROLE={role_name}");
-        println!("cargo:rustc-env=CANIC_APP={app_name}");
-        println!("cargo:rustc-env=CANIC_APP_ROLE={app_name}.{role_name}");
-        println!("cargo:rustc-env=CANIC_CANISTER_ROLE_DECLARED=true");
-        println!(
-            "cargo:rustc-env=CANIC_CANISTER_ROLE_ATTACHED={}",
-            if __canic_role_attached { "true" } else { "false" }
-        );
         println!(
             "cargo:rustc-env=CANIC_CONFIG_ORIGIN_PATH={}",
             source_abs.display()

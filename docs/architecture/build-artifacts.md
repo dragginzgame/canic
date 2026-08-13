@@ -62,6 +62,10 @@ Subnet Root with every attached Component role. `canic build <app> <role>`
 selects one deployable configured role. Both forms reject declared-only roles
 before Canic writes deploy artifacts.
 
+Both standalone build forms default to the `fast` Wasm profile. Select
+`--profile release` explicitly for production-optimized artifacts. Install and
+deployment planning continue to default to `release`.
+
 Complete App builds classify Component artifacts under Application Wasm and
 the Fleet Coordinator, Fleet Subnet Root and Wasm Store under Infrastructure
 Wasm, with Infrastructure rendered first. The infrastructure table also states

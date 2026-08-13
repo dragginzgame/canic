@@ -132,7 +132,15 @@ for primitive_target in "${!primitive_commands[@]}"; do
     if rg '\$\(MAKE\)|scripts/' <<<"$primitive_recipe" >/dev/null; then
         fail "make $primitive_target delegates hidden repository work"
     fi
+    case "$primitive_target" in
+        build | check | clippy)
+            rg -F -- '--locked' <<<"$primitive_recipe" >/dev/null ||
+                fail "make $primitive_target does not freeze Cargo.lock"
+            ;;
+    esac
 done
+rg -F 'cargo test --locked "$@"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "workspace test execution does not freeze Cargo.lock"
 
 [ -x "$PRE_COMMIT_HOOK" ] || fail "formatting pre-commit hook is not executable"
 hook_file_count="$(find "$ROOT/.githooks" -maxdepth 1 -type f | wc -l)"
@@ -200,6 +208,12 @@ rg -F 'next release ordinal:' <<<"$cadence_output" >/dev/null ||
     fail "the release cadence tool does not report the next release ordinal"
 rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
+for release_target in patch minor major; do
+    release_recipe="$(sed -n "/^$release_target:/,/^$/p" "$MAKEFILE")"
+    clean_count="$(rg -c '\$\(MAKE\) ensure-clean' <<<"$release_recipe")"
+    [ "$clean_count" -eq 2 ] ||
+        fail "make $release_target must verify cleanliness before and after validation"
+done
 release_push_recipe="$(sed -n '/^release-push:/,/^$/p' "$MAKEFILE")"
 expected_release_push_recipe=$'release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh'
 [ "$release_push_recipe" = "$expected_release_push_recipe" ] ||

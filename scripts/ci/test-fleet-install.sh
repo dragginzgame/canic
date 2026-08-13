@@ -76,6 +76,6 @@ cycles = "20T"
 EOF
 
 cd "$ROOT"
-CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-cli --bin canic -- \
+CARGO_INCREMENTAL=0 cargo run --locked -q --profile fast -p canic-cli --bin canic -- \
     --environment "$ENVIRONMENT" install --profile fast test test-local \
     --fleet-input "$input_path"

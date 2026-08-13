@@ -11,6 +11,7 @@ canic-core	timer_inventory_guard	full	parallel	ordinary
 canic-core	trap_guard	full	parallel	ordinary
 canic-testing-internal	fixture_payloads	full	parallel	ordinary
 canic	blob_storage_endpoint_macro	full	parallel	ordinary
+canic	build_cfg_surface	full	parallel	ordinary
 canic	call_facade	full	parallel	ordinary
 canic	canic_metadata	full	parallel	ordinary
 canic	changelog_governance	full	parallel	ordinary
