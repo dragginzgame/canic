@@ -103,6 +103,46 @@ Implementation slices may be finer-grained than release batches. Every active
 design/status tracker must nevertheless include a release-batch plan that maps
 its slices and completion evidence into the minor-line target.
 
+### Design Directory Shape
+
+An active design directory normally contains exactly:
+
+- the versioned normative design; and
+- `status.md`, the compact implementation and release-batch tracker.
+
+Add another top-level file only when it is a genuinely independent normative
+authority or durable closeout artifact that would make either primary document
+less clear. The status tracker must name that file's purpose. A source family,
+implementation slice, test run or conversation turn is not a reason to create
+another design file.
+
+Large source inventories, bounded supporting investigations and temporary
+traceability ledgers that remain needed for an active batch belong under
+`docs/audits/working/<line>-<topic>/`, linked from the compact design or
+status. They are working evidence, not extensions of the design. Consolidate
+or delete them when the owning batch no longer needs their exact source
+mappings; do not retain one permanent Markdown file per slice or source
+family.
+
+A working or retained supporting-evidence topic may contain at most eight
+files by default. A larger pre-existing bundle requires a named exception in
+the document-semantics guard and may shrink but must not grow. Raising a bound
+requires explicit maintainer approval and an explanation in the owning status;
+creating one file per slice, source module or agent turn is never sufficient
+justification.
+
+When a line closes or moves to `docs/design/archive/`, relocate closeout
+reports, inventories, review notes, amendments and other supporting release
+records to `docs/audits/release-lines/supporting/<line>-<topic>/`. Preserve
+their content and repair references, but keep the archived design directory at
+the same compact design/status boundary. Historical collection directories
+that contain several independent design/status pairs may retain a single index.
+
+The historical post-46 and optional-ideas collections are frozen at their
+current directory and file ceilings. Adding another collection, topic or idea
+requires explicit maintainer approval and a deliberate guard update; a new
+implementation slice must use the owning numbered design/status instead.
+
 Use stable batch labels such as `B1`, `B2` and `B3` while planning. Do not
 invent patch numbers. A patch number belongs to the maintainer-owned release
 decision, except where an already-open draft is being extended.

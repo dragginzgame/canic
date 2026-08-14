@@ -14,16 +14,17 @@ root-owned manual ICP conversion as `v0.97.3`. Manual conversion is owned by
 the root role, its standard controller endpoint, root-only config and state,
 and the deployment-root CLI. The required
 relocation decisions are frozen in the
-[Slice A report](../../audits/reports/2026-07/2026-07-22/0.97-slice-a-surface-and-graph-inventory.md).
+[Slice A report](../../../audits/reports/2026-07/2026-07-22/0.97-slice-a-surface-and-graph-inventory.md).
 Slice B gives every authoritative role-contract caller one canonical Cargo
 evidence producer and hard-cuts the declaration and protected-graph
 contradictions identified by Slice A. No package-version change or downstream
 edit is part of the current slice.
 
 The previous pass claim is superseded by the
-[rigorous closeout audit](0.97-closeout-audit.md). The release-line pointer is
+[rigorous closeout audit](../../../audits/release-lines/supporting/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-closeout-audit.md).
+The release-line pointer is
 retained at
-[0.97-closeout.md](../../audits/release-lines/0.97-closeout.md).
+[0.97-closeout.md](../../../audits/release-lines/0.97-closeout.md).
 
 The proposal gives each configured role package sole external authority over
 Canic-owned framework packages and directly selected Canic capability

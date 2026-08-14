@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
 
+- `0.102.1` closes the evidence-only whole-program diagnostic inventory across
+  every effective producer, dynamic public value, durable string and masked
+  projection owner, without allocating numbers or changing runtime, Candid or
+  stable-state behavior.
+
 - `0.102.0` adds fast-default standalone builds, locked race-free artifacts,
   same-release finalized-artifact reuse, one-pass local Candid builds and
   display-exact install timing, restores Clap-owned argument

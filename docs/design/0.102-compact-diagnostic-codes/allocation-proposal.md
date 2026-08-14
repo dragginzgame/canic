@@ -6,14 +6,20 @@ Date: 2026-08-13
 
 This document proposes the allocation policy for maintainer approval. It does
 not allocate a code and must not be imported by runtime code.
-[ledger-reconciliation.md](ledger-reconciliation.md) records the initial
-collision-free 685-identity family subset and the first seventy-nine constructor/
-semantic-call passes, bringing current qualified coverage to 2,467 identities, while
-[projection-ledger.md](projection-ledger.md) aggregates every masked public
+[The working reconciliation ledger](../../audits/working/0.102-diagnostic-inventory/ledger-reconciliation.md)
+records the initial
+collision-free 708-identity family subset, all ninety-eight constructor/
+semantic-call passes plus the complete RPC workflow-error, Template manifest
+and complete publication-workflow expansion, bringing current qualified
+coverage to 2,875 identities, while
+[the working projection ledger](../../audits/working/0.102-diagnostic-inventory/projection-ledger.md)
+aggregates every masked public
 mapping in that subset and its proposed numeric observation.
-[direct-constructor-frontier.md](direct-constructor-frontier.md) records the
-remaining site-level coverage gate. The reviewed complete allocation table will
-replace this proposal as the B1 authority.
+[the working constructor frontier](../../audits/working/0.102-diagnostic-inventory/direct-constructor-frontier.md)
+records the
+closed site-level coverage gate. Dynamic cause/formatter and projection
+ownership is now reconciled; the reviewed complete allocation and host-
+catalogue row table still precedes the B1 authority that replaces this proposal.
 [code-allocation-ledger.md](code-allocation-ledger.md) freezes the permanent
 current/retired ledger contract; its current and retired sets remain empty
 until that complete allocation is approved.
@@ -71,7 +77,7 @@ status or receipt that owns them. Conversely, capacity exhaustion and malformed
 input never share a leaf merely because both currently use one convenience
 constructor.
 
-The 1,150 constructor sites in the two largest Component Registry modules must
+The 1,154 constructor sites in the two largest Component Registry modules must
 therefore be grouped by actionable invariant, not allocated one number per
 line. Each group still lists every producer function so coverage is exhaustive.
 
@@ -112,8 +118,8 @@ The initial narrow origin families are:
 - prepaid Canister inventory and lifecycle effects;
 - cycles funding, cost guard and ICP refill;
 - stable storage and canonical decoding; and
-- current blob-storage billing/lifecycle producers pending the independent
-  0.108 extraction.
+- current blob-storage billing/lifecycle producers retained until the
+  independent 0.108 extraction.
 
 The final `DiagnosticOrigin` variants should be as narrow as operational action
 requires. These families are inventory headings, not reserved numeric bands.

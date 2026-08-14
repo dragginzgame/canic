@@ -39,7 +39,7 @@ measured same-round hierarchy ordering defect and records the cumulative
 owner/cost evidence.
 
 The immutable closeout evidence is
-[0.95 release-line closeout](../../audits/release-lines/0.95-closeout.md).
+[0.95 release-line closeout](../../../audits/release-lines/0.95-closeout.md).
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -66,7 +66,7 @@ derive its bounds from balance/headroom evidence before Slice D implementation.
 ## Slice A Evidence
 
 The canonical report is
-[0.95 timer authority Slice A](../../audits/reports/2026-07/2026-07-20/0.95-timer-authority-slice-a.md).
+[0.95 timer authority Slice A](../../../audits/reports/2026-07/2026-07-20/0.95-timer-authority-slice-a.md).
 
 - Direct IC timer access: one production owner.
 - Timer/process families: 14 rows, all dispositioned.

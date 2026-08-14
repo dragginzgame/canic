@@ -22,3 +22,9 @@ Do not put reusable audit templates here. Those belong under:
 docs/audits/recurring/
 docs/audits/modular/
 ```
+
+`supporting/<line>-<topic>/` retains historical closeout evidence, inventories,
+review notes and amendments that remain useful but are not part of a compact
+design directory. Relocation changes their repository path, not their
+historical conclusions. An archived design directory should normally retain
+only its design and status.

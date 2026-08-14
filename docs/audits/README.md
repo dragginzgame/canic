@@ -18,6 +18,16 @@ artifacts directly.
   [modular/](modular/README.md).
 - For numbered release-line closeouts, use
   [release-lines/](release-lines/README.md).
+- Active design batches may keep necessary source inventories or bounded
+  supporting investigations under `working/<line>-<topic>/`; the owning
+  compact design or status must link them and they must be consolidated or
+  deleted when no longer needed.
+- Supporting records relocated from completed design lines live under
+  `release-lines/supporting/<line>-<topic>/`; the compact archived design or
+  status links to them when they remain relevant.
+- Working and retained supporting topics are capped at eight files by default.
+  Named historical exceptions are frozen at their current ceiling and may
+  shrink but cannot grow without explicit maintainer approval.
 - To find historical runs, use the [report archive](reports/README.md).
 
 The [0.83 technical-debt ledger](0.83-technical-debt/README.md) is a retained
@@ -36,7 +46,8 @@ historical exception. New numbered-line audit material belongs under
 | `retired-methods.md` | Immutable identity and replacement for hard-cut methods | Append-only retirement entries |
 | `recurring/` | Reusable invariant and system definitions | Update deliberately; reports do not belong here |
 | `modular/` | Module-surface policy and cleanup runner | Reusable playbooks only |
-| `release-lines/` | Numbered-line closeout and program-state audits | Append-only primary reports |
+| `release-lines/` | Numbered-line closeout, program-state and retained supporting release records | Append-only primary reports; relocated supporting records preserve historical content |
+| `working/` | Temporary exact source inventories required by an active design batch | Mutable only with the owning batch; consolidate or delete at its closeout |
 | `reports/` | Dated audit reports and necessary supporting evidence | Append-only primary reports; generated evidence follows retention policy |
 | `0.83-technical-debt/` | Historical 0.83 debt ledger | Frozen except for link repair |
 
