@@ -1,6 +1,6 @@
 # Canic 0.102 Implementation Status
 
-Date: 2026-08-13
+Date: 2026-08-14
 
 ## Status
 
@@ -104,13 +104,16 @@ B1 is complete only when all of the following are reviewable together:
   `Conflict`, `ResourceExhausted` and `Unavailable` matches require semantic
   splits before the compact cut.
 - [dynamic-public-context.md](dynamic-public-context.md) now classifies the
-  first 138 individual values across the Canic memory-ledger facade, Wasm Store
+  first 194 individual values across the Canic memory-ledger facade, Wasm Store
   GC, shared manifest/capacity conversion, explicit Component Registry denials,
   typed Store publication causes, delegated-session bootstrap and Store
   publication binding/inventory plus Store GC fence, reclamation, binding
-  finalization and deletion plus the two publication management transports.
-  Sixty-six are caller-derivable, sixteen are sensitive operator-only,
-  thirty-one already have exact typed owners and twenty-five are caller-
+  finalization and deletion, the two publication management transports and
+  remaining Store module-resolution/internal-client paths, the typed Fleet-
+  service peer binding cause and the core plan/Registry typed funnels. One
+  hundred eleven are caller-derivable, sixteen are sensitive operator-only,
+  forty-two already
+  have exact typed owners and twenty-five are caller-
   required but unowned. They require request-scoped Store capacity/release
   inspection,
   guarded delegated-session capacity status, exact closed-discriminator
@@ -159,7 +162,7 @@ B1 is complete only when all of the following are reviewable together:
 - [bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 37 exact topology,
   runtime-log, refill, Placement Index and current Cashier candidates plus four
   safe projections. The four Cashier leaves are allocated in 0.102 and their
-  numbers retire without reuse when 0.107 removes the producers.
+  numbers retire without reuse when 0.108 removes the producers.
 - [cost-guard-leaves.md](cost-guard-leaves.md) maps seven exact reservation
   leaves and one safe projection, deletes the redundant public-kind classifier
   and keeps rollback failure as a secondary typed observation rather than a
@@ -198,7 +201,7 @@ B1 is complete only when all of the following are reviewable together:
   safe projections and five exact leaves reused as projection targets. It
   names proposed numeric observation owners and leaves IC effect call-site
   ownership and the current string-coded recent-failure ring as explicit
-  approval gates. Cashier uses that guarded numeric owner until 0.107 retires
+  approval gates. Cashier uses that guarded numeric owner until 0.108 retires
   its codes.
 - [ic-observability-owners.md](ic-observability-owners.md) maps 17 current IC
   call families to their operation authority or guarded runtime status and
@@ -237,7 +240,15 @@ B1 is complete only when all of the following are reviewable together:
   [root-store-bootstrap-constructor-leaves.md](root-store-bootstrap-constructor-leaves.md)
   and
   [root-bootstrap-store-state-constructor-leaves.md](root-bootstrap-store-state-constructor-leaves.md)
-  classify 2,053 effective sites across top-level and direct-child allocation, install,
+  and
+  [wasm-store-lifecycle-constructor-leaves.md](wasm-store-lifecycle-constructor-leaves.md)
+  and
+  [fleet-registry-mirror-constructor-leaves.md](fleet-registry-mirror-constructor-leaves.md)
+  and
+  [component-directory-peer-constructor-leaves.md](component-directory-peer-constructor-leaves.md)
+  and
+  [core-plan-registry-adapter-constructor-leaves.md](core-plan-registry-adapter-constructor-leaves.md)
+  classify 2,159 effective sites across top-level and direct-child allocation, install,
   commitment and activation plus top-level draining, quiescence and recycling
   and subtree-removal orchestration/effect ops/workflow plus root draining,
   final-inventory and logical-removal persistence plus Store reclamation,
@@ -267,8 +278,14 @@ B1 is complete only when all of the following are reviewable together:
   recycling and claims plus autonomous creation through explicit rollover,
   handoff, Store deletion and shared helpers plus maintenance, import and
   recoverable refill workflow plus root Store manifest, artifact and catalog
-  bootstrap, root Subnet discovery and sibling Store adoption state. The
-  seventy-three passes add 1,678 exact meanings and one Registry-
+  bootstrap, root Subnet discovery and sibling Store adoption state plus Store
+  cycle reclamation, module resolution, typed internal calls, inventory and
+  physical deletion progress plus root-local Fleet Registry Mirror Joining,
+  acknowledgement, active storage, snapshot and monotonic transition authority.
+  Root-level Component Directory synchronization and cross-root Fleet-service
+  peer authority are also closed. Core Component provisioning-plan and Fleet
+  Registry typed conversion adapters are closed without new wrapper identities.
+  The seventy-nine passes add 1,781 exact meanings and one Registry-
   state projection while reusing existing policy and earlier-slice identities. The
   complete Component Registry and Component provisioning ops/workflow files are
   classified. The Coordinator parent file's 154 direct constructors are
@@ -278,10 +295,16 @@ B1 is complete only when all of the following are reviewable together:
   calls are also closed. All 292 shared-funnel calls and the 12-site Coordinator
   workflow now have dispositions. All 69 Canister pool ops references are
   classified across three consecutive ranges, as are all 17 pool workflow and
-  refill references.
+  refill references. All 22 remaining Wasm Store lifecycle constructors are
+  classified, including four transparent typed-cause sites. All 32 Fleet
+  Registry Mirror constructors are classified, including two transparent
+  remote-diagnostic adapters. All 26 Component Directory synchronization and
+  Fleet-service peer constructors are classified, including one transparent
+  typed-topology adapter. All 26 core plan/Registry constructors are classified
+  as transparent typed conversions.
 
-The currently qualified ledgers contain 2,333 provisional exact candidates and
-31 distinct additional safe projections: 2,364 symbolic identities. Their names
+The currently qualified ledgers contain 2,436 provisional exact candidates and
+31 distinct additional safe projections: 2,467 symbolic identities. Their names
 are collision-free and all known reuse inside that qualified subset has been
 deducted. They do not yet cover the direct-constructor frontier and therefore
 are not an allocation or authority for the next number.
@@ -291,13 +314,16 @@ win and do not authorize numeric assignments.
 
 ## Next Action
 
-Reconcile the effective constructor frontier, continuing with remaining Wasm
-Store and Mirror/Directory synchronization owners.
+Reconcile the effective constructor frontier, continuing with core
+authentication, runtime intent and RPC execution owners. Fleet Registry Mirror,
+Component Directory/Fleet-service peer and core plan/Registry adapters are
+closed.
 Coordinator ops and workflow are
 closed, including all 292 hidden receipt calls. Component Registry
 is mechanically closed at all 800 ops and 354
 workflow constructors; Component provisioning is closed at all 177 ops and 56
-workflow constructors. The original 2,208-reference census is now an effective
+workflow constructors, and the 22-site remaining Wasm Store lifecycle group is
+closed. The original 2,208-reference census is now an effective
 2,499-site frontier because one generic Coordinator adapter expands to 292
 static call-site meanings across three files.
 Then proceed by authority and external-effect risk. In parallel

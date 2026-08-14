@@ -7,8 +7,8 @@ Date: 2026-08-13
 This document proposes the allocation policy for maintainer approval. It does
 not allocate a code and must not be imported by runtime code.
 [ledger-reconciliation.md](ledger-reconciliation.md) records the initial
-collision-free 685-identity family subset and the first seventy-three constructor/
-semantic-call passes, bringing current qualified coverage to 2,364 identities, while
+collision-free 685-identity family subset and the first seventy-nine constructor/
+semantic-call passes, bringing current qualified coverage to 2,467 identities, while
 [projection-ledger.md](projection-ledger.md) aggregates every masked public
 mapping in that subset and its proposed numeric observation.
 [direct-constructor-frontier.md](direct-constructor-frontier.md) records the
@@ -113,7 +113,7 @@ The initial narrow origin families are:
 - cycles funding, cost guard and ICP refill;
 - stable storage and canonical decoding; and
 - current blob-storage billing/lifecycle producers pending the independent
-  0.107 extraction.
+  0.108 extraction.
 
 The final `DiagnosticOrigin` variants should be as narrow as operational action
 requires. These families are inventory headings, not reserved numeric bands.

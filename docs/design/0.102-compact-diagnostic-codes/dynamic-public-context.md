@@ -579,3 +579,125 @@ topology/configuration inventories.
 
 The slice adds three authoritatively typed values and no caller-derivable,
 sensitive or unowned value.
+
+## Classified Slice 20: Wasm Store Lifecycle And Module Resolution
+
+This slice closes every direct public-message interpolation in the remaining
+Wasm Store lifecycle constructor group. Static Store-deletion progress messages
+add no dynamic row.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-139` | `resolved_root_store_module_source`; invalid artifact chunk metadata | root Store artifact resolution | exact `WASM_STORE_CHUNK_SET_EMPTY` or `WASM_STORE_CHUNK_HASH_LENGTH_INVALID` selected by the failed predicate | protected root-artifact template identity | 1 — caller-derivable | exact release-set manifest and selected role | none | guarded root/operator | discard template prose and select the exact failed metadata predicate |
+| `DPC-140` | `approved_module_source_from_manifest`; removed inline path | Component install-source resolution | `WASM_STORE_INLINE_SOURCE_UNSUPPORTED` | selected role | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard role prose; manifest plus exact code identifies the release |
+| `DPC-141` | same branch as `DPC-140` | same route | same meaning | selected template identity | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard template prose; manifest retains identity |
+| `DPC-142` | `resolved_bootstrap_chunk_set_for_manifest`; empty chunk metadata | root bootstrap install-source resolution | existing `WASM_STORE_CHUNK_SET_EMPTY` | protected template identity | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard template prose and preserve the existing empty-set identity |
+| `DPC-143` | `resolved_store_chunk_set_for_manifest`; bootstrap binding on ordinary path | ordinary Component install-source resolution | `WASM_STORE_BOOTSTRAP_SOURCE_PATH_FORBIDDEN` | protected template identity | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard template prose; exact code identifies the wrong path |
+| `DPC-144` | same function; empty adopted-Store metadata | ordinary Component install-source resolution | existing `WASM_STORE_CHUNK_SET_EMPTY` | protected template identity | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard template prose and preserve the existing empty-set identity |
+| `DPC-145` | same branch as `DPC-144` | same route | same meaning | selected Store principal | 3 — authoritatively typed | protected binding plus `WasmStoreOverviewResponse.stores[].pid` | none | controller-only | remove principal from diagnostic; overview retains Store identity |
+| `DPC-146` | `ensure_bootstrap_chunk_hashes_present`; index conversion | root bootstrap install-source resolution | existing `WASM_STORE_CHUNK_INDEX_OVERFLOW` | protected template identity | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard template prose and preserve the exact overflow identity |
+| `DPC-147` | same function; uploaded-hash mismatch | same route | existing `WASM_STORE_CHUNK_HASH_MISMATCH` | protected template identity | 1 — caller-derivable | exact approved manifest | none | guarded root/operator | discard template prose; manifest retains identity |
+| `DPC-148` | same branch as `DPC-147` | same route | same meaning | exact chunk index | 1 — caller-derivable | deterministic manifest traversal | none | guarded root/operator | discard index prose; protected traversal identifies the chunk |
+| `DPC-149` | same branch as `DPC-147` | same route | same meaning | root principal used as management chunk store | 3 — authoritatively typed | protected receiver/root identity | none | controller-only | remove principal from diagnostic; root binding retains it |
+| `DPC-150` | `store_pid_for_binding`; missing registered binding | Component install-source resolution | `WASM_STORE_BINDING_NOT_REGISTERED` | selected Store binding | 3 — authoritatively typed | approved manifest plus root Store publication/overview state | none | controller-only | remove binding prose; protected manifest and overview retain it |
+| `DPC-151` | `ensure_bootstrap_wasm_store`; Store cardinality failure | root Store bootstrap/publication | existing `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | current root-owned Store count | 3 — authoritatively typed | `WasmStoreOverviewResponse.stores` | none | controller-only | remove count from diagnostic; overview retains exact inventory |
+| `DPC-152` | `WasmStoreInternalClient::call_result`; request adapter | every root-to-Store internal method | exact nested `IC_CALL_REQUEST_ENCODING_FAILED` | typed nested `InternalError` with formatted dependency cause | 3 — authoritatively typed | maintained IC request adapter | transparent registered-code propagation | sensitive dependency prose | remove wrapper text and propagate the exact nested diagnostic |
+| `DPC-153` | same helper; call execution adapter | every root-to-Store internal method | exact nested IC call-admission or rejection diagnostic | typed nested `InternalError` with call cause | 3 — authoritatively typed | maintained IC call adapter and owning operation | transparent registered-code propagation plus existing observability owner | rejection prose may be sensitive | remove wrapper text; retain typed absence/retry distinctions |
+| `DPC-154` | same helper; response adapter | every root-to-Store internal method | exact nested `IC_CALL_RESPONSE_DECODING_FAILED` | typed nested `InternalError` with formatted decoder cause | 3 — authoritatively typed | maintained IC response adapter | transparent registered-code propagation | sensitive dependency prose | remove wrapper text and propagate the exact nested diagnostic |
+
+The slice adds nine caller-derivable and seven authoritatively typed values. It
+adds no sensitive-only or caller-required-unowned value because sensitive
+dependency prose is nested inside an already typed cause and is discarded while
+that exact cause propagates.
+
+Across all twenty classified slices, the dynamic ledger now contains 154
+values: 75 caller-derivable, sixteen sensitive operator-only, 38
+authoritatively typed and 25 caller-required but unowned. The 25 unowned values
+and their proposed narrow retrieval owners remain unchanged.
+
+## Classified Slice 21: Fleet-Service Peer Binding Adapter
+
+The root-level Component Directory synchronization owner uses only static
+messages. Cross-root Fleet-service requester resolution has one formatted
+typed topology cause.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-155` | `FleetServicePeerOps::resolve`; protected requester-binding validation | cross-root peer Component provisioning | exact reachable `ComponentTopologyError` selected by `validate_component_binding` | typed protected-binding validation cause | 3 — authoritatively typed | compiled Component Topology and exact derived root/Component bindings | transparent registered-code propagation with the source cause's approved public projection | protected Fleet/root/Spec authority; formatted detail may contain principals or role names | remove the formatter and propagate the exact typed diagnostic; do not allocate a generic peer-binding wrapper |
+
+The slice adds one authoritatively typed value and no caller-derivable,
+sensitive-only or caller-required-unowned value.
+
+Across all twenty-one classified slices, the dynamic ledger now contains 155
+values: 75 caller-derivable, sixteen sensitive operator-only, 39
+authoritatively typed and 25 caller-required but unowned. The 25 unowned values
+and their proposed narrow retrieval owners remain unchanged.
+
+## Classified Slice 22: Component Provisioning-Plan Typed Funnel
+
+The core provisioning-plan adapter converts a closed typed error through
+`OpsError` into string-first `InternalError`. Bounds and selected identities
+are already present in the exact plan/configuration; nested causes must remain
+typed instead of entering `Configuration(String)` or `FleetRegistry(String)`.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-156` | plan canonical-byte bound | Component provisioning planning/acceptance | existing `COMPONENT_PROVISIONING_CANONICAL_BYTES_EXCEEDED` | actual canonical bytes | 1 — caller-derivable | exact canonical plan | none | guarded Coordinator/root | discard value; plan reproduces it |
+| `DPC-157` | same bound | same routes | same meaning | maximum canonical bytes | 1 — caller-derivable | maintained plan contract | none | public contract | discard value; contract owns it |
+| `DPC-158` | plan batch-count bound | same routes | existing `COMPONENT_PROVISIONING_BATCH_COUNT_EXCEEDED` | actual batch count | 1 — caller-derivable | exact plan | none | guarded Coordinator/root | discard value; plan retains it |
+| `DPC-159` | same bound | same routes | same meaning | maximum batch count | 1 — caller-derivable | maintained plan contract | none | public contract | discard value |
+| `DPC-160` | confirmation-root bound | same routes | existing `COMPONENT_PROVISIONING_CONFIRMATION_ROOT_COUNT_EXCEEDED` | actual confirmation-root count | 1 — caller-derivable | exact plan | none | guarded Coordinator/root | discard value |
+| `DPC-161` | same bound | same routes | same meaning | maximum confirmation-root count | 1 — caller-derivable | maintained plan contract | none | public contract | discard value |
+| `DPC-162` | placement-count bound | same routes | existing `COMPONENT_PROVISIONING_PLACEMENT_COUNT_EXCEEDED` | actual placement count | 1 — caller-derivable | exact plan | none | guarded Coordinator/root | discard value |
+| `DPC-163` | same bound | same routes | same meaning | maximum placement count | 1 — caller-derivable | maintained plan contract | none | public contract | discard value |
+| `DPC-164` | Component-entry bound | same routes | existing `COMPONENT_PROVISIONING_COMPONENT_COUNT_EXCEEDED` | actual Component count | 1 — caller-derivable | exact plan | none | guarded Coordinator/root | discard value |
+| `DPC-165` | same bound | same routes | same meaning | maximum Component count | 1 — caller-derivable | maintained plan contract | none | public contract | discard value |
+| `DPC-166` | duplicate placement | same routes | existing `COMPONENT_PROVISIONING_PLACEMENT_DUPLICATED` | placement ID | 1 — caller-derivable | exact plan | none | guarded Coordinator/root | discard value; plan identifies it |
+| `DPC-167` | unknown deployment | same routes | existing `COMPONENT_PROVISIONING_DEPLOYMENT_UNKNOWN` | deployment ID | 1 — caller-derivable | exact plan and checked-in configuration | none | guarded Coordinator/root | discard value; rejected plan identifies it |
+| `DPC-168` | `Configuration(String)` from configuration compilation | same routes | exact nested deployment-configuration/topology diagnostic | typed compiler cause flattened to `String` | 3 — authoritatively typed | `ComponentDeploymentConfigurationError` before conversion | transparent registered-code propagation | may contain protected role/Spec/config fields | delete the String variant and retain the typed cause |
+| `DPC-169` | `Configuration(String)` undeclared Fleet-service branch | root-batch validation | existing `COMPONENT_PROVISIONING_FLEET_SERVICE_UNKNOWN` | service ID | 1 — caller-derivable | exact checked-in Fleet service/configuration | none | guarded Coordinator/root | replace formatted string with the exact typed decision; configuration identifies the service |
+| `DPC-170` | `FleetRegistry(String)` | planning and root-batch validation | exact nested Fleet Registry diagnostic | typed Registry cause flattened to `String` | 3 — authoritatively typed | `FleetRegistryOpsError` before conversion | transparent registered-code propagation | protected Registry details follow source projection | delete the String variant and retain the typed cause |
+
+The slice adds thirteen caller-derivable and two authoritatively typed values.
+It adds no sensitive-only or caller-required-unowned value.
+
+## Classified Slice 23: Fleet Registry Typed Funnel
+
+Fleet Registry adapters similarly convert one typed family through
+`OpsError`. All Registry fields are retained by the exact input/snapshot or
+maintained contract; the nested topology cause remains typed.
+
+| ID | Source field or branch | Public route | Diagnostic meaning | Dynamic value | Class | Authoritative owner | Proposed owner | Sensitivity | Hard-cut disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DPC-171` | Registry canonical-byte bound | Coordinator Registry compilation/validation | existing `FLEET_REGISTRY_CANONICAL_BYTES_EXCEEDED` | actual canonical bytes | 1 — caller-derivable | exact Registry snapshot | none | guarded Coordinator/root | discard value; snapshot reproduces it |
+| `DPC-172` | same bound | same routes | same meaning | maximum canonical bytes | 1 — caller-derivable | maintained Registry contract | none | public contract | discard value |
+| `DPC-173` | duplicate root | same routes | existing `FLEET_REGISTRY_ROOT_DUPLICATED` | root principal | 1 — caller-derivable | exact Registry snapshot | none | guarded Registry authority | discard value; snapshot identifies it |
+| `DPC-174` | Fleet admission ceiling | same routes | existing `FLEET_REGISTRY_ADMISSIONS_EXCEED_FLEET_MAXIMUM` | Component Spec ID | 1 — caller-derivable | snapshot and compiled topology | none | guarded Registry authority | discard value |
+| `DPC-175` | same ceiling | same routes | same meaning | admitted count | 1 — caller-derivable | exact Registry snapshot | none | guarded Registry authority | discard value |
+| `DPC-176` | same ceiling | same routes | same meaning | Fleet maximum | 1 — caller-derivable | compiled Component Topology | none | guarded Registry authority | discard value |
+| `DPC-177` | admission count overflow | same routes | existing `FLEET_REGISTRY_ADMISSION_COUNT_OVERFLOW` | Component Spec ID | 1 — caller-derivable | exact traversal and compiled topology | none | guarded Registry authority | discard value |
+| `DPC-178` | Registry/topology Spec mismatch | same routes | existing `FLEET_REGISTRY_COMPONENT_SPEC_MISMATCH` | Component Spec ID | 1 — caller-derivable | snapshot and compiled topology | none | guarded Registry authority | discard value |
+| `DPC-179` | missing draining target | root draining publication | existing `FLEET_REGISTRY_ROOT_DRAIN_TARGET_MISSING` | target root principal | 1 — caller-derivable | exact transition request | none | guarded root/Coordinator | discard value |
+| `DPC-180` | missing removal target | logical root removal | existing `FLEET_REGISTRY_ROOT_REMOVE_TARGET_MISSING` | target root principal | 1 — caller-derivable | exact transition request | none | guarded root/Coordinator | discard value |
+| `DPC-181` | genesis App mismatch | genesis compilation | existing `FLEET_REGISTRY_GENESIS_APP_MISMATCH` | received App ID | 1 — caller-derivable | exact genesis authority | none | guarded host/Coordinator | discard value |
+| `DPC-182` | same mismatch | same route | same meaning | configured expected App ID | 1 — caller-derivable | checked-in App configuration | none | guarded host/Coordinator | discard value |
+| `DPC-183` | genesis epoch invalid | same route | existing `FLEET_REGISTRY_GENESIS_AUTHORITY_EPOCH_INVALID` | received epoch | 1 — caller-derivable | exact genesis authority | none | guarded host/Coordinator | discard value |
+| `DPC-184` | service-member order invalid | service publication | existing `FLEET_REGISTRY_SERVICE_MEMBER_ORDER_NONCANONICAL` | service ID | 1 — caller-derivable | exact Registry service row | none | guarded Registry authority | discard value |
+| `DPC-185` | empty service | same route | existing `FLEET_REGISTRY_SERVICE_EMPTY` | service ID | 1 — caller-derivable | exact Registry service row | none | guarded Registry authority | discard value |
+| `DPC-186` | service Spec mismatch | same route | existing `FLEET_REGISTRY_SERVICE_SPEC_MISMATCH` | service ID | 1 — caller-derivable | exact Registry service row | none | guarded Registry authority | discard value |
+| `DPC-187` | service mode mismatch | same route | existing `FLEET_REGISTRY_SERVICE_MODE_MISMATCH` | service ID | 1 — caller-derivable | exact Registry service row | none | guarded Registry authority | discard value |
+| `DPC-188` | service placement mismatch | same route | existing `FLEET_REGISTRY_SERVICE_PLACEMENT_MISMATCH` | service ID | 1 — caller-derivable | exact Registry service row | none | guarded Registry authority | discard value |
+| `DPC-189` | service root mismatch | same route | existing `FLEET_REGISTRY_SERVICE_ROOT_MISMATCH` | service ID | 1 — caller-derivable | exact Registry service row | none | guarded Registry authority | discard value |
+| `DPC-190` | duplicate service Component | same route | existing `FLEET_REGISTRY_SERVICE_COMPONENT_DUPLICATED` | Component instance ID | 1 — caller-derivable | exact Registry service membership | none | guarded Registry authority | discard value |
+| `DPC-191` | duplicate service Canister | same route | existing `FLEET_REGISTRY_SERVICE_CANISTER_DUPLICATED` | Canister principal | 1 — caller-derivable | exact Registry service membership | none | guarded Registry authority | discard value |
+| `DPC-192` | root release-build mismatch | root validation/publication | existing `FLEET_REGISTRY_ROOT_RELEASE_BUILD_MISMATCH` | expected release build ID | 1 — caller-derivable | canonical first root row | none | guarded Registry authority | discard value |
+| `DPC-193` | same mismatch | same routes | same meaning | received release build ID | 1 — caller-derivable | exact conflicting root row | none | guarded Registry authority | discard value |
+| `DPC-194` | `FleetRegistryOpsError::Topology` | every Registry validation adapter | exact path-qualified topology diagnostic | typed `ComponentTopologyError` | 3 — authoritatively typed | compiled topology validator | transparent registered-code propagation with the source cause's approved projection | protected topology details follow source projection | preserve the typed cause; never format it into Registry prose |
+
+The slice adds twenty-three caller-derivable and one authoritatively typed
+value. It adds no sensitive-only or caller-required-unowned value.
+
+Across all twenty-three classified slices, the dynamic ledger now contains 194
+values: 111 caller-derivable, sixteen sensitive operator-only, 42
+authoritatively typed and 25 caller-required but unowned. The 25 unowned values
+and their proposed narrow retrieval owners remain unchanged.

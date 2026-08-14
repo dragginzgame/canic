@@ -149,6 +149,10 @@ fn expected_wait_inventory() -> BTreeMap<String, usize> {
             "crates/canic-backup/src/persistence/journal_lock/mod.rs".to_string(),
             2,
         ),
+        (
+            "crates/canic-host/src/canister_build/cache.rs".to_string(),
+            2,
+        ),
         ("crates/canic-host/src/icp/command.rs".to_string(), 1),
         ("crates/canic-host/src/terminal/activity.rs".to_string(), 1),
     ])

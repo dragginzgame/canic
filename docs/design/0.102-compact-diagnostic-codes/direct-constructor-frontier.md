@@ -107,6 +107,10 @@ Current site-level progress:
 | Canister pool maintenance, import, handoff and refill workflow | 17 | 477 |
 | Root Store bootstrap manifest, artifact and live-catalog workflow | 23 | 454 |
 | Root bootstrap Subnet discovery and sibling Store adoption state | 8 | 446 |
+| Wasm Store lifecycle, module resolution and physical deletion | 22 | 424 |
+| Fleet Registry Mirror synchronization and activation | 32 | 392 |
+| Component Directory synchronization and Fleet-service peer authority | 26 | 366 |
+| Core Component provisioning-plan and Fleet Registry conversion adapters | 26 | 340 |
 
 These dispositions are recorded in the Component Registry persistence and
 workflow ledgers and the Fleet Subnet Root workflow ledger linked from the
@@ -123,9 +127,9 @@ meanings expands the effective disposition frontier by 291:
 
 | Frontier | Total | Classified | Open |
 | --- | ---: | ---: | ---: |
-| Mechanical direct constructors | 2,208 | 1,762 | 446 |
+| Mechanical direct constructors | 2,208 | 1,868 | 340 |
 | Coordinator receipt-invariant calls replacing one adapter site | 292 | 292 | 0 |
-| **Effective semantic disposition frontier** | **2,499** | **2,053** | **446** |
+| **Effective semantic disposition frontier** | **2,499** | **2,159** | **340** |
 
 The adapter is explicitly a no-code funnel. Semantic progress must use the
 2,499-site frontier until all 292 calls have exact dispositions; counting its
@@ -136,10 +140,12 @@ The largest two files alone contain 1,154 references:
 - `canic-control-plane/src/ops/component_registry/mod.rs`: 800; and
 - `canic-control-plane/src/workflow/component_registry/mod.rs`: 354.
 
-Component Registry and Component provisioning ops/workflows are now closed.
-Fleet Coordinator, Canister pool, bootstrap and Wasm Store paths come next.
-They contain external-effect, interruption and authority failures and cannot
-inherit broad codes merely because an inner typed-family audit is complete.
+Component Registry and Component provisioning ops/workflows are now closed, as
+are Fleet Coordinator, Canister pool, root bootstrap, the remaining Wasm Store
+lifecycle group, Fleet Registry Mirror, Component Directory synchronization
+and Fleet-service peer authority, plus the core plan/Registry typed adapters.
+Remaining runtime/auth/RPC failures cannot inherit broad codes merely because
+an inner typed-family audit is complete.
 
 ## Reconciliation Order
 
@@ -148,8 +154,8 @@ inherit broad codes merely because an inner typed-family audit is complete.
    inventory and root/Store retirement.
 2. Component provisioning and Fleet Coordinator ops/workflows.
 3. Remaining Canister pool, bootstrap and Wasm Store lifecycle.
-4. Fleet Mirror, Component Directory synchronization and Fleet-service peer
-   workflows.
+4. Fleet Registry Mirror, Component Directory synchronization and Fleet-service
+   peer workflows.
 5. Remaining `canic-core` runtime, RPC, placement, replay and cascade sites.
 6. Final rescan proving every reference has one disposition and every allocated
    meaning has a current producer.
@@ -171,17 +177,17 @@ constructor site, not merely the enclosing file.
 | 69 | `crates/canic-control-plane/src/workflow/fleet_subnet_root.rs` | Fully classified |
 | 32 | `crates/canic-core/src/workflow/component_runtime.rs` | Site-level reconciliation open |
 | 32 | `crates/canic-core/src/workflow/runtime/auth/prepare/replay.rs` | Site-level reconciliation open |
-| 27 | `crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs` | Site-level reconciliation open |
+| 27 | `crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs` | Fully classified with root-local Mirror activation and synchronization |
 | 23 | `crates/canic-control-plane/src/ops/component_directory_synchronization/mod.rs` | Site-level reconciliation open |
 | 23 | `crates/canic-control-plane/src/workflow/bootstrap/root_store/mod.rs` | Fully classified, including 2 transparent typed topology adapters |
 | 21 | `crates/canic-control-plane/src/ops/fleet_coordinator/root_deletion/mod.rs` | Fully classified: 21 direct sites and all 10 hidden receipt-funnel calls |
 | 15 | `crates/canic-core/src/workflow/placement/allocation.rs` | Site-level reconciliation open |
 | 14 | `crates/canic-core/src/workflow/ic/icp_refill/replay.rs` | Site-level reconciliation open |
 | 14 | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs` | Site-level reconciliation open |
-| 13 | `crates/canic-control-plane/src/ops/fleet_service_peer/mod.rs` | Site-level reconciliation open |
-| 13 | `crates/canic-control-plane/src/workflow/component_directory_synchronization/mod.rs` | Site-level reconciliation open |
-| 13 | `crates/canic-core/src/ops/component_provisioning_plan/mod.rs` | Site-level reconciliation open |
-| 13 | `crates/canic-core/src/ops/fleet_registry/mod.rs` | Site-level reconciliation open |
+| 13 | `crates/canic-control-plane/src/ops/fleet_service_peer/mod.rs` | Fully classified with cross-root requester and durable-origin authority |
+| 13 | `crates/canic-control-plane/src/workflow/component_directory_synchronization/mod.rs` | Fully classified with root-level scale-out Directory convergence |
+| 13 | `crates/canic-core/src/ops/component_provisioning_plan/mod.rs` | Fully classified as typed plan/configuration/Registry conversion adapters |
+| 13 | `crates/canic-core/src/ops/fleet_registry/mod.rs` | Fully classified as typed Fleet Registry conversion adapters |
 | 12 | `crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs` | Fully classified, including 6 transparent root-error propagation sites |
 | 11 | `crates/canic-control-plane/src/workflow/canister_pool/mod.rs` | Fully classified with its 6-site refill child |
 | 11 | `crates/canic-core/src/ops/auth/token/error.rs` | Site-level reconciliation open |
@@ -189,7 +195,7 @@ constructor site, not merely the enclosing file.
 | 10 | `crates/canic-core/src/workflow/runtime/intent.rs` | Site-level reconciliation open |
 | 9 | `crates/canic-core/src/ops/storage/authority_restore/mod.rs` | Site-level reconciliation open |
 | 9 | `crates/canic-core/src/workflow/rpc/request/handler/execute.rs` | Site-level reconciliation open |
-| 8 | `crates/canic-control-plane/src/workflow/runtime/template/mod.rs` | Site-level reconciliation open |
+| 8 | `crates/canic-control-plane/src/workflow/runtime/template/mod.rs` | Fully classified with the remaining Wasm Store lifecycle group |
 | 8 | `crates/canic-core/src/workflow/runtime/auth/renewal.rs` | Site-level reconciliation open |
 | 7 | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs` | Site-level reconciliation open |
 | 7 | `crates/canic-core/src/ops/auth/token/verification.rs` | Site-level reconciliation open |
@@ -198,7 +204,7 @@ constructor site, not merely the enclosing file.
 | 6 | `crates/canic-core/src/workflow/rpc/request/handler/authorize.rs` | Site-level reconciliation open |
 | 6 | `crates/canic-core/src/workflow/runtime/auth/mod.rs` | Site-level reconciliation open |
 | 6 | `crates/canic-core/src/workflow/runtime/root.rs` | Site-level reconciliation open |
-| 5 | `crates/canic-control-plane/src/ops/fleet_registry_mirror/mod.rs` | Site-level reconciliation open |
+| 5 | `crates/canic-control-plane/src/ops/fleet_registry_mirror/mod.rs` | Fully classified with canonical active Mirror storage authority |
 | 5 | `crates/canic-control-plane/src/ops/storage/state/root_wasm_store.rs` | Fully classified with root bootstrap Subnet discovery |
 | 5 | `crates/canic-control-plane/src/workflow/component_rpc/lifecycle.rs` | Site-level reconciliation open |
 | 5 | `crates/canic-core/src/ops/fleet_service_binding/mod.rs` | Site-level reconciliation open |
@@ -206,20 +212,20 @@ constructor site, not merely the enclosing file.
 | 5 | `crates/canic-core/src/workflow/env/mod.rs` | Site-level reconciliation open |
 | 5 | `crates/canic-core/src/workflow/runtime/auth/root_issuer/mod.rs` | Site-level reconciliation open |
 | 5 | `crates/canic-core/src/workflow/runtime/nonroot.rs` | Site-level reconciliation open |
-| 4 | `crates/canic-control-plane/src/workflow/runtime/template/client/mod.rs` | Site-level reconciliation open |
-| 4 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/gc.rs` | Site-level reconciliation open |
+| 4 | `crates/canic-control-plane/src/workflow/runtime/template/client/mod.rs` | Fully classified as transparent typed IC/remote Store propagation |
+| 4 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/gc.rs` | Fully classified for direct constructors; typed publication errors remain in their existing ledger |
 | 4 | `crates/canic-core/src/ops/auth/delegation/errors.rs` | Site-level reconciliation open |
 | 4 | `crates/canic-core/src/workflow/cascade/topology.rs` | Site-level reconciliation open |
 | 4 | `crates/canic-core/src/workflow/ic/icp_refill/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-control-plane/src/workflow/bootstrap/root.rs` | Fully classified with sibling Store state facade |
 | 3 | `crates/canic-control-plane/src/workflow/runtime/fleet_activation/mod.rs` | Site-level reconciliation open |
-| 3 | `crates/canic-control-plane/src/workflow/wasm_store/mod.rs` | Site-level reconciliation open |
+| 3 | `crates/canic-control-plane/src/workflow/wasm_store/mod.rs` | Fully classified with the remaining Wasm Store lifecycle group |
 | 3 | `crates/canic-core/src/workflow/placement/scaling/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/runtime/auth/prepare/mod.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/runtime/authority_restore.rs` | Site-level reconciliation open |
 | 3 | `crates/canic-core/src/workflow/runtime/mod.rs` | Site-level reconciliation open |
 | 2 | `crates/canic-control-plane/src/ops/fleet_coordinator/deployment_ledger/mod.rs` | Fully classified: 2 direct sites and all 47 hidden receipt-funnel calls, including 2 test-only dispositions |
-| 2 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/inventory.rs` | Site-level reconciliation open |
+| 2 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/inventory.rs` | Fully classified with existing Store-cardinality identities |
 | 2 | `crates/canic-core/src/ops/auth/delegation/active.rs` | Site-level reconciliation open |
 | 2 | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/merkle.rs` | Site-level reconciliation open |
 | 2 | `crates/canic-core/src/ops/auth/token/retention/mod.rs` | Site-level reconciliation open |
@@ -236,7 +242,7 @@ constructor site, not merely the enclosing file.
 | 2 | `crates/canic-core/src/workflow/runtime/log.rs` | Site-level reconciliation open |
 | 1 | `crates/canic-control-plane/src/config.rs` | Site-level reconciliation open |
 | 1 | `crates/canic-control-plane/src/workflow/root_authority/mod.rs` | Site-level reconciliation open |
-| 1 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/creation.rs` | Site-level reconciliation open |
+| 1 | `crates/canic-control-plane/src/workflow/runtime/template/publication/lifecycle/creation.rs` | Fully classified with the existing adopted-Store identity |
 | 1 | `crates/canic-control-plane/src/workflow/state/mod.rs` | Site-level reconciliation open |
 | 1 | `crates/canic-core/src/api/component_deployment.rs` | Site-level reconciliation open |
 | 1 | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/install.rs` | Site-level reconciliation open |

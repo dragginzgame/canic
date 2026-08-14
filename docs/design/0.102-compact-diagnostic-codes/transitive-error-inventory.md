@@ -248,7 +248,7 @@ maintainer allocation review; a dependency version/checksum change reopens it.
 The remaining terminal owners are already bounded:
 
 - `TopologySnapshotValidationError`: 14 exact topology-authority violations;
-- `CashierDecodeError`: four response-shape violations scheduled for the 0.107
+- `CashierDecodeError`: four response-shape violations scheduled for the 0.108
   blob hard cut; they still require current 0.102 allocation if their producers
   have not actually been deleted before the registry freezes;
 - `StorageError`: four runtime-log invariants;
@@ -260,7 +260,7 @@ The remaining terminal owners are already bounded:
 [bounded-runtime-leaves.md](bounded-runtime-leaves.md) completes that grouping:
 37 current exact candidates, including one adjacent untyped build-network
 producer and four Cashier leaves that allocate in 0.102 and retire without
-reuse under the later 0.107 hard cut, plus four safe public projections.
+reuse under the later 0.108 hard cut, plus four safe public projections.
 
 These are suitable inputs to semantic grouping. They still need public
 projection and masked observability review; their small size does not authorize

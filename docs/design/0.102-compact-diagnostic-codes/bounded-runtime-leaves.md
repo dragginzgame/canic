@@ -94,7 +94,7 @@ The current `UnknownPool` prose embeds the requested name and a joined list of
 available pools. Those values remain available from typed configuration/status
 surfaces and do not enter the compact diagnostic.
 
-## Cashier Boundary And The 0.107 Hard Cut
+## Cashier Boundary And The 0.108 Hard Cut
 
 Current source still produces all four `CashierDecodeError` variants:
 
@@ -103,10 +103,10 @@ Current source still produces all four `CashierDecodeError` variants:
 - `BLOB_CASHIER_GATEWAY_PRINCIPAL_INVALID`; and
 - `BLOB_CASHIER_GATEWAY_LIMIT_EXCEEDED`.
 
-The 0.107 standalone-blob design removes this owner from Canic, but a future
+The 0.108 standalone-blob design removes this owner from Canic, but a future
 design is not evidence that the current producer is absent. The maintained
-release order is 0.102 before 0.107, so all four current producers must be
-allocated in 0.102 and their numbers retired without reuse when 0.107 hard-cuts
+release order is 0.102 before 0.108, so all four current producers must be
+allocated in 0.102 and their numbers retired without reuse when 0.108 hard-cuts
 the subsystem. There is no permitted temporary generic Cashier code and no
 permission to omit current evidence because its lifetime is short.
 
@@ -125,7 +125,7 @@ The current-source frontier contains **37 exact semantic candidates**:
 - four runtime-log leaves;
 - ten typed refill leaves plus one direct build-network leaf;
 - four Placement Index leaves; and
-- four current Cashier leaves whose numbers retire when 0.107 removes their
+- four current Cashier leaves whose numbers retire when 0.108 removes their
   producers.
 
 It introduces four safe projections:
@@ -133,7 +133,7 @@ It introduces four safe projections:
 - `RUNTIME_LOG_STATE_INVALID`;
 - `ICP_REFILL_RESPONSE_INVALID`;
 - `RUNTIME_CONFIGURATION_UNAVAILABLE`; and
-- `BLOB_CASHIER_RESPONSE_INVALID` until its 0.107 retirement.
+- `BLOB_CASHIER_RESPONSE_INVALID` until its 0.108 retirement.
 
 ## Required Tests
 
@@ -144,5 +144,5 @@ It introduces four safe projections:
 - exact missing build-network mapping;
 - Placement Index errors without requested/available pool prose;
 - exact Cashier mapping in 0.102 and retirement-without-reuse evidence in
-  0.107; and
+  0.108; and
 - no durable refill recovery decision based on `error_message`.
