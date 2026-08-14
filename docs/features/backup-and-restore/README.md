@@ -38,4 +38,4 @@ current local backup contract. Product blob storage is a separate feature.
 - [CLI backup and restore guide](../../../crates/canic-cli/README.md)
 - [Backup domain crate](../../../crates/canic-backup/README.md)
 - [Recovery and retry runbooks](../../operations/recovery-retry-runbooks.md)
-- [Optional archive design](../../design/0.109-optional-encrypted-canister-snapshot-archives/0.109-design.md)
+- [Optional archive design](../../design/0.110-optional-encrypted-canister-snapshot-archives/0.110-design.md)

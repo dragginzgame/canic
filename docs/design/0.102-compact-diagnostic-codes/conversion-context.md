@@ -74,7 +74,7 @@ outer variants require analysis:
 | `IcInfraError` | `Infra/Infra` |
 | `AuthOpsError` | `Ops/Ops` |
 | `TopologySnapshotValidationError` | `Invariant/Ops` |
-| `CashierDecodeError` | `Ops/Ops` pending the 0.107 hard cut |
+| `CashierDecodeError` | `Ops/Ops` pending the 0.108 hard cut |
 | `OpsError` | `Ops/Ops` |
 | `StorageError` | `Invariant/Storage` |
 | `IcpRefillWorkflowError` | `Workflow/Workflow` |

@@ -69,7 +69,7 @@ review, does not cover all direct constructors, and does not authorize
 
 ## Direct-Constructor Additions
 
-The first seventy-three site-level passes in
+The first seventy-nine site-level passes in
 [component-registry-constructor-leaves.md](component-registry-constructor-leaves.md)
 and
 [component-registry-workflow-constructor-leaves.md](component-registry-workflow-constructor-leaves.md)
@@ -97,7 +97,15 @@ and
 [root-store-bootstrap-constructor-leaves.md](root-store-bootstrap-constructor-leaves.md)
 and
 [root-bootstrap-store-state-constructor-leaves.md](root-bootstrap-store-state-constructor-leaves.md)
-classify 2,053 effective top-level and direct-child allocation/install/activation plus
+and
+[wasm-store-lifecycle-constructor-leaves.md](wasm-store-lifecycle-constructor-leaves.md)
+and
+[fleet-registry-mirror-constructor-leaves.md](fleet-registry-mirror-constructor-leaves.md)
+and
+[component-directory-peer-constructor-leaves.md](component-directory-peer-constructor-leaves.md)
+and
+[core-plan-registry-adapter-constructor-leaves.md](core-plan-registry-adapter-constructor-leaves.md)
+classify 2,159 effective top-level and direct-child allocation/install/activation plus
 top-level draining/quiescence/recycling and subtree-removal orchestration
 and physical-effect references plus root draining, final-inventory and logical
 removal persistence, Store reclamation/publication-binding finalization and
@@ -139,17 +147,29 @@ The pool workflow is closed across maintenance, import, exclusive handoff and
 recoverable Cycles Ledger refill.
 Root Store bootstrap is closed across manifest/projection authority, staged
 artifacts, protected capacity and exact live-catalog verification. Root Subnet
-discovery and sibling Store adoption state are also closed.
+discovery and sibling Store adoption state are also closed. The remaining Wasm
+Store lifecycle is closed across deletion-cycle reclamation, module resolution,
+typed internal Store calls, bootstrap/activation inventory and physical
+deletion progress. Root-local Fleet Registry Mirror operations and workflow are
+closed across Joining synchronization, acknowledgement, active storage
+authority, canonical snapshot validation, monotonic advancement and prepared
+Directory commit.
+Root-level scale-out Directory synchronization and cross-root Fleet-service
+requester/origin authority are also closed without merging their distinct
+Component, Registry, root, Spec or grant predicates.
+The core Component provisioning-plan and Fleet Registry adapter constructors
+are closed as transparent conversions into their already-qualified typed
+families.
 Together they add:
 
-- 1,678 exact Component Registry/provisioning/allocation/lifecycle meanings; and
+- 1,781 exact direct-constructor and expanded-call meanings; and
 - one safe projection, `COMPONENT_REGISTRY_STATE_INVALID`.
 
-The current qualified set is therefore **2,333 exact candidates plus 31
-additional safe projections: 2,364 collision-free identities**. This remains a
+The current qualified set is therefore **2,436 exact candidates plus 31
+additional safe projections: 2,467 collision-free identities**. This remains a
 qualified subset, not the final allocation. The effective frontier is now
 2,499 sites after replacing the Coordinator's one generic receipt adapter with
-292 call-site meanings; 446 effective dispositions remain open.
+292 call-site meanings; 340 effective dispositions remain open.
 
 The Component Registry subset is mechanically closed: a whole-file range-owner
 manifest assigns all 800 ops constructors exactly once with zero uncovered or
@@ -164,13 +184,13 @@ dispositions. Its 10 `root_deletion` and 47 `deployment_ledger` calls are also
 closed, so all 292 funnel calls now have exact dispositions. The 12-site
 Coordinator workflow is also closed.
 
-The sixty-eight latest slices' candidate-column extraction finds 1,900 exact-label
-occurrences. Three hundred twenty-seven intentionally reuse existing partition, physical-absence,
-Registry-readiness or root-retirement identities, two adopt DPC names already
-reserved for the same exact denials and the other 1,571 do not
+The seventy-four latest slices' candidate-column extraction finds 2,016 exact-label
+occurrences. Three hundred thirty-seven intentionally reuse existing partition, physical-absence,
+Registry-readiness, Store-chunk or root-retirement identities, five occurrences adopt DPC names already
+reserved for the same exact denials and the other 1,674 do not
 occur in any preceding
 qualified ledger. That collision check independently matches the
-`795 + 32 + 5 + 22 + 50 + 28 + 40 + 24 + 9 + 22 + 0 + 7 + 7 + 15 + 30 + 12 + 28 + 3 + 19 + 50 + 11 + 7 + 11 + 40 + 22 + 8 + 19 + 57 + 53 + 56 + 62 + 28 + 10 + 34 + 10 + 23 + 21 + 15 + 1 + 14 + 51 + 30 + 19 + 15 + 16 + 57 + 29 + 39 + 16 + 19 + 14 + 11 + 37 + 24 + 13 + 66 + 33 + 51 + 23 + 10 + 21 + 10 + 15 + 11 + 4 + 22 + 8 = 2,364`
+`795 + 32 + 5 + 22 + 50 + 28 + 40 + 24 + 9 + 22 + 0 + 7 + 7 + 15 + 30 + 12 + 28 + 3 + 19 + 50 + 11 + 7 + 11 + 40 + 22 + 8 + 19 + 57 + 53 + 56 + 62 + 28 + 10 + 34 + 10 + 23 + 21 + 15 + 1 + 14 + 51 + 30 + 19 + 15 + 16 + 57 + 29 + 39 + 16 + 19 + 14 + 11 + 37 + 24 + 13 + 66 + 33 + 51 + 23 + 10 + 21 + 10 + 15 + 11 + 4 + 22 + 8 + 16 + 50 + 37 = 2,467`
 arithmetic without
 treating uppercase prose or static Rust enum names as candidate labels. The
 final allocation still requires the mechanical producer manifest rather than

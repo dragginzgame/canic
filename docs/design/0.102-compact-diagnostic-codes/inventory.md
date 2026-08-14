@@ -89,7 +89,7 @@ keeps destination-invalid absence as typed evidence before projection.
 [bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 37 current exact
 topology, runtime-log, refill, Placement Index and Cashier candidates plus four
 safe projections. One projection is shared with configuration. Because 0.102
-precedes the 0.107 extraction, the four current Cashier leaves are allocated
+precedes the 0.108 extraction, the four current Cashier leaves are allocated
 now and retired without reuse by that later hard cut.
 
 [runtime-ops-leaves.md](runtime-ops-leaves.md) maps configuration lookup,
@@ -125,7 +125,13 @@ structural leaves into 54 Canic-owned semantics and adds 20 boundary-specific
 unknown leaves for the reachable non-exhaustive enums: 74 exact candidates and
 no broad projection.
 
-### Semantic Ledger Coverage
+### Initial Semantic Ledger Coverage
+
+This table is the frozen initial family and first-21-pass staging subtotal. It
+is retained to show how B1 expanded from the original typed-family audit; the
+current whole-program qualified total is maintained in
+[ledger-reconciliation.md](ledger-reconciliation.md), not by extending this
+wide table for every later site slice.
 
 | Family | Provisional exact candidates | Safe projections | Remaining qualification |
 | --- | ---: | ---: | --- |
@@ -162,7 +168,7 @@ no broad projection.
 | Component Directory convergence/runtime status | 30 new, 2 reused | 0 new | 51 direct constructor sites classified; twelve transparent adapter-sediment sites |
 | Component peer/protected-allocation workflow | 12 new, 6 reused | 0 new | 23 direct constructor sites classified; two transparent topology causes |
 | Component Registry preparation/allocation/create-install workflow | 28 new, 15 reused | 0 new | 55 direct constructor sites classified; eight transparent typed-cause/adapter sites |
-| **Current counted subtotal** | **1,095** | **31 distinct** | 1,126 identities; not a numeric allocation |
+| **Initial counted subtotal** | **1,095** | **31 distinct** | 1,126 identities; not a numeric allocation |
 
 [ledger-reconciliation.md](ledger-reconciliation.md) reconciles the qualified family
 arithmetic and every cross-family reuse. The broad source-document token census
@@ -170,16 +176,18 @@ contains 689 unique uppercase tokens; four are explicitly documented notation
 or forbidden/unreachable examples, leaving exactly 685 collision-free proposed
 identities: 655 exact meanings and 30 additional safe projections.
 
-The first twenty-one direct-constructor passes add 440 exact meanings and
-`COMPONENT_REGISTRY_STATE_INVALID`, bringing the qualified set to 1,126 distinct
-identities. Existing exact reuses are not counted again.
+The first twenty-one direct-constructor passes added 440 exact meanings and
+`COMPONENT_REGISTRY_STATE_INVALID`, bringing that initial staging set to 1,126
+distinct identities. Existing exact reuses were not counted again. The current
+seventy-nine-pass reconciliation contains 2,436 exact meanings plus 31
+additional projections: 2,467 qualified symbolic identities.
 
 [projection-ledger.md](projection-ledger.md) aggregates those 31 additional
 identities plus five exact leaves reused as projection targets. It names the
 required observation class for every masked family and records three remaining
 approval gaps: numeric conversion of the guarded recent-failure ring and
 call-site-specific IC effect-journal wiring. Cashier uses the guarded numeric
-runtime observation until its 0.107 retirement.
+runtime observation until its 0.108 retirement.
 
 [ic-observability-owners.md](ic-observability-owners.md) resolves the IC gap to
 17 current call families and their operation-specific recovery/status
@@ -200,19 +208,18 @@ Registry modules alone contain 1,154 references. Each site must reuse a
 qualified meaning, add a justified meaning or be classified as a transparent
 wrapper/native-only/sediment path before numeric allocation.
 
-[component-registry-constructor-leaves.md](component-registry-constructor-leaves.md)
-and
-[component-registry-workflow-constructor-leaves.md](component-registry-workflow-constructor-leaves.md)
-and
-[fleet-subnet-root-workflow-constructor-leaves.md](fleet-subnet-root-workflow-constructor-leaves.md)
-now close 848 of those references, leaving 1,360 site-level dispositions open.
-The Component Registry workflow file is fully classified.
+The site ledgers indexed by
+[ledger-reconciliation.md](ledger-reconciliation.md) now close 1,868 of those
+mechanical references. Expanding the Coordinator's one receipt adapter to its
+292 call-site meanings produces an effective 2,499-site frontier with 2,159
+classified and 340 open.
 
 [code-allocation-ledger.md](code-allocation-ledger.md) freezes the permanent
 repository-only current/retired allocation contract and the contract for a
 generated language-neutral current registry. Because no numeric allocation has
-been approved, its current and retired sets are both empty; the 1,126 qualified
-symbolic identities above are not ledger rows.
+been approved, its current and retired sets are both empty; neither the 1,126
+initial identities above nor the current 2,467 qualified symbolic identities
+are ledger rows.
 
 ### Current Public Leaves
 
@@ -311,7 +318,7 @@ remediation-significant even when their surrounding prose is disposable.
 [dynamic-public-context.md](dynamic-public-context.md) defines the required
 row shape and four classifications: caller-derivable, sensitive/operator-only,
 authoritatively typed, and caller-required but unowned. Its current-source
-census is not yet complete. Its first nineteen bounded slices classify 138 dynamic
+census is not yet complete. Its first twenty-three bounded slices classify 194 dynamic
 values from the Canic memory-ledger facade, Wasm Store GC, Store
 manifest/capacity conversion, explicit Component Registry denials, typed Store
 publication causes, delegated-session bootstrap and Store publication
@@ -319,7 +326,9 @@ binding/inventory plus Store GC fence, reclamation, binding finalization and
 deletion, the two Store-publication management transports and Coordinator root-
 deletion closed labels, the Coordinator initialization caller, pool asset
 principals, import routing evidence, root Store bootstrap and sibling adoption
-state: 66 are caller-derivable, sixteen are sensitive operator-only, thirty-one already
+state plus Store module resolution, typed internal-client causes, the typed
+Fleet-service peer binding cause and the core plan/Registry typed funnels: 111
+are caller-derivable, sixteen are sensitive operator-only, forty-two already
 have typed owners and twenty-five
 are caller-required but unowned. The unowned
 values
@@ -356,7 +365,7 @@ Related non-stable or boundary-only text is classified separately:
 | Runtime bootstrap `last_error` | Advisory transient context | Process-local, cleared on phase changes and rebuilt by current lifecycle execution |
 | Runtime recent-failure summaries/details | Owned operational text | Bounded runtime diagnostic/log projection, not stable recovery authority |
 | Pool response reasons | Owned operational text | Projection of typed stable status; not an independent state owner |
-| Blob billing `skipped_reason` | Owned operational text pending 0.107 extraction | Application-service response context; 0.102 must not pre-empt the later blob hard cut |
+| Blob billing `skipped_reason` | Owned operational text pending 0.108 extraction | Application-service response context; 0.102 must not pre-empt the later blob hard cut |
 | Scaling-plan `reason` | Owned operational text | Explanatory projection beside typed `ScalingPlanReason`; policy does not parse it |
 | Configuration and state-contract validation details | Owned operational text | Host/operator explanation; typed owner determines the failure branch |
 
