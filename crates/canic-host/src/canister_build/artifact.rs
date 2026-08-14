@@ -481,6 +481,7 @@ mod tests {
             args,
             [
                 "build",
+                "--locked",
                 "--manifest-path",
                 "/workspace/Cargo.toml",
                 "--target",
