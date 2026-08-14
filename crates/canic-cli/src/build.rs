@@ -923,7 +923,17 @@ mod tests {
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(table.starts_with('+'));
-        assert!(table.contains("| ROLE | VERSION  | STATUS |"));
+        let headers = table
+            .lines()
+            .nth(1)
+            .expect("build table header")
+            .split('|')
+            .filter_map(|cell| {
+                let cell = cell.trim();
+                (!cell.is_empty()).then_some(cell)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(headers, ["ROLE", "VERSION", "STATUS", "WASM"]);
         assert!(table.contains("| app  |"));
         assert!(table.contains("done"));
         assert!(table.contains("2.00 KiB (gz 512.00 B)"));
