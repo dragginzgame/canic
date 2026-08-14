@@ -44,7 +44,7 @@ retention authority.
 ## Released Slice A Evidence
 
 The canonical report is
-[0.96 receipt contract Slice A](../../audits/reports/2026-07/2026-07-21/0.96-receipt-contract-slice-a.md).
+[0.96 receipt contract Slice A](../../../audits/reports/2026-07/2026-07-21/0.96-receipt-contract-slice-a.md).
 
 The downstream bullets in this section record the historical snapshot used by
 released `v0.96.0`; they are not claims about current Toko.
@@ -76,7 +76,7 @@ released `v0.96.0`; they are not claims about current Toko.
 ## Released Slice B Capacity Evidence
 
 The canonical report is
-[0.96 receipt capacity Slice B](../../audits/reports/2026-07/2026-07-21/0.96-receipt-capacity-slice-b.md).
+[0.96 receipt capacity Slice B](../../../audits/reports/2026-07/2026-07-21/0.96-receipt-capacity-slice-b.md).
 
 - Maximum current pending and terminal primary values encode to 441 and 617
   bytes respectively; the primary map retains its 1,024-byte bound.
@@ -100,7 +100,7 @@ The canonical report is
 ## Released Slice C Replay Admission
 
 The canonical report is
-[0.96 replay deadline Slice C](../../audits/reports/2026-07/2026-07-21/0.96-replay-deadline-slice-c.md).
+[0.96 replay deadline Slice C](../../../audits/reports/2026-07/2026-07-21/0.96-replay-deadline-slice-c.md).
 
 - `BeginReceiptBackedIntentInput` requires `replay_deadline_ns`; no optional
   field, default, overload, alias, or fallback reader remains.
@@ -127,7 +127,7 @@ The canonical report is
 ## Released 0.96.3 Reconciliation Correction
 
 The canonical report is
-[0.96.3 receipt reconciliation correction](../../audits/reports/2026-07/2026-07-21/0.96-receipt-reconciliation-0.96.3.md).
+[0.96.3 receipt reconciliation correction](../../../audits/reports/2026-07/2026-07-21/0.96-receipt-reconciliation-0.96.3.md).
 
 - The released 0.96.2 lifecycle path scanned both canonical maps but also
   performed one cross-map stable-tree point lookup for every primary and every
@@ -148,7 +148,7 @@ The canonical report is
 ## Released 0.96.4 Terminal Eligibility And Capacity
 
 The canonical report is
-[0.96.4 terminal eligibility and settlement capacity](../../audits/reports/2026-07/2026-07-21/0.96-terminal-eligibility-0.96.4.md).
+[0.96.4 terminal eligibility and settlement capacity](../../../audits/reports/2026-07/2026-07-21/0.96-terminal-eligibility-0.96.4.md).
 
 - Terminal observation grace is exactly 24 hours, matching the maximum
   admitted replay horizon. Eligibility is
@@ -179,7 +179,7 @@ The canonical report is
 ## Released 0.96.5 Receipt Capacity Projection
 
 The canonical report is
-[0.96.5 receipt capacity projection](../../audits/reports/2026-07/2026-07-21/0.96-receipt-capacity-projection-0.96.5.md).
+[0.96.5 receipt capacity projection](../../../audits/reports/2026-07/2026-07-21/0.96-receipt-capacity-projection-0.96.5.md).
 
 - The application replay map's maintained B-tree length is the total record
   count and reserved terminal-slot count. The eligibility map's maintained
@@ -199,7 +199,7 @@ The canonical report is
 ## Released 0.96.6 Bounded Terminal Reclamation
 
 The canonical report is
-[0.96.6 bounded terminal reclamation](../../audits/reports/2026-07/2026-07-21/0.96-terminal-reclamation-0.96.6.md).
+[0.96.6 bounded terminal reclamation](../../../audits/reports/2026-07/2026-07-21/0.96-terminal-reclamation-0.96.6.md).
 
 - The shared primary ceiling is hard-cut from 100,000 to 1,000 records. Exact
   admission accepts 1,000 and rejects row 1,001; no configuration override or
@@ -226,7 +226,7 @@ The canonical report is
 ## Released 0.96.7 Resource Totals And Guarded Capacity
 
 The canonical report is
-[0.96.7 resource totals and guarded capacity](../../audits/reports/2026-07/2026-07-21/0.96-resource-totals-and-capacity-status-0.96.7.md).
+[0.96.7 resource totals and guarded capacity](../../../audits/reports/2026-07/2026-07-21/0.96-resource-totals-and-capacity-status-0.96.7.md).
 
 - The shared durable resource-total map has one fixed 1,000-identity ceiling,
   matching the receipt limit and the pinned six-page maximum totals
@@ -250,7 +250,7 @@ The canonical report is
 ## Released 0.96.8 Transaction-Scale Retention
 
 The canonical report is
-[0.96.8 transaction-scale receipt retention](../../audits/reports/2026-07/2026-07-21/0.96-transaction-retention-0.96.8.md).
+[0.96.8 transaction-scale receipt retention](../../../audits/reports/2026-07/2026-07-21/0.96-transaction-retention-0.96.8.md).
 
 - The maximum remaining replay window is hard-cut from 24 hours to one hour.
   This is a ceiling; adapters may supply shorter immutable action deadlines.
@@ -425,7 +425,7 @@ receipt-path evidence.
 ## Remaining Closeout Work
 
 None. The immutable
-[0.96 closeout](../../audits/release-lines/0.96-closeout.md) records a `pass`
+[0.96 closeout](../../../audits/release-lines/0.96-closeout.md) records a `pass`
 verdict at `v0.96.8`.
 
 Toko's action identity, binding vectors, batch/rate envelope, ledger

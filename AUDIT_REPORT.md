@@ -231,7 +231,8 @@ Safe fixes made:
   endpoint audits scan current root issuer renewal/lazy-repair endpoints rather
   than deleted bridge proof endpoints.
 - Added a baseline note to
-  `docs/design/0.76-auth/0.76-closeout-audit.md` clarifying that old line-number
+  `docs/audits/release-lines/supporting/0.76-auth/0.76-closeout-audit.md`
+  clarifying that old line-number
   evidence predates the 0.76.6 hard cut.
 
 No high-confidence production Rust cleanup was identified beyond already
@@ -298,7 +299,7 @@ completed hard-cut auth removals.
 - `docs/audits/recurring/system/ops-purity.md`
 - `docs/audits/recurring/system/security-boundary-ordering.md`
 - `docs/audits/recurring/system/workflow-purity.md`
-- `docs/design/0.76-auth/0.76-closeout-audit.md`
+- `docs/audits/release-lines/supporting/0.76-auth/0.76-closeout-audit.md`
 
 ## Risky Items Intentionally Deferred
 
@@ -454,7 +455,8 @@ Findings:
 
 Actions taken:
 
-- Added `docs/design/0.76-auth/chain-key-batch-maintainability-plan.md`.
+- Added
+  `docs/audits/release-lines/supporting/0.76-auth/chain-key-batch-maintainability-plan.md`.
 - The plan records current function clusters with line evidence, required test
   gates, extraction order, no-change boundaries, and stop conditions.
 - Follow-up `.7` cleanup completed the planned no-behavior-change module
@@ -481,7 +483,8 @@ Action taken:
   discovery now resolves the directory module.
 - Did not extract submodules or change behavior.
 - Updated
-  `docs/design/0.76-auth/chain-key-batch-maintainability-plan.md` so future
+  `docs/audits/release-lines/supporting/0.76-auth/chain-key-batch-maintainability-plan.md`
+  so future
   extraction work starts at Slice 2.
 
 ### Chain-Key Batch Plan Slices 2-5

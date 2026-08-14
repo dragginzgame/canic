@@ -179,7 +179,7 @@ Date: 2026-08-12
   ActivePool members, two interrupted scale-outs, three Project Instances,
   three Ledgers, one Machine and an isolated second Fleet sharing one physical
   Subnet. The exact supported envelope and Wasm measurements are recorded in
-  [qualification.md](qualification.md).
+  [qualification report](../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md).
 - Release boundary: reinstall only.
 - Implementation status: complete; Q5 closeout is released in `0.101.53`.
 - Dependency: completed 0.100 qualified independently host-installed
@@ -192,7 +192,9 @@ Date: 2026-08-12
   activation.
 - Closeout gate: Q5 completed the whole-program hard cut, sediment removal,
   generated/configuration/stable-memory review and final responsibility/size
-  accounting in [closeout.md](closeout.md). Application-data replication
+  accounting in the
+  [closeout report](../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/closeout.md).
+  Application-data replication
   remains a separate later design and is not an implementation blocker for
   0.101 topology, purpose or discovery contracts.
 
@@ -210,7 +212,7 @@ repairs do not create additional release boundaries.
 | Q1 | Scale-out recovery and ActivePool qualification; Coordinator/root | Packed and spread membership, atomic publication, canonical Directory barrier, limit rejection, forced interruption/retry and no health/readiness claims | Coordinator state-machine tests plus focused root/PocketIC evidence where an IC call is required | Complete in released `0.101.49` |
 | Q2 | Fleet isolation and physical-effect boundaries; Coordinator/root/host | Two co-located Fleets, independent Store installation/adoption, ordinary prepaid-pool claim/retry and first-excess frozen scale bounds | Focused host/root tests and the smallest required PocketIC journeys | Complete in released `0.101.50` |
 | Q3 | Durable document and policy ownership; host/control plane/core | Cross-document backup/restore consistency, typed provisioning-journal decomposition, pure initial-placement policy and shared mechanical durable I/O | Focused schema/replay tests and package Clippy | Complete in released `0.101.51` |
-| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](qualification.md) | Complete in released `0.101.52` |
+| Q4 | Real topology and supported-envelope qualification; integration harness | Disposable Toko-shaped topology, cross-Subnet placement, dynamic descendants, shared-Subnet second Fleet and measured supported envelope | Focused multi-Subnet PocketIC/disposable-environment journey and [size/capacity report](../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md) | Complete in released `0.101.52` |
 | Q5 | Hard cut, sediment removal and closeout; whole program | Layer cleanup, obsolete surfaces, install execution/performance cleanup, Candid/generated/config/stable-memory residue, responsibility/size accounting and final closeout corrections | Targeted residue and installer guards followed by maintainer-owned complete release validation | Complete in released `0.101.53` |
 
 `Q1` is complete in the released `0.101.49` batch. In addition to the packed and
@@ -228,7 +230,7 @@ inside a batch does not create another patch boundary. `Q4` is complete in the
 released `0.101.52` batch: the three-Subnet Toko-shaped journey and shared-
 Subnet second Fleet pass with exact restart/replay, protected 10,000/2,000
 Project Hub limits and the measured envelope in
-[qualification.md](qualification.md).
+[qualification report](../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md).
 `Q5` is complete in released `0.101.53`. Its cleanup
 reconciles current installation, recovery, layering and release-authority
 documentation; archives the oversized session handoff; and removes CI guard
@@ -267,7 +269,9 @@ Canonical provisioning-plan byte encoding is now a separate focused owner from
 semantic authority validation, with unchanged frozen plan and root-batch hash
 vectors. The control-plane feature gate independently compiles the Coordinator,
 Fleet Subnet Root and Wasm Store roles instead of inferring root isolation from
-the combined host consumer. The final [closeout report](closeout.md) accounts
+the combined host consumer. The final
+[closeout report](../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/closeout.md)
+accounts
 for production growth, every remaining large owner, stable memory, generated
 surfaces, permitted terminology and freshly executed focused evidence.
 

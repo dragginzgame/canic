@@ -77,7 +77,7 @@ Registry slices replace the 0.99 root model.
 
 - [x] Record the complete live Registry, Directory, cascade, lifecycle,
   bootstrap and role-package
-  [authority inventory](0.100-authority-inventory.md).
+  [authority inventory](../../audits/release-lines/supporting/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-authority-inventory.md).
 - [x] Record the intermediate Tree declaration implementation and its bounded
   validation.
 - [x] Remove `TreeSpecId`, `TreeGroupId`, `TreeId` and their public exports.
@@ -1266,7 +1266,7 @@ role; a root-only build neither creates nor qualifies Store output. The
 canonical post-extraction measurement passes and records exact replacement
 sizes, hashes, Candid exports and retained attribution.
 
-The [0.100 infrastructure Wasm boundary audit](0.100-wasm-boundary-closeout.md)
+The [0.100 infrastructure Wasm boundary audit](../../audits/release-lines/supporting/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-wasm-boundary-closeout.md)
 records a passing independent root/Store build and post-extraction artifact
 boundary. Maintained-source searches still find no Tree identity, logical
 Subnet-slot, Subnet Registry/Directory, nested Component declaration or

@@ -8,7 +8,7 @@ Last updated: 2026-07-23
 anchored to immutable `v0.97.3`, which is not retroactively treated as a
 passing 0.97 closeout. Its post-0.97 deletion/reachability inventory and
 final-0.96 receipt assertion manifest remain valid and are frozen in the
-[baseline report](../../audits/reports/2026-07/2026-07-22/0.98-immutable-baseline-and-inventory.md).
+[baseline report](../../../audits/reports/2026-07/2026-07-22/0.98-immutable-baseline-and-inventory.md).
 Published `v0.98.0` supplies the corrected immutable predecessor and completes
 Slice A. Published `v0.98.1` completes Slice B: the obsolete external race
 fixture and its two auxiliary packages are removed, while one focused
@@ -33,12 +33,14 @@ architectural sediment audit:
    intent_external, while retaining the current receipt-backed intent
    conformance in intent_authority.
 
-The accepted [consolidation design amendment](consolidation-design-amendment.md)
+The accepted
+[consolidation design amendment](../../../audits/release-lines/supporting/0.98-architectural-sediment-hard-cuts/consolidation-design-amendment.md)
 extends only the released 0.98.2 patch. Its
-[implementation tracker](consolidation-implementation-tracker.md),
-[disposition ledger](consolidation-ledger.md), and
-[validation evidence](consolidation-validation-evidence.md) support the one
-canonical [0.98 closeout audit](0.98-closeout-audit.md).
+[implementation tracker](../../../audits/release-lines/supporting/0.98-architectural-sediment-hard-cuts/consolidation-implementation-tracker.md),
+[disposition ledger](../../../audits/release-lines/supporting/0.98-architectural-sediment-hard-cuts/consolidation-ledger.md), and
+[validation evidence](../../../audits/release-lines/supporting/0.98-architectural-sediment-hard-cuts/consolidation-validation-evidence.md)
+support the one canonical
+[0.98 closeout audit](../../../audits/release-lines/supporting/0.98-architectural-sediment-hard-cuts/0.98-closeout-audit.md).
 
 Compatibility posture is a pre-1.0 hard cut. No aliases, deprecated wrappers,
 ignored config fields, fallback parsers, placeholder packages, legacy test
@@ -78,9 +80,9 @@ targets, or compatibility modes are permitted.
   `v0.98.0` without changing the frozen 0.98 deletion inventory.
 - Canonical 0.98 design: [0.98-design.md](0.98-design.md).
 - Canonical closeout evidence:
-  [0.98-closeout-audit.md](0.98-closeout-audit.md).
+  [0.98 closeout audit](../../../audits/release-lines/supporting/0.98-architectural-sediment-hard-cuts/0.98-closeout-audit.md).
 - Canonical evidence: the
-  [architectural sediment audit](../../audits/reports/2026-07-21/architectural-sediment.md).
+  [architectural sediment audit](../../../audits/reports/2026-07-21/architectural-sediment.md).
 
 ## Finding Index
 

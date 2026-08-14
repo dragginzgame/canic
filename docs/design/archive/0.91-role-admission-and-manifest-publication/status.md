@@ -90,7 +90,7 @@ compatibility path is proposed.
 - Slice B install operation evidence tests: passed.
 - Targeted `canic-core`, `canic-host`, and `canic-cli` check: passed.
 - Targeted `canic-host` check and test-target Clippy after Slice B: passed.
-- Bounded [0.91 closeout audit](../../audits/reports/2026-07/2026-07-13/0.91-closeout.md):
+- Bounded [0.91 closeout audit](../../../audits/reports/2026-07/2026-07-13/0.91-closeout.md):
   passed.
 - Full workspace, broad PocketIC, deployment, and release suites: not run per
   repository policy.

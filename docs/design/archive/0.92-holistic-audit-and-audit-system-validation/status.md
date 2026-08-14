@@ -108,7 +108,7 @@ maintainer prerequisite for any future 1.0 discussion.
 - [x] Publish the dated primary report and required summaries.
 
 Primary evidence:
-[0.92 audit-system inventory](../../audits/reports/2026-07/2026-07-14/0.92-audit-system-inventory.md).
+[0.92 audit-system inventory](../../../audits/reports/2026-07/2026-07-14/0.92-audit-system-inventory.md).
 
 ### Slice B - Meta-audit and method hardening
 
@@ -123,8 +123,8 @@ Primary evidence:
 
 Primary evidence:
 
-- [0.92 audit-system hardening](../../audits/reports/2026-07/2026-07-14/0.92-audit-system-hardening.md);
-- [0.92 method freeze](../../audits/reports/2026-07/2026-07-14/0.92-method-freeze.md).
+- [0.92 audit-system hardening](../../../audits/reports/2026-07/2026-07-14/0.92-audit-system-hardening.md);
+- [0.92 method freeze](../../../audits/reports/2026-07/2026-07-14/0.92-method-freeze.md).
 
 ### Slice C - Holistic read-only baseline
 
@@ -582,7 +582,7 @@ assigns identity by canonical owner/invariant rather than discovery order.
 
 ## Next Action
 
-The [0.92 release-line closeout](../../audits/release-lines/0.92-closeout.md)
+The [0.92 release-line closeout](../../../audits/release-lines/0.92-closeout.md)
 is complete at immutable `v0.92.12` with
 `closeout_verdict: pass_with_limitations`. No P0/P1, waiver, or blocked current
 run remains. The maintainer separately accepted D14, which fixes the
@@ -597,70 +597,70 @@ current evidence. Broad deployment, package, publish, and release validation
 remains maintainer-owned.
 
 Primary review evidence:
-[0.92 Phase C baseline review](../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).
+[0.92 Phase C baseline review](../../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).
 
 Correction evidence:
-[dependency hygiene v2](../../audits/reports/2026-07/2026-07-14/0.92-dependency-hygiene-v2.md)
+[dependency hygiene v2](../../../audits/reports/2026-07/2026-07-14/0.92-dependency-hygiene-v2.md)
 and
-[product baseline identity correction](../../audits/reports/2026-07/2026-07-14/0.92-product-baseline-identity-correction.md),
+[product baseline identity correction](../../../audits/reports/2026-07/2026-07-14/0.92-product-baseline-identity-correction.md),
 plus
-[build integrity v2](../../audits/reports/2026-07/2026-07-14/0.92-build-integrity-v2.md)
+[build integrity v2](../../../audits/reports/2026-07/2026-07-14/0.92-build-integrity-v2.md)
 and
-[instruction footprint v2](../../audits/reports/2026-07/2026-07-15/instruction-footprint-v2.md),
+[instruction footprint v2](../../../audits/reports/2026-07/2026-07-15/instruction-footprint-v2.md),
 plus
-[Wasm footprint v2](../../audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md)
+[Wasm footprint v2](../../../audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md)
 and
-[mandatory trace evidence completion](../../audits/reports/2026-07/2026-07-15/0.92-mandatory-trace-evidence-completion.md).
+[mandatory trace evidence completion](../../../audits/reports/2026-07/2026-07-15/0.92-mandatory-trace-evidence-completion.md).
 
 Phase D review evidence:
-[finding review](../../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md).
+[finding review](../../../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md).
 
 D1 implementation evidence:
-[publication safety and typed failure contract](../../audits/reports/2026-07/2026-07-15/0.92-d1-publication-safety.md).
+[publication safety and typed failure contract](../../../audits/reports/2026-07/2026-07-15/0.92-d1-publication-safety.md).
 
 D2 implementation evidence:
-[auth typed-cause preservation](../../audits/reports/2026-07/2026-07-15/0.92-d2-auth-typed-causes.md).
+[auth typed-cause preservation](../../../audits/reports/2026-07/2026-07-15/0.92-d2-auth-typed-causes.md).
 
 D3 implementation evidence:
-[canonical layer contract](../../audits/reports/2026-07/2026-07-15/0.92-d3-canonical-layer-contract.md).
+[canonical layer contract](../../../audits/reports/2026-07/2026-07-15/0.92-d3-canonical-layer-contract.md).
 
 D4 implementation evidence:
-[root-issuer admission ownership](../../audits/reports/2026-07/2026-07-15/0.92-d4-root-issuer-admission-ownership.md).
+[root-issuer admission ownership](../../../audits/reports/2026-07/2026-07-15/0.92-d4-root-issuer-admission-ownership.md).
 
 D5 implementation evidence:
-[blob-billing workflow ownership](../../audits/reports/2026-07/2026-07-15/0.92-d5-blob-billing-workflow-ownership.md).
+[blob-billing workflow ownership](../../../audits/reports/2026-07/2026-07-15/0.92-d5-blob-billing-workflow-ownership.md).
 
 D6 implementation evidence:
-[passive RPC DTO ownership](../../audits/reports/2026-07/2026-07-15/0.92-d6-passive-rpc-dto-ownership.md).
+[passive RPC DTO ownership](../../../audits/reports/2026-07/2026-07-15/0.92-d6-passive-rpc-dto-ownership.md).
 
 D7 implementation evidence:
-[internal surface hard cuts](../../audits/reports/2026-07/2026-07-15/0.92-d7-internal-surface-hard-cuts.md).
+[internal surface hard cuts](../../../audits/reports/2026-07/2026-07-15/0.92-d7-internal-surface-hard-cuts.md).
 
 D8 implementation evidence:
-[reproducible root artifacts](../../audits/reports/2026-07/2026-07-15/0.92-d8-reproducible-root-artifacts.md).
+[reproducible root artifacts](../../../audits/reports/2026-07/2026-07-15/0.92-d8-reproducible-root-artifacts.md).
 
 D9 implementation evidence:
-[release execution integrity](../../audits/reports/2026-07/2026-07-15/0.92-d9-release-execution-integrity.md).
+[release execution integrity](../../../audits/reports/2026-07/2026-07-15/0.92-d9-release-execution-integrity.md).
 
 D10 implementation evidence:
-[active documentation and hard-cut residue](../../audits/reports/2026-07/2026-07-15/0.92-d10-active-documentation-and-hard-cut-residue.md).
+[active documentation and hard-cut residue](../../../audits/reports/2026-07/2026-07-15/0.92-d10-active-documentation-and-hard-cut-residue.md).
 
 D11 implementation evidence:
-[canonical layering closure](../../audits/reports/2026-07/2026-07-15/0.92-d11-canonical-layering-closure.md).
+[canonical layering closure](../../../audits/reports/2026-07/2026-07-15/0.92-d11-canonical-layering-closure.md).
 
 D12 implementation evidence:
-[dedicated secret scan](../../audits/reports/2026-07/2026-07-16/0.92-d12-dedicated-secret-scan.md).
+[dedicated secret scan](../../../audits/reports/2026-07/2026-07-16/0.92-d12-dedicated-secret-scan.md).
 
 D13 implementation evidence:
-[workspace-only release lock synchronization](../../audits/reports/2026-07/2026-07-16/0.92-d13-workspace-lock-sync.md).
+[workspace-only release lock synchronization](../../../audits/reports/2026-07/2026-07-16/0.92-d13-workspace-lock-sync.md).
 
 Slice E compatibility evidence:
-[`v0.91.6` compatibility accounting](../../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md).
+[`v0.91.6` compatibility accounting](../../../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md).
 
 Post-closeout evidence:
-[D14 auth performance checkpoints](../../audits/reports/2026-07/2026-07-16/0.92-d14-auth-performance-checkpoints.md)
+[D14 auth performance checkpoints](../../../audits/reports/2026-07/2026-07-16/0.92-d14-auth-performance-checkpoints.md)
 and
-[D15 final P2 hardening](../../audits/reports/2026-07/2026-07-16/0.92-d15-final-p2-hardening.md).
+[D15 final P2 hardening](../../../audits/reports/2026-07/2026-07-16/0.92-d15-final-p2-hardening.md).
 
 Final release-line evidence:
-[0.92 closeout](../../audits/release-lines/0.92-closeout.md).
+[0.92 closeout](../../../audits/release-lines/0.92-closeout.md).

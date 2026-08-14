@@ -16,12 +16,12 @@ Historical handoffs are archived at:
 
 ## Current Release
 
-- Workspace package version: `0.101.53`.
-- Latest published release: `v0.101.53` at `23c0328f78b215580d734ef01b52b35fa3e38ade`.
-- Root changelog: `0.102.0` is ready for maintainer-owned full validation as an
-  explicitly requested checkpoint for the completed operator-performance/CLI-
-  diagnostics outcomes and evidence-only B1 snapshot. Package versions remain
-  `0.101.53`; no release version mutation or tag has occurred.
+- Workspace package version: `0.102.0`.
+- Latest published release: `v0.102.0` at `e6dfd7d2d212f9fce4b1b16caba33d8062e3461d`.
+- Open changelog checkpoint: `0.102.1` closes the B1 inventory phase for review;
+  package/version mutation remains maintainer-owned.
+- The published checkpoint contains the completed operator-performance/CLI-
+  diagnostics outcomes and evidence-only B1 snapshot; B1 continues after it.
 - Active design and checklist: [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - Evidence-only adjacent designs: [0.103 local application authorization](../design/0.103-framework-neutral-local-application-authorization/status.md) and [0.104 synchronous lifecycle composition](../design/0.104-framework-neutral-synchronous-lifecycle-composition/status.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
@@ -44,9 +44,9 @@ string-first, canonical infrastructure Candid retains the old shape and the
 host still matches typed enum variants.
 
 No public error shape, numeric code, stable state or diagnostic runtime behavior
-has changed. The `0.102.0` changelog draft describes this evidence boundary and
-the independent completed operator batch; it does not claim implementation of
-the compact diagnostic protocol.
+has changed. The published `0.102.0` changelog describes this evidence boundary
+and the independent completed operator batch; it does not claim implementation
+of the compact diagnostic protocol.
 
 An independent operator-maintenance slice hard-cuts top-level and build option
 failures to their exact Clap diagnostics and adds explicit pre-parse argv
@@ -133,66 +133,28 @@ Valid v2 evidence remains superseded and non-comparable. Previously recorded
 
 ## Next Action
 
-Continue B1 with the direct-constructor frontier and the new
-[dynamic public context inventory](../design/0.102-compact-diagnostic-codes/dynamic-public-context.md)
-before assigning numbers. The typed and explicitly expanded family ledgers
-began with a collision-free qualified subset of 685 symbolic identities. The
-first seventy-nine Component Registry/root-retirement/Component-provisioning/Coordinator/pool/Store/Mirror/Directory/peer/core-adapter passes classify 2,159 effective sites and add 1,781 exact meanings plus one projection,
-bringing current qualified coverage to 2,467
-identities: 2,436 exact and 31 projections. That is not whole-program coverage,
-and the dynamic interpolation census is not yet complete. Its first twenty-three
-bounded slices classify 194 values from the Canic memory-ledger facade, Wasm
-Store GC, shared manifest/capacity conversion, explicit Component Registry
-denials, typed Store publication causes, delegated-session bootstrap, Store
-publication binding/inventory and Store GC fence, reclamation, binding
-finalization and deletion, publication management, module resolution/internal client and the
-Coordinator root-deletion closed labels, Coordinator initialization, pool asset
-principals, import routing evidence, root Store bootstrap and adoption state
-plus the typed Fleet-service peer binding and core plan/Registry causes: 111 are
-caller-derivable, sixteen are sensitive operator-only, forty-two have
-existing typed owners and twenty-five are caller-required but unowned. Those
-twenty-five require request-scoped Store capacity/release inspection, guarded
-delegated-session capacity status, exact closed-discriminator diagnostics or
-root-proxied live GC inspection, operation-scoped Store deletion progress or a
-narrow operation-scoped Store-publication attempt status.
-Component RPC and Runtime Introspection have zero explicit dynamic-error rows.
-Every dynamic publication GC invalid-state field is now
-classified, as is the nested publication transport cause; their static
-invariant/cause branches remain allocation work. The transitive auth formatter
-remains open.
-The current-candidate constructor scan is pinned to `0750c309104b111fa6f5a1b3355c04fcb38faf71`;
-the post-baseline control-plane/core diff adds or removes no site. It finds 2,208
-`InternalError::*` references in 101 files after excluding external and inline
-test source. Component Registry ops and workflow alone contain 1,154. The Coordinator parent file reveals one
-generic receipt-invariant constructor with 292 static calls across the parent,
-root-deletion and deployment-ledger sources, expanding the effective frontier
-to 2,499 sites. Two thousand one hundred fifty-nine effective sites are classified, leaving
-340 dispositions. Every remaining reference needs an existing/new exact meaning
-or a transparent/native/sediment disposition. A fresh range-owner manifest assigns all 800 Component Registry ops sites exactly
-once with zero gaps/overlaps, and the workflow source/table counts independently
-agree at 354. The 177-site Component provisioning ops file is mechanically closed by four consecutive
-range owners and its workflow by three. The Coordinator parent file's 154
-direct and 235 parent-file hidden calls are closed, as are root deletion's 21
-direct and 10 hidden sites and deployment-ledger's two direct and 47 hidden
-sites. The 12-site Coordinator workflow, all 69 Canister pool ops and all 17
-pool workflow/refill references and the 23-site root Store bootstrap workflow
-are closed. Root bootstrap/Store adoption, all 22 remaining Store lifecycle,
-all 32 Fleet Registry Mirror and all 26 Component Directory synchronization/Fleet-service peer sites are also closed. All 26 core provisioning-plan/Fleet Registry
-constructors are transparent typed adapters. Continue with core auth,
-runtime intent and RPC execution owners.
+The current-candidate scan remains pinned to
+`0750c309104b111fa6f5a1b3355c04fcb38faf71`. Ninety-eight site-level passes
+classify all 2,208 mechanical references and 2,514 effective helper/call-site
+dispositions. RPC, Template-manifest and complete publication-workflow source
+expansion brings coverage to 2,875 identities: 2,844 exact plus 31 projections.
 
-In parallel, continue the dynamic-value ledger with remaining explicit runtime
-constructions, the transitive auth formatter and transitive Component Registry
-messages. Do not replace missing ownership with generic detail text or a global
-last-error field.
+All 656 dynamic values are classified: 287 caller-derivable, 67 sensitive,
+234 authoritatively typed and 68 caller-required but unowned. Each unowned value
+has a narrow proposed request/status owner. The 105-row auth formatter, native
+configuration zero-row exclusion and current Canister durable-string census
+are closed. No decision parses retained failure text.
 
-All 31 currently known projections and five exact leaves reused as projections
-have proposed observability owners. Seventeen IC call families are mapped to
-their operation-specific durable authority or guarded runtime status, including
-the missing Store-publication attempt owner; a masked code must be attached to
-that same status/operation or correlated by an
-existing retrievable operation ID. Four current Cashier leaves are included in
-0.102 and retire without reuse in the 0.108 hard cut. The permanent ledger
-contract is recorded, but no current or retired number is allocated. B2 remains
-blocked until the complete site and dynamic-context manifests, allocation,
-catalogue and projection table receive maintainer approval.
+Every projection has a proposed numeric observability owner. Seventeen IC call
+families map to their exact durable operation or guarded status; publication
+now includes the missing attempt owner. Four current Cashier leaves allocate in
+0.102 and retire without reuse in the 0.108 hard cut.
+
+The inventory phase is ready for review. B1 still requires the mechanical
+producer manifest, dense allocation rows and host catalogue before B2. No
+number is allocated and no runtime, Candid or stable schema has changed.
+
+Design-document hygiene now applies across current and archived numbered
+lines: design roots retain their design/status authority, while necessary
+working or historical supporting evidence lives under `docs/audits/`. This
+changes document placement only and preserves historical findings.

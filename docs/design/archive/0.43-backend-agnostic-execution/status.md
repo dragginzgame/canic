@@ -17,7 +17,7 @@ execution backends can run against an explicit plan and safety report rather
 than implicit installer state.
 
 0.43 is closed at `0.43.8`. The closeout report is
-[docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md](../../audits/reports/2026-05/2026-05-25/0.43-closeout.md).
+[docs/audits/reports/2026-05/2026-05-25/0.43-closeout.md](../../../audits/reports/2026-05/2026-05-25/0.43-closeout.md).
 
 ## Implemented
 
