@@ -11,7 +11,7 @@ TRACE_PROTOCOL="$ROOT/docs/audits/mandatory-trace-protocol.md"
 
 for file in "$CATALOG" "$HOWTO" "$META" "$RETIRED" "$FINGERPRINTS" "$TRACE_PROTOCOL"; do
     if [[ ! -f "$file" ]]; then
-        echo "audit method catalog missing required file: ${file#$ROOT/}" >&2
+        echo "audit method catalog missing required file: ${file#"$ROOT"/}" >&2
         exit 1
     fi
 done
@@ -24,9 +24,33 @@ mapfile -t definitions < <(
     printf '%s\n' "$ROOT/docs/audits/modular/module-surface-hardening.md"
 )
 
-expected_count=22
-if [[ "${#definitions[@]}" -ne "$expected_count" ]]; then
-    echo "audit method catalog expected $expected_count active definitions, found ${#definitions[@]}" >&2
+if [[ "${#definitions[@]}" -eq 0 ]]; then
+    echo "audit method catalog has no active definitions" >&2
+    exit 1
+fi
+
+definition_paths="$({
+    for definition in "${definitions[@]}"; do
+        printf '%s\n' "${definition#"$ROOT"/}"
+    done
+} | sort)"
+fingerprinted_definition_paths="$(
+    awk '
+        /^## Active Definition Identities$/ { in_active = 1; next }
+        in_active && /^## / { exit }
+        in_active && /^\| `CANIC-/ {
+            split($0, fields, "|")
+            path = fields[5]
+            gsub(/^[[:space:]]*`|`[[:space:]]*$/, "", path)
+            print path
+        }
+    ' "$FINGERPRINTS" | sort
+)"
+if [[ "$definition_paths" != "$fingerprinted_definition_paths" ]]; then
+    echo "audit method catalog active definitions differ from the fingerprint manifest" >&2
+    diff -u \
+        <(printf '%s\n' "$fingerprinted_definition_paths") \
+        <(printf '%s\n' "$definition_paths") >&2 || true
     exit 1
 fi
 
@@ -47,23 +71,24 @@ required_fields=(
 for definition in "${definitions[@]}"; do
     for field in "${required_fields[@]}"; do
         if ! grep -Fq -- "$field" "$definition"; then
-            echo "${definition#$ROOT/}: missing method field: $field" >&2
+            echo "${definition#"$ROOT"/}: missing method field: $field" >&2
             exit 1
         fi
     done
 
     basename="$(basename "$definition")"
-    if ! grep -Fq -- "$basename" "$CATALOG"; then
-        echo "${definition#$ROOT/}: not listed in docs/audits/METHODS.md" >&2
+    if ! grep -Fq -- "| \`$basename\` |" "$CATALOG"; then
+        echo "${definition#"$ROOT"/}: not listed in docs/audits/METHODS.md" >&2
         exit 1
     fi
 
-    relative_path="${definition#$ROOT/}"
+    relative_path="${definition#"$ROOT"/}"
     audit_id="$(sed -n 's/^- Audit ID: `\([^`]*\)`.*/\1/p' "$definition")"
     method_version="$(sed -n 's/^- Method version: `\([^`]*\)`.*/\1/p' "$definition")"
     content_hash="$(sha256sum "$definition" | awk '{print $1}')"
     fingerprint_row="| \`$audit_id\` | \`$method_version\` | \`$content_hash\` | \`$relative_path\` |"
-    if ! grep -Fqx -- "$fingerprint_row" "$FINGERPRINTS"; then
+    fingerprint_matches="$(grep -Fxc -- "$fingerprint_row" "$FINGERPRINTS" || true)"
+    if [[ "$fingerprint_matches" -ne 1 ]]; then
         echo "$relative_path: method fingerprint manifest is stale" >&2
         exit 1
     fi
@@ -93,7 +118,8 @@ fingerprinted_inputs=(
 for relative_path in "${fingerprinted_inputs[@]}"; do
     content_hash="$(sha256sum "$ROOT/$relative_path" | awk '{print $1}')"
     fingerprint_row="| \`$content_hash\` | \`$relative_path\` |"
-    if ! grep -Fqx -- "$fingerprint_row" "$FINGERPRINTS"; then
+    fingerprint_matches="$(grep -Fxc -- "$fingerprint_row" "$FINGERPRINTS" || true)"
+    if [[ "$fingerprint_matches" -ne 1 ]]; then
         echo "$relative_path: executable/governance fingerprint manifest is stale" >&2
         exit 1
     fi

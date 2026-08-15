@@ -112,8 +112,7 @@ for invariant_command in \
     'bash scripts/ci/check-release-validation-matrix.sh' \
     'bash scripts/ci/check-release-integrity-contract.sh' \
     'bash scripts/ci/check-audit-method-catalog.sh' \
-    'bash scripts/ci/check-recovery-runbooks.sh' \
-    'bash scripts/ci/check-release-package-install-validation.sh'; do
+    'bash scripts/ci/check-recovery-runbooks.sh'; do
     rg -F "$invariant_command" <<<"$invariant_recipe" >/dev/null ||
         fail "make check-invariants omits $invariant_command"
 done

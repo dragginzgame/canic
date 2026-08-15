@@ -73,13 +73,24 @@ fn has_forbidden_memory_pattern(contents: &str) -> bool {
         "MEMORY_MANAGER",
         "MemoryManager::init",
         "RestrictedMemory",
-        "stable_read",
-        "stable_write",
-        "stable_grow",
-        "stable_size",
+        "stable_read(",
+        "stable_write(",
+        "stable_grow(",
+        "stable_size(",
     ];
 
     FORBIDDEN.iter().any(|pattern| contents.contains(pattern))
+}
+
+#[test]
+fn managed_memory_guard_matches_calls_without_rejecting_observation_names() {
+    assert!(has_forbidden_memory_pattern("let pages = stable_grow(1);"));
+    assert!(has_forbidden_memory_pattern(
+        "let pages = ic_cdk::api::stable::stable_size();"
+    ));
+    assert!(!has_forbidden_memory_pattern(
+        "let pages = memory.maximum_stable_growth_pages();"
+    ));
 }
 
 fn is_managed_memory_runtime_boundary(path: &Path) -> bool {

@@ -136,7 +136,7 @@ Use these gates when validating package/install readiness before RC promotion
 or final release, assigning environment-specific gates when needed:
 
 ```text
-bash scripts/ci/check-release-package-install-validation.sh
+bash scripts/ci/check-release-validation-matrix.sh
 make package
 make test-installed-canic-cli
 make test-packaged-downstream-cli

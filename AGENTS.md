@@ -58,6 +58,12 @@ with this file, the code is wrong.
 - Before 1.0, removed surfaces are hard-cut. Do not add aliases, shims,
   compatibility wrappers, legacy fallback paths, or backwards-compatibility
   layers unless the maintainer explicitly asks.
+- Before 1.0, a new Canic-owned product protocol, Candid/config schema or
+  stable-state generation must not advance beyond `v1`. Change the maintained
+  current contract through a hard cut instead of adding `v2` or later lanes.
+  Exact upstream version names, immutable historical records and versioned
+  audit-method/evidence revisions are not product compatibility generations
+  and may retain their truthful versions.
 - Every pre-1.0 release transition is reinstall-only. Active designs must not
   specify cross-release upgrades, state migration or import, authority
   handoff, existing-installation adoption, mixed-version operation, rollback,
