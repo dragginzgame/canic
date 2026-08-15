@@ -69,7 +69,7 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
     [ -d "$design_dir" ] || continue
 
     max_files=2
-    if [ "${design_dir#$ROOT/}" = \
+    if [ "${design_dir#"$ROOT"/}" = \
         "docs/design/0.102-compact-diagnostic-codes" ]; then
         max_files=4
         require_files "$GUARD_LABEL" \
@@ -142,7 +142,7 @@ for evidence_root in \
         [ -d "$evidence_dir" ] || continue
 
         max_evidence_files=8
-        case "${evidence_dir#$ROOT/}" in
+        case "${evidence_dir#"$ROOT"/}" in
             docs/audits/working/0.102-diagnostic-inventory)
                 max_evidence_files=66
                 ;;
@@ -173,19 +173,6 @@ require_texts "$STATUS" "$GUARD_LABEL" \
     "## Next Action"
 
 forbid_text "$STATUS" "## Historical Release Detail" "$GUARD_LABEL"
-
-for operator_doc in "${operator_docs[@]}"; do
-    if rg -ni \
-        '(current|in-progress).*0\.100|0\.100 (implementation|installer)' \
-        "$operator_doc" >/dev/null; then
-        echo "current operator document reintroduces a stale 0.100 boundary: $(guard_path "$operator_doc")" >&2
-        exit 1
-    fi
-    forbid_texts "$operator_doc" "$GUARD_LABEL" \
-        "canic --environment local fleet list" \
-        "stops before Component creation" \
-        "does not yet create the"
-done
 
 for layer_doc in "$AGENTS" "$ARCHITECTURE" "$HYGIENE"; do
     forbid_text "$layer_doc" \

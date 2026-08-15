@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
 
-- `0.102.2` closes the B1 diagnostic allocation review, modernizes timer and
-  Subnet-observation foundations with explicit recovery blockers, and
-  establishes the evidence-only Fleet-estate qualification predecessor.
+- `0.102.2` closes the B1 diagnostic allocation review and consolidates timer,
+  Subnet-observation, release-validation and Fleet-estate qualification
+  foundations while retaining explicit recovery blockers.
 
 - `0.102.1` closes the evidence-only whole-program diagnostic inventory across
   every effective producer, dynamic public value, durable string and masked

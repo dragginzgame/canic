@@ -156,10 +156,10 @@ Valid v2 evidence remains superseded and non-comparable. Previously recorded
 
 Fresh B1 validation passes all 60 targeted diagnostic-ledger tests, its
 warning-denied target Clippy, changelog governance, workspace-test inventory,
-current-document semantics and diff hygiene. The audit-method catalog also
-passes after admitting the lifecycle method's current timer scans as
-`CANIC-LIFECYCLE-001/v3` and preserving v2 as superseded. The concurrent
-runtime batch remains release-blocked above.
+current-document semantics and diff hygiene. The audit-method catalog and
+consolidated release-validation/integrity guards pass after admitting current
+lifecycle scans as `CANIC-LIFECYCLE-001/v3`, preserving v2 and removing duplicate
+package-guard wiring. The concurrent runtime batch remains release-blocked above.
 
 ## Next Action
 
