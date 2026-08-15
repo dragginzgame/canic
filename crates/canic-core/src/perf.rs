@@ -75,7 +75,6 @@ pub enum PerfKey {
         kind: EndpointCallKind,
         name: String,
     },
-    Timer(String),
     Checkpoint {
         scope: String,
         label: String,
@@ -137,10 +136,6 @@ pub fn record_endpoint_call(call: EndpointCall, delta_instructions: u64) {
         },
         delta_instructions,
     );
-}
-
-pub fn record_timer(label: &str, delta_instructions: u64) {
-    record(PerfKey::Timer(label.to_string()), delta_instructions);
 }
 
 pub fn record_checkpoint(scope: &str, label: &str, delta_instructions: u64) {

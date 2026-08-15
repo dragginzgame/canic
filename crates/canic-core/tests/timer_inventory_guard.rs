@@ -22,6 +22,8 @@ fn timer_and_timed_wait_inventory_is_explicit() {
                 "TimerWorkflow::",
                 "TimerApi::",
                 "TimerOps::",
+                "register_after_completion(",
+                "register_once(",
                 "cdk_set_timer(",
                 "cdk_set_timer_interval(",
                 "cdk_clear_timer(",
@@ -54,7 +56,7 @@ fn timer_and_timed_wait_inventory_is_explicit() {
 }
 
 #[test]
-fn direct_ic_timer_access_has_one_production_owner() {
+fn direct_ic_timer_access_is_removed_from_production() {
     let root = workspace_root();
     let mut raw_crate_users = BTreeMap::new();
     let mut reexport_users = BTreeMap::new();
@@ -77,11 +79,12 @@ fn direct_ic_timer_access_has_one_production_owner() {
         });
     }
 
-    assert_eq!(
-        raw_crate_users,
-        BTreeMap::from([("crates/canic-core/src/ops/runtime/timer.rs".to_string(), 1)])
-    );
+    assert!(raw_crate_users.is_empty());
     assert!(reexport_users.is_empty());
+
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace manifest");
+    assert!(manifest.contains("ic-timers = \"=0.5.0\""));
+    assert!(!manifest.contains("ic-cdk-timers ="));
 }
 
 fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
@@ -90,24 +93,35 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
         ("crates/canic/src/api/mod.rs".to_string(), 1),
         ("crates/canic/src/macros/timer.rs".to_string(), 2),
         (
-            "crates/canic-control-plane/src/api/lifecycle.rs".to_string(),
+            "crates/canic-control-plane/src/api/fleet_coordinator.rs".to_string(),
             1,
         ),
         (
+            "crates/canic-control-plane/src/api/lifecycle.rs".to_string(),
+            3,
+        ),
+        (
             "crates/canic-control-plane/src/workflow/canister_pool/mod.rs".to_string(),
-            4,
+            6,
         ),
         ("crates/canic-core/src/api/runtime/mod.rs".to_string(), 1),
-        ("crates/canic-core/src/api/timer.rs".to_string(), 3),
+        ("crates/canic-core/src/api/timer.rs".to_string(), 13),
         (
             "crates/canic-core/src/lifecycle/init/nonroot.rs".to_string(),
+            2,
+        ),
+        (
+            "crates/canic-core/src/lifecycle/init/root.rs".to_string(),
             1,
         ),
         (
             "crates/canic-core/src/lifecycle/upgrade/nonroot.rs".to_string(),
-            1,
+            2,
         ),
-        ("crates/canic-core/src/ops/runtime/timer.rs".to_string(), 2),
+        (
+            "crates/canic-core/src/lifecycle/upgrade/root.rs".to_string(),
+            2,
+        ),
         (
             "crates/canic-core/src/workflow/placement/acknowledgement.rs".to_string(),
             2,
@@ -133,8 +147,12 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
             1,
         ),
         (
+            "crates/canic-core/src/workflow/runtime/root.rs".to_string(),
+            1,
+        ),
+        (
             "crates/canic-core/src/workflow/runtime/timer/mod.rs".to_string(),
-            6,
+            7,
         ),
     ])
 }

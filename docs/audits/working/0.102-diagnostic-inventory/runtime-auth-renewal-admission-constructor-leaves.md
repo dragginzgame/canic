@@ -19,15 +19,15 @@ assigns no number and changes no runtime behavior.
 The eight sites add six exact meanings and reuse the existing required
 chain-key configuration meaning:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `AUTH_RENEWAL_WORK_COUNT_OVERFLOW` | 2 | `Invariant` / renewal accounting | recent-failure only | Repair the bounded work counter; no unchanged retry |
-| `AUTH_RENEWAL_STALLED` | 1 | `Invariant` / renewal progress | recent-failure only | Inspect the due batch and durable progress before restarting the timer |
-| `AUTH_RENEWAL_RETRY_DEADLINE_OVERFLOW` | 1 | `Invariant` / retry time arithmetic | recent-failure only | Repair the protected time/retry inputs; no unchanged retry |
-| `AUTH_RENEWAL_RETRY_DEADLINE_MISSING` | 1 | `Invariant` / durable retry state | recent-failure only | Recover the exact batch journal; never synthesize another deadline |
-| `AUTH_RENEWAL_RETRY_DEADLINE_REGRESSED` | 1 | `Invariant` / durable retry ordering | recent-failure only | Reconcile the exact batch and observed time; never move the deadline backward |
-| reuse `AUTH_CHAIN_KEY_CONFIG_REQUIRED` | 1 | `Invariant` / protected verifier configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure the required minimum accepted proof epoch before renewal |
-| `AUTH_DELEGATED_TOKEN_MAX_TTL_OVERFLOW` | 1 | `InvalidInput` / protected TTL configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure a maximum delegated-token TTL representable in nanoseconds |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `AUTH_RENEWAL_WORK_COUNT_OVERFLOW` | 2 | `RootIssuerRenewalWorkflow::sweep_configured` issuer-count conversion and `checked_work_count` addition | `Invariant` / renewal accounting | recent-failure only | Repair the bounded work counter; no unchanged retry |
+| `AUTH_RENEWAL_STALLED` | 1 | `RootIssuerRenewalWorkflow::completed_result`; due-without-work branch | `Invariant` / renewal progress | recent-failure only | Inspect the due batch and durable progress before restarting the timer |
+| `AUTH_RENEWAL_RETRY_DEADLINE_OVERFLOW` | 1 | `RootIssuerRenewalWorkflow::failed_result`; `retry_deadline_ns` failure | `Invariant` / retry time arithmetic | recent-failure only | Repair the protected time/retry inputs; no unchanged retry |
+| `AUTH_RENEWAL_RETRY_DEADLINE_MISSING` | 1 | `RootIssuerRenewalWorkflow::failed_result`; absent persisted `next_deadline_ns` | `Invariant` / durable retry state | recent-failure only | Recover the exact batch journal; never synthesize another deadline |
+| `AUTH_RENEWAL_RETRY_DEADLINE_REGRESSED` | 1 | `RootIssuerRenewalWorkflow::failed_result`; `exact_deadline_ns.checked_sub(now_ns)` failure | `Invariant` / durable retry ordering | recent-failure only | Reconcile the exact batch and observed time; never move the deadline backward |
+| reuse `AUTH_CHAIN_KEY_CONFIG_REQUIRED` | 1 | `chain_key_min_accepted_proof_epoch`; missing configured epoch | `Invariant` / protected verifier configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure the required minimum accepted proof epoch before renewal |
+| `AUTH_DELEGATED_TOKEN_MAX_TTL_OVERFLOW` | 1 | `delegated_token_max_ttl_ns`; seconds-to-nanoseconds multiplication | `InvalidInput` / protected TTL configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure a maximum delegated-token TTL representable in nanoseconds |
 
 The two work-count constructors have the same counter owner, overflow meaning,
 timer outcome and repair action, so they share one exact identity. Deadline
@@ -51,15 +51,15 @@ authority.
 The seven admission sites add four exact meanings, reuse two existing
 attestation meanings and retain one typed policy edge:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `AUTH_ROLE_ATTESTATION_TTL_INVALID` | 1 | `InvalidInput` / attestation request | self | Request a positive TTL no greater than the configured maximum |
-| reuse `AUTH_ATTESTATION_SUBJECT_MISMATCH` | 1 | `Forbidden` / attestation subject | self | Bind the requested subject to the exact transport caller |
-| `AUTH_ATTESTATION_MEMBER_CALLER_MISMATCH` | 1 | `Forbidden` / active Registry membership | self | Invoke as the exact active Component or Component Child member |
-| `AUTH_ATTESTATION_ROLE_MISMATCH` | 1 | `Forbidden` / registered role authority | self | Request only the role in the caller's protected active binding |
-| reuse `AUTH_ATTESTATION_SUBNET_MISMATCH` | 1 | `Forbidden` / protected placement | self | Bind the request to the caller's exact registered Subnet |
-| `AUTH_ROLE_ATTESTATION_TTL_CONFIGURATION_OVERFLOW` | 1 | `InvalidInput` / protected TTL configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure a role-attestation TTL representable in nanoseconds |
-| transparent typed `AuthPolicyError` dispatch | 1 | typed issuance policy | source mapping | Preserve `AUTH_SUBJECT_CALLER_MISMATCH` or `AUTH_PUBLIC_SCOPE_NOT_SELF_GRANTABLE` |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `AUTH_ROLE_ATTESTATION_TTL_INVALID` | 1 | `validate_role_attestation_request`; zero-or-above-maximum branch | `InvalidInput` / attestation request | self | Request a positive TTL no greater than the configured maximum |
+| reuse `AUTH_ATTESTATION_SUBJECT_MISMATCH` | 1 | `validate_active_component_subject`; subject/caller inequality | `Forbidden` / attestation subject | self | Bind the requested subject to the exact transport caller |
+| `AUTH_ATTESTATION_MEMBER_CALLER_MISMATCH` | 1 | `validate_active_component_subject`; Registry member/caller inequality | `Forbidden` / active Registry membership | self | Invoke as the exact active Component or Component Child member |
+| `AUTH_ATTESTATION_ROLE_MISMATCH` | 1 | `validate_active_component_subject`; registered/requested role inequality | `Forbidden` / registered role authority | self | Request only the role in the caller's protected active binding |
+| reuse `AUTH_ATTESTATION_SUBNET_MISMATCH` | 1 | `validate_active_component_subject`; registered/requested Subnet inequality | `Forbidden` / protected placement | self | Bind the request to the caller's exact registered Subnet |
+| `AUTH_ROLE_ATTESTATION_TTL_CONFIGURATION_OVERFLOW` | 1 | `role_attestation_max_ttl_ns`; seconds-to-nanoseconds multiplication | `InvalidInput` / protected TTL configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure a role-attestation TTL representable in nanoseconds |
+| transparent typed `AuthPolicyError` dispatch | 1 | `map_token_prepare_policy_error`; exact variant dispatch required in B4 | typed issuance policy | source mapping | Preserve `AUTH_SUBJECT_CALLER_MISMATCH` or `AUTH_PUBLIC_SCOPE_NOT_SELF_GRANTABLE` |
 
 The Registry-member caller, role and Subnet predicates remain independently
 testable. A correct caller principal cannot substitute for the registered role

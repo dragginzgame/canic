@@ -1,6 +1,6 @@
 # Canic 0.102 Fleet Control-Plane Diagnostic Leaves
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status
 
@@ -24,51 +24,51 @@ limit is included.
 Correct the immutable authority/genesis evidence and retry only with the exact
 expected Fleet identity:
 
-```text
-FLEET_REGISTRY_COORDINATOR_ANONYMOUS
-FLEET_REGISTRY_COORDINATOR_SUBNET_ANONYMOUS
-FLEET_REGISTRY_ROOT_ANONYMOUS
-FLEET_REGISTRY_AUTHORITY_MISMATCH
-FLEET_REGISTRY_GENESIS_APP_MISMATCH
-FLEET_REGISTRY_GENESIS_AUTHORITY_EPOCH_INVALID
-FLEET_REGISTRY_AUTHORITY_EPOCH_NONPOSITIVE
-FLEET_REGISTRY_REVISION_NONPOSITIVE
-FLEET_REGISTRY_ROOT_CONFLICTS_WITH_COORDINATOR
-FLEET_REGISTRY_ROOT_RELEASE_BUILD_MISMATCH
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_REGISTRY_COORDINATOR_ANONYMOUS` | `FleetRegistryOpsError::AnonymousCoordinator` |
+| `FLEET_REGISTRY_COORDINATOR_SUBNET_ANONYMOUS` | `FleetRegistryOpsError::AnonymousCoordinatorSubnet` |
+| `FLEET_REGISTRY_ROOT_ANONYMOUS` | `FleetRegistryOpsError::AnonymousFleetSubnetRoot` |
+| `FLEET_REGISTRY_AUTHORITY_MISMATCH` | `FleetRegistryOpsError::AuthorityMismatch` |
+| `FLEET_REGISTRY_GENESIS_APP_MISMATCH` | `FleetRegistryOpsError::GenesisAppMismatch` |
+| `FLEET_REGISTRY_GENESIS_AUTHORITY_EPOCH_INVALID` | `FleetRegistryOpsError::GenesisAuthorityEpoch` |
+| `FLEET_REGISTRY_AUTHORITY_EPOCH_NONPOSITIVE` | `FleetRegistryOpsError::NonPositiveAuthorityEpoch` |
+| `FLEET_REGISTRY_REVISION_NONPOSITIVE` | `FleetRegistryOpsError::NonPositiveRevision` |
+| `FLEET_REGISTRY_ROOT_CONFLICTS_WITH_COORDINATOR` | `FleetRegistryOpsError::RootPrincipalConflictsWithCoordinator` |
+| `FLEET_REGISTRY_ROOT_RELEASE_BUILD_MISMATCH` | `FleetRegistryOpsError::RootReleaseBuildMismatch` |
 
 ### Canonical Snapshot And Capacity
 
 Reject the snapshot and reconstruct it canonically from the Coordinator's
 protected authority; arithmetic exhaustion never wraps:
 
-```text
-FLEET_REGISTRY_CANONICAL_BYTES_EXCEEDED
-FLEET_REGISTRY_ROOT_DUPLICATED
-FLEET_REGISTRY_ADMISSIONS_EXCEED_FLEET_MAXIMUM
-FLEET_REGISTRY_ADMISSION_COUNT_OVERFLOW
-FLEET_REGISTRY_COMPONENT_SPEC_MISMATCH
-FLEET_REGISTRY_COMPONENT_SPEC_SET_MISMATCH
-FLEET_REGISTRY_ROOT_ORDER_NONCANONICAL
-FLEET_REGISTRY_REVISION_EXHAUSTED
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_REGISTRY_CANONICAL_BYTES_EXCEEDED` | `FleetRegistryOpsError::CanonicalBytesExceeded` |
+| `FLEET_REGISTRY_ROOT_DUPLICATED` | `FleetRegistryOpsError::DuplicateFleetSubnetRoot` |
+| `FLEET_REGISTRY_ADMISSIONS_EXCEED_FLEET_MAXIMUM` | `FleetRegistryOpsError::FleetAdmissionsExceedMaximum` |
+| `FLEET_REGISTRY_ADMISSION_COUNT_OVERFLOW` | `FleetRegistryOpsError::FleetAdmissionsOverflow` |
+| `FLEET_REGISTRY_COMPONENT_SPEC_MISMATCH` | `FleetRegistryOpsError::FleetComponentSpecMismatch` |
+| `FLEET_REGISTRY_COMPONENT_SPEC_SET_MISMATCH` | `FleetRegistryOpsError::FleetComponentSpecSetMismatch` |
+| `FLEET_REGISTRY_ROOT_ORDER_NONCANONICAL` | `FleetRegistryOpsError::NonCanonicalFleetSubnetRootOrder` |
+| `FLEET_REGISTRY_REVISION_EXHAUSTED` | `FleetRegistryOpsError::RevisionExhausted` |
 
 ### Root And Directory State Machines
 
 Inspect the exact current Registry revision and issue only its admitted next
 transition. Missing targets are not treated as already transitioned:
 
-```text
-FLEET_REGISTRY_ROOT_JOIN_IDENTITY_CONFLICT
-FLEET_REGISTRY_ROOT_JOIN_REQUIRES_JOINING
-FLEET_REGISTRY_ACTIVATION_REQUIRES_ALL_JOINING
-FLEET_REGISTRY_ROOT_DRAIN_REQUIRES_ACTIVE
-FLEET_REGISTRY_ROOT_DRAIN_TARGET_MISSING
-FLEET_REGISTRY_ROOT_REMOVE_REQUIRES_DRAINING
-FLEET_REGISTRY_ROOT_REMOVE_TARGET_MISSING
-FLEET_DIRECTORY_REQUIRES_PUBLISHED_ROOTS
-FLEET_DIRECTORY_SOURCE_MISSING
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_REGISTRY_ROOT_JOIN_IDENTITY_CONFLICT` | `FleetRegistryOpsError::FleetSubnetRootJoinIdentityConflict` |
+| `FLEET_REGISTRY_ROOT_JOIN_REQUIRES_JOINING` | `FleetRegistryOpsError::FleetSubnetRootJoinRequiresJoining` |
+| `FLEET_REGISTRY_ACTIVATION_REQUIRES_ALL_JOINING` | `FleetRegistryOpsError::FleetSubnetRootActivationRequiresAllJoining` |
+| `FLEET_REGISTRY_ROOT_DRAIN_REQUIRES_ACTIVE` | `FleetRegistryOpsError::FleetSubnetRootDrainingRequiresActive` |
+| `FLEET_REGISTRY_ROOT_DRAIN_TARGET_MISSING` | `FleetRegistryOpsError::FleetSubnetRootDrainingTargetMissing` |
+| `FLEET_REGISTRY_ROOT_REMOVE_REQUIRES_DRAINING` | `FleetRegistryOpsError::FleetSubnetRootRemovalRequiresDraining` |
+| `FLEET_REGISTRY_ROOT_REMOVE_TARGET_MISSING` | `FleetRegistryOpsError::FleetSubnetRootRemovalTargetMissing` |
+| `FLEET_DIRECTORY_REQUIRES_PUBLISHED_ROOTS` | `FleetRegistryOpsError::FleetDirectoryRequiresPublishedRoots` |
+| `FLEET_DIRECTORY_SOURCE_MISSING` | `FleetRegistryOpsError::FleetDirectorySourceMissing` |
 
 ### Service Publication And Validation
 
@@ -76,42 +76,42 @@ Initial publication must supply the complete configured set; later
 publication may append only admitted Replica or PoolMember rows without
 changing existing authority or membership:
 
-```text
-FLEET_REGISTRY_SERVICE_INITIAL_REQUIRES_EMPTY_CURRENT
-FLEET_REGISTRY_SERVICE_INITIAL_REQUIRES_NONEMPTY_COMPLETE_SET
-FLEET_REGISTRY_SERVICE_APPEND_REQUIRES_ADDITIONS
-FLEET_REGISTRY_SERVICE_APPEND_AUTHORITY_MISMATCH
-FLEET_REGISTRY_SERVICE_APPEND_REMOVES_MEMBER
-FLEET_REGISTRY_SERVICE_APPEND_ADDS_AUTHORITY
-FLEET_REGISTRY_SERVICE_ORDER_NONCANONICAL
-FLEET_REGISTRY_SERVICE_MEMBER_ORDER_NONCANONICAL
-FLEET_REGISTRY_SERVICE_EMPTY
-FLEET_REGISTRY_SERVICE_SPEC_MISMATCH
-FLEET_REGISTRY_SERVICE_MODE_MISMATCH
-FLEET_REGISTRY_SERVICE_PLACEMENT_MISMATCH
-FLEET_REGISTRY_SERVICE_ROOT_MISMATCH
-FLEET_REGISTRY_SERVICE_COMPONENT_ID_EMPTY
-FLEET_REGISTRY_SERVICE_COMPONENT_ANONYMOUS
-FLEET_REGISTRY_SERVICE_COMPONENT_DUPLICATED
-FLEET_REGISTRY_SERVICE_CANISTER_DUPLICATED
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_REGISTRY_SERVICE_INITIAL_REQUIRES_EMPTY_CURRENT` | `FleetRegistryOpsError::FleetServicePublicationRequiresEmptyRegistry` |
+| `FLEET_REGISTRY_SERVICE_INITIAL_REQUIRES_NONEMPTY_COMPLETE_SET` | `FleetRegistryOpsError::FleetServicePublicationRequiresServices` |
+| `FLEET_REGISTRY_SERVICE_APPEND_REQUIRES_ADDITIONS` | `FleetRegistryOpsError::FleetServiceAppendRequiresAdditions` |
+| `FLEET_REGISTRY_SERVICE_APPEND_AUTHORITY_MISMATCH` | `FleetRegistryOpsError::FleetServiceAppendAuthorityMismatch` |
+| `FLEET_REGISTRY_SERVICE_APPEND_REMOVES_MEMBER` | `FleetRegistryOpsError::FleetServiceAppendRemovesMember` |
+| `FLEET_REGISTRY_SERVICE_APPEND_ADDS_AUTHORITY` | `FleetRegistryOpsError::FleetServiceAppendAddsAuthority` |
+| `FLEET_REGISTRY_SERVICE_ORDER_NONCANONICAL` | `FleetRegistryOpsError::NonCanonicalFleetServiceOrder` |
+| `FLEET_REGISTRY_SERVICE_MEMBER_ORDER_NONCANONICAL` | `FleetRegistryOpsError::NonCanonicalFleetServiceMemberOrder` |
+| `FLEET_REGISTRY_SERVICE_EMPTY` | `FleetRegistryOpsError::EmptyFleetService` |
+| `FLEET_REGISTRY_SERVICE_SPEC_MISMATCH` | `FleetRegistryOpsError::FleetServiceSpecMismatch` |
+| `FLEET_REGISTRY_SERVICE_MODE_MISMATCH` | `FleetRegistryOpsError::FleetServiceModeMismatch` |
+| `FLEET_REGISTRY_SERVICE_PLACEMENT_MISMATCH` | `FleetRegistryOpsError::FleetServicePlacementMismatch` |
+| `FLEET_REGISTRY_SERVICE_ROOT_MISMATCH` | `FleetRegistryOpsError::FleetServiceRootMismatch` |
+| `FLEET_REGISTRY_SERVICE_COMPONENT_ID_EMPTY` | `FleetRegistryOpsError::EmptyFleetServiceComponentIdentity` |
+| `FLEET_REGISTRY_SERVICE_COMPONENT_ANONYMOUS` | `FleetRegistryOpsError::AnonymousFleetServiceComponent` |
+| `FLEET_REGISTRY_SERVICE_COMPONENT_DUPLICATED` | `FleetRegistryOpsError::DuplicateFleetServiceComponent` |
+| `FLEET_REGISTRY_SERVICE_CANISTER_DUPLICATED` | `FleetRegistryOpsError::DuplicateFleetServiceCanister` |
 
 `FleetRegistryOpsError::Topology` is transparent but path-qualified because it
 validates root rows in canonical Coordinator Registry state, not native App
 configuration. Ten `ComponentTopologyError` decisions are reachable:
 
-```text
-FLEET_REGISTRY_TOPOLOGY_PLACEMENT_SUBNET_ANONYMOUS
-FLEET_REGISTRY_TOPOLOGY_ROOT_LIMIT_NONPOSITIVE
-FLEET_REGISTRY_TOPOLOGY_CANISTER_POOL_RANGE_INVALID
-FLEET_REGISTRY_TOPOLOGY_ADMISSIONS_EMPTY
-FLEET_REGISTRY_TOPOLOGY_ADMISSION_ORDER_NONCANONICAL
-FLEET_REGISTRY_TOPOLOGY_ADMISSION_ZERO
-FLEET_REGISTRY_TOPOLOGY_ADMISSION_SPEC_UNKNOWN
-FLEET_REGISTRY_TOPOLOGY_ADMISSION_SPEC_HASH_MISMATCH
-FLEET_REGISTRY_TOPOLOGY_ADMISSION_EXCEEDS_FLEET_MAXIMUM
-FLEET_REGISTRY_TOPOLOGY_DIGEST_MISMATCH
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_REGISTRY_TOPOLOGY_PLACEMENT_SUBNET_ANONYMOUS` | `FleetRegistryOpsError::Topology(ComponentTopologyError::AnonymousBindingPrincipal { field: "fleet_subnet_roots.placement_subnet" })` |
+| `FLEET_REGISTRY_TOPOLOGY_ROOT_LIMIT_NONPOSITIVE` | `FleetRegistryOpsError::Topology(ComponentTopologyError::NonPositiveRootLimit)` |
+| `FLEET_REGISTRY_TOPOLOGY_CANISTER_POOL_RANGE_INVALID` | `FleetRegistryOpsError::Topology(ComponentTopologyError::InvalidRootCanisterPoolRange)` |
+| `FLEET_REGISTRY_TOPOLOGY_ADMISSIONS_EMPTY` | `FleetRegistryOpsError::Topology(ComponentTopologyError::EmptyRootAdmissions)` |
+| `FLEET_REGISTRY_TOPOLOGY_ADMISSION_ORDER_NONCANONICAL` | `FleetRegistryOpsError::Topology(ComponentTopologyError::NonCanonicalAdmissionOrder)` |
+| `FLEET_REGISTRY_TOPOLOGY_ADMISSION_ZERO` | `FleetRegistryOpsError::Topology(ComponentTopologyError::ZeroRootAdmission)` |
+| `FLEET_REGISTRY_TOPOLOGY_ADMISSION_SPEC_UNKNOWN` | `FleetRegistryOpsError::Topology(ComponentTopologyError::UnknownAdmissionSpec)` |
+| `FLEET_REGISTRY_TOPOLOGY_ADMISSION_SPEC_HASH_MISMATCH` | `FleetRegistryOpsError::Topology(ComponentTopologyError::AdmissionSpecHashMismatch)` |
+| `FLEET_REGISTRY_TOPOLOGY_ADMISSION_EXCEEDS_FLEET_MAXIMUM` | `FleetRegistryOpsError::Topology(ComponentTopologyError::RootAdmissionExceedsFleetMaximum)` |
+| `FLEET_REGISTRY_TOPOLOGY_DIGEST_MISMATCH` | `FleetRegistryOpsError::Topology(ComponentTopologyError::RootTopologyDigestMismatch)` |
 
 Canonical topology byte overflow is unreachable because a Registry root holds
 a subset of the already bounded compiled topology. Fleet-wide duplicate and
@@ -139,78 +139,78 @@ IDs, roots, counts, hashes and limits are omitted.
 Reduce the exact plan to its documented bound, or stop on checked arithmetic
 exhaustion:
 
-```text
-COMPONENT_PROVISIONING_CANONICAL_BYTES_EXCEEDED
-COMPONENT_PROVISIONING_BATCH_COUNT_EXCEEDED
-COMPONENT_PROVISIONING_CONFIRMATION_ROOT_COUNT_EXCEEDED
-COMPONENT_PROVISIONING_PLACEMENT_COUNT_EXCEEDED
-COMPONENT_PROVISIONING_COMPONENT_COUNT_EXCEEDED
-COMPONENT_PROVISIONING_COUNT_OVERFLOW
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `COMPONENT_PROVISIONING_CANONICAL_BYTES_EXCEEDED` | `ComponentProvisioningPlanOpsError::CanonicalBytesExceeded` |
+| `COMPONENT_PROVISIONING_BATCH_COUNT_EXCEEDED` | `ComponentProvisioningPlanOpsError::BatchBoundExceeded` |
+| `COMPONENT_PROVISIONING_CONFIRMATION_ROOT_COUNT_EXCEEDED` | `ComponentProvisioningPlanOpsError::ConfirmationRootBoundExceeded` |
+| `COMPONENT_PROVISIONING_PLACEMENT_COUNT_EXCEEDED` | `ComponentProvisioningPlanOpsError::PlacementBoundExceeded` |
+| `COMPONENT_PROVISIONING_COMPONENT_COUNT_EXCEEDED` | `ComponentProvisioningPlanOpsError::EntryBoundExceeded` |
+| `COMPONENT_PROVISIONING_COUNT_OVERFLOW` | `ComponentProvisioningPlanOpsError::CountOverflow` |
 
 ### Fleet, Root And Canonical Authority
 
 Rebuild the plan from the exact current Registry version and compiled App
 authority. A stale plan is rejected rather than silently normalized:
 
-```text
-COMPONENT_PROVISIONING_FLEET_MISMATCH
-COMPONENT_PROVISIONING_FLEET_REGISTRY_VERSION_MISMATCH
-COMPONENT_PROVISIONING_CONFIGURATION_DIGEST_MISMATCH
-COMPONENT_PROVISIONING_CONFIRMATION_ROOT_ORDER_NONCANONICAL
-COMPONENT_PROVISIONING_CONFIRMATION_ROOT_ANONYMOUS
-COMPONENT_PROVISIONING_BATCH_ORDER_NONCANONICAL
-COMPONENT_PROVISIONING_ROOT_BINDING_MISMATCH
-COMPONENT_PROVISIONING_ROOT_RELEASE_SET_MISMATCH
-COMPONENT_PROVISIONING_SELECTED_ROOT_NOT_CONFIRMED
-COMPONENT_PROVISIONING_FRESH_CONFIRMATION_ROOT_SET_MISMATCH
-COMPONENT_PROVISIONING_FRESH_BATCH_ROOT_SET_MISMATCH
-COMPONENT_PROVISIONING_CONFIRMATION_ROOT_NOT_ACTIVE
-COMPONENT_PROVISIONING_FRESH_ROOT_NOT_ACTIVE
-COMPONENT_PROVISIONING_PLACEMENT_ORDER_NONCANONICAL
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `COMPONENT_PROVISIONING_FLEET_MISMATCH` | `ComponentProvisioningPlanOpsError::FleetMismatch` |
+| `COMPONENT_PROVISIONING_FLEET_REGISTRY_VERSION_MISMATCH` | `ComponentProvisioningPlanOpsError::FleetRegistryVersionMismatch` |
+| `COMPONENT_PROVISIONING_CONFIGURATION_DIGEST_MISMATCH` | `ComponentProvisioningPlanOpsError::ConfigurationDigestMismatch` |
+| `COMPONENT_PROVISIONING_CONFIRMATION_ROOT_ORDER_NONCANONICAL` | `ComponentProvisioningPlanOpsError::NonCanonicalDirectoryConfirmationRoots` |
+| `COMPONENT_PROVISIONING_CONFIRMATION_ROOT_ANONYMOUS` | `ComponentProvisioningPlanOpsError::AnonymousDirectoryConfirmationRoot` |
+| `COMPONENT_PROVISIONING_BATCH_ORDER_NONCANONICAL` | `ComponentProvisioningPlanOpsError::NonCanonicalBatchOrder` |
+| `COMPONENT_PROVISIONING_ROOT_BINDING_MISMATCH` | `ComponentProvisioningPlanOpsError::RootBindingMismatch` |
+| `COMPONENT_PROVISIONING_ROOT_RELEASE_SET_MISMATCH` | `ComponentProvisioningPlanOpsError::RootReleaseSetMismatch` |
+| `COMPONENT_PROVISIONING_SELECTED_ROOT_NOT_CONFIRMED` | `ComponentProvisioningPlanOpsError::SelectedRootNotConfirmed` |
+| `COMPONENT_PROVISIONING_FRESH_CONFIRMATION_ROOT_SET_MISMATCH` | `ComponentProvisioningPlanOpsError::FreshInstallConfirmationRootSetMismatch` |
+| `COMPONENT_PROVISIONING_FRESH_BATCH_ROOT_SET_MISMATCH` | `ComponentProvisioningPlanOpsError::FreshInstallBatchRootSetMismatch` |
+| `COMPONENT_PROVISIONING_CONFIRMATION_ROOT_NOT_ACTIVE` | `ComponentProvisioningPlanOpsError::ConfirmationRootNotActive` |
+| `COMPONENT_PROVISIONING_FRESH_ROOT_NOT_ACTIVE` | `ComponentProvisioningPlanOpsError::FreshInstallRootNotActive` |
+| `COMPONENT_PROVISIONING_PLACEMENT_ORDER_NONCANONICAL` | `ComponentProvisioningPlanOpsError::NonCanonicalPlacementOrder` |
 
 ### Placement, Admission And Density
 
 Correct the configured deployment selection, root admission or density/spread
 assignment before retrying:
 
-```text
-COMPONENT_PROVISIONING_PLACEMENT_DUPLICATED
-COMPONENT_PROVISIONING_DEPLOYMENT_UNKNOWN
-COMPONENT_PROVISIONING_COMPONENT_GROUP_MISMATCH
-COMPONENT_PROVISIONING_PLACEMENT_ENTRIES_MISMATCH
-COMPONENT_PROVISIONING_ROOT_ADMISSION_MISSING
-COMPONENT_PROVISIONING_ROOT_ADMISSION_EXCEEDED
-COMPONENT_PROVISIONING_ROOT_COMPONENT_CAPACITY_EXCEEDED
-COMPONENT_PROVISIONING_ROOT_GROUP_PLACEMENT_CAPACITY_EXCEEDED
-COMPONENT_PROVISIONING_FRESH_PLACEMENT_SET_MISMATCH
-COMPONENT_PROVISIONING_FRESH_PLACEMENT_POLICY_MISMATCH
-COMPONENT_PROVISIONING_FRESH_SERVICE_PLACEMENT_POLICY_MISMATCH
-COMPONENT_PROVISIONING_ROOT_DEPLOYMENT_DENSITY_EXCEEDED
-COMPONENT_PROVISIONING_ROOT_SERVICE_DENSITY_EXCEEDED
-COMPONENT_PROVISIONING_FLEET_SERVICE_UNKNOWN
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `COMPONENT_PROVISIONING_PLACEMENT_DUPLICATED` | `ComponentProvisioningPlanOpsError::DuplicatePlacement` |
+| `COMPONENT_PROVISIONING_DEPLOYMENT_UNKNOWN` | `ComponentProvisioningPlanOpsError::UnknownDeployment` |
+| `COMPONENT_PROVISIONING_COMPONENT_GROUP_MISMATCH` | `ComponentProvisioningPlanOpsError::ComponentGroupMismatch` |
+| `COMPONENT_PROVISIONING_PLACEMENT_ENTRIES_MISMATCH` | `ComponentProvisioningPlanOpsError::PlacementEntriesMismatch` |
+| `COMPONENT_PROVISIONING_ROOT_ADMISSION_MISSING` | `ComponentProvisioningPlanOpsError::MissingRootAdmission` |
+| `COMPONENT_PROVISIONING_ROOT_ADMISSION_EXCEEDED` | `ComponentProvisioningPlanOpsError::RootAdmissionExceeded` |
+| `COMPONENT_PROVISIONING_ROOT_COMPONENT_CAPACITY_EXCEEDED` | `ComponentProvisioningPlanOpsError::RootComponentCapacityExceeded` |
+| `COMPONENT_PROVISIONING_ROOT_GROUP_PLACEMENT_CAPACITY_EXCEEDED` | `ComponentProvisioningPlanOpsError::RootGroupPlacementCapacityExceeded` |
+| `COMPONENT_PROVISIONING_FRESH_PLACEMENT_SET_MISMATCH` | `ComponentProvisioningPlanOpsError::FreshInstallPlacementSetMismatch` |
+| `COMPONENT_PROVISIONING_FRESH_PLACEMENT_POLICY_MISMATCH` | `ComponentProvisioningPlanOpsError::FreshInstallPlacementPolicyMismatch` |
+| `COMPONENT_PROVISIONING_FRESH_SERVICE_PLACEMENT_POLICY_MISMATCH` | `ComponentProvisioningPlanOpsError::FreshInstallServicePlacementPolicyMismatch` |
+| `COMPONENT_PROVISIONING_ROOT_DEPLOYMENT_DENSITY_EXCEEDED` | `ComponentProvisioningPlanOpsError::RootBatchDeploymentDensityExceeded` |
+| `COMPONENT_PROVISIONING_ROOT_SERVICE_DENSITY_EXCEEDED` | `ComponentProvisioningPlanOpsError::RootBatchServiceDensityExceeded` |
+| `COMPONENT_PROVISIONING_FLEET_SERVICE_UNKNOWN` | hidden direct decision currently flattened into `ComponentProvisioningPlanOpsError::Configuration` |
 
 ### Scale-Out
 
 Scale-out may only extend the durable placement ledger's next ordinal range
 over eligible installed roots, without adding Authority occurrences:
 
-```text
-COMPONENT_PROVISIONING_SCALE_OUT_STATE_UNAVAILABLE
-COMPONENT_PROVISIONING_SCALE_OUT_COMMITTED_PLACEMENTS_NONCANONICAL
-COMPONENT_PROVISIONING_SCALE_OUT_ELIGIBLE_ROOTS_NONCANONICAL
-COMPONENT_PROVISIONING_SCALE_OUT_ROOT_INELIGIBLE
-COMPONENT_PROVISIONING_SCALE_OUT_COUNT_MISMATCH
-COMPONENT_PROVISIONING_SCALE_OUT_PLACEMENT_SET_MISMATCH
-COMPONENT_PROVISIONING_SCALE_OUT_DEPLOYMENT_MISMATCH
-COMPONENT_PROVISIONING_SCALE_OUT_AUTHORITY_FORBIDDEN
-COMPONENT_PROVISIONING_SCALE_OUT_PLACEMENT_POLICY_MISMATCH
-COMPONENT_PROVISIONING_SCALE_OUT_SERVICE_PLACEMENT_POLICY_MISMATCH
-COMPONENT_PROVISIONING_SCALE_OUT_CONFIRMATION_ROOT_SET_MISMATCH
-COMPONENT_PROVISIONING_SCALE_OUT_BATCH_EMPTY
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `COMPONENT_PROVISIONING_SCALE_OUT_STATE_UNAVAILABLE` | `ComponentProvisioningPlanOpsError::ScaleOutStateUnavailable` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_COMMITTED_PLACEMENTS_NONCANONICAL` | `ComponentProvisioningPlanOpsError::NonCanonicalCommittedPlacements` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_ELIGIBLE_ROOTS_NONCANONICAL` | `ComponentProvisioningPlanOpsError::NonCanonicalEligibleRoots` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_ROOT_INELIGIBLE` | `ComponentProvisioningPlanOpsError::ScaleOutRootIneligible` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_COUNT_MISMATCH` | `ComponentProvisioningPlanOpsError::ScaleOutCountMismatch` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_PLACEMENT_SET_MISMATCH` | `ComponentProvisioningPlanOpsError::ScaleOutPlacementSetMismatch` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_DEPLOYMENT_MISMATCH` | `ComponentProvisioningPlanOpsError::ScaleOutDeploymentMismatch` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_AUTHORITY_FORBIDDEN` | `ComponentProvisioningPlanOpsError::ScaleOutAuthorityDeployment` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_PLACEMENT_POLICY_MISMATCH` | `ComponentProvisioningPlanOpsError::ScaleOutPlacementPolicyMismatch` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_SERVICE_PLACEMENT_POLICY_MISMATCH` | `ComponentProvisioningPlanOpsError::ScaleOutServicePlacementPolicyMismatch` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_CONFIRMATION_ROOT_SET_MISMATCH` | `ComponentProvisioningPlanOpsError::ScaleOutConfirmationRootSetMismatch` |
+| `COMPONENT_PROVISIONING_SCALE_OUT_BATCH_EMPTY` | `ComponentProvisioningPlanOpsError::EmptyScaleOutBatch` |
 
 ## Fleet-Service Binding
 
@@ -221,30 +221,30 @@ those owners. Neither wrapper receives a code.
 
 The 22 direct decisions are:
 
-```text
-FLEET_SERVICE_BINDING_COMPONENT_ID_DUPLICATED
-FLEET_SERVICE_BINDING_CANISTER_DUPLICATED
-FLEET_SERVICE_BINDING_AUTHORITY_DUPLICATED
-FLEET_SERVICE_BINDING_OPERATION_ID_EMPTY
-FLEET_SERVICE_BINDING_SERVICE_EMPTY
-FLEET_SERVICE_BINDING_AUTHORITY_INVALID
-FLEET_SERVICE_BINDING_MEMBER_PURPOSE_INVALID
-FLEET_SERVICE_BINDING_SCALE_OUT_MEMBER_PURPOSE_INVALID
-FLEET_SERVICE_BINDING_SCALE_OUT_OPERATION_INVALID
-FLEET_SERVICE_BINDING_PLACEMENT_INVALID
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_COUNT_MISMATCH
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_INDEX_INVALID
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_COUNTS_MISMATCH
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_IDENTITY_MISMATCH
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_HASH_MISMATCH
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_RESULT_MISMATCH
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_STATE_MISMATCH
-FLEET_SERVICE_BINDING_ROOT_RECEIPT_TIME_MISMATCH
-FLEET_SERVICE_BINDING_COUNT_OVERFLOW
-FLEET_SERVICE_BINDING_SERVICE_UNEXPECTED
-FLEET_SERVICE_BINDING_PUBLISHED_SERVICE_MISMATCH
-FLEET_SERVICE_BINDING_PUBLISHED_SERVICE_SET_MISMATCH
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_SERVICE_BINDING_COMPONENT_ID_DUPLICATED` | `FleetServiceBindingOpsError::DuplicateComponentIdentity` |
+| `FLEET_SERVICE_BINDING_CANISTER_DUPLICATED` | `FleetServiceBindingOpsError::DuplicateComponentPrincipal` |
+| `FLEET_SERVICE_BINDING_AUTHORITY_DUPLICATED` | `FleetServiceBindingOpsError::DuplicateServiceAuthority` |
+| `FLEET_SERVICE_BINDING_OPERATION_ID_EMPTY` | `FleetServiceBindingOpsError::EmptyOperationId` |
+| `FLEET_SERVICE_BINDING_SERVICE_EMPTY` | `FleetServiceBindingOpsError::EmptyService` |
+| `FLEET_SERVICE_BINDING_AUTHORITY_INVALID` | `FleetServiceBindingOpsError::InvalidServiceAuthority` |
+| `FLEET_SERVICE_BINDING_MEMBER_PURPOSE_INVALID` | `FleetServiceBindingOpsError::InvalidServiceMemberPurpose` |
+| `FLEET_SERVICE_BINDING_SCALE_OUT_MEMBER_PURPOSE_INVALID` | `FleetServiceBindingOpsError::InvalidScaleOutMemberPurpose` |
+| `FLEET_SERVICE_BINDING_SCALE_OUT_OPERATION_INVALID` | `FleetServiceBindingOpsError::InvalidScaleOutOperation` |
+| `FLEET_SERVICE_BINDING_PLACEMENT_INVALID` | `FleetServiceBindingOpsError::InvalidServicePlacement` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_COUNT_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptCountMismatch` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_INDEX_INVALID` | `FleetServiceBindingOpsError::RootReceiptIndexOutOfBounds` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_COUNTS_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptCountsMismatch` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_IDENTITY_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptIdentityMismatch` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_HASH_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptInvalidHash` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_RESULT_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptResultMismatch` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_STATE_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptStateMismatch` |
+| `FLEET_SERVICE_BINDING_ROOT_RECEIPT_TIME_MISMATCH` | `FleetServiceBindingOpsError::RootReceiptTimeMismatch` |
+| `FLEET_SERVICE_BINDING_COUNT_OVERFLOW` | `FleetServiceBindingOpsError::CountOverflow` |
+| `FLEET_SERVICE_BINDING_SERVICE_UNEXPECTED` | `FleetServiceBindingOpsError::UnexpectedService` |
+| `FLEET_SERVICE_BINDING_PUBLISHED_SERVICE_MISMATCH` | `FleetServiceBindingOpsError::PublishedServiceMismatch` |
+| `FLEET_SERVICE_BINDING_PUBLISHED_SERVICE_SET_MISMATCH` | `FleetServiceBindingOpsError::PublishedServiceSetMismatch` |
 
 Identity/configuration and placement failures require rebuilding from the
 compiled service target. Receipt failures reject the entire publication and

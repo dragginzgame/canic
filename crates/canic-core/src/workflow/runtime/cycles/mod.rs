@@ -96,13 +96,11 @@ impl CycleWorkflow {
                 )
             })
             .transpose()?;
-        TimerWorkflow::reconcile_at(TimerKey::CycleTopup, deadline, || async {
-            Self::run_topup().await
-        });
+        TimerWorkflow::reconcile_at(TimerKey::CycleTopup, deadline)?;
         Ok(())
     }
 
-    async fn run_topup() -> TimerRunResult {
+    pub(crate) async fn run_topup() -> TimerRunResult {
         let config = match Self::automatic_topup_config() {
             Ok(Some(config)) => config,
             Ok(None) => return TimerRunResult::no_work(TimerDirective::Stop),

@@ -465,9 +465,9 @@ dependencies = [
 
 [[package]]
 name = "candid_parser"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e35c12ed409a6c02c6e204db49926c75ceeb622a4a994b828cdd3dea7dfec59"
+checksum = "b4d1368a4edc90c239b652b675a99fb21e5ce600c7ef3da082a3fcdb07bd1e1f"
 dependencies = [
  "anyhow",
  "candid",
@@ -553,11 +553,11 @@ dependencies = [
  "futures",
  "ic-canister-sig-creation",
  "ic-cdk",
- "ic-cdk-timers",
  "ic-certification",
  "ic-memory",
  "ic-signature-verification",
  "ic-stable-structures",
+ "ic-timers",
  "k256 0.14.0",
  "proc-macro2",
  "quote",
@@ -633,6 +633,7 @@ dependencies = [
  "canic-core",
  "canic-testing-internal",
  "ic-testkit",
+ "ic-timers",
  "serde",
  "serde_json",
 ]
@@ -787,9 +788,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.4.2"
+version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d262e149917187838d5b42777c8253bcb64500067342904e7d429499a6f277e"
+checksum = "509591b7bcd67f4ef775afad7662703b4935daaa6ec0e5605cfb1090b32a2b6d"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1700,9 +1701,9 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b73573e6edcd2af0cdf47bd6cb58f0b3839491263c314eaad1ccf24430e1de"
+checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
 
 [[package]]
 name = "fixedbitset"
@@ -2329,9 +2330,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.37.1"
+version = "0.40.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eeb5d7d0fe921031aaa3eedbe862cbf25e833484b5266c1b6848be55f06b502"
+checksum = "5aa6101fcf4a014042ee1ad48a8a34cdcc840b26f07660e6575f5364f481f12b"
 dependencies = [
  "candid",
  "cap-fs-ext",
@@ -2397,6 +2398,17 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "ic-timers"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9094d19461de0ef61fcf8b8aea8a3e3e54fe096bc722276b703202bdb02833c"
+dependencies = [
+ "ic-cdk-timers",
+ "ic0",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2857,9 +2869,9 @@ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "libredox"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2026a5056764a10b2bf5d56488cba40da507f5493a6a429340e2004d9ed085fa"
+checksum = "28d0a00925a9f930d679b6789b721e3a7f9ed110f41b86d2497caa780c3a070a"
 dependencies = [
  "libc",
 ]
@@ -3888,6 +3900,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+ "ic-timers",
 ]
 
 [[package]]

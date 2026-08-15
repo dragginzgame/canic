@@ -1,6 +1,6 @@
 # Canic 0.102 Fleet Activation Diagnostic Leaves
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status
 
@@ -15,35 +15,35 @@ policy are identical.
 The eight direct `PrepareFleetActivationError` decisions remain exact internal
 candidates:
 
-```text
-FLEET_ACTIVATION_RELEASE_BUILD_MISMATCH
-FLEET_ACTIVATION_AUTHORITY_EPOCH_INVALID
-FLEET_ACTIVATION_APP_MISMATCH
-FLEET_ACTIVATION_ROOT_PRINCIPAL_MISMATCH
-FLEET_ACTIVATION_WASM_STORE_AUTHORITY_MISMATCH
-FLEET_ACTIVATION_WASM_STORE_PRINCIPAL_INVALID
-FLEET_ACTIVATION_WASM_STORE_PRINCIPAL_MISMATCH
-FLEET_ACTIVATION_WASM_STORE_MODULE_HASH_ZERO
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_ACTIVATION_RELEASE_BUILD_MISMATCH` | `PrepareFleetActivationError::ReleaseBuildMismatch` |
+| `FLEET_ACTIVATION_AUTHORITY_EPOCH_INVALID` | `PrepareFleetActivationError::AuthorityEpoch` |
+| `FLEET_ACTIVATION_APP_MISMATCH` | `PrepareFleetActivationError::AppMismatch` |
+| `FLEET_ACTIVATION_ROOT_PRINCIPAL_MISMATCH` | `PrepareFleetActivationError::RootPrincipalMismatch` |
+| `FLEET_ACTIVATION_WASM_STORE_AUTHORITY_MISMATCH` | `PrepareFleetActivationError::WasmStoreAuthorityMismatch` |
+| `FLEET_ACTIVATION_WASM_STORE_PRINCIPAL_INVALID` | `PrepareFleetActivationError::WasmStorePrincipalInvalid` |
+| `FLEET_ACTIVATION_WASM_STORE_PRINCIPAL_MISMATCH` | `PrepareFleetActivationError::WasmStorePrincipalMismatch` |
+| `FLEET_ACTIVATION_WASM_STORE_MODULE_HASH_ZERO` | `PrepareFleetActivationError::WasmStoreModuleHashZero` |
 
 `PrepareFleetActivationError::Topology` is a transparent edge, but this path
 has a different authority and recovery action from native configuration
 compilation. `prepare_root_install` calls `validate_root_binding`; its eleven
 reachable path-qualified candidates are:
 
-```text
-FLEET_ACTIVATION_TOPOLOGY_ANONYMOUS_BINDING_PRINCIPAL
-FLEET_ACTIVATION_TOPOLOGY_ROOT_PRINCIPAL_CONFLICT
-FLEET_ACTIVATION_TOPOLOGY_ROOT_LIMIT_NONPOSITIVE
-FLEET_ACTIVATION_TOPOLOGY_CANISTER_POOL_RANGE_INVALID
-FLEET_ACTIVATION_TOPOLOGY_ADMISSIONS_EMPTY
-FLEET_ACTIVATION_TOPOLOGY_ADMISSION_ORDER_NONCANONICAL
-FLEET_ACTIVATION_TOPOLOGY_ADMISSION_ZERO
-FLEET_ACTIVATION_TOPOLOGY_ADMISSION_SPEC_UNKNOWN
-FLEET_ACTIVATION_TOPOLOGY_ADMISSION_SPEC_HASH_MISMATCH
-FLEET_ACTIVATION_TOPOLOGY_ADMISSION_EXCEEDS_FLEET_MAXIMUM
-FLEET_ACTIVATION_TOPOLOGY_DIGEST_MISMATCH
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `FLEET_ACTIVATION_TOPOLOGY_ANONYMOUS_BINDING_PRINCIPAL` | `PrepareFleetActivationError::Topology(ComponentTopologyError::AnonymousBindingPrincipal)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ROOT_PRINCIPAL_CONFLICT` | `PrepareFleetActivationError::Topology(ComponentTopologyError::RootPrincipalConflictsWithCoordinator)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ROOT_LIMIT_NONPOSITIVE` | `PrepareFleetActivationError::Topology(ComponentTopologyError::NonPositiveRootLimit)` |
+| `FLEET_ACTIVATION_TOPOLOGY_CANISTER_POOL_RANGE_INVALID` | `PrepareFleetActivationError::Topology(ComponentTopologyError::InvalidRootCanisterPoolRange)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ADMISSIONS_EMPTY` | `PrepareFleetActivationError::Topology(ComponentTopologyError::EmptyRootAdmissions)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ADMISSION_ORDER_NONCANONICAL` | `PrepareFleetActivationError::Topology(ComponentTopologyError::NonCanonicalAdmissionOrder)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ADMISSION_ZERO` | `PrepareFleetActivationError::Topology(ComponentTopologyError::ZeroRootAdmission)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ADMISSION_SPEC_UNKNOWN` | `PrepareFleetActivationError::Topology(ComponentTopologyError::UnknownAdmissionSpec)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ADMISSION_SPEC_HASH_MISMATCH` | `PrepareFleetActivationError::Topology(ComponentTopologyError::AdmissionSpecHashMismatch)` |
+| `FLEET_ACTIVATION_TOPOLOGY_ADMISSION_EXCEEDS_FLEET_MAXIMUM` | `PrepareFleetActivationError::Topology(ComponentTopologyError::RootAdmissionExceedsFleetMaximum)` |
+| `FLEET_ACTIVATION_TOPOLOGY_DIGEST_MISMATCH` | `PrepareFleetActivationError::Topology(ComponentTopologyError::RootTopologyDigestMismatch)` |
 
 `ComponentTopologyError::CanonicalBytesExceeded` is not reachable on this
 path: the topology was already compiled within the canonical bound and the
@@ -69,8 +69,8 @@ unchanged bytes are never retried as a new activation.
 | `FLEET_ACTIVATION_IDENTITY_MISMATCH` | `IdentityMismatch` | `Conflict` / protected operation identity | Use the exact operation and credential identity |
 | `FLEET_ACTIVATION_EVIDENCE_MISMATCH` | `EvidenceMismatch` | `Conflict` / immutable evidence | Replay exact evidence; never overwrite the retained value |
 | `FLEET_ACTIVATION_TRANSITION_INVALID` | ordinary `InvalidTransition` phase/sequence reasons | `Conflict` / activation state machine | Inspect status and issue the exact next transition |
-| `FLEET_ACTIVATION_TIMESTAMP_INVALID` | zero activation timestamp | `Invariant` / runtime clock input | Stop activation; correct the runtime time source |
-| `FLEET_ACTIVATION_EVIDENCE_HASH_INVALID` | stringified activation-evidence hashing cause | `Invariant` / canonical evidence | Preserve the future typed canonicalization cause and stop mutation |
+| `FLEET_ACTIVATION_TIMESTAMP_INVALID` | `FleetActivation::activate_component_runtime` / `activated_at_ns == 0` | `Invariant` / runtime clock input | Stop activation; correct the runtime time source |
+| `FLEET_ACTIVATION_EVIDENCE_HASH_INVALID` | `FleetActivation::activate` / `FleetActivationEvidenceOps::activation_evidence_hash` error | `Invariant` / canonical evidence | Preserve the future typed canonicalization cause and stop mutation |
 
 `InvalidRecord` currently contains more than thirty prose sites across the
 storage facade and mapper: runtime-role disagreement, missing Store/root

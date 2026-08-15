@@ -35,11 +35,11 @@ candid = { workspace = true }
 ciborium = { workspace = true }
 ic-canister-sig-creation = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
-ic-cdk-timers = { workspace = true }
 ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
 ic-signature-verification = { workspace = true, optional = true }
 ic-stable-structures = { workspace = true }
+ic-timers = { workspace = true }
 k256 = { workspace = true, optional = true }
 remain = { workspace = true }
 serde = { workspace = true }

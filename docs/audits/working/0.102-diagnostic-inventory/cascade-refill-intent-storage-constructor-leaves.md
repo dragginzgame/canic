@@ -1,6 +1,6 @@
 # Canic 0.102 Cascade, ICP Refill And Intent-Storage Constructor Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -20,12 +20,12 @@ changes no runtime behavior.
 
 All four sites preserve already-qualified owners:
 
-| Exact candidate or disposition | Sites | Current meaning | Required hard cut |
-| --- | ---: | --- | --- |
-| transparent typed Fleet-activation storage cause | 1 | Prepared topology snapshot cannot be bound to exact activation evidence | Propagate the exact storage/activation diagnostic |
-| reuse `TOPOLOGY_PARENT_CHAIN_EMPTY` | 1 | Cascade route has no receiver-first path node | Preserve the typed snapshot-validation identity |
-| reuse `TOPOLOGY_RECEIVER_MISMATCH` | 1 | First path node is not the exact receiving Canister | Remove the receiver principal from prose; the snapshot and transport target own it |
-| reuse `TOPOLOGY_NEXT_HOP_MISSING` | 1 | Requested successor is absent from the branch path | Preserve the existing exact route-repair action |
+| Exact candidate or disposition | Sites | Producer function/branch | Current meaning | Required hard cut |
+| --- | ---: | --- | --- | --- |
+| transparent typed Fleet-activation storage cause | 1 | `prepared_topology_activation_evidence` | Prepared topology snapshot cannot be bound to exact activation evidence | Propagate the exact storage/activation diagnostic |
+| reuse `TOPOLOGY_PARENT_CHAIN_EMPTY` | 1 | `TopologyCascadeWorkflow::next_child_on_path` empty-path branch | Cascade route has no receiver-first path node | Preserve the typed snapshot-validation identity |
+| reuse `TOPOLOGY_RECEIVER_MISMATCH` | 1 | `TopologyCascadeWorkflow::next_child_on_path` first-node predicate | First path node is not the exact receiving Canister | Remove the receiver principal from prose; the snapshot and transport target own it |
+| reuse `TOPOLOGY_NEXT_HOP_MISSING` | 1 | `TopologyCascadeWorkflow::slice_snapshot_for_child` empty-slice branch | Requested successor is absent from the branch path | Preserve the existing exact route-repair action |
 
 The workflow performs an additional slice after the complete snapshot has
 already passed typed validation. Its empty, receiver and next-hop failures are
@@ -41,12 +41,12 @@ recording route context only in an appropriate typed/log owner.
 The four direct constructors exhaustively map eight already-qualified policy
 and build-configuration identities:
 
-| Exact candidate or disposition | Sites | Class/origin | Action and retry |
-| --- | ---: | --- | --- |
-| reuse `ICP_REFILL_AMOUNT_ZERO` / `ICP_REFILL_AMOUNT_EXCEEDS_LIMIT` | 1 | `InvalidInput` / refill request and ceiling | Correct the amount before retrying |
-| reuse `ICP_REFILL_ALREADY_IN_PROGRESS` | 1 | `Conflict` / source-target concurrency | Resume or await the existing operation |
-| reuse `ICP_REFILL_CYCLES_FUNDING_DISABLED` / `ICP_REFILL_NOT_CONFIGURED` / `ICP_REFILL_RATE_GATE_DENIED` / `ICP_REFILL_RATE_UNAVAILABLE` | 1 | `Unavailable` / funding and rate policy | Change the named policy state before retrying |
-| reuse `ICP_REFILL_BUILD_NETWORK_UNAVAILABLE` | 1 | `Invariant` / build configuration | Rebuild with an exact `ICP_ENVIRONMENT` identity |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Action and retry |
+| --- | ---: | --- | --- | --- |
+| reuse `ICP_REFILL_AMOUNT_ZERO` / `ICP_REFILL_AMOUNT_EXCEEDS_LIMIT` | 1 | `policy_denied` input-correction arm | `InvalidInput` / refill request and ceiling | Correct the amount before retrying |
+| reuse `ICP_REFILL_ALREADY_IN_PROGRESS` | 1 | `policy_denied` concurrent-refill arm | `Conflict` / source-target concurrency | Resume or await the existing operation |
+| reuse `ICP_REFILL_CYCLES_FUNDING_DISABLED` / `ICP_REFILL_NOT_CONFIGURED` / `ICP_REFILL_RATE_GATE_DENIED` / `ICP_REFILL_RATE_UNAVAILABLE` | 1 | `policy_denied` policy-unavailable arm | `Unavailable` / funding and rate policy | Change the named policy state before retrying |
+| reuse `ICP_REFILL_BUILD_NETWORK_UNAVAILABLE` | 1 | `require_build_network` missing-build-network branch | `Invariant` / build configuration | Rebuild with an exact `ICP_ENVIRONMENT` identity |
 
 `IcpRefillPolicyViolation` remains the decision owner. B4 removes the
 intermediate debug-formatted message while retaining the exhaustive class
@@ -62,13 +62,13 @@ debug prose; it is recorded in the dynamic ledger before B2 can proceed.
 The five sites convert typed `IntentStoreOpsError` decisions through the
 generic storage string boundary:
 
-| Adapter | Sites | Disposition |
-| --- | ---: | --- |
-| finite cleanup deadline derivation | 1 | Preserve exact not-found, pending-index or expiry-index identity |
-| bounded due-expiry page | 1 | Preserve exact expiry-index identity |
-| earliest due-expiry lookup | 1 | Preserve exact expiry-index identity |
-| placement-acknowledgement presence | 1 | Preserve exact acknowledgement-index identity |
-| placement-acknowledgement page | 1 | Preserve exact acknowledgement/index/primary-record identity |
+| Adapter | Sites | Producer function | Disposition |
+| --- | ---: | --- | --- |
+| finite cleanup deadline derivation | 1 | `IntentStoreOps::cleanup_due_at_secs` | Preserve exact not-found, pending-index or expiry-index identity |
+| bounded due-expiry page | 1 | `IntentStoreOps::list_due_expiries` | Preserve exact expiry-index identity |
+| earliest due-expiry lookup | 1 | `IntentStoreOps::next_expiry_at_secs` | Preserve exact expiry-index identity |
+| placement-acknowledgement presence | 1 | `IntentStoreOps::has_placement_acknowledgements` | Preserve exact acknowledgement-index identity |
+| placement-acknowledgement page | 1 | `IntentStoreOps::list_placement_acknowledgement_page` | Preserve exact acknowledgement/index/primary-record identity |
 
 Every possible leaf is already qualified in
 [intent-store-leaves.md](intent-store-leaves.md). The adapter receives no code.

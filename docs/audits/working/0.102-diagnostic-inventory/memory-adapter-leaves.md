@@ -1,6 +1,6 @@
 # Canic 0.102 `ic-memory` Adapter Diagnostic Leaves
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status And Pin
 
@@ -97,8 +97,8 @@ aggregate code.
 | `MEMORY_SCHEMA_METADATA_INVALID` | `SchemaMetadataError::InvalidVersion` and nested staging/integrity paths | Supply current nonzero schema metadata |
 | `MEMORY_DECLARATION_KEY_DUPLICATED` | `DeclarationSnapshotError::DuplicateStableKey` | Declare each stable key exactly once |
 | `MEMORY_DECLARATION_SLOT_DUPLICATED` | `DeclarationSnapshotError::DuplicateSlot` | Give each allocation slot one owner |
-| `MEMORY_DECLARATION_LABEL_INVALID` | all four declaration-label validation variants | Use optional bounded printable ASCII metadata |
-| `MEMORY_RUNTIME_FINGERPRINT_INVALID` | all four runtime-fingerprint validation variants | Use optional bounded printable ASCII metadata |
+| `MEMORY_DECLARATION_LABEL_INVALID` | `DeclarationSnapshotError::{EmptyLabel,LabelTooLong,NonAsciiLabel,ControlCharacterLabel}` | Use optional bounded printable ASCII metadata |
+| `MEMORY_RUNTIME_FINGERPRINT_INVALID` | `DeclarationSnapshotError::{EmptyRuntimeFingerprint,RuntimeFingerprintTooLong,NonAsciiRuntimeFingerprint,ControlCharacterRuntimeFingerprint}` | Use optional bounded printable ASCII metadata |
 
 The snapshot wrapper routes its key, slot and schema variants to the same
 value-owner codes; it does not allocate path duplicates.
@@ -129,7 +129,7 @@ value-owner codes above.
 | `MEMORY_LEDGER_NO_VALID_GENERATION` | `CommitRecoveryError::NoValidGeneration` | Initialize only through the admitted genesis path; never fabricate recovery |
 | `MEMORY_LEDGER_COMMIT_SLOT_INVALID` | `InvalidCommitSlots` | Fail closed on corrupt protected slots |
 | `MEMORY_LEDGER_GENERATION_AMBIGUOUS` | `AmbiguousGeneration` | Fail closed; do not choose between conflicting equal generations |
-| `MEMORY_LEDGER_GENERATION_EXHAUSTED` | recovery/staging generation overflow | Stop commits; operator intervention is required |
+| `MEMORY_LEDGER_GENERATION_EXHAUSTED` | `CommitRecoveryError::GenerationOverflow` and `AllocationStageError::GenerationOverflow` | Stop commits; operator intervention is required |
 | `MEMORY_LEDGER_GENERATION_CONFLICT` | `UnexpectedGeneration` | Commit only the exact next protected generation |
 | `MEMORY_LEDGER_PAYLOAD_INVALID` | all six `LedgerPayloadEnvelopeError` variants | Reject corrupt, foreign or unsupported current-format payload bytes |
 | `MEMORY_LEDGER_RECORD_INVALID` | `StableCellLedgerError::Record` | Reject undecodable ledger records |
@@ -144,10 +144,10 @@ it never enters the code or controls recovery.
 
 | Candidate label | Dependency source(s) | Action and retry |
 | --- | --- | --- |
-| `MEMORY_ALLOCATION_STABLE_KEY_CONFLICT` | validation/staging stable-key-to-slot conflict | Preserve the historical slot; correct the declaration |
-| `MEMORY_ALLOCATION_SLOT_CONFLICT` | validation/staging slot-to-key conflict | Preserve the historical key; correct the declaration |
-| `MEMORY_ALLOCATION_RETIRED` | validation/staging retired allocation | Never resurrect the retired allocation |
-| `MEMORY_ALLOCATION_ACTIVE_CONFLICT` | unexpected active-allocation conflict | Fail closed; inspect declaration/ledger disagreement |
+| `MEMORY_ALLOCATION_STABLE_KEY_CONFLICT` | `AllocationValidationError::StableKeySlotConflict` and matching staging conflict | Preserve the historical slot; correct the declaration |
+| `MEMORY_ALLOCATION_SLOT_CONFLICT` | `AllocationValidationError::SlotStableKeyConflict` and matching staging conflict | Preserve the historical key; correct the declaration |
+| `MEMORY_ALLOCATION_RETIRED` | `AllocationValidationError::RetiredAllocation` and matching staging conflict | Never resurrect the retired allocation |
+| `MEMORY_ALLOCATION_ACTIVE_CONFLICT` | `AllocationValidationError::UnexpectedActiveAllocationConflict` | Fail closed; inspect declaration/ledger disagreement |
 | `MEMORY_DECLARATION_METADATA_MISSING` | `RuntimePolicyError::MissingDeclarationMetadata` | Restore the linked declaration metadata |
 | `MEMORY_ALLOCATION_STAGE_STALE` | `AllocationStageError::StaleValidatedAllocations` | Revalidate against the exact current generation |
 | `MEMORY_ALLOCATION_COUNT_EXCEEDED` | `AllocationStageError::TooManyDeclarations` | Reduce declarations to the durable diagnostic bound |
@@ -161,28 +161,28 @@ value, ledger-generation and allocation-conflict codes above.
 Twenty reachable dependency enums are `#[non_exhaustive]`. B4 requires one
 explicit Canic-owned unknown code at each match boundary:
 
-```text
-MEMORY_POLICY_IDENTITY_UNKNOWN
-MEMORY_RUNTIME_BOOTSTRAP_UNKNOWN
-MEMORY_RUNTIME_DIAGNOSTIC_UNKNOWN
-MEMORY_RUNTIME_STATE_UNKNOWN
-MEMORY_RUNTIME_CONSTRUCTION_UNKNOWN
-MEMORY_STATIC_DECLARATION_UNKNOWN
-MEMORY_DECLARATION_SNAPSHOT_UNKNOWN
-MEMORY_RANGE_AUTHORITY_UNKNOWN
-MEMORY_RANGE_UNKNOWN
-MEMORY_SLOT_UNKNOWN
-MEMORY_LEDGER_INTEGRITY_UNKNOWN
-MEMORY_SCHEMA_METADATA_UNKNOWN
-MEMORY_LEDGER_COMMIT_UNKNOWN
-MEMORY_COMMIT_RECOVERY_UNKNOWN
-MEMORY_LEDGER_PAYLOAD_UNKNOWN
-MEMORY_STABLE_CELL_LEDGER_UNKNOWN
-MEMORY_STABLE_CELL_PAYLOAD_UNKNOWN
-MEMORY_ALLOCATION_VALIDATION_UNKNOWN
-MEMORY_RUNTIME_POLICY_UNKNOWN
-MEMORY_ALLOCATION_STAGE_UNKNOWN
-```
+| Exact identity | Dependency match boundary |
+| --- | --- |
+| `MEMORY_POLICY_IDENTITY_UNKNOWN` | wildcard of `PolicyIdentityError` |
+| `MEMORY_RUNTIME_BOOTSTRAP_UNKNOWN` | wildcard of `RuntimeBootstrapError<MemoryRegistryError>` |
+| `MEMORY_RUNTIME_DIAGNOSTIC_UNKNOWN` | wildcard of `RuntimeDiagnosticError` |
+| `MEMORY_RUNTIME_STATE_UNKNOWN` | wildcard of `RuntimeStateError` |
+| `MEMORY_RUNTIME_CONSTRUCTION_UNKNOWN` | wildcard of `RuntimeConstructionError` |
+| `MEMORY_STATIC_DECLARATION_UNKNOWN` | wildcard of `StaticMemoryDeclarationError` |
+| `MEMORY_DECLARATION_SNAPSHOT_UNKNOWN` | wildcard of `DeclarationSnapshotError` |
+| `MEMORY_RANGE_AUTHORITY_UNKNOWN` | wildcard of `MemoryManagerRangeAuthorityError` |
+| `MEMORY_RANGE_UNKNOWN` | wildcard of `MemoryManagerRangeError` |
+| `MEMORY_SLOT_UNKNOWN` | wildcard of `MemoryManagerSlotError` |
+| `MEMORY_LEDGER_INTEGRITY_UNKNOWN` | wildcard of `LedgerIntegrityError` |
+| `MEMORY_SCHEMA_METADATA_UNKNOWN` | wildcard of `SchemaMetadataError` |
+| `MEMORY_LEDGER_COMMIT_UNKNOWN` | wildcard of `LedgerCommitError` |
+| `MEMORY_COMMIT_RECOVERY_UNKNOWN` | wildcard of `CommitRecoveryError` |
+| `MEMORY_LEDGER_PAYLOAD_UNKNOWN` | wildcard of `LedgerPayloadEnvelopeError` |
+| `MEMORY_STABLE_CELL_LEDGER_UNKNOWN` | wildcard of `StableCellLedgerError` |
+| `MEMORY_STABLE_CELL_PAYLOAD_UNKNOWN` | wildcard of `StableCellPayloadError` |
+| `MEMORY_ALLOCATION_VALIDATION_UNKNOWN` | wildcard of `AllocationValidationError` |
+| `MEMORY_RUNTIME_POLICY_UNKNOWN` | wildcard of `RuntimePolicyError` |
+| `MEMORY_ALLOCATION_STAGE_UNKNOWN` | wildcard of `AllocationStageError` |
 
 These unknown leaves are deliberately boundary-specific so a dependency
 upgrade cannot silently reclassify a new variant under an unrelated retry

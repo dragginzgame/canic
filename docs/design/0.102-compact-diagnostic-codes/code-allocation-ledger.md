@@ -4,14 +4,17 @@ Date: 2026-08-13
 
 ## Status
 
-This B1 document freezes the allocation-ledger contract before any number is
-approved. It allocates no code and changes no runtime or wire behavior.
+This B1 document freezes the allocation-ledger contract before any proposed
+number becomes runtime authority. It changes no runtime or wire behavior.
 
-The initial numeric allocation is still incomplete. Consequently there are no
-authoritative current rows yet, and no numeric code has ever shipped under the
-0.102 protocol to retire. Empty current and retired sets are the only truthful
-ledger state until the complete B1 producer inventory receives maintainer
-approval.
+The complete review register proposes dense rows `1..=991` for 960 exact
+handling contracts and 31 safe public projections. The proposal covers all
+3,929 producer-qualified observations exactly once, but it is not the implemented
+permanent ledger. Consequently there are no authoritative current rows yet,
+and no numeric code has ever shipped under the 0.102 protocol to retire. Empty
+current and retired sets remain the only truthful runtime-ledger state until
+the maintainer approves the complete register and B2 installs it through the
+maintained owners below.
 
 ## Maintained Owners
 
@@ -48,8 +51,10 @@ Every ledger row contains at least:
 | `catalog_owner` | Active host owner for a current row; absent when retired |
 
 Current rows additionally have one registered runtime constant, at least one
-current producer and one active host catalog entry. Retired rows have none of
-those active owners.
+current producer, one active host catalog entry, one canonical semantic
+condition and the stable handling key that justified allocation. Any number of
+equivalent producers may reference the same current row. Retired rows have
+none of those active owners.
 
 ## Retirement Transition
 
@@ -73,14 +78,22 @@ CI must prove:
 1. all current and retired numbers are globally unique and nonzero;
 2. current ledger rows, registered constants, active catalog entries and
    current JSON rows are bijective;
-3. every current row has a current producer;
+3. every current row has at least one current producer, every maintained
+   producer observation maps to exactly one current internal row or an explicit
+   non-diagnostic disposition, and equivalent producers map many-to-one;
 4. every retired row has no current producer, registered constant, active
    catalog entry or current JSON row;
 5. allocation only appends the next never-used number after initial approval;
 6. direct numeric producer construction outside the central declaration module
    and direct `Error` struct construction outside its one boundary module fail
-   mechanically; and
-7. the ledger and generated JSON registry are absent from release Wasm.
+   mechanically;
+7. the ledger, generated JSON registry, producer-coverage frontier and
+   producer-to-code mapping are absent from release Wasm; and
+8. the initial allocation is not four digits, every singleton has a reviewed
+   split rationale and no code exists solely because a producer is in another
+   module, role or subsystem; and
+9. every current code has exactly one canonical runtime declaration path and
+   no producer-local alias or duplicate constant.
 
 Protocol anti-resurrection tests for removed fields, variants and decoders are
 forbidden. Allocation anti-reuse tests over this permanent ledger are required.

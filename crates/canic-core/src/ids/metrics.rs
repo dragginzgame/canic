@@ -55,7 +55,6 @@ pub enum SystemMetricKind {
     DeleteCanister,
     DepositCycles,
     InstallCode,
-    TimerScheduled,
     UninstallCode,
     UpdateSettings,
 }

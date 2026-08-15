@@ -83,6 +83,9 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
     ) {
+        canic_core::api::timer::TimerApi::register_snapshot_resume_participant(
+            crate::workflow::canister_pool::resume_after_authority_snapshot,
+        );
         let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
         let canister_pool_imports = args.canister_pool_imports.clone();
         let wasm_store = args.authority.wasm_store_authority.wasm_store;
@@ -94,6 +97,7 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
+        crate::workflow::canister_pool::declare();
         let now_ns = canic_core::control_plane_support::ops::ic::IcOps::now_nanos();
         crate::ops::canister_pool::CanisterPoolOps::initialize_store(wasm_store, now_ns)
             .and_then(|()| {
@@ -657,6 +661,9 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
     ) -> bool {
+        canic_core::api::timer::TimerApi::register_snapshot_resume_participant(
+            crate::workflow::canister_pool::resume_after_authority_snapshot,
+        );
         crate::runtime::install::register_template_module_source_resolver();
         let active =
             canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
@@ -664,8 +671,11 @@ impl LifecycleApi {
                 config_source,
                 config_path,
             );
+        crate::workflow::canister_pool::declare();
         if active {
-            crate::workflow::canister_pool::start();
+            crate::workflow::canister_pool::start().unwrap_or_else(|error| {
+                ic_cdk::trap(format!("Canister pool maintenance start failed: {error}"))
+            });
         }
         active
     }
@@ -678,12 +688,13 @@ impl LifecycleApi {
             LifecycleMetricOutcome::Scheduled,
         );
 
-        canic_core::api::timer::TimerApi::defer_lifecycle(
+        canic_core::api::timer::TimerApi::defer_lifecycle_required(
             Duration::ZERO,
             "canic:bootstrap:post_upgrade_root_canister",
             async {
                 crate::workflow::bootstrap::root::bootstrap_post_upgrade_root_canister().await;
             },
-        );
+        )
+        .detach();
     }
 }

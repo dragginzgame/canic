@@ -48,6 +48,7 @@ pub struct FleetCoordinatorApi;
 impl FleetCoordinatorApi {
     /// Restore memory invariants and synchronously commit fresh genesis during install.
     pub fn init(args: FleetCoordinatorInitArgs) {
+        canic_core::api::timer::TimerApi::initialize_shared_runtime_required();
         MemoryRuntimeApi::bootstrap_registry()
             .unwrap_or_else(|error| ic_cdk::trap(format!("memory bootstrap failed: {error}")));
         EnvOps::initialize_fleet_coordinator_runtime();

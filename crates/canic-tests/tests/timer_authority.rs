@@ -53,10 +53,15 @@ fn application_timers_cancel_and_recur_only_after_completion() {
     assert_eq!(third.2, 0);
 
     let status = runtime_status(&fixture.pic, canister_id);
+    assert_eq!(status.timer_inventory.status, RuntimeCheckStatus::Pass);
     let interval = status
         .timers
         .iter()
-        .find(|timer| timer.subsystem == "runtime_probe" && timer.name == "timer_interval")
+        .find(|timer| {
+            timer.owner == "canic"
+                && timer.subsystem.starts_with("application-")
+                && timer.name.ends_with("::timer_interval")
+        })
         .expect("live interval registration");
     assert_eq!(interval.registration, TimerRegistrationStatus::Scheduled);
     assert_eq!(interval.condition, TimerProcessCondition::Active);
@@ -64,12 +69,31 @@ fn application_timers_cancel_and_recur_only_after_completion() {
         interval.scheduling_mode,
         TimerSchedulingMode::AfterCompletion
     );
+    assert_interval_performance(interval);
+    assert!(
+        status.timers.iter().all(|timer| {
+            !timer.name.ends_with("::timer_once") && !timer.name.ends_with("::timer_cancelled")
+        }),
+        "terminal RemoveWhenStopped timers and their observations must leave inventory"
+    );
     assert!(
         status
             .timers
             .iter()
-            .all(|timer| { timer.name != "timer_once" && timer.name != "timer_cancelled" })
+            .all(|timer| timer.subsystem != "auth_renewal"),
+        "non-root inventory must not reserve the root-only issuer-renewal job"
     );
+    assert!(
+        status
+            .timers
+            .iter()
+            .any(|timer| { timer.subsystem == "placement" && timer.name == "receipt_ack" })
+    );
+    assert!(status.timers.iter().any(|timer| {
+        timer.owner == "companion-framework"
+            && timer.subsystem == "inventory"
+            && timer.name == "visible"
+    }));
     let receipt_capacity = status
         .receipt_capacity
         .as_ref()
@@ -103,6 +127,75 @@ fn application_timers_cancel_and_recur_only_after_completion() {
     assert_eq!(cycle_topup.condition, TimerProcessCondition::Idle);
     assert_eq!(cycle_topup.next_due_at_ns, None);
     assert_eq!(cycle_topup.executions_since_runtime_start, 0);
+}
+
+fn assert_interval_performance(interval: &canic::dto::runtime::CanisterTimerStatus) {
+    assert_eq!(
+        interval
+            .scheduler_performance
+            .instruction_samples_since_runtime_start,
+        0,
+        "ordinary after-completion timers have no separate scheduler callback"
+    );
+    assert!(
+        interval
+            .work_performance
+            .instruction_samples_since_runtime_start
+            > 0,
+        "completed timer work must retain instruction observations"
+    );
+    assert_eq!(
+        interval
+            .work_performance
+            .memory_page_samples_since_runtime_start,
+        interval
+            .work_performance
+            .instruction_samples_since_runtime_start,
+        "normal work completion must retain paired instruction and memory samples"
+    );
+    let latest_memory = interval
+        .work_performance
+        .memory_pages_latest
+        .as_ref()
+        .expect("completed timer work memory-page sample");
+    assert!(latest_memory.end.wasm_pages >= latest_memory.start.wasm_pages);
+    assert!(latest_memory.end.stable_pages >= latest_memory.start.stable_pages);
+}
+
+#[test]
+fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister_id = fixture.install_runtime_probe_canister();
+    fixture
+        .pic
+        .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
+
+    let before_invalid = runtime_status(&fixture.pic, canister_id).timers.len();
+    let invalid: Result<bool, Error> = fixture
+        .pic
+        .update_candid(canister_id, "reject_invalid_timer_identity", ())
+        .expect("call invalid timer identity probe");
+    assert!(invalid.expect("invalid identity probe result"));
+    assert_eq!(
+        runtime_status(&fixture.pic, canister_id).timers.len(),
+        before_invalid,
+        "rejected identity must not consume shared registry capacity"
+    );
+
+    let fill: Result<(u64, bool), Error> = fixture
+        .pic
+        .update_candid(canister_id, "fill_timer_registry", ())
+        .expect("fill shared timer registry");
+    let (registered, rejected) = fill.expect("capacity probe result");
+    assert!(registered > 0);
+    assert!(
+        rejected,
+        "registry demand beyond the bound must be rejected"
+    );
+
+    let status = runtime_status(&fixture.pic, canister_id);
+    assert_eq!(status.timer_inventory.status, RuntimeCheckStatus::Pass);
+    assert_eq!(status.timers.len(), ic_timers::MAX_TIMER_REGISTRATIONS);
 }
 
 #[test]
@@ -196,7 +289,7 @@ fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus 
 fn intent_cleanup_status(
     pic: &PocketIc,
     canister_id: Principal,
-) -> canic::dto::runtime::CanicTimerStatus {
+) -> canic::dto::runtime::CanisterTimerStatus {
     runtime_status(pic, canister_id)
         .timers
         .into_iter()
@@ -246,13 +339,16 @@ fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
 }
 
 fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
+    let (subsystem, name) = label.split_once(':').expect("fixed Canic timer label");
     entries
         .iter()
         .find_map(|entry| {
-            (entry.labels == ["perf", "timer", label]).then(|| match entry.value {
-                MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
-                MetricValue::Count(_) | MetricValue::U128(_) => {
-                    panic!("timer performance metric must carry count and instructions")
+            (entry.labels == ["perf", "timer", "canic", subsystem, name]).then(|| {
+                match entry.value {
+                    MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
+                    MetricValue::Count(_) | MetricValue::U128(_) => {
+                        panic!("timer performance metric must carry count and instructions")
+                    }
                 }
             })
         })

@@ -6,7 +6,7 @@ implementation held
 Design:
 [0.104 framework-neutral synchronous lifecycle composition](0.104-design.md)
 
-Status cut: 2026-08-14
+Status cut: 2026-08-15
 
 ## Current Boundary
 
@@ -19,14 +19,15 @@ B1 evidence may run alongside 0.102 and 0.103 evidence. No mutating 0.104 batch
 may begin until 0.103 is accepted and complete, the B1 contract is approved
 and the maintainer explicitly authorizes mutation.
 
-The current 0.101.53 implementation remains unchanged:
+The current 0.102.1 worktree preserves the lifecycle shape:
 
 - `canic::start!` owns managed root/non-root `init` and `post_upgrade`;
 - `canic::start_local!` owns local non-root lifecycle;
 - synchronous `*_before_bootstrap` adapters restore Canic state;
 - managed post-upgrade schedules later work only when Active;
 - managed initial install remains Prepared until activation; and
-- the optional `init = { ... }` block is deferred through a zero-delay timer.
+- the optional `init = { ... }` block is deferred through a zero-delay
+  `ic-timers` `Once` registration.
 
 That optional block is not a synchronous composition seam.
 
@@ -52,20 +53,23 @@ bootstrap timer or deferred application hook.
 
 ## Renumbered Future Designs
 
-Inserting this line moves the still-provisional former 0.104-0.112 designs to
-0.105-0.113 without changing their order or implementation status:
+Inserting 0.104 originally moved the still-provisional later designs to
+0.105-0.113. The subsequent evidence-only 0.105 Fleet-estate platform
+qualification preserves 0.103/0.104 and moves only those provisional designs
+to 0.106-0.114 without changing their order or implementation status:
 
 | Current line | Design |
 | --- | --- |
-| 0.105 | Cross-Subnet data transport groundwork |
-| 0.106 | Coordinator Workers |
-| 0.107 | Declarative authentication profiles |
-| 0.108 | Standalone blob-service extraction |
-| 0.109 | Coordinator-backed root funding |
-| 0.110 | Optional encrypted Canister snapshot archives |
-| 0.111 | Language-neutral managed-guest feasibility |
-| 0.112 | Skynet Fleet observatory |
-| 0.113 | Fleet Subnet Canister estates |
+| 0.105 | Fleet-estate platform qualification |
+| 0.106 | Cross-Subnet data transport groundwork |
+| 0.107 | Coordinator Workers |
+| 0.108 | Declarative authentication profiles |
+| 0.109 | Standalone blob-service extraction |
+| 0.110 | Coordinator-backed root funding |
+| 0.111 | Optional encrypted Canister snapshot archives |
+| 0.112 | Language-neutral managed-guest feasibility |
+| 0.113 | Skynet Fleet observatory |
+| 0.114 | Fleet Subnet Canister estates |
 
 Published package versions, historical changelogs, audit evidence and archived
 handoffs retain their original identities.
@@ -107,8 +111,10 @@ B1 must answer:
 ## Current Integration Statement
 
 Canic 0.103 and a framework-neutral application guard compose at the function
-level. Combined runtime qualification is not available from current Canic.
-It requires the separately accepted and implemented 0.104 synchronous seam.
+level. A Canic+framework canister may already expose one complete timer
+inventory when both owners resolve the same exact `ic-timers` package, but
+combined lifecycle qualification is not available from current Canic. It
+requires the separately accepted and implemented 0.104 synchronous seam.
 
 0.104 itself remains framework-neutral. A downstream framework may provide
 private synchronous init/post-upgrade functions and qualify an application-

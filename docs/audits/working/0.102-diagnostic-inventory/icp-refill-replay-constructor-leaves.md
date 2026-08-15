@@ -1,6 +1,6 @@
 # Canic 0.102 ICP-Refill Replay Constructor Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -21,15 +21,15 @@ behavior.
 The seven reserve/replay sites reuse six generic replay identities and add one
 ICP-refill-specific recovery fence:
 
-| Exact candidate or disposition | Sites | Class/origin | Action and retry |
-| --- | ---: | --- | --- |
-| reuse `REPLAY_OPERATION_IN_PROGRESS` | 1 | `Conflict` / exact replay operation | Retry later with the same operation and payload |
-| reuse `REPLAY_ACTOR_MISMATCH` | 1 | `Conflict` / replay actor | Never reuse another actor's operation ID |
-| reuse `REPLAY_PAYLOAD_MISMATCH` | 1 | `Conflict` / replay payload | Replay only the original refill request or use a new ID |
-| reuse `REPLAY_RECEIPT_EXPIRED` | 1 | `Conflict` / replay retention | Begin a newly admitted refill with a new operation ID |
-| `ICP_REFILL_REPLAY_RECOVERY_REASON_INVALID` | 1 | `Conflict` / refill recovery state | Recover only cost-settlement or response-commit failure; inspect every other retained reason |
-| reuse `REPLAY_PENDING_ACTOR_CAPACITY` | 1 | `ResourceExhausted` / actor pending receipts | Wait for this actor's pending operations to settle |
-| reuse `REPLAY_PENDING_COMMAND_CAPACITY` | 1 | `ResourceExhausted` / refill command receipts | Wait for command-kind capacity before retry |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Action and retry |
+| --- | ---: | --- | --- | --- |
+| reuse `REPLAY_OPERATION_IN_PROGRESS` | 1 | `reserve_icp_refill_replay` `OperationInProgress` branch | `Conflict` / exact replay operation | Retry later with the same operation and payload |
+| reuse `REPLAY_ACTOR_MISMATCH` | 1 | `reserve_icp_refill_replay` `ActorMismatch` branch | `Conflict` / replay actor | Never reuse another actor's operation ID |
+| reuse `REPLAY_PAYLOAD_MISMATCH` | 1 | `reserve_icp_refill_replay` `PayloadMismatch` branch | `Conflict` / replay payload | Replay only the original refill request or use a new ID |
+| reuse `REPLAY_RECEIPT_EXPIRED` | 1 | `reserve_icp_refill_replay` `Expired` branch | `Conflict` / replay retention | Begin a newly admitted refill with a new operation ID |
+| `ICP_REFILL_REPLAY_RECOVERY_REASON_INVALID` | 1 | `reserve_icp_refill_replay` unsupported `RecoveryRequired` branch | `Conflict` / refill recovery state | Recover only cost-settlement or response-commit failure; inspect every other retained reason |
+| reuse `REPLAY_PENDING_ACTOR_CAPACITY` | 1 | `reserve_icp_refill_replay` `PendingActorQuotaExceeded` branch | `ResourceExhausted` / actor pending receipts | Wait for this actor's pending operations to settle |
+| reuse `REPLAY_PENDING_COMMAND_CAPACITY` | 1 | `reserve_icp_refill_replay` `PendingCommandQuotaExceeded` branch | `ResourceExhausted` / refill command receipts | Wait for command-kind capacity before retry |
 
 The six generic decisions have the same replay-receipt owner, exposure and
 retry contract as authentication prepare. They deliberately share identities.
@@ -41,15 +41,15 @@ authentication-specific recovery fence.
 
 The remaining seven replay constructors reuse the typed generic replay family:
 
-| Exact candidate or disposition | Sites | Required hard cut |
-| --- | ---: | --- |
-| reuse `REPLAY_RESPONSE_ENCODE_FAILED` | 1 | Preserve the typed response encoder and exact refill schema |
-| reuse `REPLAY_RESPONSE_DECODE_FAILED` | 1 | Preserve terminal bytes and typed refill response decoder |
-| reuse `REPLAY_RECEIPT_MISSING` | 1 | Treat absence as missing durable state, never a fresh operation |
-| reuse `REPLAY_RECEIPT_DECODE_FAILED` | 1 | Preserve malformed receipt bytes and typed decode cause |
-| reuse `REPLAY_RECEIPT_TOKEN_MISMATCH` | 1 | Reload exact receipt identity; never commit through a stale token |
-| reuse `REPLAY_STAGED_RESPONSE_MISSING` | 1 | Preserve receipt and recover only from exact staged bytes |
-| reuse `REPLAY_COST_GUARD_SETTLEMENT_MISSING` | 1 | Stop before settlement/commit without the retained cost identity |
+| Exact candidate or disposition | Sites | Producer function/branch | Required hard cut |
+| --- | ---: | --- | --- |
+| reuse `REPLAY_RESPONSE_ENCODE_FAILED` | 1 | `encode_icp_refill_replay_response` `ReplayCommitError::EncodeFailed` | Preserve the typed response encoder and exact refill schema |
+| reuse `REPLAY_RESPONSE_DECODE_FAILED` | 1 | `decode_icp_refill_replay_response` `ReplayDecodeError::DecodeFailed` | Preserve terminal bytes and typed refill response decoder |
+| reuse `REPLAY_RECEIPT_MISSING` | 1 | `map_icp_refill_replay_store_error` `ReceiptMissing` | Treat absence as missing durable state, never a fresh operation |
+| reuse `REPLAY_RECEIPT_DECODE_FAILED` | 1 | `map_icp_refill_replay_store_error` `ReceiptDecodeFailed` | Preserve malformed receipt bytes and typed decode cause |
+| reuse `REPLAY_RECEIPT_TOKEN_MISMATCH` | 1 | `map_icp_refill_replay_store_error` `ReceiptTokenMismatch` | Reload exact receipt identity; never commit through a stale token |
+| reuse `REPLAY_STAGED_RESPONSE_MISSING` | 1 | `map_icp_refill_replay_store_error` `StagedResponseMissing` | Preserve receipt and recover only from exact staged bytes |
+| reuse `REPLAY_COST_GUARD_SETTLEMENT_MISSING` | 1 | `map_icp_refill_replay_store_error` `CostGuardSettlementMissing` | Stop before settlement/commit without the retained cost identity |
 
 Command kind and response schema remain in the replay receipt. Sharing encoder
 and decoder codes does not allow one response type to decode another command's
@@ -65,10 +65,10 @@ contract.
 
 The effect permit fence adds one exact meaning:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `ICP_REFILL_COST_PERMIT_REQUIRED` | 1 | `Invariant` / value-transfer effect admission | `COST_GUARD_CONFIGURATION_INVALID` | Stop before Ledger/CMC invocation and restore the exact reserved permit |
-| transparent typed ICP Ledger/CMC infra cause | 1 | request, transport, response or system-Canister contract | source projection | Preserve the exact qualified IC-infrastructure diagnostic |
+| Exact candidate or disposition | Sites | Producer function | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `ICP_REFILL_COST_PERMIT_REQUIRED` | 1 | `require_icp_refill_cost_permit` | `Invariant` / value-transfer effect admission | `COST_GUARD_CONFIGURATION_INVALID` | Stop before Ledger/CMC invocation and restore the exact reserved permit |
+| transparent typed ICP Ledger/CMC infra cause | 1 | `map_infra` | request, transport, response or system-Canister contract | source projection | Preserve the exact qualified IC-infrastructure diagnostic |
 
 A missing permit is not ordinary quota pressure. It proves an internal effect
 crossed its pre-effect guard and must remain distinct from reserve rejection.

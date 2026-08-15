@@ -12,7 +12,7 @@ use crate::{
         bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
         env::EnvOps,
     },
-    workflow::{self, runtime::timer::TimerWorkflow},
+    workflow::{self},
 };
 use std::time::Duration;
 
@@ -53,6 +53,7 @@ fn post_upgrade_nonroot_before_bootstrap(
     config_path: &str,
     restore: fn(CanisterRole) -> Result<bool, crate::InternalError>,
 ) -> bool {
+    crate::api::timer::TimerApi::initialize_nonroot_runtime_required();
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Nonroot,
@@ -122,7 +123,7 @@ pub fn schedule_post_upgrade_nonroot_bootstrap() {
     );
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE_SCHEDULED);
 
-    TimerWorkflow::set_application_once(
+    crate::api::timer::TimerApi::defer_lifecycle_required(
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_nonroot_canister",
         async {
@@ -156,5 +157,6 @@ pub fn schedule_post_upgrade_nonroot_bootstrap() {
                 LifecycleMetricOutcome::Completed,
             );
         },
-    );
+    )
+    .detach();
 }

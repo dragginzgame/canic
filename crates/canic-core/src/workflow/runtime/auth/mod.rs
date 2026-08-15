@@ -47,6 +47,11 @@ impl RuntimeAuthWorkflow {
         renewal::RootIssuerRenewalWorkflow::reconcile()
     }
 
+    /// Run one bounded issuer-renewal timer invocation.
+    pub(crate) async fn run_root_issuer_renewal_timer() -> super::timer::TimerRunResult {
+        renewal::RootIssuerRenewalWorkflow::run_scheduled().await
+    }
+
     /// Fail fast when root delegated-auth config requires missing crypto support.
     pub fn ensure_root_crypto_contract() -> Result<(), InternalError> {
         let cfg = ConfigOps::get()?;

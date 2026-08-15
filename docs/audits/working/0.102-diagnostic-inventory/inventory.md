@@ -1,6 +1,6 @@
 # Canic 0.102 Diagnostic Inventory
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Purpose
 
@@ -77,9 +77,10 @@ one unproduced sharding reason.
 
 [auth-string-frontier.md](auth-string-frontier.md) expands and reconciles that
 untyped stop. It records ten additional typed owners, 43 direct prose
-construction sites, 84 new exact candidates and two new safe projections after
-reuse/sediment removal. It also proves that the durable chain-key signing state
-currently marks terminal protected-policy failures retryable.
+construction sites, the maintained delegated-session public helper, 103 new
+exact candidates and two new safe projections after reuse/sediment removal. It
+also proves that the durable chain-key signing state currently marks terminal
+protected-policy failures retryable.
 
 [ic-infrastructure-leaves.md](ic-infrastructure-leaves.md) maps 24 provisional
 exact leaves across the owned IC adapters and the pinned call, rejection,
@@ -89,7 +90,7 @@ keeps destination-invalid absence as typed evidence before projection.
 [bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 60 current exact
 topology, runtime-log, refill, Placement Index and complete current blob
 candidates plus four safe projections. One projection is shared with
-configuration. Because 0.102 precedes the 0.108 extraction, all 27 current blob
+configuration. Because 0.102 precedes the 0.109 extraction, all 27 current blob
 leaves are allocated now and retired without reuse by that later hard cut.
 
 [runtime-ops-leaves.md](runtime-ops-leaves.md) maps configuration lookup,
@@ -137,7 +138,7 @@ wide table for every later site slice.
 | --- | ---: | ---: | --- |
 | Runtime configuration/topology | 86 | 3 | Same-semantics grouping and masked owner review |
 | Component lifecycle policy | 34 | 4 | Grouping and sediment deletion review |
-| Authentication and policy | 132 | 6 | Retry disposition and masked owner review |
+| Authentication and policy | 151 | 6 | Retry disposition and masked owner review |
 | IC infrastructure | 24 | 4 | Calling-context projection review |
 | Bounded runtime owners | 60 | 4, one reused | Blob hard-cut order and masked owner review |
 | Cost guard | 7 | 1 | Secondary rollback observability review |
@@ -168,7 +169,7 @@ wide table for every later site slice.
 | Component Directory convergence/runtime status | 30 new, 2 reused | 0 new | 51 direct constructor sites classified; twelve transparent adapter-sediment sites |
 | Component peer/protected-allocation workflow | 12 new, 6 reused | 0 new | 23 direct constructor sites classified; two transparent topology causes |
 | Component Registry preparation/allocation/create-install workflow | 28 new, 15 reused | 0 new | 55 direct constructor sites classified; eight transparent typed-cause/adapter sites |
-| **Initial counted subtotal** | **1,120** | **31 distinct** | 1,151 identities; not a numeric allocation |
+| **Corrected initial counted subtotal** | **1,139** | **31 distinct** | 1,170 identities; not a numeric allocation |
 
 [ledger-reconciliation.md](ledger-reconciliation.md) reconciles the qualified family
 arithmetic and every cross-family reuse. The broad source-document token census
@@ -176,21 +177,25 @@ contains 712 unique uppercase tokens; four are explicitly documented notation
 or forbidden/unreachable examples, leaving exactly 708 collision-free proposed
 identities: 678 exact meanings and 30 additional safe projections.
 
-The first twenty-one direct-constructor passes added 442 exact meanings and
-`COMPONENT_REGISTRY_STATE_INVALID`, bringing that initial staging set to 1,151
-distinct identities. Existing exact reuses were not counted again. The current
-ninety-eight-pass reconciliation plus the later five-identity Component
-Registry capacity correction, current blob-family completion and complete RPC
-workflow-error/Template-manifest and complete publication-workflow expansions
-contain 2,844 exact meanings plus 31 additional projections: 2,875 qualified
-symbolic identities.
+The original source-document token census omitted nineteen maintained
+delegated-session decisions because its dynamic-value pass did not also add
+their static producers. Source-to-ledger reconciliation corrects the initial
+exact subtotal from 1,120 to 1,139 without adding a projection. A mechanical
+table-set check separately corrects one earlier prose-arithmetic undercount of
+an already materialized exact candidate. All labels are now normalized into
+explicit identity columns, so the guard no longer derives authority from
+uppercase prose or static enum names. Every exact identity also occurs in at
+least one structured producer/source/decision/dependency/site row. The current
+reconciliation therefore contains 2,864 exact meanings plus 31 additional
+projections: 2,895 qualified symbolic identities. This correction
+changes evidence only; it allocates no number and changes no runtime behavior.
 
 [projection-ledger.md](projection-ledger.md) aggregates those 31 additional
 identities plus five exact leaves reused as projection targets. It names the
 required observation class for every masked family and records three remaining
 approval gaps: numeric conversion of the guarded recent-failure ring and
 call-site-specific IC effect-journal wiring. Cashier uses the guarded numeric
-runtime observation until its 0.108 retirement.
+runtime observation until its 0.109 retirement.
 
 [ic-observability-owners.md](ic-observability-owners.md) resolves the IC gap to
 17 current call families and their operation-specific recovery/status
@@ -221,9 +226,9 @@ zero open dispositions.
 freezes the permanent
 repository-only current/retired allocation contract and the contract for a
 generated language-neutral current registry. Because no numeric allocation has
-been approved, its current and retired sets are both empty; neither the 1,151
-initial identities above nor the current 2,875 qualified symbolic identities
-are ledger rows.
+been approved, its current and retired sets are both empty; neither the 1,170
+corrected staging identities nor the current 2,895 qualified symbolic
+identities are ledger rows.
 
 ### Current Public Leaves
 
@@ -290,7 +295,7 @@ loss of meaning and would not satisfy 0.102.
 This fallback is a migration inventory aid only. B4 must replace it with exact
 typed mappings; it cannot become the compact-code allocation strategy.
 
-### Host Consumers
+### Production Consumers
 
 The current native consumers are:
 
@@ -310,6 +315,12 @@ The current native consumers are:
 `canic-testing-internal`, Canic-owned PocketIC tests and facade tests also
 decode or match the current enum. They are propagation owners, not catalogue
 authorities.
+
+[public-boundary.md](public-boundary.md) now binds this surface to exact
+current-candidate functions and source coordinates. Its structured manifest
+contains twelve machine-decision consumers and six transparent decode/render
+consumers. That closes maintained production-consumer ownership; it does not
+substitute for the pending exact producer-function mapping.
 
 ## Dynamic Public Context Classification
 
@@ -440,7 +451,7 @@ Related non-stable or boundary-only text is classified separately:
 | Runtime bootstrap `last_error` | Advisory transient context | Process-local, cleared on phase changes and rebuilt by current lifecycle execution |
 | Runtime recent-failure summaries/details | Owned operational text | Bounded runtime diagnostic/log projection, not stable recovery authority |
 | Pool response reasons | Owned operational text | Projection of typed stable status; not an independent state owner |
-| Blob billing `skipped_reason` | Owned operational text pending 0.108 extraction | Application-service response context; 0.102 must not pre-empt the later blob hard cut |
+| Blob billing `skipped_reason` | Owned operational text pending 0.109 extraction | Application-service response context; 0.102 must not pre-empt the later blob hard cut |
 | Scaling-plan `reason` | Owned operational text | Explanatory projection beside typed `ScalingPlanReason`; policy does not parse it |
 | Configuration and state-contract validation details | Owned operational text | Host/operator explanation; typed owner determines the failure branch |
 

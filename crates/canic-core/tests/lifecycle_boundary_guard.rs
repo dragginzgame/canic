@@ -123,10 +123,11 @@ fn root_post_upgrade_schedules_services_and_hooks_only_when_active() {
     );
     assert!(
         runtime.contains("FleetActivationOps::status(true)")
-            && runtime.contains("if active {")
+            && runtime.contains("TimerWorkflow::is_suspended()")
+            && runtime.contains("if active && !timers_suspended {")
             && runtime.contains("RuntimeWorkflow::start_all_root()")
-            && runtime.contains("Ok(active)"),
-        "root runtime restoration must gate service startup on protected Active state"
+            && runtime.contains("Ok(active && !timers_suspended)"),
+        "root runtime restoration must gate service startup on protected Active and unsealed state"
     );
 }
 
@@ -186,7 +187,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_init_nonroot_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
-            "TimerWorkflow::set_application_once",
+            "TimerApi::defer_lifecycle_required",
             "canic:bootstrap:init_nonroot_canister",
             "bootstrap_init_nonroot_canister().await",
         ],
@@ -196,7 +197,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_post_upgrade_nonroot_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
-            "TimerWorkflow::set_application_once",
+            "TimerApi::defer_lifecycle_required",
             "canic:bootstrap:post_upgrade_nonroot_canister",
             "bootstrap_post_upgrade_nonroot_canister().await",
         ],
@@ -206,7 +207,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_post_upgrade_root_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
-            "TimerApi::defer_lifecycle",
+            "TimerApi::defer_lifecycle_required",
             "canic:bootstrap:post_upgrade_root_canister",
             "bootstrap_post_upgrade_root_canister().await",
         ],

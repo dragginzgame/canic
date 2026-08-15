@@ -1,6 +1,6 @@
 # Canic 0.102 Template Manifest Ops Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -78,8 +78,8 @@ All thirteen variants have one disposition. Ten add exact meanings and three
 reuse existing identities. No variant is sediment, no wrapper receives a code
 and no projection is added.
 
-The qualified semantic set moves from 2,745 to 2,755 exact candidates. The 31
-safe projections are unchanged, producing 2,786 current symbolic identities.
+The qualified semantic set moves from 2,746 to 2,756 exact candidates. The 31
+safe projections are unchanged, producing 2,787 current symbolic identities.
 
 ## Required Tests
 

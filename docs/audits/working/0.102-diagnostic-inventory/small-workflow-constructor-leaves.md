@@ -22,10 +22,10 @@ number and changes no runtime behavior.
 The direct root-to-Store snapshot builder reuses two exact Fleet-activation
 topology identities:
 
-| Existing exact identity | Sites | Current meaning |
+| Existing exact identity | Sites | Producer function/branch |
 | --- | ---: | --- |
-| `FLEET_ACTIVATION_TOPOLOGY_ANONYMOUS_BINDING_PRINCIPAL` | 1 | The Store child principal is anonymous |
-| `FLEET_ACTIVATION_TOPOLOGY_ROOT_PRINCIPAL_CONFLICT` | 1 | The Store child principal equals its Fleet Subnet Root |
+| `FLEET_ACTIVATION_TOPOLOGY_ANONYMOUS_BINDING_PRINCIPAL` | 1 | `TopologySnapshotBuilder::for_direct_leaf`; the Store child principal is anonymous |
+| `FLEET_ACTIVATION_TOPOLOGY_ROOT_PRINCIPAL_CONFLICT` | 1 | `TopologySnapshotBuilder::for_direct_leaf`; the Store child principal equals its Fleet Subnet Root |
 
 These are the same protected topology predicates and reinstall action already
 qualified for activation admission. The snapshot helper receives no wrapper
@@ -63,10 +63,10 @@ and delegates; it does not reinterpret the typed result.
 
 The two checked-arithmetic branches add exact meanings:
 
-| Exact candidate | Sites | Current meaning | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Action and retry |
 | --- | ---: | --- | --- |
-| `CYCLE_TOPUP_DEADLINE_DURATION_OVERFLOW` | 1 | Configured delay cannot be represented in nanoseconds | Correct bounded top-up timing configuration; no unchanged retry |
-| `CYCLE_TOPUP_DEADLINE_TIMESTAMP_OVERFLOW` | 1 | Current time plus valid delay exceeds the timer timestamp range | Stop scheduling and wait for corrected time/state; never wrap the deadline |
+| `CYCLE_TOPUP_DEADLINE_DURATION_OVERFLOW` | 1 | `CycleWorkflow::deadline_after_secs`; configured delay cannot be represented in nanoseconds | Correct bounded top-up timing configuration; no unchanged retry |
+| `CYCLE_TOPUP_DEADLINE_TIMESTAMP_OVERFLOW` | 1 | `CycleWorkflow::deadline_after_secs`; current time plus valid delay exceeds the timer timestamp range | Stop scheduling and wait for corrected time/state; never wrap the deadline |
 
 Duration conversion and timestamp addition remain separate checked boundaries.
 
@@ -74,10 +74,10 @@ Duration conversion and timestamp addition remain separate checked boundaries.
 
 The two checked-arithmetic branches add exact meanings:
 
-| Exact candidate | Sites | Current meaning | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Action and retry |
 | --- | ---: | --- | --- |
-| `RUNTIME_LOG_RETENTION_DEADLINE_SECONDS_OVERFLOW` | 1 | Oldest log time plus retention age cannot fit seconds | Correct retention/state; never drop entries against a wrapped cutoff |
-| `RUNTIME_LOG_RETENTION_DEADLINE_NANOSECONDS_OVERFLOW` | 1 | Valid seconds deadline cannot fit the IC timer nanosecond range | Stop scheduling and preserve retained logs |
+| `RUNTIME_LOG_RETENTION_DEADLINE_SECONDS_OVERFLOW` | 1 | `LogRetentionWorkflow::next_deadline_ns`; oldest log time plus retention age cannot fit seconds | Correct retention/state; never drop entries against a wrapped cutoff |
+| `RUNTIME_LOG_RETENTION_DEADLINE_NANOSECONDS_OVERFLOW` | 1 | `seconds_to_nanos`; valid seconds deadline cannot fit the IC timer nanosecond range | Stop scheduling and preserve retained logs |
 
 The seconds and nanoseconds failures have different arithmetic owners and must
 remain independently testable.

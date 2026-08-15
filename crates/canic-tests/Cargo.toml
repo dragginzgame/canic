@@ -13,6 +13,7 @@ candid = { workspace = true }
 canic = { workspace = true, features = ["blob-storage-billing", "metrics"] }
 canic-testing-internal = { workspace = true }
 ic-testkit = { workspace = true }
+ic-timers = { workspace = true }
 
 [dev-dependencies]
 canic-control-plane = { workspace = true, features = [

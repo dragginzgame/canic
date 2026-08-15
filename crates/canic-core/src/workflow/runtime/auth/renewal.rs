@@ -46,8 +46,7 @@ impl RootIssuerRenewalWorkflow {
             return Ok(());
         }
         if !AuthOps::has_enabled_root_issuer_renewal_templates() {
-            Self::reconcile_deadline(None);
-            return Ok(());
+            return Self::reconcile_deadline(None);
         }
         let config = ConfigOps::delegated_tokens_config()?;
         if !config.enabled {
@@ -56,16 +55,13 @@ impl RootIssuerRenewalWorkflow {
                 Warn,
                 "root delegated-proof renewal timer skipped: delegated-token auth is disabled"
             );
-            Self::reconcile_deadline(None);
-            return Ok(());
+            return Self::reconcile_deadline(None);
         }
         let timing = AuthOps::root_issuer_renewal_timing(IcOps::now_nanos())?;
-        Self::reconcile_deadline(timing.next_deadline_ns);
-
-        Ok(())
+        Self::reconcile_deadline(timing.next_deadline_ns)
     }
 
-    async fn run_scheduled() -> TimerRunResult {
+    pub(super) async fn run_scheduled() -> TimerRunResult {
         let now_ns = IcOps::now_nanos();
         match Self::sweep().await {
             Ok(work_count) => Self::completed_result(now_ns, work_count),
@@ -275,10 +271,9 @@ impl RootIssuerRenewalWorkflow {
         }
     }
 
-    fn reconcile_deadline(deadline_ns: Option<u64>) {
-        TimerWorkflow::reconcile_at(TimerKey::AuthRenewal, deadline_ns, || async {
-            Self::run_scheduled().await
-        });
+    fn reconcile_deadline(deadline_ns: Option<u64>) -> Result<(), InternalError> {
+        TimerWorkflow::reconcile_at(TimerKey::AuthRenewal, deadline_ns)?;
+        Ok(())
     }
 
     fn record_timer_failure(err: &InternalError) {

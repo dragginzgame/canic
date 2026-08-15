@@ -51,6 +51,58 @@ impl AuthorityRestoreFenceOps {
             .ok_or_else(fence_uninitialized)
     }
 
+    /// Validate a snapshot seal without changing durable authority state.
+    pub fn validate_prepare(
+        request: AuthoritySnapshotRequest,
+        authority_canister: Principal,
+    ) -> Result<(), InternalError> {
+        require_operation_id(request.operation_id)?;
+        let record = require_authority(authority_canister)?;
+        match record.state {
+            AuthorityRestoreFenceStateRecord::Open { .. } => Ok(()),
+            AuthorityRestoreFenceStateRecord::Sealed { operation_id, .. }
+                if operation_id == request.operation_id =>
+            {
+                Ok(())
+            }
+            AuthorityRestoreFenceStateRecord::Sealed { .. } => Err(InternalError::conflict(
+                "authority is sealed by a different snapshot operation",
+            )),
+        }
+    }
+
+    /// Validate a live resume without opening durable authority state.
+    pub fn validate_resume(
+        request: AuthoritySnapshotRequest,
+        authority_canister: Principal,
+        history_total_num_changes: u64,
+    ) -> Result<(), InternalError> {
+        require_operation_id(request.operation_id)?;
+        let record = require_authority(authority_canister)?;
+        match record.state {
+            AuthorityRestoreFenceStateRecord::Open {
+                last_resume: Some(receipt),
+            } if receipt.operation_id == request.operation_id => Ok(()),
+            AuthorityRestoreFenceStateRecord::Open { .. } => Err(InternalError::conflict(
+                "authority snapshot operation is not sealed",
+            )),
+            AuthorityRestoreFenceStateRecord::Sealed { operation_id, .. }
+                if operation_id != request.operation_id =>
+            {
+                Err(InternalError::conflict(
+                    "authority snapshot resume names a different sealed operation",
+                ))
+            }
+            AuthorityRestoreFenceStateRecord::Sealed {
+                history_total_num_changes: sealed_history,
+                ..
+            } if sealed_history != history_total_num_changes => Err(InternalError::unavailable(
+                "authority management history advanced after the snapshot seal; restored or ambiguous authority remains mutation-fenced",
+            )),
+            AuthorityRestoreFenceStateRecord::Sealed { .. } => Ok(()),
+        }
+    }
+
     /// Seal one authority snapshot operation before the external stop/capture sequence.
     pub fn prepare(
         request: AuthoritySnapshotRequest,

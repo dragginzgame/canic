@@ -1,6 +1,6 @@
 # Canic 0.102 Publication Binding And Release Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -17,14 +17,14 @@ not claim that the aggregate enum is closed.
 
 ## Publication Binding Authority
 
-| Exact candidate or disposition | Source predicate | Public projection | Action and retry |
-| --- | --- | --- | --- |
-| `WASM_STORE_SOLE_ACTIVE_PUBLICATION_BINDING_REQUIRED` | requested binding is not the sole active slot, or a detached/retired slot remains | self | Reconcile the controller-guarded publication slots; never select another Store implicitly |
-| reuse `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | initial pin or bootstrap catalog observes zero or multiple root-owned Stores | self | Reconcile the exact adopted sibling Store inventory before publication |
-| `WASM_STORE_ADOPTED_BINDING_MISMATCH` | requested initial binding differs from the sole adopted Store binding | self | Use the protected adopted Store binding; never substitute caller-selected authority |
-| `WASM_STORE_GC_WRITE_FENCED` | adopted Store GC mode is not `Normal` | self | Stop publication; complete the owning lifecycle action rather than bypassing the one-way write fence |
-| `WASM_STORE_INITIAL_PUBLICATION_AUTHORITY_PRESENT` | initial pin encounters any existing active, detached or retired publication authority | self | Preserve the existing authority; initial bootstrap may not replace or rotate it |
-| `WASM_STORE_INITIAL_PUBLICATION_BINDING_COMMIT_FAILED` | the empty-to-active stable-state transition refuses the exact adopted binding | `COMPONENT_REGISTRY_STATE_INVALID` | Preserve the pre-transition state and inspect root Store authority; do not infer commitment |
+| Exact candidate or disposition | Producer function/branch | Source predicate | Public projection | Action and retry |
+| --- | --- | --- | --- | --- |
+| `WASM_STORE_SOLE_ACTIVE_PUBLICATION_BINDING_REQUIRED` | `WasmStorePublicationWorkflow::require_active_publication_store` | requested binding is not the sole active slot, or a detached/retired slot remains | self | Reconcile the controller-guarded publication slots; never select another Store implicitly |
+| reuse `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | `WasmStorePublicationWorkflow::pin_initial_publication_store` and `WasmStorePublicationWorkflow::single_store_catalog` cardinality branches | initial pin or bootstrap catalog observes zero or multiple root-owned Stores | self | Reconcile the exact adopted sibling Store inventory before publication |
+| `WASM_STORE_ADOPTED_BINDING_MISMATCH` | `WasmStorePublicationWorkflow::pin_initial_publication_store` binding predicate | requested initial binding differs from the sole adopted Store binding | self | Use the protected adopted Store binding; never substitute caller-selected authority |
+| `WASM_STORE_GC_WRITE_FENCED` | `WasmStorePublicationWorkflow::pin_initial_publication_store` GC-mode predicate | adopted Store GC mode is not `Normal` | self | Stop publication; complete the owning lifecycle action rather than bypassing the one-way write fence |
+| `WASM_STORE_INITIAL_PUBLICATION_AUTHORITY_PRESENT` | `WasmStorePublicationWorkflow::pin_initial_publication_store` nonempty-state predicate | initial pin encounters any existing active, detached or retired publication authority | self | Preserve the existing authority; initial bootstrap may not replace or rotate it |
+| `WASM_STORE_INITIAL_PUBLICATION_BINDING_COMMIT_FAILED` | `WasmStorePublicationWorkflow::pin_initial_publication_store` failed activation branch | the empty-to-active stable-state transition refuses the exact adopted binding | `COMPONENT_REGISTRY_STATE_INVALID` | Preserve the pre-transition state and inspect root Store authority; do not infer commitment |
 
 The Store-cardinality identity is shared because both callers require the same
 one adopted sibling Store and have the same repair. The two initial-binding
@@ -34,12 +34,12 @@ contradiction.
 
 ## Release Reconciliation And Publication
 
-| Exact candidate or disposition | Source predicate | Public projection | Action and retry |
-| --- | --- | --- | --- |
-| reuse `WASM_STORE_GC_WRITE_FENCED` | catalog reconciliation observes a Store outside GC `Normal` | self | Complete lifecycle reconciliation before importing the release catalog |
-| `WASM_STORE_EXACT_RELEASE_MISSING` | writable adopted Store lacks the exact role/template/version release | self | Publish or restore the exact admitted release; never accept another version or binding |
-| `WASM_STORE_RELEASE_CONFLICT` | the same template/version key has different retained hash or size authority | self | Preserve both manifest and observed catalog evidence; do not overwrite or select one arbitrarily |
-| reuse `WASM_STORE_BYTE_CAPACITY_EXCEEDED` | canonical release admission exceeds live Store byte capacity | self | Free retained capacity or publish a smaller exact release after inspecting the guarded projection |
+| Exact candidate or disposition | Producer function/branch | Source predicate | Public projection | Action and retry |
+| --- | --- | --- | --- | --- |
+| reuse `WASM_STORE_GC_WRITE_FENCED` | `WasmStorePublicationWorkflow::reconciled_binding_for_manifest` unavailable-Store predicate | catalog reconciliation observes a Store outside GC `Normal` | self | Complete lifecycle reconciliation before importing the release catalog |
+| `WASM_STORE_EXACT_RELEASE_MISSING` | `WasmStorePublicationWorkflow::reconciled_binding_for_manifest` missing-release predicate | writable adopted Store lacks the exact role/template/version release | self | Publish or restore the exact admitted release; never accept another version or binding |
+| `WASM_STORE_RELEASE_CONFLICT` | `WasmStorePublicationWorkflow::publish_manifest_to_adopted_store` conflict branch | the same template/version key has different retained hash or size authority | self | Preserve both manifest and observed catalog evidence; do not overwrite or select one arbitrarily |
+| reuse `WASM_STORE_BYTE_CAPACITY_EXCEEDED` | `WasmStorePublicationWorkflow::publish_manifest_to_adopted_store` capacity branch | canonical release admission exceeds live Store byte capacity | self | Free retained capacity or publish a smaller exact release after inspecting the guarded projection |
 
 The current `ExactReleaseMissing` constructor combines the first two rows with
 `||`. B4 must split that branch before compact mapping. A lifecycle write fence
@@ -48,10 +48,10 @@ absent release.
 
 ## Chunk Traversal And Integrity
 
-| Exact candidate or disposition | Source predicate | Public projection | Action and retry |
-| --- | --- | --- | --- |
-| reuse `WASM_STORE_CHUNK_INDEX_OVERFLOW` | manifest chunk position cannot fit the maintained `u32` index | self | Rebuild the release within the bounded chunk-index contract |
-| reuse `WASM_STORE_CHUNK_HASH_MISMATCH` | management upload returns a hash different from protected manifest authority | self | Preserve both values, reject publication and never install the mismatched bytes |
+| Exact candidate or disposition | Producer function/branch | Source predicate | Public projection | Action and retry |
+| --- | --- | --- | --- | --- |
+| reuse `WASM_STORE_CHUNK_INDEX_OVERFLOW` | `WasmStorePublicationWorkflow::publish_manifest_chunks_to_store` index conversion | manifest chunk position cannot fit the maintained `u32` index | self | Rebuild the release within the bounded chunk-index contract |
+| reuse `WASM_STORE_CHUNK_HASH_MISMATCH` | `WasmStorePublicationWorkflow::ensure_target_store_upload_cache` hash predicate | management upload returns a hash different from protected manifest authority | self | Preserve both values, reject publication and never install the mismatched bytes |
 
 Both meanings are already shared with Store preparation and bootstrap module
 resolution. Layer-specific wrapper codes would add no action or authority.
@@ -81,8 +81,8 @@ The twelve non-transport constructors expand to thirteen source predicates.
 Seven add exact meanings. Six reuse qualified Store identities. No safe public
 projection is added, and neither transport nor the GC lifecycle is counted.
 
-The qualified semantic set moves from 2,755 to 2,762 exact candidates. The 31
-safe projections are unchanged, producing 2,793 current symbolic identities.
+The qualified semantic set moves from 2,756 to 2,763 exact candidates. The 31
+safe projections are unchanged, producing 2,794 current symbolic identities.
 
 ## Required Tests
 

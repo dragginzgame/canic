@@ -775,7 +775,7 @@ hard-corrects the unimplemented topology design to retain the IC-native
 `SubnetKind::{Application, CloudEngine, System, Unknown}` with no umbrella
 kind. Network scope is named `IC mainnet`. Subnet specialization, placement
 eligibility, creation funding and provider topology remain independent
-evidence. The dependent 0.105 and 0.106 designs now consume the same
+evidence. The dependent 0.106 and 0.107 designs now consume the same
 vocabulary. Active Rust uses `CanonicalNetworkId::ic_mainnet()` and
 `IcMainnetEnrollment` with no old-name alias.
 

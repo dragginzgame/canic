@@ -138,7 +138,8 @@ pub fn post_upgrade_root_canister_after_memory_init() -> Result<bool, InternalEr
         .phase
         == FleetActivationPhase::Active;
 
-    if active {
+    let timers_suspended = crate::workflow::runtime::timer::TimerWorkflow::is_suspended();
+    if active && !timers_suspended {
         // --- Phase 3: Service startup ---
         RuntimeWorkflow::start_all_root().map_err(|err| {
             InternalError::invariant(
@@ -148,5 +149,5 @@ pub fn post_upgrade_root_canister_after_memory_init() -> Result<bool, InternalEr
         })?;
     }
 
-    Ok(active)
+    Ok(active && !timers_suspended)
 }

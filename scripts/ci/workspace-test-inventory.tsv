@@ -18,6 +18,7 @@ canic	changelog_governance	full	parallel	ordinary
 canic	component_deployment_ids	full	parallel	ordinary
 canic	config_guide	full	parallel	ordinary
 canic	control_plane_facade	full	parallel	ordinary
+canic	diagnostic_inventory_ledger	full	parallel	ordinary
 canic	endpoint_macro	full	parallel	ordinary
 canic	fleet_coordinator_surface	full	parallel	ordinary
 canic	install_script_surface	fast	parallel	ordinary

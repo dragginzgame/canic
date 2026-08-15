@@ -1,6 +1,6 @@
 # Canic 0.102 Authentication And Policy Diagnostic Leaves
 
-Date: 2026-08-12
+Date: 2026-08-15
 
 ## Status
 
@@ -163,11 +163,12 @@ cryptographic failures. Adjacent paths also flatten typed errors directly into
 [auth-string-frontier.md](auth-string-frontier.md) records and reconciles that
 expanded graph: ten additional typed owners, 97 declared variants, 96 non-test
 structural variants and 43 direct `Auth(...)` construction sites. It reduces
-them to 84 new exact candidates and two new safe projections after wrapper
-removal, same-semantics reuse and current-path sediment. B4/B5 must replace the
-prose constructors with those finite reasons, preserve typed cause carriers and
-separate retryable management failures from terminal protected-policy failures.
-A generic `AUTH_VALIDATION_FAILED` code is forbidden.
+that graph plus the maintained delegated-session public helper to 103 new exact
+candidates and two new safe projections after wrapper removal, same-semantics
+reuse and current-path sediment. B4/B5 must replace the prose constructors with
+those finite reasons, preserve typed cause carriers and separate retryable
+management failures from terminal protected-policy failures. A generic
+`AUTH_VALIDATION_FAILED` code is forbidden.
 
 ## Current Count
 
@@ -184,7 +185,7 @@ This family provisionally records:
 This base table contains **48 exact candidate leaves plus four safe
 projections**. The unproduced sharding policy reason is excluded. Including the
 reconciled string frontier, the complete authentication/policy family now
-contains **132 provisional exact candidates plus six distinct safe
+contains **151 provisional exact candidates plus six distinct safe
 projections**.
 
 ## Required Tests

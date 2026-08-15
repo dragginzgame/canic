@@ -25,11 +25,11 @@ they share the same modules.
 
 ## Store Deletion-Cycle Reclamation
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `WASM_STORE_DELETION_RETAINED_TARGET_ZERO` | 1 | Root requests a zero retained-cycle target | self | Supply the positive target frozen by root deletion authority | public to the authenticated root |
-| `WASM_STORE_DELETION_RETAINED_TARGET_BELOW_CALL_COST` | 1 | Retained target cannot cover the exact `deposit_cycles` call cost | self | Recalculate and supply a sufficient protected target before reserving cycles | public to the authenticated root |
-| `WASM_STORE_DELETION_GC_MODE_INCOMPLETE` / `WASM_STORE_DELETION_GC_RUN_COUNT_INVALID` / `WASM_STORE_DELETION_OCCUPIED_BYTES_NONZERO` / `WASM_STORE_DELETION_TEMPLATE_COUNT_NONZERO` / `WASM_STORE_DELETION_RELEASE_COUNT_NONZERO` / `WASM_STORE_DELETION_TEMPLATE_ROWS_PRESENT` / `WASM_STORE_DELETION_APPROVED_CATALOG_PRESENT` | 1 | One aggregate predicate merges the terminal GC mode, exact completed-run count, occupied-byte ledger, template/release counts, template rows and approved catalog | self for each exact leaf | Complete or reconcile the independently named Store authority before reclaiming cycles | guarded Store/root status |
+| `WASM_STORE_DELETION_RETAINED_TARGET_ZERO` | 1 | `validate_request`; root requests a zero retained-cycle target | self | Supply the positive target frozen by root deletion authority | public to the authenticated root |
+| `WASM_STORE_DELETION_RETAINED_TARGET_BELOW_CALL_COST` | 1 | `reclaim_deletion_cycles`; retained target cannot cover the exact `deposit_cycles` call cost | self | Recalculate and supply a sufficient protected target before reserving cycles | public to the authenticated root |
+| `WASM_STORE_DELETION_GC_MODE_INCOMPLETE` / `WASM_STORE_DELETION_GC_RUN_COUNT_INVALID` / `WASM_STORE_DELETION_OCCUPIED_BYTES_NONZERO` / `WASM_STORE_DELETION_TEMPLATE_COUNT_NONZERO` / `WASM_STORE_DELETION_RELEASE_COUNT_NONZERO` / `WASM_STORE_DELETION_TEMPLATE_ROWS_PRESENT` / `WASM_STORE_DELETION_APPROVED_CATALOG_PRESENT` | 1 | `require_empty_gc_complete_store`; one aggregate predicate merges the terminal GC mode, exact completed-run count, occupied-byte ledger, template/release counts, template rows and approved catalog | self for each exact leaf | Complete or reconcile the independently named Store authority before reclaiming cycles | guarded Store/root status |
 
 The three sites add nine exact meanings. The seven-predicate branch must become
 named policy predicates or typed state validation during B4; one broad
@@ -38,15 +38,15 @@ nonzero or independently retained inventory remains.
 
 ## Approved Module-Source Resolution
 
-| Exact candidate or disposition | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate or disposition | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `WASM_STORE_CHUNK_SET_EMPTY` / `WASM_STORE_CHUNK_HASH_LENGTH_INVALID` | 1 | Root Store artifact metadata has no chunks or contains a non-SHA-256-sized chunk hash | self for empty-set input; `COMPONENT_REGISTRY_STATE_INVALID` for malformed protected metadata | Restage exact qualified chunk metadata; do not install | guarded root/operator; empty-set identity reused |
-| `WASM_STORE_INLINE_SOURCE_UNSUPPORTED` | 1 | An approved manifest still selects the removed inline module-source path | self | Publish the role through the maintained chunked Store path | guarded root/operator |
-| `WASM_STORE_CHUNK_SET_EMPTY` | 2 | Bootstrap-local or adopted-Store metadata resolves an empty approved chunk set | self; existing exact identity | Restage and publish the exact approved release before install | guarded root/operator |
-| `WASM_STORE_BOOTSTRAP_SOURCE_PATH_FORBIDDEN` | 1 | A normal Component install attempts to consume the root-only bootstrap binding | self | Use the root control-plane bootstrap path or the admitted sibling Store binding | guarded root/operator |
-| `WASM_STORE_CHUNK_INDEX_OVERFLOW` | 1 | Bootstrap chunk traversal cannot represent its index as `u32` | self; existing exact identity | Reject the oversized set and rebuild within the chunk-index contract | guarded root/operator |
-| `WASM_STORE_CHUNK_HASH_MISMATCH` | 1 | Management upload returns a hash different from protected chunk metadata | self; existing exact identity | Preserve the mismatch and do not install or blindly retry | guarded root/operator |
-| `WASM_STORE_BINDING_NOT_REGISTERED` | 1 | Approved manifest selects no current root-owned Store binding | self | Reconcile protected publication binding before module resolution | guarded root/operator |
+| `WASM_STORE_CHUNK_SET_EMPTY` / `WASM_STORE_CHUNK_HASH_LENGTH_INVALID` | 1 | `resolved_root_store_module_source`; root Store artifact metadata has no chunks or contains a non-SHA-256-sized chunk hash | self for empty-set input; `COMPONENT_REGISTRY_STATE_INVALID` for malformed protected metadata | Restage exact qualified chunk metadata; do not install | guarded root/operator; empty-set identity reused |
+| `WASM_STORE_INLINE_SOURCE_UNSUPPORTED` | 1 | `approved_module_source_from_manifest`; an approved manifest still selects the removed inline module-source path | self | Publish the role through the maintained chunked Store path | guarded root/operator |
+| `WASM_STORE_CHUNK_SET_EMPTY` | 2 | `resolved_bootstrap_chunk_set_for_manifest` or `resolved_store_chunk_set_for_manifest`; bootstrap-local or adopted-Store metadata resolves an empty approved chunk set | self; existing exact identity | Restage and publish the exact approved release before install | guarded root/operator |
+| `WASM_STORE_BOOTSTRAP_SOURCE_PATH_FORBIDDEN` | 1 | `resolved_store_chunk_set_for_manifest`; a normal Component install attempts to consume the root-only bootstrap binding | self | Use the root control-plane bootstrap path or the admitted sibling Store binding | guarded root/operator |
+| `WASM_STORE_CHUNK_INDEX_OVERFLOW` | 1 | `ensure_bootstrap_chunk_hashes_present`; bootstrap chunk traversal cannot represent its index as `u32` | self; existing exact identity | Reject the oversized set and rebuild within the chunk-index contract | guarded root/operator |
+| `WASM_STORE_CHUNK_HASH_MISMATCH` | 1 | `ensure_bootstrap_chunk_hashes_present`; management upload returns a hash different from protected chunk metadata | self; existing exact identity | Preserve the mismatch and do not install or blindly retry | guarded root/operator |
+| `WASM_STORE_BINDING_NOT_REGISTERED` | 1 | `store_pid_for_binding`; approved manifest selects no current root-owned Store binding | self | Reconcile protected publication binding before module resolution | guarded root/operator |
 
 The eight sites add four new exact meanings. They reuse the already-qualified
 empty-set, chunk-index-overflow and chunk-hash-mismatch identities. Template,
@@ -60,10 +60,10 @@ eleven fixed Store methods.
 
 | Disposition | Sites | Current meaning | Required hard cut |
 | --- | ---: | --- | --- |
-| transparent: typed IC request-encoding cause | 1 | `CallOps::with_args` already returns the exact typed Candid/IC cause, which is formatted into a new broad invariant | Return the nested registered `IC_CALL_REQUEST_ENCODING_FAILED` cause without copying prose |
-| transparent: typed IC call cause | 1 | `CallOps::execute` already returns the exact call-admission/rejection cause, which is formatted into broad unavailability | Preserve the complete typed IC call leaf and owning workflow retry policy |
-| transparent: typed IC response-decoding cause | 1 | `CallResult::candid` already returns the exact response contract cause, which is formatted into a new broad invariant | Return the nested registered `IC_CALL_RESPONSE_DECODING_FAILED` cause without copying prose |
-| transparent: remote Store public diagnostic | 1 | A successfully decoded Store result contains its exact current public error | Propagate the remote registered diagnostic unchanged; do not wrap or renumber it |
+| transparent: typed IC request-encoding cause | 1 | `WasmStoreInternalClient::call_result` receives the exact typed Candid/IC cause from `CallOps::with_args`, which is formatted into a new broad invariant | Return the nested registered `IC_CALL_REQUEST_ENCODING_FAILED` cause without copying prose |
+| transparent: typed IC call cause | 1 | `WasmStoreInternalClient::call_result` receives the exact call-admission/rejection cause from `CallOps::execute`, which is formatted into broad unavailability | Preserve the complete typed IC call leaf and owning workflow retry policy |
+| transparent: typed IC response-decoding cause | 1 | `WasmStoreInternalClient::call_result` receives the exact response contract cause from `CallResult::candid`, which is formatted into a new broad invariant | Return the nested registered `IC_CALL_RESPONSE_DECODING_FAILED` cause without copying prose |
+| transparent: remote Store public diagnostic | 1 | `WasmStoreInternalClient::call_result`; a successfully decoded Store result contains its exact current public error | Propagate the remote registered diagnostic unchanged; do not wrap or renumber it |
 
 These four sites allocate no Store-client code. The selected fixed method and
 protected operation retain route context; a generic wrapper diagnostic would
@@ -72,11 +72,11 @@ distinctions.
 
 ## Bootstrap And Activation Inventory
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | 1 | Bootstrap publication does not observe exactly one adopted sibling Store | self; existing exact identity | Reconcile root Store inventory before publication | controller-only Store overview |
-| `FLEET_ACTIVATION_SINGLE_STORE_REQUIRED` | 1 | Fresh Fleet activation does not observe exactly one root-owned Store | self; existing exact identity | Reconcile root infrastructure before activation | controller-only Store overview |
-| `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | 1 | Publication snapshot does not observe exactly one adopted sibling Store | self; existing exact identity | Reconcile root Store inventory before snapshot/publication | controller-only Store overview |
+| `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | 1 | `WasmStorePublicationWorkflow::ensure_bootstrap_wasm_store`; bootstrap publication does not observe exactly one adopted sibling Store | self; existing exact identity | Reconcile root Store inventory before publication | controller-only Store overview |
+| `FLEET_ACTIVATION_SINGLE_STORE_REQUIRED` | 1 | `WasmStorePublicationWorkflow::root_activation_wasm_store`; fresh Fleet activation does not observe exactly one root-owned Store | self; existing exact identity | Reconcile root infrastructure before activation | controller-only Store overview |
+| `WASM_STORE_SINGLE_ADOPTED_STORE_REQUIRED` | 1 | `WasmStorePublicationWorkflow::snapshot_adopted_wasm_store`; publication snapshot does not observe exactly one adopted sibling Store | self; existing exact identity | Reconcile root Store inventory before snapshot/publication | controller-only Store overview |
 
 All three sites reuse identities already qualified by dynamic-context rows
 `DPC-079`, `DPC-084` and `DPC-085`. Store counts remain in the guarded overview
@@ -84,11 +84,11 @@ and disappear from diagnostic prose.
 
 ## Physical Store Stop And Deletion
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `ROOT_STORE_DELETION_STOP_IN_PROGRESS` | 2 | Exact Store status is `Stopping` before the stop call or after response-loss observation | self | Wait and re-observe; never issue another stop while stopping | guarded root deletion operation |
-| `ROOT_STORE_DELETION_STOP_NOT_EFFECTIVE` | 1 | A successful stop response is followed by an exact observation that the Store is still running | self | Preserve the durable deletion intent and retry only after re-observation | guarded root deletion operation |
-| `ROOT_STORE_DELETION_NOT_ABSENT` | 1 | A successful delete response is followed by an exact observation that the Store still exists | self | Preserve the intent and re-observe typed status; never infer absence from the response | guarded root deletion operation |
+| `ROOT_STORE_DELETION_STOP_IN_PROGRESS` | 2 | `stop_store_for_deletion`; exact Store status is `Stopping` before the stop call or after response-loss observation | self | Wait and re-observe; never issue another stop while stopping | guarded root deletion operation |
+| `ROOT_STORE_DELETION_STOP_NOT_EFFECTIVE` | 1 | `stop_store_for_deletion`; a successful stop response is followed by an exact observation that the Store is still running | self | Preserve the durable deletion intent and retry only after re-observation | guarded root deletion operation |
+| `ROOT_STORE_DELETION_NOT_ABSENT` | 1 | `delete_store_and_observe_absence`; a successful delete response is followed by an exact observation that the Store still exists | self | Preserve the intent and re-observe typed status; never infer absence from the response | guarded root deletion operation |
 
 The four sites add three exact meanings. Typed destination-invalid absence and
 every non-absence IC failure remain owned by the existing IC adapter; none of

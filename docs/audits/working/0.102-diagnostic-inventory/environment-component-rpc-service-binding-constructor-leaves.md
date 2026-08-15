@@ -1,6 +1,6 @@
 # Canic 0.102 Environment, Component RPC And Service-Binding Constructor Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -22,12 +22,12 @@ The five environment sites reuse two existing identities, add two exact
 protected-target meanings across two compound checks and retain one typed
 topology edge:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| reuse `ACCESS_BUILD_NETWORK_UNAVAILABLE` | 1 | `Invariant` / frozen build environment | self | Rebuild with an exact `ICP_ENVIRONMENT` identity |
-| reuse `ENV_REQUIRED_FIELDS_MISSING` | 1 | `Invariant` / runtime environment | `RUNTIME_ENVIRONMENT_INVALID` | Reinstall with every required protected environment field |
-| `MANAGED_CANISTER_INIT_ROLE_MISMATCH` / `MANAGED_CANISTER_INIT_CANISTER_MISMATCH` | 2 | `InvalidInput` / protected managed-runtime target | `COMPONENT_CHILD_AUTHORITY_INVALID` | Reinstall the Component or descendant with the exact compiled role and target Canister |
-| transparent typed Component-topology cause | 1 | protected Component/child binding validation | source projection | Preserve the exact reachable `ComponentTopologyError`; do not format it into a managed-init wrapper |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| reuse `ACCESS_BUILD_NETWORK_UNAVAILABLE` | 1 | `EnvWorkflow::init_env_from_args` missing `BuildNetworkOps::build_network` | `Invariant` / frozen build environment | self | Rebuild with an exact `ICP_ENVIRONMENT` identity |
+| reuse `ENV_REQUIRED_FIELDS_MISSING` | 1 | `EnvWorkflow::init_env_from_args` handling `EnvPolicyError::MissingEnvFields` | `Invariant` / runtime environment | `RUNTIME_ENVIRONMENT_INVALID` | Reinstall with every required protected environment field |
+| `MANAGED_CANISTER_INIT_ROLE_MISMATCH` / `MANAGED_CANISTER_INIT_CANISTER_MISMATCH` | 2 | `EnvWorkflow::init_component` and `EnvWorkflow::init_component_child` protected-target checks | `InvalidInput` / protected managed-runtime target | `COMPONENT_CHILD_AUTHORITY_INVALID` | Reinstall the Component or descendant with the exact compiled role and target Canister |
+| transparent typed Component-topology cause | 1 | `map_binding_error` called by `EnvWorkflow::init_component` and `EnvWorkflow::init_component_child` | protected Component/child binding validation | source projection | Preserve the exact reachable `ComponentTopologyError`; do not format it into a managed-init wrapper |
 
 The Component and Component-child constructors intentionally share the two
 managed-target leaves. After exact topology validation, both enforce the same
@@ -46,13 +46,13 @@ meaning or authority.
 The five workflow constructors expand to seven exact protected-lifecycle
 meanings:
 
-| Exact candidate | Sites | Current meaning | Public projection | Required hard cut |
-| --- | ---: | --- | --- | --- |
-| `RPC_COMPONENT_CHILD_PROVISION_BINDING_VARIANT_INVALID` | 1 | Child activation returned a top-level Component binding | `COMPONENT_CHILD_AUTHORITY_INVALID` | Preserve the returned binding kind and fail closed |
-| `RPC_COMPONENT_CHILD_PROVISION_COMPONENT_MISMATCH` / `RPC_COMPONENT_CHILD_PROVISION_PARENT_MISMATCH` / `RPC_COMPONENT_CHILD_PROVISION_ROLE_MISMATCH` | 1 | Terminal binding differs from the requested Component, transport parent or admitted role | `COMPONENT_CHILD_AUTHORITY_INVALID` for every leaf | Compare each field independently and never return a substituted Canister |
-| `RPC_COMPONENT_CHILD_RECYCLE_COMPONENT_MISMATCH` | 1 | Removal progress belongs to another Component tree | `COMPONENT_CHILD_AUTHORITY_INVALID` | Preserve the exact removal operation and fail closed |
-| `RPC_COMPONENT_CHILD_RECYCLE_TARGET_MISMATCH` | 1 | Removal progress names another target Canister | `COMPONENT_CHILD_AUTHORITY_INVALID` | Never redirect recycling to a different principal |
-| `RPC_COMPONENT_CHILD_RECYCLE_PARENT_MISMATCH` | 1 | Target is no longer bound to the transport caller as immediate parent | `COMPONENT_CHILD_AUTHORITY_INVALID` | Reauthenticate the exact parent after every awaited removal step |
+| Exact candidate | Sites | Producer function/branch | Current meaning | Public projection | Required hard cut |
+| --- | ---: | --- | --- | --- | --- |
+| `RPC_COMPONENT_CHILD_PROVISION_BINDING_VARIANT_INVALID` | 1 | `provision_component_child` terminal binding destructure | Child activation returned a top-level Component binding | `COMPONENT_CHILD_AUTHORITY_INVALID` | Preserve the returned binding kind and fail closed |
+| `RPC_COMPONENT_CHILD_PROVISION_COMPONENT_MISMATCH` / `RPC_COMPONENT_CHILD_PROVISION_PARENT_MISMATCH` / `RPC_COMPONENT_CHILD_PROVISION_ROLE_MISMATCH` | 1 | `provision_component_child` comparison with `ProvisionedChildIdentity::from_binding` | Terminal binding differs from the requested Component, transport parent or admitted role | `COMPONENT_CHILD_AUTHORITY_INVALID` for every leaf | Compare each field independently and never return a substituted Canister |
+| `RPC_COMPONENT_CHILD_RECYCLE_COMPONENT_MISMATCH` | 1 | `require_expected_recycle_identity` Component predicate | Removal progress belongs to another Component tree | `COMPONENT_CHILD_AUTHORITY_INVALID` | Preserve the exact removal operation and fail closed |
+| `RPC_COMPONENT_CHILD_RECYCLE_TARGET_MISMATCH` | 1 | `require_expected_recycle_identity` target predicate | Removal progress names another target Canister | `COMPONENT_CHILD_AUTHORITY_INVALID` | Never redirect recycling to a different principal |
+| `RPC_COMPONENT_CHILD_RECYCLE_PARENT_MISMATCH` | 1 | `require_expected_recycle_identity` caller-parent predicate | Target is no longer bound to the transport caller as immediate parent | `COMPONENT_CHILD_AUTHORITY_INVALID` | Reauthenticate the exact parent after every awaited removal step |
 
 `ProvisionedChildIdentity` is a useful comparison shape, but its equality
 result is not one diagnostic meaning. Component, parent and role are separate
@@ -66,13 +66,13 @@ successful or merely in progress.
 All five sites convert typed `FleetServiceBindingOpsError` values through the
 generic `OpsError` string boundary. They allocate no wrapper identity:
 
-| Adapter | Sites | Disposition |
-| --- | ---: | --- |
-| initial configuration compilation | 1 | Preserve the exact compiled configuration cause rather than `Configuration(String)` |
-| complete initial-service compilation | 1 | Exhaustively preserve the already-qualified Fleet-service binding or dependency leaf |
-| complete Scale Out compilation | 1 | Exhaustively preserve the already-qualified Fleet-service binding or dependency leaf |
-| planned-root receipt lookup | 1 | Preserve `FLEET_SERVICE_BINDING_ROOT_RECEIPT_INDEX_INVALID` |
-| terminal root-receipt validation | 1 | Preserve the exact qualified receipt identity, state, count, time, hash or result leaf |
+| Adapter | Sites | Producer function | Disposition |
+| --- | ---: | --- | --- |
+| initial configuration compilation | 1 | `FleetServiceBindingOps::compile_initial` | Preserve the exact compiled configuration cause rather than `Configuration(String)` |
+| complete initial-service compilation | 1 | `FleetServiceBindingOps::compile_initial_compiled` | Exhaustively preserve the already-qualified Fleet-service binding or dependency leaf |
+| complete Scale Out compilation | 1 | `FleetServiceBindingOps::compile_scale_out_compiled` | Exhaustively preserve the already-qualified Fleet-service binding or dependency leaf |
+| planned-root receipt lookup | 1 | `FleetServiceBindingOps::validate_provisioned_root_receipt_compiled` | Preserve `FLEET_SERVICE_BINDING_ROOT_RECEIPT_INDEX_INVALID` |
+| terminal root-receipt validation | 1 | `FleetServiceBindingOps::validate_provisioned_root_receipt_compiled` calling `validate_root_receipt` | Preserve the exact qualified receipt identity, state, count, time, hash or result leaf |
 
 The 22 Fleet-service binding meanings and their configuration, provisioning-
 plan and receipt-hashing dependencies are already qualified in

@@ -4,11 +4,12 @@ Date: 2026-08-12
 
 ## Status
 
-This is the complete current-source inventory of explicit public diagnostic
-construction and code-dependent control flow at immutable baseline
-`v0.101.53`. It allocates no numeric code. The larger internal producer ledger
-remains active because broad `InternalError` fallback projection can still
-reach the same public wire.
+This is the complete inventory of explicit public diagnostic construction at
+immutable baseline `v0.101.53`, plus the exact maintained production-consumer
+surface refreshed against pinned current-candidate source
+`0750c309104b111fa6f5a1b3355c04fcb38faf71`. It allocates no numeric code. The
+larger internal producer ledger remains active because broad `InternalError`
+fallback projection can still reach the same public wire.
 
 The boundary audit distinguishes three things that raw `ErrorCode` references
 cannot distinguish:
@@ -35,7 +36,7 @@ inline test modules in 26 production files. They are distributed as follows:
 | `canic-control-plane/workflow/component_rpc` | 4 | Component capability parent/recycle authority |
 | `canic-control-plane/workflow/runtime/template` | 5 | Store calls, response decoding, manifest lookup and publication mapping |
 | `canic-core/api/auth` | 17 | Delegated-token API and session admission |
-| `canic-core/api/blob_storage` | 11 | Current blob lifecycle and Cashier mapping pending the 0.108 hard cut |
+| `canic-core/api/blob_storage` | 11 | Current blob lifecycle and Cashier mapping pending the 0.109 hard cut |
 | `canic-core/api/error` | 5 | Broad fallback projection, not five final leaf meanings |
 | `canic-core/workflow/cost_guard` | 2 | Invalid permit and exhausted protected-operation budget |
 | `canic-core/workflow/ic/icp_refill/replay` | 7 | ICP-refill replay conflict and quota decisions |
@@ -73,10 +74,10 @@ The current 20-leaf enum is an inventory input, not the proposed allocation:
 | `Conflict` | Replay, operation, lifecycle, Registry, Directory, GC and funding states | Broad class only; split by owner, retry and operation identity behavior |
 | `Forbidden` | Authenticated denial, missing membership, authority mismatch and disabled policy | Broad class only; split before any recovery consumer is converted |
 | `Internal` | Encoding, invalid response and unprojected infra/ops/workflow failures | Broad class only; internal leaves need explicit safe projection and observability |
-| `InternalRpcMalformed` | Cashier response mapping in the current blob subsystem | Cover while current; do not preserve after the independent 0.108 hard cut removes its producer |
+| `InternalRpcMalformed` | Cashier response mapping in the current blob subsystem | Cover while current; do not preserve after the independent 0.109 hard cut removes its producer |
 | `InvalidInput` | Configuration, envelope, proof, replay metadata and request validation | Broad class only; split by owner and caller correction |
 | `InvariantViolation` | Publication, decoding and impossible state | Broad class only; most leaves require masking plus numeric observability |
-| `NotFound` | Current blob object not live | Cover the current producer; 0.108 determines its later retirement |
+| `NotFound` | Current blob object not live | Cover the current producer; 0.109 determines its later retirement |
 | `OperationIdRequired` | Missing replay identity in several unrelated command families | Split by owning command family because origin and remediation differ |
 | `ResourceExhausted` | Quotas, capacities, overflow and funding policy | Broad class only; preserve capacity-specific machine decisions |
 | `RootDataCertificateUnavailable` | Certified-query proof requested without a data certificate | Already narrow; retain only for this exact query-context failure |
@@ -91,46 +92,63 @@ None of these names or groupings reserves a numeric identity.
 
 ## Code-Dependent Machine Decisions
 
-These current consumers do more than render an error. The final allocation and
-mapping tests must preserve each decision independently:
+These twelve current production consumers do more than render an error. The
+final allocation and mapping tests must preserve each decision independently.
+The source coordinates identify the pinned current-candidate code, not moving
+worktree lines.
 
-| Consumer | Current match | Current decision | Required semantic boundary |
-| --- | --- | --- | --- |
-| `canic-control-plane/src/workflow/component_rpc/mod.rs` | any `Forbidden` from active-member resolution | Attempt durable subtree-removal recovery | Match only the exact member-not-active/missing leaf; unrelated authorization failures must not enter recovery |
-| `canic-core/src/access/auth/token.rs` | `AuthProofExpired`, `AuthTokenExpired` | Convert to certificate-expired or token-expired access state | Keep the two expiry owners distinct |
-| `canic-core/src/workflow/runtime/auth/prepare/mod.rs` | `AuthMaterialStale` or `AuthProofExpired` | Run one lazy root-proof repair, then revalidate replay ownership | Match only repairable delegation-material leaves |
-| `canic-core/src/workflow/runtime/auth/provisioning/mod.rs` | four auth/input leaves | Classify installation as expired/superseded, proof mismatch or signer rejection | Give every branch an exact typed mapping; unknown codes remain signer rejection |
-| `canic-core/src/workflow/runtime/auth/renewal.rs` | `AuthProofPending`, `Conflict`, `Unavailable`, or internal infra/ops | Schedule bounded renewal retry | Replace broad conflict/unavailable matching with exact retryable leaves |
-| `canic-core/src/workflow/runtime/cycles/mod.rs` | any public `Conflict`, or internal infra/ops | Retry automatic funding | Match the exact funding-in-progress/transient leaves only |
-| `canic-core/src/workflow/runtime/cycles/mod.rs` through `InternalError::is_public_resource_exhausted` | any public `ResourceExhausted` | Consume one resource-exhaustion recovery opportunity | Replace the broad-class predicate with the exact recoverable capacity leaf set |
-| `canic-host/src/install_root/fleet_component_provisioning_install/mod.rs` | any `Unavailable` | Treat status as not prepared and invoke prepare | Match only the exact provisioning-not-prepared leaf |
-| `canic-host/src/fleet_subnet_root_deletion/mod.rs` | any `Unavailable` | Treat optional terminal status as absent | Match only the exact terminal-receipt-absent leaf; transport or fenced state must remain failures |
-| Store template/publication workflows and metrics | Store leaves plus broad conflict/invariant/not-found | Select missing-chunk, hash, manifest, capacity or invariant metric/recovery reason | Preserve exhaustive Store-specific identities and stop collapsing unrelated broad leaves |
+| Consumer function | Baseline site | Current match | Current decision | Required exact replacement |
+| --- | --- | --- | --- | --- |
+| `recycle_target_authority` | `crates/canic-control-plane/src/workflow/component_rpc/mod.rs:58-69` | any `Forbidden` from active-member resolution | Attempt durable subtree-removal recovery | Match only the exact member-not-active or missing leaf; unrelated authorization failures must not enter recovery |
+| `WasmStoreMetricReason::from_manifest_source_error` | `crates/canic-control-plane/src/workflow/runtime/template/mod.rs:344-359` | three Store leaves, any other public leaf, or no public projection | Select missing-chunk, hash, manifest, Store-call or invalid-state metric reason | Preserve exhaustive Store-specific identities and distinguish non-Store public failures from internal invariant state |
+| `WasmStoreMetricReason::from_publication_error` | `crates/canic-control-plane/src/workflow/runtime/template/publication/release/metrics.rs:18-37` | four Store leaves plus broad conflict, invariant and not-found classes | Select capacity, missing-chunk, hash, manifest, Store-call or invalid-state metric reason | Match the exact publication leaves; unrelated broad-class failures must not become publication state |
+| `access_error_from_verification` | `crates/canic-core/src/access/auth/token.rs:68-74` | `AuthProofExpired`, `AuthTokenExpired`, or other | Convert to certificate-expired, token-expired or denied access state | Keep the two expiry owners distinct and replace the prose-carrying catch-all with an exact safe access cause |
+| `delegated_token_prepare_error_allows_lazy_repair` | `crates/canic-core/src/workflow/runtime/auth/prepare/mod.rs:342-349` | `AuthMaterialStale` or `AuthProofExpired` | Run one lazy root-proof repair, then revalidate replay ownership | Match only repairable delegation-material leaves |
+| `IssuerProofInstallError::record_failure` | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs:232-247` | four auth/input leaves plus catch-all | Classify installation as expired or superseded, proof mismatch or signer rejection | Give every branch an exact typed mapping; unknown codes remain signer rejection |
+| `is_retryable_renewal_error` | `crates/canic-core/src/workflow/runtime/auth/renewal.rs:323-333` | `AuthProofPending`, any `Conflict`, any `Unavailable`, or internal infra/ops | Schedule bounded renewal retry | Replace broad class and public matches with the exact retryable renewal leaves |
+| `is_retryable_funding_error` | `crates/canic-core/src/workflow/runtime/cycles/mod.rs:340-347` | any public `Conflict`, or internal infra/ops | Retry automatic funding | Match only exact funding-in-progress and transient transport leaves |
+| `InternalError::is_public_resource_exhausted` | `crates/canic-core/src/error.rs:159-162` | any public `ResourceExhausted` | Classify a failure as eligible for resource-exhaustion recovery | Replace the broad class with the exact recoverable capacity leaf set |
+| `claim_resource_exhaustion_recovery` | `crates/canic-core/src/workflow/runtime/cycles/mod.rs:349-352` | the resource-exhaustion classifier plus an in-memory one-shot fence | Consume one resource-exhaustion recovery opportunity | Preserve the exact eligible leaf set and one-shot budget as separate decisions |
+| `query_or_prepare` | `crates/canic-host/src/install_root/fleet_component_provisioning_install/mod.rs:144-165` | any rejected `Unavailable` | Treat status as not prepared and invoke prepare | Match only the exact provisioning-not-prepared leaf |
+| `query_optional` | `crates/canic-host/src/fleet_subnet_root_deletion/mod.rs:900-915` | any rejected `Unavailable` | Treat optional terminal status as absent | Match only the exact terminal-receipt-absent leaf; transport or fenced state must remain failures |
 
 The two host `Unavailable` consumers prove that a one-for-one replacement of
 the current enum is unsafe: the same broad leaf currently authorizes different
 effects. The component recycle and automatic funding consumers show the same
 problem for `Forbidden`, `Conflict` and `ResourceExhausted` inside Canisters.
 
-## Rendering-Only Consumers
+## Transparent Decode And Rendering Consumers
 
-The central ICP response decoder, replica-query decoder, `canic inspect` and
-cycles CLI preserve or display the current error without authorizing a state
-transition. They must move to the host catalogue in B2/B3, but they do not
-define leaf semantics.
+These six production consumers preserve, compare or display a diagnostic
+without defining one of the semantic decisions above. They must move to the
+host catalogue in B2/B3, but they do not define leaf allocation.
 
-`canic-cli` currently stores `ErrorCode` plus message in
-`CyclesCommandError::IcpRefillRejected`. The compact cut replaces that pair
-with the raw diagnostic identity and host rendering; CLI code must not gain a
-second copy of catalogue prose.
+| Consumer function | Baseline site | Current input | Current behavior | Required exact replacement |
+| --- | --- | --- | --- | --- |
+| `decode_json_result_response` | `crates/canic-host/src/icp/response/mod.rs:56-65` | canonical ICP response containing `Result<T, Error>` | Decode and preserve a rejected endpoint error | Decode arbitrary raw numeric identity losslessly and let the central host catalogue render known codes |
+| `CanisterProtocolError::is_rejected_with` | `crates/canic-host/src/canister_protocol/mod.rs:69-78` | one rejected endpoint error and caller-selected current enum leaf | Perform an exact equality predicate for host workflows | Compare raw identities exactly; callers must supply the narrow registered host constant they own |
+| `decode_cycle_balance_response` | `crates/canic-host/src/replica_query/mod.rs:34-41` | replica response containing `Result<u128, Error>` | Preserve a Canister rejection separately from transport and decode failures | Preserve arbitrary raw numeric identity and render it through the central catalogue |
+| `CyclesCommandError::IcpRefillRejected` | `crates/canic-cli/src/cycles/mod.rs:34-70` | current `ErrorCode` plus message | Retain and render the endpoint rejection | Retain the raw identity only and delegate rich rendering to `canic-host` |
+| `decode_icp_refill_response` | `crates/canic-cli/src/cycles/convert/response.rs:60-83` | ICP refill response containing `Result<_, Error>` | Split endpoint rejection from malformed or mismatched terminal response | Preserve the raw rejection identity without copying message or catalogue prose into the CLI |
+| `runtime_response_payload` | `crates/canic-cli/src/inspect/mod.rs:357-365` | runtime-status endpoint response through the central host decoder | Propagate a typed host rejection while rendering the successful report locally | Keep endpoint failure rendering centralized and leave runtime-status report rendering independent |
+
+Canic-owned test decoders and assertions remain verification consumers rather
+than runtime policy or catalogue authorities. Their complete source update is
+part of the atomic B3 contract cut; they do not add semantic rows to this
+production-consumer manifest.
+
+The combined production surface therefore contains twelve machine-decision
+consumers and six transparent decode/render consumers. Each row is guarded as
+structured evidence; this closes the production consumer side of the B1
+manifest, but not the much larger exact producer-function mapping.
 
 ## Remaining B1 Work
 
-The public boundary is now bounded and its machine decisions are explicit.
-B1 still requires:
+The public boundary and maintained production-consumer surface are now bounded
+and mechanically explicit. B1 still requires:
 
-1. grouping all reachable internal constructors and typed conversions by
-   actionable invariant;
+1. binding every provisional exact identity to its exhaustive current producer
+   function or finite source-selected adapter set;
 2. classifying every dynamic value currently interpolated into a public message
    through [dynamic-public-context.md](dynamic-public-context.md), with an
    endpoint-specific typed owner for every caller-required unowned value;

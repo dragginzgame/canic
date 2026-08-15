@@ -420,7 +420,7 @@ Fleet policy writer.
   paid fallback absent. Grouped provisioning consumes only Ready pool assets;
   root maintenance remains the single automatic refill authority.
 - Deferred beyond 0.101: authenticated minimum-balance/fixed-top-up policy and
-  bounded overfunding warnings are owned by the accepted 0.113 Canister-estate
+  bounded overfunding warnings are owned by the accepted 0.114 Canister-estate
   design rather than this topology release.
 - Deferred beyond 0.101: any non-IC ledger funding design must separately prove
   exact-Subnet, guaranteed-response and expired-uncertainty fences before it

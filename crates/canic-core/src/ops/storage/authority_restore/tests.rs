@@ -110,6 +110,33 @@ fn sealed_authority_exposes_validated_state() {
 }
 
 #[test]
+fn validation_phases_do_not_commit_fence_transitions() {
+    reset();
+    let authority = principal(9);
+    let request = AuthoritySnapshotRequest {
+        operation_id: [83; 32],
+    };
+    AuthorityRestoreFenceOps::initialize(authority).expect("initialize");
+
+    AuthorityRestoreFenceOps::validate_prepare(request, authority).expect("validate prepare");
+    assert_eq!(
+        AuthorityRestoreFenceOps::status()
+            .expect("open status")
+            .phase,
+        AuthorityRestoreFencePhase::Open
+    );
+
+    AuthorityRestoreFenceOps::prepare(request, authority, 89, 97).expect("seal");
+    AuthorityRestoreFenceOps::validate_resume(request, authority, 89).expect("validate resume");
+    assert_eq!(
+        AuthorityRestoreFenceOps::status()
+            .expect("still sealed status")
+            .phase,
+        AuthorityRestoreFencePhase::Sealed
+    );
+}
+
+#[test]
 fn snapshot_seal_requires_a_nonzero_operation_identity() {
     reset();
     let authority = principal(7);

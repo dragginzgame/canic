@@ -10,11 +10,13 @@ use crate::{
     dto::{
         error::Error,
         runtime::{
-            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanicTimerStatus,
+            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanisterTimerStatus,
             RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary,
             RuntimeBlobStorageStatusSummary, RuntimeBuildInfo, RuntimeCheck, RuntimeDiagnostic,
             RuntimeFeatureStatus, RuntimeReceiptCapacityStatus, RuntimeStateDomainSummary,
             RuntimeStateSummary, RuntimeTopologyStatus, RuntimeVisibilityEntry,
+            TimerCallbackPerformanceStatus, TimerMemoryPageExtentStatus,
+            TimerMemoryPageSampleStatus,
         },
     },
     ops::{
@@ -28,11 +30,8 @@ use crate::{
         storage::intent::{RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD, ReceiptBackedIntentOps},
     },
     state_contract::{STATE_MANIFEST_SCHEMA_VERSION, canic_state_descriptors},
-    workflow::runtime::timer::{TimerRuntimeSnapshot, TimerWorkflow},
+    workflow::runtime::timer::TimerWorkflow,
 };
-
-const MAX_TIMER_SUBSYSTEM_BYTES: usize = 64;
-const MAX_TIMER_NAME_BYTES: usize = 96;
 const RUNTIME_FEATURE_SOURCE: &str = "compile_feature";
 const RUNTIME_FEATURE_FLAGS: [(&str, bool); 10] = [
     (
@@ -194,14 +193,19 @@ impl RuntimeIntrospectionApi {
             .as_ref()
             .ok()
             .map(|capacity| capacity.status);
-        let status = aggregate_runtime_status(readiness.status, receipt_capacity_status);
-        let (receipt_capacity, recent_failures) = match receipt_capacity_result {
-            Ok(capacity) => (Some(capacity), RecentFailureOps::snapshot()),
+        let timer_observation = timer_status_observation(TimerWorkflow::statuses(), observed_at_ns);
+        let status = aggregate_runtime_status(
+            readiness.status,
+            receipt_capacity_status,
+            timer_observation.check.status,
+        );
+        let (receipt_capacity, receipt_failure) = match receipt_capacity_result {
+            Ok(capacity) => (Some(capacity), None),
             Err(err) => {
                 let (class, origin) = err.log_fields();
                 (
                     None,
-                    RecentFailureOps::snapshot_with(RecentFailureInput {
+                    Some(RecentFailureInput {
                         occurred_at_ns: observed_at_ns,
                         subsystem: "intent_capacity".to_string(),
                         code: "receipt_capacity_unavailable".to_string(),
@@ -212,6 +216,11 @@ impl RuntimeIntrospectionApi {
                 )
             }
         };
+        let recent_failures = RecentFailureOps::snapshot_with_many(
+            [timer_observation.failure, receipt_failure]
+                .into_iter()
+                .flatten(),
+        );
 
         CanicRuntimeStatus {
             schema_version: RUNTIME_INTROSPECTION_SCHEMA_VERSION,
@@ -233,7 +242,8 @@ impl RuntimeIntrospectionApi {
                 subnet,
                 source: "runtime_observed".to_string(),
             }),
-            timers: timer_statuses(),
+            timers: timer_observation.timers,
+            timer_inventory: timer_observation.check,
             state,
             auth: Some(runtime_auth_status()),
             blob_storage: runtime_blob_storage_status(),
@@ -337,8 +347,13 @@ const fn receipt_capacity_condition(
 const fn aggregate_runtime_status(
     readiness: ReadinessStatus,
     receipt_capacity: Option<RuntimeCheckStatus>,
+    timer_inventory: RuntimeCheckStatus,
 ) -> RuntimeStatus {
     if matches!(readiness, ReadinessStatus::NotReady)
+        || matches!(
+            timer_inventory,
+            RuntimeCheckStatus::Fail | RuntimeCheckStatus::NotEvaluated
+        )
         || matches!(
             receipt_capacity,
             None | Some(RuntimeCheckStatus::Fail | RuntimeCheckStatus::NotEvaluated)
@@ -349,6 +364,7 @@ const fn aggregate_runtime_status(
         readiness,
         ReadinessStatus::Degraded | ReadinessStatus::NotEvaluated
     ) || matches!(receipt_capacity, Some(RuntimeCheckStatus::Warn))
+        || matches!(timer_inventory, RuntimeCheckStatus::Warn)
     {
         RuntimeStatus::Degraded
     } else {
@@ -371,46 +387,197 @@ fn runtime_blob_storage_status() -> Option<RuntimeBlobStorageStatusSummary> {
     })
 }
 
-fn timer_statuses() -> Vec<CanicTimerStatus> {
-    timer_statuses_from(TimerWorkflow::statuses())
+struct TimerStatusObservation {
+    check: RuntimeCheck,
+    timers: Vec<CanisterTimerStatus>,
+    failure: Option<RecentFailureInput>,
 }
 
-fn timer_statuses_from(snapshots: Vec<TimerRuntimeSnapshot>) -> Vec<CanicTimerStatus> {
+fn timer_status_observation(
+    snapshots: Result<Vec<ic_timers::TimerSnapshot>, crate::api::timer::TimerError>,
+    observed_at_ns: u64,
+) -> TimerStatusObservation {
+    match snapshots {
+        Ok(snapshots) => TimerStatusObservation {
+            check: RuntimeCheck {
+                category: "runtime".to_string(),
+                code: "timer_inventory_available".to_string(),
+                status: RuntimeCheckStatus::Pass,
+                subject: "shared_timer_registry".to_string(),
+                detail: "the complete canister-local timer inventory was observed".to_string(),
+                next: None,
+                source: "ic_timers".to_string(),
+            },
+            timers: timer_statuses_from(snapshots),
+            failure: None,
+        },
+        Err(error) => TimerStatusObservation {
+            check: RuntimeCheck {
+                category: "runtime".to_string(),
+                code: "timer_inventory_unavailable".to_string(),
+                status: RuntimeCheckStatus::Fail,
+                subject: "shared_timer_registry".to_string(),
+                detail: "the canister-local timer inventory could not be observed".to_string(),
+                next: Some(
+                    "retry runtime observation; inspect recent failures if unavailable persists"
+                        .to_string(),
+                ),
+                source: "ic_timers".to_string(),
+            },
+            timers: Vec::new(),
+            failure: Some(RecentFailureInput {
+                occurred_at_ns: observed_at_ns,
+                subsystem: "timer_runtime".to_string(),
+                code: "timer_inventory_unavailable".to_string(),
+                severity: FailureSeverity::Error,
+                summary: error.to_string(),
+                correlation_id: None,
+            }),
+        },
+    }
+}
+
+fn timer_statuses_from(snapshots: Vec<ic_timers::TimerSnapshot>) -> Vec<CanisterTimerStatus> {
     let mut timers = snapshots
         .into_iter()
         .map(|snapshot| {
-            let (subsystem, name) = split_timer_label(&snapshot.label);
-            CanicTimerStatus {
-                name,
-                subsystem,
-                scheduling_mode: snapshot.scheduling_mode,
-                registration: snapshot.registration,
-                condition: snapshot.condition,
-                enabled: snapshot.enabled,
-                generation: snapshot.generation,
-                next_due_at_ns: snapshot.next_due_at_ns,
-                last_outcome: snapshot.last_outcome,
-                last_work_count: snapshot.last_work_count,
-                last_success_at_ns: snapshot.last_success_at_ns,
-                last_failure_at_ns: snapshot.last_failure_at_ns,
-                consecutive_expected_failures: snapshot.consecutive_expected_failures,
-                schedules_since_runtime_start: snapshot.schedules_since_runtime_start,
-                executions_since_runtime_start: snapshot.executions_since_runtime_start,
-                successes_since_runtime_start: snapshot.successes_since_runtime_start,
-                expected_failures_since_runtime_start: snapshot
-                    .expected_failures_since_runtime_start,
-                invariant_failures_since_runtime_start: snapshot
-                    .invariant_failures_since_runtime_start,
-                stale_callbacks_since_runtime_start: snapshot.stale_callbacks_since_runtime_start,
+            let identity = snapshot.identity();
+            let observability = snapshot.observability();
+            let outcomes = observability.outcomes();
+            let counters = observability.counters();
+            let performance = observability.performance();
+            let condition = timer_process_condition(snapshot.process_condition());
+            CanisterTimerStatus {
+                name: identity.name().to_string(),
+                owner: identity.owner().to_string(),
+                subsystem: identity.subsystem().to_string(),
+                scheduling_mode: timer_scheduling_mode(snapshot.scheduling_mode()),
+                registration: timer_registration_status(snapshot.registration_status()),
+                condition,
+                enabled: condition != crate::domain::runtime::TimerProcessCondition::Disabled,
+                generation: snapshot.generation(),
+                next_due_at_ns: snapshot.next_deadline_ns(),
+                last_outcome: outcomes.last_outcome().map(timer_execution_outcome),
+                last_work_count: outcomes.last_work_count().unwrap_or_default(),
+                last_success_at_ns: outcomes.last_success_at_ns(),
+                last_failure_at_ns: outcomes.last_failure_at_ns(),
+                consecutive_expected_failures: outcomes.consecutive_expected_failures(),
+                schedules_since_runtime_start: counters.wakeups_armed(),
+                executions_since_runtime_start: counters.work_started(),
+                successes_since_runtime_start: counters
+                    .succeeded()
+                    .saturating_add(counters.no_work()),
+                expected_failures_since_runtime_start: counters.retryable_failure(),
+                invariant_failures_since_runtime_start: counters.invariant_failure(),
+                stale_callbacks_since_runtime_start: counters
+                    .stale_wakeups()
+                    .saturating_add(counters.stale_work()),
+                scheduler_performance: timer_callback_performance_status(
+                    performance.scheduler_instructions(),
+                    performance.scheduler_memory_pages(),
+                ),
+                work_performance: timer_callback_performance_status(
+                    performance.work_instructions(),
+                    performance.work_memory_pages(),
+                ),
             }
         })
         .collect::<Vec<_>>();
     timers.sort_by(|left, right| {
-        left.subsystem
-            .cmp(&right.subsystem)
+        left.owner
+            .cmp(&right.owner)
+            .then_with(|| left.subsystem.cmp(&right.subsystem))
             .then_with(|| left.name.cmp(&right.name))
     });
     timers
+}
+
+fn timer_callback_performance_status(
+    instructions: ic_timers::MeasurementSummary,
+    memory: ic_timers::MemoryPageSummary,
+) -> TimerCallbackPerformanceStatus {
+    TimerCallbackPerformanceStatus {
+        instruction_samples_since_runtime_start: instructions.samples(),
+        instructions_latest: instructions.latest(),
+        instructions_maximum: instructions.maximum(),
+        instructions_total_since_runtime_start: instructions.total(),
+        memory_page_samples_since_runtime_start: memory.samples(),
+        memory_pages_latest: memory.latest().map(timer_memory_page_sample_status),
+        maximum_wasm_memory_growth_pages: memory.maximum_wasm_growth_pages(),
+        maximum_stable_memory_growth_pages: memory.maximum_stable_growth_pages(),
+    }
+}
+
+const fn timer_memory_page_sample_status(
+    sample: ic_timers::MemoryPageSample,
+) -> TimerMemoryPageSampleStatus {
+    TimerMemoryPageSampleStatus {
+        start: timer_memory_page_extent_status(sample.start()),
+        end: timer_memory_page_extent_status(sample.end()),
+    }
+}
+
+const fn timer_memory_page_extent_status(
+    extent: ic_timers::MemoryPageExtent,
+) -> TimerMemoryPageExtentStatus {
+    TimerMemoryPageExtentStatus {
+        wasm_pages: extent.wasm_pages(),
+        stable_pages: extent.stable_pages(),
+    }
+}
+
+const fn timer_scheduling_mode(
+    value: ic_timers::TimerSchedulingMode,
+) -> crate::domain::runtime::TimerSchedulingMode {
+    use crate::domain::runtime::TimerSchedulingMode as Canic;
+    use ic_timers::TimerSchedulingMode as Shared;
+    match value {
+        Shared::Once => Canic::Once,
+        Shared::AfterCompletion => Canic::AfterCompletion,
+        Shared::Deadline => Canic::Deadline,
+        Shared::Retry => Canic::Retry,
+        Shared::Continuation => Canic::Continuation,
+        Shared::Watchdog => Canic::Watchdog,
+    }
+}
+
+const fn timer_registration_status(
+    value: ic_timers::TimerRegistrationStatus,
+) -> crate::domain::runtime::TimerRegistrationStatus {
+    use crate::domain::runtime::TimerRegistrationStatus as Canic;
+    match value {
+        ic_timers::TimerRegistrationStatus::Unregistered => Canic::Unregistered,
+        ic_timers::TimerRegistrationStatus::Scheduled => Canic::Scheduled,
+        ic_timers::TimerRegistrationStatus::Running => Canic::Running,
+    }
+}
+
+const fn timer_process_condition(
+    value: ic_timers::TimerProcessCondition,
+) -> crate::domain::runtime::TimerProcessCondition {
+    use crate::domain::runtime::TimerProcessCondition as Canic;
+    match value {
+        ic_timers::TimerProcessCondition::Disabled => Canic::Disabled,
+        ic_timers::TimerProcessCondition::Idle => Canic::Idle,
+        ic_timers::TimerProcessCondition::Active => Canic::Active,
+        ic_timers::TimerProcessCondition::Retrying => Canic::Retrying,
+        ic_timers::TimerProcessCondition::Failed => Canic::Failed,
+    }
+}
+
+const fn timer_execution_outcome(
+    value: ic_timers::TimerLastOutcome,
+) -> crate::domain::runtime::TimerExecutionOutcome {
+    use crate::domain::runtime::TimerExecutionOutcome as Canic;
+    match value {
+        ic_timers::TimerLastOutcome::Completed(completion) => match completion {
+            ic_timers::TimerCompletionOutcome::Success => Canic::Success,
+            ic_timers::TimerCompletionOutcome::NoWork => Canic::NoWork,
+            ic_timers::TimerCompletionOutcome::RetryableFailure => Canic::RetryableFailure,
+            ic_timers::TimerCompletionOutcome::InvariantFailure => Canic::InvariantFailure,
+        },
+        ic_timers::TimerLastOutcome::Unacknowledged => Canic::Unacknowledged,
+    }
 }
 
 fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
@@ -453,54 +620,6 @@ fn state_summary_for_memory_ids(
     })
 }
 
-fn split_timer_label(label: &str) -> (String, String) {
-    label
-        .split_once("::")
-        .or_else(|| label.split_once(':'))
-        .map_or_else(
-            || {
-                (
-                    "runtime".to_string(),
-                    bounded_runtime_text(label, MAX_TIMER_NAME_BYTES),
-                )
-            },
-            |(subsystem, name)| {
-                (
-                    bounded_runtime_text(subsystem, MAX_TIMER_SUBSYSTEM_BYTES),
-                    bounded_runtime_text(name, MAX_TIMER_NAME_BYTES),
-                )
-            },
-        )
-}
-
-fn bounded_runtime_text(value: &str, max_bytes: usize) -> String {
-    let sanitized = value
-        .chars()
-        .map(|character| {
-            if character.is_control() {
-                ' '
-            } else {
-                character
-            }
-        })
-        .collect::<String>();
-
-    if sanitized.len() <= max_bytes {
-        return sanitized;
-    }
-
-    let mut end = 0;
-    for (index, character) in sanitized.char_indices() {
-        let next = index + character.len_utf8();
-        if next > max_bytes {
-            break;
-        }
-        end = next;
-    }
-
-    sanitized[..end].to_string()
-}
-
 fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
     [
         ("schema_version", RuntimeFieldVisibility::PublicSafe),
@@ -513,6 +632,7 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
         ("features", RuntimeFieldVisibility::OperatorOnly),
         ("topology", RuntimeFieldVisibility::ControllerOnly),
         ("timers", RuntimeFieldVisibility::OperatorOnly),
+        ("timer_inventory", RuntimeFieldVisibility::OperatorOnly),
         ("state", RuntimeFieldVisibility::OperatorOnly),
         ("auth", RuntimeFieldVisibility::OperatorOnly),
         ("blob_storage", RuntimeFieldVisibility::FeatureGated),
@@ -533,9 +653,6 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::runtime::{
-        TimerExecutionOutcome, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
-    };
     use crate::ids::IntentResourceKey;
     use crate::ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
@@ -553,6 +670,30 @@ mod tests {
         assert_eq!(health.observed_at_ns, Some(42));
         assert_eq!(health.checks.len(), 1);
         assert_eq!(health.checks[0].code, "canister_responsive");
+    }
+
+    #[test]
+    fn unavailable_timer_inventory_is_explicit_and_fails_runtime_status() {
+        let observation =
+            timer_status_observation(Err(crate::api::timer::TimerError::CustodyBusy), 101);
+
+        assert_eq!(observation.check.status, RuntimeCheckStatus::Fail);
+        assert!(observation.timers.is_empty());
+        assert_eq!(
+            observation
+                .failure
+                .as_ref()
+                .map(|failure| failure.code.as_str()),
+            Some("timer_inventory_unavailable")
+        );
+        assert_eq!(
+            aggregate_runtime_status(
+                ReadinessStatus::Ready,
+                Some(RuntimeCheckStatus::Pass),
+                observation.check.status,
+            ),
+            RuntimeStatus::Failing
+        );
     }
 
     #[test]
@@ -605,6 +746,7 @@ mod tests {
             ("features", RuntimeFieldVisibility::OperatorOnly),
             ("topology", RuntimeFieldVisibility::ControllerOnly),
             ("timers", RuntimeFieldVisibility::OperatorOnly),
+            ("timer_inventory", RuntimeFieldVisibility::OperatorOnly),
             ("state", RuntimeFieldVisibility::OperatorOnly),
             ("auth", RuntimeFieldVisibility::OperatorOnly),
             ("blob_storage", RuntimeFieldVisibility::FeatureGated),
@@ -673,11 +815,23 @@ mod tests {
             RuntimeCheckStatus::Fail
         );
         assert_eq!(
-            aggregate_runtime_status(ReadinessStatus::Ready, Some(RuntimeCheckStatus::Warn)),
+            aggregate_runtime_status(
+                ReadinessStatus::Ready,
+                Some(RuntimeCheckStatus::Warn),
+                RuntimeCheckStatus::Pass,
+            ),
             RuntimeStatus::Degraded
         );
         assert_eq!(
-            aggregate_runtime_status(ReadinessStatus::Ready, None),
+            aggregate_runtime_status(ReadinessStatus::Ready, None, RuntimeCheckStatus::Pass,),
+            RuntimeStatus::Failing
+        );
+        assert_eq!(
+            aggregate_runtime_status(
+                ReadinessStatus::Ready,
+                Some(RuntimeCheckStatus::Pass),
+                RuntimeCheckStatus::Fail,
+            ),
             RuntimeStatus::Failing
         );
     }
@@ -710,7 +864,8 @@ mod tests {
         assert!(status.receipt_capacity.is_none());
         let failure = status
             .recent_failures
-            .first()
+            .iter()
+            .find(|failure| failure.code == "receipt_capacity_unavailable")
             .expect("current capacity failure diagnostic");
         assert_eq!(failure.subsystem, "intent_capacity");
         assert_eq!(failure.code, "receipt_capacity_unavailable");
@@ -817,57 +972,6 @@ mod tests {
     }
 
     #[test]
-    fn runtime_status_projects_live_registration_and_process_condition() {
-        let statuses = timer_statuses_from(vec![timer_snapshot("cycles:topup")]);
-
-        assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].subsystem, "cycles");
-        assert_eq!(statuses[0].name, "topup");
-        assert_eq!(statuses[0].registration, TimerRegistrationStatus::Scheduled);
-        assert_eq!(statuses[0].condition, TimerProcessCondition::Active);
-        assert_eq!(
-            statuses[0].last_outcome,
-            Some(TimerExecutionOutcome::Success)
-        );
-        assert_eq!(statuses[0].schedules_since_runtime_start, 3);
-    }
-
-    #[test]
-    fn runtime_status_bounds_timer_labels() {
-        let label = format!("{}\n:{}\n", "subsystem".repeat(12), "timer_name".repeat(16));
-        let status = timer_statuses_from(vec![timer_snapshot(&label)]);
-
-        assert_eq!(status.len(), 1);
-        assert!(status[0].subsystem.len() <= MAX_TIMER_SUBSYSTEM_BYTES);
-        assert!(status[0].name.len() <= MAX_TIMER_NAME_BYTES);
-        assert!(!status[0].subsystem.contains('\n'));
-        assert!(!status[0].name.contains('\n'));
-    }
-
-    fn timer_snapshot(label: &str) -> TimerRuntimeSnapshot {
-        TimerRuntimeSnapshot {
-            label: label.to_string(),
-            scheduling_mode: TimerSchedulingMode::AfterCompletion,
-            registration: TimerRegistrationStatus::Scheduled,
-            condition: TimerProcessCondition::Active,
-            enabled: true,
-            generation: 4,
-            next_due_at_ns: Some(500),
-            last_outcome: Some(TimerExecutionOutcome::Success),
-            last_work_count: 2,
-            last_success_at_ns: Some(400),
-            last_failure_at_ns: None,
-            consecutive_expected_failures: 0,
-            schedules_since_runtime_start: 3,
-            executions_since_runtime_start: 2,
-            successes_since_runtime_start: 2,
-            expected_failures_since_runtime_start: 0,
-            invariant_failures_since_runtime_start: 0,
-            stale_callbacks_since_runtime_start: 0,
-        }
-    }
-
-    #[test]
     fn state_summary_joins_runtime_memory_ids_to_owner_metadata() {
         let summary = state_summary_for_memory_ids(
             Some("root"),
@@ -911,10 +1015,13 @@ mod tests {
             7,
         );
 
-        assert_eq!(status.recent_failures.len(), 1);
-        assert_eq!(status.recent_failures[0].occurred_at_ns, 77);
-        assert_eq!(status.recent_failures[0].subsystem, "runtime");
-        assert_eq!(status.recent_failures[0].code, "readiness_failed");
+        let failure = status
+            .recent_failures
+            .iter()
+            .find(|failure| failure.code == "readiness_failed")
+            .expect("retained recent failure");
+        assert_eq!(failure.occurred_at_ns, 77);
+        assert_eq!(failure.subsystem, "runtime");
 
         RecentFailureOps::reset();
     }

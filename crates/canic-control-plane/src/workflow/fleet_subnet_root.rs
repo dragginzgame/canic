@@ -288,7 +288,7 @@ pub async fn begin_draining(
         &reservation,
         IcOps::now_nanos(),
     )?;
-    crate::workflow::canister_pool::stop();
+    crate::workflow::canister_pool::stop()?;
     Ok(draining_response(draining))
 }
 

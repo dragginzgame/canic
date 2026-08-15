@@ -1,6 +1,6 @@
 # Canic 0.102 Final Small-Adapter Constructor Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -21,10 +21,10 @@ impossible-state distinctions.
 
 ## Control-Plane Configuration And Root Authority
 
-| Exact candidate or disposition | Effective sites | Current meaning | Public projection | Action and retry |
+| Exact candidate or disposition | Effective sites | Producer function/branch | Public projection | Action and retry |
 | --- | ---: | --- | --- | --- |
-| `WASM_STORE_RUNTIME_ROLE_INVALID` | 1 | The Store-only configuration facade is executing under another protected runtime role | `RUNTIME_CONFIGURATION_INVALID` | Reinstall the Wasm Store with its exact protected role; never reinterpret another role as a Store |
-| reuse `ROOT_PROTECTED_AUTHORITY_MISMATCH` | 1 | Protected Fleet Subnet Root binding names another Canister | `COMPONENT_REGISTRY_STATE_INVALID` | Preserve the binding, fail closed and reinstall the exact root authority |
+| `WASM_STORE_RUNTIME_ROLE_INVALID` | 1 | `current_wasm_store`; the Store-only configuration facade is executing under another protected runtime role | `RUNTIME_CONFIGURATION_INVALID` | Reinstall the Wasm Store with its exact protected role; never reinterpret another role as a Store |
+| reuse `ROOT_PROTECTED_AUTHORITY_MISMATCH` | 1 | `validated_root_authority`; protected Fleet Subnet Root binding names another Canister | `COMPONENT_REGISTRY_STATE_INVALID` | Preserve the binding, fail closed and reinstall the exact root authority |
 
 The current role string is not diagnostic authority. The protected environment
 retains it; B4 selects the exact Store-role identity and emits no role prose.
@@ -34,13 +34,13 @@ retains it; B4 selects the exact Store-role identity and emits no role prose.
 The formatted `authority + reason` helper hides five independently repairable
 protected-inventory failures:
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry |
 | --- | ---: | --- | --- | --- |
-| `ROOT_STATE_CASCADE_STORE_PRINCIPAL_ANONYMOUS` | 1 | Store inventory contains the anonymous principal | self | Repair/reinstall root-owned Store inventory before another cascade |
-| `ROOT_STATE_CASCADE_COMPONENT_PRINCIPAL_ANONYMOUS` | 1 | Component Registry root membership contains the anonymous principal | self | Repair/reinstall Component Registry authority before another cascade |
-| `ROOT_STATE_CASCADE_STORE_ROOT_PRINCIPAL_CONFLICT` | 1 | Store inventory names the Fleet Subnet Root as its own child | self | Repair the root/Store authority; never cascade to self as a child |
-| `ROOT_STATE_CASCADE_COMPONENT_ROOT_PRINCIPAL_CONFLICT` | 1 | Component Registry membership names the Fleet Subnet Root as a Component | self | Repair Component membership; never cascade to self as a Component |
-| `ROOT_STATE_CASCADE_INVENTORY_OVERLAP` | 1 | One principal appears in more than one root-owned inventory | self | Preserve both authorities and reconcile the duplicate before retry |
+| `ROOT_STATE_CASCADE_STORE_PRINCIPAL_ANONYMOUS` | 1 | `RootStateCascadeTargets::insert`; Store inventory contains the anonymous principal | self | Repair/reinstall root-owned Store inventory before another cascade |
+| `ROOT_STATE_CASCADE_COMPONENT_PRINCIPAL_ANONYMOUS` | 1 | `RootStateCascadeTargets::insert`; Component Registry root membership contains the anonymous principal | self | Repair/reinstall Component Registry authority before another cascade |
+| `ROOT_STATE_CASCADE_STORE_ROOT_PRINCIPAL_CONFLICT` | 1 | `RootStateCascadeTargets::insert`; Store inventory names the Fleet Subnet Root as its own child | self | Repair the root/Store authority; never cascade to self as a child |
+| `ROOT_STATE_CASCADE_COMPONENT_ROOT_PRINCIPAL_CONFLICT` | 1 | `RootStateCascadeTargets::insert`; Component Registry membership names the Fleet Subnet Root as a Component | self | Repair Component membership; never cascade to self as a Component |
+| `ROOT_STATE_CASCADE_INVENTORY_OVERLAP` | 1 | `RootStateCascadeTargets::insert`; one principal appears in more than one root-owned inventory | self | Preserve both authorities and reconcile the duplicate before retry |
 
 These exact identities reveal no principal. Source authority changes the repair
 owner, so Store and Component anonymous/root-conflict paths must not collapse.
@@ -66,16 +66,16 @@ None receives a wrapper code or forwards source formatter text.
 One `canonical_error` constructor currently merges eight live canonicalization
 meanings and one impossible length branch:
 
-| Exact candidate or disposition | Sites | Current meaning | Public projection | Action and retry |
+| Exact candidate or disposition | Sites | Producer function/branch | Public projection | Action and retry |
 | --- | ---: | --- | --- | --- |
-| `FLEET_ACTIVATION_CASCADE_MANIFEST_CAPACITY_EXCEEDED` | 1 | Cascade manifest leaves no bounded slot for the root | `FLEET_ACTIVATION_STATE_INVALID` | Correct bounded inventory construction before hashing |
-| `FLEET_ACTIVATION_CREDENTIAL_MANIFEST_GENERATION_INVALID` | 1 | Credential manifest generation is zero | `FLEET_ACTIVATION_STATE_INVALID` | Rebuild from a positive protected generation |
-| `FLEET_ACTIVATION_CREDENTIAL_MANIFEST_ENTRY_LIMIT_EXCEEDED` | 1 | Credential manifest exceeds its frozen entry bound | `FLEET_ACTIVATION_STATE_INVALID` | Reduce/fix bounded manifest construction before hashing |
-| `FLEET_ACTIVATION_CREDENTIAL_GENERATION_INVALID` | 1 | Activation evidence names generation zero | `FLEET_ACTIVATION_STATE_INVALID` | Rebuild evidence from the exact positive generation |
-| `FLEET_ACTIVATION_CASCADE_MANIFEST_ORDER_INVALID` | 1 | Cascade principals are not in strict canonical order | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the manifest canonically; do not hash reordered contradictory input |
-| `FLEET_ACTIVATION_CREDENTIAL_MANIFEST_SUBJECT_ORDER_INVALID` | 1 | Credential subjects are not in strict canonical order | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the credential manifest canonically |
-| `FLEET_ACTIVATION_TOPOLOGY_PARENT_ORDER_INVALID` | 1 | Topology children-map parents are not strictly ordered | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the protected topology map canonically |
-| `FLEET_ACTIVATION_TOPOLOGY_CHILD_ORDER_INVALID` | 1 | One topology child list is not strictly ordered | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the exact child list canonically |
+| `FLEET_ACTIVATION_CASCADE_MANIFEST_CAPACITY_EXCEEDED` | 1 | `FleetActivationEvidenceOps::cascade_manifest_hash`; cascade manifest leaves no bounded slot for the root | `FLEET_ACTIVATION_STATE_INVALID` | Correct bounded inventory construction before hashing |
+| `FLEET_ACTIVATION_CREDENTIAL_MANIFEST_GENERATION_INVALID` | 1 | `FleetActivationEvidenceOps::credential_manifest_hash`; credential manifest generation is zero | `FLEET_ACTIVATION_STATE_INVALID` | Rebuild from a positive protected generation |
+| `FLEET_ACTIVATION_CREDENTIAL_MANIFEST_ENTRY_LIMIT_EXCEEDED` | 1 | `FleetActivationEvidenceOps::credential_manifest_hash`; credential manifest exceeds its frozen entry bound | `FLEET_ACTIVATION_STATE_INVALID` | Reduce/fix bounded manifest construction before hashing |
+| `FLEET_ACTIVATION_CREDENTIAL_GENERATION_INVALID` | 1 | `FleetActivationEvidenceOps::activation_evidence_hash`; activation evidence names generation zero | `FLEET_ACTIVATION_STATE_INVALID` | Rebuild evidence from the exact positive generation |
+| `FLEET_ACTIVATION_CASCADE_MANIFEST_ORDER_INVALID` | 1 | `FleetActivationEvidenceOps::cascade_manifest_hash`; cascade principals are not in strict canonical order | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the manifest canonically; do not hash reordered contradictory input |
+| `FLEET_ACTIVATION_CREDENTIAL_MANIFEST_SUBJECT_ORDER_INVALID` | 1 | `FleetActivationEvidenceOps::credential_manifest_hash`; credential subjects are not in strict canonical order | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the credential manifest canonically |
+| `FLEET_ACTIVATION_TOPOLOGY_PARENT_ORDER_INVALID` | 1 | `encode_topology_snapshot`; topology children-map parents are not strictly ordered | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the protected topology map canonically |
+| `FLEET_ACTIVATION_TOPOLOGY_CHILD_ORDER_INVALID` | 1 | `encode_topology_snapshot`; one topology child list is not strictly ordered | `FLEET_ACTIVATION_STATE_INVALID` | Reconstruct the exact child list canonically |
 | remove unreachable encoded-length overflow | 1 | A resident `Vec<u8>` length cannot exceed `u64` on supported Wasm32 or 64-bit host targets | none | Remove the impossible branch; do not allocate permanent sediment |
 
 B4 replaces the string label passed to `require_strict_bytes_order` with a
@@ -85,12 +85,12 @@ an unreachable diagnostic.
 
 ## IC Funding, Reservation Hashing And Module Resolution
 
-| Exact candidate or reuse | Sites | Current meaning | Public projection | Action and retry |
+| Exact candidate or reuse | Sites | Current producer/meaning | Public projection | Action and retry |
 | --- | ---: | --- | --- | --- |
-| `CANISTER_CREATION_FUNDING_OVERFLOW` | 1 | Configured initial balance plus live Subnet creation cost exceeds `u128` | self | Correct the funding plan; never wrap or attach a truncated amount |
-| `ROOT_DRAINING_RESERVATION_ENCODE_FAILED` | 1 | Canonical Coordinator-owned draining reservation cannot be Candid encoded | self | Preserve the reservation and stop before accepting its hash |
-| reuse `ENV_MANAGED_BINDING_UNAVAILABLE` | 1 | Runtime has no protected managed binding | `ACCESS_DEPENDENCY_UNAVAILABLE` | Use a Registry-managed Component runtime after valid initialization |
-| `WASM_STORE_MODULE_SOURCE_RESOLVER_UNREGISTERED` | 1 | A maintained root/control-plane install facade has no registered Store-backed resolver | `RUNTIME_CONFIGURATION_UNAVAILABLE` | Complete resolver registration during root startup before install work |
+| `CANISTER_CREATION_FUNDING_OVERFLOW` | 1 | `IcOps::canister_creation_attached_cycles`; configured initial balance plus live Subnet creation cost exceeds `u128` | self | Correct the funding plan; never wrap or attach a truncated amount |
+| `ROOT_DRAINING_RESERVATION_ENCODE_FAILED` | 1 | `FleetSubnetRootDrainingReservationOps::content_hash`; canonical Coordinator-owned draining reservation cannot be Candid encoded | self | Preserve the reservation and stop before accepting its hash |
+| reuse `ENV_MANAGED_BINDING_UNAVAILABLE` | 1 | `EnvOps::managed_binding`; runtime has no protected managed binding | `ACCESS_DEPENDENCY_UNAVAILABLE` | Use a Registry-managed Component runtime after valid initialization |
+| `WASM_STORE_MODULE_SOURCE_RESOLVER_UNREGISTERED` | 1 | `ModuleSourceRuntimeApi::approved_module_source`; a maintained root/control-plane install facade has no registered Store-backed resolver | `RUNTIME_CONFIGURATION_UNAVAILABLE` | Complete resolver registration during root startup before install work |
 
 The reservation codec cause remains a finite typed implementation detail. The
 module-source facade remains maintained even though the current repository has
@@ -98,25 +98,25 @@ no ordinary endpoint caller, so missing registration is not dead code.
 
 ## Placement Index And Sharding Workflows
 
-| Exact candidate or disposition | Sites | Current meaning | Public projection | Action and retry |
+| Exact candidate or disposition | Sites | Producer function/branch | Public projection | Action and retry |
 | --- | ---: | --- | --- | --- |
-| `PLACEMENT_INDEX_STALE_REPAIR_CLAIM_LOST` | 1 | Stale repair loses its exact claim without crossing an await boundary | self | Preserve claim state and retry only after inspecting the conflicting local mutation |
-| `PLACEMENT_INDEX_FINAL_BIND_CLAIM_LOST` | 1 | A provisional child is attached but its exact claim disappears before final bind | self | Reconcile/recycle the provisional child; do not substitute another claim |
+| `PLACEMENT_INDEX_STALE_REPAIR_CLAIM_LOST` | 1 | `PlacementIndexWorkflow::repair_stale_entry`; stale repair loses its exact claim without crossing an await boundary | self | Preserve claim state and retry only after inspecting the conflicting local mutation |
+| `PLACEMENT_INDEX_FINAL_BIND_CLAIM_LOST` | 1 | `PlacementIndexWorkflow::finalize_created_instance`; a provisional child is attached but its exact claim disappears before final bind | self | Reconcile/recycle the provisional child; do not substitute another claim |
 | remove non-bound repair result branch | 1 | `repair_stale_entry` constructs only `Bound`, yet returns the broad status enum | none | Return a bound-only type and make the impossible match arm unrepresentable |
-| reuse `SHARDING_POOL_AT_CAPACITY` | 2 | Bootstrap/assignment observes the configured maximum shard count | self | Free capacity or increase the admitted maximum before retry |
-| reuse `SHARDING_NO_FREE_SLOTS` | 2 | Selection/bootstrap has no free configured slot | self | Increase/rebalance configured slots; do not retry unchanged |
+| reuse `SHARDING_POOL_AT_CAPACITY` | 2 | `ShardingWorkflow::bootstrap_empty_active` and `ShardingWorkflow::ensure_bootstrap_capacity`; bootstrap/assignment observes the configured maximum shard count | self | Free capacity or increase the admitted maximum before retry |
+| reuse `SHARDING_NO_FREE_SLOTS` | 2 | `ShardingWorkflow::bootstrap_empty_active` and `ShardingWorkflow::bootstrap_initial_shards_for_pool`; selection/bootstrap has no free configured slot | self | Increase/rebalance configured slots; do not retry unchanged |
 
 The Sharding helper must accept a typed exhaustion reason. Pool, partition key
 and the internal bootstrap sentinel are not part of either compact identity.
 
 ## Root RPC And Topology Guards
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry |
 | --- | ---: | --- | --- | --- |
-| `RPC_COMPONENT_MEMBER_REGISTRY_COMPONENT_MISMATCH` | 1 | Active member binding and supplied Registry head name different Component trees | `COMPONENT_CHILD_AUTHORITY_INVALID` | Re-resolve both values from the same protected membership lookup |
-| `RPC_REQUEST_CYCLES_REPLAY_RESPONSE_KIND_MISMATCH` | 1 | A cycles operation replays a terminal response from another capability kind | `RPC_RESPONSE_INVALID` | Preserve the receipt and fail closed; never reinterpret its response |
-| `RPC_CHILD_CREATION_OPERATION_ID_INVALID` | 1 | Generic child creation receives the all-zero operation identity | self | Generate one nonzero operation ID before request construction |
-| `TOPOLOGY_MUTATION_IN_PROGRESS` | 1 | Another topology mutation holds the workflow-local guard | self | Retry after the current bounded mutation completes |
+| `RPC_COMPONENT_MEMBER_REGISTRY_COMPONENT_MISMATCH` | 1 | `RootCapabilityMemberAuthority::try_from_active_member`; active member binding and supplied Registry head name different Component trees | `COMPONENT_CHILD_AUTHORITY_INVALID` | Re-resolve both values from the same protected membership lookup |
+| `RPC_REQUEST_CYCLES_REPLAY_RESPONSE_KIND_MISMATCH` | 1 | `response_replay_first_with_child`; a cycles operation replays a terminal response from another capability kind | `RPC_RESPONSE_INVALID` | Preserve the receipt and fail closed; never reinterpret its response |
+| `RPC_CHILD_CREATION_OPERATION_ID_INVALID` | 1 | `RpcRequestWorkflow::create_canister_request`; generic child creation receives the all-zero operation identity | self | Generate one nonzero operation ID before request construction |
+| `TOPOLOGY_MUTATION_IN_PROGRESS` | 1 | `TopologyGuard::try_enter`; another topology mutation holds the workflow-local guard | self | Retry after the current bounded mutation completes |
 
 The active-member mismatch remains distinct from missing Registry authority:
 both values exist, but their protected Component identity disagrees.
@@ -144,8 +144,9 @@ effective semantic frontier grows by fifteen, from 2,499 to 2,514, and is fully
 classified at 2,514 of 2,514. The later Component Registry capacity review
 corrects five post-precharge meanings, so that pass reaches 2,703 exact
 candidates plus 31 safe projections. The later complete current blob-family
-pass adds 23 exact identities, bringing that checkpoint to 2,757
-collision-free identities. The subsequent transitive RPC workflow-error pass
+pass adds 23 exact identities. Mechanical set reconciliation corrects that
+checkpoint to 2,758 collision-free identities; the former prose arithmetic was
+one low. The subsequent transitive RPC workflow-error pass
 adds nineteen exact identities outside this direct-constructor frontier.
 
 This pass closes only the direct-constructor frontier. Authentication dynamic

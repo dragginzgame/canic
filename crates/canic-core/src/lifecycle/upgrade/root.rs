@@ -14,6 +14,7 @@ pub fn post_upgrade_root_canister_before_bootstrap(
     config_source: &str,
     config_path: &str,
 ) -> bool {
+    crate::api::timer::TimerApi::initialize_root_runtime_required();
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Root,
@@ -55,6 +56,16 @@ pub fn post_upgrade_root_canister_before_bootstrap(
             format!("env restore failed (root upgrade): {err}"),
         );
     }
+    let sealed = crate::ops::storage::authority_restore::AuthorityRestoreFenceOps::is_sealed_for(
+        crate::ops::ic::IcOps::canister_self(),
+    )
+    .unwrap_or_else(|error| {
+        lifecycle_trap(
+            LifecyclePhase::PostUpgrade,
+            format!("authority restore fence recovery failed: {error}"),
+        )
+    });
+    crate::api::timer::TimerApi::restore_snapshot_suspension(sealed);
     let active = match workflow::runtime::post_upgrade_root_canister_after_memory_init() {
         Ok(active) => active,
         Err(err) => {

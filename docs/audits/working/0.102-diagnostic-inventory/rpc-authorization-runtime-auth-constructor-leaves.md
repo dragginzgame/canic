@@ -20,14 +20,14 @@ behavior.
 The six sites add five exact authority meanings and reuse the Component-caller
 identity qualified by the execution pass:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `RPC_PROVISION_PARENT_MODE_INVALID` | 1 | `InvalidInput` / structural request | self | Request only `ThisCanister` parentage for structural provisioning |
-| `RPC_PROVISION_PARENT_AUTHORITY_MISMATCH` | 1 | `Forbidden` / immediate-parent authority | self | Invoke from the exact registered immediate parent |
-| reuse `RPC_COMPONENT_CALLER_REQUIRED` | 1 | `Forbidden` / Component-child authority | self | A Fleet Subnet Root cannot present itself as the Component parent of a child recycle |
-| `RPC_CALLER_AUTHORITY_MISMATCH` | 1 | `Forbidden` / protected Registry caller | self | Derive authority for the exact transport caller; never substitute a presented binding |
-| `RPC_ROOT_CALLER_AUTHORITY_REQUIRED` | 1 | `Forbidden` / root self-call authority | self | Root self-calls must use the protected Fleet Subnet Root caller authority |
-| `RPC_COMPONENT_CALLER_AUTHORITY_REQUIRED` | 1 | `Forbidden` / registered Component authority | self | A Component caller must use its Component authority and cannot borrow root authority |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `RPC_PROVISION_PARENT_MODE_INVALID` | 1 | `authorize_provision`; non-`CreateCanisterParent::ThisCanister` branch | `InvalidInput` / structural request | self | Request only `ThisCanister` parentage for structural provisioning |
+| `RPC_PROVISION_PARENT_AUTHORITY_MISMATCH` | 1 | `authorize_provision`; protected parent/caller inequality | `Forbidden` / immediate-parent authority | self | Invoke from the exact registered immediate parent |
+| reuse `RPC_COMPONENT_CALLER_REQUIRED` | 1 | `authorize_recycle`; missing `caller_component` authority | `Forbidden` / Component-child authority | self | A Fleet Subnet Root cannot present itself as the Component parent of a child recycle |
+| `RPC_CALLER_AUTHORITY_MISMATCH` | 1 | `require_exact_caller_authority`; protected caller/transport caller inequality | `Forbidden` / protected Registry caller | self | Derive authority for the exact transport caller; never substitute a presented binding |
+| `RPC_ROOT_CALLER_AUTHORITY_REQUIRED` | 1 | `require_exact_caller_authority`; root self-call without root authority | `Forbidden` / root self-call authority | self | Root self-calls must use the protected Fleet Subnet Root caller authority |
+| `RPC_COMPONENT_CALLER_AUTHORITY_REQUIRED` | 1 | `require_exact_caller_authority`; Component caller presenting root authority | `Forbidden` / registered Component authority | self | A Component caller must use its Component authority and cannot borrow root authority |
 
 The three caller-authority decisions remain distinct. Principal mismatch,
 root-self authority absence and a Component presenting root authority reject
@@ -45,13 +45,13 @@ meanings; the authorization wrapper receives no code.
 The six startup sites add four exact feature-contract meanings and reuse one
 existing chain-key capability identity at two sites:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `AUTH_ROOT_CANISTER_SIGNATURE_CREATION_UNAVAILABLE` | 1 | `Invariant` / root build contract | self | Rebuild the root with role-attestation signature creation support |
-| reuse `AUTH_CHAIN_KEY_CRYPTO_UNAVAILABLE` | 2 | `Invariant` / root signer or verifier build contract | self | Rebuild the affected role with the admitted chain-key capability |
-| `AUTH_ISSUER_CANISTER_SIGNATURE_CREATION_UNAVAILABLE` | 1 | `Invariant` / issuer build contract | self | Rebuild the issuer role with canister-signature creation support |
-| `AUTH_ROOT_CANISTER_SIGNATURE_VERIFICATION_UNAVAILABLE` | 1 | `Invariant` / root-proof verifier build contract | self | Rebuild the verifier role with root canister-signature verification support |
-| `AUTH_ISSUER_CANISTER_SIGNATURE_VERIFICATION_UNAVAILABLE` | 1 | `Invariant` / delegated-token verifier build contract | self | Rebuild the verifier role with issuer canister-signature verification support |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `AUTH_ROOT_CANISTER_SIGNATURE_CREATION_UNAVAILABLE` | 1 | `RuntimeAuthWorkflow::ensure_root_crypto_contract`; required root-signature creation feature absent | `Invariant` / root build contract | self | Rebuild the root with role-attestation signature creation support |
+| reuse `AUTH_CHAIN_KEY_CRYPTO_UNAVAILABLE` | 2 | `RuntimeAuthWorkflow::ensure_root_crypto_contract` signing branch and `RuntimeAuthWorkflow::ensure_auth_proof_verifier_support_contract` verification branch | `Invariant` / root signer or verifier build contract | self | Rebuild the affected role with the admitted chain-key capability |
+| `AUTH_ISSUER_CANISTER_SIGNATURE_CREATION_UNAVAILABLE` | 1 | `RuntimeAuthWorkflow::ensure_nonroot_crypto_contract`; required issuer-signature creation feature absent | `Invariant` / issuer build contract | self | Rebuild the issuer role with canister-signature creation support |
+| `AUTH_ROOT_CANISTER_SIGNATURE_VERIFICATION_UNAVAILABLE` | 1 | `RuntimeAuthWorkflow::ensure_auth_proof_verifier_support_contract`; role-attestation verifier feature absent | `Invariant` / root-proof verifier build contract | self | Rebuild the verifier role with root canister-signature verification support |
+| `AUTH_ISSUER_CANISTER_SIGNATURE_VERIFICATION_UNAVAILABLE` | 1 | `RuntimeAuthWorkflow::ensure_auth_proof_verifier_support_contract`; delegated-token verifier feature absent | `Invariant` / delegated-token verifier build contract | self | Rebuild the verifier role with issuer canister-signature verification support |
 
 Creation and verification do not share an identity, and root-proof versus
 issuer-proof verification remain separate. They require different Cargo

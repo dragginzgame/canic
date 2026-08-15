@@ -16,6 +16,7 @@ pub fn init_root_canister_before_bootstrap(
     config_source: &str,
     config_path: &str,
 ) {
+    crate::api::timer::TimerApi::initialize_root_runtime_required();
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::Init,
         LifecycleMetricRole::Root,

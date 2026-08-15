@@ -21,10 +21,10 @@ changes no runtime behavior.
 
 The shared receipt hasher reuses two already-qualified identities:
 
-| Existing exact identity | Sites | Required hard cut |
+| Existing exact identity | Sites | Producer function/hard cut |
 | --- | ---: | --- |
-| `COMPONENT_PROVISIONING_RECEIPT_ENCODE_FAILED` | 1 | Preserve a finite typed Candid encoder cause and never hash fallback bytes |
-| `COMPONENT_PROVISIONING_RECEIPT_BYTE_COUNT_EXCEEDED` | 1 | Reject an authority whose canonical encoding cannot fit the frozen `u64` byte-count prefix |
+| `COMPONENT_PROVISIONING_RECEIPT_ENCODE_FAILED` | 1 | `receipt_content_hash`; preserve a finite typed Candid encoder cause and never hash fallback bytes |
+| `COMPONENT_PROVISIONING_RECEIPT_BYTE_COUNT_EXCEEDED` | 1 | `receipt_content_hash`; reject an authority whose canonical encoding cannot fit the frozen `u64` byte-count prefix |
 
 The static method label chooses no second diagnostic family. Every caller uses
 the same frozen domain-plus-length-plus-bytes construction; receipt kind and
@@ -47,10 +47,10 @@ it and propagates the registered source code.
 
 The two direct transport branches add exact meanings:
 
-| Exact candidate | Sites | Current meaning | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Action and retry |
 | --- | ---: | --- | --- |
-| `RPC_NONROOT_STRUCTURAL_REQUEST_INVALID` | 1 | A non-root structural capability target receives a request other than cycles funding | Route root-only requests to the exact root; never reinterpret the request |
-| `RPC_NON_STRUCTURAL_CAPABILITY_UNSUPPORTED` | 1 | An internal root RPC requests a parent/proof shape not admitted by the structural path | Use the structural parent shape or the delegated-token endpoint |
+| `RPC_NONROOT_STRUCTURAL_REQUEST_INVALID` | 1 | `RpcOps::call_response_capability_v1_structural`; a non-root structural capability target receives a request other than cycles funding | Route root-only requests to the exact root; never reinterpret the request |
+| `RPC_NON_STRUCTURAL_CAPABILITY_UNSUPPORTED` | 1 | `non_structural_capability_proof_error`; an internal root RPC requests a parent/proof shape not admitted by the structural path | Use the structural parent shape or the delegated-token endpoint |
 
 These are local transport-contract failures, not authorization denials from the
 receiver. They must not become `AUTH_PROOF_INVALID` or prove anything about the
@@ -60,10 +60,10 @@ remote Canister.
 
 The two request adapters add distinct codec meanings:
 
-| Exact candidate | Sites | Current meaning | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Action and retry |
 | --- | ---: | --- | --- |
-| `RPC_CREATE_EXTRA_ARG_ENCODE_FAILED` | 1 | Generic child-creation extra argument cannot be encoded | Fix the admitted application payload/type before retry |
-| `RPC_PLACEMENT_EXTRA_ARG_ENCODE_FAILED` | 1 | Placement-child extra argument cannot be encoded | Fix the admitted placement payload/type before retry |
+| `RPC_CREATE_EXTRA_ARG_ENCODE_FAILED` | 1 | `RequestDispatchOps::create_canister_with_metadata`; generic child-creation extra argument cannot be encoded | Fix the admitted application payload/type before retry |
+| `RPC_PLACEMENT_EXTRA_ARG_ENCODE_FAILED` | 1 | `RequestDispatchOps::allocate_placement_child_with_metadata`; placement-child extra argument cannot be encoded | Fix the admitted placement payload/type before retry |
 
 The routes remain distinct because they enter different lifecycle/admission
 journeys even though both use Candid. Neither formatter text survives B4.
@@ -72,10 +72,10 @@ journeys even though both use Candid. Neither formatter text survives B4.
 
 The two target checks have these dispositions:
 
-| Exact candidate or reuse | Sites | Current meaning | Action and retry |
+| Exact candidate or reuse | Sites | Producer function/branch | Action and retry |
 | --- | ---: | --- | --- |
-| `WASM_STORE_INIT_TARGET_ANONYMOUS` | 1 | Host/root requests an initialization payload for the anonymous principal | Supply the real planned sibling Store principal |
-| reuse `FLEET_ACTIVATION_WASM_STORE_AUTHORITY_MISMATCH` | 1 | Requested sibling Store differs from protected activation authority | Preserve the protected authority and use its exact Store |
+| `WASM_STORE_INIT_TARGET_ANONYMOUS` | 1 | `wasm_store_init_args`; host/root requests an initialization payload for the anonymous principal | Supply the real planned sibling Store principal |
+| reuse `FLEET_ACTIVATION_WASM_STORE_AUTHORITY_MISMATCH` | 1 | `wasm_store_init_args`; requested sibling Store differs from protected activation authority | Preserve the protected authority and use its exact Store |
 
 The target mismatch is the same exact authority predicate already qualified by
 Fleet activation; a payload-builder wrapper would duplicate it.

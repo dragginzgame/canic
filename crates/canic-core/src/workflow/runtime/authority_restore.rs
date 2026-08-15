@@ -44,13 +44,19 @@ impl AuthorityRestoreWorkflow {
         let authority = IcOps::canister_self();
         let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
         require_resumable_timer_state()?;
+        AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
+        TimerWorkflow::suspend_all().unwrap_or_else(|error| {
+            trap_timer_transition("suspend timers before sealing authority", error)
+        });
         let status = AuthorityRestoreFenceOps::prepare(
             request,
             authority,
             history_total_num_changes,
             IcOps::now_nanos(),
-        )?;
-        TimerWorkflow::suspend_all();
+        )
+        .unwrap_or_else(|error| {
+            trap_authority_transition("commit sealed authority after timer suspension", error)
+        });
         Ok(status)
     }
 
@@ -62,13 +68,37 @@ impl AuthorityRestoreWorkflow {
         require_resumable_timer_state()?;
         let authority = IcOps::canister_self();
         let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
+        AuthorityRestoreFenceOps::validate_resume(request, authority, history_total_num_changes)?;
+        TimerWorkflow::resume_all().unwrap_or_else(|error| {
+            trap_timer_transition(
+                "restore timer participants while authority remains sealed",
+                error,
+            )
+        });
+        if EnvOps::is_root() {
+            crate::workflow::runtime::RuntimeWorkflow::start_all_root().unwrap_or_else(|error| {
+                trap_authority_transition(
+                    "reconcile root timer owners while authority remains sealed",
+                    error,
+                )
+            });
+        } else if !EnvOps::is_fleet_coordinator_runtime() {
+            crate::workflow::runtime::RuntimeWorkflow::start_all().unwrap_or_else(|error| {
+                trap_authority_transition(
+                    "reconcile non-root timer owners while authority remains sealed",
+                    error,
+                )
+            });
+        }
         let status = AuthorityRestoreFenceOps::resume(
             request,
             authority,
             history_total_num_changes,
             IcOps::now_nanos(),
-        )?;
-        TimerWorkflow::resume_all();
+        )
+        .unwrap_or_else(|error| {
+            trap_authority_transition("open authority after timer reconstruction", error)
+        });
         Ok(status)
     }
 
@@ -84,9 +114,25 @@ impl AuthorityRestoreWorkflow {
     }
 }
 
+fn trap_timer_transition(context: &str, error: crate::api::timer::TimerError) -> ! {
+    ic_cdk::trap(format!(
+        "authority snapshot failed closed while attempting to {context}: {error}"
+    ))
+}
+
+fn trap_authority_transition(context: &str, error: InternalError) -> ! {
+    ic_cdk::trap(format!(
+        "authority snapshot failed closed while attempting to {context}: {error}"
+    ))
+}
+
 fn require_resumable_timer_state() -> Result<(), InternalError> {
-    TimerWorkflow::require_resumable()
-        .map_err(|reason| InternalError::invariant(InternalErrorOrigin::Workflow, reason))
+    TimerWorkflow::require_resumable().map_err(|error| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("timer snapshot is not resumable: {error}"),
+        )
+    })
 }
 
 fn require_authority_runtime() -> Result<(), InternalError> {

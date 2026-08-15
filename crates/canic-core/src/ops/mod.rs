@@ -27,7 +27,6 @@ pub mod fleet_activation;
 pub mod fleet_registry;
 pub mod fleet_service_binding;
 pub mod ic;
-pub mod perf;
 pub mod placement;
 pub mod replay;
 pub mod root_draining_reservation;

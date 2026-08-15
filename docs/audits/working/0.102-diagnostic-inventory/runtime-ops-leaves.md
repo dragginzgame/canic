@@ -1,6 +1,6 @@
 # Canic 0.102 Runtime Ops Diagnostic Leaves
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status
 
@@ -36,18 +36,18 @@ code.
 
 The ten direct protected-context decisions are exact internal candidates:
 
-```text
-COMPONENT_DEPLOYMENT_BINDING_MISMATCH
-COMPONENT_DEPLOYMENT_CONFIGURATION_DIGEST_MISMATCH
-COMPONENT_DEPLOYMENT_UNKNOWN_DEPLOYMENT
-COMPONENT_DEPLOYMENT_GROUP_MISMATCH
-COMPONENT_DEPLOYMENT_UNKNOWN_MEMBER
-COMPONENT_DEPLOYMENT_COMPONENT_SPEC_MISMATCH
-COMPONENT_DEPLOYMENT_COMPONENT_SPEC_HASH_MISMATCH
-COMPONENT_DEPLOYMENT_PURPOSE_MISMATCH
-COMPONENT_DEPLOYMENT_LABELS_MISMATCH
-COMPONENT_DEPLOYMENT_LIMITS_MISMATCH
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `COMPONENT_DEPLOYMENT_BINDING_MISMATCH` | `ProtectedComponentDeploymentError::BindingMismatch` |
+| `COMPONENT_DEPLOYMENT_CONFIGURATION_DIGEST_MISMATCH` | `ProtectedComponentDeploymentError::ConfigurationDigestMismatch` |
+| `COMPONENT_DEPLOYMENT_UNKNOWN_DEPLOYMENT` | `ProtectedComponentDeploymentError::UnknownDeployment` |
+| `COMPONENT_DEPLOYMENT_GROUP_MISMATCH` | `ProtectedComponentDeploymentError::ComponentGroupMismatch` |
+| `COMPONENT_DEPLOYMENT_UNKNOWN_MEMBER` | `ProtectedComponentDeploymentError::UnknownMember` |
+| `COMPONENT_DEPLOYMENT_COMPONENT_SPEC_MISMATCH` | `ProtectedComponentDeploymentError::ComponentSpecMismatch` |
+| `COMPONENT_DEPLOYMENT_COMPONENT_SPEC_HASH_MISMATCH` | `ProtectedComponentDeploymentError::ComponentSpecHashMismatch` |
+| `COMPONENT_DEPLOYMENT_PURPOSE_MISMATCH` | `ProtectedComponentDeploymentError::PurposeMismatch` |
+| `COMPONENT_DEPLOYMENT_LABELS_MISMATCH` | `ProtectedComponentDeploymentError::LabelsMismatch` |
+| `COMPONENT_DEPLOYMENT_LIMITS_MISMATCH` | `ProtectedComponentDeploymentError::LimitsMismatch` |
 
 All ten project publicly to `COMPONENT_DEPLOYMENT_CONTEXT_INVALID`. Their
 deployment IDs, member paths, labels and expected/actual values are protected
@@ -85,10 +85,11 @@ root code.
 
 ## Request, RPC And Wrapper Ownership
 
-`RequestOpsError::InvalidResponseType` becomes
-`RPC_RESPONSE_VARIANT_INVALID`. It is an invariant at the closed internal
-`Request`/`Response` dispatcher and projects publicly to
-`RPC_RESPONSE_INVALID`; retrying unchanged code cannot repair it.
+The request dispatcher has one exact direct decision:
+
+| Exact identity | Current typed owner | Public projection | Action and retry |
+| --- | --- | --- | --- |
+| `RPC_RESPONSE_VARIANT_INVALID` | `RequestOpsError::InvalidResponseType` | `RPC_RESPONSE_INVALID` | Fix the closed `Request`/`Response` dispatcher; unchanged retry cannot repair it |
 
 The following wrappers allocate no code:
 

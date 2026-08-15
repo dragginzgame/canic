@@ -20,11 +20,11 @@ changes no runtime behavior.
 The three direct sites add two exact retained-response capacity meanings and
 retain one transparent remote diagnostic:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `REPLAY_RETAINED_ACTOR_CAPACITY` | 1 | `ResourceExhausted` / per-actor retained responses | self | Release or wait for retained responses before preparing another token |
-| `REPLAY_RETAINED_COMMAND_CAPACITY` | 1 | `ResourceExhausted` / per-command retained responses | self | Release or wait for command-wide retention capacity |
-| transparent remote public diagnostic | 1 | root-issued delegation-proof response | source diagnostic | Preserve the exact registered root diagnostic without an orchestration wrapper |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `REPLAY_RETAINED_ACTOR_CAPACITY` | 1 | `RuntimeAuthWorkflow::prepare_delegated_token`; `ReplayReceiptRetentionError::ActorQuotaExceeded` | `ResourceExhausted` / per-actor retained responses | self | Release or wait for retained responses before preparing another token |
+| `REPLAY_RETAINED_COMMAND_CAPACITY` | 1 | `RuntimeAuthWorkflow::prepare_delegated_token`; `ReplayReceiptRetentionError::CommandQuotaExceeded` | `ResourceExhausted` / per-command retained responses | self | Release or wait for command-wide retention capacity |
+| transparent remote public diagnostic | 1 | `chain_key_delegation_proof_from_root_call`; root-returned `Error` | root-issued delegation-proof response | source diagnostic | Preserve the exact registered root diagnostic without an orchestration wrapper |
 
 Retained-response capacity is not pending-operation capacity. The former
 bounds replayable terminal responses; the latter bounds in-flight receipts and
@@ -45,10 +45,10 @@ constructors here.
 Four provisioning sites add one exact meaning and reuse the qualified proof-
 availability meaning:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| reuse `AUTH_PROOF_UNAVAILABLE` | 3 | `Unavailable` / signed issuer proof | self | Retry after signing or proof preparation advances |
-| `AUTH_ISSUER_PROOF_INSTALLATION_INCOMPLETE` | 1 | `Unavailable` / issuer install batch | self | Inspect the exact batch and issuer failure before retry |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| reuse `AUTH_PROOF_UNAVAILABLE` | 3 | `RuntimeAuthWorkflow::get_or_create_chain_key_delegation_proof_for_issuer_root`; missing batch, signing-in-flight and missing signed-proof branches | `Unavailable` / signed issuer proof | self | Retry after signing or proof preparation advances |
+| `AUTH_ISSUER_PROOF_INSTALLATION_INCOMPLETE` | 1 | `ChainKeyDelegationProofBatchInstallResult::into_explicit_result`; zero-success/no-retained-failure branch | `Unavailable` / issuer install batch | self | Inspect the exact batch and issuer failure before retry |
 
 Missing batch identity, signing still in flight and absent signed issuer proof
 share one exact meaning because each reports the same not-yet-available
@@ -61,12 +61,12 @@ therefore receives its own identity.
 Eight constructors currently replace typed causes with issuer-specific prose.
 They add no wrapper identity:
 
-| Exact candidate or disposition | Sites | Current boundary | Required hard cut |
-| --- | ---: | --- | --- |
-| reuse `IC_CALL_REQUEST_ENCODING_FAILED` | 2 | interactive install and renewal batch | Preserve the exact typed request-encoding cause |
-| transparent typed IC transport cause | 2 | interactive install and renewal batch | Preserve the exact transport/effect diagnostic and its retry disposition |
-| reuse `IC_CALL_RESPONSE_DECODING_FAILED` | 2 | interactive install and renewal batch | Preserve the exact typed response-decoding cause |
-| transparent issuer public diagnostic | 2 | interactive install and renewal batch | Return or record the issuer's registered diagnostic unchanged |
+| Exact candidate or disposition | Sites | Producer function/branch | Current boundary | Required hard cut |
+| --- | ---: | --- | --- | --- |
+| reuse `IC_CALL_REQUEST_ENCODING_FAILED` | 2 | `install_delegation_proof_on_issuer` plus `IssuerProofInstallError::{into_internal_error, into_renewal_error}` request-encoding branches | interactive install and renewal batch | Preserve the exact typed request-encoding cause |
+| transparent typed IC transport cause | 2 | `install_delegation_proof_on_issuer` plus `IssuerProofInstallError::{into_internal_error, into_renewal_error}` transport branches | interactive install and renewal batch | Preserve the exact transport/effect diagnostic and its retry disposition |
+| reuse `IC_CALL_RESPONSE_DECODING_FAILED` | 2 | `issuer_install_outcome` plus `IssuerProofInstallError::{into_internal_error, into_renewal_error}` invalid-response branches | interactive install and renewal batch | Preserve the exact typed response-decoding cause |
+| transparent issuer public diagnostic | 2 | `issuer_install_response` plus `IssuerProofInstallError::{into_internal_error, into_renewal_error}` rejection branches | interactive install and renewal batch | Return or record the issuer's registered diagnostic unchanged |
 
 Interactive provisioning and timer renewal may project the same nested cause
 differently only when their exposure boundary requires it; they must not mint
@@ -78,10 +78,10 @@ exact diagnostic in the operation-specific or guarded runtime observation.
 
 The final two sites reuse existing configuration meanings:
 
-| Exact candidate or disposition | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| reuse `AUTH_DELEGATED_TOKEN_MAX_TTL_OVERFLOW` | 1 | `InvalidInput` / protected TTL configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure a maximum TTL representable in nanoseconds |
-| reuse `AUTH_CHAIN_KEY_CONFIG_REQUIRED` | 1 | `Invariant` / protected verifier configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure the required minimum accepted proof epoch |
+| Exact candidate or disposition | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| reuse `AUTH_DELEGATED_TOKEN_MAX_TTL_OVERFLOW` | 1 | `delegated_token_max_ttl_ns`; seconds-to-nanoseconds multiplication | `InvalidInput` / protected TTL configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure a maximum TTL representable in nanoseconds |
+| reuse `AUTH_CHAIN_KEY_CONFIG_REQUIRED` | 1 | `chain_key_min_accepted_proof_epoch`; missing configured epoch | `Invariant` / protected verifier configuration | `RUNTIME_CONFIGURATION_INVALID` | Configure the required minimum accepted proof epoch |
 
 These are the same fields, authority and repair actions already qualified in
 the renewal path. Lazy repair does not create a second configuration owner.

@@ -9,7 +9,7 @@ service surfaces in this document are implemented or approved release
 requirements.
 
 The first bounded feasibility slice is specified separately in the
-[0.111 language-neutral managed-guest design](../../../design/0.111-motokoisation/0.111-design.md).
+[0.112 language-neutral managed-guest design](../../../design/0.112-motokoisation/0.112-design.md).
 That design
 does not approve the broader end state described here.
 
@@ -168,7 +168,7 @@ Component Child roles.
 - The current pre-1.0 reinstall-only policy permits removal of the old ordinary
   runtime ABI instead of retaining adapters or compatibility decoding.
 
-The bounded feasibility slice is now allocated to 0.111 after insertion of the
+The bounded feasibility slice is now allocated to 0.112 after insertion of the
 independent 0.103 local-application-authorization line and corresponding
 renumbering of provisional designs. This exploration does not itself reassign
 another current design line.

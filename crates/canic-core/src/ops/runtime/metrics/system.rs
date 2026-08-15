@@ -118,12 +118,12 @@ mod tests {
 
         // Force near-overflow state
         SYSTEM_METRICS.with_borrow_mut(|counts| {
-            counts.insert(SystemMetricKind::TimerScheduled, u64::MAX);
+            counts.insert(SystemMetricKind::CanisterCall, u64::MAX);
         });
 
-        SystemMetrics::increment(SystemMetricKind::TimerScheduled);
+        SystemMetrics::increment(SystemMetricKind::CanisterCall);
 
         let map = snapshot_map();
-        assert_eq!(map.get(&SystemMetricKind::TimerScheduled), Some(&u64::MAX));
+        assert_eq!(map.get(&SystemMetricKind::CanisterCall), Some(&u64::MAX));
     }
 }
