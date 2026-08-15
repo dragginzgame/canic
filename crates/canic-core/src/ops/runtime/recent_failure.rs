@@ -58,12 +58,15 @@ impl RecentFailureOps {
         });
     }
 
-    /// Project one current failure ahead of the retained snapshot without mutation.
+    /// Project current failures ahead of retained history without mutating it.
     #[must_use]
-    pub fn snapshot_with(input: RecentFailureInput) -> Vec<RecentFailure> {
+    pub fn snapshot_with_many(
+        inputs: impl IntoIterator<Item = RecentFailureInput>,
+    ) -> Vec<RecentFailure> {
         let mut failures = Vec::with_capacity(MAX_RECENT_FAILURES);
-        failures.push(project(input));
-        failures.extend(Self::snapshot().into_iter().take(MAX_RECENT_FAILURES - 1));
+        failures.extend(inputs.into_iter().map(project).take(MAX_RECENT_FAILURES));
+        let remaining = MAX_RECENT_FAILURES.saturating_sub(failures.len());
+        failures.extend(Self::snapshot().into_iter().take(remaining));
         failures
     }
 
@@ -189,7 +192,7 @@ mod tests {
         RecentFailureOps::reset();
         RecentFailureOps::record(input(1));
 
-        let projected = RecentFailureOps::snapshot_with(input(2));
+        let projected = RecentFailureOps::snapshot_with_many([input(2)]);
 
         assert_eq!(projected.len(), 2);
         assert_eq!(projected[0].occurred_at_ns, 2);

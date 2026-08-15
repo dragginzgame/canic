@@ -48,7 +48,6 @@ use crate::{
                 RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetricProofMode,
             },
             scaling::{ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason},
-            timer::TimerMode,
             wasm_store::{
                 WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
                 WasmStoreMetricSource,
@@ -61,7 +60,6 @@ use crate::{
     },
     storage::stable::icp_refill::{IcpRefillRecordErrorCode, IcpRefillRecordStatus},
 };
-use std::time::Duration;
 
 fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
     EndpointCall {
@@ -203,6 +201,17 @@ fn perf_endpoint_metrics_include_call_kind_label() {
         1,
         30,
     );
+}
+
+#[test]
+fn timer_inventory_availability_distinguishes_unavailable_from_empty() {
+    let available = timer_inventory_availability(true);
+    let unavailable = timer_inventory_availability(false);
+
+    assert_eq!(available.labels, ["inventory", "available"]);
+    assert!(matches!(available.value, MetricValue::Count(1)));
+    assert_eq!(unavailable.labels, ["inventory", "available"]);
+    assert!(matches!(unavailable.value, MetricValue::Count(0)));
 }
 
 #[test]
@@ -778,7 +787,13 @@ fn reset_for_tests_clears_all_metric_families() {
     reset_for_tests();
 
     for kind in all_metric_kinds() {
-        assert!(entries(*kind).is_empty());
+        let entries = entries(*kind);
+        if matches!(kind, MetricsKind::Runtime) {
+            assert_eq!(entries.len(), 1);
+            assert_metric_count(&entries, &["timer", "inventory", "available"], 0);
+        } else {
+            assert!(entries.is_empty());
+        }
     }
 }
 
@@ -857,7 +872,6 @@ fn seed_all_metric_families_for_reset_test() {
         ShardingMetricOutcome::Started,
         ShardingMetricReason::Ok,
     );
-    TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), "once:test");
     WasmStoreMetrics::record(
         WasmStoreMetricOperation::SourceResolve,
         WasmStoreMetricSource::Resolver,

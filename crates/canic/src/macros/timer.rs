@@ -12,8 +12,8 @@
 /// Schedule a one-shot timer with an auto-generated label.
 ///
 /// # Examples
-/// - `timer!(Duration::from_secs(5), do_cleanup);`
-/// - `timer!(Duration::ZERO, my_task, arg1, arg2);`
+/// - `timer!(Duration::from_secs(5), do_cleanup)?;`
+/// - `timer!(Duration::ZERO, my_task, arg1, arg2)?;`
 ///
 #[macro_export]
 macro_rules! timer {
@@ -32,8 +32,8 @@ macro_rules! timer {
 /// Schedule a repeating timer with an auto-generated label.
 ///
 /// # Examples
-/// - `timer_interval!(Duration::from_secs(60), heartbeat);`
-/// - `timer_interval!(Duration::from_secs(10), tick, state.clone());`
+/// - `timer_interval!(Duration::from_secs(60), heartbeat)?;`
+/// - `timer_interval!(Duration::from_secs(10), tick, state.clone())?;`
 ///
 #[macro_export]
 macro_rules! timer_interval {

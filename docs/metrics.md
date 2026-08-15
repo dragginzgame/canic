@@ -124,14 +124,14 @@ use the existing family-specific dimensions:
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `inter_canister_call` | `[method]` | Target canister principal | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
-| `perf` | `[endpoint, call_kind, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
+| `perf` | `[endpoint, call_kind, name]`, `[timer, owner, subsystem, name]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
 | `platform_call` | `[surface, mode, outcome, reason]` | `None` | `Count` |
 | `placement_index` | `[operation, outcome, reason]` | `None` | `Count` |
 | `replay` | `[operation, outcome, reason]` | `None` | `Count` |
 | `root_capability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` |
 | `scaling` | `[operation, outcome, reason]` | `None` | `Count` |
 | `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
-| `timer` | `[mode, label]` | `None` | `CountAndU64` |
+| `timer` | `[policy, owner, subsystem, name]` or `[inventory, available]` | `None` | `CountAndU64` for timer rows; `Count` for availability |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
 
 Delegated-auth renewal rows use the existing `delegated_auth` family with
@@ -140,9 +140,26 @@ the bounded operation label `renewal_sweep`. Outcomes are
 `ok`, `invalid_state`, `cert_expired`, `issuer_proof_unavailable`,
 `cert_hash_mismatch`, `disabled`, and `root_proof_prepare_failed`.
 
-For `timer`, `count` is the execution count and `value_u64` is the latest
-armed delay in milliseconds. Delay is deliberately a value rather than a key,
-so exact-deadline rescheduling does not create unbounded metric rows.
+For `timer`, `count` is accepted consumer-work starts and `value_u64` is the
+latest armed delay in milliseconds. Delay is deliberately a value rather than
+a key, so exact-deadline rescheduling does not create unbounded metric rows.
+Timer rows come from the shared `ic-timers` inventory, so they include Canic,
+application, and other framework owners in the same canister. Timer `perf`
+rows use completed work-instruction samples as `count` and their saturating
+instruction total as `value_u64`. These samples bracket the complete accepted
+shared-runtime callback path, including registry acceptance, consumer work,
+completion accounting, and successor binding; they are not isolated
+application-function benchmarks. Runtime timer status schema 3 separately
+projects scheduler and work instruction aggregates plus each role's bounded
+latest Wasm/stable-memory page extents and maximum observed page growth. Memory
+page extents are epoch-local high-water observations, not exact live bytes or
+exclusive attribution for asynchronous work. A transient `RemoveWhenStopped`
+declaration disappears from inventory at terminal state, so its final status
+and performance sample are not retained; retained declarations preserve their
+normally completed observations.
+`timer/inventory/available` is `1` when the complete
+registry was observed and `0` when observation failed; an unavailable registry
+is never represented as a successful empty inventory.
 
 Endpoint perf `call_kind` labels are `query`, `composite_query`, or `update`.
 Query and composite-query endpoint perf rows are only durable when sampled by a

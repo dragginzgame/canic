@@ -1,6 +1,6 @@
 # Canic 0.102 Transitive Error-Owner Inventory
 
-Date: 2026-08-12
+Date: 2026-08-15
 
 ## Status
 
@@ -261,7 +261,7 @@ reopens it.
 The remaining terminal owners are already bounded:
 
 - `TopologySnapshotValidationError`: 14 exact topology-authority violations;
-- `CashierDecodeError`: four response-shape violations scheduled for the 0.108
+- `CashierDecodeError`: four response-shape violations scheduled for the 0.109
   blob hard cut; they still require current 0.102 allocation if their producers
   have not actually been deleted before the registry freezes;
 - `StorageError`: four runtime-log invariants;
@@ -276,7 +276,7 @@ The remaining terminal owners are already bounded:
 [bounded-runtime-leaves.md](bounded-runtime-leaves.md) completes that grouping:
 60 current exact candidates, including one adjacent untyped build-network
 producer and the complete 27-leaf blob hash/lifecycle/billing/Cashier family
-that allocates in 0.102 and retires without reuse under the later 0.108 hard
+that allocates in 0.102 and retires without reuse under the later 0.109 hard
 cut, plus four safe public projections.
 
 [rpc-workflow-error-leaves.md](rpc-workflow-error-leaves.md) separately closes
@@ -325,7 +325,9 @@ not imply a 512-entry host catalogue, numeric bands or reserved capacity.
 All bounded semantic families, the expanded authentication formatter, direct
 constructor frontier, RPC and publication aggregates, dynamic public values
 and durable string owners now have dispositions. The reconciled qualified set
-is 2,844 exact identities plus 31 projection-only identities.
+is 2,864 exact identities plus 31 projection-only identities after the
+delegated-session producer correction and the pre-existing arithmetic
+correction.
 
 Numeric assignment remains the final B1 action. It must materialize one
 mechanical producer manifest and complete host-catalogue row per retained exact

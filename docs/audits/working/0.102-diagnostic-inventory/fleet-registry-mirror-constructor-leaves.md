@@ -20,13 +20,13 @@ remain owned by their existing ledgers rather than receiving Mirror wrappers.
 
 ## Active Mirror Storage Authority
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `FLEET_MIRROR_ROOT_AUTHORITY_MISMATCH` | 1 | Protected root authority names a Canister other than the receiver | self | Reinstall or invoke the exact protected Fleet Subnet Root | authenticated root authority |
-| `FLEET_MIRROR_ACTIVE_MISSING` | 1 | No active root-local Fleet Registry Mirror is retained | self | Complete or recover initial synchronization and activation | root-local Mirror status |
-| `FLEET_MIRROR_STORED_MANIFEST_MISMATCH` / `FLEET_MIRROR_STORED_VERSION_MISMATCH` / `FLEET_MIRROR_STORED_DIRECTORY_MISMATCH` / `FLEET_MIRROR_PREVIOUS_AUTHORITY_MISMATCH` / `FLEET_MIRROR_REVISION_NOT_ADVANCED` / `FLEET_MIRROR_PREVIOUS_HASH_INVALID` / `FLEET_MIRROR_CURRENT_HASH_INVALID` | 1 | One storage predicate merges three canonical snapshot projections with authority, monotonic-revision and two nonzero-hash requirements | `COMPONENT_REGISTRY_STATE_INVALID` for every exact leaf | Preserve the retained Mirror and reconcile or reinstall its exact authority | recent failure plus guarded Mirror status |
-| `FLEET_MIRROR_ROOT_ROW_MISSING` | 1 | Active Mirror Registry omits the protected local root | `COMPONENT_REGISTRY_STATE_INVALID` | Preserve the Mirror and fail closed | recent failure plus guarded Mirror status |
-| `FLEET_MIRROR_ROOT_PLACEMENT_MISMATCH` / `FLEET_MIRROR_ROOT_ADMISSIONS_MISMATCH` / `FLEET_MIRROR_ROOT_TOPOLOGY_MISMATCH` / `FLEET_MIRROR_ROOT_RELEASE_SET_MISMATCH` / `FLEET_MIRROR_ROOT_LIMITS_MISMATCH` / `FLEET_MIRROR_ROOT_STATUS_NOT_CURRENT` | 1 | One protected-row predicate merges five immutable root fields with the `Active`-or-`Draining` lifecycle fence | `COMPONENT_REGISTRY_STATE_INVALID` for every exact leaf | Preserve protected authority and Mirror row; identify the exact contradiction | recent failure plus guarded Mirror status |
+| `FLEET_MIRROR_ROOT_AUTHORITY_MISMATCH` | 1 | `FleetRegistryMirrorOps::validated_current`; protected root authority names a Canister other than the receiver | self | Reinstall or invoke the exact protected Fleet Subnet Root | authenticated root authority |
+| `FLEET_MIRROR_ACTIVE_MISSING` | 1 | `FleetRegistryMirrorOps::validated_current`; no active root-local Fleet Registry Mirror is retained | self | Complete or recover initial synchronization and activation | root-local Mirror status |
+| `FLEET_MIRROR_STORED_MANIFEST_MISMATCH` / `FLEET_MIRROR_STORED_VERSION_MISMATCH` / `FLEET_MIRROR_STORED_DIRECTORY_MISMATCH` / `FLEET_MIRROR_PREVIOUS_AUTHORITY_MISMATCH` / `FLEET_MIRROR_REVISION_NOT_ADVANCED` / `FLEET_MIRROR_PREVIOUS_HASH_INVALID` / `FLEET_MIRROR_CURRENT_HASH_INVALID` | 1 | `FleetRegistryMirrorOps::validated_current`; one storage predicate merges three canonical snapshot projections with authority, monotonic-revision and two nonzero-hash requirements | `COMPONENT_REGISTRY_STATE_INVALID` for every exact leaf | Preserve the retained Mirror and reconcile or reinstall its exact authority | recent failure plus guarded Mirror status |
+| `FLEET_MIRROR_ROOT_ROW_MISSING` | 1 | `validated_root_entry`; active Mirror Registry omits the protected local root | `COMPONENT_REGISTRY_STATE_INVALID` | Preserve the Mirror and fail closed | recent failure plus guarded Mirror status |
+| `FLEET_MIRROR_ROOT_PLACEMENT_MISMATCH` / `FLEET_MIRROR_ROOT_ADMISSIONS_MISMATCH` / `FLEET_MIRROR_ROOT_TOPOLOGY_MISMATCH` / `FLEET_MIRROR_ROOT_RELEASE_SET_MISMATCH` / `FLEET_MIRROR_ROOT_LIMITS_MISMATCH` / `FLEET_MIRROR_ROOT_STATUS_NOT_CURRENT` | 1 | `validated_root_entry`; one protected-row predicate merges five immutable root fields with the `Active`-or-`Draining` lifecycle fence | `COMPONENT_REGISTRY_STATE_INVALID` for every exact leaf | Preserve protected authority and Mirror row; identify the exact contradiction | recent failure plus guarded Mirror status |
 
 The five sites add 16 exact meanings. Canonical Registry validation remains
 typed and transparent before these root-local evidence comparisons. B4 must
@@ -36,17 +36,17 @@ specific corrupt authority.
 
 ## Joining Synchronization And Acknowledgement
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `FLEET_MIRROR_SYNC_EXPECTED_REGISTRY_MISMATCH` | 2 | Fetched or stored Joining snapshot differs from the host-frozen Registry version | self | Reload the exact install plan and current snapshot; retry only matching authority | host plan and root sync status |
-| `FLEET_MIRROR_ACTIVE_ALREADY_PRESENT` | 1 | Initial Joining synchronization is attempted after active Mirror commitment | self | Use active status or the admitted monotonic advance path | root-local Mirror status |
-| `FLEET_MIRROR_CANDIDATE_CONFLICT` | 1 | Retained Joining candidate differs from the freshly fetched snapshot | self | Preserve both observations and reconcile; never overwrite the candidate | root-local Mirror status |
-| `FLEET_MIRROR_ACK_ROOT_MISMATCH` / `FLEET_MIRROR_ACK_REGISTRY_MISMATCH` | 1 | Coordinator acknowledgement names another root or Registry version | self for each exact leaf | Reject the response and preserve the staged candidate | synchronization response and candidate status |
-| `FLEET_MIRROR_CANDIDATE_MISSING` | 1 | Synchronization status has no staged Joining snapshot | self | Start or recover exact initial synchronization | root-local Mirror status |
-| `FLEET_MIRROR_CANDIDATE_ACK_MISSING` | 2 | Staged candidate lacks its Coordinator acknowledgement at status or activation | self | Recover the exact acknowledgement call; do not infer success from candidate presence | root-local Mirror status |
-| `FLEET_MIRROR_JOINING_CANDIDATE_MISSING` | 1 | Initial activation has neither an active Mirror nor its acknowledged Joining candidate | self | Complete exact synchronization before activation | root-local Mirror status |
-| `FLEET_MIRROR_JOINING_SOURCE_MISMATCH` | 1 | Joining candidate differs from the requested previous Registry authority | self | Reload the retained candidate and rebuild the exact activation request | activation request and Mirror status |
-| `FLEET_MIRROR_STORED_ACK_ROOT_MISMATCH` / `FLEET_MIRROR_STORED_ACK_REGISTRY_MISMATCH` | 2 | Durable acknowledgement differs from its candidate root or Registry version | `COMPONENT_REGISTRY_STATE_INVALID` for either exact leaf | Preserve candidate and acknowledgement and fail closed | recent failure plus guarded Mirror status |
+| `FLEET_MIRROR_SYNC_EXPECTED_REGISTRY_MISMATCH` | 2 | `workflow::fleet_registry_mirror::synchronize` or `workflow::fleet_registry_mirror::status`; fetched or stored Joining snapshot differs from the host-frozen Registry version | self | Reload the exact install plan and current snapshot; retry only matching authority | host plan and root sync status |
+| `FLEET_MIRROR_ACTIVE_ALREADY_PRESENT` | 1 | `workflow::fleet_registry_mirror::synchronize`; initial Joining synchronization is attempted after active Mirror commitment | self | Use active status or the admitted monotonic advance path | root-local Mirror status |
+| `FLEET_MIRROR_CANDIDATE_CONFLICT` | 1 | `workflow::fleet_registry_mirror::synchronize`; retained Joining candidate differs from the freshly fetched snapshot | self | Preserve both observations and reconcile; never overwrite the candidate | root-local Mirror status |
+| `FLEET_MIRROR_ACK_ROOT_MISMATCH` / `FLEET_MIRROR_ACK_REGISTRY_MISMATCH` | 1 | `workflow::fleet_registry_mirror::synchronize`; Coordinator acknowledgement names another root or Registry version | self for each exact leaf | Reject the response and preserve the staged candidate | synchronization response and candidate status |
+| `FLEET_MIRROR_CANDIDATE_MISSING` | 1 | `workflow::fleet_registry_mirror::status`; synchronization status has no staged Joining snapshot | self | Start or recover exact initial synchronization | root-local Mirror status |
+| `FLEET_MIRROR_CANDIDATE_ACK_MISSING` | 2 | `workflow::fleet_registry_mirror::status` or `workflow::fleet_registry_mirror::activate`; staged candidate lacks its Coordinator acknowledgement | self | Recover the exact acknowledgement call; do not infer success from candidate presence | root-local Mirror status |
+| `FLEET_MIRROR_JOINING_CANDIDATE_MISSING` | 1 | `workflow::fleet_registry_mirror::activate`; initial activation has neither an active Mirror nor its acknowledged Joining candidate | self | Complete exact synchronization before activation | root-local Mirror status |
+| `FLEET_MIRROR_JOINING_SOURCE_MISMATCH` | 1 | `workflow::fleet_registry_mirror::activate`; Joining candidate differs from the requested previous Registry authority | self | Reload the retained candidate and rebuild the exact activation request | activation request and Mirror status |
+| `FLEET_MIRROR_STORED_ACK_ROOT_MISMATCH` / `FLEET_MIRROR_STORED_ACK_REGISTRY_MISMATCH` | 2 | `workflow::fleet_registry_mirror::activate` or `workflow::fleet_registry_mirror::response`; durable acknowledgement differs from its candidate root or Registry version | `COMPONENT_REGISTRY_STATE_INVALID` for either exact leaf | Preserve candidate and acknowledgement and fail closed | recent failure plus guarded Mirror status |
 
 These 12 sites add 11 exact meanings. Two status/activation sites share the
 same missing-acknowledgement prerequisite, and both durable-response checks
@@ -54,15 +54,15 @@ reuse the same two stored acknowledgement identities.
 
 ## Active Transition And Publication Commit
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `FLEET_MIRROR_TARGET_NOT_REACHED` | 1 | Active status remains at the admitted transition source rather than the requested target | self | Resume or recover the exact Mirror advance | active Mirror status |
-| `FLEET_MIRROR_UNCHANGED_PUBLICATION_MISMATCH` | 1 | A no-change Component publication names a Registry other than the active Mirror | self | Reload current publication and Mirror authority | publication operation and Mirror status |
-| `FLEET_MIRROR_DIRECTORY_SOURCE_MISMATCH` | 1 | Prepared Component Directory synchronization starts from a different active Registry | self | Rebuild the synchronization transition from the active Mirror | prepared publication operation |
-| `FLEET_MIRROR_PREPARED_COMMIT_SOURCE_CHANGED` | 1 | Active Mirror changed after transition preparation and before its no-await commit | self | Discard the prepared value and prepare again from current authority | prepared transition plus active Mirror status |
-| `FLEET_MIRROR_TARGET_PREVIOUS_REGISTRY_MISMATCH` / `FLEET_MIRROR_TARGET_DIRECTORY_MISMATCH` | 1 | Current Registry already equals the requested target but its predecessor or Directory binds another transition | self for each exact leaf | Preserve current authority and reject the conflicting retry payload | activation request and active Mirror status |
-| `FLEET_MIRROR_CURRENT_AUTHORITY_MISMATCH` | 1 | Current Mirror and requested target belong to different Fleet Registry authorities | self | Use the exact Fleet/root authority; never cross an authority boundary | activation request and active Mirror status |
-| `FLEET_MIRROR_TRANSITION_SOURCE_MISMATCH` | 1 | Current Mirror is neither the exact source, exact target nor an admitted later revision | self | Reload current authority and rebuild the monotonic transition | activation request and active Mirror status |
+| `FLEET_MIRROR_TARGET_NOT_REACHED` | 1 | `active_status`; active status remains at the admitted transition source rather than the requested target | self | Resume or recover the exact Mirror advance | active Mirror status |
+| `FLEET_MIRROR_UNCHANGED_PUBLICATION_MISMATCH` | 1 | `advance_for_component_publication`; a no-change Component publication names a Registry other than the active Mirror | self | Reload current publication and Mirror authority | publication operation and Mirror status |
+| `FLEET_MIRROR_DIRECTORY_SOURCE_MISMATCH` | 1 | `prepare_component_publication_transition`; prepared Component Directory synchronization starts from a different active Registry | self | Rebuild the synchronization transition from the active Mirror | prepared publication operation |
+| `FLEET_MIRROR_PREPARED_COMMIT_SOURCE_CHANGED` | 1 | `commit_component_publication_transition`; active Mirror changed after transition preparation and before its no-await commit | self | Discard the prepared value and prepare again from current authority | prepared transition plus active Mirror status |
+| `FLEET_MIRROR_TARGET_PREVIOUS_REGISTRY_MISMATCH` / `FLEET_MIRROR_TARGET_DIRECTORY_MISMATCH` | 1 | `classify_active_transition`; current Registry already equals the requested target but its predecessor or Directory binds another transition | self for each exact leaf | Preserve current authority and reject the conflicting retry payload | activation request and active Mirror status |
+| `FLEET_MIRROR_CURRENT_AUTHORITY_MISMATCH` | 1 | `classify_active_transition`; current Mirror and requested target belong to different Fleet Registry authorities | self | Use the exact Fleet/root authority; never cross an authority boundary | activation request and active Mirror status |
+| `FLEET_MIRROR_TRANSITION_SOURCE_MISMATCH` | 1 | `classify_active_transition`; current Mirror is neither the exact source, exact target nor an admitted later revision | self | Reload current authority and rebuild the monotonic transition | activation request and active Mirror status |
 
 The seven sites add eight exact meanings. A later valid Mirror may satisfy a
 stale request only through the existing explicit revision classifier; these
@@ -70,14 +70,14 @@ conflicts must not become a generic exact-retry success.
 
 ## Snapshot, Target And Transition Validation
 
-| Exact candidate | Sites | Current meaning | Public projection | Action and retry | Observation |
+| Exact candidate | Sites | Producer function/branch | Public projection | Action and retry | Observation |
 | --- | ---: | --- | --- | --- | --- |
-| `FLEET_MIRROR_SNAPSHOT_ROOT_STATUS_MISMATCH` | 1 | Snapshot root lifecycle differs from the required Joining/target state | self | Fetch the Registry state admitted by the current lifecycle phase | supplied snapshot and Registry status |
-| `FLEET_MIRROR_SNAPSHOT_ROOT_MISSING` | 1 | Coordinator snapshot omits the protected local root | self | Reject the snapshot and reconcile Coordinator Registry state | supplied snapshot |
-| `FLEET_MIRROR_SNAPSHOT_MANIFEST_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_VERSION_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_PLACEMENT_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_ADMISSIONS_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_TOPOLOGY_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_RELEASE_SET_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_LIMITS_MISMATCH` | 1 | One supplied-snapshot predicate merges canonical manifest/version with five immutable protected root fields | self for every exact leaf | Reject the untrusted snapshot and identify the exact changed authority field | supplied snapshot plus protected authority |
-| `FLEET_MIRROR_TARGET_REGISTRY_MISMATCH` | 1 | Coordinator target snapshot differs from the controller-expected Registry version | self | Reconcile controller and Coordinator observations before commit | activation request and fetched snapshot |
-| `FLEET_MIRROR_TARGET_DIRECTORY_MISMATCH` | 1 | Canonically derived root Directory differs from controller-expected authority | self | Rebuild the request from the canonical target snapshot | activation request and derived Directory |
-| `FLEET_MIRROR_PREVIOUS_AUTHORITY_REQUEST_MISMATCH` / `FLEET_MIRROR_TARGET_AUTHORITY_REQUEST_MISMATCH` / `FLEET_MIRROR_REQUEST_REVISION_NOT_ADVANCED` / `FLEET_MIRROR_REQUEST_PREVIOUS_HASH_INVALID` / `FLEET_MIRROR_REQUEST_TARGET_HASH_INVALID` | 1 | One request predicate merges source/target Fleet authority, monotonic revision and two nonzero Registry hashes | self for every exact leaf | Correct the independently named transition field before any fetch or commit | activation request |
+| `FLEET_MIRROR_SNAPSHOT_ROOT_STATUS_MISMATCH` | 1 | `validate_snapshot`; snapshot root lifecycle differs from the required Joining/target state | self | Fetch the Registry state admitted by the current lifecycle phase | supplied snapshot and Registry status |
+| `FLEET_MIRROR_SNAPSHOT_ROOT_MISSING` | 1 | `validated_snapshot_root`; Coordinator snapshot omits the protected local root | self | Reject the snapshot and reconcile Coordinator Registry state | supplied snapshot |
+| `FLEET_MIRROR_SNAPSHOT_MANIFEST_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_VERSION_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_PLACEMENT_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_ADMISSIONS_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_TOPOLOGY_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_RELEASE_SET_MISMATCH` / `FLEET_MIRROR_SNAPSHOT_ROOT_LIMITS_MISMATCH` | 1 | `validated_snapshot_root`; one supplied-snapshot predicate merges canonical manifest/version with five immutable protected root fields | self for every exact leaf | Reject the untrusted snapshot and identify the exact changed authority field | supplied snapshot plus protected authority |
+| `FLEET_MIRROR_TARGET_REGISTRY_MISMATCH` | 1 | `validate_target`; Coordinator target snapshot differs from the controller-expected Registry version | self | Reconcile controller and Coordinator observations before commit | activation request and fetched snapshot |
+| `FLEET_MIRROR_TARGET_DIRECTORY_MISMATCH` | 1 | `validate_target`; canonically derived root Directory differs from controller-expected authority | self | Rebuild the request from the canonical target snapshot | activation request and derived Directory |
+| `FLEET_MIRROR_PREVIOUS_AUTHORITY_REQUEST_MISMATCH` / `FLEET_MIRROR_TARGET_AUTHORITY_REQUEST_MISMATCH` / `FLEET_MIRROR_REQUEST_REVISION_NOT_ADVANCED` / `FLEET_MIRROR_REQUEST_PREVIOUS_HASH_INVALID` / `FLEET_MIRROR_REQUEST_TARGET_HASH_INVALID` | 1 | `validate_transition_request`; one request predicate merges source/target Fleet authority, monotonic revision and two nonzero Registry hashes | self for every exact leaf | Correct the independently named transition field before any fetch or commit | activation request |
 
 The six sites contain 16 exact meanings. `FLEET_MIRROR_TARGET_DIRECTORY_MISMATCH`
 reuses the same exact target-authority meaning already selected when an active
@@ -89,8 +89,8 @@ compiler first; its exact validation causes are not renumbered here.
 
 | Disposition | Sites | Current meaning | Required hard cut |
 | --- | ---: | --- | --- |
-| transparent: Coordinator snapshot public diagnostic | 1 | Successfully decoded Coordinator result already carries the exact public Registry diagnostic | Propagate the registered remote diagnostic unchanged |
-| transparent: Coordinator acknowledgement public diagnostic | 1 | Successfully decoded Coordinator result already carries the exact acknowledgement diagnostic | Propagate the registered remote diagnostic unchanged |
+| transparent: Coordinator snapshot public diagnostic | 1 | `fetch_snapshot`; successfully decoded Coordinator result already carries the exact public Registry diagnostic | Propagate the registered remote diagnostic unchanged |
+| transparent: Coordinator acknowledgement public diagnostic | 1 | `acknowledge_snapshot`; successfully decoded Coordinator result already carries the exact acknowledgement diagnostic | Propagate the registered remote diagnostic unchanged |
 
 Transport, request-encoding and response-decoding failures are already typed
 by `CallOps` before these two result adapters. Neither adapter receives a

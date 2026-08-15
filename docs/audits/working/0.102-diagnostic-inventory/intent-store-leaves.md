@@ -1,6 +1,6 @@
 # Canic 0.102 Intent Store Diagnostic Leaves
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status
 
@@ -53,21 +53,21 @@ All labels in this section project to `INTENT_STATE_INVALID`. Stop mutation and
 reconstruct/check the canonical primary records; do not repair by guessing
 from a derived counter or index.
 
-```text
-INTENT_AGGREGATE_UNDERFLOW
-INTENT_AGGREGATE_OVERFLOW
-INTENT_PENDING_INDEX_MISSING
-INTENT_PENDING_INDEX_EXISTS
-INTENT_PENDING_INDEX_MISMATCH
-INTENT_PENDING_TOTAL_MISMATCH
-INTENT_RESOURCE_TOTAL_LIMIT_EXCEEDED
-INTENT_EXPIRY_INDEX_EXISTS
-INTENT_EXPIRY_INDEX_MISSING
-INTENT_EXPIRY_INDEX_VALUE_MISMATCH
-INTENT_EXPIRY_INDEX_KEY_MISMATCH
-INTENT_TTL_FREE_IN_EXPIRY_INDEX
-INTENT_TOTALS_MISSING
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `INTENT_AGGREGATE_UNDERFLOW` | `IntentStoreOpsError::AggregateUnderflow` |
+| `INTENT_AGGREGATE_OVERFLOW` | `IntentStoreOpsError::AggregateOverflow` |
+| `INTENT_PENDING_INDEX_MISSING` | `IntentStoreOpsError::PendingIndexMissing` |
+| `INTENT_PENDING_INDEX_EXISTS` | `IntentStoreOpsError::PendingIndexExists` |
+| `INTENT_PENDING_INDEX_MISMATCH` | `IntentStoreOpsError::PendingIndexMismatch` |
+| `INTENT_PENDING_TOTAL_MISMATCH` | `IntentStoreOpsError::PendingTotalMismatch` |
+| `INTENT_RESOURCE_TOTAL_LIMIT_EXCEEDED` | `IntentStoreOpsError::ResourceTotalRecordLimitExceeded` |
+| `INTENT_EXPIRY_INDEX_EXISTS` | `IntentStoreOpsError::ExpiryIndexExists` |
+| `INTENT_EXPIRY_INDEX_MISSING` | `IntentStoreOpsError::ExpiryIndexMissing` |
+| `INTENT_EXPIRY_INDEX_VALUE_MISMATCH` | `IntentStoreOpsError::ExpiryIndexValueMismatch` |
+| `INTENT_EXPIRY_INDEX_KEY_MISMATCH` | `IntentStoreOpsError::ExpiryIndexKeyMismatch` |
+| `INTENT_TTL_FREE_IN_EXPIRY_INDEX` | `IntentStoreOpsError::TtlFreeIntentInExpiryIndex` |
+| `INTENT_TOTALS_MISSING` | `IntentStoreOpsError::TotalsMissing` |
 
 Capacity reached is an admitted resource condition and is listed above;
 persisted record count above the limit is a contradictory state invariant and
@@ -77,14 +77,14 @@ remains distinct here.
 
 These six exact internal leaves project to `INTENT_STATE_INVALID`:
 
-```text
-INTENT_PLACEMENT_ACK_INDEX_EXISTS
-INTENT_PLACEMENT_ACK_INDEX_MISSING
-INTENT_PLACEMENT_ACK_INDEX_VALUE_MISMATCH
-INTENT_PLACEMENT_ACK_INDEX_UNEXPECTED
-INTENT_PLACEMENT_ACK_PRIMARY_MISSING
-INTENT_PLACEMENT_ACK_PRIMARY_MISMATCH
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `INTENT_PLACEMENT_ACK_INDEX_EXISTS` | `IntentStoreOpsError::PlacementAcknowledgementIndexExists` |
+| `INTENT_PLACEMENT_ACK_INDEX_MISSING` | `IntentStoreOpsError::PlacementAcknowledgementIndexMissing` |
+| `INTENT_PLACEMENT_ACK_INDEX_VALUE_MISMATCH` | `IntentStoreOpsError::PlacementAcknowledgementIndexValueMismatch` |
+| `INTENT_PLACEMENT_ACK_INDEX_UNEXPECTED` | `IntentStoreOpsError::PlacementAcknowledgementUnexpectedIndex` |
+| `INTENT_PLACEMENT_ACK_PRIMARY_MISSING` | `IntentStoreOpsError::PlacementAcknowledgementPrimaryMissing` |
+| `INTENT_PLACEMENT_ACK_PRIMARY_MISMATCH` | `IntentStoreOpsError::PlacementAcknowledgementPrimaryMismatch` |
 
 An index entry never proves that its primary intent committed. Missing or
 contradictory primary state cannot be treated as an acknowledged placement.
@@ -94,27 +94,27 @@ contradictory primary state cannot be treated as an acknowledged placement.
 All labels below project to `INTENT_STATE_INVALID` and stop reclamation,
 replay or settlement until the exact same-release state is reconciled:
 
-```text
-INTENT_RECEIPT_RECORD_LIMIT_EXCEEDED
-INTENT_APPLICATION_REPLAY_MISSING
-INTENT_APPLICATION_REPLAY_PRIMARY_MISSING
-INTENT_APPLICATION_REPLAY_UNEXPECTED
-INTENT_APPLICATION_REPLAY_IDENTITY_MISMATCH
-INTENT_APPLICATION_REPLAY_SCHEMA_MISMATCH
-INTENT_APPLICATION_ELIGIBILITY_MISSING
-INTENT_APPLICATION_ELIGIBILITY_EXISTS
-INTENT_APPLICATION_ELIGIBILITY_PRIMARY_MISMATCH
-INTENT_APPLICATION_ELIGIBILITY_IDENTITY_MISMATCH
-INTENT_APPLICATION_ELIGIBILITY_SCHEMA_MISMATCH
-INTENT_APPLICATION_ELIGIBILITY_BINDING_MISMATCH
-INTENT_APPLICATION_ELIGIBILITY_REVISION_MISMATCH
-INTENT_APPLICATION_ELIGIBILITY_TIMESTAMP_OVERFLOW
-INTENT_APPLICATION_ELIGIBILITY_RESERVATION_OVERFLOW
-INTENT_APPLICATION_RECLAMATION_COUNT_OVERFLOW
-INTENT_RECEIPT_RECORD_SCHEMA_MISMATCH
-INTENT_PAYLOAD_BINDING_SCHEMA_UNSUPPORTED
-INTENT_TERMINAL_EVIDENCE_SCHEMA_UNSUPPORTED
-```
+| Exact identity | Current typed owner |
+| --- | --- |
+| `INTENT_RECEIPT_RECORD_LIMIT_EXCEEDED` | `IntentStoreOpsError::ReceiptBackedRecordLimitExceeded` |
+| `INTENT_APPLICATION_REPLAY_MISSING` | `IntentStoreOpsError::ApplicationReceiptReplayMissing` |
+| `INTENT_APPLICATION_REPLAY_PRIMARY_MISSING` | `IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing` |
+| `INTENT_APPLICATION_REPLAY_UNEXPECTED` | `IntentStoreOpsError::ApplicationReceiptReplayUnexpected` |
+| `INTENT_APPLICATION_REPLAY_IDENTITY_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptReplayIdentityMismatch` |
+| `INTENT_APPLICATION_REPLAY_SCHEMA_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptReplaySchemaMismatch` |
+| `INTENT_APPLICATION_ELIGIBILITY_MISSING` | `IntentStoreOpsError::ApplicationReceiptEligibilityMissing` |
+| `INTENT_APPLICATION_ELIGIBILITY_EXISTS` | `IntentStoreOpsError::ApplicationReceiptEligibilityExists` |
+| `INTENT_APPLICATION_ELIGIBILITY_PRIMARY_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch` |
+| `INTENT_APPLICATION_ELIGIBILITY_IDENTITY_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptEligibilityIdentityMismatch` |
+| `INTENT_APPLICATION_ELIGIBILITY_SCHEMA_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptEligibilitySchemaMismatch` |
+| `INTENT_APPLICATION_ELIGIBILITY_BINDING_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptEligibilityBindingMismatch` |
+| `INTENT_APPLICATION_ELIGIBILITY_REVISION_MISMATCH` | `IntentStoreOpsError::ApplicationReceiptEligibilityRevisionMismatch` |
+| `INTENT_APPLICATION_ELIGIBILITY_TIMESTAMP_OVERFLOW` | `IntentStoreOpsError::ApplicationReceiptEligibilityOverflow` |
+| `INTENT_APPLICATION_ELIGIBILITY_RESERVATION_OVERFLOW` | `IntentStoreOpsError::ApplicationReceiptEligibilityReservationOverflow` |
+| `INTENT_APPLICATION_RECLAMATION_COUNT_OVERFLOW` | `IntentStoreOpsError::ApplicationReceiptReclamationCountOverflow` |
+| `INTENT_RECEIPT_RECORD_SCHEMA_MISMATCH` | `IntentStoreOpsError::ReceiptBackedRecordSchemaMismatch` |
+| `INTENT_PAYLOAD_BINDING_SCHEMA_UNSUPPORTED` | `IntentStoreOpsError::UnsupportedPayloadBindingSchema` |
+| `INTENT_TERMINAL_EVIDENCE_SCHEMA_UNSUPPORTED` | `IntentStoreOpsError::UnsupportedTerminalEvidenceSchema` |
 
 `ReceiptBackedRecordLimitExceeded` represents an already-invalid count above
 the hard limit; the separate application eligibility capacity leaf is the
@@ -124,9 +124,12 @@ requests and not permission to add compatibility decoders.
 
 ## Store Schema
 
-`INTENT_STORE_SCHEMA_MISMATCH`, from `SchemaMismatch`, also projects to
-`INTENT_STATE_INVALID`. Pre-1.0 release transitions remain reinstall-only; B5
-must not add a legacy decoder, state migration or fallback tag.
+| Exact identity | Current typed source | Public projection |
+| --- | --- | --- |
+| `INTENT_STORE_SCHEMA_MISMATCH` | `IntentStoreOpsError::SchemaMismatch` | `INTENT_STATE_INVALID` |
+
+Pre-1.0 release transitions remain reinstall-only; B5 must not add a legacy
+decoder, state migration or fallback tag.
 
 ## Current Count
 

@@ -1,6 +1,6 @@
 # Canic 0.102 Authentication String Frontier
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status
 
@@ -218,11 +218,11 @@ branches or prove a new producer before either can receive a number.
 | New exact candidate | Direct typed producer | Projection | Action |
 | --- | --- | --- | --- |
 | `AUTH_CHAIN_KEY_SIGNER_HEADER_POLICY_MISMATCH` | `ChainKeySignerError::HeaderPolicyMismatch` | `AUTH_CHAIN_KEY_SIGNING_FAILED` | Stop retrying and repair protected batch/policy identity |
-| `AUTH_CHAIN_KEY_TEST_KEY_FORBIDDEN_ON_IC` | IC-network test-key rejection in config, signer or verifier | self | Configure the production key |
-| `AUTH_CHAIN_KEY_TEST_KEY_OPT_IN_REQUIRED` | local-network test-key rejection without opt-in | self | Explicitly allow the local test key or select another key |
+| `AUTH_CHAIN_KEY_TEST_KEY_FORBIDDEN_ON_IC` | `token::verifier_config::configured_chain_key_root_verifier`, `delegated::chain_key::verify_key_id_network` and `delegated::chain_key_signing::validate_signing_key_network`; IC-network branch | self | Configure the production key |
+| `AUTH_CHAIN_KEY_TEST_KEY_OPT_IN_REQUIRED` | `token::verifier_config::configured_chain_key_root_verifier`, `delegated::chain_key::verify_key_id_network` and `delegated::chain_key_signing::validate_signing_key_network`; local-network opt-in branch | self | Explicitly allow the local test key or select another key |
 | `AUTH_CHAIN_KEY_SIGNER_PUBLIC_KEY_MISMATCH` | `ChainKeySignerError::PublicKeyMismatch` | `AUTH_CHAIN_KEY_SIGNING_FAILED` | Stop retrying and reconcile the configured key |
 | `AUTH_CHAIN_KEY_SIGNER_SIGNATURE_INVALID` | invalid signature returned by `ChainKeySignerError` | `AUTH_CHAIN_KEY_SIGNING_FAILED` | Stop retrying and inspect signer/key authority |
-| `AUTH_CHAIN_KEY_CRYPTO_UNAVAILABLE` | disabled chain-key signing or verification support | self | Deploy the role with the required crypto feature |
+| `AUTH_CHAIN_KEY_CRYPTO_UNAVAILABLE` | feature-disabled `delegated::chain_key::{verify_chain_key_ecdsa_signature_enabled, verify_chain_key_ecdsa_public_key_shape_enabled}` and `delegated::chain_key_signing::normalize_chain_key_ecdsa_signature_enabled` | self | Deploy the role with the required crypto feature |
 | `AUTH_TOKEN_RETRIEVAL_EXPIRED` | `RetainedDelegatedTokenLookupError::Expired` | self | Prepare a new token operation |
 | `AUTH_TOKEN_RETRIEVAL_MISSING` | `RetainedDelegatedTokenLookupError::Missing` | self | Prepare the exact token before retrieval |
 | `AUTH_CHAIN_KEY_PROOF_SCHEMA_MISMATCH` | `ChainKeyRootProofError::SchemaVersionMismatch` | `AUTH_PROOF_INVALID` | Reacquire a current proof |
@@ -309,26 +309,26 @@ sites receive no additional identity.
 
 | New exact candidate | Current producer family | Projection | Action |
 | --- | --- | --- | --- |
-| `AUTH_ATTESTATION_EXPIRY_OVERFLOW` | role-attestation TTL addition | self | Correct issue time or TTL |
-| `AUTH_ATTESTATION_RETRIEVAL_MISSING` | prepared attestation lookup | self | Prepare the attestation again |
-| `AUTH_ROOT_PROOF_RETRIEVAL_MISSING` | prepared root-proof lookup | self | Prepare the exact root proof again |
-| `AUTH_ROOT_PROOF_RETRIEVAL_EXPIRED` | root-proof retrieval window | self | Start a new proof preparation |
-| `AUTH_TOKEN_VERIFIER_DISABLED` | current-Canister verifier fence | self | Enable the verifier for the role before retry |
-| `AUTH_CHAIN_KEY_POLICY_UNAVAILABLE` | missing protected root-proof policy | self | Install the required verifier policy |
-| `AUTH_TOKEN_RETENTION_ACTOR_CAPACITY` | per-actor retained-token bound | self | Wait for pruning or reduce outstanding preparations |
-| `AUTH_TOKEN_RETENTION_GLOBAL_CAPACITY` | global retained-token bound | self | Wait for pruning before retry |
-| `AUTH_ACTIVE_DELEGATION_PROOF_MISSING` | missing local active proof | self | Provision an active proof |
-| `AUTH_ROOT_CANISTER_PRINCIPAL_INVALID` | empty or malformed configured root principal | self | Correct the configured root Canister principal |
-| `AUTH_CHAIN_KEY_CONFIG_REQUIRED` | missing/empty required signer or verifier field | self | Complete the bounded chain-key configuration |
-| `AUTH_CHAIN_KEY_CONFIG_HEX_INVALID` | malformed configured key/path/hash hex | self | Correct hexadecimal configuration |
-| `AUTH_CHAIN_KEY_CONFIG_FIXED_LENGTH_INVALID` | wrong-length fixed hash | self | Supply the required 32-byte value |
-| `AUTH_CHAIN_KEY_PUBLIC_KEY_INVALID` | invalid configured secp256k1 public key | self | Supply a valid public key |
-| `AUTH_CHAIN_KEY_DERIVATION_PATH_HASH_MISMATCH` | path/hash binding check | self | Recompute and freeze the exact path hash |
-| `AUTH_CHAIN_KEY_REVOCATION_LATENCY_ZERO` | zero protected revocation bound | self | Configure a positive bound |
-| `AUTH_IC_ROOT_KEY_REQUIRED` | missing/empty IC root key | self | Configure the network's root key |
-| `AUTH_IC_ROOT_KEY_HEX_INVALID` | malformed IC root-key hex | self | Correct the root-key encoding |
-| `AUTH_IC_ROOT_KEY_LENGTH_INVALID` | wrong-length raw IC root key | self | Supply the required raw key length |
-| `AUTH_IC_ROOT_KEY_NETWORK_MISMATCH` | IC/local root-key mismatch | self | Use the root key for the exact build network |
+| `AUTH_ATTESTATION_EXPIRY_OVERFLOW` | `AuthOps::prepare_role_attestation`; `issued_at_ns.checked_add(ttl_ns)` overflow branch | self | Correct issue time or TTL |
+| `AUTH_ATTESTATION_RETRIEVAL_MISSING` | `AuthOps::get_role_attestation`; missing `PENDING_ROLE_ATTESTATIONS` entry | self | Prepare the attestation again |
+| `AUTH_ROOT_PROOF_RETRIEVAL_MISSING` | `root_canister_sig::get_root_canister_signature_proof`; missing `PENDING_ROOT_PROOFS` entry | self | Prepare the exact root proof again |
+| `AUTH_ROOT_PROOF_RETRIEVAL_EXPIRED` | `root_canister_sig::get_root_canister_signature_proof`; `retrieval_expires_at_ns` fence | self | Start a new proof preparation |
+| `AUTH_TOKEN_VERIFIER_DISABLED` | `token::verification::require_current_canister_delegated_token_verifier`; disabled-role branch | self | Enable the verifier for the role before retry |
+| `AUTH_CHAIN_KEY_POLICY_UNAVAILABLE` | `AuthOps::plan_due_chain_key_root_delegation_batch`, `AuthOps::signed_chain_key_delegation_proof_for_issuer` and `delegation::current_chain_key_registry_identity`; missing `chain_key_root` policy | self | Install the required verifier policy |
+| `AUTH_TOKEN_RETENTION_ACTOR_CAPACITY` | `token::retention::prune_and_admit`; `max_active_per_actor` branch | self | Wait for pruning or reduce outstanding preparations |
+| `AUTH_TOKEN_RETENTION_GLOBAL_CAPACITY` | `token::retention::prune_and_admit`; `max_active_per_command_kind` branch | self | Wait for pruning before retry |
+| `AUTH_ACTIVE_DELEGATION_PROOF_MISSING` | `AuthOps::prepare_delegated_token_issuer_proof`; missing result from `AuthOps::active_delegation_proof` | self | Provision an active proof |
+| `AUTH_ROOT_CANISTER_PRINCIPAL_INVALID` | `token::verifier_config::configured_root_canister_id`; empty and `Principal::from_text` branches | self | Correct the configured root Canister principal |
+| `AUTH_CHAIN_KEY_CONFIG_REQUIRED` | `token::verifier_config::{required_chain_key_field, required_chain_key_u64}`, `delegated::chain_key_signing::{required_chain_key_field, required_chain_key_derivation_path, required_chain_key_u64}` and `delegation::required_chain_key_max_revocation_latency_ns` | self | Complete the bounded chain-key configuration |
+| `AUTH_CHAIN_KEY_CONFIG_HEX_INVALID` | `token::verifier_config::{configured_chain_key_root_verifier, required_fixed_32_chain_key_hex}` and `delegated::chain_key_signing::{chain_key_signing_policy_from_config, required_chain_key_derivation_path, required_fixed_32_chain_key_hex}` | self | Correct hexadecimal configuration |
+| `AUTH_CHAIN_KEY_CONFIG_FIXED_LENGTH_INVALID` | `token::verifier_config::required_fixed_32_chain_key_hex` and `delegated::chain_key_signing::required_fixed_32_chain_key_hex`; failed 32-byte conversion | self | Supply the required 32-byte value |
+| `AUTH_CHAIN_KEY_PUBLIC_KEY_INVALID` | `token::verifier_config::configured_chain_key_root_verifier` and `delegated::chain_key_signing::chain_key_signing_policy_from_config`; `verify_chain_key_ecdsa_public_key_shape` rejection | self | Supply a valid public key |
+| `AUTH_CHAIN_KEY_DERIVATION_PATH_HASH_MISMATCH` | `delegated::chain_key_signing::chain_key_signing_policy_from_config`; derived/configured hash inequality | self | Recompute and freeze the exact path hash |
+| `AUTH_CHAIN_KEY_REVOCATION_LATENCY_ZERO` | `token::verifier_config::configured_chain_key_root_verifier` and `delegation::required_chain_key_max_revocation_latency_ns`; zero-value branches | self | Configure a positive bound |
+| `AUTH_IC_ROOT_KEY_REQUIRED` | `token::verifier_config::configured_ic_root_public_key_raw`; absent or empty configured value | self | Configure the network's root key |
+| `AUTH_IC_ROOT_KEY_HEX_INVALID` | `token::verifier_config::configured_ic_root_public_key_raw`; `decode_hex` rejection | self | Correct the root-key encoding |
+| `AUTH_IC_ROOT_KEY_LENGTH_INVALID` | `token::verifier_config::configured_ic_root_public_key_raw`; `IC_ROOT_PUBLIC_KEY_RAW_LENGTH` mismatch | self | Supply the required raw key length |
+| `AUTH_IC_ROOT_KEY_NETWORK_MISMATCH` | `token::verifier_config::validate_build_network_root_key_pair`; IC/local key mismatch branches | self | Use the root key for the exact build network |
 
 The active-proof fallback needs a small hard cut rather than three status
 codes. An expired local proof reuses `AUTH_CERT_EXPIRED`; a missing proof uses
@@ -397,13 +397,99 @@ Both are deliberately less specific than their stored internal codes. All
 cryptographic proof-shape and binding failures reuse the already-recorded
 `AUTH_PROOF_INVALID` projection.
 
+## Delegated-Session Public Boundary Correction
+
+Source-to-ledger reconciliation found a gap in the preceding family
+arithmetic. `AuthApi::set_delegated_session_subject` is a maintained public SDK
+helper whose static decision branches were present at the pinned source
+baseline, but Slice 7 of the dynamic-context ledger classified only their
+interpolated values. Those branches were not added to the provisional exact-
+leaf count. Dynamic-value closure is not producer closure.
+
+The complete helper adds nineteen exact meanings. Eight subject-rejection
+meanings are shared between the wallet-caller and requested-subject checks:
+
+| New exact candidate | Typed producer | Class / origin | Projection | Disposition and action |
+| --- | --- | --- | --- | --- |
+| `AUTH_DELEGATED_SESSION_SUBJECT_ANONYMOUS` | `DelegatedSessionSubjectRejection::Anonymous` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; supply a non-anonymous user principal |
+| `AUTH_DELEGATED_SESSION_SUBJECT_MANAGEMENT_CANISTER` | `DelegatedSessionSubjectRejection::ManagementCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; never use the management Canister as a user subject |
+| `AUTH_DELEGATED_SESSION_SUBJECT_LOCAL_CANISTER` | `DelegatedSessionSubjectRejection::LocalCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; supply a user principal rather than the receiving Canister |
+| `AUTH_DELEGATED_SESSION_SUBJECT_ROOT_CANISTER` | `DelegatedSessionSubjectRejection::RootCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; do not establish a user session for the configured root |
+| `AUTH_DELEGATED_SESSION_SUBJECT_PARENT_CANISTER` | `DelegatedSessionSubjectRejection::ParentCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; do not establish a user session for the registered parent |
+| `AUTH_DELEGATED_SESSION_SUBJECT_SUBNET_CANISTER` | `DelegatedSessionSubjectRejection::SubnetCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; do not establish a user session for a protected same-Subnet Canister |
+| `AUTH_DELEGATED_SESSION_SUBJECT_FLEET_SUBNET_ROOT_CANISTER` | `DelegatedSessionSubjectRejection::FleetSubnetRootCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; do not establish a user session for the Fleet Subnet Root |
+| `AUTH_DELEGATED_SESSION_SUBJECT_DIRECT_CHILD_CANISTER` | `DelegatedSessionSubjectRejection::DirectChildCanister` | `Forbidden` / delegated-session admission | self | `DoNotRetry`; do not establish a user session for a registered direct child |
+
+The remaining eleven meanings bind the helper's time, subject, replay and
+capacity decisions:
+
+| New exact candidate | Current decision | Class / origin | Projection | Disposition and action |
+| --- | --- | --- | --- | --- |
+| `AUTH_DELEGATED_SESSION_ISSUED_TIME_OVERFLOW` | current IC seconds cannot be represented as nanoseconds | `Invariant` / delegated-session time | self | `DoNotRetry`; preserve state and inspect the observed time contract |
+| `AUTH_DELEGATED_SESSION_SUBJECT_MISMATCH` | verified bootstrap-token subject differs from the requested subject | `Forbidden` / delegated-session binding | self | `DoNotRetry`; acquire a token for the exact requested subject |
+| `AUTH_DELEGATED_SESSION_CONFIGURED_TTL_ZERO` | protected maximum session TTL is zero | `Invariant` / delegated-session configuration | `RUNTIME_CONFIGURATION_INVALID` | `RetryAfterStateChange`; correct configuration and reinstall |
+| `AUTH_DELEGATED_SESSION_REQUESTED_TTL_ZERO` | caller requests a zero-second session | `InvalidInput` / delegated-session request | self | `DoNotRetry`; request a positive bounded TTL |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_TOKEN_INVALID` | canonical bootstrap-token fingerprint encoding fails | `Invariant` / delegated-session bootstrap | self | `DoNotRetry`; reject the token without exposing codec prose |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_REPLAY_REUSED` | an exactly bound token no longer owns an active matching session | `Forbidden` / delegated-session replay | self | `DoNotRetry`; acquire a fresh bootstrap token |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_REPLAY_CONFLICT` | a token fingerprint is bound to another wallet or subject | `Forbidden` / delegated-session replay | self | `DoNotRetry`; acquire a fresh token without exposing the retained binding |
+| `AUTH_DELEGATED_SESSION_CAPACITY_EXCEEDED` | global active-session capacity is full | `ResourceExhausted` / delegated-session capacity | self | `RetryAfterStateChange`; inspect guarded capacity status and retry after expiry/pruning |
+| `AUTH_DELEGATED_SESSION_SUBJECT_CAPACITY_EXCEEDED` | the requested subject has reached its session ceiling | `ResourceExhausted` / delegated-session capacity | self | `RetryAfterStateChange`; inspect request-scoped guarded capacity status |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY_EXCEEDED` | global live bootstrap-binding capacity is full | `ResourceExhausted` / delegated-session replay capacity | self | `RetryAfterStateChange`; inspect guarded capacity status and retry after expiry/pruning |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY_EXCEEDED` | the requested subject has reached its bootstrap-binding ceiling | `ResourceExhausted` / delegated-session replay capacity | self | `RetryAfterStateChange`; inspect request-scoped guarded capacity status |
+
+The disabled-service branch reuses `AUTH_DELEGATED_TOKENS_DISABLED`; maximum-
+TTL conversion reuses `AUTH_DELEGATED_TOKEN_MAX_TTL_OVERFLOW`; a bootstrap token
+that expires at the seconds boundary reuses `AUTH_TOKEN_EXPIRED`; configuration
+and token verification preserve their typed causes. The `Upserted` formatter
+arm is unreachable after the preceding match and receives no code.
+
+The four capacity identities require the guarded bounded status owners already
+specified by `DPC-073` through `DPC-078`. The replay-conflict identity retains
+only aggregate metrics and the protected binding; neither principal crosses the
+public boundary. No generic session detail string is introduced.
+
+### Producer And Observation Ownership
+
+The nineteen rows have these exhaustive producer owners:
+
+| Exact identities | Producer owner |
+| --- | --- |
+| eight `AUTH_DELEGATED_SESSION_SUBJECT_*` identities | `access::auth::validate_delegated_session_subject`; `AuthApi::set_delegated_session_subject` preserves the exact `DelegatedSessionSubjectRejection` variant for both the wallet and requested-subject checks |
+| `AUTH_DELEGATED_SESSION_ISSUED_TIME_OVERFLOW` and `AUTH_DELEGATED_SESSION_SUBJECT_MISMATCH` | `AuthApi::set_delegated_session_subject` |
+| `AUTH_DELEGATED_SESSION_CONFIGURED_TTL_ZERO` and `AUTH_DELEGATED_SESSION_REQUESTED_TTL_ZERO` | `AuthApi::clamp_delegated_session_expires_at`, preserving `AuthOps::clamp_delegated_session_expires_at`'s exact typed decision |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_TOKEN_INVALID` | `AuthApi::delegated_session_bootstrap_token_fingerprint` |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_REPLAY_REUSED` | `AuthApi::enforce_bootstrap_replay_policy` |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_REPLAY_CONFLICT` | `AuthApi::enforce_bootstrap_replay_policy` |
+| `AUTH_DELEGATED_SESSION_CAPACITY_EXCEEDED` | `AuthStateOps::upsert_delegated_session_with_bootstrap_binding`, preserving the exact `DelegatedSessionUpsertResult` capacity variant; B4 deletes the prose-only `delegated_session_capacity_message` adapter |
+| `AUTH_DELEGATED_SESSION_SUBJECT_CAPACITY_EXCEEDED` | `AuthStateOps::upsert_delegated_session_with_bootstrap_binding`, preserving the exact `DelegatedSessionUpsertResult` capacity variant; B4 deletes the prose-only `delegated_session_capacity_message` adapter |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY_EXCEEDED` | `AuthStateOps::upsert_delegated_session_with_bootstrap_binding`, preserving the exact `DelegatedSessionUpsertResult` capacity variant; B4 deletes the prose-only `delegated_session_capacity_message` adapter |
+| `AUTH_DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY_EXCEEDED` | `AuthStateOps::upsert_delegated_session_with_bootstrap_binding`, preserving the exact `DelegatedSessionUpsertResult` capacity variant; B4 deletes the prose-only `delegated_session_capacity_message` adapter |
+
+Each table's current-decision text is its concise host summary. Every self-
+projected identity is safe because it exposes only a finite admission, replay,
+time or capacity decision and never a principal, token fingerprint, configured
+capacity or dependency cause. It is publicly observable through the returned
+code. `AUTH_DELEGATED_SESSION_CONFIGURED_TTL_ZERO` is the sole masked row: the
+exact numeric code must be recorded in guarded authentication status before
+returning `RUNTIME_CONFIGURATION_INVALID`. Its protected configuration remains
+the retrieval owner. The replay-conflict metric and stable binding remain
+aggregate/private observation only; neither is required to reconstruct the
+public exact code.
+
+These rows now contain producer, summary, class, origin, disposition, action,
+projection, observation and exposure evidence. Numeric allocation and the
+permanent catalogue owner remain deliberately unset until the complete B1 set
+is reviewed together.
+
 ## Allocation Consequences
 
-This pass does not add 96 codes. It reconciles the structural perimeter to
-**84 new exact candidates and two new safe projections**:
+This pass does not add one code per structural variant. It reconciles the
+structural and delegated-session perimeter to **103 new exact candidates and
+two new safe projections**:
 
 - 64 new candidates from the typed owner graph; and
-- 20 new candidates from direct prose and adjacent broad constructors.
+- 20 new candidates from direct prose and adjacent broad constructors; and
+- 19 new candidates from the maintained delegated-session public helper.
 
 It establishes these decisions for the final B1 allocation:
 
@@ -417,7 +503,7 @@ It establishes these decisions for the final B1 allocation:
    diagnostic identity, not a formatted error.
 
 Together with [auth-policy-leaves.md](auth-policy-leaves.md), authentication and
-policy now account for **132 provisional exact candidates and six distinct safe
+policy now account for **151 provisional exact candidates and six distinct safe
 projections**. The structural 96-variant expansion remains evidence for the
 reconciliation, not permission to allocate placeholders. The numbers remain
 provisional until whole-ledger collision and observability checks complete.

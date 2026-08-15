@@ -446,7 +446,8 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
 
     for timer in &status.timers {
         lines.push(format!(
-            "timer: {}/{} registration={} condition={} mode={} enabled={}",
+            "timer: {}/{}/{} registration={} condition={} mode={} enabled={}",
+            timer.owner,
             timer.subsystem,
             timer.name,
             timer.registration.label(),
@@ -747,7 +748,7 @@ mod tests {
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
-        assert!(rendered.contains("schema_version: 1"));
+        assert!(rendered.contains("schema_version: 3"));
         assert!(rendered.contains("role: root"));
         assert!(rendered.contains("features: 2"));
         assert!(rendered.contains("timers: 1"));
@@ -759,7 +760,7 @@ mod tests {
         ));
         assert!(
             rendered
-                .contains("timer: runtime/heartbeat registration=scheduled condition=active mode=after_completion enabled=true")
+                .contains("timer: canic/runtime/heartbeat registration=scheduled condition=active mode=after_completion enabled=true")
         );
         assert!(rendered.contains(
             "state_domain: runtime_bindings version=1 storage=stable_memory memory_id=1 status=ok"
@@ -872,8 +873,8 @@ mod tests {
         use canic_core::dto::runtime::{
             CanicReadinessStatus, FailureSeverity, ReadinessStatus, RecentFailure,
             RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary, RuntimeBuildInfo,
-            RuntimeFeatureStatus, RuntimeFieldVisibility, RuntimeStateDomainStatus,
-            RuntimeStateDomainSummary, RuntimeStateSummary,
+            RuntimeCheck, RuntimeCheckStatus, RuntimeFeatureStatus, RuntimeFieldVisibility,
+            RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary,
         };
 
         CanicRuntimeStatus {
@@ -905,6 +906,15 @@ mod tests {
             ],
             topology: None,
             timers: vec![sample_timer_status()],
+            timer_inventory: RuntimeCheck {
+                category: "runtime".to_string(),
+                code: "timer_inventory_available".to_string(),
+                status: RuntimeCheckStatus::Pass,
+                subject: "shared_timer_registry".to_string(),
+                detail: "available".to_string(),
+                next: None,
+                source: "ic_timers".to_string(),
+            },
             state: Some(RuntimeStateSummary {
                 manifest_schema_version: 1,
                 domains: vec![RuntimeStateDomainSummary {
@@ -977,20 +987,22 @@ mod tests {
         }
     }
 
-    fn sample_timer_status() -> canic_core::dto::runtime::CanicTimerStatus {
+    fn sample_timer_status() -> canic_core::dto::runtime::CanisterTimerStatus {
         use canic_core::dto::runtime::{
-            CanicTimerStatus, TimerExecutionOutcome, TimerProcessCondition,
+            CanisterTimerStatus, TimerCallbackPerformanceStatus, TimerExecutionOutcome,
+            TimerMemoryPageExtentStatus, TimerMemoryPageSampleStatus, TimerProcessCondition,
             TimerRegistrationStatus, TimerSchedulingMode,
         };
 
-        CanicTimerStatus {
+        CanisterTimerStatus {
             name: "heartbeat".to_string(),
+            owner: "canic".to_string(),
             subsystem: "runtime".to_string(),
             scheduling_mode: TimerSchedulingMode::AfterCompletion,
             registration: TimerRegistrationStatus::Scheduled,
             condition: TimerProcessCondition::Active,
             enabled: true,
-            generation: 2,
+            generation: Some(2),
             next_due_at_ns: Some(100),
             last_outcome: Some(TimerExecutionOutcome::Success),
             last_work_count: 1,
@@ -1003,6 +1015,35 @@ mod tests {
             expected_failures_since_runtime_start: 0,
             invariant_failures_since_runtime_start: 0,
             stale_callbacks_since_runtime_start: 0,
+            scheduler_performance: TimerCallbackPerformanceStatus {
+                instruction_samples_since_runtime_start: 0,
+                instructions_latest: None,
+                instructions_maximum: None,
+                instructions_total_since_runtime_start: 0,
+                memory_page_samples_since_runtime_start: 0,
+                memory_pages_latest: None,
+                maximum_wasm_memory_growth_pages: None,
+                maximum_stable_memory_growth_pages: None,
+            },
+            work_performance: TimerCallbackPerformanceStatus {
+                instruction_samples_since_runtime_start: 1,
+                instructions_latest: Some(10),
+                instructions_maximum: Some(10),
+                instructions_total_since_runtime_start: 10,
+                memory_page_samples_since_runtime_start: 1,
+                memory_pages_latest: Some(TimerMemoryPageSampleStatus {
+                    start: TimerMemoryPageExtentStatus {
+                        wasm_pages: 20,
+                        stable_pages: 2,
+                    },
+                    end: TimerMemoryPageExtentStatus {
+                        wasm_pages: 21,
+                        stable_pages: 2,
+                    },
+                }),
+                maximum_wasm_memory_growth_pages: Some(1),
+                maximum_stable_memory_growth_pages: Some(0),
+            },
         }
     }
 }

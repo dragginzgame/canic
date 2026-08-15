@@ -315,6 +315,8 @@ pub enum TimerSchedulingMode {
     Retry,
     #[serde(rename = "continuation")]
     Continuation,
+    #[serde(rename = "watchdog")]
+    Watchdog,
 }
 
 impl TimerSchedulingMode {
@@ -326,6 +328,7 @@ impl TimerSchedulingMode {
             Self::Deadline => "deadline",
             Self::Retry => "retry",
             Self::Continuation => "continuation",
+            Self::Watchdog => "watchdog",
         }
     }
 }
@@ -344,6 +347,8 @@ pub enum TimerExecutionOutcome {
     RetryableFailure,
     #[serde(rename = "invariant_failure")]
     InvariantFailure,
+    #[serde(rename = "unacknowledged")]
+    Unacknowledged,
 }
 
 impl TimerExecutionOutcome {
@@ -354,19 +359,9 @@ impl TimerExecutionOutcome {
             Self::NoWork => "no_work",
             Self::RetryableFailure => "retryable_failure",
             Self::InvariantFailure => "invariant_failure",
+            Self::Unacknowledged => "unacknowledged",
         }
     }
-}
-
-///
-/// TimerMode
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum TimerMode {
-    Interval,
-    Once,
 }
 
 #[cfg(test)]
@@ -456,6 +451,7 @@ mod tests {
         assert_eq!(TimerSchedulingMode::Deadline.label(), "deadline");
         assert_eq!(TimerSchedulingMode::Retry.label(), "retry");
         assert_eq!(TimerSchedulingMode::Continuation.label(), "continuation");
+        assert_eq!(TimerSchedulingMode::Watchdog.label(), "watchdog");
 
         assert_eq!(TimerExecutionOutcome::Success.label(), "success");
         assert_eq!(TimerExecutionOutcome::NoWork.label(), "no_work");
@@ -466,6 +462,10 @@ mod tests {
         assert_eq!(
             TimerExecutionOutcome::InvariantFailure.label(),
             "invariant_failure"
+        );
+        assert_eq!(
+            TimerExecutionOutcome::Unacknowledged.label(),
+            "unacknowledged"
         );
     }
 }

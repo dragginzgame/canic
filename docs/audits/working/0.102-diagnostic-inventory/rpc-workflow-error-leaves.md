@@ -1,6 +1,6 @@
 # Canic 0.102 RPC Workflow Error Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -86,15 +86,15 @@ The root workflow reuses these already-qualified exact meanings:
 The current compact-root decoder and shared committed-response helper add the
 following exact source meanings:
 
-| Exact candidate | Source predicate | Public projection | Action and retry |
-| --- | --- | --- | --- |
-| `RPC_REPLAY_COMPACT_VARIANT_TAG_MISSING` | compact prefix has no following variant tag | self | Preserve the terminal bytes; repair the exact compact encoder/decoder contract |
-| `RPC_REPLAY_COMPACT_VARIANT_INVALID` | retained compact tag is unknown | self | Preserve the terminal bytes; never reinterpret an unknown variant |
-| `RPC_REPLAY_COMPACT_CYCLES_VALUE_TRUNCATED` | cycles `u128` field has fewer than sixteen bytes | self | Preserve the terminal bytes; fail closed rather than defaulting or padding |
-| `RPC_REPLAY_COMPACT_CYCLES_PAYLOAD_TRAILING_BYTES` | decoded cycles value leaves bytes behind | self | Preserve the terminal bytes; reject noncanonical payloads |
-| `REPLAY_RESPONSE_SCHEMA_VERSION_MISSING` | committed response lacks its schema version | self | Preserve the receipt and repair missing terminal schema authority |
-| `REPLAY_RESPONSE_SCHEMA_VERSION_UNSUPPORTED` | committed response names another schema version | self | Preserve the receipt; never decode through a compatibility fallback |
-| `REPLAY_TERMINAL_RESPONSE_MISSING` | committed/recovered receipt has no terminal response bytes | self | Preserve the receipt and reconcile its terminal state; never fabricate a response |
+| Exact candidate | Producer function/branch | Source predicate | Public projection | Action and retry |
+| --- | --- | --- | --- | --- |
+| `RPC_REPLAY_COMPACT_VARIANT_TAG_MISSING` | `try_decode_compact_root_replay_response` missing-tag branch | compact prefix has no following variant tag | self | Preserve the terminal bytes; repair the exact compact encoder/decoder contract |
+| `RPC_REPLAY_COMPACT_VARIANT_INVALID` | `try_decode_compact_root_replay_response` unknown-tag branch | retained compact tag is unknown | self | Preserve the terminal bytes; never reinterpret an unknown variant |
+| `RPC_REPLAY_COMPACT_CYCLES_VALUE_TRUNCATED` | `decode_u128` through `take_exact` | cycles `u128` field has fewer than sixteen bytes | self | Preserve the terminal bytes; fail closed rather than defaulting or padding |
+| `RPC_REPLAY_COMPACT_CYCLES_PAYLOAD_TRAILING_BYTES` | `try_decode_compact_root_replay_response` trailing-bytes branch | decoded cycles value leaves bytes behind | self | Preserve the terminal bytes; reject noncanonical payloads |
+| `REPLAY_RESPONSE_SCHEMA_VERSION_MISSING` | `committed_response_bytes` missing-version branch | committed response lacks its schema version | self | Preserve the receipt and repair missing terminal schema authority |
+| `REPLAY_RESPONSE_SCHEMA_VERSION_UNSUPPORTED` | `committed_response_bytes` version predicate | committed response names another schema version | self | Preserve the receipt; never decode through a compatibility fallback |
+| `REPLAY_TERMINAL_RESPONSE_MISSING` | `committed_response_bytes` missing-bytes branch | committed/recovered receipt has no terminal response bytes | self | Preserve the receipt and reconcile its terminal state; never fabricate a response |
 
 The last three meanings are shared by delegated-token, role-attestation,
 ICP-refill and root response recovery wherever the same receipt predicate is
@@ -128,8 +128,8 @@ live variants and seven exact decoder-source meanings. Four live variants reuse
 existing replay-decision identities, while the two codec wrappers select
 source codes and receive no wrapper identity.
 
-The qualified semantic set moves from 2,726 to 2,745 exact candidates. The 31
-safe projections are unchanged, producing 2,776 current symbolic identities.
+The qualified semantic set moves from 2,727 to 2,746 exact candidates. The 31
+safe projections are unchanged, producing 2,777 current symbolic identities.
 
 ## Required Tests
 

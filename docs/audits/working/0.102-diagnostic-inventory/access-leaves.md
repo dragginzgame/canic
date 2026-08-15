@@ -40,10 +40,10 @@ auth identity.
 | Candidate label | Current producer | Public projection | Action and retry |
 | --- | --- | --- | --- |
 | `ACCESS_FLEET_SUBNET_ROOT_REQUIRED` | `access::env::is_fleet_subnet_root` | self | Call the endpoint only on its Fleet Subnet Root |
-| `ACCESS_BUILD_NETWORK_MISMATCH` | configured build network differs | self | Use an endpoint built for the required network |
-| `ACCESS_BUILD_NETWORK_UNAVAILABLE` | build network is absent | self | Rebuild with the required `ICP_ENVIRONMENT` identity |
-| `ACCESS_FLEET_DISABLED` | disabled query or update | self | Enable the Fleet before retrying |
-| `ACCESS_FLEET_READONLY` | update while read-only | self | Use a query or restore write mode before retrying |
+| `ACCESS_BUILD_NETWORK_MISMATCH` | `access::env::check_build_network`; mismatched `Some(actual)` branch | self | Use an endpoint built for the required network |
+| `ACCESS_BUILD_NETWORK_UNAVAILABLE` | `access::env::check_build_network`; `None` branch | self | Rebuild with the required `ICP_ENVIRONMENT` identity |
+| `ACCESS_FLEET_DISABLED` | `access::fleet::guard_fleet_query` and disabled branch of `guard_fleet_update` | self | Enable the Fleet before retrying |
+| `ACCESS_FLEET_READONLY` | read-only branch of `access::fleet::guard_fleet_update` | self | Use a query or restore write mode before retrying |
 
 Disabled query and disabled update share one code: owner, meaning and action
 are identical. Read-only remains separate because queries still work and the
@@ -53,12 +53,12 @@ operator action differs.
 
 | Candidate label | Current producer | Public projection | Action and retry |
 | --- | --- | --- | --- |
-| `ACCESS_CONTROLLER_REQUIRED` | `is_controller` | self | Use an admitted controller caller |
-| `ACCESS_WHITELIST_REQUIRED` | initialized whitelist does not contain caller | self | Add or use a whitelisted caller |
-| `ACCESS_DIRECT_CHILD_REQUIRED` | `is_child` | self | Call from an exact direct child |
-| `ACCESS_PARENT_REQUIRED` | `is_parent` | self | Call from the configured immediate parent |
-| `ACCESS_ROOT_REQUIRED` | `is_root` | self | Call from the exact configured root |
-| `ACCESS_SELF_REQUIRED` | `is_same_canister` | self | Use the self-call-only route |
+| `ACCESS_CONTROLLER_REQUIRED` | `access::auth::predicates::is_controller` | self | Use an admitted controller caller |
+| `ACCESS_WHITELIST_REQUIRED` | `access::auth::predicates::is_whitelisted`; initialized whitelist miss | self | Add or use a whitelisted caller |
+| `ACCESS_DIRECT_CHILD_REQUIRED` | `access::auth::predicates::is_child` | self | Call from an exact direct child |
+| `ACCESS_PARENT_REQUIRED` | `access::auth::predicates::is_parent` | self | Call from the configured immediate parent |
+| `ACCESS_ROOT_REQUIRED` | `access::auth::predicates::is_root` | self | Call from the exact configured root |
+| `ACCESS_SELF_REQUIRED` | `access::auth::predicates::is_same_canister` | self | Use the self-call-only route |
 
 Caller principals never enter the compact diagnostic. Configuration, parent or
 root lookup failure is not the same as a negative predicate: it preserves its
@@ -69,9 +69,9 @@ exact internal configuration/environment code and projects publicly through
 
 | Candidate label | Current producer | Public projection | Action and retry |
 | --- | --- | --- | --- |
-| `ACCESS_REQUIRED_SCOPE_MISSING` | verified token lacks endpoint scope | self | Obtain a token granting the required scope |
-| `ACCESS_DELEGATED_TOKEN_MALFORMED` | bounded first-argument decode fails | self | Submit a canonical bounded delegated token as argument one |
-| `ACCESS_ROLE_ATTESTATION_MALFORMED` | bounded first-argument decode fails | self | Submit a canonical bounded role attestation as argument one |
+| `ACCESS_REQUIRED_SCOPE_MISSING` | `access::auth::token::enforce_required_scope`; verified-token miss | self | Obtain a token granting the required scope |
+| `ACCESS_DELEGATED_TOKEN_MALFORMED` | `access::auth::token::delegated_token_from_ingress_bytes`; bounded first-argument decode failure | self | Submit a canonical bounded delegated token as argument one |
+| `ACCESS_ROLE_ATTESTATION_MALFORMED` | `access::auth::attestation::role_attestation_from_ingress_bytes`; bounded first-argument decode failure | self | Submit a canonical bounded role attestation as argument one |
 
 Decoder errors, type names and ingress bytes are discarded. Quota and maximum
 type-length checks remain in place and execute before cryptographic work.
@@ -86,12 +86,12 @@ unavailability likewise preserves the typed dependency cause and uses
 
 | Candidate label | Current producer | Public projection | Action and retry |
 | --- | --- | --- | --- |
-| `ACCESS_SERVICE_GUARD_INVALID` | endpoint's static Fleet-service guard cannot parse | `ACCESS_CONFIGURATION_INVALID` | Correct the endpoint declaration and reinstall |
-| `ACCESS_SERVICE_AUTHORITY_REQUIRED` | active Component lacks exact service Authority purpose | self | Route through the admitted active Authority member |
-| `ACCESS_EXPRESSION_RULE_REQUIRED` | an access expression contains no rules | `ACCESS_CONFIGURATION_INVALID` | Declare at least one predicate and reinstall |
-| `ACCESS_NEGATED_PREDICATE_MATCHED` | a negated predicate succeeds | self | Satisfy the configured inverse policy |
-| `ACCESS_ACTIVE_COMPONENT_REQUIRED` | caller is not an active Registry member | self | Call from an exact active Component member |
-| `ACCESS_ROOT_OR_ACTIVE_COMPONENT_REQUIRED` | caller is neither active root nor active member | self | Call from one of the two admitted identities |
+| `ACCESS_SERVICE_GUARD_INVALID` | `access::deployment::require_service_authority`; `FleetServiceId::try_from` failure | `ACCESS_CONFIGURATION_INVALID` | Correct the endpoint declaration and reinstall |
+| `ACCESS_SERVICE_AUTHORITY_REQUIRED` | `access::deployment::require_service_authority`; `component_runtime::require_service_authority` rejection | self | Route through the admitted active Authority member |
+| `ACCESS_EXPRESSION_RULE_REQUIRED` | `access::expr::AccessFailure::no_predicates` | `ACCESS_CONFIGURATION_INVALID` | Declare at least one predicate and reinstall |
+| `ACCESS_NEGATED_PREDICATE_MATCHED` | `access::expr::AccessFailure::negated` | self | Satisfy the configured inverse policy |
+| `ACCESS_ACTIVE_COMPONENT_REQUIRED` | `ActiveComponentMemberPredicate::eval`; active Registry-member resolution rejects | self | Call from an exact active Component member |
+| `ACCESS_ROOT_OR_ACTIVE_COMPONENT_REQUIRED` | `RootCapabilityCallerPredicate::eval` through `root_capability_denial` | self | Call from one of the two admitted identities |
 
 The two control-plane predicates currently discard the exact Registry or root
 runtime cause. A simple membership miss may return the exact public access leaf;

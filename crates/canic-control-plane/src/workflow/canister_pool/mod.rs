@@ -7,7 +7,7 @@ use crate::ops::{
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
 use canic_core::{
-    api::timer::{TimerApi, TimerHandle},
+    api::timer::{TimerApi, TimerDirective, TimerHandle, TimerRunResult},
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         error::InternalError,
@@ -60,36 +60,64 @@ impl Drop for MaintenanceLease {
     }
 }
 
-/// Start one non-overlapping root-owned maintenance loop.
-pub fn start() {
-    MAINTENANCE_TIMER.with_borrow_mut(|current| {
-        if let Some(existing) = current.take() {
-            let _ = TimerApi::cancel(existing);
-        }
-        *current = Some(TimerApi::set_interval(
-            MAINTENANCE_INTERVAL,
-            "canic:canister_pool:maintain",
-            || async {
-                let _ = maintain_once().await;
-            },
-        ));
+/// Reserve inactive maintenance in the shared inventory before application hooks run.
+pub fn declare() {
+    let handle = TimerApi::declare_canister_pool_maintenance(MAINTENANCE_INTERVAL, || async {
+        maintenance_timer_result(maintain_once().await)
+    })
+    .unwrap_or_else(|error| {
+        ic_cdk::trap(format!(
+            "canister-pool maintenance declaration rejected: {error}"
+        ))
     });
-    TimerApi::defer_lifecycle(
+    MAINTENANCE_TIMER.with_borrow_mut(|current| *current = Some(handle));
+}
+
+/// Start one non-overlapping root-owned maintenance loop.
+pub fn start() -> Result<(), InternalError> {
+    MAINTENANCE_TIMER.with_borrow_mut(|current| -> Result<(), InternalError> {
+        if let Some(existing) = current.take() {
+            TimerApi::cancel(existing)?;
+        }
+        *current = Some(
+            TimerApi::set_canister_pool_maintenance(MAINTENANCE_INTERVAL, || async {
+                maintenance_timer_result(maintain_once().await)
+            })
+            .map_err(InternalError::from)?,
+        );
+        Ok(())
+    })?;
+    TimerApi::defer_lifecycle_result_required(
         Duration::ZERO,
         "canic:canister_pool:maintain_initial",
-        async {
-            let _ = maintain_once().await;
-        },
-    );
+        async { maintenance_timer_result(maintain_once().await) },
+    )
+    .detach();
+    Ok(())
+}
+
+/// Re-arm maintenance after snapshot resume only when the domain still owns it.
+pub fn resume_after_authority_snapshot() -> Result<(), canic_core::api::timer::TimerError> {
+    MAINTENANCE_TIMER.with_borrow_mut(|current| {
+        if current.is_none() {
+            return Ok(());
+        }
+        *current = Some(TimerApi::set_canister_pool_maintenance(
+            MAINTENANCE_INTERVAL,
+            || async { maintenance_timer_result(maintain_once().await) },
+        )?);
+        Ok(())
+    })
 }
 
 /// Stop proactive maintenance once root draining has fenced new allocations.
-pub fn stop() {
-    MAINTENANCE_TIMER.with_borrow_mut(|current| {
+pub fn stop() -> Result<(), InternalError> {
+    MAINTENANCE_TIMER.with_borrow_mut(|current| -> Result<(), InternalError> {
         if let Some(existing) = current.take() {
-            let _ = TimerApi::cancel(existing);
+            TimerApi::cancel(existing)?;
         }
-    });
+        Ok(())
+    })
 }
 
 /// Return the exact immutable policy and durable asset inventory.
@@ -142,9 +170,10 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
         status.phase,
         FleetActivationPhase::Prepared | FleetActivationPhase::Active
     ) {
-        return Err(InternalError::unavailable(
-            "Canister pool maintenance requires a Prepared or Active Fleet Subnet Root",
-        ));
+        return Ok(PoolAdminResponse::MaintenancePaused {
+            reason: "Canister pool maintenance requires a Prepared or Active Fleet Subnet Root"
+                .to_string(),
+        });
     }
     let config = pool_config()?;
 
@@ -180,6 +209,29 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
         return Ok(PoolAdminResponse::Maintained);
     }
     refill::start(&config).await
+}
+
+fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> TimerRunResult {
+    match result {
+        Ok(PoolAdminResponse::MaintenancePaused { .. }) => {
+            TimerRunResult::no_work(TimerDirective::Stop)
+        }
+        Ok(_) => TimerRunResult::success(1, TimerDirective::Stop),
+        Err(error)
+            if matches!(
+                error.class(),
+                canic_core::control_plane_support::error::InternalErrorClass::Infra
+                    | canic_core::control_plane_support::error::InternalErrorClass::Ops
+            ) =>
+        {
+            TimerRunResult {
+                outcome: canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure,
+                work_count: 0,
+                directive: TimerDirective::Stop,
+            }
+        }
+        Err(_) => TimerRunResult::invariant_failure(),
+    }
 }
 
 async fn import(canister_id: Principal) -> Result<PoolAdminResponse, InternalError> {
@@ -386,6 +438,7 @@ fn pool_config() -> Result<FleetSubnetCanisterPoolConfig, InternalError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use canic_core::control_plane_support::error::InternalErrorOrigin;
 
     #[test]
     fn import_subnet_requires_exact_nns_routing_evidence() {
@@ -398,6 +451,35 @@ mod tests {
         assert!(
             validate_import_subnet(canister_id, expected, Some(Principal::from_slice(&[5; 29])))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn maintenance_timer_completion_preserves_domain_outcomes() {
+        let paused = maintenance_timer_result(Ok(PoolAdminResponse::MaintenancePaused {
+            reason: "not active".to_string(),
+        }));
+        assert_eq!(
+            paused.outcome,
+            canic_core::dto::runtime::TimerExecutionOutcome::NoWork
+        );
+
+        let retryable = maintenance_timer_result(Err(InternalError::infra(
+            InternalErrorOrigin::Infra,
+            "management call failed",
+        )));
+        assert_eq!(
+            retryable.outcome,
+            canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure
+        );
+
+        let invariant = maintenance_timer_result(Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "state contradiction",
+        )));
+        assert_eq!(
+            invariant.outcome,
+            canic_core::dto::runtime::TimerExecutionOutcome::InvariantFailure
         );
     }
 }

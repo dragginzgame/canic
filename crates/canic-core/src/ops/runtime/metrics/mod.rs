@@ -25,11 +25,10 @@ pub mod scaling;
 #[cfg(feature = "sharding")]
 pub mod sharding;
 pub mod system;
-pub mod timer;
 pub mod wasm_store;
 
 use crate::{
-    domain::{metrics::MetricsKind, runtime::TimerMode},
+    domain::metrics::MetricsKind,
     dto::metrics::{MetricEntry, MetricValue},
     ops::runtime::env::EnvOps,
     perf::{self, PerfKey},
@@ -42,7 +41,7 @@ use {
     inter_canister_call::InterCanisterCallMetrics, lifecycle::LifecycleMetrics,
     placement_index::PlacementIndexMetrics, platform_call::PlatformCallMetrics,
     replay::ReplayMetrics, root_capability::RootCapabilityMetrics, scaling::ScalingMetrics,
-    timer::TimerMetrics, wasm_store::WasmStoreMetrics,
+    wasm_store::WasmStoreMetrics,
 };
 
 #[cfg(feature = "sharding")]
@@ -96,9 +95,27 @@ pub fn platform_entries() -> Vec<MetricEntry> {
 #[must_use]
 pub fn runtime_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("intent", intent_entries());
-    entries.extend(prefix_entries("perf", perf_entries()));
-    entries.extend(prefix_entries("timer", timer_entries()));
+    if let Ok(timer_snapshots) = ic_timers::timer_snapshots() {
+        entries.extend(prefix_entries("perf", perf_entries(&timer_snapshots)));
+        let mut timer_metrics = vec![timer_inventory_availability(true)];
+        timer_metrics.extend(timer_entries(&timer_snapshots));
+        entries.extend(prefix_entries("timer", timer_metrics));
+    } else {
+        entries.extend(prefix_entries("perf", perf_entries(&[])));
+        entries.extend(prefix_entries(
+            "timer",
+            vec![timer_inventory_availability(false)],
+        ));
+    }
     entries
+}
+
+fn timer_inventory_availability(available: bool) -> MetricEntry {
+    MetricEntry {
+        labels: vec!["inventory".to_string(), "available".to_string()],
+        principal: None,
+        value: MetricValue::Count(u64::from(available)),
+    }
 }
 
 #[must_use]
@@ -148,7 +165,6 @@ pub fn reset_for_tests() {
     #[cfg(feature = "sharding")]
     ShardingMetrics::reset();
     SystemMetrics::reset();
-    TimerMetrics::reset();
     WasmStoreMetrics::reset();
     perf::reset();
 }
@@ -364,24 +380,29 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
 
 /// Project timer counters into the unified public metrics row shape.
 #[must_use]
-fn timer_entries() -> Vec<MetricEntry> {
-    TimerMetrics::snapshot()
-        .entries
-        .into_iter()
-        .map(|(key, value)| MetricEntry {
-            labels: vec![
-                match key.mode {
-                    TimerMode::Once => "once",
-                    TimerMode::Interval => "interval",
-                }
-                .to_string(),
-                key.label,
-            ],
-            principal: None,
-            value: MetricValue::CountAndU64 {
-                count: value.executions,
-                value_u64: value.latest_delay_ms,
-            },
+fn timer_entries(snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
+    snapshots
+        .iter()
+        .map(|snapshot| {
+            let identity = snapshot.identity();
+            let counters = snapshot.observability().counters();
+            let latest_delay_ms = snapshot
+                .latest_armed_delay_ns()
+                .unwrap_or_default()
+                .saturating_div(1_000_000);
+            MetricEntry {
+                labels: vec![
+                    snapshot.policy().label().to_string(),
+                    identity.owner().to_string(),
+                    identity.subsystem().to_string(),
+                    identity.name().to_string(),
+                ],
+                principal: None,
+                value: MetricValue::CountAndU64 {
+                    count: counters.work_started(),
+                    value_u64: latest_delay_ms,
+                },
+            }
         })
         .collect()
 }
@@ -495,8 +516,8 @@ fn icp_refill_entries() -> Vec<MetricEntry> {
 
 /// Project perf counters into the unified public metrics row shape.
 #[must_use]
-fn perf_entries() -> Vec<MetricEntry> {
-    perf::entries()
+fn perf_entries(timer_snapshots: &[ic_timers::TimerSnapshot]) -> Vec<MetricEntry> {
+    let mut entries = perf::entries()
         .into_iter()
         .map(|entry| {
             let labels = match entry.key {
@@ -505,7 +526,6 @@ fn perf_entries() -> Vec<MetricEntry> {
                     kind.metric_label().to_string(),
                     name,
                 ],
-                PerfKey::Timer(label) => vec!["timer".to_string(), label],
                 PerfKey::Checkpoint { scope, label } => {
                     vec!["checkpoint".to_string(), scope, label]
                 }
@@ -520,7 +540,25 @@ fn perf_entries() -> Vec<MetricEntry> {
                 },
             }
         })
-        .collect()
+        .collect::<Vec<_>>();
+    entries.extend(timer_snapshots.iter().map(|snapshot| {
+        let identity = snapshot.identity();
+        let work = snapshot.observability().performance().work_instructions();
+        MetricEntry {
+            labels: vec![
+                "timer".to_string(),
+                identity.owner().to_string(),
+                identity.subsystem().to_string(),
+                identity.name().to_string(),
+            ],
+            principal: None,
+            value: MetricValue::CountAndU64 {
+                count: work.samples(),
+                value_u64: work.total(),
+            },
+        }
+    }));
+    entries
 }
 
 #[cfg(test)]

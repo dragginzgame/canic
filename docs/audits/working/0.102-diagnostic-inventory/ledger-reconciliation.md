@@ -1,6 +1,6 @@
 # Canic 0.102 Diagnostic Ledger Reconciliation
 
-Date: 2026-08-13
+Date: 2026-08-15
 
 ## Status
 
@@ -16,7 +16,10 @@ direct-constructor additions below now close the frontier recorded in
 close the remaining dynamic formatter, allocation, catalogue or
 projection-approval gates.
 
-## Reconciled Family Arithmetic
+## Frozen Initial Family Arithmetic
+
+This is the pre-delegated-session family checkpoint. It remains useful as the
+708-identity baseline, but it is not the current whole-program count.
 
 | Family | New exact meanings | New safe projections | Reused identities |
 | --- | ---: | ---: | --- |
@@ -41,9 +44,9 @@ to allocate another label or number.
 
 ## Mechanical Collision Check
 
-Every currently proposed exact label and projection is materialized in 14
-inventory documents across the 13 families. The deliberately broad
-uppercase-token census finds 712
+The frozen initial-family checkpoint materialized its labels in 14 inventory
+documents across the 13 families. The deliberately broad uppercase-token
+census finds 712
 unique tokens. Exactly four are documentation notation rather than proposed
 diagnostic identities:
 
@@ -263,9 +266,13 @@ Together they add:
 The later complete `RpcWorkflowError`/replay decoder and Template-manifest
 expansions add twenty-nine exact meanings without a projection. The partial
 `PublicationWorkflowError` binding/release pass adds seven more and its GC pass
-adds sixty; the two typed transport surfaces add twenty-two. The current
-qualified set is therefore **2,844 exact candidates plus 31 additional safe
-projections: 2,875 collision-free identities**. This remains a
+adds sixty; the two typed transport surfaces add twenty-two. The subsequent
+source-to-ledger pass restores nineteen maintained delegated-session decisions
+whose dynamic values were classified without adding their static producers. A
+mechanical table-set check also corrects one earlier prose-arithmetic undercount
+of an already materialized exact candidate; it adds no semantic label. The
+current qualified set is therefore **2,864 exact candidates plus 31 additional
+safe projections: 2,895 collision-free identities**. This remains a
 qualified subset, not the final allocation. The effective frontier is now
 fully classified at 2,514 sites after replacing the Coordinator's one generic
 receipt adapter and the three final small helpers with their call-site
@@ -289,15 +296,27 @@ The ninety-three direct-constructor slices' candidate-column extraction finds
 partition, physical-absence, Registry-readiness, Store-chunk or root-retirement
 identities, five occurrences adopt DPC names already reserved for the same
 exact denials and the other 1,941 do not occur in any preceding qualified
-ledger. That collision check independently matches the 2,757-identity prefix.
+ledger. Mechanical set reconciliation corrects the former 2,757-identity prose
+prefix to 2,758. That prefix predates the delegated-session correction; the
+corrected prefix is 2,777 identities.
 The separately source-exhaustive RPC workflow-error and Template-manifest
 audits prove twenty-nine additions, the publication binding/release pass proves
 seven, its GC pass proves sixty and its typed transport pass proves twenty-two.
 The combined arithmetic is
-`795 + 32 + 5 + 22 + 50 + 28 + 40 + 24 + 9 + 22 + 0 + 7 + 7 + 15 + 30 + 12 + 28 + 3 + 19 + 50 + 11 + 7 + 11 + 40 + 22 + 8 + 19 + 57 + 53 + 56 + 62 + 28 + 10 + 34 + 10 + 23 + 21 + 15 + 1 + 14 + 51 + 30 + 19 + 15 + 16 + 57 + 29 + 39 + 16 + 19 + 14 + 11 + 37 + 24 + 13 + 66 + 33 + 51 + 23 + 10 + 21 + 10 + 15 + 11 + 4 + 22 + 8 + 16 + 50 + 37 + 11 + 14 + 9 + 10 + 21 + 3 + 0 + 0 + 4 + 9 + 0 + 23 + 2 + 64 + 55 + 5 + 5 + 4 + 23 + 5 + 23 + 19 + 10 + 7 + 60 + 22 = 2,875`
-without treating uppercase prose or static Rust enum names as candidate labels. The
+`796 + 32 + 5 + 22 + 50 + 28 + 40 + 24 + 9 + 22 + 0 + 7 + 7 + 15 + 30 + 12 + 28 + 3 + 19 + 50 + 11 + 7 + 11 + 40 + 22 + 8 + 19 + 57 + 53 + 56 + 62 + 28 + 10 + 34 + 10 + 23 + 21 + 15 + 1 + 14 + 51 + 30 + 19 + 15 + 16 + 57 + 29 + 39 + 16 + 19 + 14 + 11 + 37 + 24 + 13 + 66 + 33 + 51 + 23 + 10 + 21 + 10 + 15 + 11 + 4 + 22 + 8 + 16 + 50 + 37 + 11 + 14 + 9 + 10 + 21 + 3 + 0 + 0 + 4 + 9 + 0 + 23 + 2 + 64 + 55 + 5 + 5 + 4 + 23 + 5 + 23 + 19 + 10 + 7 + 60 + 22 + 19 = 2,895`
+uses the corrected materialized prefix without treating uppercase prose or
+static Rust enum names as candidate labels. The
 final allocation still requires the mechanical producer manifest rather than
 relying on documentation token scans.
+
+The current guard no longer uses that historical token census as authority.
+All 2,895 current labels are normalized into explicit identity columns across
+the complete evidence set; the guard reads only those columns, requires every
+safe projection to be present and pins the sorted set fingerprint. This closes
+symbolic row materialization. A separate check requires structured typed
+producer, source, decision, dependency-boundary, site or call evidence for all
+2,864 exact identities. It does not yet prove the pending exhaustive current
+function/consumer manifest or host metadata.
 
 ## Intentional Reuse Ledger
 
@@ -352,7 +371,7 @@ is not required to repeat its Rust name mechanically.
 The direct-constructor frontier, complete 656-value dynamic ledger, 105-row
 authentication formatter, current Canister stable failure-string census and
 67-site native configuration-authoring zero-row exclusion are closed. The
-final table must reconcile its 2,844 exact candidates with public projections
+final table must reconcile its 2,864 exact candidates with public projections
 and current/retired allocation. For every retained exact leaf it
 must record:
 

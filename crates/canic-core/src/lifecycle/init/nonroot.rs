@@ -13,7 +13,7 @@ use crate::{
     log,
     log::Topic,
     ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
-    workflow::{self, runtime::timer::TimerWorkflow},
+    workflow::{self},
 };
 use std::time::Duration;
 
@@ -71,6 +71,7 @@ fn init_nonroot_before_bootstrap(
     config_path: &str,
     initialize: impl FnOnce(CanisterRole) -> Result<(), crate::InternalError>,
 ) {
+    crate::api::timer::TimerApi::initialize_nonroot_runtime_required();
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::Init,
         LifecycleMetricRole::Nonroot,
@@ -113,7 +114,7 @@ pub fn schedule_init_nonroot_bootstrap() {
     );
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT_SCHEDULED);
 
-    TimerWorkflow::set_application_once(
+    crate::api::timer::TimerApi::defer_lifecycle_required(
         Duration::ZERO,
         "canic:bootstrap:init_nonroot_canister",
         async {
@@ -144,5 +145,6 @@ pub fn schedule_init_nonroot_bootstrap() {
                 LifecycleMetricOutcome::Completed,
             );
         },
-    );
+    )
+    .detach();
 }

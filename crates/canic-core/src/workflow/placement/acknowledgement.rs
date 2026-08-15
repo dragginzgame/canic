@@ -57,26 +57,19 @@ impl PlacementAcknowledgementWorkflow {
     /// Advance the worker immediately when exact terminal evidence is added.
     pub fn schedule_if_pending() -> Result<(), InternalError> {
         if ReceiptBackedIntentOps::has_placement_acknowledgements()? {
-            Self::schedule(Duration::ZERO);
+            Self::schedule(Duration::ZERO)?;
         } else {
-            TimerWorkflow::reconcile_at(
-                TimerKey::PlacementReceiptAcknowledgement,
-                None,
-                Self::run_scheduled,
-            );
+            TimerWorkflow::reconcile_at(TimerKey::PlacementReceiptAcknowledgement, None)?;
         }
         Ok(())
     }
 
-    fn schedule(delay: Duration) {
-        TimerWorkflow::schedule(
-            TimerKey::PlacementReceiptAcknowledgement,
-            delay,
-            Self::run_scheduled,
-        );
+    fn schedule(delay: Duration) -> Result<(), InternalError> {
+        TimerWorkflow::schedule(TimerKey::PlacementReceiptAcknowledgement, delay)?;
+        Ok(())
     }
 
-    async fn run_scheduled() -> TimerRunResult {
+    pub(crate) async fn run_scheduled() -> TimerRunResult {
         let result = match Self::drain_batch().await {
             Ok(result) => result,
             Err(err) => {

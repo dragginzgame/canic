@@ -1,40 +1,40 @@
 //! Module: workflow::runtime::timer
 //!
-//! Responsibility: own runtime timer identity, arbitration, recurrence, and live status.
-//! Does not own: domain work predicates, stable queues, retry policy, or lifecycle hooks.
-//! Boundary: all canister scheduling reaches the IC only through TimerOps.
+//! Responsibility: adapt Canic timer ownership to the shared `ic-timers` runtime.
+//! Does not own: provider handles, timer arbitration, recurrence state, counters, or snapshots.
+//! Boundary: Canic retains only bounded opaque registration claims; `ic-timers` is canonical.
 
-mod control;
-
-use self::control::{TimerControl, TimerControlAction, TimerRegistration};
 use crate::{
-    domain::runtime::{
-        TimerExecutionOutcome, TimerMode, TimerProcessCondition, TimerRegistrationStatus,
-        TimerSchedulingMode,
-    },
-    ops::{ic::IcOps, runtime::timer::TimerOps},
+    InternalError, InternalErrorOrigin,
+    domain::runtime::TimerExecutionOutcome,
+    workflow::{placement::acknowledgement::PlacementAcknowledgementWorkflow, runtime},
+};
+use ic_timers::{
+    AfterCompletionContext, AfterCompletionRegistration, DeclarationLifetime, OnceContext,
+    OnceRegistration, ScheduleError, TimerCadence, TimerCompletion,
+    TimerDirective as ProviderDirective, TimerError as ProviderError, TimerIdentity,
+    TimerIdentityError, TimerRegistrationStatus, TimerRunResult as ProviderRunResult,
+    TimerSchedule, TimerSnapshot, initialize_runtime, register_after_completion, register_once,
+    timer_snapshot, timer_snapshots,
 };
 use std::{
     cell::{Cell, RefCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     future::Future,
-    pin::Pin,
-    rc::Rc,
     time::Duration,
 };
+use thiserror::Error;
 
-use crate::ops::runtime::timer::TimerId;
-
-type TimerFuture = Pin<Box<dyn Future<Output = TimerRunResult>>>;
-type TimerTaskFactory = Rc<RefCell<dyn FnMut() -> TimerFuture>>;
+type SnapshotResumeParticipant = fn() -> Result<(), TimerError>;
 
 thread_local! {
-    static TIMERS: RefCell<BTreeMap<TimerIdentity, TimerEntry>> = const { RefCell::new(BTreeMap::new()) };
-    static NEXT_APPLICATION_TIMER_ID: Cell<u64> = const { Cell::new(0) };
+    static CLAIMS: RefCell<BTreeMap<ClaimKey, TimerClaim>> = const { RefCell::new(BTreeMap::new()) };
+    static NEXT_TRANSIENT_ID: Cell<u64> = const { Cell::new(0) };
+    static SNAPSHOT_RESUME_PARTICIPANT: Cell<Option<SnapshotResumeParticipant>> = const { Cell::new(None) };
     static TIMERS_SUSPENDED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Closed identities for Canic-owned background processes.
+/// Closed identities for Canic-owned dynamic background processes.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum TimerKey {
@@ -46,20 +46,42 @@ pub enum TimerKey {
 }
 
 impl TimerKey {
-    const fn label(self) -> &'static str {
+    #[cfg(test)]
+    const ALL: [Self; 5] = [
+        Self::AuthRenewal,
+        Self::CycleTopup,
+        Self::IntentCleanup,
+        Self::LogRetention,
+        Self::PlacementReceiptAcknowledgement,
+    ];
+    const NONROOT: [Self; 4] = [
+        Self::CycleTopup,
+        Self::IntentCleanup,
+        Self::LogRetention,
+        Self::PlacementReceiptAcknowledgement,
+    ];
+    const ROOT: [Self; 4] = [
+        Self::AuthRenewal,
+        Self::CycleTopup,
+        Self::IntentCleanup,
+        Self::LogRetention,
+    ];
+
+    const fn identity_parts(self) -> (&'static str, &'static str) {
         match self {
-            Self::AuthRenewal => "auth_renewal:run",
-            Self::CycleTopup => "cycles:topup",
-            Self::IntentCleanup => "intent_cleanup:run",
-            Self::LogRetention => "log_retention:run",
-            Self::PlacementReceiptAcknowledgement => "placement:receipt_ack",
+            Self::AuthRenewal => ("auth_renewal", "run"),
+            Self::CycleTopup => ("cycles", "topup"),
+            Self::IntentCleanup => ("intent_cleanup", "run"),
+            Self::LogRetention => ("log_retention", "run"),
+            Self::PlacementReceiptAcknowledgement => ("placement", "receipt_ack"),
         }
     }
-}
 
-/// Opaque identity returned to the public application timer facade.
-#[derive(Debug, Eq, PartialEq)]
-pub struct ApplicationTimerId(u64);
+    fn identity(self) -> Result<TimerIdentity, TimerError> {
+        let (subsystem, name) = self.identity_parts();
+        TimerIdentity::try_new("canic", subsystem, name).map_err(Into::into)
+    }
+}
 
 /// Scheduling decision returned after one bounded built-in invocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,24 +90,6 @@ pub enum TimerDirective {
     ContinueImmediately,
     RetryAfter(Duration),
     ScheduleAt(u64),
-    RecurAfter(Duration),
-}
-
-impl TimerDirective {
-    fn deadline_and_mode(
-        self,
-        now_ns: u64,
-    ) -> Result<Option<(u64, TimerSchedulingMode)>, &'static str> {
-        match self {
-            Self::Stop => Ok(None),
-            Self::ContinueImmediately => Ok(Some((now_ns, TimerSchedulingMode::Continuation))),
-            Self::RetryAfter(delay) => deadline_after(now_ns, delay)
-                .map(|deadline| Some((deadline, TimerSchedulingMode::Retry))),
-            Self::ScheduleAt(deadline) => Ok(Some((deadline, TimerSchedulingMode::Deadline))),
-            Self::RecurAfter(delay) => deadline_after(now_ns, delay)
-                .map(|deadline| Some((deadline, TimerSchedulingMode::AfterCompletion))),
-        }
-    }
 }
 
 /// Typed result of one bounded built-in invocation.
@@ -123,178 +127,222 @@ impl TimerRunResult {
             directive: TimerDirective::Stop,
         }
     }
+
+    const fn into_provider(self) -> ProviderRunResult {
+        let completion = match self.outcome {
+            TimerExecutionOutcome::Success => TimerCompletion::success(self.work_count),
+            TimerExecutionOutcome::NoWork => TimerCompletion::no_work(),
+            TimerExecutionOutcome::RetryableFailure => {
+                TimerCompletion::retryable_failure(self.work_count)
+            }
+            TimerExecutionOutcome::InvariantFailure | TimerExecutionOutcome::Unacknowledged => {
+                TimerCompletion::invariant_failure(self.work_count)
+            }
+        };
+        let directive = match self.directive {
+            TimerDirective::Stop => ProviderDirective::Stop,
+            TimerDirective::ContinueImmediately => ProviderDirective::ContinueImmediately,
+            TimerDirective::RetryAfter(delay) => ProviderDirective::RetryAfter(delay),
+            TimerDirective::ScheduleAt(deadline_ns) => ProviderDirective::ScheduleAt(deadline_ns),
+        };
+        ProviderRunResult::new(completion, directive)
+    }
 }
 
-/// Heap-only timer status, explicitly scoped to the current runtime start.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TimerRuntimeSnapshot {
-    pub label: String,
-    pub scheduling_mode: TimerSchedulingMode,
-    pub registration: TimerRegistrationStatus,
-    pub condition: TimerProcessCondition,
-    pub enabled: bool,
-    pub generation: u64,
-    pub next_due_at_ns: Option<u64>,
-    pub last_outcome: Option<TimerExecutionOutcome>,
-    pub last_work_count: u64,
-    pub last_success_at_ns: Option<u64>,
-    pub last_failure_at_ns: Option<u64>,
-    pub consecutive_expected_failures: u64,
-    pub schedules_since_runtime_start: u64,
-    pub executions_since_runtime_start: u64,
-    pub successes_since_runtime_start: u64,
-    pub expected_failures_since_runtime_start: u64,
-    pub invariant_failures_since_runtime_start: u64,
-    pub stale_callbacks_since_runtime_start: u64,
+/// Failure from Canic's public timer adapter or bounded claim custody.
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum TimerError {
+    #[error("Canic timer claim custody is already borrowed")]
+    CustodyBusy,
+    #[error("Canic timer identity allocation is exhausted")]
+    IdentityExhausted,
+    #[error(transparent)]
+    Identity(#[from] TimerIdentityError),
+    #[error("Canic timer claim is missing")]
+    MissingClaim,
+    #[error(transparent)]
+    Provider(#[from] ProviderError),
+    #[error("timer registration rollback failed after {primary}: {cleanup}")]
+    RegistrationRollback {
+        primary: Box<Self>,
+        cleanup: Box<Self>,
+    },
+    #[error("Canic timer claim is running and cannot be suspended: {0}")]
+    RunningClaim(String),
+    #[error(transparent)]
+    Schedule(#[from] ScheduleError),
+    #[error("Canic timers are suspended for an authority snapshot")]
+    Suspended,
+    #[error("authority snapshots do not support a timer outside Canic custody: {0}")]
+    UnmanagedClaim(String),
+    #[error("Canic timer claim has the wrong scheduling policy")]
+    WrongPolicy,
 }
+
+impl From<TimerError> for InternalError {
+    fn from(error: TimerError) -> Self {
+        Self::invariant(
+            InternalErrorOrigin::Workflow,
+            format!("Canic timer runtime failed: {error}"),
+        )
+    }
+}
+
+/// Opaque identity returned to the public timer facade.
+#[derive(Debug, Eq, PartialEq)]
+pub struct TimerClaimId(ClaimKey);
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum TimerIdentity {
+enum ClaimKey {
     BuiltIn(TimerKey),
-    Application(u64),
+    CanisterPoolMaintenance,
+    Transient(u64),
 }
 
-struct TimerEntry {
-    label: String,
-    timer_mode: TimerMode,
-    scheduling_mode: TimerSchedulingMode,
-    enabled: bool,
-    condition: TimerProcessCondition,
-    retain_when_stopped: bool,
-    control: TimerControl,
-    handle: Option<TimerId>,
-    task: TimerTaskFactory,
-    last_outcome: Option<TimerExecutionOutcome>,
-    last_work_count: u64,
-    last_success_at_ns: Option<u64>,
-    last_failure_at_ns: Option<u64>,
-    consecutive_expected_failures: u64,
-    schedules: u64,
-    executions: u64,
-    successes: u64,
-    expected_failures: u64,
-    invariant_failures: u64,
-    stale_callbacks: u64,
+enum TimerClaim {
+    AfterCompletion(AfterCompletionRegistration),
+    Once(OnceRegistration),
 }
 
-impl TimerEntry {
-    fn new(
-        label: String,
-        timer_mode: TimerMode,
-        scheduling_mode: TimerSchedulingMode,
-        retain_when_stopped: bool,
-        task: TimerTaskFactory,
-    ) -> Self {
-        Self {
-            label,
-            timer_mode,
-            scheduling_mode,
-            enabled: true,
-            condition: TimerProcessCondition::Active,
-            retain_when_stopped,
-            control: TimerControl::default(),
-            handle: None,
-            task,
-            last_outcome: None,
-            last_work_count: 0,
-            last_success_at_ns: None,
-            last_failure_at_ns: None,
-            consecutive_expected_failures: 0,
-            schedules: 0,
-            executions: 0,
-            successes: 0,
-            expected_failures: 0,
-            invariant_failures: 0,
-            stale_callbacks: 0,
+impl TimerClaim {
+    const fn identity(&self) -> &TimerIdentity {
+        match self {
+            Self::AfterCompletion(registration) => registration.identity(),
+            Self::Once(registration) => registration.identity(),
         }
     }
 
-    fn snapshot(&self) -> TimerRuntimeSnapshot {
-        let (registration, next_due_at_ns) = match self.control.registration() {
-            TimerRegistration::Unregistered => (TimerRegistrationStatus::Unregistered, None),
-            TimerRegistration::Scheduled { deadline_ns, .. } => {
-                (TimerRegistrationStatus::Scheduled, Some(deadline_ns))
-            }
-            TimerRegistration::Running { .. } => (TimerRegistrationStatus::Running, None),
-        };
-
-        TimerRuntimeSnapshot {
-            label: self.label.clone(),
-            scheduling_mode: self.scheduling_mode,
-            registration,
-            condition: self.condition,
-            enabled: self.enabled,
-            generation: self.control.generation(),
-            next_due_at_ns,
-            last_outcome: self.last_outcome,
-            last_work_count: self.last_work_count,
-            last_success_at_ns: self.last_success_at_ns,
-            last_failure_at_ns: self.last_failure_at_ns,
-            consecutive_expected_failures: self.consecutive_expected_failures,
-            schedules_since_runtime_start: self.schedules,
-            executions_since_runtime_start: self.executions,
-            successes_since_runtime_start: self.successes,
-            expected_failures_since_runtime_start: self.expected_failures,
-            invariant_failures_since_runtime_start: self.invariant_failures,
-            stale_callbacks_since_runtime_start: self.stale_callbacks,
-        }
-    }
-}
-
-/// Canonical scheduling workflow for built-in and application timers.
-pub struct TimerWorkflow;
-
-impl TimerWorkflow {
-    /// Disarm every Canic-owned timer while retaining its logical registration in heap state.
-    pub(crate) fn suspend_all() {
-        TIMERS_SUSPENDED.with(|suspended| suspended.set(true));
-        let handles = TIMERS.with_borrow_mut(|timers| {
-            timers
-                .values_mut()
-                .filter_map(|entry| entry.handle.take())
-                .collect::<Vec<_>>()
-        });
-        for handle in handles {
-            TimerOps::clear(handle);
-        }
-    }
-
-    /// Prove a stopped snapshot retained no partially executing Canic timer.
-    pub(crate) fn require_resumable() -> Result<(), &'static str> {
-        let has_running = TIMERS.with_borrow(|timers| {
-            timers.values().any(|entry| {
-                matches!(
-                    entry.control.registration(),
-                    TimerRegistration::Running { .. }
-                )
-            })
-        });
-        if has_running {
-            return Err("authority snapshot retained a running Canic timer");
+    fn cancel(&self) -> Result<(), TimerError> {
+        match self {
+            Self::AfterCompletion(registration) => registration.cancel()?,
+            Self::Once(registration) => registration.cancel()?,
         }
         Ok(())
     }
 
-    /// Re-arm the retained logical registrations after the live authority resumes.
-    pub(crate) fn resume_all() {
-        if !TIMERS_SUSPENDED.with(|suspended| suspended.replace(false)) {
-            return;
+    fn unregister(self) -> Result<(), TimerError> {
+        match self {
+            Self::AfterCompletion(registration) => registration.unregister()?,
+            Self::Once(registration) => registration.unregister()?,
         }
-        let registrations = TIMERS.with_borrow(|timers| {
-            timers
-                .iter()
-                .filter_map(|(identity, entry)| match entry.control.registration() {
-                    TimerRegistration::Scheduled {
-                        generation,
-                        deadline_ns,
-                    } => Some((*identity, generation, deadline_ns)),
-                    TimerRegistration::Unregistered | TimerRegistration::Running { .. } => None,
-                })
-                .collect::<Vec<_>>()
-        });
-        for (identity, generation, deadline_ns) in registrations {
-            arm(identity, generation, deadline_ns);
+        Ok(())
+    }
+}
+
+/// Canonical Canic adapter for the shared canister-local timer runtime.
+pub struct TimerWorkflow;
+
+impl TimerWorkflow {
+    /// Initialize only the shared timer runtime for a canister with no Canic runtime jobs.
+    pub(crate) fn initialize_shared_runtime() -> Result<(), TimerError> {
+        initialize_runtime()?;
+        Ok(())
+    }
+
+    /// Initialize the shared runtime and reserve fixed non-root declarations.
+    pub(crate) fn initialize_nonroot_runtime() -> Result<(), TimerError> {
+        Self::initialize_shared_runtime()?;
+        for key in TimerKey::NONROOT {
+            declare_builtin(key)?;
         }
+        Ok(())
+    }
+
+    /// Initialize the shared runtime and reserve fixed root declarations.
+    pub(crate) fn initialize_root_runtime() -> Result<(), TimerError> {
+        Self::initialize_shared_runtime()?;
+        for key in TimerKey::ROOT {
+            declare_builtin(key)?;
+        }
+        Ok(())
+    }
+
+    /// Restore volatile suspension from the durable authority fence.
+    pub(crate) fn restore_snapshot_suspension(sealed: bool) {
+        TIMERS_SUSPENDED.with(|suspended| suspended.set(sealed));
+    }
+
+    /// Return whether durable lifecycle restoration left timer owners suspended.
+    #[must_use]
+    pub(crate) fn is_suspended() -> bool {
+        TIMERS_SUSPENDED.with(Cell::get)
+    }
+
+    /// Register the one root control-plane timer reconciler for snapshot resume.
+    pub(crate) fn register_snapshot_resume_participant(
+        participant: fn() -> Result<(), TimerError>,
+    ) {
+        SNAPSHOT_RESUME_PARTICIPANT.with(|current| current.set(Some(participant)));
+    }
+
+    /// Disarm every Canic-owned claim without affecting other runtime owners.
+    pub(crate) fn suspend_all() -> Result<(), TimerError> {
+        Self::require_resumable()?;
+        TIMERS_SUSPENDED.with(|suspended| suspended.set(true));
+
+        let transient_keys = CLAIMS
+            .try_with(|claims| {
+                let claims = claims.try_borrow().map_err(|_| TimerError::CustodyBusy)?;
+                Ok::<_, TimerError>(
+                    claims
+                        .keys()
+                        .copied()
+                        .filter(|key| matches!(key, ClaimKey::Transient(_)))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .map_err(|_| TimerError::CustodyBusy)??;
+
+        CLAIMS
+            .try_with(|claims| {
+                let claims = claims.try_borrow().map_err(|_| TimerError::CustodyBusy)?;
+                for (key, claim) in claims.iter() {
+                    if !matches!(key, ClaimKey::Transient(_)) {
+                        claim.cancel()?;
+                    }
+                }
+                Ok::<_, TimerError>(())
+            })
+            .map_err(|_| TimerError::CustodyBusy)??;
+
+        for key in transient_keys {
+            remove_claim(key)?.unregister()?;
+        }
+        Ok(())
+    }
+
+    /// Prove that no Canic-owned claim is currently executing.
+    pub(crate) fn require_resumable() -> Result<(), TimerError> {
+        let identities = CLAIMS
+            .try_with(|claims| {
+                let claims = claims.try_borrow().map_err(|_| TimerError::CustodyBusy)?;
+                Ok::<_, TimerError>(
+                    claims
+                        .values()
+                        .map(|claim| claim.identity().clone())
+                        .collect::<BTreeSet<_>>(),
+                )
+            })
+            .map_err(|_| TimerError::CustodyBusy)??;
+        require_observed_claims_resumable(
+            &identities,
+            timer_snapshots()?
+                .into_iter()
+                .map(|snapshot| (snapshot.identity().clone(), snapshot.registration_status())),
+        )
+    }
+
+    /// End snapshot suspension before domain owners reconstruct their deadlines.
+    pub(crate) fn resume_all() -> Result<(), TimerError> {
+        TIMERS_SUSPENDED.with(|suspended| suspended.set(false));
+        if let Some(participant) = SNAPSHOT_RESUME_PARTICIPANT.with(Cell::get)
+            && let Err(error) = participant()
+        {
+            TIMERS_SUSPENDED.with(|suspended| suspended.set(true));
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Schedule a cancellable application one-shot.
@@ -302,618 +350,586 @@ impl TimerWorkflow {
         delay: Duration,
         label: impl Into<String>,
         task: impl Future<Output = ()> + 'static,
-    ) -> ApplicationTimerId {
-        let id = next_application_timer_id();
-        let mut task = Some(task);
-        let factory = timer_factory(move || {
-            let task = task
-                .take()
-                .unwrap_or_else(|| panic!("application one-shot executed more than once"));
-            async move {
-                task.await;
-                TimerRunResult::success(1, TimerDirective::Stop)
-            }
-        });
-        let identity = TimerIdentity::Application(id);
-        insert_entry(
-            identity,
-            TimerEntry::new(
-                label.into(),
-                TimerMode::Once,
-                TimerSchedulingMode::Once,
-                false,
-                factory,
-            ),
-        );
-        request_after(identity, delay);
-        ApplicationTimerId(id)
+    ) -> Result<TimerClaimId, TimerError> {
+        register_transient_once("application", delay, label.into(), task)
     }
 
-    /// Schedule a cancellable application interval after each completed invocation.
+    /// Schedule one cancellable lifecycle deferral.
+    pub fn set_lifecycle_once(
+        delay: Duration,
+        label: impl Into<String>,
+        task: impl Future<Output = ()> + 'static,
+    ) -> Result<TimerClaimId, TimerError> {
+        register_transient_once("lifecycle", delay, label.into(), task)
+    }
+
+    /// Schedule lifecycle work whose typed completion must remain observable.
+    pub fn set_lifecycle_result_once(
+        delay: Duration,
+        label: impl Into<String>,
+        task: impl Future<Output = TimerRunResult> + 'static,
+    ) -> Result<TimerClaimId, TimerError> {
+        register_transient_result_once("lifecycle", delay, label.into(), task)
+    }
+
+    /// Schedule a cancellable, non-overlapping after-completion interval.
     pub fn set_application_interval<F, Fut>(
         interval: Duration,
         label: impl Into<String>,
-        task: F,
-    ) -> ApplicationTimerId
+        mut task: F,
+    ) -> Result<TimerClaimId, TimerError>
     where
         F: FnMut() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        let id = next_application_timer_id();
-        let mut task = task;
-        let factory = timer_factory(move || {
-            let future = task();
-            async move {
-                future.await;
-                TimerRunResult::success(1, TimerDirective::RecurAfter(interval))
-            }
-        });
-        let identity = TimerIdentity::Application(id);
-        insert_entry(
+        require_active()?;
+        discard_expired_transient_claims()?;
+        let (key, identity) = next_transient_identity("application", label.into())?;
+        let cadence = TimerCadence::new(interval)?;
+        let registration = register_after_completion(
             identity,
-            TimerEntry::new(
-                label.into(),
-                TimerMode::Interval,
-                TimerSchedulingMode::AfterCompletion,
-                false,
-                factory,
-            ),
-        );
-        request_after(identity, interval);
-        ApplicationTimerId(id)
-    }
-
-    /// Consume an application timer identity and suppress any future invocation.
-    #[must_use]
-    pub fn cancel_application(id: ApplicationTimerId) -> bool {
-        cancel(TimerIdentity::Application(id.0))
-    }
-
-    /// Configure one built-in bounded process if needed and request its next run.
-    pub fn schedule<F, Fut>(key: TimerKey, delay: Duration, task: F)
-    where
-        F: FnMut() -> Fut + 'static,
-        Fut: Future<Output = TimerRunResult> + 'static,
-    {
-        ensure_builtin(
-            key,
-            delay,
-            TimerMode::Once,
-            TimerSchedulingMode::Once,
-            timer_factory(task),
-        );
-    }
-
-    /// Configure one built-in bounded process if needed and request an absolute deadline.
-    pub fn schedule_at<F, Fut>(key: TimerKey, deadline_ns: u64, task: F)
-    where
-        F: FnMut() -> Fut + 'static,
-        Fut: Future<Output = TimerRunResult> + 'static,
-    {
-        let identity = TimerIdentity::BuiltIn(key);
-        ensure_bounded_entry(identity, key, task);
-        request_at(identity, deadline_ns);
-    }
-
-    /// Configure one built-in bounded process and reconcile its sole live deadline.
-    pub fn reconcile_at<F, Fut>(key: TimerKey, deadline_ns: Option<u64>, task: F)
-    where
-        F: FnMut() -> Fut + 'static,
-        Fut: Future<Output = TimerRunResult> + 'static,
-    {
-        let identity = TimerIdentity::BuiltIn(key);
-        ensure_bounded_entry(identity, key, task);
-        match deadline_ns {
-            Some(deadline_ns) => request_reconcile_at(identity, deadline_ns),
-            None => request_idle(identity),
+            cadence,
+            DeclarationLifetime::RemoveWhenStopped,
+            move |_context: AfterCompletionContext| {
+                let future = task();
+                async move {
+                    future.await;
+                    ProviderRunResult::new(
+                        TimerCompletion::success(1),
+                        ProviderDirective::RecurAfterCompletion,
+                    )
+                }
+            },
+        )?;
+        if let Err(error) = registration.ensure_scheduled() {
+            return Err(rollback_registration(
+                TimerClaim::AfterCompletion(registration),
+                error.into(),
+            ));
         }
+        retain_claim(key, TimerClaim::AfterCompletion(registration))?;
+        Ok(TimerClaimId(key))
     }
 
-    /// Snapshot live registrations and current-runtime counters.
-    #[must_use]
-    pub fn statuses() -> Vec<TimerRuntimeSnapshot> {
-        TIMERS.with_borrow(|timers| timers.values().map(TimerEntry::snapshot).collect())
+    /// Declare or re-arm the fixed root canister-pool maintenance cadence.
+    #[doc(hidden)]
+    pub fn set_canister_pool_maintenance<F, Fut>(
+        interval: Duration,
+        task: F,
+    ) -> Result<TimerClaimId, TimerError>
+    where
+        F: FnMut() -> Fut + 'static,
+        Fut: Future<Output = TimerRunResult> + 'static,
+    {
+        require_active()?;
+        let key = ClaimKey::CanisterPoolMaintenance;
+        let handle = Self::declare_canister_pool_maintenance(interval, task)?;
+        with_claim(key, |claim| match claim {
+            TimerClaim::AfterCompletion(registration) => {
+                registration.ensure_scheduled().map_err(TimerError::from)
+            }
+            TimerClaim::Once(_) => Err(TimerError::WrongPolicy),
+        })?
+        .ok_or(TimerError::MissingClaim)??;
+        Ok(handle)
+    }
+
+    /// Reserve inactive root canister-pool maintenance before application hooks run.
+    pub fn declare_canister_pool_maintenance<F, Fut>(
+        interval: Duration,
+        mut task: F,
+    ) -> Result<TimerClaimId, TimerError>
+    where
+        F: FnMut() -> Fut + 'static,
+        Fut: Future<Output = TimerRunResult> + 'static,
+    {
+        require_active()?;
+        let key = ClaimKey::CanisterPoolMaintenance;
+        if with_claim(key, |_| ())?.is_some() {
+            return Ok(TimerClaimId(key));
+        }
+
+        let identity = TimerIdentity::try_new("canic", "canister_pool", "maintain")?;
+        let cadence = TimerCadence::new(interval)?;
+        let registration = register_after_completion(
+            identity,
+            cadence,
+            DeclarationLifetime::Retained,
+            move |_context: AfterCompletionContext| {
+                let future = task();
+                async move {
+                    let result = future.await.into_provider();
+                    ProviderRunResult::new(
+                        result.completion(),
+                        ProviderDirective::RecurAfterCompletion,
+                    )
+                }
+            },
+        )?;
+        retain_claim(key, TimerClaim::AfterCompletion(registration))?;
+        Ok(TimerClaimId(key))
+    }
+
+    /// Consume a public handle and suppress future invocations.
+    pub fn cancel(handle: TimerClaimId) -> Result<(), TimerError> {
+        match handle.0 {
+            ClaimKey::Transient(_) => remove_claim(handle.0)?.unregister()?,
+            ClaimKey::CanisterPoolMaintenance => {
+                with_claim(handle.0, TimerClaim::cancel)?.ok_or(TimerError::MissingClaim)??;
+            }
+            ClaimKey::BuiltIn(_) => return Err(TimerError::WrongPolicy),
+        }
+        Ok(())
+    }
+
+    /// Request the earliest desired run for one fixed built-in.
+    pub fn schedule(key: TimerKey, delay: Duration) -> Result<(), TimerError> {
+        require_active()?;
+        with_builtin(key, |registration| {
+            registration.ensure_scheduled(TimerSchedule::After(delay))
+        })
+    }
+
+    /// Request the earliest desired absolute deadline for one fixed built-in.
+    pub fn schedule_at(key: TimerKey, deadline_ns: u64) -> Result<(), TimerError> {
+        require_active()?;
+        with_builtin(key, |registration| {
+            registration.ensure_scheduled(TimerSchedule::At(deadline_ns))
+        })
+    }
+
+    /// Reconcile one fixed built-in to its exact authoritative deadline.
+    pub fn reconcile_at(key: TimerKey, deadline_ns: Option<u64>) -> Result<(), TimerError> {
+        require_active()?;
+        with_builtin(key, |registration| {
+            registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
+        })
+    }
+
+    /// Return the shared canonical timer inventory in deterministic identity order.
+    pub fn statuses() -> Result<Vec<TimerSnapshot>, TimerError> {
+        Ok(timer_snapshots()?)
     }
 
     /// Return the completed retryable-failure streak for one built-in owner.
     #[must_use]
     pub(crate) fn consecutive_expected_failures(key: TimerKey) -> u64 {
-        TIMERS.with_borrow(|timers| {
-            timers
-                .get(&TimerIdentity::BuiltIn(key))
-                .map_or(0, |entry| entry.consecutive_expected_failures)
-        })
+        key.identity()
+            .and_then(|identity| Ok(ic_timers::consecutive_expected_failures(&identity)?))
+            .ok()
+            .flatten()
+            .unwrap_or_default()
     }
 
-    /// Return whether one built-in owner stopped on an invariant failure.
+    /// Return whether one built-in owner stopped on a failure.
     #[must_use]
     pub(crate) fn is_failed(key: TimerKey) -> bool {
-        TIMERS.with_borrow(|timers| {
-            timers
-                .get(&TimerIdentity::BuiltIn(key))
-                .is_some_and(|entry| entry.condition == TimerProcessCondition::Failed)
-        })
-    }
-}
-
-fn ensure_bounded_entry<F, Fut>(identity: TimerIdentity, key: TimerKey, task: F)
-where
-    F: FnMut() -> Fut + 'static,
-    Fut: Future<Output = TimerRunResult> + 'static,
-{
-    insert_entry_if_absent(
-        identity,
-        TimerEntry::new(
-            key.label().to_string(),
-            TimerMode::Once,
-            TimerSchedulingMode::Deadline,
-            true,
-            timer_factory(task),
-        ),
-    );
-}
-
-fn ensure_builtin(
-    key: TimerKey,
-    initial_delay: Duration,
-    timer_mode: TimerMode,
-    scheduling_mode: TimerSchedulingMode,
-    factory: TimerTaskFactory,
-) -> bool {
-    let identity = TimerIdentity::BuiltIn(key);
-    let inserted = insert_entry_if_absent(
-        identity,
-        TimerEntry::new(
-            key.label().to_string(),
-            timer_mode,
-            scheduling_mode,
-            true,
-            factory,
-        ),
-    );
-    request_after(identity, initial_delay);
-    inserted
-}
-
-fn timer_factory<F, Fut>(mut task: F) -> TimerTaskFactory
-where
-    F: FnMut() -> Fut + 'static,
-    Fut: Future<Output = TimerRunResult> + 'static,
-{
-    Rc::new(RefCell::new(move || {
-        let future: TimerFuture = Box::pin(task());
-        future
-    }))
-}
-
-fn insert_entry(identity: TimerIdentity, entry: TimerEntry) {
-    let previous = TIMERS.with_borrow_mut(|timers| timers.insert(identity, entry));
-    assert!(
-        previous.is_none(),
-        "timer identity allocated more than once"
-    );
-}
-
-fn insert_entry_if_absent(identity: TimerIdentity, entry: TimerEntry) -> bool {
-    TIMERS.with_borrow_mut(|timers| {
-        if let std::collections::btree_map::Entry::Vacant(vacant) = timers.entry(identity) {
-            vacant.insert(entry);
-            return true;
-        }
-        false
-    })
-}
-
-fn request_after(identity: TimerIdentity, delay: Duration) {
-    let now_ns = IcOps::now_nanos();
-    let deadline_ns = deadline_after(now_ns, delay)
-        .unwrap_or_else(|err| panic!("timer scheduling failed closed: {err}"));
-    request_at(identity, deadline_ns);
-}
-
-fn request_at(identity: TimerIdentity, deadline_ns: u64) {
-    let action = TIMERS.with_borrow_mut(|timers| {
-        let entry = timers
-            .get_mut(&identity)
-            .unwrap_or_else(|| panic!("timer identity is not configured"));
-        entry.enabled = true;
-        entry.condition = TimerProcessCondition::Active;
-        let action = entry
-            .control
-            .schedule(deadline_ns)
-            .unwrap_or_else(|err| panic!("timer scheduling failed closed: {err}"));
-        if matches!(
-            action,
-            TimerControlAction::Arm { .. } | TimerControlAction::Replace { .. }
-        ) {
-            entry.scheduling_mode = TimerSchedulingMode::Deadline;
-        }
-        action
-    });
-    apply_action(identity, action);
-}
-
-fn request_reconcile_at(identity: TimerIdentity, deadline_ns: u64) {
-    let action = TIMERS.with_borrow_mut(|timers| {
-        let entry = timers
-            .get_mut(&identity)
-            .unwrap_or_else(|| panic!("timer identity is not configured"));
-        entry.enabled = true;
-        entry.condition = TimerProcessCondition::Active;
-        entry.scheduling_mode = TimerSchedulingMode::Deadline;
-        entry
-            .control
-            .reconcile(deadline_ns)
-            .unwrap_or_else(|err| panic!("timer deadline reconciliation failed closed: {err}"))
-    });
-    apply_action(identity, action);
-}
-
-fn request_idle(identity: TimerIdentity) {
-    let action = TIMERS.with_borrow_mut(|timers| {
-        let entry = timers
-            .get_mut(&identity)
-            .unwrap_or_else(|| panic!("timer identity is not configured"));
-        entry.enabled = true;
-        entry.condition = TimerProcessCondition::Idle;
-        entry
-            .control
-            .cancel()
-            .unwrap_or_else(|err| panic!("timer idle reconciliation failed closed: {err}"))
-    });
-    apply_action(identity, action);
-}
-
-fn cancel(identity: TimerIdentity) -> bool {
-    let Some(action) = TIMERS.with_borrow_mut(|timers| {
-        let entry = timers.get_mut(&identity)?;
-        entry.enabled = false;
-        entry.condition = TimerProcessCondition::Disabled;
-        Some(
-            entry
-                .control
-                .cancel()
-                .unwrap_or_else(|err| panic!("timer cancellation failed closed: {err}")),
-        )
-    }) else {
-        return false;
-    };
-    apply_action(identity, action);
-    let remove = TIMERS.with_borrow(|timers| {
-        timers.get(&identity).is_some_and(|entry| {
-            !entry.retain_when_stopped
-                && matches!(
-                    entry.control.registration(),
-                    TimerRegistration::Unregistered
-                )
-        })
-    });
-    if remove {
-        TIMERS.with_borrow_mut(|timers| {
-            timers.remove(&identity);
-        });
-    }
-    true
-}
-
-fn apply_action(identity: TimerIdentity, action: TimerControlAction) {
-    if TIMERS_SUSPENDED.with(Cell::get) {
-        if matches!(
-            action,
-            TimerControlAction::Clear | TimerControlAction::Replace { .. }
-        ) {
-            clear_current_handle(identity);
-        }
-        return;
-    }
-    match action {
-        TimerControlAction::None | TimerControlAction::Disarm { .. } => {}
-        TimerControlAction::Clear => clear_current_handle(identity),
-        TimerControlAction::Replace {
-            generation,
-            deadline_ns,
-        } => {
-            clear_current_handle(identity);
-            arm(identity, generation, deadline_ns);
-        }
-        TimerControlAction::Arm {
-            generation,
-            deadline_ns,
-        } => arm(identity, generation, deadline_ns),
-    }
-}
-
-fn clear_current_handle(identity: TimerIdentity) {
-    if let Some(handle) = TIMERS.with_borrow_mut(|timers| {
-        timers
-            .get_mut(&identity)
-            .and_then(|entry| entry.handle.take())
-    }) {
-        TimerOps::clear(handle);
-    }
-}
-
-fn arm(identity: TimerIdentity, generation: u64, deadline_ns: u64) {
-    let (label, timer_mode) = TIMERS.with_borrow(|timers| {
-        let entry = timers
-            .get(&identity)
-            .unwrap_or_else(|| panic!("timer identity disappeared before arm"));
-        (entry.label.clone(), entry.timer_mode)
-    });
-    let now_ns = IcOps::now_nanos();
-    let delay = Duration::from_nanos(deadline_ns.saturating_sub(now_ns));
-    let handle = TimerOps::set(delay, timer_mode, label, async move {
-        fire(identity, generation).await;
-    });
-
-    let keep = TIMERS.with_borrow_mut(|timers| {
-        let Some(entry) = timers.get_mut(&identity) else {
-            return false;
-        };
-        if entry.control.registration()
-            != (TimerRegistration::Scheduled {
-                generation,
-                deadline_ns,
+        key.identity()
+            .and_then(|identity| Ok(timer_snapshot(&identity)?))
+            .ok()
+            .flatten()
+            .is_some_and(|snapshot| {
+                snapshot.process_condition() == ic_timers::TimerProcessCondition::Failed
             })
-        {
-            return false;
-        }
-        entry.handle = Some(handle);
-        entry.schedules = entry.schedules.saturating_add(1);
-        true
-    });
-    if !keep {
-        TimerOps::clear(handle);
     }
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "IC canister futures and thread-local timer factories are intentionally single-threaded"
-)]
-async fn fire(identity: TimerIdentity, generation: u64) {
-    let task = TIMERS.with_borrow_mut(|timers| {
-        let entry = timers.get_mut(&identity)?;
-        if !entry.control.begin(generation) {
-            entry.stale_callbacks = entry.stale_callbacks.saturating_add(1);
-            return None;
-        }
-        entry.handle = None;
-        entry.executions = entry.executions.saturating_add(1);
-        Some(Rc::clone(&entry.task))
-    });
-    let Some(task) = task else {
-        return;
-    };
-
-    let future = { (task.borrow_mut())() };
-    drop(task);
-    let mut result = future.await;
-    let now_ns = IcOps::now_nanos();
-    let deadline_and_mode = result.directive.deadline_and_mode(now_ns);
-    if deadline_and_mode.is_err() {
-        result = TimerRunResult::invariant_failure();
+fn declare_builtin(key: TimerKey) -> Result<(), TimerError> {
+    let claim_key = ClaimKey::BuiltIn(key);
+    if with_claim(claim_key, |_| ())?.is_some() {
+        return Ok(());
     }
-    let (directive_deadline_ns, scheduling_mode) = deadline_and_mode.ok().flatten().unzip();
+    let registration = register_once(
+        key.identity()?,
+        DeclarationLifetime::Retained,
+        move |_context: OnceContext| async move { run_builtin(key).await.into_provider() },
+    )?;
+    retain_claim(claim_key, TimerClaim::Once(registration))
+}
 
-    let (action, remove) = TIMERS.with_borrow_mut(|timers| {
-        let entry = timers
-            .get_mut(&identity)
-            .unwrap_or_else(|| panic!("running timer identity disappeared"));
-        entry.last_outcome = Some(result.outcome);
-        entry.last_work_count = result.work_count;
-        match result.outcome {
-            TimerExecutionOutcome::Success | TimerExecutionOutcome::NoWork => {
-                entry.last_success_at_ns = Some(now_ns);
-                entry.consecutive_expected_failures = 0;
-                entry.successes = entry.successes.saturating_add(1);
-            }
-            TimerExecutionOutcome::RetryableFailure => {
-                entry.last_failure_at_ns = Some(now_ns);
-                entry.consecutive_expected_failures =
-                    entry.consecutive_expected_failures.saturating_add(1);
-                entry.expected_failures = entry.expected_failures.saturating_add(1);
-            }
-            TimerExecutionOutcome::InvariantFailure => {
-                entry.last_failure_at_ns = Some(now_ns);
-                entry.consecutive_expected_failures = 0;
-                entry.invariant_failures = entry.invariant_failures.saturating_add(1);
-            }
+async fn run_builtin(key: TimerKey) -> TimerRunResult {
+    match key {
+        TimerKey::AuthRenewal => {
+            runtime::auth::RuntimeAuthWorkflow::run_root_issuer_renewal_timer().await
         }
-        let action = entry
-            .control
-            .complete(generation, directive_deadline_ns)
-            .unwrap_or_else(|err| panic!("timer completion failed closed: {err}"));
-        if let Some(mode) =
-            effective_scheduling_mode(action, directive_deadline_ns, scheduling_mode)
-        {
-            entry.scheduling_mode = mode;
+        TimerKey::CycleTopup => runtime::cycles::CycleWorkflow::run_topup().await,
+        TimerKey::IntentCleanup => runtime::intent::IntentCleanupWorkflow::run_due_batch(),
+        TimerKey::LogRetention => runtime::log::LogRetentionWorkflow::run_due_batch(),
+        TimerKey::PlacementReceiptAcknowledgement => {
+            PlacementAcknowledgementWorkflow::run_scheduled().await
         }
-        entry.condition = match action {
-            TimerControlAction::Disarm { cancelled: true } => {
-                if entry.enabled {
-                    TimerProcessCondition::Idle
+    }
+}
+
+fn register_transient_once(
+    scope: &str,
+    delay: Duration,
+    label: String,
+    task: impl Future<Output = ()> + 'static,
+) -> Result<TimerClaimId, TimerError> {
+    require_active()?;
+    discard_expired_transient_claims()?;
+    let (key, identity) = next_transient_identity(scope, label)?;
+    let mut task = Some(task);
+    let registration = register_once(
+        identity,
+        DeclarationLifetime::RemoveWhenStopped,
+        move |_context: OnceContext| {
+            let task = task.take();
+            async move {
+                if let Some(task) = task {
+                    task.await;
+                }
+                drop_claim(key);
+                ProviderRunResult::new(TimerCompletion::success(1), ProviderDirective::Stop)
+            }
+        },
+    )?;
+    if let Err(error) = registration.ensure_scheduled(TimerSchedule::After(delay)) {
+        return Err(rollback_registration(
+            TimerClaim::Once(registration),
+            error.into(),
+        ));
+    }
+    retain_claim(key, TimerClaim::Once(registration))?;
+    Ok(TimerClaimId(key))
+}
+
+fn register_transient_result_once(
+    scope: &str,
+    delay: Duration,
+    label: String,
+    task: impl Future<Output = TimerRunResult> + 'static,
+) -> Result<TimerClaimId, TimerError> {
+    require_active()?;
+    discard_expired_transient_claims()?;
+    let (key, identity) = next_transient_identity(scope, label)?;
+    let mut task = Some(task);
+    let registration = register_once(
+        identity,
+        DeclarationLifetime::RemoveWhenStopped,
+        move |_context: OnceContext| {
+            let task = task.take();
+            async move {
+                let result = if let Some(task) = task {
+                    task.await.into_provider()
                 } else {
-                    TimerProcessCondition::Disabled
-                }
+                    TimerRunResult::invariant_failure().into_provider()
+                };
+                drop_claim(key);
+                ProviderRunResult::new(result.completion(), ProviderDirective::Stop)
             }
-            TimerControlAction::Disarm { cancelled: false } => match result.outcome {
-                TimerExecutionOutcome::Success | TimerExecutionOutcome::NoWork => {
-                    TimerProcessCondition::Idle
-                }
-                TimerExecutionOutcome::RetryableFailure
-                | TimerExecutionOutcome::InvariantFailure => TimerProcessCondition::Failed,
-            },
-            TimerControlAction::Arm { .. } => {
-                if matches!(result.outcome, TimerExecutionOutcome::InvariantFailure) {
-                    TimerProcessCondition::Failed
-                } else if matches!(result.outcome, TimerExecutionOutcome::RetryableFailure)
-                    || matches!(result.directive, TimerDirective::RetryAfter(_))
-                {
-                    TimerProcessCondition::Retrying
-                } else {
-                    TimerProcessCondition::Active
-                }
-            }
-            TimerControlAction::None
-            | TimerControlAction::Replace { .. }
-            | TimerControlAction::Clear => {
-                panic!("timer completion produced an invalid control action")
-            }
-        };
-        let remove =
-            !entry.retain_when_stopped && matches!(action, TimerControlAction::Disarm { .. });
-        (action, remove)
-    });
-
-    if remove {
-        TIMERS.with_borrow_mut(|timers| {
-            timers.remove(&identity);
-        });
-    } else {
-        apply_action(identity, action);
+        },
+    )?;
+    if let Err(error) = registration.ensure_scheduled(TimerSchedule::After(delay)) {
+        return Err(rollback_registration(
+            TimerClaim::Once(registration),
+            error.into(),
+        ));
     }
+    retain_claim(key, TimerClaim::Once(registration))?;
+    Ok(TimerClaimId(key))
 }
 
-fn effective_scheduling_mode(
-    action: TimerControlAction,
-    directive_deadline_ns: Option<u64>,
-    directive_mode: Option<TimerSchedulingMode>,
-) -> Option<TimerSchedulingMode> {
-    let TimerControlAction::Arm { deadline_ns, .. } = action else {
-        return None;
-    };
-    Some(if Some(deadline_ns) == directive_deadline_ns {
-        directive_mode.unwrap_or(TimerSchedulingMode::Deadline)
-    } else {
-        TimerSchedulingMode::Deadline
-    })
-}
-
-fn next_application_timer_id() -> u64 {
-    NEXT_APPLICATION_TIMER_ID.with(|next| {
+fn next_transient_identity(
+    scope: &str,
+    label: String,
+) -> Result<(ClaimKey, TimerIdentity), TimerError> {
+    let id = NEXT_TRANSIENT_ID.with(|next| {
         let id = next
             .get()
             .checked_add(1)
-            .unwrap_or_else(|| panic!("application timer identity exhausted"));
+            .ok_or(TimerError::IdentityExhausted)?;
         next.set(id);
-        id
-    })
+        Ok::<_, TimerError>(id)
+    })?;
+    let identity = TimerIdentity::try_new("canic", format!("{scope}-{id}"), label)?;
+    Ok((ClaimKey::Transient(id), identity))
 }
 
-fn deadline_after(now_ns: u64, delay: Duration) -> Result<u64, &'static str> {
-    let delay_ns = u64::try_from(delay.as_nanos()).map_err(|_| "timer delay exceeds u64 nanos")?;
-    now_ns
-        .checked_add(delay_ns)
-        .ok_or("timer deadline exceeds u64 nanos")
+fn require_active() -> Result<(), TimerError> {
+    if TIMERS_SUSPENDED.with(Cell::get) {
+        return Err(TimerError::Suspended);
+    }
+    Ok(())
+}
+
+fn with_builtin(
+    key: TimerKey,
+    operation: impl FnOnce(&OnceRegistration) -> Result<(), ProviderError>,
+) -> Result<(), TimerError> {
+    with_claim(ClaimKey::BuiltIn(key), |claim| match claim {
+        TimerClaim::Once(registration) => operation(registration).map_err(TimerError::from),
+        TimerClaim::AfterCompletion(_) => Err(TimerError::WrongPolicy),
+    })?
+    .ok_or(TimerError::MissingClaim)?
+}
+
+fn with_claim<T>(
+    key: ClaimKey,
+    operation: impl FnOnce(&TimerClaim) -> T,
+) -> Result<Option<T>, TimerError> {
+    CLAIMS
+        .try_with(|claims| {
+            let claims = claims.try_borrow().map_err(|_| TimerError::CustodyBusy)?;
+            Ok::<_, TimerError>(claims.get(&key).map(operation))
+        })
+        .map_err(|_| TimerError::CustodyBusy)?
+}
+
+fn retain_claim(key: ClaimKey, claim: TimerClaim) -> Result<(), TimerError> {
+    retain_with_rollback(
+        claim,
+        |claim| {
+            CLAIMS.with(|claims| {
+                let Ok(mut claims) = claims.try_borrow_mut() else {
+                    return Err((TimerError::CustodyBusy, claim));
+                };
+                if claims.contains_key(&key) {
+                    return Err((TimerError::WrongPolicy, claim));
+                }
+                claims.insert(key, claim);
+                Ok(())
+            })
+        },
+        TimerClaim::unregister,
+    )
+}
+
+fn retain_with_rollback<T>(
+    claim: T,
+    retain: impl FnOnce(T) -> Result<(), (TimerError, T)>,
+    cleanup: impl FnOnce(T) -> Result<(), TimerError>,
+) -> Result<(), TimerError> {
+    match retain(claim) {
+        Ok(()) => Ok(()),
+        Err((primary, claim)) => match cleanup(claim) {
+            Ok(()) => Err(primary),
+            Err(cleanup) => Err(TimerError::RegistrationRollback {
+                primary: Box::new(primary),
+                cleanup: Box::new(cleanup),
+            }),
+        },
+    }
+}
+
+fn rollback_registration(claim: TimerClaim, primary: TimerError) -> TimerError {
+    match claim.unregister() {
+        Ok(()) => primary,
+        Err(cleanup) => TimerError::RegistrationRollback {
+            primary: Box::new(primary),
+            cleanup: Box::new(cleanup),
+        },
+    }
+}
+
+fn remove_claim(key: ClaimKey) -> Result<TimerClaim, TimerError> {
+    CLAIMS
+        .try_with(|claims| {
+            claims
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?
+                .remove(&key)
+                .ok_or(TimerError::MissingClaim)
+        })
+        .map_err(|_| TimerError::CustodyBusy)?
+}
+
+fn drop_claim(key: ClaimKey) {
+    let _ = CLAIMS.try_with(|claims| {
+        if let Ok(mut claims) = claims.try_borrow_mut() {
+            claims.remove(&key);
+        }
+    });
+}
+
+fn discard_expired_transient_claims() -> Result<(), TimerError> {
+    let expired = CLAIMS
+        .try_with(|claims| {
+            let claims = claims.try_borrow().map_err(|_| TimerError::CustodyBusy)?;
+            claims
+                .iter()
+                .filter(|(key, _)| matches!(key, ClaimKey::Transient(_)))
+                .map(|(key, claim)| (*key, claim.identity().clone()))
+                .map(|(key, identity)| Ok(timer_snapshot(&identity)?.is_none().then_some(key)))
+                .collect::<Result<Vec<_>, TimerError>>()
+        })
+        .map_err(|_| TimerError::CustodyBusy)??
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    if expired.is_empty() {
+        return Ok(());
+    }
+    CLAIMS
+        .try_with(|claims| {
+            let mut claims = claims
+                .try_borrow_mut()
+                .map_err(|_| TimerError::CustodyBusy)?;
+            for key in expired {
+                claims.remove(&key);
+            }
+            Ok(())
+        })
+        .map_err(|_| TimerError::CustodyBusy)?
+}
+
+fn format_identity(identity: &TimerIdentity) -> String {
+    format!(
+        "{}/{}/{}",
+        identity.owner(),
+        identity.subsystem(),
+        identity.name()
+    )
+}
+
+fn require_observed_claims_resumable(
+    claimed: &BTreeSet<TimerIdentity>,
+    observed: impl IntoIterator<Item = (TimerIdentity, TimerRegistrationStatus)>,
+) -> Result<(), TimerError> {
+    for (identity, registration) in observed {
+        if !claimed.contains(&identity) {
+            return Err(TimerError::UnmanagedClaim(format_identity(&identity)));
+        }
+        if registration == TimerRegistrationStatus::Running {
+            return Err(TimerError::RunningClaim(format_identity(&identity)));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn reset_timer_runtime() {
-        TIMERS.with_borrow_mut(BTreeMap::clear);
-        TIMERS_SUSPENDED.with(|suspended| suspended.set(false));
-        NEXT_APPLICATION_TIMER_ID.with(|next| next.set(0));
-    }
-
-    fn test_entry() -> TimerEntry {
-        TimerEntry::new(
-            "authority-restore-test".to_string(),
-            TimerMode::Once,
-            TimerSchedulingMode::Deadline,
-            true,
-            timer_factory(|| async { TimerRunResult::no_work(TimerDirective::Stop) }),
-        )
-    }
+    use std::{cell::Cell, collections::BTreeSet};
 
     #[test]
-    fn deadline_conversion_is_checked() {
-        assert_eq!(deadline_after(10, Duration::from_nanos(5)), Ok(15));
-        assert_eq!(
-            deadline_after(u64::MAX, Duration::from_nanos(1)),
-            Err("timer deadline exceeds u64 nanos")
-        );
-    }
-
-    #[test]
-    fn fixed_timer_labels_are_unique_and_low_cardinality() {
-        let keys = [
-            TimerKey::AuthRenewal,
-            TimerKey::CycleTopup,
-            TimerKey::IntentCleanup,
-            TimerKey::LogRetention,
-            TimerKey::PlacementReceiptAcknowledgement,
-        ];
-        let labels = keys.map(TimerKey::label);
-        let unique = labels
+    fn fixed_claim_identities_are_exact_and_unique() {
+        let identities = TimerKey::ALL
             .into_iter()
-            .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(unique.len(), keys.len());
-        assert!(labels.into_iter().all(|label| label.len() <= 64));
+            .map(|key| key.identity().expect("fixed timer identity"))
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(identities.len(), TimerKey::ALL.len());
+        assert!(
+            identities
+                .iter()
+                .all(|identity| identity.owner() == "canic")
+        );
+        assert!(identities.iter().any(|identity| {
+            identity.subsystem() == "intent_cleanup" && identity.name() == "run"
+        }));
     }
 
     #[test]
-    fn authority_suspension_retains_logical_deadlines_without_arming() {
-        reset_timer_runtime();
-        let identity = TimerIdentity::BuiltIn(TimerKey::IntentCleanup);
-        let mut entry = test_entry();
-        let action = entry.control.schedule(100).expect("schedule timer");
-        assert!(matches!(action, TimerControlAction::Arm { .. }));
-        TIMERS.with_borrow_mut(|timers| {
-            timers.insert(identity, entry);
-        });
-
-        TimerWorkflow::suspend_all();
-        assert!(TIMERS_SUSPENDED.with(Cell::get));
+    fn root_and_nonroot_declarations_match_actual_runtime_owners() {
         assert_eq!(
-            TIMERS.with_borrow(|timers| timers[&identity].control.registration()),
-            TimerRegistration::Scheduled {
-                generation: 1,
-                deadline_ns: 100,
-            }
+            TimerKey::ROOT.into_iter().collect::<BTreeSet<_>>(),
+            [
+                TimerKey::AuthRenewal,
+                TimerKey::CycleTopup,
+                TimerKey::IntentCleanup,
+                TimerKey::LogRetention,
+            ]
+            .into_iter()
+            .collect()
         );
-
-        let replacement = TIMERS.with_borrow_mut(|timers| {
-            timers
-                .get_mut(&identity)
-                .expect("retained timer")
-                .control
-                .reconcile(50)
-                .expect("replace retained deadline")
-        });
-        apply_action(identity, replacement);
         assert_eq!(
-            TIMERS.with_borrow(|timers| timers[&identity].control.registration()),
-            TimerRegistration::Scheduled {
-                generation: 2,
-                deadline_ns: 50,
-            }
+            TimerKey::NONROOT.into_iter().collect::<BTreeSet<_>>(),
+            [
+                TimerKey::CycleTopup,
+                TimerKey::IntentCleanup,
+                TimerKey::LogRetention,
+                TimerKey::PlacementReceiptAcknowledgement,
+            ]
+            .into_iter()
+            .collect()
         );
-        assert!(TIMERS.with_borrow(|timers| timers[&identity].handle.is_none()));
-        reset_timer_runtime();
     }
 
     #[test]
-    fn authority_snapshot_rejects_a_partially_executing_timer() {
-        reset_timer_runtime();
-        let identity = TimerIdentity::BuiltIn(TimerKey::CycleTopup);
-        let mut entry = test_entry();
-        let TimerControlAction::Arm { generation, .. } =
-            entry.control.schedule(100).expect("schedule timer")
-        else {
-            panic!("initial timer schedule must arm");
-        };
-        assert!(entry.control.begin(generation));
-        TIMERS.with_borrow_mut(|timers| {
-            timers.insert(identity, entry);
-        });
+    fn failed_custody_insertion_runs_registration_cleanup() {
+        let cleaned = Cell::new(false);
+        let error = retain_with_rollback(
+            17u8,
+            |claim| Err((TimerError::CustodyBusy, claim)),
+            |claim| {
+                assert_eq!(claim, 17);
+                cleaned.set(true);
+                Ok(())
+            },
+        )
+        .expect_err("custody rejection must propagate");
+
+        assert!(matches!(error, TimerError::CustodyBusy));
+        assert!(cleaned.get());
+    }
+
+    #[test]
+    fn built_in_results_preserve_completion_and_directive() {
+        let result = TimerRunResult {
+            outcome: TimerExecutionOutcome::RetryableFailure,
+            work_count: 3,
+            directive: TimerDirective::RetryAfter(Duration::from_secs(5)),
+        }
+        .into_provider();
 
         assert_eq!(
-            TimerWorkflow::require_resumable(),
-            Err("authority snapshot retained a running Canic timer")
+            result.completion().outcome(),
+            ic_timers::TimerCompletionOutcome::RetryableFailure
         );
-        reset_timer_runtime();
+        assert_eq!(result.completion().work_count(), 3);
+        assert_eq!(
+            result.directive(),
+            ProviderDirective::RetryAfter(Duration::from_secs(5))
+        );
+    }
+
+    #[test]
+    fn snapshot_resume_invokes_the_registered_domain_participant() {
+        thread_local! {
+            static CALLED: Cell<bool> = const { Cell::new(false) };
+        }
+        #[expect(
+            clippy::unnecessary_wraps,
+            reason = "the test double must implement the fallible participant signature"
+        )]
+        fn participant() -> Result<(), TimerError> {
+            CALLED.with(|called| called.set(true));
+            Ok(())
+        }
+
+        TimerWorkflow::register_snapshot_resume_participant(participant);
+        TimerWorkflow::resume_all().expect("resume timer owners");
+
+        assert!(CALLED.with(Cell::get));
+        SNAPSHOT_RESUME_PARTICIPANT.with(|current| current.set(None));
+    }
+
+    #[test]
+    fn authority_snapshot_rejects_a_claim_outside_canic_custody() {
+        let external = TimerIdentity::try_new("companion-framework", "snapshot", "unmanaged")
+            .expect("external identity");
+        assert!(matches!(
+            require_observed_claims_resumable(
+                &BTreeSet::new(),
+                [(external, TimerRegistrationStatus::Unregistered)]
+            ),
+            Err(TimerError::UnmanagedClaim(identity))
+                if identity == "companion-framework/snapshot/unmanaged"
+        ));
+    }
+
+    #[test]
+    fn authority_snapshot_rejects_a_running_canic_claim() {
+        let identity =
+            TimerIdentity::try_new("canic", "cycles", "topup").expect("Canic timer identity");
+        assert!(matches!(
+            require_observed_claims_resumable(
+                &BTreeSet::from([identity.clone()]),
+                [(identity, TimerRegistrationStatus::Running)]
+            ),
+            Err(TimerError::RunningClaim(identity)) if identity == "canic/cycles/topup"
+        ));
     }
 }

@@ -72,19 +72,19 @@ cached path cannot emit either proof-cause variant.
 The remaining 13 sites contain twelve direct decisions and one transparent
 signer-cause wrapper. The direct decisions reduce to eleven exact candidates:
 
-| Exact candidate | Sites | Class/origin | Public projection | Action and retry |
-| --- | ---: | --- | --- | --- |
-| `AUTH_CHAIN_KEY_BATCH_EXPIRY_OVERFLOW` | 1 | `Invariant` / batch time arithmetic | self | Correct protected time/TTL policy; no unchanged retry |
-| `AUTH_CHAIN_KEY_BATCH_EMPTY` | 2 | `Invariant` / selected batch construction | self | Repair selected-template/batch construction; no unchanged retry |
-| `AUTH_CHAIN_KEY_BATCH_TTL_ZERO` | 1 | `Invariant` / protected batch policy | self | Configure positive certificate, verifier and revocation bounds |
-| `AUTH_CHAIN_KEY_CERT_CANONICALIZATION_FAILED` | 1 | `Invariant` / prepared certificate evidence | self | Inspect the canonical encoder and protected certificate inputs |
-| `AUTH_CHAIN_KEY_APPROVAL_COUNT_MISMATCH` | 1 | `Invariant` / workflow approval binding | self | Rebuild approvals for the exact opaque plan; no unchanged retry |
-| `AUTH_CHAIN_KEY_APPROVAL_ISSUER_MISMATCH` | 1 | `Invariant` / issuer authority | self | Preserve plan order and exact issuer identity; no unchanged retry |
-| `AUTH_CHAIN_KEY_APPROVAL_EXPIRY_MISMATCH` | 1 | `Invariant` / batch window authority | self | Bind every approval to the plan expiry; no unchanged retry |
-| `AUTH_CHAIN_KEY_BATCH_ISSUER_DUPLICATED` | 1 | `Invariant` / canonical issuer set | self | Repair duplicate protected renewal state; no unchanged retry |
-| `AUTH_CHAIN_KEY_BATCH_SIGNATURE_MISSING` | 1 | `Invariant` / durable signed-batch state | self | Repair contradictory signed state; never install unchanged |
-| `AUTH_CHAIN_KEY_BATCH_CAPACITY_EXCEEDED` | 1 | `ResourceExhausted` / bounded pending batches | self | Wait for expiry/install pruning before bounded retry |
-| `AUTH_CHAIN_KEY_REGISTRY_CANONICALIZATION_FAILED` | 1 | `Invariant` / protected delegated-auth Registry | self | Repair canonical Registry policy state before preparing another batch |
+| Exact candidate | Sites | Producer function/branch | Class/origin | Public projection | Action and retry |
+| --- | ---: | --- | --- | --- | --- |
+| `AUTH_CHAIN_KEY_BATCH_EXPIRY_OVERFLOW` | 1 | `plan_due_chain_key_root_delegation_batch`; `now_ns.checked_add(cert_ttl_ns)` failure | `Invariant` / batch time arithmetic | self | Correct protected time/TTL policy; no unchanged retry |
+| `AUTH_CHAIN_KEY_BATCH_EMPTY` | 2 | `shared_batch_cert_ttl_ns` missing selected template and `merkle_root_and_witnesses` empty leaf set | `Invariant` / selected batch construction | self | Repair selected-template/batch construction; no unchanged retry |
+| `AUTH_CHAIN_KEY_BATCH_TTL_ZERO` | 1 | `shared_batch_cert_ttl_ns`; minimum protected TTL is zero | `Invariant` / protected batch policy | self | Configure positive certificate, verifier and revocation bounds |
+| `AUTH_CHAIN_KEY_CERT_CANONICALIZATION_FAILED` | 1 | `build_chain_key_batch_leaf`; `chain_key_delegation_cert_hash` failure | `Invariant` / prepared certificate evidence | self | Inspect the canonical encoder and protected certificate inputs |
+| `AUTH_CHAIN_KEY_APPROVAL_COUNT_MISMATCH` | 1 | `validate_issuer_approvals`; plan/approval length inequality | `Invariant` / workflow approval binding | self | Rebuild approvals for the exact opaque plan; no unchanged retry |
+| `AUTH_CHAIN_KEY_APPROVAL_ISSUER_MISMATCH` | 1 | `ensure_issuer_approval_matches_plan`; issuer inequality | `Invariant` / issuer authority | self | Preserve plan order and exact issuer identity; no unchanged retry |
+| `AUTH_CHAIN_KEY_APPROVAL_EXPIRY_MISMATCH` | 1 | `ensure_issuer_approval_matches_plan`; expiry inequality | `Invariant` / batch window authority | self | Bind every approval to the plan expiry; no unchanged retry |
+| `AUTH_CHAIN_KEY_BATCH_ISSUER_DUPLICATED` | 1 | `reject_duplicate_chain_key_issuers`; adjacent canonical issuer equality | `Invariant` / canonical issuer set | self | Repair duplicate protected renewal state; no unchanged retry |
+| `AUTH_CHAIN_KEY_BATCH_SIGNATURE_MISSING` | 1 | `start_chain_key_root_delegation_batch_install`; signed batch without `signature` | `Invariant` / durable signed-batch state | self | Repair contradictory signed state; never install unchanged |
+| `AUTH_CHAIN_KEY_BATCH_CAPACITY_EXCEEDED` | 1 | `plan_due_chain_key_root_delegation_batch` capacity branch and `chain_key_root_delegation_batch_quota_exceeded` constructor | `ResourceExhausted` / bounded pending batches | self | Wait for expiry/install pruning before bounded retry |
+| `AUTH_CHAIN_KEY_REGISTRY_CANONICALIZATION_FAILED` | 1 | `current_chain_key_delegated_auth_registry`; `delegated_auth_registry_hash` failure | `Invariant` / protected delegated-auth Registry | self | Repair canonical Registry policy state before preparing another batch |
 
 The two `AUTH_CHAIN_KEY_BATCH_EMPTY` sites are one invariant: a batch with no
 selected issuer has no Merkle leaf. Different helper wording does not justify

@@ -1,6 +1,6 @@
 # Canic 0.102 Root And Non-Root Runtime Lifecycle Constructor Leaves
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -18,14 +18,14 @@ assigns no number and changes no runtime behavior.
 
 The six root lifecycle sites add no exact meaning:
 
-| Exact candidate or disposition | Sites | Current boundary | Required hard cut |
+| Exact candidate or disposition | Sites | Producer function/branch | Required hard cut |
 | --- | ---: | --- | --- |
-| transparent typed memory-bootstrap cause | 1 | stable-memory registry bootstrap | Preserve the exact `ic-memory` adapter diagnostic |
-| reuse `ACCESS_BUILD_NETWORK_UNAVAILABLE` | 1 | embedded build-network identity | Rebuild with exact IC/local network configuration |
-| reuse `ENV_REQUIRED_FIELDS_MISSING` | 1 | root environment policy | Return the existing environment identity without the missing-field list |
-| transparent typed environment-import cause | 1 | protected root environment import | Preserve the exact environment diagnostic and approved projection |
-| transparent typed configuration cause | 1 | application init-mode lookup | Preserve the exact configuration diagnostic |
-| transparent typed runtime-startup cause | 1 | Active root service startup | Preserve the exact failing service diagnostic without a root-startup wrapper |
+| transparent typed memory-bootstrap cause | 1 | `init_root_canister`; stable-memory registry bootstrap | Preserve the exact `ic-memory` adapter diagnostic |
+| reuse `ACCESS_BUILD_NETWORK_UNAVAILABLE` | 1 | `init_root_canister`; embedded build-network identity | Rebuild with exact IC/local network configuration |
+| reuse `ENV_REQUIRED_FIELDS_MISSING` | 1 | `init_root_canister`; root environment policy | Return the existing environment identity without the missing-field list |
+| transparent typed environment-import cause | 1 | `init_root_canister`; protected root environment import | Preserve the exact environment diagnostic and approved projection |
+| transparent typed configuration cause | 1 | `init_root_canister`; application init-mode lookup | Preserve the exact configuration diagnostic |
+| transparent typed runtime-startup cause | 1 | `post_upgrade_root_canister_after_memory_init`; Active root service startup | Preserve the exact failing service diagnostic without a root-startup wrapper |
 
 Lifecycle phase does not create another error meaning. Memory bootstrap occurs
 before protected state initialization; environment and configuration admission
@@ -42,11 +42,11 @@ environment fields similarly reuse the exact policy identity already shared by
 
 All five non-root constructors are transparent typed edges:
 
-| Exact candidate or disposition | Sites | Current boundary | Required hard cut |
+| Exact candidate or disposition | Sites | Producer function/branch | Required hard cut |
 | --- | ---: | --- | --- |
-| transparent typed environment workflow cause | 2 | sibling Wasm Store and standalone-local initialization | Preserve exact environment admission/import cause |
-| transparent typed memory-bootstrap cause | 1 | stable-memory registry bootstrap | Preserve the exact `ic-memory` adapter diagnostic |
-| transparent typed configuration cause | 2 | application init mode and post-upgrade current-role configuration | Preserve the exact configuration diagnostic |
+| transparent typed environment workflow cause | 2 | `init_wasm_store_canister` and `init_local_nonroot_canister`; environment initialization | Preserve exact environment admission/import cause |
+| transparent typed memory-bootstrap cause | 1 | `initialize_nonroot_base`; stable-memory registry bootstrap | Preserve the exact `ic-memory` adapter diagnostic |
+| transparent typed configuration cause | 2 | `register_nonroot_runtime_contract` and `restore_nonroot_after_upgrade`; current-role configuration | Preserve the exact configuration diagnostic |
 
 Managed Component/Component Child authority, sibling Store authority and
 standalone-local initialization remain distinct lifecycle routes, but wrapping

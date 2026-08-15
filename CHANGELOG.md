@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.102.x] - 2026-08-13 - Faster Fleet Builds And Diagnostic Groundwork
+## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
+
+- `0.102.2` closes the B1 diagnostic allocation review, modernizes timer and
+  Subnet-observation foundations with explicit recovery blockers, and
+  establishes the evidence-only Fleet-estate qualification predecessor.
 
 - `0.102.1` closes the evidence-only whole-program diagnostic inventory across
   every effective producer, dynamic public value, durable string and masked

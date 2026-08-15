@@ -117,19 +117,38 @@ operations.
 
 `timer!` schedules one asynchronous invocation. `timer_interval!` schedules
 the next invocation only after the current future completes, so interval work
-cannot overlap itself. Both return an opaque, single-owner handle:
+cannot overlap itself. Both return a typed `Result` containing an opaque,
+single-owner handle:
 
 ```rust
 use canic::prelude::*;
 use std::time::Duration;
 
-let handle = timer_interval!(Duration::from_secs(30), refresh_cache);
-assert!(canic::api::timer::cancel(handle));
+let handle = timer_interval!(Duration::from_secs(30), refresh_cache)
+    .expect("schedule cache refresh");
+canic::api::timer::cancel(handle).expect("cancel cache refresh");
 ```
 
 Cancellation consumes the handle. A pending invocation is cleared; a running
 invocation is allowed to finish but cannot rearm. Guarded timer macros and raw
-CDK timer access are not part of the maintained facade.
+CDK timer access are not part of the maintained facade. Labels are validated
+by the shared `ic-timers` runtime and are limited to 64 UTF-8 bytes. Dropping a
+handle deliberately detaches caller control and does not cancel the timer.
+Call `handle.detach()` when that loss of control is intentional and should be
+visible in the source.
+
+Every linked owner must resolve the same exact `ic-timers` package ID; two
+versions create two canister-local registries rather than one inventory.
+Timer performance observations bracket the complete accepted shared-runtime
+callback path: registry acceptance, consumer work, completion accounting, and
+successor binding. They are operational callback costs, not isolated
+application-function benchmarks. A transient `RemoveWhenStopped` declaration
+that reaches terminal state is removed from the shared inventory, so no final
+status or performance sample survives after removal; retained declarations
+preserve their normally completed samples.
+Authority snapshots currently reject any timer claim outside Canic custody;
+combined-framework snapshot composition requires a separately qualified
+synchronous lifecycle seam.
 
 This crate lives in the Canic workspace. See the workspace guide at
 `../../README.md` for full setup, topology, and example canisters.

@@ -324,7 +324,7 @@ impl IntentCleanupWorkflow {
         Self::reconcile()
     }
 
-    fn run_due_batch() -> TimerRunResult {
+    pub(crate) fn run_due_batch() -> TimerRunResult {
         Self::run_due_batch_at(IcOps::now_nanos())
     }
 
@@ -473,17 +473,13 @@ impl IntentCleanupWorkflow {
 
     fn reconcile() -> Result<(), InternalError> {
         let deadline_ns = Self::next_cleanup_deadline_ns()?;
-        TimerWorkflow::reconcile_at(TimerKey::IntentCleanup, deadline_ns, || async {
-            Self::run_due_batch()
-        });
+        TimerWorkflow::reconcile_at(TimerKey::IntentCleanup, deadline_ns)?;
         Ok(())
     }
 
     fn schedule_at(due_at_secs: u64) -> Result<(), InternalError> {
         let deadline_ns = Self::deadline_ns(due_at_secs)?;
-        TimerWorkflow::schedule_at(TimerKey::IntentCleanup, deadline_ns, || async {
-            Self::run_due_batch()
-        });
+        TimerWorkflow::schedule_at(TimerKey::IntentCleanup, deadline_ns)?;
         Ok(())
     }
 

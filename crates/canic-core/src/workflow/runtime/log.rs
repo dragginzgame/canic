@@ -52,13 +52,11 @@ impl LogRetentionWorkflow {
             Some(max_age_secs) => Self::next_deadline_ns(max_age_secs)?,
             None => None,
         };
-        TimerWorkflow::reconcile_at(TimerKey::LogRetention, deadline, || async {
-            Self::run_due_batch()
-        });
+        TimerWorkflow::reconcile_at(TimerKey::LogRetention, deadline)?;
         Ok(())
     }
 
-    fn run_due_batch() -> TimerRunResult {
+    pub(crate) fn run_due_batch() -> TimerRunResult {
         let config = match ConfigOps::log_config() {
             Ok(config) => config,
             Err(err) => {

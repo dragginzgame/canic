@@ -7,7 +7,7 @@ pub use crate::domain::runtime::{
     TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
 };
 
-pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 1;
+pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 3;
 
 //
 // CanicHealthStatus
@@ -51,7 +51,8 @@ pub struct CanicRuntimeStatus {
     pub build: RuntimeBuildInfo,
     pub features: Vec<RuntimeFeatureStatus>,
     pub topology: Option<RuntimeTopologyStatus>,
-    pub timers: Vec<CanicTimerStatus>,
+    pub timers: Vec<CanisterTimerStatus>,
+    pub timer_inventory: RuntimeCheck,
     pub state: Option<RuntimeStateSummary>,
     pub auth: Option<RuntimeAuthStatusSummary>,
     pub blob_storage: Option<RuntimeBlobStorageStatusSummary>,
@@ -129,18 +130,23 @@ pub struct RuntimeTopologyStatus {
 }
 
 //
-// CanicTimerStatus
+// CanisterTimerStatus
 //
 
+/// One live or retained registration from the shared canister timer registry.
+///
+/// A transient `RemoveWhenStopped` registration is absent after reaching its
+/// terminal state; its final observation is therefore not retained here.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanicTimerStatus {
+pub struct CanisterTimerStatus {
     pub name: String,
+    pub owner: String,
     pub subsystem: String,
     pub scheduling_mode: TimerSchedulingMode,
     pub registration: TimerRegistrationStatus,
     pub condition: TimerProcessCondition,
     pub enabled: bool,
-    pub generation: u64,
+    pub generation: Option<u64>,
     pub next_due_at_ns: Option<u64>,
     pub last_outcome: Option<TimerExecutionOutcome>,
     pub last_work_count: u64,
@@ -153,6 +159,50 @@ pub struct CanicTimerStatus {
     pub expected_failures_since_runtime_start: u64,
     pub invariant_failures_since_runtime_start: u64,
     pub stale_callbacks_since_runtime_start: u64,
+    pub scheduler_performance: TimerCallbackPerformanceStatus,
+    pub work_performance: TimerCallbackPerformanceStatus,
+}
+
+//
+// TimerCallbackPerformanceStatus
+//
+
+/// Bounded, runtime-epoch observations for one timer callback role.
+///
+/// Samples cover the complete accepted shared-runtime callback path rather
+/// than isolating the consumer function from registry and completion work.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TimerCallbackPerformanceStatus {
+    pub instruction_samples_since_runtime_start: u64,
+    pub instructions_latest: Option<u64>,
+    pub instructions_maximum: Option<u64>,
+    pub instructions_total_since_runtime_start: u64,
+    pub memory_page_samples_since_runtime_start: u64,
+    pub memory_pages_latest: Option<TimerMemoryPageSampleStatus>,
+    pub maximum_wasm_memory_growth_pages: Option<u64>,
+    pub maximum_stable_memory_growth_pages: Option<u64>,
+}
+
+//
+// TimerMemoryPageSampleStatus
+//
+
+/// Wasm and stable-memory page extents bracketing one completed callback.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TimerMemoryPageSampleStatus {
+    pub start: TimerMemoryPageExtentStatus,
+    pub end: TimerMemoryPageExtentStatus,
+}
+
+//
+// TimerMemoryPageExtentStatus
+//
+
+/// Runtime high-water memory extents measured in 64-KiB pages.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TimerMemoryPageExtentStatus {
+    pub wasm_pages: u64,
+    pub stable_pages: u64,
 }
 
 //

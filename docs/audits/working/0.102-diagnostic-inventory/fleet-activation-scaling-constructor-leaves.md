@@ -19,11 +19,11 @@ behavior.
 
 The three static branches add three exact meanings:
 
-| Exact candidate | Sites | Current meaning | Action and retry |
+| Exact candidate | Sites | Producer function/branch | Action and retry |
 | --- | ---: | --- | --- |
-| `FLEET_ACTIVATION_ROOT_BOOTSTRAP_PREPARATION_INCOMPLETE` | 1 | Root bootstrap has not prepared the complete managed inventory before activation preparation | Inspect bootstrap status and resume the exact preparation journey |
-| `FLEET_ACTIVATION_RESUME_ROOT_INACTIVE` | 1 | Core activation resume returned without placing the root runtime in `Active` | Preserve activation state and recover/retry the exact operation |
-| `FLEET_ACTIVATION_ROOT_BOOTSTRAP_NOT_READY` | 1 | Activation reached `Active` but the independently restored bootstrap readiness fence remains false | Inspect bootstrap status and retry the same activation resume |
+| `FLEET_ACTIVATION_ROOT_BOOTSTRAP_PREPARATION_INCOMPLETE` | 1 | `workflow::runtime::fleet_activation::prepare_root`; root bootstrap has not prepared the complete managed inventory before activation preparation | Inspect bootstrap status and resume the exact preparation journey |
+| `FLEET_ACTIVATION_RESUME_ROOT_INACTIVE` | 1 | `workflow::runtime::fleet_activation::resume_root`; core activation resume returned without placing the root runtime in `Active` | Preserve activation state and recover/retry the exact operation |
+| `FLEET_ACTIVATION_ROOT_BOOTSTRAP_NOT_READY` | 1 | `workflow::runtime::fleet_activation::resume_root`; activation reached `Active` but the independently restored bootstrap readiness fence remains false | Inspect bootstrap status and retry the same activation resume |
 
 These do not reuse `FLEET_SUBNET_ROOT_RUNTIME_INACTIVE`. That existing leaf
 denies an ordinary root-local lifecycle operation before root activation; the
@@ -35,10 +35,10 @@ postconditions and have different recovery owners.
 One source constructor currently publishes a preformatted policy reason. Its
 typed `ScalingPlanReason` must select one of two exact meanings:
 
-| Exact candidate | Typed decision | Action and retry |
+| Exact candidate | Producer function/typed decision | Action and retry |
 | --- | --- | --- |
-| `SCALING_MAX_WORKERS_REACHED` | `AtMaxWorkers` | Free/recycle a worker or increase the configured maximum before retry |
-| `SCALING_WITHIN_POLICY_BOUNDS` | `WithinBounds` | Do not create a worker until observed demand/policy admits scale-out |
+| `SCALING_MAX_WORKERS_REACHED` | `ScalingWorkflow::create_worker`: `AtMaxWorkers` | Free/recycle a worker or increase the configured maximum before retry |
+| `SCALING_WITHIN_POLICY_BOUNDS` | `ScalingWorkflow::create_worker`: `WithinBounds` | Do not create a worker until observed demand/policy admits scale-out |
 
 `BelowMinWorkers` admits creation and therefore cannot reach this error
 constructor. B4 must stop forwarding `ScalingPlan.reason: String`; the typed

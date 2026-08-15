@@ -44,21 +44,24 @@ not implement, depend on or claim it.
 
 ## Numbering Reservation
 
-Inserting 0.103 and the independent 0.104 lifecycle-composition line moves the
-previous provisional Canic 0.103-0.111 designs to 0.105-0.113 without changing
-their intended order or implementation status:
+Inserting 0.103 and the independent 0.104 lifecycle-composition line originally
+moved the former provisional 0.103-0.111 designs to 0.105-0.113. The later
+evidence-only 0.105 Fleet-estate platform qualification preserves the
+peer-reviewed 0.103/0.104 identities and moves only those provisional lines to
+0.106-0.114:
 
 | Current line | Design |
 | --- | --- |
-| 0.105 | Cross-Subnet data transport groundwork |
-| 0.106 | Coordinator Workers |
-| 0.107 | Declarative authentication profiles |
-| 0.108 | Standalone blob-service extraction |
-| 0.109 | Coordinator-backed root funding |
-| 0.110 | Optional encrypted Canister snapshot archives |
-| 0.111 | Language-neutral managed-guest feasibility |
-| 0.112 | Skynet Fleet observatory |
-| 0.113 | Fleet Subnet Canister estates |
+| 0.105 | Fleet-estate platform qualification |
+| 0.106 | Cross-Subnet data transport groundwork |
+| 0.107 | Coordinator Workers |
+| 0.108 | Declarative authentication profiles |
+| 0.109 | Standalone blob-service extraction |
+| 0.110 | Coordinator-backed root funding |
+| 0.111 | Optional encrypted Canister snapshot archives |
+| 0.112 | Language-neutral managed-guest feasibility |
+| 0.113 | Skynet Fleet observatory |
+| 0.114 | Fleet Subnet Canister estates |
 
 Published package versions, historical changelogs, audit evidence and archived
 handoffs are not design reservations and were not renumbered.
@@ -164,7 +167,7 @@ B1 must answer:
     establishment inputs that B7 will qualify after implementation;
 12. current and proposed instruction, stable-byte, heap-byte, restore and
     raw-Wasm costs; and
-13. the precise 0.107 authentication-profile reconciliation.
+13. the precise 0.108 authentication-profile reconciliation.
 
 ## Next Authorized Action
 

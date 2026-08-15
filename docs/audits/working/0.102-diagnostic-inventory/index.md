@@ -1,6 +1,6 @@
 # Canic 0.102 Implementation Status
 
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Status
 
@@ -21,13 +21,11 @@ Date: 2026-08-14
   dynamic-public-context and durable-state inventories plus the initial
   allocation ledger, host catalogue and projection table receive maintainer
   approval.
-- Release checkpoint: `v0.102.0` is published at
-  `e6dfd7d2d212f9fce4b1b16caba33d8062e3461d`. It closes the completed
-  operator-performance and CLI-diagnostic outcomes together with the reviewable
-  B1 evidence snapshot. B1 remains active; no incomplete diagnostic behavior is
-  represented as released.
-- Open checkpoint draft: `0.102.1` closes the whole-program inventory phase for
-  review while leaving allocation and host-catalogue approval inside active B1.
+- Published checkpoints: `v0.102.0` at
+  `e6dfd7d2d212f9fce4b1b16caba33d8062e3461d` and `v0.102.1` at
+  `86763c5f16478e2e548e2059e5efaa963bf9a966`. They preserve reviewable B1
+  evidence without representing incomplete diagnostic behavior as released.
+- Open work is the unversioned remainder of the B1 allocation-authority batch.
   It changes no runtime, Candid, stable state or package version.
 - Measurement gate: the fresh current-source canonical Wasm baseline passes;
   every later material cut and closeout must remain comparable with v3.
@@ -65,16 +63,20 @@ B1 is complete only when all of the following are reviewable together:
    endpoint-specific typed owner;
 3. every durable diagnostic-derived string is classified as redundant prose,
    advisory context, recovery-significant state or owned operational text;
-4. every proposed leaf has one meaning, class, origin, typed host disposition,
-   public projection and, where masked, a retrievable operation-correlated
-   numeric observability owner;
-5. every proposed number is nonzero, unique across the permanent current and
+4. every producer observation maps to one reviewed canonical condition and
+   handling contract or explicit non-diagnostic disposition, with equivalent
+   producers sharing a code;
+5. every compressed code has one meaning, class, semantic origin, typed host
+   disposition, public projection and, where masked, a retrievable operation-
+   correlated numeric observability owner;
+6. every proposed number is nonzero, unique across the permanent current and
    retired allocation ledger and backed by a current producer when active;
-6. the current host catalogue and generated language-neutral registry are
+7. the current host catalogue and generated language-neutral registry are
    bijective with the proposed current allocation rows;
-7. representative leaf, Fleet Subnet Root and Wasm Store artifacts have a
+8. representative leaf, Fleet Subnet Root and Wasm Store artifacts have a
    reproducible current-source baseline; and
-8. the maintainer can approve or amend the complete inventories and initial
+9. the maintainer can approve or amend the complete inventories, many-to-one
+   map and initial
    allocation before B2 makes them authoritative.
 
 ## Current Evidence
@@ -94,7 +96,7 @@ B1 is complete only when all of the following are reviewable together:
   [allocation proposal](../../../design/0.102-compact-diagnostic-codes/allocation-proposal.md)
   recommends dense monotonic
   codes, unpadded `E<decimal>` rendering and nine host-only broad classes. These
-  choices and the later complete leaf table remain maintainer review gates.
+  choices and the later compressed code table remain maintainer review gates.
 - The design's
   [code-allocation ledger](../../../design/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
   now freezes the
@@ -107,10 +109,93 @@ B1 is complete only when all of the following are reviewable together:
   errors, and defines the one-release-set Fleet activation boundary. These are
   design constraints, not implementation claims.
 - [public-boundary.md](public-boundary.md) proves 151 explicit public
-  constructions in 26 production files and records every current
-  code-dependent machine decision. In particular, broad `Forbidden`,
-  `Conflict`, `ResourceExhausted` and `Unavailable` matches require semantic
-  splits before the compact cut.
+  constructions in 26 production files and records the exact maintained
+  production-consumer surface: twelve code-dependent machine decisions and six
+  transparent decode/render consumers at the pinned current-candidate source.
+  In particular, broad `Forbidden`, `Conflict`, `ResourceExhausted` and
+  `Unavailable` matches require semantic splits before the compact cut.
+- The targeted inventory guard now distinguishes typed evidence from exact
+  source anchoring. All 2,864 exact provisional identities name a symbolic
+  source anchor in a structured owner cell, and the empty debt set is
+  fingerprinted so later source drift cannot silently reopen it. This is a
+  producer-manifest boundary, not proof of runtime reachability by itself. The
+  first closed family is the twenty-identity access
+  boundary, whose exact function/branch anchors have their own completeness
+  check. The twelve-identity authority-restore family is also complete at this
+  level, including the typed endpoint-policy fence and eleven newly anchored
+  persistence/workflow decisions. The twenty direct-prose authentication
+  identities now name their exact attestation, proof-retrieval, retention,
+  verifier and chain-key configuration functions and have a separate
+  family-completeness check. Closing the remaining verifier/signer test-key and
+  feature-disabled crypto sites makes all 151 authentication identities
+  complete at this symbolic-anchor level. The thirteen runtime-auth renewal/
+  admission identities and eleven RPC/runtime-crypto identities also have
+  exact function/branch evidence and independent family guards; shared
+  identities that were already anchored do not inflate the global progress
+  count. The twenty-one prepare-replay identities and eight prepare/
+  provisioning identities now close the adjacent request, decision, retained-
+  receipt, codec, capacity, remote-proof and issuer-install boundaries with
+  their own guards. The eleven core chain-key batch/approval identities now
+  close their validation, canonicalization, planning and installation
+  branches under a separate guard. A bounded five-identity Canister creation/
+  pool helper subset also names the funding-overflow, immutable-configuration
+  and missing-asset producers. All ten pool initialization, reset and claim
+  identities name their exact transition functions under another guard; this
+  is joined by all twenty-one autonomous-creation intent, paid-attempt,
+  terminal-evidence, adoption, commit, retry, cancel and rollover identities.
+  All ten exclusive-handoff identities bind their begin/completion authority,
+  asset-state and terminal-receipt branches. Store deletion, configuration,
+  cost/adoption helpers and recycling settlement close the remaining direct
+  range: all 56 meanings across 69 pool constructor sites are symbol-addressed.
+  The seventeen adjacent workflow constructor sites reference eighteen exact
+  identities; after three ops reuses, all fifteen net-new maintenance, import,
+  handoff and recoverable-refill meanings are symbol-addressed too.
+  All twenty-two root/Store bootstrap meanings now bind their exact manifest,
+  topology, artifact, staged-authority and live-catalog branches under a family
+  guard; two topology adapters remain transparent typed-cause propagation.
+  The adjacent root-Subnet/sibling-Store state ledger anchors all nine exact
+  identities—one access reuse plus eight net-new meanings—while preserving the
+  typed Registry discovery failure as transparent propagation.
+  The twenty-one Store-lifecycle and fifty Fleet Mirror coverage labels now
+  bind their exact producer functions as well. Their Store-client and
+  Coordinator-result adapters remain transparent typed-cause propagation and
+  therefore do not create wrapper codes.
+  The adjacent Component Directory/Fleet-service peer boundary also binds all
+  forty-two exact meanings to its synchronization and protected-requester
+  functions. Its typed Component-binding adapter remains transparent, while
+  the already-qualified exact count-overflow projection is reused.
+  The durable Component Directory synchronization journal now binds all
+  fifty-five coverage meanings to exact progress, acceptance, retry, intent,
+  terminal and stable-commit functions. Its unreachable placement commit
+  variants remain explicit non-diagnostic dispositions.
+  Fleet-activation/scaling plus the five small core ops owners now bind their
+  thirteen referenced coverage labels as well. Typed configuration adapters
+  and the two impossible scaling shapes remain explicit non-allocating
+  dispositions.
+  The five adjacent small workflow owners bind their six referenced topology
+  and deadline labels; their cost-guard and capability adapters remain
+  transparent typed propagation.
+  The final small-adapter family binds all twenty-seven candidate/reuse
+  identities to exact producers. Its twenty-eight coverage labels include the
+  exact Fleet-activation state identity reused as a projection; five typed
+  adapters remain transparent, two impossible states remain code-free and the
+  twenty-three net-new anchors alone reduce global debt.
+  The Component runtime owner now binds all seventy-four exact preparation,
+  synchronization, activation, Directory-validation and hashing identities to
+  concrete functions. Sixty-four are net-new meanings, ten are exact reuses,
+  seventy-two reduce global debt and three storage adapters remain transparent.
+  The root-issuer/delegation-batch family likewise binds its sole reused
+  certificate-TTL identity to the exact mapper while keeping five typed Fleet,
+  storage and policy edges transparent; it creates no duplicate code and does
+  not reduce already-closed global debt.
+  Root/non-root lifecycle orchestration likewise reuses its two already-
+  anchored access/environment identities and source-addresses all nine
+  transparent memory, environment, configuration and startup edges without a
+  lifecycle wrapper code.
+  Runtime coordination, restore and activation bind all twelve referenced
+  identities too. Ten reuse existing access/restore/activation anchors; only
+  the resumable-refill upgrade fence and credential-bundle capability fence
+  reduce global debt, while three memory/storage adapters remain transparent.
 - [dynamic-public-context.md](dynamic-public-context.md) now classifies the
   first 656 individual values across the Canic memory-ledger facade, Wasm Store
   GC, shared manifest/capacity conversion, explicit Component Registry denials,
@@ -200,7 +285,7 @@ B1 is complete only when all of the following are reviewable together:
   candidates plus three safe projections for semantic grouping. An exposed
   enum variant alone is not allocation evidence.
 - [auth-policy-leaves.md](auth-policy-leaves.md) and
-  [auth-string-frontier.md](auth-string-frontier.md) map 132 provisional exact
+  [auth-string-frontier.md](auth-string-frontier.md) map 151 provisional exact
   authentication/policy candidates and six safe projections. The expanded stop
   contains ten additional typed owners, 96 non-test structural variants and 43
   direct prose construction sites, but wrapper reuse and current-path sediment
@@ -275,7 +360,7 @@ B1 is complete only when all of the following are reviewable together:
 - [bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 60 exact topology,
   runtime-log, refill, Placement Index and complete current blob candidates
   plus four safe projections. All 27 blob leaves are allocated in 0.102 and
-  their numbers retire without reuse when 0.108 removes the producers.
+  their numbers retire without reuse when 0.109 removes the producers.
 - [cost-guard-leaves.md](cost-guard-leaves.md) maps seven exact reservation
   leaves and one safe projection, deletes the redundant public-kind classifier
   and keeps rollback failure as a secondary typed observation rather than a
@@ -312,10 +397,10 @@ B1 is complete only when all of the following are reviewable together:
   expected 708 collision-free frontier-checkpoint identities. Later source-
   semantic expansion is added explicitly rather than rewriting that census.
 - [projection-ledger.md](projection-ledger.md) aggregates all 31 currently qualified additional
-  safe projections and five exact leaves reused as projection targets. It
+  safe projections and eight exact leaves reused as projection targets. It
   names proposed numeric observation owners and leaves IC effect call-site
   ownership and the current string-coded recent-failure ring as explicit
-  approval gates. Cashier uses that guarded numeric owner until 0.108 retires
+  approval gates. Cashier uses that guarded numeric owner until 0.109 retires
   its codes.
 - [ic-observability-owners.md](ic-observability-owners.md) maps 17 current IC
   call families to their operation authority or guarded runtime status and
@@ -491,24 +576,44 @@ B1 is complete only when all of the following are reviewable together:
   typed-topology adapter. All 26 core plan/Registry constructors are classified
   as transparent typed conversions.
 
-The currently qualified ledgers contain 2,844 provisional exact candidates and
-31 distinct additional safe projections: 2,875 symbolic identities. Their names
-are collision-free and all known reuse inside that qualified subset has been
-deducted. They cover the direct-constructor and dynamic/transitive formatter
-frontiers. Allocation and host-catalogue review remain open; the set is not yet
-authority for the next number.
+Source-to-ledger reconciliation corrected a nineteen-observation omission at the
+maintained delegated-session helper boundary. A mechanical table-set check also
+found one earlier prose-arithmetic undercount of an already materialized exact
+candidate; it did not add another semantic label. The currently qualified
+ledgers therefore contain 2,864 exact provisional identities and 31 distinct
+additional safe projections: 2,895 coverage labels. The nineteen added labels
+do not collide with the preceding set. Producer qualification expands those
+labels into 3,898 exact entries plus the 31 projections. The complete guarded
+allocation and host-catalogue proposal maps all 3,929 observations onto 991
+review rows; the label and qualified-observation sets remain coverage evidence,
+not allocation counts.
 
-These observations establish work to inventory. They are not proof of a size
-win and do not authorize numeric assignments.
+Every one of the 2,895 labels is now present in an explicit identity column;
+the former configuration, activation, Fleet compiler, protected-deployment,
+intent-store, memory-adapter and request-dispatch prose lists are structured
+rows. `crates/canic/tests/diagnostic_inventory_ledger.rs` derives exclusively
+from those columns, proves that all 31 projections are members of the set and
+pins the sorted label set. A second check proves that every one of the 2,864
+exact provisional identities occurs in at least one row with structured typed producer,
+source, decision, dependency-boundary, site or call evidence. The function and
+consumer manifests are now closed, while the derived numeric register remains
+a maintainer-review proposal rather than runtime allocation authority.
+
+The complete composition register establishes a 3.96:1 coverage-to-code
+reduction and stays below the four-digit rejection gate. It does not authorize
+runtime numeric assignments before maintainer approval.
 
 ## Next Action
 
 The producer, direct-constructor, transitive formatter, 656-value dynamic
 context and current durable-string inventories are closed. The original 2,208
 references expand to 2,514 effective helper/call-site dispositions and the
-qualified semantic set is 2,844 exact identities plus 31 projections.
+closed label frontier is 2,864 exact provisional identities plus 31
+projections. Its producer-qualified review frontier is 3,929 observations.
 
-Assemble the mechanical producer manifest, complete allocation rows and host
-catalogue from that closed inventory for maintainer review. Rerun the stable
-failure-string census immediately before B5 mutation. Do not begin B2 or expose
-a second diagnostic protocol before allocation approval.
+Review the complete guarded many-to-one register in the allocation proposal.
+It maps the closed frontier onto 960 exact-condition contracts plus 31 safe
+public projections and proposes dense codes `1..=991`; the source frontier and
+register remain repository-only. Rerun the stable failure-string census
+immediately before B5 mutation. Do not begin B2 or expose a second diagnostic
+protocol before the maintainer approves or corrects that allocation.
