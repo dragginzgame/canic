@@ -16,7 +16,7 @@ use crate::{
         runtime::env::EnvOps,
         storage::authority_restore::AuthorityRestoreFenceOps,
     },
-    workflow::runtime::timer::TimerWorkflow,
+    workflow::runtime::timer::{TimerError, TimerWorkflow},
 };
 
 /// Runtime coordinator for Fleet authority snapshot sealing and live resume.
@@ -114,7 +114,7 @@ impl AuthorityRestoreWorkflow {
     }
 }
 
-fn trap_timer_transition(context: &str, error: crate::api::timer::TimerError) -> ! {
+fn trap_timer_transition(context: &str, error: TimerError) -> ! {
     ic_cdk::trap(format!(
         "authority snapshot failed closed while attempting to {context}: {error}"
     ))
