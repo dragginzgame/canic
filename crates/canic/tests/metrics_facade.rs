@@ -1,6 +1,6 @@
 use canic::{
     api::{metrics::MetricsQuery, runtime::MemoryRuntimeApi},
-    dto::metrics::{MetricEntry, MetricsKind, QueryPerfSample},
+    dto::metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
     dto::page::PageRequest,
 };
 
@@ -57,7 +57,20 @@ fn all_metric_families_are_public_facade_usable() {
             },
         );
 
-        assert_eq!(page.total, 0);
-        assert!(page.entries.is_empty());
+        if matches!(kind, MetricsKind::Runtime) {
+            assert_eq!(page.total, 1);
+            assert_eq!(page.entries.len(), 1);
+
+            let availability = &page.entries[0];
+            assert_eq!(availability.labels, ["timer", "inventory", "available"]);
+            assert!(availability.principal.is_none());
+            match &availability.value {
+                MetricValue::Count(value) => assert_eq!(*value, 0),
+                value => panic!("unexpected timer inventory availability value: {value:?}"),
+            }
+        } else {
+            assert_eq!(page.total, 0);
+            assert!(page.entries.is_empty());
+        }
     }
 }
