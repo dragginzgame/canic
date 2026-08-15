@@ -28,7 +28,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
 | `CANIC-AUTH-TRUST-001` | `2` | `150d075dd9749d6c2b849837ce422753fa1a438a8656e50eac0370f555e769c5` | `docs/audits/recurring/invariants/token-trust-chain.md` |
-| `CANIC-LIFECYCLE-001` | `2` | `89202cda4ed08ced7d9f70fd98ff1e68e04bc1877a528a489060242f5acd8059` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
+| `CANIC-LIFECYCLE-001` | `3` | `f35101e6f877dadcba678d2b2db5695b3ffdecd23d6f6eb4e737200b2b1bf405` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
 | `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` |
@@ -48,6 +48,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-LIFECYCLE-001` | `2` | `89202cda4ed08ced7d9f70fd98ff1e68e04bc1877a528a489060242f5acd8059` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` | `CANIC-LIFECYCLE-001/v3` |
 | `CANIC-WASM-001` | `2` | `e33fc36ee904fa6a9af8c7aa399a94b98c441e25fe6590ac1548c548ba2f3ffb` | `docs/audits/recurring/system/wasm-footprint.md` | `CANIC-WASM-001/v3` |
 | `CANIC-AUTH-AUDIENCE-001` | `2` | `bfe780a3e93f0511f9c7bbbbf7cf84dee40b23d1456ab68fe12122a671b30a5c` | `docs/audits/recurring/invariants/audience-target-binding.md` | `CANIC-AUTH-AUDIENCE-001/v3` |
 | `CANIC-AUTH-AUDIENCE-001` | `1` | `9d28324a6101e94ba964e8d8478909323e16e83bc0134975ab37f69030602448` | `docs/audits/recurring/invariants/audience-target-binding.md` | `CANIC-AUTH-AUDIENCE-001/v2` |
@@ -89,7 +90,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `0eb8e77d81af93338dcc6051255ddfcf71790dfacd67edb5ec4eae64e9ef393d` | `docs/audits/META-AUDIT.md` |
-| `91da886663a69003c1a2b6247aa85431f0d3bc52d00633b09b35165d03af52ef` | `docs/audits/METHODS.md` |
+| `1add59800a4e7524950f571f2cf202704b9402d2835eedf793964e19a9ad9128` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |
