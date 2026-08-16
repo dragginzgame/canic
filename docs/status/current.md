@@ -146,6 +146,19 @@ development; automated agents run targeted checks only.
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
 
+The standalone cycle-burn waveform idea completed its sole authorized B0b
+mainnet calibration on 2026-08-16. Canister
+`w47na-gaaaa-aaaad-qmclq-cai` burned exactly `4 Tcycles` on the frozen public
+13-node `verified_application` Subnet and retained more than `1 Tcycle`.
+Direct-burn visibility passed, but the public Subnet peak rose only
+approximately `0.883 Bcycles/second` and stayed elevated across the observed
+tail, rejecting the assumed independent approximately 100-second buckets by
+approximately a `45.3x` flattening factor. B1 and any further destructive
+effect remain held; the current 860-point executor/economic model is invalid
+until a complete dated aggregation kernel and a different bounded strategy
+are accepted. Exact evidence is retained in the
+[B0b calibration report](../audits/working/saltz-b0b-calibration/mainnet-calibration.md).
+
 ## Next Action
 
 The diagnostic batch is ready for maintainer commit/push validation. Do not

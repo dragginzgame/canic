@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   controller-authorized calibration probe hard-binds one `4 Tcycle` pulse,
   retains a `1 Tcycle` reserve and exposes a recoverable receipt without
   enabling the preview or future waveform Burner; its dedicated IC environment
-  exists only for the separately approved B0b observation.
+  exists only for the separately approved B0b observation. That mainnet
+  calibration proved direct-burn visibility but rejected the assumed
+  independent approximately 100-second drawing buckets, leaving all further
+  destructive work held pending a different qualified observation model.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

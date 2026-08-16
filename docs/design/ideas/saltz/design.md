@@ -21,9 +21,14 @@ Date: 2026-08-16
   external-effect authorization contract for exact network, identity, asset,
   cycle, concurrency and terminal-state bounds.
 * Qualification disposition: B0a and the B0b methodology are approved. On
-  2026-08-16 the maintainer separately authorized one exact `4 Tcycle` B0b
-  mainnet pulse using the named calibration identity and disposable probe.
-  B1 implementation remains held until the promotion gates close.
+  2026-08-16 the maintainer separately authorized and completed one exact
+  `4 Tcycle` B0b mainnet pulse using the named calibration identity and
+  disposable probe. Direct-burn visibility passed, but the result rejected
+  independent approximately 100-second burn attribution: the attributable
+  Subnet peak was approximately `45.3` times flatter than the naive model and
+  remained elevated across the observed tail. The complete dated aggregation
+  kernel remains open. B1 implementation remains held until the promotion
+  gates close.
 * Implementation disposition: the non-destructive `apps/saltz` foundation and
   numeric preview may proceed independently. The checked-in Burner shell is
   inert and contains no burn, timer, run-state or authorization path. The
@@ -142,6 +147,16 @@ that remains distinct from the IC's volatile ordinary burn-rate signal. The
 provisional target deliberately clears the dated `30..=60 Bcycles/second`
 planning band, but remains subject to an economic no-go ceiling and B0
 visibility qualification rather than treating signal dominance as unlimited.
+
+The completed B0b calibration invalidates the current waveform's execution
+model. A `4 Tcycle` mainnet pulse did reach the exact Subnet's public metric,
+but its attributable peak was only approximately
+`0.883 Bcycles/second` rather than the naive `40 Bcycles/second` implied by a
+100-second bucket, and the signal remained spread across the observed tail.
+The numeric geometry remains valid preview material; its 860 points and the
+cost table below are not an executable pulse schedule or qualified economic
+plan. No higher burn is justified until the complete aggregation kernel is
+understood.
 
 ### Numeric Waveform Authority
 
@@ -394,14 +409,28 @@ cycles-ledger mint maximum: 7 Tcycles
 canister creation/funding maximum: 6 Tcycles
 intentional burn: exactly one 4 Tcycle pulse
 minimum retained canister balance: 1 Tcycle
-placement: one standard application Subnet, frozen before burn
+placement: canister w47na-gaaaa-aaaad-qmclq-cai on public 13-node
+           verified_application Subnet
+           5kdm2-62fc6-fwnja-hutkz-ycsnm-4z33i-woh43-4cenu-ev7mi-gii6t-4ae
 retry/catch-up: prohibited
 ```
+
+The executed placement was canister
+`w47na-gaaaa-aaaad-qmclq-cai` on the public 13-node
+`verified_application` Subnet
+`5kdm2-62fc6-fwnja-hutkz-ycsnm-4z33i-woh43-4cenu-ev7mi-gii6t-4ae`.
+That exact placement is the frozen authority consumed by the experiment.
 
 The selected identity's public principal is not secret material. Its private
 key and recovery material must never enter the repository, generated evidence
 or command output. This authorization covers B0b observation only; it does not
 authorize the waveform executor or 24-hour run.
+
+The completed calibration and exact accounting are retained in the
+[B0b mainnet calibration report](../../../audits/working/saltz-b0b-calibration/mainnet-calibration.md).
+It requested and burned exactly `4_000_000_000_000` cycles at
+`2026-08-16T18:36:53.539370423Z`, retained more than the required
+`1 Tcycle`, and consumed no retry or catch-up authority.
 
 ### Q2. Dashboard bucket cadence
 
@@ -412,6 +441,13 @@ The public Dashboard surfaces more than one metrics API and permits a
 caller-selected aggregation step. The promoted design must name one exact
 endpoint and request rather than assume that every source pixel is
 independently displayed.
+
+The B0b result rejects that assumption for the current API lane. With
+`step=10`, a single pulse remained visible across many returned samples; with
+`step=100`, it did not appear as a `4 Tcycle / 100 second = 40 Bcycles/second`
+bucket. The caller-selected step is sample spacing, not evidence of an
+independent burn-attribution interval. The complete smoothing/decay kernel
+must be recovered before a replacement execution model can be proposed.
 
 ### Q3. Metric publication lag
 
@@ -425,6 +461,16 @@ Measure:
 * variance between Metrics API data and the rendered line.
 
 Until these are measured, the Saltz waveform is a design target rather than a claim of pixel-perfect reproduction.
+
+The first elevated sample was timestamped approximately `26.5` seconds after
+execution and the peak sample approximately `56.5` seconds after execution.
+The API first exposed the elevated series between polls approximately `47` and
+`68` seconds after the burn. The exact Subnet peak increase was approximately
+`0.883 Bcycles/second`, versus a pre-burn maximum adjacent 100-second change of
+approximately `0.101 Bcycles/second`, so the direct effect was clearly useful
+for qualification. It remained near its elevated band through the last frozen
+sample more than ten minutes after execution. The decay duration, frontend
+downsampling and Y-axis behavior remain open.
 
 ## Fundamental Accuracy Limit
 
@@ -1426,6 +1472,11 @@ qualified observation contract and the accepted Burner boundary.
 * determine publication latency;
 * freeze Y-axis behavior;
 * perform only tiny bounded burns.
+
+The one authorized destructive effect is complete. Q1 passed, while the
+single-pulse-per-provisional-bucket model failed. Continued read-only decay
+observation may refine the dated kernel, but no further burn, mint, funding or
+retry is inherited. B1 remains held.
 
 ### B1 — Burner Component
 
