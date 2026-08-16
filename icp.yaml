@@ -105,9 +105,8 @@ environments:
     network: local
     canisters: [root, app, user_hub, user_shard]
 
-  # Override the implicit all-canister mainnet environment so the local-only
-  # waveform preview and cycle-burn probe cannot be deployed there without a
-  # deliberate config edit.
+  # Override the implicit all-canister mainnet environment so experimental
+  # canisters require a dedicated, deliberately named environment.
   - name: ic
     network: ic
     canisters:
@@ -136,6 +135,10 @@ environments:
 
   - name: cycle-burn-local
     network: saltz-local
+    canisters: [cycle_burn_probe]
+
+  - name: cycle-burn-calibration-ic
+    network: ic
     canisters: [cycle_burn_probe]
 
   - name: test

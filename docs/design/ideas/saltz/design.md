@@ -11,16 +11,19 @@ Date: 2026-08-16
   Swiss-mountain profile as a modest jagged trace near the IC's ordinary Cycle
   Burn Rate band over one complete ICP Dashboard `1D` window. Its authoring
   provenance and permission remain promotion gates.
-* This is not yet a numbered release design and authorizes no IC-mainnet effect.
+* This is not yet a numbered release design. The idea alone authorizes no
+  IC-mainnet effect; the separately recorded B0b calibration below is the sole
+  current exception and does not promote B1 or B4.
 * Burner implementation requires Canic's accepted role-owned Candid surface
   and shared `ic-timers` consumer hard cut. Its Canic-owned managed-role base
   contains only compiled status/command variants; Saltz run control remains an
   application-owned protocol. Any mainnet run must use Canic's accepted
   external-effect authorization contract for exact network, identity, asset,
   cycle, concurrency and terminal-state bounds.
-* Qualification disposition: B0a and the B0b methodology are approved. B0b
-  still requires a separate exact authorization before any live calibration
-  effect. B1 implementation remains held until the promotion gates close.
+* Qualification disposition: B0a and the B0b methodology are approved. On
+  2026-08-16 the maintainer separately authorized one exact `4 Tcycle` B0b
+  mainnet pulse using the named calibration identity and disposable probe.
+  B1 implementation remains held until the promotion gates close.
 * Implementation disposition: the non-destructive `apps/saltz` foundation and
   numeric preview may proceed independently. The checked-in Burner shell is
   inert and contains no burn, timer, run-state or authorization path. The
@@ -381,6 +384,24 @@ to a dedicated `cycle-burn-local` identity. A signed `1,000,000,000`-cycle
 request burned exactly that amount, while the anonymous caller rejected as
 `AccessDenied`. This is local authorization evidence only and grants no
 mainnet identity or effect authority.
+
+The separately authorized mainnet calibration envelope is:
+
+```text
+network: IC mainnet
+identity: 5czt6-ctczu-3d74z-xwdcb-lq3vj-sbsei-g2tyx-x5jlz-lmbkz-2xosq-rqe
+cycles-ledger mint maximum: 7 Tcycles
+canister creation/funding maximum: 6 Tcycles
+intentional burn: exactly one 4 Tcycle pulse
+minimum retained canister balance: 1 Tcycle
+placement: one standard application Subnet, frozen before burn
+retry/catch-up: prohibited
+```
+
+The selected identity's public principal is not secret material. Its private
+key and recovery material must never enter the repository, generated evidence
+or command output. This authorization covers B0b observation only; it does not
+authorize the waveform executor or 24-hour run.
 
 ### Q2. Dashboard bucket cadence
 

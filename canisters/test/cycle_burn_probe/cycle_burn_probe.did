@@ -1,7 +1,10 @@
 type BurnProbeError = variant {
   AccessDenied;
   AlreadyUsed;
-  AmountOutOfRange : record { maximum_allowed_cycles : nat };
+  InsufficientBalance : record {
+    available_cycles : nat;
+    required_cycles : nat;
+  };
 };
 
 type BurnReceipt = record {
@@ -9,8 +12,18 @@ type BurnReceipt = record {
   burned_cycles : nat;
   balance_before_cycles : nat;
   balance_after_burn_cycles : nat;
+  caller : principal;
+  executed_at_ns : nat64;
+};
+
+type BurnStatus = record {
+  authorized_burn_cycles : nat;
+  minimum_retained_cycles : nat;
+  current_balance_cycles : nat;
+  receipt : opt BurnReceipt;
 };
 
 service : {
-  burn_once : (nat) -> (variant { Ok : BurnReceipt; Err : BurnProbeError });
+  burn_once : () -> (variant { Ok : BurnReceipt; Err : BurnProbeError });
+  burn_status : () -> (variant { Ok : BurnStatus; Err : BurnProbeError }) query;
 };

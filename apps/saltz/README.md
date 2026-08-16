@@ -79,37 +79,35 @@ uses a raw gateway URL. Locally, open the deployed principal as:
 http://<canister-id>.raw.localhost:8002/
 ```
 
-The repository also contains a separate local-only `cycle_burn_probe` test
+The repository also contains a separate `cycle_burn_probe` qualification
 canister. It is not the Burner Component and cannot schedule or replay a
-waveform. Its single controller-only `burn_once` update accepts at most
-`100 Bcycles`, retains at least `1 Tcycles`, succeeds only once per install and
-returns the requested burn, actual burn and same-message balances. Deploy it
-with explicit local funding, then invoke the bounded calibration:
+waveform. Its controller-only `burn_once` update has no amount argument: the
+Wasm hard-binds exactly one `4 Tcycle` pulse, retains at least `1 Tcycle` and
+succeeds only once per install. The controller-only `burn_status` query makes
+the immutable envelope and committed receipt recoverable when an update
+response is uncertain. Deploy it locally with explicit synthetic funding:
 
 ```sh
 icp identity new cycle-burn-local
-icp deploy cycle_burn_probe -e cycle-burn-local --cycles 2t \
+icp deploy cycle_burn_probe -e cycle-burn-local --cycles 6t \
   --identity cycle-burn-local
-icp canister call cycle_burn_probe burn_once '(50_000_000_000 : nat)' \
+icp canister call cycle_burn_probe burn_once '()' \
   -e cycle-burn-local \
   --identity cycle-burn-local \
   --candid canisters/test/cycle_burn_probe/cycle_burn_probe.did
 ```
 
 Keep the CLI default identity separate and pass `--identity cycle-burn-local`
-explicitly. The test identity must remain local and must not hold real value.
-On a fresh deployment the creating identity becomes the probe controller.
-Existing deployments require a deliberate controller transfer before use.
+explicitly. On a fresh deployment the creating identity becomes the probe
+controller. Existing deployments require a deliberate controller transfer
+before use.
 
 The returned receipt proves the local burn primitive and accounting path. It
 does not populate or reproduce the public ICP Dashboard, whose cycle-burn-rate
 series observes mainnet Subnets only.
 
-The preview and local calibration probe are excluded from every checked-in
-IC-mainnet environment,
-including the explicitly narrowed `ic` environment that replaces the CLI's
-all-canister implicit default. Adding either is a separate external-effect
-decision requiring an authenticated dedicated identity plus an explicitly
-approved environment, Subnet/controller set and cycle ceiling. Until that
-exact authorization exists, the checked-in workflow can deploy both only to
-their explicit local environments.
+The preview remains excluded from every checked-in IC-mainnet environment. The
+calibration probe remains excluded from the broad `ic` environment and is
+admitted only through `cycle-burn-calibration-ic`. That dedicated environment
+does not itself authorize an effect: the exact identity, mint, creation,
+Subnet, burn and retained-balance envelope must be recorded before each use.

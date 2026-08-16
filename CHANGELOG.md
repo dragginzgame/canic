@@ -11,10 +11,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - The standalone waveform preview now retains and serves only its digested
   numeric trace: the source photograph, derived overlay and host image compiler
   are removed, and the preview is excluded from every checked-in IC-mainnet
-  environment while its local target remains available. A separate local-only,
-  controller-authorized one-shot probe now demonstrates a bounded cycle burn
-  and returns exact same-message accounting without enabling the preview or
-  future waveform Burner.
+  environment while its local target remains available. A separate
+  controller-authorized calibration probe hard-binds one `4 Tcycle` pulse,
+  retains a `1 Tcycle` reserve and exposes a recoverable receipt without
+  enabling the preview or future waveform Burner; its dedicated IC environment
+  exists only for the separately approved B0b observation.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 
