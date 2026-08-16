@@ -809,7 +809,10 @@ mod tests {
             .next()
             .expect("protected cleanup diagnostic");
         assert_eq!(failure.subsystem, "intent_cleanup");
-        assert_eq!(failure.code, "intent_cleanup_invariant");
+        assert_eq!(
+            failure.code,
+            crate::diagnostics::codes::CAPACITY_UNAVAILABLE.to_string()
+        );
         assert_eq!(failure.severity, FailureSeverity::Error);
         RecentFailureOps::reset();
     }
