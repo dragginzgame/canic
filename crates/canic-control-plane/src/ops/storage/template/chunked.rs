@@ -879,7 +879,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::WASM_STORE_CHUNK_MISSING.raw_code()
+            canic_core::diagnostics::codes::POSITION_CAPACITY.raw_code()
         );
     }
 

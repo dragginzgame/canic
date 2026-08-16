@@ -1253,7 +1253,7 @@ mod tests {
         let err = LifecycleOperationGuard::try_enter().expect_err("second operation must reject");
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            canic_core::diagnostics::codes::REQUEST_INCOMPLETE.raw_code()
         );
 
         drop(guard);
