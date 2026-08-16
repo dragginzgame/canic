@@ -194,7 +194,7 @@ mod tests {
 
         assert_eq!(
             err.public_error().code(),
-            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+            canic_core::diagnostics::codes::CAPACITY_INSUFFICIENT.raw_code()
         );
     }
 
