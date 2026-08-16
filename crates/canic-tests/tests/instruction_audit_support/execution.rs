@@ -45,7 +45,7 @@ fn is_registry_auth_scenario(scenario: &AuditScenario) -> bool {
         scenario.key,
         "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
             | "issuer:canic_prepare_delegated_token:active-proof"
-            | "project_hub:verifier_verify_token:valid-delegated-token"
+            | "verifier:verifier_verify_token:valid-delegated-token"
     )
 }
 
@@ -104,7 +104,7 @@ fn prepare_registry_auth_scenario(
                 delegated_token: None,
             }
         }
-        "project_hub:verifier_verify_token:valid-delegated-token" => {
+        "verifier:verifier_verify_token:valid-delegated-token" => {
             provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
             let token = issue_delegated_token_from_active_proof(
                 setup.pic(),
@@ -146,7 +146,7 @@ fn execute_registry_auth_scenario(
         "issuer:canic_prepare_delegated_token:active-proof" => {
             execute_delegated_token_prepare(setup.pic(), prepared, &setup.verifier.role);
         }
-        "project_hub:verifier_verify_token:valid-delegated-token" => {
+        "verifier:verifier_verify_token:valid-delegated-token" => {
             execute_verifier_auth_scenario(setup.pic(), prepared.target_pid, prepared);
         }
         other => panic!("unsupported Registry-bound auth audit scenario: {other}"),

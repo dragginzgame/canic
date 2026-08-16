@@ -49,6 +49,10 @@ pub enum BurnerCommand {
         authorization_digest: Vec<u8>,
         chart_start_at_ns: u64,
     },
+
+    AuthorizeWaveform {
+        authorization_digest: Vec<u8>,
+    },
 }
 
 ///
@@ -155,6 +159,8 @@ pub enum TerminalReason {
     PartialBurn,
 
     RuntimeInvariant,
+
+    WaveformNotAuthorized,
 }
 
 ///
@@ -173,13 +179,15 @@ pub struct BurnerSummary {
     pub execution_allowance_cycles: u128,
     pub initial_funding_cycles: u128,
     pub initial_funding_step_count: u32,
-    pub kernel_window_seconds: u64,
+    pub kernel_gain_seconds: u64,
+    pub kernel_support_seconds: u64,
     pub max_burn_rate_cycles_per_second: u64,
     pub max_lateness_ns: u64,
     pub max_total_burn_cycles: u128,
     pub minimum_arm_lead_ns: u64,
     pub minimum_retained_cycles: u128,
     pub next_step_index: u32,
+    pub observation_phase_lead_seconds: u64,
     pub phase: RunPhase,
     pub pre_roll_cycles: u128,
     pub pre_roll_step_count: u32,
@@ -193,6 +201,7 @@ pub struct BurnerSummary {
     pub total_burn_cycles: u128,
     pub total_burned_cycles: u128,
     pub total_step_count: u32,
+    pub waveform_authorized: bool,
     pub waveform_step_count: u32,
 }
 
@@ -250,6 +259,7 @@ struct RunEvidence {
     schedule_start_at_ns: u64,
     terminal_reason: Option<TerminalReason>,
     total_burned_cycles: u128,
+    waveform_authorized: bool,
 }
 
 #[ic_cdk::init]
@@ -267,6 +277,9 @@ fn burner_command(command: BurnerCommand) -> Result<BurnerSummary, BurnerError> 
             authorization_digest,
             chart_start_at_ns,
         } => arm(&authorization_digest, chart_start_at_ns)?,
+        BurnerCommand::AuthorizeWaveform {
+            authorization_digest,
+        } => authorize_waveform(&authorization_digest)?,
     }
     Ok(summary())
 }
@@ -316,12 +329,15 @@ fn arm(authorization_digest: &[u8], chart_start_at_ns: u64) -> Result<(), Burner
 
     let now_ns = time();
     let pre_roll_duration_ns = pre_roll_duration_ns();
+    let observation_phase_lead_ns = observation_phase_lead_ns();
     let earliest_chart_start_ns = now_ns
         .saturating_add(MIN_ARM_LEAD_NS)
-        .saturating_add(pre_roll_duration_ns);
+        .saturating_add(pre_roll_duration_ns)
+        .saturating_add(observation_phase_lead_ns);
     let latest_chart_start_ns = now_ns
         .saturating_add(MAX_ARM_LEAD_NS)
-        .saturating_add(pre_roll_duration_ns);
+        .saturating_add(pre_roll_duration_ns)
+        .saturating_add(observation_phase_lead_ns);
     let alignment_ns = plan::CHART_STEP_SECONDS.saturating_mul(NANOS_PER_SECOND);
     if chart_start_at_ns < earliest_chart_start_ns
         || chart_start_at_ns > latest_chart_start_ns
@@ -348,7 +364,7 @@ fn arm(authorization_digest: &[u8], chart_start_at_ns: u64) -> Result<(), Burner
         });
     }
 
-    let schedule_start_at_ns = chart_start_at_ns - pre_roll_duration_ns;
+    let schedule_start_at_ns = chart_start_at_ns - pre_roll_duration_ns - observation_phase_lead_ns;
     REGISTRATION.with_borrow(|slot| {
         slot.as_ref()
             .ok_or(BurnerError::Rejected {
@@ -368,7 +384,53 @@ fn arm(authorization_digest: &[u8], chart_start_at_ns: u64) -> Result<(), Burner
             schedule_start_at_ns,
             terminal_reason: None,
             total_burned_cycles: 0,
+            waveform_authorized: false,
         });
+    });
+    Ok(())
+}
+
+fn authorize_waveform(authorization_digest: &[u8]) -> Result<(), BurnerError> {
+    let (phase, next_step_index, waveform_authorized) = STATE.with_borrow(|state| match state {
+        BurnerState::Prepared => (RunPhase::Prepared, 0, false),
+        BurnerState::Run(run) => (run.phase, run.next_step_index, run.waveform_authorized),
+    });
+    if !matches!(phase, RunPhase::Armed | RunPhase::Running) {
+        return Err(BurnerError::Conflict { phase });
+    }
+    if authorization_digest != plan::PLAN_DIGEST {
+        return Err(BurnerError::Rejected {
+            reason: RejectionReason::Authorization,
+        });
+    }
+    if waveform_authorized {
+        return Ok(());
+    }
+
+    let remaining_cycles = remaining_burn_cycles(next_step_index).ok_or(BurnerError::Rejected {
+        reason: RejectionReason::Timer,
+    })?;
+    // The externally funded allowance absorbs this message's transient cycle reservation.
+    let required_cycles = remaining_cycles
+        .checked_add(plan::MIN_RETAINED_CYCLES)
+        .ok_or(BurnerError::Rejected {
+            reason: RejectionReason::Timer,
+        })?;
+    let available_cycles = canister_cycle_balance();
+    if available_cycles < required_cycles {
+        return Err(BurnerError::Rejected {
+            reason: RejectionReason::Funding {
+                available_cycles,
+                required_cycles,
+            },
+        });
+    }
+
+    STATE.with_borrow_mut(|state| {
+        let BurnerState::Run(run) = state else {
+            unreachable!("phase check established run evidence");
+        };
+        run.waveform_authorized = true;
     });
     Ok(())
 }
@@ -401,6 +463,7 @@ fn abort() -> Result<(), BurnerError> {
                 schedule_start_at_ns: 0,
                 terminal_reason: Some(TerminalReason::ControllerAbort),
                 total_burned_cycles: 0,
+                waveform_authorized: false,
             });
         }
         BurnerState::Run(run) => {
@@ -425,6 +488,10 @@ fn run_timer_step() -> TimerRunResult {
             fail_run(run, TerminalReason::RuntimeInvariant);
             return stopped_invariant_failure();
         };
+        if index >= plan::PRE_ROLL_STEP_COUNT && !run.waveform_authorized {
+            fail_run(run, TerminalReason::WaveformNotAuthorized);
+            return stopped_invariant_failure();
+        }
         let Some(expected_deadline_ns) = expected_at_ns(run.schedule_start_at_ns, index) else {
             fail_run(run, TerminalReason::RuntimeInvariant);
             return stopped_invariant_failure();
@@ -533,15 +600,25 @@ fn pre_roll_duration_ns() -> u64 {
     u64::from(plan::PRE_ROLL_STEP_COUNT) * plan::CONTROL_STEP_SECONDS * NANOS_PER_SECOND
 }
 
+const fn observation_phase_lead_ns() -> u64 {
+    plan::OBSERVATION_PHASE_LEAD_SECONDS * NANOS_PER_SECOND
+}
+
 const fn required_cycles_to_arm() -> u128 {
     plan::INITIAL_FUNDING_CYCLES + plan::MIN_RETAINED_CYCLES + plan::EXECUTION_ALLOWANCE_CYCLES
 }
 
 const fn required_balance_before_burn(burn_cycles: u128) -> Option<u128> {
-    match burn_cycles.checked_add(plan::MIN_RETAINED_CYCLES) {
-        Some(balance) => balance.checked_add(plan::EXECUTION_ALLOWANCE_CYCLES),
-        None => None,
-    }
+    // Embedded burn allocation is separate; ordinary execution may consume the allowance.
+    burn_cycles.checked_add(plan::MIN_RETAINED_CYCLES)
+}
+
+fn remaining_burn_cycles(next_step_index: u32) -> Option<u128> {
+    let start = usize::try_from(next_step_index).ok()?;
+    plan::BURN_CYCLES
+        .get(start..)?
+        .iter()
+        .try_fold(0_u128, |sum, amount| sum.checked_add(*amount))
 }
 
 const fn total_step_count() -> u32 {
@@ -561,13 +638,15 @@ fn summary() -> BurnerSummary {
             execution_allowance_cycles: plan::EXECUTION_ALLOWANCE_CYCLES,
             initial_funding_cycles: plan::INITIAL_FUNDING_CYCLES,
             initial_funding_step_count: plan::INITIAL_FUNDING_STEP_COUNT,
-            kernel_window_seconds: plan::KERNEL_WINDOW_SECONDS,
+            kernel_gain_seconds: plan::KERNEL_GAIN_SECONDS,
+            kernel_support_seconds: plan::KERNEL_SUPPORT_SECONDS,
             max_burn_rate_cycles_per_second: plan::MAX_BURN_RATE_CYCLES_PER_SECOND,
             max_lateness_ns: MAX_LATENESS_NS,
             max_total_burn_cycles: plan::MAX_TOTAL_BURN_CYCLES,
             minimum_arm_lead_ns: MIN_ARM_LEAD_NS,
             minimum_retained_cycles: plan::MIN_RETAINED_CYCLES,
             next_step_index: run.map_or(0, |run| run.next_step_index),
+            observation_phase_lead_seconds: plan::OBSERVATION_PHASE_LEAD_SECONDS,
             phase: run_phase(state),
             pre_roll_cycles: plan::PRE_ROLL_CYCLES,
             pre_roll_step_count: plan::PRE_ROLL_STEP_COUNT,
@@ -583,6 +662,7 @@ fn summary() -> BurnerSummary {
             total_burn_cycles: plan::TOTAL_BURN_CYCLES,
             total_burned_cycles: run.map_or(0, |run| run.total_burned_cycles),
             total_step_count: total_step_count(),
+            waveform_authorized: run.is_some_and(|run| run.waveform_authorized),
             waveform_step_count: plan::WAVEFORM_STEP_COUNT,
         }
     })
@@ -670,6 +750,9 @@ mod tests {
             plan::TOTAL_BURN_CYCLES
         );
         assert_eq!(plan::BACKGROUND_CYCLES_PER_SECOND, 30_000_000_000);
+        assert_eq!(plan::KERNEL_GAIN_SECONDS, 4_201);
+        assert_eq!(plan::KERNEL_SUPPORT_SECONDS, 3_600);
+        assert_eq!(plan::OBSERVATION_PHASE_LEAD_SECONDS, 100);
         assert_eq!(plan::TARGET_FLOOR_CYCLES_PER_SECOND, 100_000_000_000);
         assert_eq!(plan::TARGET_AMPLITUDE_CYCLES_PER_SECOND, 50_000_000_000);
         assert_eq!(
@@ -695,9 +778,7 @@ mod tests {
         assert_eq!(plan::INITIAL_FUNDING_CYCLES, plan::PRE_ROLL_CYCLES);
         assert_eq!(
             required_balance_before_burn(plan::BURN_CYCLES[0]),
-            plan::BURN_CYCLES[0]
-                .checked_add(plan::MIN_RETAINED_CYCLES)
-                .and_then(|balance| balance.checked_add(plan::EXECUTION_ALLOWANCE_CYCLES))
+            plan::BURN_CYCLES[0].checked_add(plan::MIN_RETAINED_CYCLES)
         );
         assert_eq!(
             plan::BURN_CYCLES[plan::PRE_ROLL_STEP_COUNT as usize..]

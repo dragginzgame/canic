@@ -211,8 +211,8 @@ patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||
     fail "the patch release flow omits its read-only cadence advisory"
 cadence_output="$(bash "$RELEASE_CADENCE")"
-rg -F 'normal planning range: 6-10' <<<"$cadence_output" >/dev/null ||
-    fail "the release cadence tool does not report the governed planning range"
+rg -F 'guideline: no more than 12 releases per minor' <<<"$cadence_output" >/dev/null ||
+    fail "the release cadence tool does not report the governed release-count guideline"
 rg -F 'next release ordinal:' <<<"$cadence_output" >/dev/null ||
     fail "the release cadence tool does not report the next release ordinal"
 rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||

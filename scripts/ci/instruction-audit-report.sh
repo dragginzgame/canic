@@ -156,7 +156,6 @@ mapfile -t METHOD_INPUTS < <(
     find \
       canisters/test/delegation_issuer_stub \
       canisters/test/delegation_root_stub \
-      canisters/test/project_hub_stub \
       -type f \( -name '*.rs' -o -name 'Cargo.toml' -o -name 'canic.toml' \) -print
     find crates/canic-tests/tests/instruction_audit_support -type f -name '*.rs' -print
   } | sort -u

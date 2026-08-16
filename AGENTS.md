@@ -36,8 +36,9 @@ with this file, the code is wrong.
   planned release batch until its direct implementation, adversarial/recovery
   evidence, propagation and cleanup are complete.
 - Do not recommend a push merely because one focused test or CI repair passes.
-  The normal minor-line planning target is roughly 6-10 substantive release
-  batches, with any justified exception recorded in the design/status tracker.
+  There is no minimum release count for a minor line. As a soft guideline, keep
+  each minor to no more than 12 published releases; if another release would
+  exceed that count, reassess the minor boundary and record the decision.
 
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog

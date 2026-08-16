@@ -17,22 +17,26 @@ pub const BACKGROUND_CYCLES_PER_SECOND: u64 = 30_000_000_000;
 pub const CHART_STEP_SECONDS: u64 = 600;
 pub const CONTROL_STEP_SECONDS: u64 = 100;
 pub const EXECUTION_ALLOWANCE_CYCLES: u128 = 100_000_000_000;
-pub const INITIAL_FUNDING_STEP_COUNT: usize = 42;
-pub const KERNEL_WINDOW_SECONDS: u64 = 4_201;
+pub const INITIAL_FUNDING_STEP_COUNT: usize = 35;
+pub const KERNEL_GAIN_SECONDS: u64 = 4_201;
+pub const KERNEL_SUPPORT_SECONDS: u64 = 3_600;
 pub const MAX_BURN_RATE_CYCLES_PER_SECOND: u64 = 500_000_000_000;
-pub const MAX_TOTAL_BURN_CYCLES: u128 = 8_500_000_000_000_000;
+pub const MAX_TOTAL_BURN_CYCLES: u128 = 10_000_000_000_000_000;
 pub const MIN_RETAINED_CYCLES: u128 = 1_000_000_000_000;
-pub const PRE_ROLL_STEP_COUNT: usize = 42;
+pub const OBSERVATION_PHASE_LEAD_SECONDS: u64 = 100;
+pub const PRE_ROLL_STEP_COUNT: usize = 35;
 pub const TARGET_AMPLITUDE_CYCLES_PER_SECOND: u64 = 50_000_000_000;
 pub const TARGET_FLOOR_CYCLES_PER_SECOND: u64 = 100_000_000_000;
 pub const WAVEFORM_STEP_COUNT: usize = 864;
 
 const _: () = assert!(INITIAL_FUNDING_STEP_COUNT <= PRE_ROLL_STEP_COUNT);
+const _: () =
+    assert!(KERNEL_SUPPORT_SECONDS == (PRE_ROLL_STEP_COUNT as u64 + 1) * CONTROL_STEP_SECONDS);
+const _: () = assert!(OBSERVATION_PHASE_LEAD_SECONDS == CONTROL_STEP_SECONDS);
 
 const HEIGHT_SCALE: u128 = 1_000_000;
 const PLAN_DIGEST_DOMAIN: &[u8] = b"canic-saltz-global-executable-plan-v1";
 const WEIGHT_FULL_SECONDS: u128 = 100;
-const WEIGHT_REMAINDER_SECONDS: u128 = 1;
 
 ///
 /// ExecutablePlan
@@ -92,11 +96,20 @@ pub fn compile_executable_plan(waveform: &Waveform) -> Result<ExecutablePlan, Ex
     }
 
     let target = resample_control_target(waveform)?;
-    let mut rates = vec![target[0]; PRE_ROLL_STEP_COUNT];
+    let pre_roll_rate = u128::from(target[0])
+        .checked_mul(u128::from(KERNEL_GAIN_SECONDS))
+        .and_then(|weighted| weighted.checked_add(u128::from(KERNEL_SUPPORT_SECONDS) - 1))
+        .map(|weighted| weighted / u128::from(KERNEL_SUPPORT_SECONDS))
+        .and_then(|rate| u64::try_from(rate).ok())
+        .ok_or(ExecutablePlanError::Arithmetic)?;
+    if pre_roll_rate > MAX_BURN_RATE_CYCLES_PER_SECOND {
+        return Err(ExecutablePlanError::Rate);
+    }
+    let mut rates = vec![pre_roll_rate; PRE_ROLL_STEP_COUNT];
     for desired in target {
         let past_weighted = past_weighted_rate(&rates)?;
         let desired_weighted = u128::from(desired)
-            .checked_mul(u128::from(KERNEL_WINDOW_SECONDS))
+            .checked_mul(u128::from(KERNEL_GAIN_SECONDS))
             .ok_or(ExecutablePlanError::Arithmetic)?;
         let requested_weighted = desired_weighted.saturating_sub(past_weighted);
         let requested_rate = requested_weighted
@@ -194,16 +207,12 @@ fn past_weighted_rate(rates: &[u64]) -> Result<u128, ExecutablePlanError> {
         return Err(ExecutablePlanError::Duration);
     }
 
-    let full = (1..PRE_ROLL_STEP_COUNT).try_fold(0_u128, |sum, lag| {
+    (1..=PRE_ROLL_STEP_COUNT).try_fold(0_u128, |sum, lag| {
         u128::from(rates[history_end - lag])
             .checked_mul(WEIGHT_FULL_SECONDS)
             .and_then(|value| sum.checked_add(value))
             .ok_or(ExecutablePlanError::Arithmetic)
-    })?;
-    u128::from(rates[history_end - PRE_ROLL_STEP_COUNT])
-        .checked_mul(WEIGHT_REMAINDER_SECONDS)
-        .and_then(|value| full.checked_add(value))
-        .ok_or(ExecutablePlanError::Arithmetic)
+    })
 }
 
 fn checked_sum(values: &[u128]) -> Result<u128, ExecutablePlanError> {
@@ -222,10 +231,12 @@ fn plan_digest(burn_cycles: &[u128], total_cycles: u128) -> [u8; 32] {
         u128::from(CONTROL_STEP_SECONDS),
         EXECUTION_ALLOWANCE_CYCLES,
         u128::try_from(INITIAL_FUNDING_STEP_COUNT).expect("bounded constant"),
-        u128::from(KERNEL_WINDOW_SECONDS),
+        u128::from(KERNEL_GAIN_SECONDS),
+        u128::from(KERNEL_SUPPORT_SECONDS),
         u128::from(MAX_BURN_RATE_CYCLES_PER_SECOND),
         MAX_TOTAL_BURN_CYCLES,
         MIN_RETAINED_CYCLES,
+        u128::from(OBSERVATION_PHASE_LEAD_SECONDS),
         u128::try_from(PRE_ROLL_STEP_COUNT).expect("bounded constant"),
         u128::from(TARGET_AMPLITUDE_CYCLES_PER_SECOND),
         u128::from(TARGET_FLOOR_CYCLES_PER_SECOND),
@@ -262,12 +273,27 @@ mod tests {
         assert_eq!(first.digest, second.digest);
         assert_eq!(first.burn_cycles, second.burn_cycles);
         assert_eq!(
+            first.digest,
+            [
+                0xdc, 0x1c, 0xc6, 0xba, 0x53, 0x47, 0x0e, 0x0f, 0x4a, 0xbf, 0x80, 0x45, 0x22, 0x4c,
+                0x8a, 0x9b, 0xb9, 0x25, 0x16, 0xb8, 0x6e, 0x45, 0x8e, 0x92, 0x38, 0xd4, 0x42, 0x8d,
+                0xef, 0x3e, 0x13, 0xd9,
+            ]
+        );
+        assert_eq!(
             first.initial_funding_cycles,
             first.burn_cycles[..INITIAL_FUNDING_STEP_COUNT]
                 .iter()
                 .sum::<u128>()
         );
         assert_eq!(first.total_cycles, first.pre_roll_cycles + first.run_cycles);
+        assert_eq!(first.pre_roll_cycles, 409_320_934_169_000);
+        assert_eq!(first.run_cycles, 9_072_189_520_950_000);
+        assert_eq!(first.total_cycles, 9_481_510_455_119_000);
+        assert_eq!(
+            first.burn_cycles.iter().copied().max(),
+            Some(29_765_485_333_400)
+        );
         assert!(first.total_cycles <= MAX_TOTAL_BURN_CYCLES);
         assert!(first.burn_cycles.iter().all(|amount| {
             *amount

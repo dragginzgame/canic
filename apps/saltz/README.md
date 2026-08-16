@@ -42,7 +42,7 @@ implementation identity.
 
 The checked-in CSV preserves the numeric geometry and exact rational 24-hour
 time axis. The burner resamples that geometry into one immutable integer plan:
-42 pre-roll pulses followed by 864 drawing pulses, one every 100 seconds. The
+35 pre-roll pulses followed by 864 drawing pulses, one every 100 seconds. The
 build fails if its digest, duration, per-pulse rate or total ceiling drifts.
 The removed image-authoring pipeline does not exist in the workspace, so the
 CSV does not independently establish source provenance.
@@ -54,39 +54,51 @@ change at `4.255 Bcycles/second`. The controller conservatively credits only
 `30 Bcycles/second` of unrelated background and targets a visible
 `100 Bcycles/second` floor plus `50 Bcycles/second` relief.
 
-The terminal 26-pulse mainnet rise fits a rectangular `4,201`-second response
-with `R² = 0.999475`. That window remains a candidate until the complete
-post-Abort trailing edge is frozen; the code is not mainnet installation or
-execution authority merely because local evidence passes.
+The terminal 26-pulse mainnet rise fits a `4,200.842`-second gain denominator
+with `R² = 0.999475`. The observed trailing edge gives a distinct
+`3,600`-second visible support and a conservative `100`-second control-grid
+phase lead. The
+complete post-Abort tail remains the final response gate; local evidence is
+not mainnet installation or execution authority.
 
 The exact local candidate envelope is:
 
-- authorization digest `87694d17f2b57f03b6345bce51db4be97e45eeb78b2dd5cedaf891b703579590`;
-- pre-roll burn `420,915,600,000,000` cycles;
-- drawing burn `7,898,578,155,865,700` cycles;
-- total intentional burn `8,319,493,755,865,700` cycles;
+- authorization digest `dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9`;
+- pre-roll burn `409,320,934,169,000` cycles;
+- drawing burn `9,072,189,520,950,000` cycles;
+- total intentional burn `9,481,510,455,119,000` cycles;
 - maximum per-step rate `500,000,000,000 cycles/second`;
-- immutable total ceiling `8,500,000,000,000,000 cycles`;
+- peak compiled rate `297,654,853,334 cycles/second`;
+- immutable total ceiling `10,000,000,000,000,000 cycles`;
 - retained reserve `1,000,000,000,000` cycles; and
 - execution allowance `100,000,000,000` cycles.
 
-The candidate's first 42 pulses are its complete 70-minute pre-roll and burn
-exactly `420,915,600,000,000 cycles`. Arming would therefore require at least
-`422,015,600,000,000 cycles`: that pre-roll, retained reserve and execution
+The candidate's first 35 pulses are its complete pre-roll and burn exactly
+`409,320,934,169,000 cycles`. Arming would therefore require at least
+`410,420,934,169,000 cycles`: that pre-roll, retained reserve and execution
 allowance. The existing terminal canister has more than that balance, but this
 fact is not reinstall or Arm authority. Funding is never autonomous. If an
 external top-up does not arrive before a later pulse needs it, the first
 balance shortfall stops permanently without retry or catch-up. Additional
 balance cannot increase the immutable schedule or total ceiling.
 
+`Arm` authorizes only the 35-pulse pre-roll. Surplus balance cannot cross the
+pre-roll-to-waveform boundary: the first drawing pulse fails terminally unless
+the controller separately submits `AuthorizeWaveform` with the exact plan
+digest. That command also rejects unless the current balance covers every
+remaining embedded burn plus the retained reserve; the externally funded
+execution allowance absorbs transient message reservation and run costs.
+
 The application-owned Candid surface is exactly two methods:
 
-- `burner_command(variant { Arm; Abort })` — controller-only update;
+- `burner_command(variant { Abort; Arm; AuthorizeWaveform })` — controller-only
+  update;
 - `burner_status(variant { Summary; Receipts })` — controller-only query.
 
 There is no generic amount argument, start/stop toggle, forecast endpoint,
-funding endpoint, Fleet endpoint or application timer facade. `Abort` is the
-only stop command and never resumes.
+funding endpoint, Fleet endpoint or application timer facade. Continuation is
+a variant, not another endpoint; it cannot change any amount or deadline.
+`Abort` is the only stop command and never resumes.
 
 The 10× staged-trial release Wasm with module hash
 `2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9`
@@ -186,7 +198,7 @@ cargo run --locked -p saltz_simulator -- \
 
 The simulator binds the checked-in waveform digest and reports the current
 144-point `1D` fit. Its floating-point report remains analysis only. A separate
-integer compiler emits the exact 909 amounts embedded by the burner build;
+integer compiler emits the exact 899 amounts embedded by the burner build;
 that digested array, not the floating-point report, is execution authority.
 
 The separately authorized B0b mainnet calibration is now complete. Its former
@@ -206,8 +218,8 @@ steps raised the owning Subnet series from approximately `0.312` to
 `1.303 Bcycles/second` while retaining more than `1 Tcycle`. The result proves
 that bounded repeated input produces a clean accumulated signal. It does not
 qualify the complete decay kernel. The maintainer later promoted implementation
-and inert deployment of the standalone burner; a mint, top-up and `Arm` remain
-separate exact external effects.
+and inert deployment of the standalone burner; a mint, top-up, `Arm` and
+waveform continuation remain separate exact external effects.
 
 The preview, calibration probe and burner remain excluded from the broad `ic`
 environment. Their deliberately named environments do not themselves

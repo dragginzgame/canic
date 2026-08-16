@@ -18,7 +18,7 @@ use canic::{
         page::{Page, PageRequest},
         rpc::RootRequestMetadata,
     },
-    ids::{CanisterRole, ComponentBinding, ComponentChildBinding},
+    ids::{CanisterRole, ComponentBinding},
     protocol::{CANIC_GET_ROLE_ATTESTATION, CANIC_METRICS, CANIC_PREPARE_ROLE_ATTESTATION},
 };
 use ic_testkit::pic::{CandidCallExt, PocketIc};
@@ -35,53 +35,6 @@ pub(super) fn assert_registry_bound_role_attestation(
     assert_issuer_guard_metrics(pic, root, issuer.canister_id);
 }
 
-/// Exercise role-attestation issuance through an exact active Component Child.
-pub(super) fn assert_registry_bound_child_role_attestation(
-    pic: &PocketIc,
-    root: Principal,
-    child: &ComponentChildBinding,
-) {
-    let request = RoleAttestationRequest {
-        subject: child.canister_id,
-        role: child.role.clone(),
-        subnet_id: Some(child.component.placement_subnet.into_principal()),
-        audience: child.parent_canister_id,
-        ttl_ns: 60_000_000_000,
-        epoch: child.component.authority.epoch,
-        metadata: Some(RootRequestMetadata {
-            request_id: [31; 32],
-            ttl_ns: 60_000_000_000,
-        }),
-    };
-    let prepared: Result<RoleAttestationPrepareResponse, Error> = pic
-        .update_candid_as(
-            root,
-            child.canister_id,
-            CANIC_PREPARE_ROLE_ATTESTATION,
-            (request,),
-        )
-        .expect("Component Child role attestation prepare transport");
-    let prepared = prepared.expect("Component Child role attestation prepare");
-    let signed: Result<SignedRoleAttestation, Error> = pic
-        .query_candid_as(
-            root,
-            child.canister_id,
-            CANIC_GET_ROLE_ATTESTATION,
-            (RoleAttestationGetRequest {
-                payload_hash: prepared.payload_hash,
-            },),
-        )
-        .expect("Component Child role attestation retrieval transport");
-    let signed = signed.expect("Component Child role attestation retrieval");
-
-    assert_eq!(signed.payload.subject, child.canister_id);
-    assert_eq!(signed.payload.role, child.role);
-    assert_eq!(
-        signed.payload.subnet_id,
-        Some(child.component.placement_subnet.into_principal())
-    );
-}
-
 fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &ComponentBinding) {
     let mut subject_drift =
         role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 11);
@@ -95,7 +48,7 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
     );
 
     let mut role_drift = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 12);
-    role_drift.role = CanisterRole::from("project_hub");
+    role_drift.role = CanisterRole::from("other_role");
     assert_role_prepare_forbidden(
         pic,
         root,

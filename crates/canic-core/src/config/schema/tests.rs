@@ -235,8 +235,6 @@ fn checked_in_delegated_auth_configs_validate_with_current_chain_key_policy() {
         "apps/test/test-configs/root-sharding.toml",
         "canisters/test/delegation_issuer_stub/canic.toml",
         "canisters/test/delegation_root_stub/canic.toml",
-        "canisters/test/project_hub_stub/canic.toml",
-        "canisters/test/project_instance_stub/canic.toml",
         "canisters/test/runtime_probe/canic.toml",
     ] {
         let path = root.join(rel_path);
@@ -291,7 +289,7 @@ fn every_checked_in_canic_config_parses_and_validates() {
     let mut configs = Vec::new();
     collect_canic_configs(&root, &mut configs);
     configs.sort();
-    assert_eq!(configs.len(), 26, "checked-in canic.toml inventory changed");
+    assert_eq!(configs.len(), 18, "checked-in canic.toml inventory changed");
 
     for path in configs {
         let rel_path = path.strip_prefix(&root).unwrap_or(&path).display();

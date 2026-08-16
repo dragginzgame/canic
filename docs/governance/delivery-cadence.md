@@ -28,27 +28,23 @@ The release cadence is therefore outcome-based rather than time-based.
 A slice, commit, agent turn, changelog edit and published patch are not
 interchangeable concepts.
 
-## Minor-Line Planning Target
+## Minor-Line Release Guideline
 
-Before implementation begins, the design or status tracker should group one
-minor-version line into roughly **6–10 substantive release batches**. Multiple
-design documents assigned to the same minor share that range.
+A minor line has no minimum release count. Design and status trackers should
+group work by real outcome and dependency boundaries rather than planning
+toward a quota.
 
-Six to ten is a planning target, not a quota. A smaller line may need fewer;
-an unusually broad safety or architecture line may need more. When the plan
-falls outside the range, the tracker must explain why the dependency and
-review boundaries are genuinely different. It must not manufacture
-micro-releases or unrelated mega-batches merely to hit a number.
-
-After ten published releases in one minor, the tracker must explicitly
-reassess whether remaining work belongs in:
+As a soft guideline, publish no more than **12 releases per minor line**. When
+the next release would exceed that count, the tracker must explicitly reassess
+whether remaining work belongs in:
 
 - the current open batch;
 - a small number of consolidated closeout batches; or
 - a separately authorized later minor.
 
-The advisory release-cadence tool surfaces this threshold but does not block a
-maintainer's release decision.
+The tracker may record why another same-minor boundary remains the clearer
+choice. The advisory release-cadence tool surfaces the threshold but does not
+block a maintainer's release decision.
 
 ## Release-Batch Contract
 
@@ -94,14 +90,14 @@ If those conditions are not met, the handoff should say what remains in the
 open batch instead of recommending another patch release.
 
 The maintainer may still request an early emergency or checkpoint release.
-That explicit decision overrides the normal batching target without changing
-the scope of later work.
+That explicit decision overrides the normal outcome-batching guideline without
+changing the scope of later work.
 
 ## Design and Status Trackers
 
 Implementation slices may be finer-grained than release batches. Every active
 design/status tracker must nevertheless include a release-batch plan that maps
-its slices and completion evidence into the minor-line target.
+its slices and completion evidence into coherent outcomes.
 
 ### Design Directory Shape
 
@@ -168,10 +164,11 @@ Each tracker row records:
 | Validation | Focused checks needed before handoff |
 | Status | Pending, active, ready or published |
 
-## Existing Over-Target Lines
+## Existing Over-Guideline Lines
 
 Historical releases are immutable and are not renumbered or collapsed. An
-active minor that already exceeds the target adopts this policy prospectively:
+active minor that already exceeds the guideline adopts this policy
+prospectively:
 keep the current patch draft open for its complete outcome, consolidate the
 remaining tracker into a small number of honest batches, and avoid further
 one-proof or one-fallout releases.
@@ -185,6 +182,6 @@ make release-cadence
 ```
 
 The command reports the current minor line, its published release count, the
-normal planning range and the ordinal of the next release. `make patch` runs
-the same advisory before validation and version mutation. The advisory never
+12-release guideline and the ordinal of the next release. `make patch` runs the
+same advisory before validation and version mutation. The advisory never
 changes files, tags or release authority.

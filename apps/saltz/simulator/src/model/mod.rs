@@ -1,6 +1,6 @@
 //! Module: model
 //!
-//! Responsibility: forward-model a bounded non-negative controller through one smoothing kernel.
+//! Responsibility: forward-model a bounded non-negative controller through one measured kernel.
 //! Does not own: platform guarantees, background forecasts, or executable cycle amounts.
 //! Boundary: every result is explicitly provisional until the complete pulse tail is frozen.
 
@@ -28,7 +28,8 @@ pub struct SimulationConfig {
     pub background_cycles_per_second: u64,
     pub chart_step_seconds: u64,
     pub control_step_seconds: u64,
-    pub kernel_window_seconds: u64,
+    pub kernel_gain_seconds: u64,
+    pub kernel_support_seconds: u64,
     pub max_burn_rate_cycles_per_second: u64,
     pub max_total_burn_cycles: u128,
     pub target_amplitude_cycles_per_second: u64,
@@ -59,7 +60,8 @@ pub struct SimulationReport {
     pub chart_max_error_cycles_per_second: f64,
     pub chart_points: Vec<ChartPoint>,
     pub control_points: Vec<f64>,
-    pub kernel_window_seconds: u64,
+    pub kernel_gain_seconds: u64,
+    pub kernel_support_seconds: u64,
     pub max_total_burn_cycles: u128,
     pub nonnegative_constraint_steps: usize,
     pub peak_control_cycles_per_second: f64,
@@ -105,7 +107,9 @@ impl Display for SimulationError {
             Self::ChartStep => formatter.write_str("chart step must be a multiple of control step"),
             Self::ControlStep => formatter.write_str("control step must be nonzero"),
             Self::Duration => formatter.write_str("waveform duration must divide by control step"),
-            Self::Kernel => formatter.write_str("kernel window must be at least one control step"),
+            Self::Kernel => {
+                formatter.write_str("kernel gain and support must be at least one control step")
+            }
             Self::Rate => formatter.write_str("target rate or rate ceiling is invalid"),
         }
     }
@@ -113,7 +117,7 @@ impl Display for SimulationError {
 
 impl Error for SimulationError {}
 
-/// Simulate a non-negative causal inverse against a rectangular smoothing approximation.
+/// Simulate a non-negative causal inverse against the measured gain and support approximation.
 pub fn simulate(
     waveform: &Waveform,
     config: &SimulationConfig,
@@ -123,8 +127,9 @@ pub fn simulate(
     let control_count = usize::try_from(duration_seconds(waveform) / config.control_step_seconds)
         .map_err(|_| SimulationError::Duration)?;
     let target = resample_target(waveform, config, control_count);
-    let weights = rectangular_kernel(config);
-    let pre_roll = vec![target[0]; weights.len() - 1];
+    let weights = measured_kernel(config);
+    let steady_pre_roll_rate = target[0] / weights.iter().sum::<f64>();
+    let pre_roll = vec![steady_pre_roll_rate; weights.len() - 1];
     let (control, predicted, nonnegative_constraint_steps, rate_cap_constraint_steps) =
         invert_nonnegative(&target, &pre_roll, &weights, config);
     let chart_points = chart_points(&target, &predicted, &control, config);
@@ -140,7 +145,8 @@ pub fn simulate(
         chart_max_error_cycles_per_second: chart_max_error * BILLION,
         chart_points,
         control_points: control,
-        kernel_window_seconds: config.kernel_window_seconds,
+        kernel_gain_seconds: config.kernel_gain_seconds,
+        kernel_support_seconds: config.kernel_support_seconds,
         max_total_burn_cycles: config.max_total_burn_cycles,
         nonnegative_constraint_steps,
         peak_control_cycles_per_second,
@@ -163,10 +169,12 @@ fn validate(waveform: &Waveform, config: &SimulationConfig) -> Result<(), Simula
     {
         return Err(SimulationError::ChartStep);
     }
-    if config.kernel_window_seconds < config.control_step_seconds {
+    if config.kernel_gain_seconds < config.control_step_seconds
+        || config.kernel_support_seconds < config.control_step_seconds
+    {
         return Err(SimulationError::Kernel);
     }
-    if usize::try_from(config.kernel_window_seconds / config.control_step_seconds).is_err() {
+    if usize::try_from(config.kernel_support_seconds / config.control_step_seconds).is_err() {
         return Err(SimulationError::Kernel);
     }
     if !duration_seconds(waveform).is_multiple_of(config.control_step_seconds) {
@@ -215,14 +223,14 @@ fn resample_target(
         .collect()
 }
 
-fn rectangular_kernel(config: &SimulationConfig) -> Vec<f64> {
-    let full_steps = usize::try_from(config.kernel_window_seconds / config.control_step_seconds)
+fn measured_kernel(config: &SimulationConfig) -> Vec<f64> {
+    let full_steps = usize::try_from(config.kernel_support_seconds / config.control_step_seconds)
         .expect("kernel step count was validated");
-    let remainder = config.kernel_window_seconds % config.control_step_seconds;
+    let remainder = config.kernel_support_seconds % config.control_step_seconds;
     let mut weights =
-        vec![config.control_step_seconds as f64 / config.kernel_window_seconds as f64; full_steps];
+        vec![config.control_step_seconds as f64 / config.kernel_gain_seconds as f64; full_steps];
     if remainder > 0 {
-        weights.push(remainder as f64 / config.kernel_window_seconds as f64);
+        weights.push(remainder as f64 / config.kernel_gain_seconds as f64);
     }
     weights
 }
@@ -362,7 +370,8 @@ mod tests {
             background_cycles_per_second: 625_000_000,
             chart_step_seconds: 600,
             control_step_seconds: 100,
-            kernel_window_seconds: 4_531,
+            kernel_gain_seconds: 4_201,
+            kernel_support_seconds: 3_600,
             max_burn_rate_cycles_per_second: 20_000_000_000,
             max_total_burn_cycles: 200_000_000_000_000,
             target_amplitude_cycles_per_second: 1_500_000_000,

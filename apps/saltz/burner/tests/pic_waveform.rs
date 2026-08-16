@@ -13,8 +13,8 @@ use ic_testkit::{
 };
 use pocket_ic::CreateCanisterParams;
 use saltz_burner::{
-    BurnerCommand, BurnerError, BurnerStatusRequest, BurnerStatusResponse, ReceiptPage,
-    RejectionReason, RunPhase, TerminalReason,
+    BurnerCommand, BurnerError, BurnerStatusRequest, BurnerStatusResponse, ReceiptKind,
+    ReceiptPage, RejectionReason, RunPhase, TerminalReason,
 };
 
 const BILLION: u128 = 1_000_000_000;
@@ -28,7 +28,95 @@ fn immutable_waveform_burns_exact_steps_and_abort_stops_future_burns() {
 
     assert_arm_rejects_insufficient_funding(&pic, &wasm);
     assert_abort_stops_future_burns(&pic, &wasm);
+    assert_fully_funded_waveform_completes_exactly(&pic, &wasm);
     assert_trial_window_cannot_burn_a_later_step(&pic, &wasm);
+}
+
+fn assert_fully_funded_waveform_completes_exactly(pic: &PocketIc, wasm: &[u8]) {
+    let canister_id = install(pic, wasm, 2_000 * BILLION);
+    let prepared = summary(pic, canister_id);
+    let target_balance = prepared.total_burn_cycles
+        + prepared.minimum_retained_cycles
+        + prepared.execution_allowance_cycles;
+    pic.add_cycles(
+        canister_id,
+        target_balance - prepared.current_balance_cycles,
+    );
+    let chart_start_at_ns = aligned_chart_start(pic, &prepared);
+    let armed = command(
+        pic,
+        canister_id,
+        BurnerCommand::Arm {
+            authorization_digest: prepared.authorization_digest,
+            chart_start_at_ns,
+        },
+    )
+    .expect("full synthetic funding should arm");
+    assert!(!armed.waveform_authorized);
+    let wrong_authorization = command(
+        pic,
+        canister_id,
+        BurnerCommand::AuthorizeWaveform {
+            authorization_digest: vec![0; 32],
+        },
+    );
+    assert!(matches!(
+        wrong_authorization,
+        Err(BurnerError::Rejected {
+            reason: RejectionReason::Authorization
+        })
+    ));
+    let authorized = command(
+        pic,
+        canister_id,
+        BurnerCommand::AuthorizeWaveform {
+            authorization_digest: armed.authorization_digest.clone(),
+        },
+    )
+    .expect("full synthetic funding should authorize the waveform");
+    assert!(authorized.waveform_authorized);
+    set_time_ns(pic, armed.schedule_start_at_ns.expect("schedule start"));
+
+    for step in 0..=armed.pre_roll_step_count {
+        if step > 0 {
+            pic.advance_time(Duration::from_secs(armed.control_step_seconds));
+        }
+        pic.tick();
+    }
+
+    let running = summary(pic, canister_id);
+    assert_eq!(running.phase, RunPhase::Running);
+    assert_eq!(running.receipt_count, armed.pre_roll_step_count + 1);
+    assert!(running.total_burned_cycles > armed.pre_roll_cycles);
+    let page = receipts(pic, canister_id, armed.pre_roll_step_count, 1);
+    let receipt = page.receipts.first().expect("first waveform receipt");
+    assert!(matches!(receipt.kind, ReceiptKind::Waveform));
+    assert_eq!(receipt.burned_cycles, receipt.requested_cycles);
+    assert_eq!(
+        receipt.expected_at_ns,
+        chart_start_at_ns - armed.observation_phase_lead_seconds * NANOS_PER_SECOND
+    );
+    for _ in (armed.pre_roll_step_count + 1)..armed.total_step_count {
+        pic.advance_time(Duration::from_secs(armed.control_step_seconds));
+        pic.tick();
+    }
+    let completed = summary(pic, canister_id);
+    assert_eq!(
+        completed.phase,
+        RunPhase::Completed,
+        "terminal={:?}, receipts={}, burned={}, balance={}",
+        completed.terminal_reason,
+        completed.receipt_count,
+        completed.total_burned_cycles,
+        completed.current_balance_cycles
+    );
+    assert_eq!(completed.receipt_count, armed.total_step_count);
+    assert_eq!(completed.total_burned_cycles, armed.total_burn_cycles);
+    assert!(completed.current_balance_cycles >= completed.minimum_retained_cycles);
+    assert!(
+        completed.current_balance_cycles
+            < completed.minimum_retained_cycles + completed.execution_allowance_cycles
+    );
 }
 
 fn assert_trial_window_cannot_burn_a_later_step(pic: &PocketIc, wasm: &[u8]) {
@@ -50,6 +138,16 @@ fn assert_trial_window_cannot_burn_a_later_step(pic: &PocketIc, wasm: &[u8]) {
         },
     )
     .expect("exact trial funding should arm");
+    assert_eq!(armed.kernel_gain_seconds, 4_201);
+    assert_eq!(armed.kernel_support_seconds, 3_600);
+    assert_eq!(
+        armed.observation_phase_lead_seconds,
+        armed.control_step_seconds
+    );
+    assert_eq!(
+        armed.schedule_start_at_ns.expect("schedule start"),
+        chart_start_at_ns - armed.kernel_support_seconds * NANOS_PER_SECOND
+    );
     set_time_ns(
         pic,
         armed
@@ -68,13 +166,28 @@ fn assert_trial_window_cannot_burn_a_later_step(pic: &PocketIc, wasm: &[u8]) {
     assert_eq!(funded.receipt_count, armed.initial_funding_step_count);
     assert_eq!(funded.total_burned_cycles, armed.initial_funding_cycles);
 
+    let continuation = command(
+        pic,
+        canister_id,
+        BurnerCommand::AuthorizeWaveform {
+            authorization_digest: armed.authorization_digest.clone(),
+        },
+    );
+    assert!(matches!(
+        continuation,
+        Err(BurnerError::Rejected {
+            reason: RejectionReason::Funding { .. }
+        })
+    ));
+    assert!(!summary(pic, canister_id).waveform_authorized);
+
     pic.advance_time(Duration::from_secs(armed.control_step_seconds));
     pic.tick();
     let stopped = summary(pic, canister_id);
     assert_eq!(stopped.phase, RunPhase::Failed);
     assert_eq!(
         stopped.terminal_reason,
-        Some(TerminalReason::InsufficientBalance)
+        Some(TerminalReason::WaveformNotAuthorized)
     );
     assert_eq!(stopped.receipt_count, armed.initial_funding_step_count);
     assert_eq!(stopped.total_burned_cycles, armed.initial_funding_cycles);
@@ -130,7 +243,7 @@ fn assert_abort_stops_future_burns(pic: &PocketIc, wasm: &[u8]) {
     let canister_id = install(pic, wasm, 430_000 * BILLION);
     let prepared = summary(pic, canister_id);
     assert!(prepared.required_cycles_to_arm < prepared.total_burn_cycles);
-    assert_eq!(prepared.initial_funding_step_count, 42);
+    assert_eq!(prepared.initial_funding_step_count, 35);
     let chart_start_at_ns = aligned_chart_start(pic, &prepared);
     let armed = command(
         pic,
@@ -244,7 +357,8 @@ fn aligned_chart_start(pic: &PocketIc, summary: &saltz_burner::BurnerSummary) ->
     let now_ns = time_ns(pic);
     let pre_roll_ns =
         u64::from(summary.pre_roll_step_count) * summary.control_step_seconds * NANOS_PER_SECOND;
-    let earliest = now_ns + summary.minimum_arm_lead_ns + pre_roll_ns;
+    let observation_phase_lead_ns = summary.observation_phase_lead_seconds * NANOS_PER_SECOND;
+    let earliest = now_ns + summary.minimum_arm_lead_ns + pre_roll_ns + observation_phase_lead_ns;
     let alignment = summary.chart_step_seconds * NANOS_PER_SECOND;
     earliest.div_ceil(alignment) * alignment
 }

@@ -8,12 +8,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The standalone waveform experiment rejects its Subnet-scaled executor,
-  freezes seven-day global homepage noise and controlled rise evidence, and
-  compiles a still-inert 100–150 Bcycles/second candidate with the scale field
-  removed and an explicit peak-rate report; its observed decay gate remains
-  open and no replacement mainnet effect is authorized.
-
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
@@ -22,7 +16,9 @@ Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
   typed failures onto 161 reviewed semantic reasons, keeps prose in the host
   catalogue, preserves arbitrary decoded codes and adds a flat release identity
   guard with a strict six-field ledger, without JSON, generic handling,
-  compatibility or history machinery.
+  compatibility or history machinery, and removes the downstream Toko-only
+  topology qualification fixture and canister stubs. Release cadence now has
+  no minimum and uses only a soft 12-release-per-minor guideline.
 
 - `0.102.1` closes the evidence-only whole-program diagnostic inventory across
   every effective producer, dynamic public value, durable string and masked

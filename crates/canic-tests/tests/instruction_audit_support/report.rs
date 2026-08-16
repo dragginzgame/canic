@@ -696,10 +696,6 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
             "Issuer delegated-token preparation",
             "`crates/canic-core/src/workflow/runtime/auth/prepare/mod.rs`",
         ),
-        "verifier_verify_token" => (
-            "Verifier delegated-token boundary",
-            "`canisters/test/project_hub_stub/src/lib.rs`; `crates/canic-core/src/ops/auth/delegated/verify.rs`",
-        ),
         "root_bootstrap_init" => (
             "Root installation checkpoint group",
             "`crates/canic-control-plane/src/workflow/bootstrap/root.rs`",
