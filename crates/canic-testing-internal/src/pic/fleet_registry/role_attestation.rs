@@ -86,19 +86,43 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
     let mut subject_drift =
         role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 11);
     subject_drift.subject = root;
-    assert_role_prepare_forbidden(pic, root, issuer.canister_id, subject_drift);
+    assert_role_prepare_forbidden(
+        pic,
+        root,
+        issuer.canister_id,
+        subject_drift,
+        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+    );
 
     let mut role_drift = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 12);
     role_drift.role = CanisterRole::from("project_hub");
-    assert_role_prepare_forbidden(pic, root, issuer.canister_id, role_drift);
+    assert_role_prepare_forbidden(
+        pic,
+        root,
+        issuer.canister_id,
+        role_drift,
+        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+    );
 
     let mut subnet_drift = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 13);
     subnet_drift.subnet_id = Some(Principal::from_slice(&[0x61; 29]));
-    assert_role_prepare_forbidden(pic, root, issuer.canister_id, subnet_drift);
+    assert_role_prepare_forbidden(
+        pic,
+        root,
+        issuer.canister_id,
+        subnet_drift,
+        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+    );
 
     let mut unregistered = role_attestation_request(issuer, issuer.canister_id, 60_000_000_000, 14);
     unregistered.subject = Principal::anonymous();
-    assert_role_prepare_forbidden(pic, root, Principal::anonymous(), unregistered);
+    assert_role_prepare_forbidden(
+        pic,
+        root,
+        Principal::anonymous(),
+        unregistered,
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code(),
+    );
 }
 
 fn assert_role_attestation_verification(
@@ -133,7 +157,7 @@ fn assert_role_attestation_verification(
     .expect_err("local-Subnet access must reject an attestation without a Subnet claim");
     assert_eq!(
         missing_subnet.code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let attestation =
@@ -148,7 +172,7 @@ fn assert_role_attestation_verification(
     .expect_err("role attestation caller mismatch must fail");
     assert_eq!(
         caller_mismatch.code(),
-        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
     );
 
     let attestation = issue_role_attestation(pic, root, issuer, root, 60_000_000_000, 23);
@@ -162,7 +186,7 @@ fn assert_role_attestation_verification(
     .expect_err("role attestation audience mismatch must fail");
     assert_eq!(
         audience_mismatch.code(),
-        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
     );
 
     let attestation =
@@ -177,7 +201,7 @@ fn assert_role_attestation_verification(
     .expect_err("role attestation epoch floor mismatch must fail");
     assert_eq!(
         epoch_mismatch.code(),
-        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        canic_core::diagnostics::codes::VERSION_INACTIVE.raw_code()
     );
 
     let attestation =
@@ -194,7 +218,7 @@ fn assert_role_attestation_verification(
     .expect_err("expired role attestation must fail");
     assert_eq!(
         expired.code(),
-        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        canic_core::diagnostics::codes::SECURITY_EXPIRED.raw_code()
     );
 }
 
@@ -223,6 +247,7 @@ fn assert_role_prepare_forbidden(
     root: Principal,
     caller: Principal,
     request: RoleAttestationRequest,
+    expected_code: canic_core::diagnostics::DiagnosticCode,
 ) {
     let response: Result<RoleAttestationPrepareResponse, Error> = pic
         .update_candid_as(root, caller, CANIC_PREPARE_ROLE_ATTESTATION, (request,))
@@ -231,7 +256,7 @@ fn assert_role_prepare_forbidden(
         response
             .expect_err("invalid Component attestation request must fail")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        expected_code
     );
 }
 
@@ -318,7 +343,7 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
         .expect("issuer root-guard denial transport");
     assert_eq!(
         denied.expect_err("anonymous root guard").code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
     assert_eq!(
         metric_count_for_labels(pic, issuer, MetricsKind::Security, &denial_labels),

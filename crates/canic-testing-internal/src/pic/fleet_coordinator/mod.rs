@@ -186,7 +186,7 @@ placement.minimum_distinct_roots = 2
             unauthorized
                 .expect_err("non-controller join must fail")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
 
         assert_authority_snapshot_restore_fence(&pic, coordinator);
@@ -457,7 +457,7 @@ placement.minimum_distinct_roots = 2
             unauthorized
                 .expect_err("non-controller activation must fail")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
         let active: Result<FleetRegistry, Error> = pic
             .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
