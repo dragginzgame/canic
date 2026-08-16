@@ -1198,6 +1198,7 @@ version = "0.102.1"
 dependencies = [
  "candid",
  "ic-cdk",
+ "serde",
 ]
 
 [[package]]
@@ -4064,6 +4065,14 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+]
+
+[[package]]
+name = "saltz_simulator"
+version = "0.102.1"
+dependencies = [
+ "clap",
+ "sha2 0.10.9",
 ]
 
 [[package]]

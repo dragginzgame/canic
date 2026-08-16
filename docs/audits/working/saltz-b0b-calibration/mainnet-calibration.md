@@ -23,7 +23,34 @@ Consequently:
 - the metric's complete smoothing/decay kernel remains unqualified;
 - the existing 24-hour cost and executor model is not executable authority;
 - B1 Burner implementation and B4 artistic execution remain held; and
-- no additional burn, mint, funding or retry is authorized by this evidence.
+- no additional burn, mint, funding or retry is authorized by this evidence
+  except the separately bounded follow-on plateau below.
+
+## Follow-On Plateau Authorization
+
+On 2026-08-16 the maintainer explicitly requested an immediately stoppable
+live test after reviewing the pulse result and smoothing-aware remediation.
+That authority is narrowed to:
+
+| Bound | Authorized value |
+| --- | --- |
+| Network and placement | The same IC-mainnet canister and frozen Subnet |
+| Identity | The same exact controller principal |
+| New cycles-ledger mint | At most `3 Tcycles` |
+| Existing-canister top-up | At most `4 Tcycles` |
+| Step | Exactly `200 Bcycles` |
+| Step spacing | Nominally `100 seconds`, host driven |
+| Step count | At most `18` |
+| Intentional burn | At most `3.6 Tcycles` |
+| Retained canister balance | At least `1 Tcycle` |
+| Execution allowance | `100 Bcycles` |
+| Autonomous work | None: no canister timer, retry or catch-up |
+| Stop | Cease host calls and submit terminal `Abort` |
+
+The follow-on tests whether a bounded sequence accumulates into the predicted
+Subnet plateau. It does not execute any waveform point, authorize the
+24-hour run or promote the Burner. Reinstallation of the disposable probe is
+permitted because the completed pulse receipt is frozen in this report.
 
 ## Exact Authorization
 

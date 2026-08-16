@@ -1,29 +1,78 @@
-type BurnProbeError = variant {
-  AccessDenied;
-  AlreadyUsed;
-  InsufficientBalance : record {
+type BurnReceipt = record {
+  balance_after_burn_cycles : nat;
+  balance_before_cycles : nat;
+  burned_cycles : nat;
+  caller : principal;
+  executed_at_ns : nat64;
+  expected_at_ns : nat64;
+  requested_cycles : nat;
+  step_index : nat32;
+};
+
+type InvalidReason = variant {
+  Balance : record {
     available_cycles : nat;
     required_cycles : nat;
   };
+  StartWindow : record {
+    earliest_ns : nat64;
+    latest_ns : nat64;
+    now_ns : nat64;
+    requested_ns : nat64;
+  };
+  StepIndex : record {
+    expected : nat32;
+    received : nat32;
+  };
+  StepTiming : record {
+    earliest_ns : nat64;
+    latest_ns : nat64;
+    now_ns : nat64;
+  };
 };
 
-type BurnReceipt = record {
-  requested_cycles : nat;
-  burned_cycles : nat;
-  balance_before_cycles : nat;
-  balance_after_burn_cycles : nat;
-  caller : principal;
-  executed_at_ns : nat64;
+type ProbeCommand = variant {
+  Abort;
+  Start : record { start_at_ns : nat64 };
+  Step : record { index : nat32 };
 };
 
-type BurnStatus = record {
-  authorized_burn_cycles : nat;
-  minimum_retained_cycles : nat;
+type ProbeError = variant {
+  AccessDenied;
+  Conflict : record { phase : RunPhase };
+  Invalid : record { reason : InvalidReason };
+};
+
+type ProbeStatus = record {
+  authorized_total_burn_cycles : nat;
   current_balance_cycles : nat;
-  receipt : opt BurnReceipt;
+  execution_allowance_cycles : nat;
+  max_lateness_ns : nat64;
+  minimum_retained_cycles : nat;
+  next_step_index : nat32;
+  phase : RunPhase;
+  receipts : vec BurnReceipt;
+  start_at_ns : opt nat64;
+  step_burn_cycles : nat;
+  step_count : nat32;
+  step_spacing_ns : nat64;
+  terminal_reason : opt TerminalReason;
+  total_burned_cycles : nat;
+};
+
+type RunPhase = variant {
+  Aborted;
+  Completed;
+  Prepared;
+  Running;
+};
+
+type TerminalReason = variant {
+  ControllerAbort;
+  LateStep;
 };
 
 service : {
-  burn_once : () -> (variant { Ok : BurnReceipt; Err : BurnProbeError });
-  burn_status : () -> (variant { Ok : BurnStatus; Err : BurnProbeError }) query;
+  probe_command : (ProbeCommand) -> (variant { Ok : ProbeStatus; Err : ProbeError });
+  probe_status : () -> (variant { Ok : ProbeStatus; Err : ProbeError }) query;
 };

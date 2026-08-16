@@ -10,6 +10,7 @@ members = [
     "apps/saltz/burner",
     "apps/saltz/preview",
     "apps/saltz/root",
+    "apps/saltz/simulator",
     "apps/skynet/console",
     "apps/skynet/memory_cell",
     "apps/skynet/node",

@@ -81,17 +81,18 @@ http://<canister-id>.raw.localhost:8002/
 
 The repository also contains a separate `cycle_burn_probe` qualification
 canister. It is not the Burner Component and cannot schedule or replay a
-waveform. Its controller-only `burn_once` update has no amount argument: the
-Wasm hard-binds exactly one `4 Tcycle` pulse, retains at least `1 Tcycle` and
-succeeds only once per install. The controller-only `burn_status` query makes
-the immutable envelope and committed receipt recoverable when an update
-response is uncertain. Deploy it locally with explicit synthetic funding:
+waveform. Its current Wasm hard-binds at most eighteen `200 Bcycle` steps,
+retains at least `1 Tcycle` plus a `100 Bcycle` execution allowance and has no
+timer. The host must submit every exact index; stopping host calls stops new
+burns. One controller-only `probe_command` update composes `Start`, `Step` and
+terminal `Abort`, while `probe_status` makes all committed receipts
+recoverable. Deploy it locally with explicit synthetic funding:
 
 ```sh
 icp identity new cycle-burn-local
 icp deploy cycle_burn_probe -e cycle-burn-local --cycles 6t \
   --identity cycle-burn-local
-icp canister call cycle_burn_probe burn_once '()' \
+icp canister call cycle_burn_probe probe_status '()' \
   -e cycle-burn-local \
   --identity cycle-burn-local \
   --candid canisters/test/cycle_burn_probe/cycle_burn_probe.did
@@ -106,14 +107,28 @@ The returned receipt proves the local burn primitive and accounting path. It
 does not populate or reproduce the public ICP Dashboard, whose cycle-burn-rate
 series observes mainnet Subnets only.
 
-The separately authorized B0b mainnet calibration is now complete. One exact
-`4 Tcycle` pulse was clearly visible in the owning Subnet's public series, but
+Model a bounded proposal without any network effect:
+
+```sh
+cargo run --locked -p saltz_simulator -- \
+  --max-total-burn-cycles 130000000000000
+```
+
+The simulator binds the checked-in waveform digest, resamples it to the
+current 144-point `1D` chart surface and reports pre-roll, run cost,
+non-negative-control constraints, rate-cap constraints and predicted fidelity.
+Its provisional floating-point output is never executable authority.
+
+The separately authorized B0b mainnet calibration is now complete. Its former
+one-shot installation burned one exact `4 Tcycle` pulse that was clearly
+visible in the owning Subnet's public series, but
 the attributable peak was only approximately `0.883 Bcycles/second` and
 remained spread across the observed tail. A naive independent 100-second
 bucket would have been `40 Bcycles/second`. The API `step` parameter therefore
 does not provide the independent approximately 100-second drawing buckets the
-current 860-point plan assumed. The probe has no timer or second-burn path; no
-additional effect is authorized. See the
+current 860-point plan assumed. The follow-on plateau is governed by the
+separate exact envelope in the calibration report; neither calibration
+authorizes B1 or a complete waveform. See the
 [bounded calibration report](../../docs/audits/working/saltz-b0b-calibration/mainnet-calibration.md).
 
 The preview remains excluded from every checked-in IC-mainnet environment. The

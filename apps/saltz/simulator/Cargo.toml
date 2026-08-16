@@ -1,0 +1,14 @@
+[package]
+name = "saltz_simulator"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+description = "Offline cycle-burn waveform forward simulator"
+
+[dependencies]
+clap = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true
