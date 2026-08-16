@@ -23,6 +23,9 @@ Historical handoffs are archived at:
   diagnostic hard cut. Package/version mutation remains maintainer-owned.
   Active design and checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
+- The following `0.102.3` draft stages one flat `.2` `code + name` release
+  baseline and removes archived B1 census/count coupling from permanent tests.
+  The baseline remains freely changeable with `.2` until `.2` ships.
 - The published checkpoint contains the completed operator-performance/CLI-
   diagnostics outcomes and evidence-only B1 snapshot. The `.2` draft changes
   the public wire to `Error { code: u16 }`; its 161 assignments remain
@@ -47,6 +50,8 @@ The maintained model is lossless `DiagnosticCode`, producer-only
 `InternalError` and a host catalogue generated with runtime constants from
 `reasons.toml`. There is no JSON or generic handling framework. Once released,
 `code + name` is immutable; the current assignments remain freely changeable.
+Permanent tests now enforce that rule without reading the archived B1 census or
+freezing the initial current/retired row counts.
 
 The scheduled 0.103 line owns the role-owned Candid and autonomous-operation
 hard cut. Root, Coordinator, Store and managed applications own methods;
@@ -97,10 +102,10 @@ creating infrastructure.
 
 The unreleased 991 candidate was replaced, not retired. The reviewed 161-row
 register, raw/registered split, host catalogue and typed mappings own `.2`.
-B1 tooling/allocation authority is removed while its evidence remains archived.
-Activation requires one admitted release set and matching callers. Do not add a
-dual protocol, compatibility decoder, message fallback, diagnostic version or
-observability subsystem.
+B1 tooling/allocation authority is removed while its evidence remains archived
+and unreferenced by permanent ledger tests. Activation requires one admitted
+release set and matching callers. Do not add a dual protocol, compatibility
+decoder, message fallback, diagnostic version or observability subsystem.
 
 The 0.103 design is scheduled, but B1 inventory awaits explicit promotion and
 no endpoint mutation is authorized. 0.104 then consumes its completed
@@ -143,6 +148,10 @@ causal diagnostic-savings claim is made. A complete `make validate` recorded on
 2026-08-16 is historical push evidence and must not be repeated during focused
 development; automated agents run targeted checks only.
 
+The `.3` release-baseline guard, generic current/retired catalogue invariants
+and removal of B1 test authority pass their exact tests and warning-denied
+Clippy targets.
+
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
 
@@ -155,30 +164,36 @@ approximately `0.883 Bcycles/second` and stayed elevated across the observed
 tail, rejecting the assumed independent approximately 100-second buckets by
 approximately a `45.3x` flattening factor. The later exact `3.6 Tcycle`
 host-driven plateau proved that repeated bounded input accumulates cleanly,
-raising the observed series approximately `0.990 Bcycles/second`. B1 and any
-additional destructive effect remain held; the current 860-point executor and
-economic model remain invalid until a complete dated aggregation kernel and a
-different bounded strategy are accepted. Exact evidence is retained in the
+raising the observed series approximately `0.990 Bcycles/second`. The
+maintainer then explicitly promoted a standalone, non-Fleet executor and inert
+mainnet install. The complete decay kernel remains open, so its embedded
+`4,531`-second rectangular controller is a dated bounded proposal rather than
+a Dashboard-fidelity claim. Exact calibration evidence is retained in the
 [B0b calibration report](../audits/working/saltz-b0b-calibration/mainnet-calibration.md).
 
-A host-only simulator now binds the 860-point digest, resamples the current
-600-second/144-point `1D` frontend surface and fails proposals across total,
-rate and non-negative-control constraints. The separately authorized B0c
-plateau completed eighteen exact host-driven `200 Bcycle` steps and raised the
-owning Subnet series from approximately `0.312` to `1.303 Bcycles/second` while
-retaining more than `1 Tcycle`. Accumulation passed; the complete decay kernel,
-B1 and the 24-hour waveform remain held. The exact mint request produced an
-`8_750 cycle` conversion overage, so later envelopes must bind discrete ICP
-e8s and their maximum cycle result.
+The integer compiler embeds 45 pre-roll plus 864 waveform amounts at exact
+100-second deadlines. Authorization digest
+`491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9`
+can burn at most `95,805,294,472,300 cycles`, but the separately authorized
+staged trial binds only the first 42 pulses and requires
+`6,482,468,000,000 cycles` at `Arm`. Exact schedule/unit checks,
+warning-denied Clippy, strict extracted Candid and targeted PocketIC funding,
+authority, timer-burn and abort evidence pass. Release Wasm
+`728edf4a7d652cc1ffa79e7dda5e96e4a91e42c67eaabb9cc7e2e240f325294b`
+is installed on `w47na-gaaaa-aaaad-qmclq-cai`. The controller converted
+`2.94007673 ICP`, topped up exactly `5.3 Tcycles` and armed the run for a first
+deadline at `2026-08-16T23:45:00+02:00`. The one-hour evidence decision is
+`00:45`; a continuation top-up or Abort must occur before `00:55`.
 
 ## Next Action
 
-The diagnostic batch is ready for maintainer commit/push validation. Do not
-rerun the broad census/full suite or add JSON, generic handling metadata,
-observability infrastructure, compatibility decoding or retired 991 rows.
+The focused `.3` identity-guard cleanup is complete. Do not rerun the broad
+census/full suite or add JSON, generic handling metadata, observability
+infrastructure, compatibility decoding, B1 test coupling or retired 991 rows.
 
-For the standalone waveform idea, observe the B0c post-stop Subnet tail
-read-only and fit the dated kernel before proposing a new controller or
-financial envelope. No additional mint, top-up or burn is authorized.
+For the standalone waveform idea, monitor the armed staged trial against the
+owning Subnet series. At the one-hour evidence point, either authorize a later
+exact continuation top-up or call terminal `Abort` before the initial funding
+window ends. Do not infer full waveform fidelity from pre-roll alone.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

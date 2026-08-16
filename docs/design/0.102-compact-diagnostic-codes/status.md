@@ -7,6 +7,9 @@ Date: 2026-08-16
 - State: Register, Map and the atomic Cut are complete in the untagged
   `0.102.2` draft. The maintained model is: canisters send `u16`, runtime
   reasons are typed and the host owns prose.
+- Follow-up: the `0.102.3` draft stages one flat `.2` `code + name` release
+  baseline and removes the archived B1 census and initial row counts from
+  permanent test authority. The baseline may move freely until `.2` ships.
 - Release: the public wire is now exactly `Error { code: u16 }`.
   `InternalError` owns an exact registered code and its explicit public
   projection; it stores no message, class, origin or optional public DTO.
@@ -108,10 +111,11 @@ projection and producer context do not manufacture additional identities.
 
 ## Focused Validation
 
-Targeted checks establish the accepted B1 arithmetic, the 161-row ledger and
-generated-code drift guard, raw/registered separation, explicit projection,
-lossless remote forwarding, host lookup, the exact one-field Candid wire, and
-the affected typed mappings in core and the control plane. Core,
+Historical B1 arithmetic remains archived evidence. Permanent targeted checks
+establish unique nonzero ledger rows, released `code + name` preservation,
+generated-code drift, raw/registered separation, explicit projection, lossless
+remote forwarding, host lookup, the exact one-field Candid wire, and the
+affected typed mappings in core and the control plane. Core,
 control-plane, host, CLI, Fleet Coordinator and Wasm Store feature builds
 compile. The complete broad validation recorded for the earlier release
 checkpoint remains historical evidence; it is not a reason to rerun broad
@@ -138,7 +142,7 @@ diagnostic-savings claim.
 
 ## Next Action
 
-The diagnostic batch is ready for maintainer commit/push validation. Do not
-generate JSON, add handling metadata or create new observability
-infrastructure. The maintainer owns the full validation performed when
-pushing.
+The focused `.3` identity guard and migration-authority cleanup pass their
+targeted tests and warning-denied Clippy targets. Do not generate JSON, add
+handling metadata, restore B1 test authority or create new observability
+infrastructure. The maintainer owns full validation when publishing.

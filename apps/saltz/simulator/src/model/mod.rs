@@ -123,7 +123,7 @@ pub fn simulate(
         .map_err(|_| SimulationError::Duration)?;
     let target = resample_target(waveform, config, control_count);
     let weights = rectangular_kernel(config);
-    let pre_roll = vec![target[0]; weights.len()];
+    let pre_roll = vec![target[0]; weights.len() - 1];
     let (control, predicted, nonnegative_constraint_steps, rate_cap_constraint_steps) =
         invert_nonnegative(&target, &pre_roll, &weights, config);
     let chart_points = chart_points(&target, &predicted, &control, config);

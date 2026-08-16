@@ -8,28 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The standalone waveform preview now retains and serves only its digested
-  numeric trace: the source photograph, derived overlay and host image compiler
-  are removed, and the preview is excluded from every checked-in IC-mainnet
-  environment while its local target remains available. A separate
-  controller-authorized calibration probe hard-binds one `4 Tcycle` pulse,
-  retains a `1 Tcycle` reserve and exposes a recoverable receipt without
-  enabling the preview or future waveform Burner; its dedicated IC environment
-  exists only for the separately approved B0b observation. That mainnet
-  calibration proved direct-burn visibility but rejected the assumed
-  independent approximately 100-second drawing buckets, leaving all further
-  destructive work held pending a different qualified observation model. A
-  host-only simulator now projects bounded proposals onto the current
-  144-point `1D` surface, while a separately authorized plateau probe composes
-  Start, exact indexed Step and terminal Abort behind one command method and
-  can never continue without host calls. Its bounded mainnet qualification
-  completed eighteen exact `200 Bcycle` steps, retained more than `1 Tcycle`
-  and produced a clean approximately `0.990 Bcycles/second` observed Subnet
-  rise without promoting the full waveform.
-
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
+
+- `0.102.3` records the `.2` diagnostic `code + name` release baseline in one
+  flat host-only snapshot and rejects post-release reuse or renaming without
+  freezing mutable catalogue prose, initial row counts or the archived B1
+  census, and without adding release-history machinery.
 
 - `0.102.2` hard-cuts public errors to `Error { code: u16 }`, maps existing
   typed failures onto 161 reviewed semantic reasons, keeps prose in the host

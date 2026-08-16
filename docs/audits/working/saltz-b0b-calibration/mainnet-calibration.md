@@ -247,3 +247,28 @@ observe the post-stop tail read-only and then either:
 Neither alternative nor any additional external effect is authorized by this
 report. The exact financial envelope must also bind discrete ICP e8s and their
 maximum minted-cycle result.
+
+## Post-Calibration Asset Disposition
+
+After the calibration closed, the maintainer separately authorized a
+standalone full-waveform implementation and inert deployment. On 2026-08-16
+the existing canister `w47na-gaaaa-aaaad-qmclq-cai` was reinstalled with
+release Wasm/module hash
+`46cd68c5231843e17c4694e95d32e4f4e1fe2d35ff7386208c8a15c56b89f5ce`.
+That reinstall intentionally erased the completed probe runtime state; this
+report retains its evidence.
+
+Controller-only status after reinstall reported `Prepared`, no schedule, zero
+receipts, zero intentional waveform burn and `1,290,997,070,850 cycles`. The
+embedded plan digest is
+`20bd60ecfdf993cc0b294128a2916385955114b4743506531164f6e41af0207c`.
+No cycles mint, top-up or `Arm` was executed as part of the deployment. The
+public Dashboard canister record remained stale at immediate verification and
+is not authority for this later installation.
+
+That inert installation was subsequently superseded by separately authorized
+staged-trial Wasm
+`728edf4a7d652cc1ffa79e7dda5e96e4a91e42c67eaabb9cc7e2e240f325294b`.
+Its funding, authorization digest and timing evidence live in the active
+standalone design/status record; they do not retroactively change this bounded
+B0 calibration authority.
