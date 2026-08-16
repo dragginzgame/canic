@@ -43,9 +43,9 @@ A code slice is a small, focused implementation unit chosen for reviewability
 and safety. It is not a release patch by default.
 
 Release grouping, continuation and handoff readiness are governed by
-[delivery cadence governance](delivery-cadence.md). The normal planning target
-is roughly 6-10 substantive release batches for a complete minor line, not one
-release per implementation slice.
+[delivery cadence governance](delivery-cadence.md). A minor has no minimum
+release count and should normally publish no more than 12 releases; an
+implementation slice is not automatically a release.
 
 Default development cadence:
 
@@ -122,9 +122,9 @@ Release bumps are human-owned. The normal human release path is `make patch`,
 reviewed, humans finish the release with `make release-stage`,
 `make release-commit`, and `make release-push`.
 Before patch validation and version mutation, `make patch` prints the
-read-only `make release-cadence` advisory. The advisory reports when the
-current minor is outside its normal planning range but never blocks or expands
-the maintainer's release authority.
+read-only `make release-cadence` advisory. The advisory reports when the next
+release would exceed the soft 12-release minor-line guideline but never blocks
+or expands the maintainer's release authority.
 The Make version targets require a clean source tree, run the same explicit
 `make validate` workflow and recheck tracked cleanliness before changing
 package versions. They do

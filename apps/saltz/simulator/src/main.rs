@@ -28,9 +28,13 @@ struct Args {
     #[arg(long)]
     emit_chart: bool,
 
-    /// Provisional rectangular smoothing width in seconds.
-    #[arg(long, default_value_t = 4_531)]
-    kernel_window_seconds: u64,
+    /// Measured normalization denominator for one pulse's displayed gain.
+    #[arg(long, default_value_t = 4_201)]
+    kernel_gain_seconds: u64,
+
+    /// Measured duration for which one pulse remains visible.
+    #[arg(long, default_value_t = 3_600)]
+    kernel_support_seconds: u64,
 
     /// Maximum permitted instantaneous control rate in cycles per second.
     #[arg(long, default_value_t = 20_000_000_000)]
@@ -68,7 +72,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             background_cycles_per_second: args.background_cycles_per_second,
             chart_step_seconds: args.chart_step_seconds,
             control_step_seconds: args.control_step_seconds,
-            kernel_window_seconds: args.kernel_window_seconds,
+            kernel_gain_seconds: args.kernel_gain_seconds,
+            kernel_support_seconds: args.kernel_support_seconds,
             max_burn_rate_cycles_per_second: args.max_burn_rate_cycles_per_second,
             max_total_burn_cycles: args.max_total_burn_cycles,
             target_amplitude_cycles_per_second: args.target_amplitude_cycles_per_second,
@@ -76,12 +81,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         },
     )?;
 
-    println!("model=provisional_rectangular_kernel");
+    println!("model=measured_gain_and_support_kernel");
     println!("waveform_sha256={}", waveform.sha256);
     println!("waveform_points={}", waveform.heights_ppm.len());
     println!("control_points={}", report.control_points.len());
     println!("chart_points={}", report.chart_points.len());
-    println!("kernel_window_seconds={}", report.kernel_window_seconds);
+    println!("kernel_gain_seconds={}", report.kernel_gain_seconds);
+    println!("kernel_support_seconds={}", report.kernel_support_seconds);
     println!("pre_roll_cycles={}", report.pre_roll_cycles);
     println!("run_cycles={}", report.run_cycles);
     println!("total_cycles={}", report.total_cycles);

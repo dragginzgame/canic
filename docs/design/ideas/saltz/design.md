@@ -11,12 +11,14 @@ Date: 2026-08-16
 - Runtime owner: `apps/saltz/burner`.
 - Purpose: draw one complete mountain waveform in the global public
   cycle-burn-rate series by burning a fixed, bounded schedule of one canister's
-  own cycles. The current compiled Subnet model does not satisfy that purpose.
+  own cycles. The rejected installation remains terminal; the replacement
+  global controller is local and inert until its remaining gates close.
 - Fleet relationship: none. The canister is not a Root, Coordinator, Store or
   managed Component and has no Canic runtime dependency.
 - Effect authority: install and status inspection are permitted. Deployment is
-  inert. A cycles mint, canister top-up and `Arm` are separate external effects
-  and require an exact recorded envelope before execution.
+  inert. A cycles mint, canister top-up, `Arm` and `AuthorizeWaveform` are
+  separate external effects and require an exact recorded envelope before
+  execution.
 - Qualification: direct mainnet burn visibility and repeated-input accumulation
   passed on 2026-08-16. The complete decay kernel and global-background model
   remain unqualified. The Subnet-scoped schedule is rejected for artistic
@@ -32,7 +34,9 @@ Build one deliberately narrow standalone canister that can do exactly this:
 ```text
 controller arms one embedded plan at one future chart boundary
     -> one retained ic-timers registration executes absolute deadlines
-    -> each message burns its one precompiled amount and commits one receipt
+    -> 35 pre-roll messages burn without waveform authority
+    -> one separately funded command authorizes the immutable waveform remainder
+    -> each authorized message burns its one precompiled amount and commits one receipt
     -> completion, abort or the first fault stops permanently
 ```
 
@@ -71,11 +75,12 @@ The public Subnet series moved from approximately `0.312` to
 into a clean signal. It did not measure the complete decay kernel.
 
 The rejected Subnet controller used a provisional rectangular `4,531`-second
-response inferred from the B0b scale. The B0d constant-input rise now fits an
-approximately `4,201`-second window with `R² = 0.999475`; the post-Abort tail
-must confirm that width before it becomes replacement executable authority.
-The public API's caller-selected `step` still means returned sample spacing;
-it does not establish independent burn attribution.
+response inferred from the B0b scale. The B0d constant-input rise fits a
+`4,200.842`-second gain denominator with `R² = 0.999475`. Its observed trailing
+edge removes the first pulse between its 3,600- and 3,700-second 100-second
+samples, showing that gain normalization, visible support and observation
+phase are three different facts. The public API's caller-selected `step` still means returned
+sample spacing; it does not establish independent burn attribution.
 
 ## Numeric Waveform Authority
 
@@ -146,11 +151,11 @@ approximately `0.954`, mean absolute error of approximately
 `486.0 Mcycles/second` under the same provisional rectangular response. Those
 figures are model evidence, not an observed public result.
 
-## Candidate Global Plan (Held)
+## Candidate Global Plan (Tail Gate In Progress)
 
 The replacement source hard-cuts the rejected scale layer into one direct
 global-homepage contract. It remains inert until the complete B0d trailing
-edge accepts or revises the candidate kernel:
+edge accepts or revises the measured transfer contract:
 
 | Field | Exact local candidate |
 | --- | ---: |
@@ -159,16 +164,26 @@ edge accepts or revises the candidate kernel:
 | Visible target relief | `50,000,000,000 cycles/second` |
 | Control cadence | `100 seconds` |
 | Homepage chart cadence | `600 seconds` |
-| Candidate kernel width | `4,201 seconds` |
+| Measured gain denominator | `4,201 seconds` |
+| Measured visible support | `3,600 seconds` |
+| Control-grid phase lead | `100 seconds` |
 | Per-step rate ceiling | `500,000,000,000 cycles/second` |
-| Pre-roll steps | `42` |
+| Peak compiled control rate | `297,654,853,334 cycles/second` |
+| Pre-roll steps | `35` |
 | Waveform steps | `864` |
-| Total steps | `906` |
-| Pre-roll burn | `420,915,600,000,000 cycles` |
-| Waveform burn | `7,898,578,155,865,700 cycles` |
-| Total intentional burn | `8,319,493,755,865,700 cycles` |
-| Immutable total ceiling | `8,500,000,000,000,000 cycles` |
-| Candidate digest | `87694d17f2b57f03b6345bce51db4be97e45eeb78b2dd5cedaf891b703579590` |
+| Total steps | `899` |
+| Pre-roll burn | `409,320,934,169,000 cycles` |
+| Waveform burn | `9,072,189,520,950,000 cycles` |
+| Total intentional burn | `9,481,510,455,119,000 cycles` |
+| Immutable total ceiling | `10,000,000,000,000,000 cycles` |
+| Candidate digest | `dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9` |
+
+The replacement inverse uses 36 equal 100-second support taps, each normalized
+by the measured 4,201-second gain denominator. Thirty-five prior inputs seed
+the first waveform solve; the current input is the thirty-sixth tap. A pulse
+began appearing approximately 10 seconds after execution and was fully
+represented by approximately 60 seconds; the conservative 100-second phase
+lead keeps execution on the control lattice and affects neither gain nor support.
 
 There is no `control_signal_scale` field or intermediate base-rate family.
 The compiler works directly in global cycles-per-second units. The complete
@@ -176,41 +191,49 @@ pre-roll is also the initial funding window, so a future Arm would require
 exactly:
 
 ```text
-420,915,600,000,000  complete 42-pulse pre-roll
+409,320,934,169,000  complete 35-pulse pre-roll
   1,000,000,000,000  minimum retained balance
     100,000,000,000  execution allowance
 -------------------
-422,015,600,000,000  minimum balance at Arm
+410,420,934,169,000  minimum balance at Arm
 ```
 
 The terminal canister already exceeds that balance, but only a reinstall can
-replace its terminal state and old plan. Reinstall, Arm and any additional
-funding remain separately authorized mainnet effects.
+replace its terminal state and old plan. Reinstall, Arm, continuation and any
+additional funding remain separately authorized mainnet effects.
 
 ## Economic Boundary
 
-The authorized staged trial funds 42 exact pulses, covering 70 minutes. Arming
-requires the canister balance to cover all of:
+The replacement's initial funding window is its complete 35-pulse pre-roll,
+covering controlled input from 60 minutes before the first labelled chart
+point through 200 seconds before it. Arming requires the exact
+`410,420,934,169,000-cycle` balance shown above. The existing terminal asset
+exceeds that amount, so qualification requires no new ICP conversion.
 
-```text
-53,824,680,000,000  first 42 exact pulses
- 1,000,000,000,000  minimum retained balance
-   100,000,000,000  execution allowance
--------------------
-54,924,680,000,000  minimum balance at Arm
-```
+`Arm` cannot authorize the 864 drawing pulses. `AuthorizeWaveform` is a second
+variant of the same command endpoint, accepts only the exact embedded digest
+and requires the current balance to cover every remaining burn plus the
+retained reserve. The separately funded execution allowance absorbs transient
+message reservation and later execution cost. If authorization is absent at
+the first waveform deadline, the run fails terminally before burn with
+`WaveformNotAuthorized`. Surplus balance alone cannot cross the boundary.
 
 The canister cannot mint, request or move funding. A controller may deposit
 cycles through a separate operator action while the run is active. Additional
-balance cannot increase the burn because all 909 amounts and the total are
+balance cannot increase the burn because all 899 amounts and the total are
 embedded. Without a later top-up, the first pulse whose amount would cross the
 retained reserve fails terminally; nothing catches up or resumes.
 
-Every intentional-burn precondition protects the sum of the retained reserve
-and execution allowance. Normal message execution may consume the allowance,
-but `cycles_burn` can consume neither balance. Targeted PocketIC evidence funds
-the staged window, commits exactly 42 receipts, and proves pulse 43 fails
-before burn with `InsufficientBalance`.
+Arm funding includes both the retained reserve and execution allowance. Every
+intentional-burn precondition preserves the retained reserve; the immutable
+plan total prevents explicit burn from exceeding its separately funded
+allocation, while ordinary message execution may consume the allowance. A
+stricter per-pulse `reserve + allowance` check was rejected by the full local
+run because it safely stopped at receipt 898 after ordinary execution consumed
+part of the allowance. Targeted PocketIC evidence now funds the complete
+pre-roll, proves an unfunded first waveform pulse fails before burn, crosses
+that boundary under full funding, and completes all 899 exact receipts while
+retaining the reserve and an unexhausted portion of the allowance.
 
 The mainnet financial authorization must bind discrete ICP e8s and the maximum
 cycles they can mint. B0c showed why: an exact `3 Tcycle` request deposited
@@ -225,9 +248,12 @@ nominal cycle target.
 - the exact 32-byte plan digest exposed by `Summary`; and
 - a `chart_start_at_ns` aligned to an exact 600-second Unix epoch boundary.
 
-The first pre-roll deadline is exactly 4,500 seconds before chart start. At
-arm time that first deadline must still be at least 60 seconds in the future.
-Chart start may be no more than seven days plus pre-roll in the future.
+The first pre-roll deadline is exactly 3,600 seconds before the labelled chart
+start. The first waveform burn is exactly 100 seconds before chart start so
+the complete measured attribution transition precedes the requested label. At arm
+time the first deadline must still be at least 60 seconds in the future. Chart
+start may be no more than seven days plus pre-roll and phase lead in the
+future.
 
 Every successor uses:
 
@@ -255,7 +281,7 @@ Prepared -> Armed -> Running -> Completed
 - `Prepared`: no waveform timer is armed and no run evidence exists.
 - `Armed`: the first pre-roll deadline is registered; no pulse has executed.
 - `Running`: at least one exact pulse and receipt committed.
-- `Completed`: all 909 amounts committed and their sum equals the plan total.
+- `Completed`: all 899 amounts committed and their sum equals the plan total.
 - `Aborted`: controller cancellation won and no later callback may burn.
 - `Failed`: lateness, balance shortfall or an internal invariant stopped the
   registration.
@@ -264,6 +290,11 @@ Prepared -> Armed -> Running -> Completed
 replacement plan or second run in the same installation. A reinstall creates
 a fresh inert installation, but reinstall is a separate controller effect and
 never follows from canister code.
+
+`waveform_authorized` is a monotonic per-run fact, not another phase. It starts
+false at `Arm`, can become true only through the exact-digest, fully funded
+`AuthorizeWaveform` command, and can never return to false. Without it,
+`Running` is limited to pre-roll receipts.
 
 ## Burn And Receipt Atomicity
 
@@ -301,6 +332,9 @@ enum BurnerCommand {
     Arm {
         authorization_digest: Vec<u8>,
         chart_start_at_ns: u64,
+    },
+    AuthorizeWaveform {
+        authorization_digest: Vec<u8>,
     },
     Abort,
 }
@@ -360,10 +394,11 @@ Required targeted evidence is:
 4. strict two-method extracted Candid;
 5. controller-only status and commands;
 6. underfunded `Arm` rejects without changing `Prepared`;
-7. exhaustive pure checks cover all 909 amounts, exact summed burn and every
+7. exhaustive pure checks cover all 899 amounts, exact summed burn and every
    derived deadline;
-8. PocketIC commits exact consecutive timer pulses and abort prevents every
-   later pulse;
+8. PocketIC commits exact consecutive timer pulses, crosses the
+   pre-roll-to-waveform boundary, completes all 899 pulses under full synthetic
+   funding and proves Abort prevents every later pulse;
 9. release Wasm build and structural validation; and
 10. inert mainnet install reports `Prepared`, zero receipts and zero
     intentional burn before funding.

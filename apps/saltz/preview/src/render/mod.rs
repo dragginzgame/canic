@@ -49,9 +49,9 @@ const PAGE: &str = r##"<!doctype html>
       <div class="graph">
         <svg viewBox="0 0 1280 340" role="img" aria-labelledby="graph-title graph-description">
           <title id="graph-title">Proposed global cycle-burn-rate profile over 24 hypothetical hours</title>
-          <desc id="graph-description">The yellow line is a static proposal for a global Dashboard total ranging from 100 to 150 billion cycles per second. The red band is a dated global observation from 2026-08-15 through 2026-08-16. This canister does not perform an intentional cycle burn.</desc>
-          <rect class="band" x="80" y="186.574" width="1120" height="23.077"/>
-          <text class="band-label" x="94" y="202">DATED GLOBAL SAMPLE // 31.7–49.9B/s // 2026-08-15/16</text>
+          <desc id="graph-description">The yellow line is a static proposal for a global Dashboard total ranging from 100 to 150 billion cycles per second. The red band is a dated seven-day global observation from 2026-08-09 through 2026-08-16 UTC. This canister does not perform an intentional cycle burn.</desc>
+          <rect class="band" x="80" y="181.516" width="1120" height="30.650"/>
+          <text class="band-label" x="94" y="202">DATED GLOBAL SAMPLE // 29.7–53.9B/s // 2026-08-09/16 UTC</text>
           <line class="gridline" x1="80" y1="60" x2="1200" y2="60"/><line class="gridline" x1="80" y1="97.941" x2="1200" y2="97.941"/><line class="gridline" x1="80" y1="135.882" x2="1200" y2="135.882"/><line class="gridline" x1="80" y1="173.823" x2="1200" y2="173.823"/><line class="gridline" x1="80" y1="211.764" x2="1200" y2="211.764"/><line class="gridline" x1="80" y1="249.705" x2="1200" y2="249.705"/>
           <line class="gridline" x1="80" y1="60" x2="80" y2="249.705"/><line class="gridline" x1="360" y1="60" x2="360" y2="249.705"/><line class="gridline" x1="640" y1="60" x2="640" y2="249.705"/><line class="gridline" x1="920" y1="60" x2="920" y2="249.705"/><line class="gridline" x1="1200" y1="60" x2="1200" y2="249.705"/>
           <line class="target" x1="80" y1="123.235" x2="1200" y2="123.235"/>
@@ -63,14 +63,14 @@ const PAGE: &str = r##"<!doctype html>
           <polyline class="wave-glow" points="__WAVEFORM_POINTS__"/><polyline class="wave" points="__WAVEFORM_POINTS__"/>
         </svg>
       </div>
-      <div class="caption"><span><strong>Yellow line</strong>Exact numeric-trace geometry mapped to a proposed 100–150B/s global total.</span><span><strong>Red band</strong>Frozen 2026-08-15/16 global sample, not a current baseline guarantee.</span></div>
+      <div class="caption"><span><strong>Yellow line</strong>Exact numeric-trace geometry mapped to a proposed 100–150B/s global total.</span><span><strong>Red band</strong>Frozen seven-day 2026-08-09/16 UTC global sample, not a current baseline guarantee.</span></div>
     </section>
 
     <div class="actions"><a class="button" href="/waveform.csv">Download proposed waveform CSV</a><a class="button" href="/api/status.json">Inspect machine-readable status</a></div>
 
     <div class="evidence">
       <section class="panel"><header><h2>Artifact Provenance</h2><span>BUILD-VERIFIED</span></header><div class="body"><div class="fact"><span class="label">Proposed waveform CSV SHA-256</span><strong>__CSV_SHA256__</strong><small>860 contiguous rational buckets covering exactly 24 hypothetical hours</small></div><div class="fact"><span class="label">Numeric trace SHA-256</span><strong>__TRACE_SHA256__</strong><small>Exact immutable geometry used by the yellow line</small></div></div></section>
-      <section class="panel"><header><h2>Runtime Truth</h2><span>INERT BY CONSTRUCTION</span></header><div class="body"><div class="fact"><span class="label">Actual canister behavior</span><strong>Static raw HTTP preview</strong><small>One query method; no update, timer, stable state, operator command or live metric fetch</small></div><div class="fact"><span class="label">Intentional cycle burn</span><strong>Impossible in this Wasm</strong><small>No cycles_burn call or active run exists; serving queries still incurs ordinary execution cost</small></div><div class="fact"><span class="label">Qualification state</span><strong>Still open</strong><small>This preview does not qualify Dashboard aggregation, execution timing, funding or authorization</small></div><div class="fact"><span class="label">Zero-background scale</span><strong>10,464.206 Tcycles</strong><small>Hypothetical 24-hour integral of the proposed total; not a funding amount or approved spend</small></div></div></section>
+      <section class="panel"><header><h2>Runtime Truth</h2><span>INERT BY CONSTRUCTION</span></header><div class="body"><div class="fact"><span class="label">Actual canister behavior</span><strong>Static raw HTTP preview</strong><small>One query method; no update, timer, stable state, operator command or live metric fetch</small></div><div class="fact"><span class="label">Intentional cycle burn</span><strong>Impossible in this Wasm</strong><small>No cycles_burn call or active run exists; serving queries still incurs ordinary execution cost</small></div><div class="fact"><span class="label">Qualification state</span><strong>Still open</strong><small>Global background and controlled rise are frozen; the trailing edge, funding, start and authorization remain separate gates</small></div><div class="fact"><span class="label">Zero-background scale</span><strong>12,628.762 Tcycles</strong><small>Hypothetical 24-hour integral under the measured gain/support model; not a funding amount or approved spend</small></div></div></section>
     </div>
 
     <footer><span>RESPONDING CANISTER // __CANISTER_ID__</span><span class="made">Made with <span class="heart">❤️</span> by <a href="https://github.com/dragginzgame/canic" rel="noreferrer">Canic</a></span><span>INERT PREVIEW // RAW HTTP // SCHEMA 1</span></footer>
@@ -123,12 +123,12 @@ pub fn status_json(canister_id: &str) -> String {
             "  }},\n",
             "  \"dated_global_observation\": {{\n",
             "    \"purpose\": \"orientation_only\",\n",
-            "    \"first_sample_timestamp_seconds\": 1786812500,\n",
-            "    \"last_sample_timestamp_seconds\": 1786898900,\n",
-            "    \"requested_step_seconds\": 100,\n",
-            "    \"point_count\": 865,\n",
-            "    \"minimum_cycles_per_second\": 31671060640.008118,\n",
-            "    \"maximum_cycles_per_second\": 49918117789.45853\n",
+            "    \"first_sample_timestamp_seconds\": 1786313400,\n",
+            "    \"last_sample_timestamp_seconds\": 1786918200,\n",
+            "    \"requested_step_seconds\": 600,\n",
+            "    \"point_count\": 1009,\n",
+            "    \"minimum_cycles_per_second\": 29683726705.542504,\n",
+            "    \"maximum_cycles_per_second\": 53914760216.68247\n",
             "  }},\n",
             "  \"presentation\": \"code_native_svg\"\n",
             "}}\n"

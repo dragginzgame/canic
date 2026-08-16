@@ -1286,33 +1286,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
-name = "database_a_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "database_b_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "database_c_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "delegation_issuer_stub"
 version = "0.102.1"
 dependencies = [
@@ -3488,42 +3461,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "project_hub_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "project_instance_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "project_ledger_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "project_machine_stub"
-version = "0.102.1"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
 ]
 
 [[package]]

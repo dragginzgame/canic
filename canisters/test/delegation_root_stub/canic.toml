@@ -9,22 +9,6 @@ package = "."
 kind = "canister"
 package = "../delegation_issuer_stub"
 
-[roles.project_hub]
-kind = "canister"
-package = "../project_hub_stub"
-
-[roles.project_instance]
-kind = "canister"
-package = "../project_instance_stub"
-
-[roles.project_ledger]
-kind = "canister"
-package = "../project_ledger_stub"
-
-[roles.project_machine]
-kind = "canister"
-package = "../project_machine_stub"
-
 [auth.delegated_tokens]
 enabled = true
 build_network = "local"
@@ -51,63 +35,3 @@ initial_cycles = "1T"
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
-
-[component_specs.projects]
-component_role = "project_hub"
-maximum_instances = 2
-initial_cycles = "1T"
-
-[component_specs.projects.provisions.issuer]
-maximum_instances_per_requester_per_root = 1
-
-[component_specs.projects.index.pools.projects]
-canister_role = "project_instance"
-key_name = "project"
-
-[component_specs.projects.auth]
-delegated_token_verifier = true
-role_attestation_cache = true
-
-[component_specs.projects.children.project_instance]
-kind = "instance"
-initial_cycles = "1T"
-
-[component_specs.projects.children.project_instance.auth]
-delegated_token_verifier = true
-role_attestation_cache = true
-
-[component_specs.projects.spawn_grants.project_hub.project_instance]
-maximum_instances_per_parent = 20_000
-
-[component_specs.projects.children.project_ledger]
-kind = "singleton"
-initial_cycles = "1T"
-
-[component_specs.projects.children.project_machine]
-kind = "singleton"
-initial_cycles = "1T"
-
-[component_specs.projects.spawn_grants.project_instance.project_ledger]
-maximum_instances_per_parent = 1
-
-[component_specs.projects.spawn_grants.project_instance.project_machine]
-maximum_instances_per_parent = 1
-
-[component_groups.grouped_projects.components.project_hub]
-component_spec = "projects"
-service = "projects"
-
-[component_group_deployments.grouped_projects]
-component_group = "grouped_projects"
-service_purpose = "pool_member"
-initial_placements = 1
-maximum_placements = 2
-placement.maximum_per_root = 1
-placement.minimum_distinct_roots = 1
-
-[services.fleet.targets.projects]
-role = "project_hub"
-component_spec = "projects"
-mode = "active_pool"
-placement.maximum_members_per_root = 1
-placement.minimum_distinct_roots = 1

@@ -517,11 +517,6 @@ mod tests {
                 "scale_hub",
                 vec![50],
             ),
-            (
-                "canisters/test/project_hub_stub/canic.toml",
-                "project_hub",
-                vec![51],
-            ),
         ] {
             let config = workspace.join(config_path);
             let resolution = resolve_workspace_state_manifest(&workspace, &[config], Some(role));

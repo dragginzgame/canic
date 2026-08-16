@@ -11,6 +11,7 @@ type BurnReceipt = record {
 type BurnerCommand = variant {
   Arm : record { chart_start_at_ns : nat64; authorization_digest : blob };
   Abort;
+  AuthorizeWaveform : record { authorization_digest : blob };
 };
 type BurnerError = variant {
   AccessDenied;
@@ -30,13 +31,17 @@ type BurnerSummary = record {
   background_cycles_per_second : nat64;
   total_step_count : nat32;
   chart_start_at_ns : opt nat64;
+  kernel_support_seconds : nat64;
+  observation_phase_lead_seconds : nat64;
   current_balance_cycles : nat;
   execution_allowance_cycles : nat;
+  waveform_authorized : bool;
   required_cycles_to_arm : nat;
   terminal_reason : opt TerminalReason;
   initial_funding_step_count : nat32;
   receipt_count : nat32;
   schedule_start_at_ns : opt nat64;
+  kernel_gain_seconds : nat64;
   max_lateness_ns : nat64;
   total_burned_cycles : nat;
   total_burn_cycles : nat;
@@ -55,7 +60,6 @@ type BurnerSummary = record {
   minimum_retained_cycles : nat;
   chart_step_seconds : nat64;
   waveform_step_count : nat32;
-  kernel_window_seconds : nat64;
 };
 type ReceiptKind = variant { Waveform; PreRoll };
 type ReceiptPage = record {
@@ -90,6 +94,7 @@ type TerminalReason = variant {
   PartialBurn;
   InsufficientBalance;
   RuntimeInvariant;
+  WaveformNotAuthorized;
   ControllerAbort;
 };
 service : () -> {

@@ -8,10 +8,11 @@ use std::{env, error::Error, fmt::Write as _, fs, path::PathBuf};
 
 use saltz_simulator::{
     BACKGROUND_CYCLES_PER_SECOND, CHART_STEP_SECONDS, CONTROL_STEP_SECONDS,
-    EXECUTION_ALLOWANCE_CYCLES, INITIAL_FUNDING_STEP_COUNT, KERNEL_WINDOW_SECONDS,
-    MAX_BURN_RATE_CYCLES_PER_SECOND, MAX_TOTAL_BURN_CYCLES, MIN_RETAINED_CYCLES,
-    PRE_ROLL_STEP_COUNT, TARGET_AMPLITUDE_CYCLES_PER_SECOND, TARGET_FLOOR_CYCLES_PER_SECOND,
-    WAVEFORM_STEP_COUNT, compile_executable_plan, waveform,
+    EXECUTION_ALLOWANCE_CYCLES, INITIAL_FUNDING_STEP_COUNT, KERNEL_GAIN_SECONDS,
+    KERNEL_SUPPORT_SECONDS, MAX_BURN_RATE_CYCLES_PER_SECOND, MAX_TOTAL_BURN_CYCLES,
+    MIN_RETAINED_CYCLES, OBSERVATION_PHASE_LEAD_SECONDS, PRE_ROLL_STEP_COUNT,
+    TARGET_AMPLITUDE_CYCLES_PER_SECOND, TARGET_FLOOR_CYCLES_PER_SECOND, WAVEFORM_STEP_COUNT,
+    compile_executable_plan, waveform,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -50,10 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         generated,
         "pub const INITIAL_FUNDING_STEP_COUNT: u32 = {INITIAL_FUNDING_STEP_COUNT};"
     )?;
-    writeln!(
-        generated,
-        "pub const KERNEL_WINDOW_SECONDS: u64 = {KERNEL_WINDOW_SECONDS};"
-    )?;
+    write_response_contract(&mut generated)?;
     writeln!(
         generated,
         "pub const MAX_BURN_RATE_CYCLES_PER_SECOND: u64 = {MAX_BURN_RATE_CYCLES_PER_SECOND};"
@@ -110,4 +108,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         "cargo:rerun-if-changed=../../../docs/design/ideas/saltz/saltz_24h_waveform_floor_100B_860.csv"
     );
     Ok(())
+}
+
+fn write_response_contract(generated: &mut String) -> Result<(), std::fmt::Error> {
+    writeln!(
+        generated,
+        "pub const KERNEL_GAIN_SECONDS: u64 = {KERNEL_GAIN_SECONDS};"
+    )?;
+    writeln!(
+        generated,
+        "pub const KERNEL_SUPPORT_SECONDS: u64 = {KERNEL_SUPPORT_SECONDS};"
+    )?;
+    writeln!(
+        generated,
+        "pub const OBSERVATION_PHASE_LEAD_SECONDS: u64 = {OBSERVATION_PHASE_LEAD_SECONDS};"
+    )
 }

@@ -157,21 +157,36 @@ Read-only B0e global qualification is active. The exact seven-day pre-run
 global series contains 1,009 ten-minute samples with `37.576 Bcycles/second`
 median, `37.983` mean, `53.915` maximum and `4.255 Bcycles/second` 95th-
 percentile absolute adjacent change. Replaying a provisional
-`100..=150 Bcycles/second` trace over every historical day yields
-`0.923..=0.965` correlations. The 26-pulse controlled rise fits an effective
-`4,200.842`-second rectangular window with `R² = 0.999475`; the complete
-post-Abort tail remains the acceptance gate.
+`100..=150 Bcycles/second` trace over every historical day yields strong
+correlations. The 26-pulse controlled rise fits a `4,200.842`-second
+display-gain denominator with `R² = 0.999475`. The observed tail begins at
+timestamp `1786922200`, one 100-second sample after the first pulse reaches
+3,600 seconds of age. Its successive approximately `0.3 Bcycles/second` losses
+separate the measured gain from 3,600-second visible support. Ten-second onset
+evidence shows attribution beginning about 10 seconds after execution and
+becoming complete by about 60 seconds; the controller conservatively leads the
+label by one 100-second control step. Remaining pulse expirations are still the
+acceptance gate.
 
 The local candidate hard-cuts the obsolete 10× scale into a direct global
 contract: `30 Bcycles/second` conservative background credit,
-`100 Bcycles/second` floor, `50 Bcycles/second` relief, `4,201`-second candidate
-window and `500 Bcycles/second` hard rate ceiling. Its exact integer plan is 42
-pre-roll plus 864 waveform pulses totaling `8,319,493,755,865,700 cycles` with
-digest `87694d17f2b57f03b6345bce51db4be97e45eeb78b2dd5cedaf891b703579590`.
+`100 Bcycles/second` floor, `50 Bcycles/second` relief, a `4,201`-second gain
+denominator, `3,600`-second support, `100`-second control-grid phase lead and
+`500 Bcycles/second` hard rate ceiling. Its exact integer plan is 35 pre-roll
+plus 864 waveform pulses totaling `9,481,510,455,119,000 cycles` with digest
+`dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9`.
 Simulator/unit checks, warning-denied Clippy, Wasm-target compilation, strict
-Candid equivalence and targeted PocketIC funding, exhaustion, receipt and
-Abort evidence pass. This code remains inert local evidence; it is not
-reinstall, funding or Arm authority.
+Candid equivalence and targeted PocketIC funding, exhaustion, exact first
+waveform receipt, complete 899-pulse execution and Abort evidence pass. This
+code remains inert local evidence; it is not reinstall, funding or Arm
+authority.
+
+`Arm` is now an immutable staged authority: it can burn only the 35-pulse
+pre-roll. Surplus balance cannot enter the drawing. The first waveform pulse
+requires a separate exact-digest `AuthorizeWaveform` command whose current
+balance covers every remaining burn plus the retained reserve. Focused
+PocketIC proves an underfunded continuation rejects, an absent continuation
+fails before burn and a fully funded continuation completes all 899 receipts.
 
 ## Next Action
 
@@ -180,10 +195,10 @@ census/full suite or add JSON, generic handling metadata, observability
 infrastructure, compatibility decoding, B1 test coupling or retired 991 rows.
 
 For the standalone waveform idea, retain the terminal canister and its
-remaining cycles without further effects. Observe the complete B0d trailing
-edge, accept or revise the candidate `4,201`-second kernel, then reconcile the
-integer plan, historical global replay and financial ceiling. Any reinstall,
-mint, top-up or Arm still requires a new exact mainnet authorization; passing
-local checks cannot supply it.
+remaining cycles without further effects until all 26 pulse expirations are
+current. Accept or revise the separated gain/support/lag contract, then freeze
+the canonical Wasm, exact chart start and staged financial envelope. Any
+reinstall, mint, top-up or Arm still requires a new exact mainnet authorization;
+passing local checks cannot supply it.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

@@ -37,11 +37,11 @@ fn page_tells_the_inert_preview_story() {
     assert!(body.contains("Proposed Dashboard Total"));
     assert!(body.contains("STATIC MODEL // NOT LIVE OR QUALIFIED"));
     assert!(body.contains("100–150B/s"));
-    assert!(body.contains("DATED GLOBAL SAMPLE // 31.7–49.9B/s // 2026-08-15/16"));
+    assert!(body.contains("DATED GLOBAL SAMPLE // 29.7–53.9B/s // 2026-08-09/16 UTC"));
     assert!(body.contains("PROPOSED WAVEFORM FLOOR // 100B/s"));
     assert!(body.contains("HYPOTHETICAL ELAPSED TIME // NO START IS ARMED"));
     assert!(body.contains("Impossible in this Wasm"));
-    assert!(body.contains("10,464.206 Tcycles"));
+    assert!(body.contains("12,628.762 Tcycles"));
     assert!(body.contains("Made with <span class=\"heart\">❤️</span> by <a href=\"https://github.com/dragginzgame/canic\" rel=\"noreferrer\">Canic</a>"));
     assert!(body.contains(">0B</text>"));
     assert!(body.contains("aaaaa-aa"));
@@ -98,7 +98,11 @@ fn provenance_json_identifies_the_inert_single_method_canister() {
         value["waveform"]["csv_sha256"],
         "11fd75eb8fd0fed4f075d324051cc880db50619837bfe6c889fe9d654647d911"
     );
-    assert_eq!(value["dated_global_observation"]["point_count"], 865);
+    assert_eq!(value["dated_global_observation"]["point_count"], 1009);
+    assert_eq!(
+        value["dated_global_observation"]["requested_step_seconds"],
+        600
+    );
     assert_eq!(
         value["dated_global_observation"]["purpose"],
         "orientation_only"
