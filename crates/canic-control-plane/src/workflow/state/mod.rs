@@ -86,7 +86,10 @@ impl FleetStateWorkflow {
     }
 }
 
-fn invalid_root_child(_authority: RootChildAuthority, _reason: &'static str) -> InternalError {
+const fn invalid_root_child(
+    _authority: RootChildAuthority,
+    _reason: &'static str,
+) -> InternalError {
     InternalError::invariant()
 }
 

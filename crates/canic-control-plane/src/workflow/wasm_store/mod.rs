@@ -45,7 +45,7 @@ pub async fn reclaim_deletion_cycles(
     let target_cycles_to_retain = request
         .retained_cycles_target
         .checked_sub(deposit_call_cost)
-        .ok_or_else(|| InternalError::invalid_input())?;
+        .ok_or_else(InternalError::invalid_input)?;
     let maximum_transfer =
         transferable_cycles(cycles_before, target_cycles_to_retain, deposit_call_cost);
     if maximum_transfer == 0 {
@@ -90,7 +90,7 @@ const fn transferable_cycles(
         .saturating_sub(call_cost)
 }
 
-fn validate_request(
+const fn validate_request(
     request: WasmStoreDeletionCycleReclamationRequest,
 ) -> Result<(), InternalError> {
     if request.retained_cycles_target == 0 {

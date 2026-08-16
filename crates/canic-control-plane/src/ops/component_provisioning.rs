@@ -279,7 +279,7 @@ impl RootComponentProvisioningOps {
         let next_placements = current
             .tracked_group_placements
             .checked_add(validation.placement_count)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_placements > request.batch.root.limits.maximum_group_placements {
             return Err(InternalError::resource_exhausted());
         }
@@ -331,7 +331,7 @@ impl RootComponentProvisioningOps {
     ) -> Result<RootComponentProvisioningView, InternalError> {
         validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
         let record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let view = validated_record(record)?;
         if view.plan_hash != request.plan_hash {
             return Err(InternalError::conflict());
@@ -482,7 +482,7 @@ impl RootComponentProvisioningOps {
             });
         };
         let record = RootComponentProvisioningStore::operation(*operation_id)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let view = validated_record(record)?;
         if view.plan_hash != *plan_hash {
             return Err(InternalError::invariant());
@@ -492,7 +492,7 @@ impl RootComponentProvisioningOps {
             .placements
             .iter()
             .position(|placement| &placement.group_placement == group_placement)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let member = member_by_path(&view, group_placement, member_path)?;
         let component_authority_is_exact = [
             view.batch.root.authority == binding.authority,
@@ -506,10 +506,7 @@ impl RootComponentProvisioningOps {
         if !component_authority_is_exact {
             return Err(InternalError::invariant());
         }
-        let result = view
-            .result
-            .as_ref()
-            .ok_or_else(|| InternalError::invariant())?;
+        let result = view.result.as_ref().ok_or_else(InternalError::invariant)?;
         let component_group =
             derive_component_group_directory_from_view(&view, result, placement_index)?;
         let retained_binding = component_group
@@ -517,7 +514,7 @@ impl RootComponentProvisioningOps {
             .iter()
             .find(|candidate| candidate.member_path == member.member_path)
             .map(|candidate| &candidate.binding)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if retained_binding != binding {
             return Err(InternalError::invariant());
         }
@@ -542,7 +539,7 @@ impl RootComponentProvisioningOps {
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
@@ -588,7 +585,7 @@ impl RootComponentProvisioningOps {
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
@@ -635,7 +632,7 @@ impl RootComponentProvisioningOps {
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
@@ -682,7 +679,7 @@ impl RootComponentProvisioningOps {
         partition: &crate::view::component_registry::ComponentRegistryPartitionView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
@@ -743,7 +740,7 @@ impl RootComponentProvisioningOps {
         started_at_ns: u64,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let current = validated_record(current_record.clone())?;
         validate_publication_request(request, &current)?;
         if current.phase == RootComponentProvisioningPhase::Published
@@ -876,7 +873,7 @@ impl RootComponentProvisioningOps {
         let intent = current
             .publication_in_flight
             .as_ref()
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         if intent.component_index != member.component_index
             || intent.canister_id != member.binding.canister_id
             || intent.directory_authority_hash != directory_authority_hash
@@ -901,7 +898,7 @@ impl RootComponentProvisioningOps {
             });
         *published_component_count = published_component_count
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         *in_flight = None;
         RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
             .map_err(map_commit_error)?;
@@ -972,7 +969,7 @@ impl RootComponentProvisioningOps {
         started_at_ns: u64,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let current = validated_record(current_record.clone())?;
         validate_activation_request(request, &current)?;
         if current.phase == RootComponentProvisioningPhase::RuntimesActive
@@ -1036,7 +1033,7 @@ impl RootComponentProvisioningOps {
             return Err(InternalError::conflict());
         }
         let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_activation_member_authority(&current, member, &allocation)?;
         validate_terminal_component_activation(member, &allocation)?;
         let mut next = current_record.clone();
@@ -1049,7 +1046,7 @@ impl RootComponentProvisioningOps {
         };
         *activated_component_count = activated_component_count
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
             .map_err(map_commit_error)?;
         validated_record(next)
@@ -1182,10 +1179,7 @@ impl RootComponentProvisioningOps {
             u32::try_from(member_index).map_err(|_| InternalError::resource_exhausted())?,
         )?;
         let deployment = Self::member_deployment_context(&view, &member, allocation)?;
-        let result = view
-            .result
-            .as_ref()
-            .ok_or_else(|| InternalError::invariant())?;
+        let result = view.result.as_ref().ok_or_else(InternalError::invariant)?;
         let component_group =
             derive_component_group_directory_from_view(&view, result, placement_index)?;
         Ok(RootComponentGroupRuntimeAuthorityView {
@@ -1229,7 +1223,7 @@ fn required_publishing_record(
     request: &RootComponentPublicationRequest,
 ) -> Result<RootComponentProvisioningRecord, InternalError> {
     let record = RootComponentProvisioningStore::operation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if !matches!(
         record.state,
         RootComponentProvisioningStateRecordPhase::Publishing { .. }
@@ -1243,7 +1237,7 @@ fn required_activating_record(
     request: &RootComponentActivationRequest,
 ) -> Result<RootComponentProvisioningRecord, InternalError> {
     let record = RootComponentProvisioningStore::operation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if !matches!(
         record.state,
         RootComponentProvisioningStateRecordPhase::Activating { .. }
@@ -1257,10 +1251,7 @@ fn member_at_index(
     view: &RootComponentProvisioningView,
     target_index: u32,
 ) -> Result<RootComponentPublicationMemberView, InternalError> {
-    let result = view
-        .result
-        .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+    let result = view.result.as_ref().ok_or_else(InternalError::invariant)?;
     let mut flat_index = 0_u32;
     for (placement_index, (planned, provisioned)) in view
         .batch
@@ -1302,7 +1293,7 @@ fn member_at_index(
             }
             flat_index = flat_index
                 .checked_add(1)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
         }
     }
     Err(InternalError::invariant())
@@ -1390,7 +1381,7 @@ fn validate_terminal_component_activation(
     let membership = commitment
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     if !commitment.runtime_activated || !membership.directory_synchronized {
         return Err(InternalError::conflict());
     }
@@ -1463,7 +1454,7 @@ fn validate_acceptance_identity(
                     u32::try_from(placement.entries.len())
                         .map_err(|_| InternalError::resource_exhausted())?,
                 )
-                .ok_or_else(|| InternalError::resource_exhausted())
+                .ok_or_else(InternalError::resource_exhausted)
         })?;
     if placement_count != validation.placement_count
         || component_count != validation.component_count
@@ -1893,7 +1884,7 @@ fn validated_publishing_state(
     let result = provisioned
         .result
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if publication_started_at_ns < provisioned_at_ns {
         return Err(InternalError::invariant());
     }
@@ -2297,9 +2288,9 @@ fn provisioned_member_evidence(
                 u32::try_from(member_index).map_err(|_| InternalError::resource_exhausted())?,
             )?;
             let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-                .ok_or_else(|| InternalError::invariant())?;
+                .ok_or_else(InternalError::invariant)?;
             let partition = ComponentRegistryOps::partition(allocation.component)?
-                .ok_or_else(|| InternalError::invariant())?;
+                .ok_or_else(InternalError::invariant)?;
             validate_registry_committed_member(view, &member, &allocation, &partition)?;
             evidence.push(ProvisionedMemberEvidence {
                 member,
@@ -2325,7 +2316,7 @@ fn provisioned_result_record(
     for placement in &view.batch.placements {
         let mut members = Vec::with_capacity(placement.entries.len());
         for entry in &placement.entries {
-            let observed = evidence.next().ok_or_else(|| InternalError::invariant())?;
+            let observed = evidence.next().ok_or_else(InternalError::invariant)?;
             let expected_member = (&placement.group_placement, &entry.member_path);
             let observed_member = (
                 &observed.member.group_placement,
@@ -2374,7 +2365,7 @@ fn commit_provisioned_result(
     result: RootComponentProvisioningResultRecord,
 ) -> Result<RootComponentProvisioningView, InternalError> {
     let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let current = validated_record(current_record.clone())?;
     if RootComponentProvisioningOps::advance_disposition(request, &current)?
         != RootComponentProvisioningAdvanceDisposition::Advance
@@ -2476,11 +2467,11 @@ fn derive_component_group_directory_from_parts(
     let planned = batch
         .placements
         .get(placement_index)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let provisioned = result
         .placements
         .get(placement_index)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let placement_matches = [
         planned.group_placement == provisioned.group_placement,
         planned.component_group == provisioned.component_group,
@@ -2542,7 +2533,7 @@ fn result_member_at(
         .iter()
         .flat_map(|placement| &placement.members)
         .nth(index)
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 fn validate_provisioned_result(
@@ -2579,7 +2570,7 @@ fn validate_provisioned_result(
             }
             observed_count = observed_count
                 .checked_add(1)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
         }
     }
     if observed_count != component_count {
@@ -2868,7 +2859,7 @@ fn validate_member_cursor(
     let placement = batch
         .placements
         .get(usize::try_from(placement_index).map_err(|_| InternalError::invariant())?)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if usize::try_from(member_index)
         .ok()
         .is_none_or(|index| index >= placement.entries.len())
@@ -2960,19 +2951,19 @@ fn advance_member_cursor(
         .batch
         .placements
         .get(usize::try_from(placement_index).map_err(|_| InternalError::invariant())?)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_completed = completed_count
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let next_member = member_index
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let entry_count =
         u32::try_from(placement.entries.len()).map_err(|_| InternalError::invariant())?;
     if next_member == entry_count {
         let next_placement = placement_index
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         Ok((next_placement, 0, next_completed))
     } else {
         Ok((placement_index, next_member, next_completed))
@@ -3095,11 +3086,11 @@ fn member_at_cursor(
         .batch
         .placements
         .get(usize::try_from(placement_index).map_err(|_| InternalError::invariant())?)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let entry = placement
         .entries
         .get(usize::try_from(member_index).map_err(|_| InternalError::invariant())?)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     Ok(RootComponentProvisioningMemberView {
         member_operation_id: member_operation_id(
             view.batch.root.fleet_subnet_root,
@@ -3129,12 +3120,12 @@ fn member_by_path(
         .placements
         .iter()
         .find(|placement| &placement.group_placement == group_placement)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let entry = placement
         .entries
         .iter()
         .find(|entry| &entry.member_path == member_path)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     Ok(RootComponentProvisioningMemberView {
         member_operation_id: member_operation_id(
             view.batch.root.fleet_subnet_root,
@@ -3262,7 +3253,7 @@ fn validate_member_authority(
     Ok(())
 }
 
-fn claimed_allocation_canister(
+const fn claimed_allocation_canister(
     progress: &RootComponentAllocationProgressView,
 ) -> Result<Principal, InternalError> {
     match progress {
@@ -3272,8 +3263,8 @@ fn claimed_allocation_canister(
         | RootComponentAllocationProgressView::Verified { canister, .. }
         | RootComponentAllocationProgressView::Committed { canister, .. } => Ok(*canister),
         RootComponentAllocationProgressView::Reserved
-        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict()),
-        RootComponentAllocationProgressView::Removed { .. } => Err(InternalError::conflict()),
+        | RootComponentAllocationProgressView::CreationIntent(_)
+        | RootComponentAllocationProgressView::Removed { .. } => Err(InternalError::conflict()),
     }
 }
 
@@ -3307,13 +3298,13 @@ fn accepted_member<'a>(
         .binary_search_by(|candidate| candidate.group_placement.cmp(group_placement))
         .ok()
         .map(|index| &view.batch.placements[index])
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     let entry = placement
         .entries
         .binary_search_by(|candidate| candidate.member_path.cmp(member_path))
         .ok()
         .map(|index| &placement.entries[index])
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     Ok((placement, entry))
 }
 
@@ -3337,7 +3328,7 @@ fn acceptance_receipt_hash(
     )
 }
 
-fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
+const fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
     match error {
         RootComponentProvisioningCommitError::ActiveOperationConflict => {
             InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)

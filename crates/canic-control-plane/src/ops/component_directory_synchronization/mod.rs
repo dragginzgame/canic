@@ -95,7 +95,7 @@ impl RootComponentDirectorySynchronizationOps {
         validate_request(request)?;
         let record =
             RootComponentProvisioningStore::directory_synchronization(request.operation_id)
-                .ok_or_else(|| InternalError::unavailable())?;
+                .ok_or_else(InternalError::unavailable)?;
         let view = validated_record(record)?;
         require_request_authority(&view, request)?;
         if request.expected_synchronized_component_count > view.synchronized_component_count {
@@ -134,7 +134,7 @@ impl RootComponentDirectorySynchronizationOps {
                 .map(Box::new)
                 .map(RootComponentDirectorySynchronizationDisposition::Current);
         }
-        let intent = intent.ok_or_else(|| InternalError::invariant())?;
+        let intent = intent.ok_or_else(InternalError::invariant)?;
         validate_next_intent(&view, &intent, started_at_ns)?;
         let mut next = view_to_record(&view)?;
         next.state = RootComponentDirectorySynchronizationStateRecord::Synchronizing {
@@ -162,14 +162,14 @@ impl RootComponentDirectorySynchronizationOps {
         let in_flight = view
             .in_flight
             .as_ref()
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         if in_flight != observed || recorded_at_ns < in_flight.started_at_ns {
             return Err(InternalError::conflict());
         }
         let synchronized_component_count = view
             .synchronized_component_count
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let complete = synchronized_component_count == target_count(&view)?;
         let mut next = view_to_record(&view)?;
         next.state = if complete {
@@ -297,7 +297,7 @@ fn validate_next_intent(
     let target = view
         .targets
         .get(index)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let target_is_exact = [
         intent.component_index == view.synchronized_component_count,
         intent.component == target.component,
@@ -457,7 +457,7 @@ fn view_to_record(
             planned_at_ns: view.planned_at_ns,
             synchronized_at_ns: view
                 .synchronized_at_ns
-                .ok_or_else(|| InternalError::invariant())?,
+                .ok_or_else(InternalError::invariant)?,
             receipt_content_hash: view.receipt_content_hash,
         }
     } else if view.synchronized_component_count == 0 && view.in_flight.is_none() {
@@ -546,7 +546,7 @@ fn intent_record_to_view(
     }
 }
 
-fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
+const fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
     match error {
         RootComponentProvisioningCommitError::ActiveOperationConflict => {
             InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)

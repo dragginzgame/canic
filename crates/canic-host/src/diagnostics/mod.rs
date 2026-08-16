@@ -121,11 +121,13 @@ impl DiagnosticCatalog {
     }
 
     /// Iterate over current entries in numeric order.
+    #[must_use]
     pub fn current_entries(&self) -> impl ExactSizeIterator<Item = &DiagnosticEntry> {
         self.current.iter()
     }
 
     /// Iterate over retired entries in numeric order.
+    #[must_use]
     pub fn retired_entries(&self) -> impl ExactSizeIterator<Item = &RetiredDiagnosticEntry> {
         self.retired.iter()
     }
@@ -153,7 +155,7 @@ pub fn render_diagnostic(code: DiagnosticCode) -> String {
         DiagnosticLookup::Current(entry) => {
             let mut rendered = format!("{} {}: {}", entry.code, entry.name, entry.summary);
             if let Some(guidance) = entry.guidance {
-                rendered.push_str(" ");
+                rendered.push(' ');
                 rendered.push_str(guidance);
             }
             rendered
@@ -193,13 +195,14 @@ mod tests {
 
     #[test]
     fn lookup_distinguishes_current_retired_and_unknown_codes() {
+        static RETIRED: &[RetiredDiagnosticEntry] =
+            &[RetiredDiagnosticEntry::new(23, "FORMER_IDENTITY")];
+
         let current = diagnostic_catalog().lookup(DiagnosticCode::from_raw(1));
         assert!(
             matches!(current, DiagnosticLookup::Current(entry) if entry.name == "ACCESS_UNAVAILABLE")
         );
 
-        static RETIRED: &[RetiredDiagnosticEntry] =
-            &[RetiredDiagnosticEntry::new(23, "FORMER_IDENTITY")];
         let fixture = DiagnosticCatalog::new(&[], RETIRED);
         let retired = fixture.lookup(DiagnosticCode::from_raw(23));
         assert!(

@@ -62,7 +62,7 @@ impl FleetRegistryMirrorOps {
         }
         let active = Self::current()
             .active
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let topology = ConfigOps::component_topology()?;
         FleetRegistryOps::validate(
             &authority.binding.authority,
@@ -138,7 +138,7 @@ fn validated_root_entry(
         .iter()
         .find(|entry| entry.fleet_subnet_root == root)
         .cloned()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let expected = FleetSubnetRootEntry {
         placement_subnet: authority.binding.placement_subnet,
         fleet_subnet_root: root,

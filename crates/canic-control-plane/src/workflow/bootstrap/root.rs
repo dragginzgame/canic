@@ -275,8 +275,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 /// IC builds resolve the authoritative subnet from the NNS registry. Local and
 /// test builds use the explicit subnet identity seeded by lifecycle init.
 pub async fn root_set_subnet_id() -> Result<(), InternalError> {
-    let build_network =
-        BuildNetworkOps::build_network().ok_or_else(|| InternalError::invariant())?;
+    let build_network = BuildNetworkOps::build_network().ok_or_else(InternalError::invariant)?;
 
     if build_network != BuildNetwork::Ic {
         let subnet_pid = EnvOps::subnet_pid()?;

@@ -558,7 +558,7 @@ pub async fn status(
     root_store::status(request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &request)?;
 
-    let prepared = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let prepared = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     let expected = ComponentRegistryPreparationAuthority::new(
         &authority.binding,
         &request.expected_fleet_registry,
@@ -803,7 +803,7 @@ fn peer_component_requester(
             InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let requester = ComponentRegistryOps::partition(requester_component)?
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if requester.binding.canister_id != caller {
         return Err(InternalError::public(
             canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
@@ -888,7 +888,7 @@ pub fn allocation_status(
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let topology = ConfigOps::component_topology()?;
     validate_allocation_record(
         &authority.binding,
@@ -942,7 +942,7 @@ pub async fn reserve_child_allocation(
     }
 
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -967,7 +967,7 @@ pub async fn reserve_child_allocation(
     let component_descendants = partition
         .reserved_descendants
         .checked_add(partition.committed_descendants)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let parent_role_instances = ComponentRegistryOps::parent_role_instances(
         request.component,
         caller,
@@ -1015,7 +1015,7 @@ pub fn child_allocation_status(
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     validate_child_allocation(
         &authority.binding,
         authority.initial_release_set,
@@ -1044,7 +1044,7 @@ pub async fn begin_component_draining(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1053,7 +1053,7 @@ pub async fn begin_component_draining(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let draining = ComponentRegistryOps::begin_component_draining(
@@ -1064,8 +1064,8 @@ pub async fn begin_component_draining(
         maximum_registry_bytes,
         fleet_directory.clone(),
     )?;
-    let current = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+    let current =
+        ComponentRegistryOps::partition(request.component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1083,12 +1083,12 @@ pub fn component_draining_status(
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let draining = ComponentRegistryOps::component_draining(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if draining.operation_id != request.operation_id {
         return Err(InternalError::conflict());
     }
-    let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+    let partition =
+        ComponentRegistryOps::partition(request.component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1118,7 +1118,7 @@ pub async fn quiesce_component(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1127,11 +1127,11 @@ pub async fn quiesce_component(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let draining = ComponentRegistryOps::component_draining(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_component_draining(&partition, &draining, None, None)?;
     let operation_matches = request.operation_id == draining.operation_id;
     let registry_matches = request.expected_registry == draining.registry;
@@ -1172,8 +1172,8 @@ pub async fn quiesce_component(
         plan.expected_status_module_hash,
         IcOps::now_nanos(),
     )?;
-    let current = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+    let current =
+        ComponentRegistryOps::partition(request.component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1191,12 +1191,12 @@ pub fn component_quiescence_status(
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let draining = ComponentRegistryOps::component_draining(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if request.operation_id != draining.operation_id {
         return Err(InternalError::conflict());
     }
-    let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+    let partition =
+        ComponentRegistryOps::partition(request.component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1260,7 +1260,7 @@ pub async fn delete_component(
         IcOps::now_nanos(),
     )?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_component_draining(&partition, &draining, None, None)?;
     let plan = prepared_component_deletion_plan(
         &prepared.root,
@@ -1316,7 +1316,7 @@ pub fn remove_component_membership(
             RootComponentDeletionProgressView::DeleteIntent(_)
             | RootComponentDeletionProgressView::Deleted(_) => None,
         })
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     CanisterPoolOps::complete_recycling(canister_id, request.component, IcOps::now_nanos())?;
     component_deletion_response(removed)
 }
@@ -1325,13 +1325,11 @@ fn component_recycling_canister(
     request: &RootComponentDeletionRequest,
 ) -> Result<candid::Principal, InternalError> {
     let draining = ComponentRegistryOps::component_draining(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if draining.operation_id != request.operation_id {
         return Err(InternalError::conflict());
     }
-    let deletion = draining
-        .deletion
-        .ok_or_else(|| InternalError::unavailable())?;
+    let deletion = draining.deletion.ok_or_else(InternalError::unavailable)?;
     match deletion {
         RootComponentDeletionProgressView::Deleted(receipt) => {
             Ok(receipt.deletion.quiescence.stop.canister_id)
@@ -1350,7 +1348,7 @@ pub fn component_deletion_status(
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let draining = ComponentRegistryOps::component_draining(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if request.operation_id != draining.operation_id {
         return Err(InternalError::conflict());
     }
@@ -1438,7 +1436,7 @@ async fn prepared_component_draining_boundary(
 
     let topology = ConfigOps::component_topology()?;
     let partition =
-        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::unavailable())?;
+        ComponentRegistryOps::partition(component)?.ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1447,7 +1445,7 @@ async fn prepared_component_draining_boundary(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     Ok(PreparedComponentDrainingBoundary {
@@ -1485,10 +1483,10 @@ async fn advance_subtree_removal_phase(
         }
     };
     ComponentRegistryOps::subtree_removal(response.component, response.operation_id)?
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
-fn subtree_removal_action(
+const fn subtree_removal_action(
     removal: &RootComponentSubtreeRemovalView,
 ) -> Result<ComponentSubtreeRemovalAction, InternalError> {
     let action = match &removal.progress {
@@ -1639,7 +1637,7 @@ pub async fn begin_subtree_removal(
         return Ok(subtree_removal_response(existing));
     }
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1648,7 +1646,7 @@ pub async fn begin_subtree_removal(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::begin_subtree_removal(
@@ -1686,7 +1684,7 @@ pub async fn advance_subtree_removal(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1695,7 +1693,7 @@ pub async fn advance_subtree_removal(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::advance_subtree_removal(
@@ -1732,7 +1730,7 @@ pub async fn prepare_subtree_leaf_stop(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1741,7 +1739,7 @@ pub async fn prepare_subtree_leaf_stop(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::prepare_subtree_leaf_stop(
@@ -1780,7 +1778,7 @@ pub async fn stop_subtree_leaf(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1789,11 +1787,11 @@ pub async fn stop_subtree_leaf(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -1858,7 +1856,7 @@ pub async fn prepare_subtree_leaf_delete(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1867,7 +1865,7 @@ pub async fn prepare_subtree_leaf_delete(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::prepare_subtree_leaf_delete(
@@ -1906,7 +1904,7 @@ pub async fn delete_subtree_leaf(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1915,11 +1913,11 @@ pub async fn delete_subtree_leaf(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -1984,7 +1982,7 @@ pub async fn remove_subtree_leaf_membership(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1993,7 +1991,7 @@ pub async fn remove_subtree_leaf_membership(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     CanisterPoolOps::validate_complete_recycling(
@@ -2026,10 +2024,6 @@ pub async fn remove_subtree_leaf_membership(
 }
 
 /// Converge the post-removal Directory on the surviving owner and distinct parent.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one workflow reverifies root authority and independently converges both bounded recipients"
-)]
 pub async fn synchronize_subtree_leaf_directory(
     request: RootComponentSubtreeRemovalDirectorySynchronizationRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
@@ -2048,7 +2042,7 @@ pub async fn synchronize_subtree_leaf_directory(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2057,11 +2051,11 @@ pub async fn synchronize_subtree_leaf_directory(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -2147,7 +2141,7 @@ pub async fn finalize_subtree_leaf(
 
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2156,7 +2150,7 @@ pub async fn finalize_subtree_leaf(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::finalize_subtree_leaf(
@@ -2181,7 +2175,7 @@ pub async fn finalize_subtree_leaf(
 pub fn subtree_removal_status(
     request: RootComponentSubtreeRemovalStatusRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
-    existing_subtree_removal(request)?.ok_or_else(|| InternalError::unavailable())
+    existing_subtree_removal(request)?.ok_or_else(InternalError::unavailable)
 }
 
 /// Read one durable removal when present, preserving absence for nested lifecycle admission.
@@ -2210,7 +2204,7 @@ pub(super) async fn advance_existing_subtree_removal(
     request: RootComponentSubtreeRemovalStatusRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let removal = Box::pin(advance_subtree_removal_phase(removal)).await?;
     Ok(subtree_removal_response(removal))
 }
@@ -2238,7 +2232,7 @@ pub async fn create_child_allocation(
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     validate_child_allocation(
         &authority.binding,
         authority.initial_release_set,
@@ -2266,7 +2260,7 @@ pub async fn create_allocation(
 
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_allocation_caller(&allocation)?;
     validate_allocation_record(
         &authority.binding,
@@ -2302,7 +2296,7 @@ pub(super) async fn advance_group_member_install(
     let plan =
         component_install_plan_with_deployment(root, store, &allocation, Some(deployment)).await?;
     let _response = advance_install(operation_id, allocation, plan).await?;
-    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| InternalError::invariant())
+    ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::invariant)
 }
 
 /// Reuse the ordinary top-level Registry commitment with plan-derived grouped limits.
@@ -2365,7 +2359,7 @@ pub async fn install_allocation(
 
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_allocation_caller(&allocation)?;
     validate_allocation_record(
         &authority.binding,
@@ -2410,7 +2404,7 @@ pub async fn install_child_allocation(
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     validate_child_allocation(
         &authority.binding,
         authority.initial_release_set,
@@ -2448,7 +2442,7 @@ pub async fn commit_child_allocation(
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     let topology = ConfigOps::component_topology()?;
     validate_child_allocation(
         &authority.binding,
@@ -2654,7 +2648,7 @@ fn activate_and_validate_child_membership(
     )?;
     let registered =
         ComponentRegistryOps::registered_parent(plan.allocation.component, plan.child_canister)?
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
     if registered != (plan.child_binding.clone(), ComponentLifecycleStatus::Active) {
         return Err(InternalError::invariant());
     }
@@ -2686,7 +2680,7 @@ fn validate_child_membership_receipt(
     let membership = committed_child_directory_receipt(allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let membership_authority =
         ComponentPartitionSnapshotAuthority::from_child_membership(membership);
     let partition_authority = ComponentPartitionSnapshotAuthority::from_partition(partition);
@@ -2727,7 +2721,7 @@ pub async fn commit_allocation(
 
     let topology = ConfigOps::component_topology()?;
     let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_allocation_caller(&allocation)?;
     validate_allocation_record(
         &authority.binding,
@@ -3079,7 +3073,7 @@ async fn activate_component_membership_with_plan(
     let membership = committed_directory_receipt(&activated_allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if membership.directory_authority_hash != active_authority_hash {
         return Err(InternalError::invariant());
     }
@@ -3265,7 +3259,7 @@ pub fn active_component_member_authority(
     let component = ComponentRegistryOps::component_for_principal(canister)
         .ok_or(ActiveComponentMemberError::NotActive)?;
     let partition =
-        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::invariant())?;
+        ComponentRegistryOps::partition(component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3273,7 +3267,7 @@ pub fn active_component_member_authority(
         &partition,
     )?;
     let (member, member_status) = ComponentRegistryOps::registered_parent(component, canister)?
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if partition.status != ComponentLifecycleStatus::Active
         || member_status != ComponentLifecycleStatus::Active
     {
@@ -3294,12 +3288,12 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
     let membership = committed_directory_receipt(&plan.allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if !membership.directory_synchronized {
         return Err(InternalError::unavailable());
     }
     let active_partition = ComponentRegistryOps::partition(plan.allocation.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &plan.root_binding,
         plan.allocation.release_set,
@@ -3341,8 +3335,8 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
 async fn prepared_initial_component_runtime_plan(
     operation_id: [u8; 32],
 ) -> Result<PreparedComponentRuntimePlan, InternalError> {
-    let allocation = ComponentRegistryOps::allocation(operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+    let allocation =
+        ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::unavailable)?;
     if !matches!(
         &allocation.provisioning_origin,
         ComponentProvisioningOrigin::ComponentGroup { .. }
@@ -3369,7 +3363,7 @@ pub fn registry_partition(
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3387,7 +3381,7 @@ pub fn directory_head(
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let topology = ConfigOps::component_topology()?;
     let partition = ComponentRegistryOps::partition(request.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3410,7 +3404,7 @@ pub fn directory_page(
     let topology = ConfigOps::component_topology()?;
     let component = request.directory.provenance.component.component;
     let partition =
-        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::unavailable())?;
+        ComponentRegistryOps::partition(component)?.ok_or_else(InternalError::unavailable)?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3440,7 +3434,7 @@ pub fn directory_page(
     if let Some(role) = request.role.as_ref() {
         let spec = topology
             .get(&partition.binding.component_spec)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if spec.child(role).is_none() {
             return Err(InternalError::invalid_input());
         }
@@ -3840,7 +3834,7 @@ async fn component_install_plan_with_deployment(
         .map_err(|_error| InternalError::invalid_input())?;
     let spec_maximum_registry_bytes = topology
         .get(&allocation.component_spec)
-        .ok_or_else(|| InternalError::invariant())?
+        .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
     let deployment =
@@ -3921,7 +3915,7 @@ async fn child_component_install_plan(
         .validate_component_child_binding(root, &binding)
         .map_err(|_error| InternalError::invalid_input())?;
     let partition = ComponentRegistryOps::partition(allocation.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let deployment_authority = RootComponentProvisioningOps::component_deployment_authority(
         &partition.provisioning_origin,
         &binding.component,
@@ -4459,8 +4453,8 @@ async fn prepared_component_runtime_plan_with_group_authority(
     let fleet_directory =
         validate_current_mirror_authority(&root_authority, root, &preparation_request)?;
     let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+    let allocation =
+        ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::unavailable)?;
     let retained_group_authority =
         validated_group_component_runtime_authority(&allocation, group_authority)?;
     validate_allocation_record(
@@ -4569,7 +4563,7 @@ async fn prepared_child_runtime_plan(
         return Err(InternalError::unavailable());
     }
     let allocation = ComponentRegistryOps::child_allocation(component, operation_id)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let topology = ConfigOps::component_topology()?;
     validate_child_allocation(
         &root_authority.binding,
@@ -4662,7 +4656,7 @@ fn current_child_partition(
     committed: &ComponentRegistryPartitionView,
 ) -> Result<ComponentRegistryPartitionView, InternalError> {
     let current =
-        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::invariant())?;
+        ComponentRegistryOps::partition(component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(root, release_set, topology, &current)?;
     if current.status != ComponentLifecycleStatus::Active
         || current.binding != committed.binding
@@ -4703,7 +4697,7 @@ fn active_component_direct_children_for_authority(
 ) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
     let component = authority.component.provenance.component.component;
     let partition =
-        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::unavailable())?;
+        ComponentRegistryOps::partition(component)?.ok_or_else(InternalError::unavailable)?;
     if component_directory_head(&partition) != authority.component {
         return Err(InternalError::conflict());
     }
@@ -4966,7 +4960,7 @@ async fn converge_subtree_directory_recipients(
         ),
         ComponentLifecycleStatus::Draining => {
             let draining = ComponentRegistryOps::component_draining(partition.binding.component)?
-                .ok_or_else(|| InternalError::invariant())?;
+                .ok_or_else(InternalError::invariant)?;
             if !matches!(
                 draining.quiescence,
                 Some(RootComponentQuiescenceProgressView::Quiescent(_))
@@ -4987,7 +4981,7 @@ async fn converge_subtree_directory_recipients(
         partition.binding.component,
         leaf.parent_canister_id,
     )?
-    .ok_or_else(|| InternalError::invariant())?;
+    .ok_or_else(InternalError::invariant)?;
     if status != ComponentLifecycleStatus::Active {
         return Err(InternalError::conflict());
     }
@@ -5069,14 +5063,12 @@ fn active_member_directory_is_converged(
     let current = status
         .authority
         .as_ref()
-        .ok_or_else(|| InternalError::conflict())?;
-    let current_hash = status
-        .authority_hash
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
+    let current_hash = status.authority_hash.ok_or_else(InternalError::conflict)?;
     let current_direct_children_hash = status
         .direct_children_hash
-        .ok_or_else(|| InternalError::conflict())?;
-    let activation = status.activation.ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
+    let activation = status.activation.ok_or_else(InternalError::conflict)?;
     validate_active_member_protected_status(status, binding, current, current_hash, activation)?;
 
     let current_component = &current.component.provenance;
@@ -5184,9 +5176,7 @@ fn exact_active_member_directory_receipt(
     )? {
         return Err(InternalError::unavailable());
     }
-    let activation = status
-        .activation
-        .ok_or_else(|| InternalError::invariant())?;
+    let activation = status.activation.ok_or_else(InternalError::invariant)?;
     Ok(ComponentRuntimeDirectoryConvergenceEvidence {
         operation_id: status.operation_id,
         binding: binding.clone(),
@@ -5335,7 +5325,7 @@ fn validate_active_directory_refresh_identity(
     if !identity_is_exact {
         return Err(InternalError::conflict());
     }
-    status.activation.ok_or_else(|| InternalError::invariant())
+    status.activation.ok_or_else(InternalError::invariant)
 }
 
 fn active_directory_refresh_covers(
@@ -5469,9 +5459,7 @@ fn active_target_runtime_status_for_deployment(
         request,
         authority_hash,
     )?;
-    let activation = status
-        .activation
-        .ok_or_else(|| InternalError::invariant())?;
+    let activation = status.activation.ok_or_else(InternalError::invariant)?;
     Ok(ComponentRuntimeStatusResponse {
         operation_id: request.operation_id,
         binding: binding.clone(),
@@ -5531,9 +5519,7 @@ fn active_membership_target_status_for_deployment(
     )? {
         return Err(InternalError::unavailable());
     }
-    let activation = status
-        .activation
-        .ok_or_else(|| InternalError::invariant())?;
+    let activation = status.activation.ok_or_else(InternalError::invariant)?;
     Ok(ComponentRuntimeStatusResponse {
         operation_id: prepared_request.operation_id,
         binding: binding.clone(),
@@ -5548,7 +5534,7 @@ fn active_membership_target_status_for_deployment(
     })
 }
 
-fn allocation_creation_and_canister(
+const fn allocation_creation_and_canister(
     allocation: &RootComponentAllocationView,
 ) -> Result<(&RootComponentCreationEffectView, candid::Principal), InternalError> {
     match &allocation.progress {
@@ -5575,7 +5561,7 @@ fn allocation_creation_and_canister(
     }
 }
 
-fn child_allocation_creation_and_canister(
+const fn child_allocation_creation_and_canister(
     allocation: &RootComponentChildAllocationView,
 ) -> Result<(&RootComponentCreationEffectView, candid::Principal), InternalError> {
     match &allocation.progress {
@@ -5601,7 +5587,7 @@ fn child_allocation_creation_and_canister(
     }
 }
 
-fn install_effect(
+const fn install_effect(
     allocation: &RootComponentAllocationView,
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
     match &allocation.progress {
@@ -5610,7 +5596,7 @@ fn install_effect(
     }
 }
 
-fn child_install_effect(
+const fn child_install_effect(
     allocation: &RootComponentChildAllocationView,
 ) -> Result<&RootComponentChildInstallEffectView, InternalError> {
     match &allocation.progress {
@@ -5621,7 +5607,7 @@ fn child_install_effect(
     }
 }
 
-fn committed_or_verified_installation(
+const fn committed_or_verified_installation(
     allocation: &RootComponentAllocationView,
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
     match &allocation.progress {
@@ -5631,7 +5617,7 @@ fn committed_or_verified_installation(
     }
 }
 
-fn committed_or_verified_child_installation(
+const fn committed_or_verified_child_installation(
     allocation: &RootComponentChildAllocationView,
 ) -> Result<&RootComponentChildInstallEffectView, InternalError> {
     match &allocation.progress {
@@ -5643,7 +5629,7 @@ fn committed_or_verified_child_installation(
     }
 }
 
-fn committed_installation(
+const fn committed_installation(
     allocation: &RootComponentAllocationView,
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
     match &allocation.progress {
@@ -5652,7 +5638,7 @@ fn committed_installation(
     }
 }
 
-fn committed_child_installation(
+const fn committed_child_installation(
     allocation: &RootComponentChildAllocationView,
 ) -> Result<&RootComponentChildInstallEffectView, InternalError> {
     match &allocation.progress {
@@ -5663,7 +5649,7 @@ fn committed_child_installation(
     }
 }
 
-pub(super) fn committed_directory_receipt(
+pub(super) const fn committed_directory_receipt(
     allocation: &RootComponentAllocationView,
 ) -> Result<&crate::view::component_registry::RootComponentCommitmentView, InternalError> {
     match &allocation.progress {
@@ -5672,7 +5658,7 @@ pub(super) fn committed_directory_receipt(
     }
 }
 
-fn committed_child_directory_receipt(
+const fn committed_child_directory_receipt(
     allocation: &RootComponentChildAllocationView,
 ) -> Result<&crate::view::component_registry::RootComponentChildCommitmentView, InternalError> {
     match &allocation.progress {
@@ -5685,7 +5671,7 @@ fn prepared_registry(
     root: &canic_core::ids::FleetSubnetRootBinding,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
 ) -> Result<RootComponentRegistryView, InternalError> {
-    let prepared = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let prepared = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     if &prepared.root != root || prepared.release_set != release_set {
         return Err(InternalError::conflict());
     }
@@ -5949,9 +5935,7 @@ const fn component_final_inventory_response(
 fn component_deletion_response(
     draining: RootComponentDrainingView,
 ) -> Result<RootComponentDeletionResponse, InternalError> {
-    let progress = draining
-        .deletion
-        .ok_or_else(|| InternalError::unavailable())?;
+    let progress = draining.deletion.ok_or_else(InternalError::unavailable)?;
     let phase = match progress {
         RootComponentDeletionProgressView::DeleteIntent(intent) => {
             RootComponentDeletionPhase::DeleteIntent(component_deletion_intent(intent))
@@ -6026,9 +6010,7 @@ const fn component_final_inventory(
 fn component_quiescence_response(
     draining: RootComponentDrainingView,
 ) -> Result<RootComponentQuiescenceResponse, InternalError> {
-    let phase = draining
-        .quiescence
-        .ok_or_else(|| InternalError::unavailable())?;
+    let phase = draining.quiescence.ok_or_else(InternalError::unavailable)?;
     Ok(RootComponentQuiescenceResponse {
         operation_id: draining.operation_id,
         component: draining.component,
@@ -6293,7 +6275,7 @@ fn membership_response(
     let membership = committed_directory_receipt(&allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let encoded_bytes_covered = membership.registry_encoded_bytes <= partition.encoded_bytes;
     if !membership.directory_synchronized
         || !encoded_bytes_covered
@@ -6320,7 +6302,7 @@ fn child_membership_response(
     let membership = committed_child_directory_receipt(&allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let membership_matches_partition =
         ComponentPartitionSnapshotAuthority::from_child_membership(membership)
             == ComponentPartitionSnapshotAuthority::from_partition(&active_partition);
@@ -6399,7 +6381,7 @@ fn component_deployment_limits(
         ProtectedComponentDeployment::UngroupedOrdinary { .. } => {
             let spec = topology
                 .get(&partition.binding.component_spec)
-                .ok_or_else(|| InternalError::invariant())?;
+                .ok_or_else(InternalError::invariant)?;
             Ok(ComponentDeploymentLimits {
                 maximum_descendants: spec.limits.maximum_descendants,
                 maximum_registry_bytes: spec.limits.maximum_registry_bytes,
@@ -6498,9 +6480,7 @@ fn exact_store_artifact<'a>(
     role: &canic_core::ids::CanisterRole,
 ) -> Result<&'a canic_core::dto::root_store::RootStoreCatalogEntry, InternalError> {
     let mut matching = store.catalog.iter().filter(|entry| &entry.role == role);
-    let artifact = matching
-        .next()
-        .ok_or_else(|| InternalError::unavailable())?;
+    let artifact = matching.next().ok_or_else(InternalError::unavailable)?;
     if matching.next().is_some() {
         return Err(InternalError::invariant());
     }
@@ -7034,8 +7014,8 @@ fn require_active_peer_allocation_caller(operation_id: [u8; 32]) -> Result<(), I
     require_active_root_runtime(
         "peer Component lifecycle requires an Active Fleet Subnet Root runtime",
     )?;
-    let allocation = ComponentRegistryOps::allocation(operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+    let allocation =
+        ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::unavailable)?;
     revalidate_retained_peer_origin(
         &authority,
         &ConfigOps::component_topology()?,
@@ -7259,10 +7239,10 @@ pub(super) fn validate_allocation_record(
         .binary_search_by(|candidate| candidate.component_spec.cmp(&allocation.component_spec))
         .ok()
         .map(|index| &root.component_admissions[index])
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let spec = topology
         .get(&allocation.component_spec)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if allocation.spec_hash != admission.spec_hash {
         return Err(InternalError::invariant());
     }
@@ -7357,8 +7337,8 @@ fn validate_subtree_removal(
     removal: &RootComponentSubtreeRemovalView,
     request: Option<&RootComponentSubtreeRemovalRequest>,
 ) -> Result<(), InternalError> {
-    let partition = ComponentRegistryOps::partition(removal.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+    let partition =
+        ComponentRegistryOps::partition(removal.component)?.ok_or_else(InternalError::invariant)?;
     validate_partition(root, release_set, topology, &partition)?;
     validate_subtree_removal_target(root, topology, removal)?;
     let reserved_registry_is_valid = removal.reserved_against_registry.component
@@ -7418,8 +7398,7 @@ fn validate_subtree_removal_target(
             return Err(InternalError::invariant());
         }
     } else {
-        let (target, _current_status) =
-            registered_target.ok_or_else(|| InternalError::invariant())?;
+        let (target, _current_status) = registered_target.ok_or_else(InternalError::invariant)?;
         let ManagedCanisterBinding::ComponentChild(target) = target else {
             return Err(InternalError::invariant());
         };
@@ -7485,15 +7464,15 @@ fn validate_child_allocation(
     }
     let spec = topology
         .get(&parent_component.component_spec)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let child = spec
         .child(&allocation.child_role)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let grant = spec
         .spawn_grant(parent_role, &allocation.child_role)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let partition = ComponentRegistryOps::partition(parent_component.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if partition.binding != *parent_component {
         return Err(InternalError::invariant());
     }

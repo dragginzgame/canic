@@ -236,7 +236,7 @@ fn claim_maintenance() -> Result<AsyncRecoveryClaim, InternalError> {
     let now_ns = IcOps::now_nanos();
     let lease_expires_at_ns = now_ns
         .checked_add(MAINTENANCE_LEASE_NS)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     AsyncTimerRecoveryOps::claim(
         AsyncRecoveryOwner::CanisterPoolMaintenance,
         now_ns,
@@ -314,7 +314,7 @@ fn maintenance_recovery_deadline(
                 .map_err(|_| InternalError::invariant())?,
         )
         .map(Some)
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> TimerRunResult {
@@ -512,7 +512,7 @@ fn validate_import_subnet(
     expected: SubnetId,
     actual: Option<Principal>,
 ) -> Result<(), InternalError> {
-    let actual = actual.ok_or_else(|| InternalError::unavailable())?;
+    let actual = actual.ok_or_else(InternalError::unavailable)?;
     if actual != expected.into_principal() {
         return Err(InternalError::conflict());
     }

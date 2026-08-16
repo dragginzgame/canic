@@ -75,7 +75,7 @@ impl FleetServicePeerOps {
             .component_admissions
             .iter()
             .find(|admission| admission.component_spec == service.component_spec)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let requester_root = root_binding(&registry.authority, owner);
         let component = component_binding(&registry.authority, service, member, owner, admission);
         topology
@@ -168,9 +168,7 @@ fn exact_service_member_root(
     let mut candidates = roots
         .iter()
         .filter(|root| root.fleet_subnet_root == expected_root);
-    let root = candidates
-        .next()
-        .ok_or_else(|| InternalError::invariant())?;
+    let root = candidates.next().ok_or_else(InternalError::invariant)?;
     if candidates.next().is_some() {
         return Err(InternalError::invariant());
     }

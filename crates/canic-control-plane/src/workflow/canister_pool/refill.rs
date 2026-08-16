@@ -63,8 +63,7 @@ pub(super) async fn start(
 }
 
 pub(super) async fn reconcile() -> Result<PoolAdminResponse, InternalError> {
-    let creation =
-        CanisterPoolOps::pending_creation().ok_or_else(|| InternalError::unavailable())?;
+    let creation = CanisterPoolOps::pending_creation().ok_or_else(InternalError::unavailable)?;
     validate_creation_authority(&creation)?;
     match creation.progress {
         CanisterPoolCreationProgressView::Created {
@@ -84,8 +83,7 @@ pub(super) async fn reconcile() -> Result<PoolAdminResponse, InternalError> {
 }
 
 pub(super) async fn reconcile_draining() -> Result<PoolAdminResponse, InternalError> {
-    let creation =
-        CanisterPoolOps::pending_creation().ok_or_else(|| InternalError::unavailable())?;
+    let creation = CanisterPoolOps::pending_creation().ok_or_else(InternalError::unavailable)?;
     validate_creation_authority(&creation)?;
     match creation.progress {
         CanisterPoolCreationProgressView::Intent {
@@ -131,8 +129,7 @@ async fn retry_intent(
     was_uncertain: bool,
 ) -> Result<PoolAdminResponse, InternalError> {
     reconcile_previous_cost_guard(&creation, was_uncertain)?;
-    let creation =
-        CanisterPoolOps::pending_creation().ok_or_else(|| InternalError::unavailable())?;
+    let creation = CanisterPoolOps::pending_creation().ok_or_else(InternalError::unavailable)?;
     let permit = deployment::reserve_canister_pool_creation_cost_guard()?;
     let settlement = permit.replay_settlement();
     CanisterPoolOps::begin_creation_attempt(creation.operation_id, settlement).map_err(

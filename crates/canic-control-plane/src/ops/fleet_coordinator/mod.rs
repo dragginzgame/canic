@@ -457,7 +457,7 @@ impl FleetCoordinatorOps {
         let fresh = current
             .component_provisioning
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if fresh.operation_id == request.operation_id {
             return Err(InternalError::conflict());
         }
@@ -507,7 +507,7 @@ impl FleetCoordinatorOps {
             &current.component_scale_out_receipts,
             request.operation_id,
         )?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
         if receipt.plan_hash != request.plan_hash {
             return Err(InternalError::conflict());
         }
@@ -585,9 +585,7 @@ impl FleetCoordinatorOps {
         if progress.accepted_root_count != request.expected_accepted_root_count {
             return Err(InternalError::conflict());
         }
-        let intent = progress
-            .in_flight
-            .ok_or_else(|| InternalError::conflict())?;
+        let intent = progress.in_flight.ok_or_else(InternalError::conflict)?;
         let batch = root_batch(record, intent.root_index)?;
         validate_root_acceptance_response(record, batch, &response)?;
         validate_root_acceptance_observation(intent.started_at_ns, &response, recorded_at_ns)?;
@@ -657,7 +655,7 @@ impl FleetCoordinatorOps {
         }
         let roots_accepted_at_ns = progress
             .roots_accepted_at_ns
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         let previous_observed_at_ns = root_provision_previous_observed_at(&progress)?;
         if started_at_ns < previous_observed_at_ns {
             return Err(InternalError::invalid_input());
@@ -665,7 +663,7 @@ impl FleetCoordinatorOps {
         let response = progress
             .current_response
             .as_ref()
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         let call = root_provision_call(record, progress.provisioned_root_count, response)?;
         let intent = FleetComponentProvisioningRootProvisionIntentRecord {
             root_index: progress.provisioned_root_count,
@@ -1366,7 +1364,7 @@ impl FleetCoordinatorOps {
             .root_draining_reservations
             .iter()
             .find(|record| draining_reservation_status_matches(&record.response, &request))
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let response = &record.response;
         if response.request.operation_id != request.operation_id
             || response.request.expected_root.fleet_subnet_root != request.fleet_subnet_root
@@ -1537,7 +1535,7 @@ impl FleetCoordinatorOps {
     fn current() -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = FleetCoordinatorRegistryStore::export()
             .current
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         Self::validate_current(current)
     }
 
@@ -1617,7 +1615,7 @@ fn require_test_component_deployment_configuration(
         .map_err(|_error| InternalError::invalid_input())?;
     let current = FleetCoordinatorRegistryStore::export()
         .current
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if current.component_deployment_configuration != expected {
         return Err(InternalError::conflict());
     }
@@ -4746,7 +4744,7 @@ const fn confirmation_intent_root(
     }
 }
 
-fn confirmation_call_publication_request(
+const fn confirmation_call_publication_request(
     call: &FleetComponentDirectoryConfirmationCallView,
 ) -> Result<&RootComponentPublicationRequest, InternalError> {
     match call {
@@ -4760,7 +4758,7 @@ fn confirmation_call_publication_request(
     }
 }
 
-fn fresh_confirmation_intent(
+const fn fresh_confirmation_intent(
     intent: &FleetComponentDirectoryConfirmationIntentRecord,
 ) -> Result<(u32, Principal, &RootComponentPublicationRequest, u64), InternalError> {
     let FleetComponentDirectoryConfirmationIntentRecord::FreshPublication {
@@ -4777,7 +4775,7 @@ fn fresh_confirmation_intent(
     Ok((*root_index, *fleet_subnet_root, request, *started_at_ns))
 }
 
-fn scale_out_synchronization_intent(
+const fn scale_out_synchronization_intent(
     intent: &FleetComponentDirectoryConfirmationIntentRecord,
 ) -> Result<
     (
@@ -4802,7 +4800,7 @@ fn scale_out_synchronization_intent(
     Ok((*root_index, *fleet_subnet_root, request, *started_at_ns))
 }
 
-fn scale_out_publication_intent(
+const fn scale_out_publication_intent(
     intent: &FleetComponentDirectoryConfirmationIntentRecord,
 ) -> Result<(u32, Principal, &RootComponentPublicationRequest, u64), InternalError> {
     let FleetComponentDirectoryConfirmationIntentRecord::ScaleOutPublication {
@@ -4884,7 +4882,7 @@ fn scale_out_confirmation_progress(
     Ok((synchronization.as_ref(), publication.as_deref()))
 }
 
-fn require_scale_out_operation(
+const fn require_scale_out_operation(
     record: &FleetComponentProvisioningRecord,
 ) -> Result<(), InternalError> {
     if matches!(
@@ -5266,7 +5264,7 @@ fn validate_runtime_activation_response(
     }
     let activation_started_at_ns = response
         .activation_started_at_ns
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     if previous_activation_started_at_ns
         .is_some_and(|expected| expected != activation_started_at_ns)
     {
@@ -5390,12 +5388,10 @@ fn validate_terminal_runtime_activation(
     activation_started_at_ns: u64,
     recorded_at_ns: u64,
 ) -> Result<(), InternalError> {
-    let activation = response
-        .activation
-        .ok_or_else(|| InternalError::conflict())?;
+    let activation = response.activation.ok_or_else(InternalError::conflict)?;
     let runtimes_activated_at_ns = response
         .runtimes_activated_at_ns
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     let progress_is_terminal = response.root_runtime_active
         && response.activated_component_count == response.component_count;
     let identity_is_exact = activation.component_count == response.component_count
@@ -5523,7 +5519,7 @@ fn validate_directory_confirmation_response(
     let publication = response
         .publication
         .as_ref()
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     if &publication.fleet_registry != context.published_registry
         || publication.fleet_directory_content_hash != context.fleet_directory_content_hash
     {
@@ -5874,7 +5870,7 @@ fn root_batch(
         .plan
         .batches
         .get(index)
-        .ok_or_else(|| InternalError::conflict())
+        .ok_or_else(InternalError::conflict)
 }
 
 fn replay_recorded_root_acceptance(
@@ -6122,7 +6118,7 @@ fn validate_root_acceptance_response(
     Ok(())
 }
 
-fn validate_root_acceptance_observation(
+const fn validate_root_acceptance_observation(
     started_at_ns: u64,
     response: &RootComponentProvisioningStatusResponse,
     recorded_at_ns: u64,
@@ -6180,7 +6176,7 @@ fn validate_root_provision_response(
             )?;
             let provisioned_at_ns = response
                 .provisioned_at_ns
-                .ok_or_else(|| InternalError::conflict())?;
+                .ok_or_else(InternalError::conflict)?;
             if provisioned_at_ns < started_at_ns || recorded_at_ns < provisioned_at_ns {
                 return Err(InternalError::invalid_input());
             }
@@ -6618,7 +6614,7 @@ fn require_snapshot_root(
         .find(|entry| {
             entry.fleet_subnet_root == caller && entry.status != FleetSubnetRootStatus::Removed
         })
-        .ok_or_else(|| InternalError::forbidden())
+        .ok_or_else(InternalError::forbidden)
 }
 
 fn require_joining_root(
@@ -6632,7 +6628,7 @@ fn require_joining_root(
         .find(|entry| {
             entry.fleet_subnet_root == caller && entry.status == FleetSubnetRootStatus::Joining
         })
-        .ok_or_else(|| InternalError::forbidden())
+        .ok_or_else(InternalError::forbidden)
 }
 
 fn require_all_roots_joining(
@@ -7343,7 +7339,7 @@ fn draining_reservation_for_publication<'a>(
             FleetSubnetRootDrainingIdentity::from_reservation_request(&record.response.request)
                 .conflicts_with(publication_identity)
         })
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let reservation_identity =
         FleetSubnetRootDrainingIdentity::from_reservation_request(&reservation.response.request);
     if reservation_identity != publication_identity {
@@ -7683,6 +7679,6 @@ fn validate_root_draining_reservations(
     Ok(())
 }
 
-fn receipt_invariant(_message: &'static str) -> InternalError {
+const fn receipt_invariant(_message: &'static str) -> InternalError {
     InternalError::invariant()
 }
