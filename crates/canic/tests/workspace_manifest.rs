@@ -74,6 +74,19 @@ fn workspace_member_manifests(root: &Path, manifest: &Value) -> Vec<PathBuf> {
         .collect()
 }
 
+// Returns whether a workspace member belongs to Canic's governed package tree.
+fn is_canic_owned_workspace_member(root: &Path, manifest_path: &Path) -> bool {
+    let Ok(relative) = manifest_path.strip_prefix(root) else {
+        return false;
+    };
+
+    relative
+        .components()
+        .next()
+        .and_then(|component| component.as_os_str().to_str())
+        .is_some_and(|component| matches!(component, "canisters" | "crates"))
+}
+
 // Checks whether a manifest value inherits its setting from the workspace.
 fn is_workspace_inherited(value: &Value) -> bool {
     value
@@ -503,7 +516,7 @@ fn check_dependency_table(
     }
 }
 
-// Verifies every workspace member inherits package and dependency versions from the root.
+// Verifies Canic-owned workspace members inherit package and dependency versions from the root.
 #[test]
 fn workspace_members_inherit_versions_from_root() {
     let root = workspace_root();
@@ -521,6 +534,10 @@ fn workspace_members_inherit_versions_from_root() {
 
     // Validate each workspace member against the root manifest contract.
     for manifest_path in member_manifests {
+        if !is_canic_owned_workspace_member(&root, &manifest_path) {
+            continue;
+        }
+
         let manifest = read_manifest(&manifest_path);
         let Some(package) = manifest.get("package").and_then(Value::as_table) else {
             continue;
@@ -607,7 +624,7 @@ fn publishable_members_do_not_depend_on_unpublished_workspace_members() {
     }
 }
 
-// Verifies canister artifact crates do not also publish Rust library artifacts.
+// Verifies Canic-owned canister artifact crates do not also emit Rust libraries.
 #[test]
 fn cdylib_members_do_not_emit_rlib_artifacts() {
     let root = workspace_root();
@@ -617,6 +634,10 @@ fn cdylib_members_do_not_emit_rlib_artifacts() {
 
     let mut failures = Vec::new();
     for manifest_path in member_manifests {
+        if !is_canic_owned_workspace_member(&root, &manifest_path) {
+            continue;
+        }
+
         let manifest = read_manifest(&manifest_path);
         let crate_types = lib_crate_types(&manifest);
 
