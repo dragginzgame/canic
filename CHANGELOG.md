@@ -18,7 +18,8 @@ Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
   guard with a strict six-field ledger, without JSON, generic handling,
   compatibility or history machinery, and removes the downstream Toko-only
   topology qualification fixture and canister stubs. Release cadence now has
-  no minimum and uses only a soft 12-release-per-minor guideline.
+  no minimum and uses only a soft 12-release-per-minor guideline, while current
+  status semantics no longer fail releases at an arbitrary line count.
 
 - `0.102.1` closes the evidence-only whole-program diagnostic inventory across
   every effective producer, dynamic public value, durable string and masked

@@ -37,12 +37,6 @@ require_files "$GUARD_LABEL" \
     "$AUTH_CONTRACT" \
     "${operator_docs[@]}"
 
-status_line_count="$(wc -l <"$STATUS")"
-[ "$status_line_count" -le 200 ] || {
-    echo "current status is no longer a compact handoff: $status_line_count lines" >&2
-    exit 1
-}
-
 for design_entry in "$ROOT"/docs/design/*; do
     [ -d "$design_entry" ] || continue
     case "$(basename "$design_entry")" in
