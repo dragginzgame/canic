@@ -48,7 +48,7 @@ impl IcOps {
             ic_cdk::api::cost_create_canister(),
         )
         .map(Cycles::new)
-        .ok_or_else(|| InternalError::resource_exhausted())
+        .ok_or_else(InternalError::resource_exhausted)
     }
 
     /// Return the current caller principal.

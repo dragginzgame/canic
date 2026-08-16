@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - The standalone waveform preview now retains and serves only its digested
   numeric trace: the source photograph, derived overlay and host image compiler
-  are removed, image routes are absent, and focused guards prevent raster or
-  vector image artifacts from returning.
+  are removed, and the preview is excluded from every checked-in IC-mainnet
+  environment while its local target remains available.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

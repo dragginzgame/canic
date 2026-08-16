@@ -42,7 +42,7 @@ impl IntentCleanupBatch {
         let total = self
             .application_receipts_removed
             .checked_add(self.local_intents_aborted)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         u64::try_from(total).map_err(|_| InternalError::invariant())
     }
 }
@@ -378,7 +378,7 @@ impl IntentCleanupWorkflow {
             usize::try_from(application.removed_records).map_err(|_| InternalError::invariant())?;
         let local_limit = CLEANUP_BATCH_SIZE
             .checked_sub(application_receipts_removed)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let now_secs = now_ns / NANOS_PER_SECOND;
         let due = IntentStoreOps::list_due_expiry_intents(now_secs, local_limit)?;
         let mut aborted = 0;
@@ -469,7 +469,7 @@ impl IntentCleanupWorkflow {
     fn deadline_ns(due_at_secs: u64) -> Result<u64, InternalError> {
         due_at_secs
             .checked_mul(NANOS_PER_SECOND)
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 }
 

@@ -339,7 +339,7 @@ fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u
     config
         .chain_key_root_proof
         .min_accepted_proof_epoch
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
@@ -349,7 +349,7 @@ fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
         .unwrap_or(DEFAULT_DELEGATED_TOKEN_MAX_TTL_SECS);
     max_ttl_secs
         .checked_mul(1_000_000_000)
-        .ok_or_else(|| InternalError::invalid_input())
+        .ok_or_else(InternalError::invalid_input)
 }
 
 // -----------------------------------------------------------------------------

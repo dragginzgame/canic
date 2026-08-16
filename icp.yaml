@@ -97,6 +97,22 @@ environments:
     network: local
     canisters: [root, app, user_hub, user_shard]
 
+  # Override the implicit all-canister mainnet environment so the inert
+  # waveform preview cannot be deployed there without a deliberate config edit.
+  - name: ic
+    network: ic
+    canisters:
+      - root
+      - app
+      - test
+      - scale_hub
+      - scale_replica
+      - user_hub
+      - user_shard
+      - playground_root
+      - playground_hub
+      - wenzelroll
+
   - name: proof
     network: ic
     canisters: [root, app, user_hub, user_shard]
@@ -104,10 +120,6 @@ environments:
   - name: playground-ic
     network: ic
     canisters: [playground_root, playground_hub, wenzelroll]
-
-  - name: saltz-preview-ic
-    network: ic
-    canisters: [saltz_preview]
 
   - name: saltz-preview-local
     network: saltz-local

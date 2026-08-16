@@ -88,7 +88,7 @@ impl RuntimeAuthWorkflow {
         }
 
         let proof = AuthOps::signed_chain_key_delegation_proof_for_issuer(issuer_pid, now_ns)?
-            .ok_or_else(|| InternalError::auth_proof_pending())?;
+            .ok_or_else(InternalError::auth_proof_pending)?;
         crate::perf!("root_proof_load_issuer");
         Ok(proof)
     }
@@ -389,7 +389,7 @@ mod tests {
     #[test]
     fn explicit_provisioning_preserves_issuer_application_error() {
         let rejected = Error::from_registered(crate::diagnostics::codes::AUTH_CERT_EXPIRED);
-        let failure = issuer_install_response(Err(rejected.clone()))
+        let failure = issuer_install_response(Err(rejected))
             .expect_err("issuer application rejection must remain an error");
         assert_eq!(
             failure.record_failure(),
@@ -429,8 +429,7 @@ mod tests {
         );
 
         let rejected = Error::from_registered(crate::diagnostics::codes::AUTH_CERT_EXPIRED);
-        let public =
-            IssuerProofInstallError::RejectedByIssuer(rejected.clone()).into_renewal_error();
+        let public = IssuerProofInstallError::RejectedByIssuer(rejected).into_renewal_error();
         assert_eq!(public.public_error(), rejected);
     }
 }

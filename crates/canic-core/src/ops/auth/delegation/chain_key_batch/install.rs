@@ -117,7 +117,7 @@ pub(super) fn start_chain_key_root_delegation_batch_install(
     let signature = batch
         .signature
         .clone()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let proofs = batch
         .issuers
         .iter()

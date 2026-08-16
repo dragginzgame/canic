@@ -119,7 +119,7 @@ impl PlacementAcknowledgementWorkflow {
             ACKNOWLEDGEMENT_BATCH_SIZE,
         )?;
         let mut work_count = 0u64;
-        let root_pid = EnvOps::root_pid().map_err(|err| err)?;
+        let root_pid = EnvOps::root_pid()?;
 
         for intent in page.intents {
             let operation_id = intent.operation_id;

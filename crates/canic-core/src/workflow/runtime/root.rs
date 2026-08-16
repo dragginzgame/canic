@@ -77,8 +77,7 @@ pub fn init_root_canister(
         parent_pid: Some(fleet_subnet_root_pid),
     };
 
-    let build_network =
-        BuildNetworkOps::build_network().ok_or_else(|| InternalError::invariant())?;
+    let build_network = BuildNetworkOps::build_network().ok_or_else(InternalError::invariant)?;
     crate::log!(Topic::Init, Info, "build network: {build_network}");
     let validated = match validate_or_default(input) {
         Ok(validated) => validated,

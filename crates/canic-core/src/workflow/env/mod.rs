@@ -36,7 +36,7 @@ impl EnvWorkflow {
         env_args: EnvBootstrapArgs,
         role: CanisterRole,
     ) -> Result<(), InternalError> {
-        BuildNetworkOps::build_network().ok_or_else(|| InternalError::invariant())?;
+        BuildNetworkOps::build_network().ok_or_else(InternalError::invariant)?;
 
         let input = EnvInput {
             fleet_subnet_root_pid: env_args.fleet_subnet_root_pid,

@@ -105,12 +105,8 @@ pub(super) fn execute_placement_receipt_acknowledgement(
                 crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
             ));
         }
-        PlacementReceiptAcknowledgementDecision::NotCommitted => {
-            return Err(InternalError::public(
-                crate::diagnostics::codes::STATE_CONFLICT,
-            ));
-        }
-        PlacementReceiptAcknowledgementDecision::NotPlacementEffect => {
+        PlacementReceiptAcknowledgementDecision::NotCommitted
+        | PlacementReceiptAcknowledgementDecision::NotPlacementEffect => {
             return Err(InternalError::public(
                 crate::diagnostics::codes::STATE_CONFLICT,
             ));
@@ -174,7 +170,7 @@ fn component_child_provision_request(
     let expected_registry = authority
         .caller_registry()
         .cloned()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     Ok(RootComponentChildProvisionRequest {
         operation_id: pending.receipt_token.receipt().operation_id.into_bytes(),
         component,
@@ -189,7 +185,7 @@ fn resolve_provision_parent(
 ) -> Result<crate::cdk::types::Principal, InternalError> {
     authority
         .provision_parent_canister_id()
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 fn root_provision_command_kind(command_kind: &'static str) -> CommandKind {
@@ -314,7 +310,7 @@ fn component_child_recycle_request(
     let expected_registry = authority
         .caller_registry()
         .cloned()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     Ok(RootComponentChildRecycleRequest {
         operation_id: pending.receipt_token.receipt().operation_id.into_bytes(),
         component,

@@ -152,7 +152,7 @@ impl TopologyCascadeWorkflow {
             MetricReason::Ok,
         );
 
-        CycleWorkflow::reconcile_after_topology_change().map_err(|err| err)?;
+        CycleWorkflow::reconcile_after_topology_change()?;
 
         if let Some(next_pid) = next {
             let next_snapshot = match Self::slice_snapshot_for_child(next_pid, &snapshot) {

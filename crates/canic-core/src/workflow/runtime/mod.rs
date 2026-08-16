@@ -77,15 +77,15 @@ pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
 }
 
 pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
-    IntentStoreOps::rebuild_expiry_index().map_err(|err| err)?;
-    ReceiptBackedIntentOps::reconcile_receipt_indexes().map_err(|err| err)?;
-    let _receipt_capacity = ReceiptBackedIntentOps::receipt_capacity().map_err(|err| err)?;
+    IntentStoreOps::rebuild_expiry_index()?;
+    ReceiptBackedIntentOps::reconcile_receipt_indexes()?;
+    let _receipt_capacity = ReceiptBackedIntentOps::receipt_capacity()?;
 
     Ok(())
 }
 
 pub(super) fn rebuild_root_derived_storage_indexes() -> Result<(), InternalError> {
-    IcpRefillStoreOps::rebuild_indexes().map_err(|err| err)?;
+    IcpRefillStoreOps::rebuild_indexes()?;
     rebuild_derived_storage_indexes()
 }
 

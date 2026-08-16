@@ -140,7 +140,7 @@ impl FleetActivationWorkflow {
         let manifest = root_status
             .cascade_manifest
             .clone()
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
 
         for entry in &manifest {
             resume_nonroot_activation(entry, &root_status, request).await?;
@@ -149,7 +149,7 @@ impl FleetActivationWorkflow {
         let root_cascade = root_status
             .cascade
             .clone()
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
             &root_status.identity,
             &root_cascade,
@@ -220,7 +220,7 @@ impl FleetActivationWorkflow {
         }
         let credential = root_status
             .credential
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let expected_cascade = FleetCascadeActivationEvidence::Applied {
             state_snapshot_hash: FleetActivationEvidenceOps::state_snapshot_hash(&state)?,
             topology_snapshot_hash: FleetActivationEvidenceOps::topology_snapshot_hash(&topology)?,

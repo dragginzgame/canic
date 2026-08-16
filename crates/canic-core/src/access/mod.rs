@@ -115,7 +115,9 @@ impl AccessError {
             | Self::ControllerRequired
             | Self::DirectChildRequired
             | Self::FleetSubnetRootRequired
+            | Self::ParentRequired
             | Self::RootOrActiveComponentRequired
+            | Self::RootRequired
             | Self::SelfRequired
             | Self::ServiceAuthorityRequired => {
                 AccessDiagnosticCodes::public(codes::AUTHORITY_UNAVAILABLE)
@@ -141,9 +143,6 @@ impl AccessError {
             }
             Self::FleetDisabled => AccessDiagnosticCodes::public(codes::AUTHORITY_INACTIVE),
             Self::FleetReadonly => AccessDiagnosticCodes::public(codes::AUTHORITY_INVALID_STATE),
-            Self::ParentRequired | Self::RootRequired => {
-                AccessDiagnosticCodes::public(codes::AUTHORITY_UNAVAILABLE)
-            }
             Self::ExpressionRuleRequired => AccessDiagnosticCodes::projected(
                 codes::CONFIGURATION_UNAVAILABLE,
                 codes::CONFIGURATION_INVALID,
@@ -151,7 +150,7 @@ impl AccessError {
             Self::NegatedPredicateMatched => {
                 AccessDiagnosticCodes::public(codes::CONFIGURATION_INVALID_STATE)
             }
-            Self::RequiredScopeMissing => {
+            Self::RequiredScopeMissing | Self::WhitelistRequired => {
                 AccessDiagnosticCodes::public(codes::CONFIGURATION_UNAVAILABLE)
             }
             Self::ServiceGuardInvalid => AccessDiagnosticCodes::projected(
@@ -160,9 +159,6 @@ impl AccessError {
             ),
             Self::DelegatedTokenMaxTtlOverflow => {
                 AccessDiagnosticCodes::projected(codes::TIME_CAPACITY, codes::CONFIGURATION_INVALID)
-            }
-            Self::WhitelistRequired => {
-                AccessDiagnosticCodes::public(codes::CONFIGURATION_UNAVAILABLE)
             }
             Self::Internal(_) => return None,
         };
@@ -283,7 +279,10 @@ mod tests {
             assert_eq!(actual.exact, expected);
             assert_eq!(actual.public, expected);
         }
+    }
 
+    #[test]
+    fn projected_access_rejections_use_the_approved_registered_identities() {
         let projected = [
             (
                 AccessError::ExpressionRuleRequired,

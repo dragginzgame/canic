@@ -54,7 +54,7 @@ struct FanoutFailures {
 }
 
 impl FanoutFailures {
-    fn push(&mut self, _pid: Principal, error: InternalError) {
+    const fn push(&mut self, _pid: Principal, error: InternalError) {
         self.count += 1;
         self.first = Some(match self.first.take() {
             None => error,
@@ -62,7 +62,7 @@ impl FanoutFailures {
         });
     }
 
-    fn into_error(self) -> Option<InternalError> {
+    const fn into_error(self) -> Option<InternalError> {
         self.first
     }
 }

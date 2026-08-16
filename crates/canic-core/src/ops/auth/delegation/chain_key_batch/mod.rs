@@ -225,7 +225,7 @@ pub(in crate::ops::auth) fn plan_due_chain_key_root_delegation_batch(
     let expires_at_ns = input
         .now_ns
         .checked_add(cert_ttl_ns)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
 
     Ok(ChainKeyRootDelegationBatchPreparation::RequiresPolicy(
         ChainKeyRootDelegationBatchPreparePlan {
@@ -480,7 +480,7 @@ fn shared_batch_cert_ttl_ns(
         .iter()
         .map(|due| due.template.cert_ttl_ns)
         .min()
-        .ok_or_else(|| InternalError::invalid_input())?;
+        .ok_or_else(InternalError::invalid_input)?;
     let ttl_ns = template_ttl_ns
         .min(max_cert_ttl_ns)
         .min(max_revocation_latency_ns);
