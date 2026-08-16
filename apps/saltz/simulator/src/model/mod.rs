@@ -62,6 +62,7 @@ pub struct SimulationReport {
     pub kernel_window_seconds: u64,
     pub max_total_burn_cycles: u128,
     pub nonnegative_constraint_steps: usize,
+    pub peak_control_cycles_per_second: f64,
     pub pre_roll_cycles: u128,
     pub rate_cap_constraint_steps: usize,
     pub run_cycles: u128,
@@ -131,6 +132,7 @@ pub fn simulate(
     let pre_roll_cycles = integrate_cycles(&pre_roll, config.control_step_seconds);
     let run_cycles = integrate_cycles(&control, config.control_step_seconds);
     let total_cycles = pre_roll_cycles.saturating_add(run_cycles);
+    let peak_control_cycles_per_second = control.iter().copied().fold(0.0_f64, f64::max) * BILLION;
 
     Ok(SimulationReport {
         chart_correlation,
@@ -141,6 +143,7 @@ pub fn simulate(
         kernel_window_seconds: config.kernel_window_seconds,
         max_total_burn_cycles: config.max_total_burn_cycles,
         nonnegative_constraint_steps,
+        peak_control_cycles_per_second,
         pre_roll_cycles,
         rate_cap_constraint_steps,
         run_cycles,
@@ -373,6 +376,10 @@ mod tests {
 
         assert!(report.within_total_cap);
         assert!(report.nonnegative_constraint_steps > 0);
+        assert!(
+            report.peak_control_cycles_per_second
+                <= config().max_burn_rate_cycles_per_second as f64
+        );
         assert_eq!(report.rate_cap_constraint_steps, 0);
         assert!(!report.proposal_exact());
     }

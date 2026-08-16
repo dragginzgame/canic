@@ -12,15 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
 
-- `0.102.3` records the `.2` diagnostic `code + name` release baseline in one
-  flat host-only snapshot and rejects post-release reuse or renaming without
-  freezing mutable catalogue prose, initial row counts or the archived B1
-  census, and without adding release-history machinery.
-
 - `0.102.2` hard-cuts public errors to `Error { code: u16 }`, maps existing
   typed failures onto 161 reviewed semantic reasons, keeps prose in the host
-  catalogue and preserves arbitrary decoded codes without adding JSON,
-  generic handling metadata or compatibility machinery.
+  catalogue, preserves arbitrary decoded codes and adds a flat release identity
+  guard with a strict six-field ledger, without JSON, generic handling,
+  compatibility or history machinery.
 
 - `0.102.1` closes the evidence-only whole-program diagnostic inventory across
   every effective producer, dynamic public value, durable string and masked

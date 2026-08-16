@@ -72,6 +72,7 @@ fn read(path: &Path) -> String {
 fn reasons() -> Vec<Reason> {
     let source = read(&workspace_root().join("crates/canic-host/diagnostics/reasons.toml"));
     let document = toml::from_str::<toml::Table>(&source).expect("valid reason ledger TOML");
+    assert_eq!(document.len(), 1, "reason ledger owns only the reason rows");
     document
         .get("reason")
         .and_then(toml::Value::as_array)
@@ -79,30 +80,47 @@ fn reasons() -> Vec<Reason> {
         .iter()
         .map(|value| {
             let row = value.as_table().expect("reason row");
+            let allowed_fields = ["code", "name", "origin", "summary", "guidance", "retired"];
+            let unexpected_fields = row
+                .keys()
+                .filter(|field| !allowed_fields.contains(&field.as_str()))
+                .collect::<Vec<_>>();
+            assert!(
+                unexpected_fields.is_empty(),
+                "reason row has unsupported fields: {unexpected_fields:?}"
+            );
             let code = row
                 .get("code")
                 .and_then(toml::Value::as_integer)
                 .and_then(|value| u16::try_from(value).ok())
                 .expect("u16 reason code");
             let string = |field: &str| {
-                row.get(field)
+                let value = row
+                    .get(field)
                     .and_then(toml::Value::as_str)
-                    .unwrap_or_else(|| panic!("reason E{code} missing {field}"))
-                    .to_string()
+                    .unwrap_or_else(|| panic!("reason E{code} missing {field}"));
+                assert!(!value.trim().is_empty(), "reason E{code} has empty {field}");
+                value.to_string()
             };
             Reason {
                 code,
                 name: string("name"),
                 origin: string("origin"),
                 summary: string("summary"),
-                guidance: row
-                    .get("guidance")
-                    .and_then(toml::Value::as_str)
-                    .map(str::to_string),
+                guidance: row.get("guidance").map(|value| {
+                    let guidance = value
+                        .as_str()
+                        .unwrap_or_else(|| panic!("reason E{code} guidance must be a string"));
+                    assert!(
+                        !guidance.trim().is_empty(),
+                        "reason E{code} has empty guidance"
+                    );
+                    guidance.to_string()
+                }),
                 retired: row
                     .get("retired")
                     .and_then(toml::Value::as_bool)
-                    .unwrap_or(false),
+                    .unwrap_or_else(|| panic!("reason E{code} missing boolean retired")),
             }
         })
         .collect()
