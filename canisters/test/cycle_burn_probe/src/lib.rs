@@ -1,68 +1,102 @@
 //! Module: cycle_burn_probe
 //!
-//! Responsibility: provide one bounded, controller-only local burn calibration.
+//! Responsibility: provide one exact, controller-only cycle-burn calibration.
 //! Does not own: waveform scheduling, retries, funding, timers, or production state.
 //! Boundary: one successful call is permitted per installation and commits its receipt atomically.
 
-use std::cell::Cell;
+use std::cell::RefCell;
 
-use candid::CandidType;
-use ic_cdk::api::{canister_cycle_balance, cycles_burn, is_controller, msg_caller};
+use candid::{CandidType, Principal};
+use ic_cdk::api::{canister_cycle_balance, cycles_burn, is_controller, msg_caller, time};
 
-const MAX_BURN_CYCLES: u128 = 100_000_000_000;
+const AUTHORIZED_BURN_CYCLES: u128 = 4_000_000_000_000;
 const MIN_RETAINED_CYCLES: u128 = 1_000_000_000_000;
 
 thread_local! {
-    static USED: Cell<bool> = const { Cell::new(false) };
+    static RECEIPT: RefCell<Option<BurnReceipt>> = const { RefCell::new(None) };
 }
 
 /// Exact same-message evidence returned by the one permitted burn.
-#[derive(CandidType)]
+#[derive(CandidType, Clone)]
 struct BurnReceipt {
     requested_cycles: u128,
     burned_cycles: u128,
     balance_before_cycles: u128,
     balance_after_burn_cycles: u128,
+    caller: Principal,
+    executed_at_ns: u64,
 }
 
-/// Bounded rejection reasons for the local calibration probe.
+/// Recoverable current evidence for an uncertain update response.
+#[derive(CandidType)]
+struct BurnStatus {
+    authorized_burn_cycles: u128,
+    minimum_retained_cycles: u128,
+    current_balance_cycles: u128,
+    receipt: Option<BurnReceipt>,
+}
+
+/// Bounded rejection reasons for the calibration probe.
 #[derive(CandidType)]
 enum BurnProbeError {
     AccessDenied,
     AlreadyUsed,
-    AmountOutOfRange { maximum_allowed_cycles: u128 },
+    InsufficientBalance {
+        available_cycles: u128,
+        required_cycles: u128,
+    },
 }
 
-/// Burn one controller-selected amount within the immutable local calibration envelope.
+/// Burn the one compile-time-authorized calibration amount.
 #[ic_cdk::update]
-fn burn_once(amount_cycles: u128) -> Result<BurnReceipt, BurnProbeError> {
+fn burn_once() -> Result<BurnReceipt, BurnProbeError> {
     if !is_controller(&msg_caller()) {
         return Err(BurnProbeError::AccessDenied);
     }
-    if USED.get() {
+    if RECEIPT.with_borrow(Option::is_some) {
         return Err(BurnProbeError::AlreadyUsed);
     }
 
     let balance_before_cycles = canister_cycle_balance();
-    let available_cycles = balance_before_cycles.saturating_sub(MIN_RETAINED_CYCLES);
-    let maximum_allowed_cycles = MAX_BURN_CYCLES.min(available_cycles);
-    if amount_cycles == 0 || amount_cycles > maximum_allowed_cycles {
-        return Err(BurnProbeError::AmountOutOfRange {
-            maximum_allowed_cycles,
+    let required_cycles = AUTHORIZED_BURN_CYCLES + MIN_RETAINED_CYCLES;
+    if balance_before_cycles < required_cycles {
+        return Err(BurnProbeError::InsufficientBalance {
+            available_cycles: balance_before_cycles,
+            required_cycles,
         });
     }
 
-    let burned_cycles = cycles_burn(amount_cycles);
-    if burned_cycles != amount_cycles {
+    let caller = msg_caller();
+    let executed_at_ns = time();
+    let burned_cycles = cycles_burn(AUTHORIZED_BURN_CYCLES);
+    if burned_cycles != AUTHORIZED_BURN_CYCLES {
         ic_cdk::trap("cycle burn did not match the prevalidated amount");
     }
 
-    USED.set(true);
-    Ok(BurnReceipt {
-        requested_cycles: amount_cycles,
+    let receipt = BurnReceipt {
+        requested_cycles: AUTHORIZED_BURN_CYCLES,
         burned_cycles,
         balance_before_cycles,
         balance_after_burn_cycles: canister_cycle_balance(),
+        caller,
+        executed_at_ns,
+    };
+    RECEIPT.with_borrow_mut(|stored| *stored = Some(receipt.clone()));
+    Ok(receipt)
+}
+
+/// Return the immutable authorization and committed receipt, if any.
+#[ic_cdk::query]
+fn burn_status() -> Result<BurnStatus, BurnProbeError> {
+    if !is_controller(&msg_caller()) {
+        return Err(BurnProbeError::AccessDenied);
+    }
+
+    Ok(BurnStatus {
+        authorized_burn_cycles: AUTHORIZED_BURN_CYCLES,
+        minimum_retained_cycles: MIN_RETAINED_CYCLES,
+        current_balance_cycles: canister_cycle_balance(),
+        receipt: RECEIPT.with_borrow(Clone::clone),
     })
 }
 
