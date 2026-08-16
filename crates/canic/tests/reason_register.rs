@@ -1,11 +1,11 @@
 //! Test: reason_register
 //!
-//! Responsibility: keep the reviewed cause families, host ledger, runtime constants, and host catalogue exact.
-//! Does not own: producer mappings, public projection, handling policy, or released-version comparison.
+//! Responsibility: keep released identities, the current reason ledger, runtime constants, and the host catalogue exact.
+//! Does not own: producer mappings, public projection, or handling policy.
 //! Boundary: repository-only generation evidence; none of this data enters canister Wasm.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fmt::Write as _,
     fs,
     path::{Path, PathBuf},
@@ -19,6 +19,41 @@ struct Reason {
     summary: String,
     guidance: Option<String>,
     retired: bool,
+}
+
+fn released_identities() -> BTreeMap<u16, String> {
+    let source = read(&workspace_root().join("crates/canic-host/diagnostics/released.toml"));
+    let document = toml::from_str::<toml::Table>(&source).expect("valid released ledger TOML");
+    assert_eq!(
+        document.len(),
+        2,
+        "released ledger owns only its version and code/name identities"
+    );
+    let release = document
+        .get("release")
+        .and_then(toml::Value::as_str)
+        .expect("released ledger version");
+    assert!(
+        !release.is_empty(),
+        "released ledger version must not be empty"
+    );
+
+    let mut identities = BTreeMap::new();
+    for (name, code) in document
+        .get("identity")
+        .and_then(toml::Value::as_table)
+        .expect("released identity table")
+    {
+        let code = code
+            .as_integer()
+            .and_then(|value| u16::try_from(value).ok())
+            .unwrap_or_else(|| panic!("released diagnostic {name} must have a u16 code"));
+        assert!(
+            identities.insert(code, name.clone()).is_none(),
+            "released diagnostic code E{code} must be unique"
+        );
+    }
+    identities
 }
 
 fn workspace_root() -> PathBuf {
@@ -69,31 +104,6 @@ fn reasons() -> Vec<Reason> {
                     .and_then(toml::Value::as_bool)
                     .unwrap_or(false),
             }
-        })
-        .collect()
-}
-
-fn reviewed_names(qualification: &str) -> BTreeSet<String> {
-    let source =
-        read(&workspace_root().join("docs/audits/working/0.102-diagnostic-inventory/index.md"));
-    let (_, remainder) = source
-        .split_once("<!-- BEGIN SEMANTIC CAUSE REVIEW -->")
-        .expect("semantic review start");
-    let (table, _) = remainder
-        .split_once("<!-- END SEMANTIC CAUSE REVIEW -->")
-        .expect("semantic review end");
-
-    table
-        .lines()
-        .filter(|line| line.starts_with("| `"))
-        .filter_map(|line| {
-            let cells = line
-                .trim_matches('|')
-                .split('|')
-                .map(str::trim)
-                .collect::<Vec<_>>();
-            (cells.len() == 6 && cells[4] == format!("`{qualification}`"))
-                .then(|| cells[1].trim_matches('`').to_string())
         })
         .collect()
 }
@@ -160,9 +170,8 @@ fn generated_runtime_block(source: &str) -> &str {
 }
 
 #[test]
-fn reviewed_register_is_unique_nonzero_and_exact() {
+fn reason_ledger_is_unique_nonzero_and_sorted() {
     let reasons = reasons();
-    let current_count = reasons.iter().filter(|reason| !reason.retired).count();
     let codes = reasons
         .iter()
         .map(|reason| reason.code)
@@ -172,8 +181,6 @@ fn reviewed_register_is_unique_nonzero_and_exact() {
         .map(|reason| reason.name.as_str())
         .collect::<BTreeSet<_>>();
 
-    assert_eq!(reasons.len(), 161);
-    assert_eq!(current_count, 161);
     assert_eq!(codes.len(), reasons.len());
     assert_eq!(names.len(), reasons.len());
     assert!(reasons.iter().all(|reason| reason.code != 0));
@@ -181,14 +188,22 @@ fn reviewed_register_is_unique_nonzero_and_exact() {
         reasons.windows(2).all(|pair| pair[0].code < pair[1].code),
         "reason ledger must stay sorted for static binary lookup"
     );
-    assert_eq!(
-        names,
-        reviewed_names("global")
-            .iter()
-            .map(String::as_str)
-            .collect()
-    );
-    assert_eq!(reviewed_names("local").len(), 10);
+}
+
+#[test]
+fn released_code_and_name_identities_are_preserved() {
+    let current = reasons()
+        .into_iter()
+        .map(|reason| (reason.code, reason.name))
+        .collect::<BTreeMap<_, _>>();
+
+    for (code, released_name) in released_identities() {
+        assert_eq!(
+            current.get(&code),
+            Some(&released_name),
+            "released diagnostic E{code} must retain its name"
+        );
+    }
 }
 
 #[test]

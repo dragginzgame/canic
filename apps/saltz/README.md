@@ -1,15 +1,15 @@
 # Saltz Waveform Application
 
-Saltz is an experimental Canic application for rendering the selected neon
-mountain trace in the public ICP Cycle Burn Rate graph. The checked-in
-application is deliberately inert: it cannot burn cycles, arm a run, schedule
-a waveform or accept a funding authorization.
+Saltz is an experimental standalone canister for rendering the selected
+mountain trace in one exact ICP Subnet's public Cycle Burn Rate series. The
+burner is destructive only after a controller explicitly arms its immutable
+compiled plan; install and ordinary status calls cannot burn the waveform.
 
-This first implementation boundary contains:
+The implementation boundary contains:
 
-- one ordinary Fleet Subnet Root package;
-- one inert Burner Component package; and
-- one pinned numeric waveform CSV consumed by the standalone preview.
+- one standalone burner package with no Fleet or Canic runtime dependency;
+- one pinned numeric waveform CSV consumed at build time; and
+- one separately deployable read-only preview.
 
 It also contains an independent `saltz_preview` canister. The preview is not a
 Fleet role and has no Canic runtime dependency. It exposes one read-only
@@ -38,24 +38,73 @@ link is absent. The long German document title is the only textual clue to the
 artistic source. Internal package and design names retain their truthful
 implementation identity.
 
-The checked-in CSV preserves the provisional numeric waveform and exact
-rational 24-hour time axis. The removed image-authoring pipeline no longer
-exists in the workspace, so the CSV is presentation evidence rather than an
-executable `RunPlan` or reproducible source-extraction claim. Dashboard
-qualification and any future privately held source evidence remain open.
+The checked-in CSV preserves the numeric geometry and exact rational 24-hour
+time axis. The burner resamples that geometry into one immutable integer plan:
+45 pre-roll pulses followed by 864 drawing pulses, one every 100 seconds. The
+build fails if its digest, duration, per-pulse rate or total ceiling drifts.
+The removed image-authoring pipeline does not exist in the workspace, so the
+CSV does not independently establish source provenance.
 
-The current review mapping is a provisional `100..=150 Bcycles/second`
-combined visible-rate target. Its `50 Bcycles/second` relief replaces the
-former `16.667 Bcycles/second` candidate after dated global IC observations
-showed that the smaller mountain could be lost in baseline volatility. This
-raises the zero-background 24-hour exposure to approximately
-`10_464.206204 Tcycles`; B0 visibility and economic qualification remain
-mandatory before any destructive implementation or authorization.
+The executable mapping is deliberately Subnet-scoped: a visible target of
+`1..=2.5 Bcycles/second` against a fixed dated `0.625 Bcycles/second`
+background model. It is not intended to dominate the volatile global series.
+The inferred rectangular `4,531`-second response model remains dated and
+provisional; a successful timer execution proves the burn plan, not artistic
+fidelity on the public Dashboard.
 
-No application runtime code deploys another Canister or performs a destructive
-external effect. Burner implementation remains gated by the accepted shared
-`ic-timers` consumer hard cut, Dashboard qualification and an explicit
-external-effect authorization contract.
+The exact embedded envelope is:
+
+- authorization digest `491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9`;
+- pre-roll burn `5,766,930,000,000` cycles;
+- drawing burn `90,038,364,472,300` cycles;
+- total intentional burn `95,805,294,472,300` cycles;
+- retained reserve `1,000,000,000,000` cycles; and
+- execution allowance `100,000,000,000` cycles.
+
+The authorized staged trial binds its first 42 pulses, covering 70 minutes and
+`5,382,468,000,000` intentional cycles. Arming therefore requires at least
+`6,482,468,000,000` cycles: that initial burn allocation, the retained reserve
+and the execution allowance. Funding is never autonomous. If an external
+top-up does not arrive before a later pulse needs it, the first balance
+shortfall stops permanently without retry or catch-up. Additional balance
+cannot increase the immutable schedule or total ceiling.
+
+The application-owned Candid surface is exactly two methods:
+
+- `burner_command(variant { Arm; Abort })` — controller-only update;
+- `burner_status(variant { Summary; Receipts })` — controller-only query.
+
+There is no generic amount argument, start/stop toggle, forecast endpoint,
+funding endpoint, Fleet endpoint or application timer facade. `Abort` is the
+only stop command and never resumes.
+
+The staged-trial release Wasm with module hash
+`728edf4a7d652cc1ffa79e7dda5e96e4a91e42c67eaabb9cc7e2e240f325294b`
+was installed on IC-mainnet canister `w47na-gaaaa-aaaad-qmclq-cai` on
+2026-08-16. Its authorization digest is
+`491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9`.
+The controller then funded only the 70-minute trial envelope and armed a first
+deadline at `2026-08-16T23:45:00+02:00`, with the one-hour decision point at
+`00:45` and the next-funding deadline before `00:55`.
+
+Build and test the standalone burner without creating a mainnet canister:
+
+```sh
+cargo test -p saltz_simulator
+POCKET_IC_BIN=/path/to/pocket-ic cargo test -p saltz_burner --test pic_waveform
+icp build saltz_burner -e waveform-burner-local
+```
+
+Deploying through `waveform-burner-local` or `waveform-burner-ic` installs an
+inert `Prepared` canister. It does not fund or arm the schedule. Inspect the
+exact envelope with:
+
+```sh
+icp canister call saltz_burner burner_status \
+  '(variant { Summary })' \
+  -e waveform-burner-local \
+  --candid apps/saltz/burner/saltz_burner.did
+```
 
 Build and test the standalone preview without creating a canister:
 
@@ -114,10 +163,10 @@ cargo run --locked -p saltz_simulator -- \
   --max-total-burn-cycles 130000000000000
 ```
 
-The simulator binds the checked-in waveform digest, resamples it to the
-current 144-point `1D` chart surface and reports pre-roll, run cost,
-non-negative-control constraints, rate-cap constraints and predicted fidelity.
-Its provisional floating-point output is never executable authority.
+The simulator binds the checked-in waveform digest and reports the current
+144-point `1D` fit. Its floating-point report remains analysis only. A separate
+integer compiler emits the exact 909 amounts embedded by the burner build;
+that digested array, not the floating-point report, is execution authority.
 
 The separately authorized B0b mainnet calibration is now complete. Its former
 one-shot installation burned one exact `4 Tcycle` pulse that was clearly
@@ -125,21 +174,22 @@ visible in the owning Subnet's public series, but
 the attributable peak was only approximately `0.883 Bcycles/second` and
 remained spread across the observed tail. A naive independent 100-second
 bucket would have been `40 Bcycles/second`. The API `step` parameter therefore
-does not provide the independent approximately 100-second drawing buckets the
-current 860-point plan assumed. The follow-on plateau is governed by the
-separate exact envelope in the calibration report; neither calibration
-authorizes B1 or a complete waveform. See the
+does not provide independent approximately 100-second drawing buckets. The
+embedded controller instead uses their overlap under the dated inferred
+`4,531`-second rectangular response. That inference is a bounded proposal, not
+a completed platform contract. See the
 [bounded calibration report](../../docs/audits/working/saltz-b0b-calibration/mainnet-calibration.md).
 
 That B0c plateau is also complete: eighteen exact host-driven `200 Bcycle`
 steps raised the owning Subnet series from approximately `0.312` to
 `1.303 Bcycles/second` while retaining more than `1 Tcycle`. The result proves
 that bounded repeated input produces a clean accumulated signal. It does not
-yet qualify the complete decay kernel or authorize another mint, top-up, burn
-or waveform run.
+qualify the complete decay kernel. The maintainer later promoted implementation
+and inert deployment of the standalone burner; a mint, top-up and `Arm` remain
+separate exact external effects.
 
-The preview remains excluded from every checked-in IC-mainnet environment. The
-calibration probe remains excluded from the broad `ic` environment and is
-admitted only through `cycle-burn-calibration-ic`. That dedicated environment
-does not itself authorize an effect: the exact identity, mint, creation,
-Subnet, burn and retained-balance envelope must be recorded before each use.
+The preview, calibration probe and burner remain excluded from the broad `ic`
+environment. Their deliberately named environments do not themselves
+authorize an effect. In particular, `waveform-burner-ic` authorizes only an
+explicit install command unless a separate exact funding and arm envelope is
+recorded.

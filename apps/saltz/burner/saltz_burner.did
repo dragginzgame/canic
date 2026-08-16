@@ -1,0 +1,98 @@
+type BurnReceipt = record {
+  expected_at_ns : nat64;
+  balance_before_cycles : nat;
+  burned_cycles : nat;
+  kind : ReceiptKind;
+  balance_after_cycles : nat;
+  step_index : nat32;
+  executed_at_ns : nat64;
+  requested_cycles : nat;
+};
+type BurnerCommand = variant {
+  Arm : record { chart_start_at_ns : nat64; authorization_digest : blob };
+  Abort;
+};
+type BurnerError = variant {
+  AccessDenied;
+  Rejected : record { reason : RejectionReason };
+  Conflict : record { phase : RunPhase };
+};
+type BurnerStatusRequest = variant {
+  Summary;
+  Receipts : record { limit : nat16; start : nat32 };
+};
+type BurnerStatusResponse = variant {
+  Summary : BurnerSummary;
+  Receipts : ReceiptPage;
+};
+type BurnerSummary = record {
+  control_step_seconds : nat64;
+  background_cycles_per_second : nat64;
+  total_step_count : nat32;
+  chart_start_at_ns : opt nat64;
+  current_balance_cycles : nat;
+  execution_allowance_cycles : nat;
+  required_cycles_to_arm : nat;
+  terminal_reason : opt TerminalReason;
+  initial_funding_step_count : nat32;
+  receipt_count : nat32;
+  schedule_start_at_ns : opt nat64;
+  max_lateness_ns : nat64;
+  total_burned_cycles : nat;
+  total_burn_cycles : nat;
+  target_floor_cycles_per_second : nat64;
+  max_burn_rate_cycles_per_second : nat64;
+  run_cycles : nat;
+  next_step_index : nat32;
+  max_total_burn_cycles : nat;
+  pre_roll_cycles : nat;
+  initial_funding_cycles : nat;
+  minimum_arm_lead_ns : nat64;
+  pre_roll_step_count : nat32;
+  phase : RunPhase;
+  authorization_digest : blob;
+  target_amplitude_cycles_per_second : nat64;
+  minimum_retained_cycles : nat;
+  chart_step_seconds : nat64;
+  waveform_step_count : nat32;
+  kernel_window_seconds : nat64;
+};
+type ReceiptKind = variant { Waveform; PreRoll };
+type ReceiptPage = record {
+  next_start : opt nat32;
+  total_receipts : nat32;
+  receipts : vec BurnReceipt;
+};
+type RejectionReason = variant {
+  ReceiptPage : record { limit : nat16; start : nat32; maximum_limit : nat16 };
+  Authorization;
+  Timer;
+  StartWindow : record {
+    earliest_chart_start_ns : nat64;
+    latest_chart_start_ns : nat64;
+    alignment_ns : nat64;
+    requested_chart_start_ns : nat64;
+  };
+  Funding : record { available_cycles : nat; required_cycles : nat };
+};
+type Result = variant { Ok : BurnerSummary; Err : BurnerError };
+type Result_1 = variant { Ok : BurnerStatusResponse; Err : BurnerError };
+type RunPhase = variant {
+  Failed;
+  Prepared;
+  Armed;
+  Running;
+  Completed;
+  Aborted;
+};
+type TerminalReason = variant {
+  LateTimer;
+  PartialBurn;
+  InsufficientBalance;
+  RuntimeInvariant;
+  ControllerAbort;
+};
+service : () -> {
+  burner_command : (BurnerCommand) -> (Result);
+  burner_status : (BurnerStatusRequest) -> (Result_1) query;
+}

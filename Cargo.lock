@@ -4043,8 +4043,12 @@ name = "saltz_burner"
 version = "0.102.1"
 dependencies = [
  "candid",
- "canic",
  "ic-cdk",
+ "ic-testkit",
+ "ic-timers",
+ "pocket-ic",
+ "saltz_simulator",
+ "serde",
 ]
 
 [[package]]

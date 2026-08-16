@@ -177,20 +177,39 @@ mod tests {
     #[test]
     fn generated_catalogue_is_sorted_unique_and_complete() {
         let catalog = diagnostic_catalog();
-        let codes = catalog
+        let current_codes = catalog
             .current_entries()
             .map(|entry| entry.code.raw())
             .collect::<Vec<_>>();
-        let names = catalog
+        let retired_codes = catalog
+            .retired_entries()
+            .map(|entry| entry.code.raw())
+            .collect::<Vec<_>>();
+        let current_names = catalog
             .current_entries()
             .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        let retired_names = catalog
+            .retired_entries()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        let entry_count = current_codes.len() + retired_codes.len();
+        let unique_codes = current_codes
+            .iter()
+            .chain(&retired_codes)
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let unique_names = current_names
+            .iter()
+            .chain(&retired_names)
+            .copied()
             .collect::<std::collections::BTreeSet<_>>();
 
-        assert_eq!(codes.len(), 161);
-        assert_eq!(names.len(), codes.len());
-        assert!(codes.iter().all(|code| *code != 0));
-        assert!(codes.windows(2).all(|pair| pair[0] < pair[1]));
-        assert_eq!(catalog.retired_entries().len(), 0);
+        assert_eq!(unique_codes.len(), entry_count);
+        assert_eq!(unique_names.len(), entry_count);
+        assert!(unique_codes.iter().all(|code| *code != 0));
+        assert!(current_codes.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(retired_codes.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
     #[test]

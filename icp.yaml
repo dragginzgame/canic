@@ -85,6 +85,14 @@ canisters:
             - CARGO_INCREMENTAL=0 cargo build --locked --package cycle_burn_probe --target wasm32-unknown-unknown --release
             - cp target/wasm32-unknown-unknown/release/cycle_burn_probe.wasm "$ICP_WASM_OUTPUT_PATH"
 
+  - name: saltz_burner
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo build --locked --package saltz_burner --target wasm32-unknown-unknown --release
+            - cp target/wasm32-unknown-unknown/release/saltz_burner.wasm "$ICP_WASM_OUTPUT_PATH"
+
 networks:
   - name: local
     mode: managed
@@ -140,6 +148,14 @@ environments:
   - name: cycle-burn-calibration-ic
     network: ic
     canisters: [cycle_burn_probe]
+
+  - name: waveform-burner-local
+    network: saltz-local
+    canisters: [saltz_burner]
+
+  - name: waveform-burner-ic
+    network: ic
+    canisters: [saltz_burner]
 
   - name: test
     network: local
