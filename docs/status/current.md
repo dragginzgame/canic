@@ -159,6 +159,12 @@ until a complete dated aggregation kernel and a different bounded strategy
 are accepted. Exact evidence is retained in the
 [B0b calibration report](../audits/working/saltz-b0b-calibration/mainnet-calibration.md).
 
+A host-only simulator now binds the 860-point digest, resamples the current
+600-second/144-point `1D` frontend surface and fails proposals across total,
+rate and non-negative-control constraints. The separately authorized B0c
+plateau is capped at eighteen host-driven `200 Bcycle` steps with no timer,
+retry or catch-up; it does not promote the 24-hour Burner.
+
 ## Next Action
 
 The diagnostic batch is ready for maintainer commit/push validation. Do not

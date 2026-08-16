@@ -4,7 +4,7 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 publish = false
-description = "Exact one-shot cycle burn calibration probe"
+description = "Exact host-driven cycle burn plateau calibration probe"
 
 [lib]
 crate-type = ["cdylib"]
@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 candid = { workspace = true }
 ic-cdk = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true

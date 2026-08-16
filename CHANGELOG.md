@@ -18,7 +18,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   exists only for the separately approved B0b observation. That mainnet
   calibration proved direct-burn visibility but rejected the assumed
   independent approximately 100-second drawing buckets, leaving all further
-  destructive work held pending a different qualified observation model.
+  destructive work held pending a different qualified observation model. A
+  host-only simulator now projects bounded proposals onto the current
+  144-point `1D` surface, while a separately authorized plateau probe composes
+  Start, exact indexed Step and terminal Abort behind one command method and
+  can never continue without host calls.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

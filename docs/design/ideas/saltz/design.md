@@ -29,6 +29,9 @@ Date: 2026-08-16
   remained elevated across the observed tail. The complete dated aggregation
   kernel remains open. B1 implementation remains held until the promotion
   gates close.
+* Follow-on disposition: the maintainer separately authorized one host-driven
+  B0c plateau of at most eighteen `200 Bcycle` steps on the existing probe.
+  It has no timer, retry or catch-up and remains distinct from Burner B1.
 * Implementation disposition: the non-destructive `apps/saltz` foundation and
   numeric preview may proceed independently. The checked-in Burner shell is
   inert and contains no burn, timer, run-state or authorization path. The
@@ -1477,6 +1480,20 @@ The one authorized destructive effect is complete. Q1 passed, while the
 single-pulse-per-provisional-bucket model failed. Continued read-only decay
 observation may refine the dated kernel, but no further burn, mint, funding or
 retry is inherited. B1 remains held.
+
+### B0c — Host-Driven Plateau
+
+The separately authorized follow-on uses the existing disposable probe to
+submit at most eighteen compile-time-bound `200 Bcycle` steps at nominal
+100-second spacing. The canister exposes one controller-only command method
+and one controller-only status query. `Start`, exact indexed `Step` and
+terminal `Abort` are command variants rather than endpoints.
+
+The host owns timing. The canister has no timer and cannot continue after host
+calls stop. A committed index is idempotent, a future index rejects, a late
+index aborts terminally without burn, and the total cannot exceed
+`3.6 Tcycles` per installation. This B0 evidence does not execute the waveform
+or promote B1.
 
 ### B1 — Burner Component
 
