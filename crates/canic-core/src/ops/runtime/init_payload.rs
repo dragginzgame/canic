@@ -19,17 +19,13 @@ pub fn wasm_store_init_args(
     target_pid: Principal,
 ) -> Result<FleetSubnetWasmStoreInitArgs, InternalError> {
     if target_pid == Principal::anonymous() {
-        return Err(InternalError::invalid_input(
-            "managed infrastructure target Canister is anonymous",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     EnvOps::require_root()?;
     let authority = FleetActivationOps::wasm_store_authority().map_err(StorageOpsError::from)?;
     if authority.wasm_store != target_pid {
-        return Err(InternalError::invalid_input(
-            "managed sibling Wasm Store target differs from protected authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let identity = FleetActivationOps::status(EnvOps::is_root())
         .map_err(StorageOpsError::from)?

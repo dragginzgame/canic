@@ -5,7 +5,7 @@
 //! Boundary: callers use these helpers before applying Cashier-derived facts.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::{candid::Int, types::Principal},
     dto::blob_storage::{BlobStorageCashierAccountCycleBalances, BlobStorageCashierDebtTarget},
 };
@@ -49,7 +49,21 @@ pub enum CashierDecodeError {
 
 impl From<CashierDecodeError> for InternalError {
     fn from(err: CashierDecodeError) -> Self {
-        Self::ops(InternalErrorOrigin::Ops, err.to_string())
+        let code = match err {
+            CashierDecodeError::InvalidCycleBalance { .. } => {
+                crate::diagnostics::codes::CAPACITY_INVALID
+            }
+            CashierDecodeError::EmptyGatewayPrincipalList => {
+                crate::diagnostics::codes::COLLECTION_INVALID
+            }
+            CashierDecodeError::InvalidGatewayPrincipal { .. } => {
+                crate::diagnostics::codes::AUTHORITY_INVALID
+            }
+            CashierDecodeError::TooManyGatewayPrincipals { .. } => {
+                crate::diagnostics::codes::CAPACITY_LIMIT
+            }
+        };
+        Self::public(code)
     }
 }
 

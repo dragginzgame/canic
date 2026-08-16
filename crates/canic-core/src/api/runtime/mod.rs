@@ -202,15 +202,15 @@ impl RuntimeIntrospectionApi {
         let (receipt_capacity, receipt_failure) = match receipt_capacity_result {
             Ok(capacity) => (Some(capacity), None),
             Err(err) => {
-                let (class, origin) = err.log_fields();
+                let code = err.code();
                 (
                     None,
                     Some(RecentFailureInput {
                         occurred_at_ns: observed_at_ns,
                         subsystem: "intent_capacity".to_string(),
-                        code: "receipt_capacity_unavailable".to_string(),
+                        code: code.to_string(),
                         severity: FailureSeverity::Error,
-                        summary: format!("class={class} origin={origin}: {err}"),
+                        summary: format!("diagnostic={code}"),
                         correlation_id: None,
                     }),
                 )

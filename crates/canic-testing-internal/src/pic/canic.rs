@@ -109,15 +109,17 @@ impl CanicPicExt for PocketIc {
         self.install_canister(
             wasm_store,
             wasm_store_wasm,
-            encode_one(store_args)
-                .map_err(|error| Error::internal(format!("encode Store init failed: {error}")))?,
+            encode_one(store_args).map_err(|error| {
+                Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED)
+            })?,
             Some(installation_controller),
         );
         self.install_canister(
             root_id,
             root_wasm,
-            encode_one(&root_args)
-                .map_err(|error| Error::internal(format!("encode root init failed: {error}")))?,
+            encode_one(&root_args).map_err(|error| {
+                Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED)
+            })?,
             None,
         );
         adopt_sibling_wasm_store(self, root_id, &root_args);
@@ -382,7 +384,7 @@ pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
     input: ManagedRootInstallInput<'_>,
 ) -> Result<Vec<u8>, Error> {
     encode_one(managed_test_root_init_args(input)?)
-        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
+        .map_err(|err| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))
 }
 
 fn ensure_canister_wasm_ready(
@@ -450,7 +452,7 @@ fn managed_test_root_init_args(
     } = input;
     let identity = managed_test_init_identity();
     let config = AppConfigSnapshot::load(config_path)
-        .map_err(|error| Error::internal(format!("load root test config failed: {error}")))?;
+        .map_err(|error| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?;
     let topology = config.component_topology();
     let component_admissions = topology
         .component_specs
@@ -464,7 +466,7 @@ fn managed_test_root_init_args(
     let component_topology_digest = topology
         .project_for_admissions(&component_admissions)
         .and_then(|projection| projection.digest())
-        .map_err(|error| Error::internal(format!("compile root test authority failed: {error}")))?;
+        .map_err(|error| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?;
     let expected_module_hash = <[u8; 32]>::try_from(wasm_hash(root_wasm))
         .expect("SHA-256 helper must return exactly 32 bytes");
     let expected_wasm_store_module_hash = <[u8; 32]>::try_from(wasm_hash(wasm_store_wasm))

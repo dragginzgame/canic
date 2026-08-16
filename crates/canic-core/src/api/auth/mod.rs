@@ -7,7 +7,6 @@
 use crate::{
     cdk::types::Principal,
     dto::{auth::DelegatedToken, error::Error},
-    error::InternalErrorClass,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
@@ -35,33 +34,29 @@ mod token;
 pub struct AuthApi;
 
 impl AuthApi {
-    const DELEGATED_TOKENS_DISABLED: &str =
-        "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
-    const DELEGATED_TOKEN_ISSUER_DISABLED: &str = "delegated token issuer disabled for this canister; enable auth.delegated_token_issuer on its Component Spec or child-role table in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
 
     // Map internal auth failures onto public endpoint errors.
     fn map_auth_error(err: crate::InternalError) -> Error {
-        match err.class() {
-            InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
-                Error::internal(err.to_string())
-            }
-            _ => Error::from(err),
-        }
+        Error::from(err)
     }
 
     fn require_delegated_token_issuer_enabled() -> Result<(), Error> {
         let delegated_tokens_cfg =
             ConfigOps::delegated_tokens_config().map_err(Self::map_auth_error)?;
         if !delegated_tokens_cfg.enabled {
-            return Err(Error::invalid(Self::DELEGATED_TOKENS_DISABLED));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::REQUEST_INVALID,
+            ));
         }
 
         let canister_cfg = ConfigOps::current_canister().map_err(Self::map_auth_error)?;
         if !canister_cfg.auth.delegated_token_issuer {
-            return Err(Error::forbidden(Self::DELEGATED_TOKEN_ISSUER_DISABLED));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
 
         Ok(())
@@ -94,14 +89,16 @@ impl AuthApi {
     fn delegated_token_max_ttl_ns() -> Result<u64, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
 
         let max_ttl_secs = cfg
             .max_ttl_secs
             .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
-        max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
-            Error::invalid("auth.delegated_tokens.max_ttl_secs overflows nanoseconds")
-        })
+        max_ttl_secs
+            .checked_mul(1_000_000_000)
+            .ok_or_else(|| Error::from_registered(crate::diagnostics::codes::REQUEST_INVALID))
     }
 }

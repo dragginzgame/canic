@@ -9,12 +9,7 @@ pub mod capability;
 mod lifecycle;
 pub mod request;
 
-use crate::{
-    InternalError, InternalErrorOrigin,
-    cdk::types::Principal,
-    dto::error::{Error as PublicError, ErrorCode},
-    ids::CanisterRole,
-};
+use crate::{InternalError, cdk::types::Principal, diagnostics::codes, ids::CanisterRole};
 use thiserror::Error as ThisError;
 
 pub use authority::{
@@ -106,22 +101,41 @@ pub enum RpcWorkflowError {
 impl From<RpcWorkflowError> for InternalError {
     fn from(err: RpcWorkflowError) -> Self {
         match err {
-            RpcWorkflowError::CyclesFundingDisabled => {
-                Self::public(PublicError::unavailable("cycles funding disabled"))
+            RpcWorkflowError::CanisterRoleNotFound(_)
+            | RpcWorkflowError::ChildNotFound(_)
+            | RpcWorkflowError::ParentNotFound(_) => Self::public(codes::AUTHORITY_UNAVAILABLE),
+            RpcWorkflowError::NotChildOfCaller(_, _) => {
+                Self::public(codes::AUTHORITY_INVALID_STATE)
             }
+            RpcWorkflowError::InsufficientFundingCycles { .. } => {
+                Self::public(codes::CAPACITY_INSUFFICIENT)
+            }
+            RpcWorkflowError::CyclesFundingDisabled => Self::public(codes::CAPACITY_INACTIVE),
             RpcWorkflowError::MissingReplayMetadata(_) => {
-                Self::public(PublicError::operation_id_required())
+                Self::public(codes::AUTHORITY_UNAVAILABLE)
             }
-            RpcWorkflowError::InsufficientFundingCycles { .. }
-            | RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
-            | RpcWorkflowError::FundingCooldownActive { .. } => Self::public(PublicError::policy(
-                ErrorCode::ResourceExhausted,
-                err.to_string(),
-            )),
-            RpcWorkflowError::FundingOperationInProgress { .. } => {
-                Self::public(PublicError::conflict(err.to_string()))
+            RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
+            | RpcWorkflowError::ReplayStoreCapacityReached(_) => {
+                Self::public(codes::CAPACITY_LIMIT)
             }
-            other => Self::workflow(InternalErrorOrigin::Workflow, other.to_string()),
+            RpcWorkflowError::FundingCooldownActive { .. } => {
+                Self::public(codes::CAPACITY_UNEXPECTED_STATE)
+            }
+            RpcWorkflowError::FundingOperationInProgress { .. }
+            | RpcWorkflowError::ReplayDuplicateSame(_) => Self::public(codes::REQUEST_INCOMPLETE),
+            RpcWorkflowError::InvalidReplayTtl { ttl_ns: 0, .. } => {
+                Self::public(codes::TIME_INVALID)
+            }
+            RpcWorkflowError::InvalidReplayTtl { .. } => Self::public(codes::TIME_CAPACITY),
+            RpcWorkflowError::ReplayTtlOverflow { .. } => Self::public(codes::CAPACITY_UNSUPPORTED),
+            RpcWorkflowError::ReplayExpired(_) => Self::public(codes::EVIDENCE_EXPIRED),
+            RpcWorkflowError::ReplayConflict(_) => Self::public(codes::CODEC_CONFLICT),
+            RpcWorkflowError::ReplayEncodeFailed(_) | RpcWorkflowError::ReplayDecodeFailed(_) => {
+                Self::public(codes::CODEC_FAILED)
+            }
+            RpcWorkflowError::ReplayStoreCallerCapacityReached { .. } => {
+                Self::public(codes::AUTHORITY_CAPACITY)
+            }
         }
     }
 }
@@ -133,26 +147,21 @@ impl From<RpcWorkflowError> for InternalError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::error::ErrorCode;
 
     #[test]
     fn cycles_funding_disabled_maps_to_unavailable_public_error() {
         let internal: InternalError = RpcWorkflowError::CyclesFundingDisabled.into();
-        let public = internal
-            .public_error()
-            .expect("expected public error mapping for kill switch");
-        assert_eq!(public.code, ErrorCode::Unavailable);
+        let public = internal.public_error();
+        assert_eq!(public.code(), codes::CAPACITY_INACTIVE.raw_code());
     }
 
     #[test]
     fn missing_replay_metadata_maps_to_operation_id_required() {
         let internal: InternalError =
             RpcWorkflowError::MissingReplayMetadata("RequestCycles").into();
-        let public = internal
-            .public_error()
-            .expect("expected public replay metadata error");
+        let public = internal.public_error();
 
-        assert_eq!(public.code, ErrorCode::OperationIdRequired);
+        assert_eq!(public.code(), codes::AUTHORITY_UNAVAILABLE.raw_code());
     }
 
     #[test]
@@ -162,10 +171,8 @@ mod tests {
             available: 4_000,
         }
         .into();
-        let public = internal
-            .public_error()
-            .expect("expected public funding-capacity error");
+        let public = internal.public_error();
 
-        assert_eq!(public.code, ErrorCode::ResourceExhausted);
+        assert_eq!(public.code(), codes::CAPACITY_INSUFFICIENT.raw_code());
     }
 }

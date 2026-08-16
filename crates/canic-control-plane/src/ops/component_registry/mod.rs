@@ -80,7 +80,7 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         config::schema::ComponentChildKind,
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         model::replay::ReplayCostGuardSettlement,
         ops::{
             component_runtime::ComponentRuntimeOps,
@@ -430,10 +430,7 @@ impl RootComponentFinalInventoryAuthority<'_> {
     }
 
     fn invalid() -> InternalError {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component final inventory differs from exact empty Registry authority",
-        )
+        InternalError::invariant()
     }
 }
 
@@ -562,10 +559,7 @@ impl RootComponentDeletionAuthority<'_> {
     }
 
     fn invalid() -> InternalError {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component deletion progress differs from frozen final authority",
-        )
+        InternalError::invariant()
     }
 }
 
@@ -1177,10 +1171,7 @@ impl ComponentRegistryOps {
         for partition in partitions {
             validate_partition_record(&partition)?;
             if !canisters.insert(partition.binding.canister_id) {
-                return Err(InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component Registry partitions contain a duplicate top-level Canister",
-                ));
+                return Err(InternalError::invariant());
             }
         }
         Ok(canisters.into_iter().collect())
@@ -1191,9 +1182,7 @@ impl ComponentRegistryOps {
         components: &[ComponentInstanceId],
     ) -> Result<Vec<RootComponentDirectorySynchronizationTargetView>, InternalError> {
         if components.windows(2).any(|pair| pair[0] >= pair[1]) {
-            return Err(InternalError::invalid_input(
-                "Component Directory synchronization identities are not canonical",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let selected = components.iter().copied().collect::<BTreeSet<_>>();
         let mut allocations = BTreeMap::new();
@@ -1203,42 +1192,27 @@ impl ComponentRegistryOps {
                     .insert(allocation.component, allocation)
                     .is_some()
             {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "affected Component has duplicate allocation history",
-                ));
+                return Err(InternalError::invariant());
             }
         }
         components
             .iter()
             .map(|component| {
-                let partition =
-                    RootComponentRegistryStore::partition(*component).ok_or_else(|| {
-                        InternalError::unavailable(
-                            "affected service Component has no Registry partition",
-                        )
-                    })?;
+                let partition = RootComponentRegistryStore::partition(*component)
+                    .ok_or_else(|| InternalError::unavailable())?;
                 validate_partition_record(&partition)?;
                 if partition.status != ComponentLifecycleStatus::Active {
-                    return Err(InternalError::conflict(
-                        "affected service Component is not Active",
-                    ));
+                    return Err(InternalError::conflict());
                 }
-                let allocation = allocations.remove(component).ok_or_else(|| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        "affected service Component has no allocation history",
-                    )
-                })?;
+                let allocation = allocations
+                    .remove(component)
+                    .ok_or_else(|| InternalError::invariant())?;
                 if ComponentAllocationPartitionAuthority::from_committed_allocation(&allocation)
                     != Some(ComponentAllocationPartitionAuthority::from_partition(
                         &partition,
                     ))
                 {
-                    return Err(InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        "affected service Component allocation differs from Registry authority",
-                    ));
+                    return Err(InternalError::invariant());
                 }
                 let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
                     &allocation.progress
@@ -1251,9 +1225,7 @@ impl ComponentRegistryOps {
                         .as_ref()
                         .is_some_and(|membership| membership.directory_synchronized);
                 if !membership_is_terminal {
-                    return Err(InternalError::conflict(
-                        "affected service Component lacks terminal active membership",
-                    ));
+                    return Err(InternalError::conflict());
                 }
                 Ok(RootComponentDirectorySynchronizationTargetView {
                     component: *component,
@@ -1272,10 +1244,8 @@ impl ComponentRegistryOps {
         component_group: Option<ComponentGroupDirectory>,
         directory_synchronized_at_ns: u64,
     ) -> Result<RootComponentDirectoryRefreshPlanView, InternalError> {
-        let partition =
-            RootComponentRegistryStore::partition(target.component).ok_or_else(|| {
-                InternalError::unavailable("affected service Component partition is absent")
-            })?;
+        let partition = RootComponentRegistryStore::partition(target.component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let current_head = component_partition_head(&partition);
         let baseline_is_covered = current_head.component == target.source_registry.component
@@ -1284,18 +1254,15 @@ impl ComponentRegistryOps {
             || partition.binding.canister_id != target.canister_id
             || !baseline_is_covered
         {
-            return Err(InternalError::conflict(
-                "affected service Component changed protected Registry authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if directory_synchronized_at_ns <= partition.directory_synchronized_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component Directory refresh time must advance current authority",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let revision = partition.revision.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry revision overflow")
-        })?;
+        let revision = partition
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
             &partition.provisioning_origin,
@@ -1340,13 +1307,10 @@ impl ComponentRegistryOps {
         plan: &RootComponentDirectoryRefreshPlanView,
         maximum_component_registry_bytes: u64,
     ) -> Result<ComponentRegistryPartitionView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition =
-            RootComponentRegistryStore::partition(plan.registry.component).ok_or_else(|| {
-                InternalError::unavailable("affected service Component partition is absent")
-            })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(plan.registry.component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         if component_partition_head(&partition) == plan.registry {
             return Ok(partition_record_to_view(partition));
@@ -1354,21 +1318,12 @@ impl ComponentRegistryOps {
         if component_partition_head(&partition) != plan.previous_registry
             || partition.status != ComponentLifecycleStatus::Active
         {
-            return Err(InternalError::conflict(
-                "affected service Component changed after Directory intent persistence",
-            ));
+            return Err(InternalError::conflict());
         }
         let allocation = RootComponentRegistryStore::allocation(plan.allocation_operation_id)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "affected service Component allocation disappeared",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if allocation.component != plan.registry.component {
-            return Err(InternalError::conflict(
-                "affected service Component allocation differs from Directory intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut next_partition = partition.clone();
         next_partition.revision = plan.registry.revision;
@@ -1376,9 +1331,7 @@ impl ComponentRegistryOps {
         next_partition.directory_synchronized_at_ns = plan.directory_synchronized_at_ns;
         converge_directory_refresh_bytes(&partition, &mut next_partition)?;
         if next_partition.encoded_bytes > maximum_component_registry_bytes {
-            return Err(InternalError::resource_exhausted(
-                "Component Directory refresh exceeds its protected Component Registry byte limit",
-            ));
+            return Err(InternalError::resource_exhausted());
         }
         let previous_entry_bytes = RootComponentRegistryStore::partition_entry_bytes(&partition);
         let next_entry_bytes = RootComponentRegistryStore::partition_entry_bytes(&next_partition);
@@ -1390,9 +1343,7 @@ impl ComponentRegistryOps {
             "root Component Registry Directory refresh",
         )?;
         if next_meta.encoded_bytes > current.root.limits.maximum_registry_bytes {
-            return Err(InternalError::resource_exhausted(
-                "Component Directory refresh exceeds the protected root Registry byte limit",
-            ));
+            return Err(InternalError::resource_exhausted());
         }
         RootComponentRegistryStore::replace_component_partition(
             &current,
@@ -1412,10 +1363,8 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
         component_group: Option<ComponentGroupDirectory>,
     ) -> Result<RootComponentDirectoryRefreshPlanView, InternalError> {
-        let partition =
-            RootComponentRegistryStore::partition(intent.component).ok_or_else(|| {
-                InternalError::unavailable("affected service Component partition is absent")
-            })?;
+        let partition = RootComponentRegistryStore::partition(intent.component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let current = component_partition_head(&partition);
         if current == intent.previous_registry {
@@ -1438,9 +1387,7 @@ impl ComponentRegistryOps {
             || partition.binding.canister_id != intent.canister_id
             || partition.directory_synchronized_at_ns != intent.directory_synchronized_at_ns
         {
-            return Err(InternalError::conflict(
-                "affected service Component differs from durable Directory intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let authority = ComponentRuntimeDirectoryAuthority {
             fleet: fleet_directory,
@@ -1475,23 +1422,16 @@ impl ComponentRegistryOps {
         started_at_ns: u64,
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
         if operation_id == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root draining operation ID must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if started_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root draining start time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if reservation.reservation_hash == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root draining reservation hash must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         if let Some(existing) = current.root_draining.as_ref() {
             validate_root_draining_record(&current, existing)?;
             return if existing.operation_id == operation_id
@@ -1500,16 +1440,12 @@ impl ComponentRegistryOps {
             {
                 Ok(root_draining_record_to_view(existing.clone()))
             } else {
-                Err(InternalError::conflict(
-                    "Fleet Subnet Root is already draining under different authority",
-                ))
+                Err(InternalError::conflict())
             };
         }
         if !Self::registry_covers_preparation(&current.prepared_against_registry, expected_registry)
         {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining request is not covered by its preparation authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let record = RootFleetSubnetDrainingRecord {
             operation_id,
@@ -1540,9 +1476,7 @@ impl ComponentRegistryOps {
         };
         RootComponentRegistryStore::begin_root_draining(&current, record.clone()).map_err(
             |error| match error {
-                RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(
-                    "root Component Registry changed before its draining fence committed",
-                ),
+                RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(),
             },
         )?;
         Ok(root_draining_record_to_view(record))
@@ -1551,24 +1485,20 @@ impl ComponentRegistryOps {
     pub(crate) fn root_draining(
         operation_id: [u8; 32],
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
-        Self::root_draining_if_present(operation_id)?
-            .ok_or_else(|| InternalError::unavailable("Fleet Subnet Root draining has not begun"))
+        Self::root_draining_if_present(operation_id)?.ok_or_else(|| InternalError::unavailable())
     }
 
     pub(crate) fn root_draining_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetDrainingView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let Some(record) = current.root_draining.as_ref() else {
             return Ok(None);
         };
         validate_root_draining_record(&current, record)?;
         if record.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining status names a different operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(Some(root_draining_record_to_view(record.clone())))
     }
@@ -1576,23 +1506,17 @@ impl ComponentRegistryOps {
     pub(crate) fn validate_published_root_draining(
         current_registry: &FleetRegistryVersion,
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Draining root mirror lacks its local admission cutoff",
-            )
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::invariant())?;
         validate_root_draining_record(&current, record)?;
         let publication_is_later = record.active_registry.authority == current_registry.authority
             && record.active_registry.revision < current_registry.revision;
         if !publication_is_later {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Draining root mirror is not later than its local admission cutoff",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(root_draining_record_to_view(record.clone()))
     }
@@ -1602,9 +1526,7 @@ impl ComponentRegistryOps {
             return Ok(());
         };
         if current.root_draining.is_some() {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining has fenced Wasm Store administration",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(())
     }
@@ -1613,12 +1535,12 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_registry: &FleetRegistryVersion,
     ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         let plan =
             terminal_root_inventory_plan(&current, draining, operation_id, expected_registry)?;
@@ -1631,17 +1553,15 @@ impl ComponentRegistryOps {
     pub(crate) fn root_final_inventory_intent_registry(
         operation_id: [u8; 32],
     ) -> Result<Option<FleetRegistryVersion>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root final inventory names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         let Some(intent) = draining.final_inventory_intent.as_ref() else {
             return Ok(None);
@@ -1658,14 +1578,11 @@ impl ComponentRegistryOps {
         prepared_at_ns: u64,
     ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
         if prepared_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root final inventory preparation time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1675,9 +1592,7 @@ impl ComponentRegistryOps {
             return Ok(plan);
         }
         if prepared_at_ns < draining.started_at_ns {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root final inventory preparation precedes its draining fence",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let record = RootFleetSubnetFinalInventoryIntentRecord {
             operation_id,
@@ -1688,18 +1603,11 @@ impl ComponentRegistryOps {
             prepared_at_ns,
         };
         RootComponentRegistryStore::prepare_root_final_inventory(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before final inventory intent committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         let committed = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
         if committed != plan {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed root final inventory intent differs from prepared authority",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(committed)
     }
@@ -1707,25 +1615,22 @@ impl ComponentRegistryOps {
     pub(crate) fn root_final_inventory(
         operation_id: [u8; 32],
     ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
-        Self::root_final_inventory_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root final inventory has not been frozen")
-        })
+        Self::root_final_inventory_if_present(operation_id)?
+            .ok_or_else(|| InternalError::unavailable())
     }
 
     pub(crate) fn root_final_inventory_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetFinalInventoryView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root final inventory names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         let Some(inventory) = draining.final_inventory.as_ref() else {
             return Ok(None);
@@ -1739,21 +1644,20 @@ impl ComponentRegistryOps {
         store: &RootStoreBootstrapResponse,
         store_status: &WasmStoreStatusResponse,
     ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root removal names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
-        let inventory = draining.final_inventory.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root final inventory is not complete")
-        })?;
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_final_inventory_record(&current, draining, inventory)?;
         let evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
         let store_is_exact = [
@@ -1768,9 +1672,7 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|valid| valid);
         if !store_is_exact {
-            return Err(InternalError::conflict(
-                "live root Store differs from the retained terminal inventory",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(root_final_inventory_record_to_view(inventory.clone()))
     }
@@ -1778,17 +1680,15 @@ impl ComponentRegistryOps {
     pub(crate) fn root_removal_publication_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetRemovalPublicationView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root removal publication names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .removal_publication
@@ -1813,13 +1713,10 @@ impl ComponentRegistryOps {
             if response_is_exact {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root removal publication already contains different authority",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1827,11 +1724,9 @@ impl ComponentRegistryOps {
         let inventory = draining
             .final_inventory
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable("root final inventory is not complete"))?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if !root_final_inventory_record_matches_response(inventory, &response.final_inventory) {
-            return Err(InternalError::invalid_input(
-                "Coordinator root removal response differs from local final inventory",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let record = RootFleetSubnetRemovalPublicationRecord {
             operation_id,
@@ -1841,34 +1736,24 @@ impl ComponentRegistryOps {
             recorded_at_ns,
         };
         RootComponentRegistryStore::record_root_removal_publication(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before removal publication committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        Self::root_removal_publication_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed root removal publication is missing",
-            )
-        })
+        Self::root_removal_publication_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn root_store_reclamation_intent_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreReclamationIntentView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store reclamation names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .store_reclamation_intent
@@ -1881,42 +1766,32 @@ impl ComponentRegistryOps {
         prepared_at_ns: u64,
     ) -> Result<RootFleetSubnetStoreReclamationIntentView, InternalError> {
         if expected_final_inventory_hash == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root Store reclamation inventory hash must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if prepared_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root Store reclamation preparation time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if let Some(existing) = Self::root_store_reclamation_intent_if_present(operation_id)? {
             if existing.final_inventory_hash == expected_final_inventory_hash {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store reclamation differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
             .expect("validated root draining authority");
-        let inventory = draining.final_inventory.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root final inventory is not complete")
-        })?;
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         if draining.removal_publication.is_none() {
-            return Err(InternalError::unavailable(
-                "Fleet Subnet Root logical removal has not been published",
-            ));
+            return Err(InternalError::unavailable());
         }
         if inventory.inventory_hash != expected_final_inventory_hash {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store reclamation names a different final inventory",
-            ));
+            return Err(InternalError::conflict());
         }
         let record = RootFleetSubnetStoreReclamationIntentRecord {
             operation_id,
@@ -1925,34 +1800,24 @@ impl ComponentRegistryOps {
             prepared_at_ns,
         };
         RootComponentRegistryStore::prepare_root_store_reclamation(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before Store reclamation intent committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        Self::root_store_reclamation_intent_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root Store reclamation intent is missing",
-            )
-        })
+        Self::root_store_reclamation_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn root_store_reclamation_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreReclamationView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store reclamation names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .store_reclamation
@@ -1968,37 +1833,22 @@ impl ComponentRegistryOps {
             return Ok(existing);
         }
         if completed_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root Store reclamation completion time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
             .expect("validated root draining authority");
         let record = root_store_reclamation_record(draining, evidence, completed_at_ns)?;
         RootComponentRegistryStore::record_root_store_reclamation(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before Store reclamation committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        let committed =
-            Self::root_store_reclamation_if_present(operation_id)?.ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "committed Fleet Subnet Root Store reclamation receipt is missing",
-                )
-            })?;
+        let committed = Self::root_store_reclamation_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())?;
         if committed != root_store_reclamation_record_to_view(record) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Store reclamation differs from exact terminal authority",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(committed)
     }
@@ -2006,17 +1856,15 @@ impl ComponentRegistryOps {
     pub(crate) fn root_store_binding_finalization_intent_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationIntentView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store binding finalization names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .store_binding_finalization_intent
@@ -2040,9 +1888,7 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|valid| valid);
         if !request_is_valid {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root Store binding finalization authority is incomplete",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if let Some(existing) =
             Self::root_store_binding_finalization_intent_if_present(operation_id)?
@@ -2057,24 +1903,20 @@ impl ComponentRegistryOps {
             if retry_is_exact {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store binding finalization differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
             .expect("validated root draining authority");
-        let reclamation = draining.store_reclamation.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete")
-        })?;
+        let reclamation = draining
+            .store_reclamation
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         if reclamation.reclamation_hash != expected_reclamation_hash {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store binding finalization names a different reclamation receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         let record = RootFleetSubnetStoreBindingFinalizationIntentRecord {
             operation_id,
@@ -2085,39 +1927,26 @@ impl ComponentRegistryOps {
             source_generation,
             prepared_at_ns,
         };
-        RootComponentRegistryStore::prepare_root_store_binding_finalization(
-            &current,
-            record,
-        )
-        .map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before Store binding finalization intent committed",
-                )
-            },
-        )?;
-        Self::root_store_binding_finalization_intent_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root Store binding finalization intent is missing",
-            )
-        })
+        RootComponentRegistryStore::prepare_root_store_binding_finalization(&current, record)
+            .map_err(|RootComponentRegistryCommitError::ConflictingState| {
+                InternalError::conflict()
+            })?;
+        Self::root_store_binding_finalization_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn root_store_binding_finalization_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store binding finalization names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .store_binding_finalization
@@ -2134,13 +1963,10 @@ impl ComponentRegistryOps {
             return Ok(existing);
         }
         if completed_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root Store binding finalization completion time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2150,23 +1976,11 @@ impl ComponentRegistryOps {
             &current,
             record.clone(),
         )
-        .map_err(|RootComponentRegistryCommitError::ConflictingState| {
-            InternalError::conflict(
-                "root Component Registry changed before Store binding finalization committed",
-            )
-        })?;
+        .map_err(|RootComponentRegistryCommitError::ConflictingState| InternalError::conflict())?;
         let committed = Self::root_store_binding_finalization_if_present(operation_id)?
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "committed Fleet Subnet Root Store binding finalization receipt is missing",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if committed != root_store_binding_finalization_record_to_view(record) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Store binding finalization differs from terminal authority",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(committed)
     }
@@ -2174,17 +1988,15 @@ impl ComponentRegistryOps {
     pub(crate) fn root_store_deletion_intent_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreDeletionIntentView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .store_deletion_intent
@@ -2226,13 +2038,10 @@ impl ComponentRegistryOps {
             if retry_is_exact {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2240,30 +2049,18 @@ impl ComponentRegistryOps {
         let finalization = draining
             .store_binding_finalization
             .as_ref()
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root Store binding finalization is not complete",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if finalization.finalization_hash != expected_binding_finalization_hash {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion names a different binding finalization receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         if finalization.binding != binding.as_str() {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion binding differs from finalization authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if finalization.wasm_store != wasm_store {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion Canister differs from finalization authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if !observed_controllers.contains(&draining.fleet_subnet_root) {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion controllers omit protected root authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let record = RootFleetSubnetStoreDeletionIntentRecord {
             operation_id,
@@ -2279,30 +2076,18 @@ impl ComponentRegistryOps {
             prepared_at_ns,
         };
         RootComponentRegistryStore::prepare_root_store_deletion(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before Store deletion intent committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        Self::root_store_deletion_intent_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root Store deletion intent is missing",
-            )
-        })
+        Self::root_store_deletion_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn record_root_store_cycle_reclamation(
         operation_id: [u8; 32],
         evidence: RootFleetSubnetStoreCycleReclamationEvidence,
     ) -> Result<RootFleetSubnetStoreDeletionIntentView, InternalError> {
-        let existing =
-            Self::root_store_deletion_intent_if_present(operation_id)?.ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root Store deletion intent has not been prepared",
-                )
-            })?;
+        let existing = Self::root_store_deletion_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::unavailable())?;
         if existing.observed_cycles_after_reclamation.is_some() {
             let retry_is_exact = [
                 existing.observed_cycles_after_reclamation
@@ -2314,9 +2099,7 @@ impl ComponentRegistryOps {
             if retry_is_exact {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store cycle reclamation differs from its durable receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         let evidence_is_valid = [
             evidence.observed_cycles_after_reclamation
@@ -2327,13 +2110,10 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|valid| valid);
         if !evidence_is_valid {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store cycle reclamation exceeds its durable authority",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2345,34 +2125,24 @@ impl ComponentRegistryOps {
         record.observed_cycles_after_reclamation = Some(evidence.observed_cycles_after_reclamation);
         record.cycles_reclaimed_at_ns = Some(evidence.cycles_reclaimed_at_ns);
         RootComponentRegistryStore::record_root_store_cycle_reclamation(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before Store cycle reclamation committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        Self::root_store_deletion_intent_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root Store cycle reclamation is missing",
-            )
-        })
+        Self::root_store_deletion_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn root_store_deletion_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreDeletionView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .store_deletion
@@ -2389,36 +2159,22 @@ impl ComponentRegistryOps {
             return Ok(existing);
         }
         if completed_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root Store deletion completion time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
             .expect("validated root draining authority");
         let record = root_store_deletion_record(draining, evidence, completed_at_ns)?;
         RootComponentRegistryStore::record_root_store_deletion(&current, record.clone()).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before Store deletion committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        let committed = Self::root_store_deletion_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root Store deletion receipt is missing",
-            )
-        })?;
+        let committed = Self::root_store_deletion_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())?;
         if committed != root_store_deletion_record_to_view(record) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Store deletion differs from terminal absence authority",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(committed)
     }
@@ -2426,17 +2182,15 @@ impl ComponentRegistryOps {
     pub(crate) fn root_deletion_preparation_intent_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetDeletionPreparationIntentView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion preparation names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .root_deletion_preparation_intent
@@ -2474,9 +2228,7 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|valid| valid);
         if !input_is_valid {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root deletion preparation authority is incomplete",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if let Some(existing) = Self::root_deletion_preparation_intent_if_present(operation_id)? {
             let retry_is_exact = [
@@ -2493,32 +2245,27 @@ impl ComponentRegistryOps {
             if retry_is_exact {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion preparation differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
             .expect("validated root draining authority");
-        let inventory = draining.final_inventory.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root final inventory is not complete")
-        })?;
-        let deletion = draining.store_deletion.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root Store deletion is not complete")
-        })?;
+        let inventory = draining
+            .final_inventory
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
+        let deletion = draining
+            .store_deletion
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         if deletion.deletion_hash != expected_store_deletion_hash {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion preparation names a different Store deletion receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         if draining.active_registry.authority.binding.coordinator != coordinator {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion preparation names a different Coordinator",
-            ));
+            return Err(InternalError::conflict());
         }
         let record = RootFleetSubnetDeletionPreparationIntentRecord {
             operation_id,
@@ -2536,18 +2283,10 @@ impl ComponentRegistryOps {
             prepared_at_ns,
         };
         RootComponentRegistryStore::prepare_root_deletion(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before root deletion intent committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        Self::root_deletion_preparation_intent_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root deletion preparation intent is missing",
-            )
-        })
+        Self::root_deletion_preparation_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn record_root_deletion_cycle_reclamation(
@@ -2557,11 +2296,7 @@ impl ComponentRegistryOps {
         cycles_reclaimed_at_ns: u64,
     ) -> Result<RootFleetSubnetDeletionPreparationIntentView, InternalError> {
         let existing = Self::root_deletion_preparation_intent_if_present(operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root deletion preparation intent has not been recorded",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if existing.coordinator_intent_hash.is_some() {
             let retry_is_exact = [
                 existing.coordinator_intent_hash == Some(coordinator_intent_hash),
@@ -2574,9 +2309,7 @@ impl ComponentRegistryOps {
             if retry_is_exact {
                 return Ok(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root cycle reclamation differs from its durable receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         let evidence_is_valid = [
             coordinator_intent_hash != [0; 32],
@@ -2587,13 +2320,10 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|valid| valid);
         if !evidence_is_valid {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root cycle reclamation exceeds durable deletion authority",
-            ));
+            return Err(InternalError::conflict());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2607,32 +2337,24 @@ impl ComponentRegistryOps {
         record.cycles_reclaimed_at_ns = Some(cycles_reclaimed_at_ns);
         RootComponentRegistryStore::record_root_deletion_cycle_reclamation(&current, record)
             .map_err(|RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before root cycle reclamation committed",
-                )
+                InternalError::conflict()
             })?;
-        Self::root_deletion_preparation_intent_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root cycle reclamation is missing",
-            )
-        })
+        Self::root_deletion_preparation_intent_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn root_deletion_preparation_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetDeletionPreparationView>, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining = current.root_draining.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root draining has not begun")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion status names a different draining operation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(draining
             .root_deletion_preparation
@@ -2652,13 +2374,10 @@ impl ComponentRegistryOps {
             .into_iter()
             .all(|valid| valid);
         if !fields_are_valid {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root deletion readiness receipt is incomplete",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2666,11 +2385,7 @@ impl ComponentRegistryOps {
         let intent = draining
             .root_deletion_preparation_intent
             .as_ref()
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root deletion preparation intent has not been recorded",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootFleetSubnetDeletionPreparationRecord {
             operation_id,
             fleet_subnet_root: draining.fleet_subnet_root,
@@ -2684,38 +2399,22 @@ impl ComponentRegistryOps {
             observed_freezing_threshold_seconds: intent.observed_freezing_threshold_seconds,
             observed_cycles_after_reclamation: intent
                 .observed_cycles_after_reclamation
-                .ok_or_else(|| {
-                    InternalError::unavailable(
-                        "Fleet Subnet Root cycle reclamation has not been recorded",
-                    )
-                })?,
-            cycles_reclaimed_at_ns: intent.cycles_reclaimed_at_ns.ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root cycle-reclamation time has not been recorded",
-                )
-            })?,
-            coordinator_intent_hash: intent.coordinator_intent_hash.ok_or_else(|| {
-                InternalError::unavailable(
-                    "Coordinator root-deletion readiness intent has not been recorded",
-                )
-            })?,
+                .ok_or_else(|| InternalError::unavailable())?,
+            cycles_reclaimed_at_ns: intent
+                .cycles_reclaimed_at_ns
+                .ok_or_else(|| InternalError::unavailable())?,
+            coordinator_intent_hash: intent
+                .coordinator_intent_hash
+                .ok_or_else(|| InternalError::unavailable())?,
             coordinator_readiness_hash,
             prepared_at_ns: intent.prepared_at_ns,
             completed_at_ns,
         };
         RootComponentRegistryStore::record_root_deletion_preparation(&current, record).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before root deletion readiness committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
-        Self::root_deletion_preparation_if_present(operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root deletion readiness receipt is missing",
-            )
-        })
+        Self::root_deletion_preparation_if_present(operation_id)?
+            .ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn finalize_root_inventory(
@@ -2727,40 +2426,27 @@ impl ComponentRegistryOps {
     ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
         if let Some(existing) = Self::root_final_inventory_if_present(operation_id)? {
             if &existing.registry != expected_registry {
-                return Err(InternalError::conflict(
-                    "Fleet Subnet Root final inventory retry names a different Registry",
-                ));
+                return Err(InternalError::conflict());
             }
             return Ok(existing);
         }
         if finalized_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root final inventory time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let intent_registry = Self::root_final_inventory_intent_registry(operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root final inventory intent has not been prepared",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if &intent_registry != expected_registry {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root final inventory differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let draining = current
             .root_draining
             .as_ref()
             .expect("validated root draining authority");
         if finalized_at_ns < draining.started_at_ns {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root final inventory time precedes its draining fence",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let store_evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
         let mut record = RootFleetSubnetFinalInventoryRecord {
@@ -2786,18 +2472,11 @@ impl ComponentRegistryOps {
         };
         record.inventory_hash = root_final_inventory_hash(&record)?;
         RootComponentRegistryStore::finalize_root_inventory(&current, record.clone()).map_err(
-            |RootComponentRegistryCommitError::ConflictingState| {
-                InternalError::conflict(
-                    "root Component Registry changed before final inventory committed",
-                )
-            },
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         let committed = Self::root_final_inventory(operation_id)?;
         if committed != root_final_inventory_record_to_view(record) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "committed Fleet Subnet Root final inventory differs from prepared authority",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(committed)
     }
@@ -2824,13 +2503,10 @@ impl ComponentRegistryOps {
         sealed_at_ns: u64,
     ) -> Result<RootComponentInitialInventoryPlan, InternalError> {
         if sealed_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "initial Component inventory seal time must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let inventory = complete_initial_inventory(&current)?;
         if let Some(existing) = current.initial_inventory {
             validate_initial_inventory_receipt(
@@ -2866,12 +2542,11 @@ impl ComponentRegistryOps {
     pub(crate) fn validate_sealed_initial_inventory(
         fleet_activation_operation_id: [u8; 32],
     ) -> Result<RootComponentInitialInventoryPlan, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let receipt = current.initial_inventory.ok_or_else(|| {
-            InternalError::unavailable("initial Component inventory has not been sealed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let receipt = current
+            .initial_inventory
+            .ok_or_else(|| InternalError::unavailable())?;
         let inventory = complete_initial_inventory(&current)?;
         validate_initial_inventory_receipt(
             &receipt,
@@ -2888,16 +2563,13 @@ impl ComponentRegistryOps {
     pub(crate) fn initial_inventory(
         fleet_activation_operation_id: [u8; 32],
     ) -> Result<RootComponentInitialInventoryView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let receipt = current.initial_inventory.ok_or_else(|| {
-            InternalError::unavailable("initial Component inventory has not been sealed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let receipt = current
+            .initial_inventory
+            .ok_or_else(|| InternalError::unavailable())?;
         if receipt.fleet_activation_operation_id != fleet_activation_operation_id {
-            return Err(InternalError::conflict(
-                "initial Component inventory is bound to a different Fleet activation",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(initial_inventory_record_to_view(receipt))
     }
@@ -2947,9 +2619,7 @@ impl ComponentRegistryOps {
             root_draining: None,
         };
         RootComponentRegistryStore::prepare(record.clone()).map_err(|error| match error {
-            RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(
-                "root Component Registry is already prepared under different authority",
-            ),
+            RootComponentRegistryCommitError::ConflictingState => InternalError::conflict(),
         })?;
         Ok(record_to_view(record))
     }
@@ -2966,18 +2636,16 @@ impl ComponentRegistryOps {
     pub(crate) fn active_membership_partition(
         operation_id: [u8; 32],
     ) -> Result<ComponentRegistryPartitionView, InternalError> {
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation is not committed for active membership validation",
-            ));
+            return Err(InternalError::conflict());
         };
-        let membership = commitment.membership.as_ref().ok_or_else(|| {
-            InternalError::conflict("Component allocation has no active membership receipt")
-        })?;
+        let membership = commitment
+            .membership
+            .as_ref()
+            .ok_or_else(|| InternalError::conflict())?;
         let active = exact_active_partition(&record, commitment, membership)?;
         Ok(partition_record_to_view(active))
     }
@@ -2987,18 +2655,8 @@ impl ComponentRegistryOps {
     ) -> Result<ComponentSpecInstanceCounts, InternalError> {
         let (reserved, committed) = RootComponentRegistryStore::allocation_counts(component_spec);
         Ok(ComponentSpecInstanceCounts {
-            reserved: u32::try_from(reserved).map_err(|_| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root Component reservation count exceeds u32",
-                )
-            })?,
-            committed: u32::try_from(committed).map_err(|_| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root committed Component count exceeds u32",
-                )
-            })?,
+            reserved: u32::try_from(reserved).map_err(|_| InternalError::invariant())?,
+            committed: u32::try_from(committed).map_err(|_| InternalError::invariant())?,
         })
     }
 
@@ -3009,25 +2667,14 @@ impl ComponentRegistryOps {
         let (reserved, committed) =
             RootComponentRegistryStore::peer_allocation_counts(requester, target_component_spec);
         Ok(PeerComponentInstanceCounts {
-            reserved: u32::try_from(reserved).map_err(|_| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "peer Component reservation count exceeds u32",
-                )
-            })?,
-            committed: u32::try_from(committed).map_err(|_| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "peer committed Component count exceeds u32",
-                )
-            })?,
+            reserved: u32::try_from(reserved).map_err(|_| InternalError::invariant())?,
+            committed: u32::try_from(committed).map_err(|_| InternalError::invariant())?,
         })
     }
 
     pub(crate) fn require_top_level_allocation_open() -> Result<(), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         ensure_root_accepts_top_level_allocation(&current)
     }
 
@@ -3037,9 +2684,8 @@ impl ComponentRegistryOps {
         provisioning_origin: ComponentProvisioningOrigin,
         root_runtime_active: bool,
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentAllocationRecord {
             operation_id,
             allocation_sequence: decision.allocation_sequence,
@@ -3055,64 +2701,43 @@ impl ComponentRegistryOps {
             return if existing == record {
                 Ok(allocation_record_to_view(existing))
             } else {
-                Err(InternalError::conflict(
-                    "Component allocation operation is already bound to different intent",
-                ))
+                Err(InternalError::conflict())
             };
         }
         ensure_root_accepts_top_level_allocation(&current)?;
         match (current.initial_inventory.as_ref(), root_runtime_active) {
             (Some(_), false) => {
-                return Err(InternalError::conflict(
-                    "initial Component inventory is sealed while the root runtime is Prepared",
-                ));
+                return Err(InternalError::conflict());
             }
             (Some(receipt), true) if !receipt.root_runtime_activated => {
-                return Err(InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "active root runtime has no terminal initial-inventory receipt",
-                ));
+                return Err(InternalError::invariant());
             }
             (None, true) => {
-                return Err(InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "active root runtime has no sealed initial Component inventory",
-                ));
+                return Err(InternalError::invariant());
             }
             (None, false) | (Some(_), true) => {}
         }
 
         if current.next_allocation_sequence != record.allocation_sequence {
-            return Err(InternalError::conflict(
-                "Component allocation sequence changed before reservation commit",
-            ));
+            return Err(InternalError::conflict());
         }
         let entry_bytes = RootComponentRegistryStore::allocation_entry_bytes(&record);
         let encoded_bytes = current
             .encoded_bytes
             .checked_add(entry_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if encoded_bytes > current.root.limits.maximum_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "Component Registry reservation requires {encoded_bytes} bytes, exceeding protected limit {}",
-                current.root.limits.maximum_registry_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         let mut next = current.clone();
-        next.next_allocation_sequence =
-            next.next_allocation_sequence
-                .checked_add(1)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("Component allocation sequence is exhausted")
-                })?;
+        next.next_allocation_sequence = next
+            .next_allocation_sequence
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         next.reserved_component_instances = next
             .reserved_component_instances
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("reserved Component instance count overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         next.encoded_bytes = encoded_bytes;
 
         RootComponentRegistryStore::reserve_allocation(&current, next, record.clone())
@@ -3124,19 +2749,15 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         plan: &RootComponentCreationPlan,
     ) -> Result<(), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         if !matches!(
             record.progress,
             RootComponentAllocationProgressRecord::Reserved
         ) {
-            return Err(InternalError::conflict(
-                "Component allocation has already crossed its creation-intent boundary",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let charged_entry_bytes = creation_charged_entry_bytes(&record, plan);
@@ -3148,19 +2769,15 @@ impl ComponentRegistryOps {
         plan: RootComponentCreationPlan,
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         if !matches!(
             record.progress,
             RootComponentAllocationProgressRecord::Reserved
         ) {
-            return Err(InternalError::conflict(
-                "Component allocation has already crossed its creation-intent boundary",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let charged_entry_bytes = creation_charged_entry_bytes(&record, &plan);
@@ -3196,12 +2813,10 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         canister: Principal,
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let effect = match &record.progress {
             RootComponentAllocationProgressRecord::CreationIntent(effect) => effect.clone(),
             RootComponentAllocationProgressRecord::Created {
@@ -3228,14 +2843,10 @@ impl ComponentRegistryOps {
             | RootComponentAllocationProgressRecord::Verified { .. }
             | RootComponentAllocationProgressRecord::Committed { .. }
             | RootComponentAllocationProgressRecord::Removed { .. } => {
-                return Err(InternalError::conflict(
-                    "Component allocation is already bound to a different created Canister",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentAllocationProgressRecord::Reserved => {
-                return Err(InternalError::conflict(
-                    "Component allocation has no durable creation intent",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         let charged_entry_bytes = effect.charged_entry_bytes;
@@ -3246,27 +2857,14 @@ impl ComponentRegistryOps {
         next_meta.known_created_component_canisters = next_meta
             .known_created_component_canisters
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "known-created Component Canister count overflowed",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let allocated_component_canisters = current
             .reserved_component_instances
             .checked_add(current.committed_component_instances)
             .and_then(|count| count.checked_add(current.managed_descendants))
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "allocated Component-tree Canister count overflowed",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if next_meta.known_created_component_canisters > allocated_component_canisters {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "known-created Component Canisters exceed allocated Component-tree capacity",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_allocation(
             &current,
@@ -3282,19 +2880,15 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         plan: &RootComponentInstallPlan,
     ) -> Result<(), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         if !matches!(
             record.progress,
             RootComponentAllocationProgressRecord::Created { .. }
         ) {
-            return Err(InternalError::conflict(
-                "Component allocation is not ready to cross its install-intent boundary",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let charged_entry_bytes = install_charged_entry_bytes(&record, plan)?;
@@ -3306,20 +2900,16 @@ impl ComponentRegistryOps {
         plan: RootComponentInstallPlan,
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let (creation, canister) = match &record.progress {
             RootComponentAllocationProgressRecord::Created { effect, canister } => {
                 (effect.clone(), *canister)
             }
             _ => {
-                return Err(InternalError::conflict(
-                    "Component allocation is not ready for installation",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         let charged_entry_bytes = install_charged_entry_bytes(&record, &plan)?;
@@ -3355,12 +2945,10 @@ impl ComponentRegistryOps {
         plan: &RootComponentInstallPlan,
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let (creation, canister, existing) = match &record.progress {
             RootComponentAllocationProgressRecord::InstallIntent {
                 creation,
@@ -3368,9 +2956,7 @@ impl ComponentRegistryOps {
                 installation,
             } => (creation.clone(), *canister, installation),
             _ => {
-                return Err(InternalError::conflict(
-                    "Component allocation has no renewable install intent",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         validate_install_effect_record(existing, plan)?;
@@ -3426,18 +3012,14 @@ impl ComponentRegistryOps {
         scan_limit: usize,
     ) -> Result<ComponentDirectoryPageView, InternalError> {
         if scan_limit == 0 {
-            return Err(InternalError::invalid_input(
-                "Component Directory page scan limit must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if selection.start_after.as_ref().is_some_and(|cursor| {
             selection
                 .parent_canister_id
                 .is_some_and(|parent| cursor.parent_canister_id != parent)
         }) {
-            return Err(InternalError::invalid_input(
-                "Component Directory cursor is outside the selected parent",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if selection.start_after.as_ref().is_some_and(|cursor| {
             selection.parent_canister_id.is_some()
@@ -3446,14 +3028,11 @@ impl ComponentRegistryOps {
                     .as_ref()
                     .is_some_and(|role| role != &cursor.role)
         }) {
-            return Err(InternalError::invalid_input(
-                "Component Directory cursor is outside the selected parent-role index",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let start_after = selection.start_after.as_ref().map(|cursor| {
             (
@@ -3479,22 +3058,14 @@ impl ComponentRegistryOps {
         for traversal in traversals {
             validate_child_traversal_record(component, &traversal)?;
             let child = RootComponentRegistryStore::child(component, traversal.canister_id)
-                .ok_or_else(|| {
-                    InternalError::invariant(
-                        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                        "Component Directory traversal has no normalized child row",
-                    )
-                })?;
+                .ok_or_else(|| InternalError::invariant())?;
             validate_child_record(&partition, &child)?;
             if ComponentTreeNodeIdentity::from_traversal(&traversal)
                 != ComponentTreeNodeIdentity::from_child(&child)
                 || RootComponentRegistryStore::component_for_principal(traversal.parent_canister_id)
                     != Some(component)
             {
-                return Err(InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component Directory traversal differs from normalized child authority",
-                ));
+                return Err(InternalError::invariant());
             }
             if selection
                 .role
@@ -3518,14 +3089,11 @@ impl ComponentRegistryOps {
     pub(crate) fn prepared_partition(
         operation_id: [u8; 32],
     ) -> Result<ComponentRegistryPartitionView, InternalError> {
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation has no committed Registry authority",
-            ));
+            return Err(InternalError::conflict());
         };
         exact_committed_partition(&record, commitment).map(partition_record_to_view)
     }
@@ -3543,17 +3111,11 @@ impl ComponentRegistryOps {
         InternalError,
     > {
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Child allocation has no committed Registry authority",
-            ));
+            return Err(InternalError::conflict());
         };
         let committed = exact_committed_child_partition(&record, commitment)?;
         validate_child_directory_authority_hash(
@@ -3581,12 +3143,8 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::component_for_principal(canister) != Some(component) {
             return Ok(None);
         }
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "indexed Component Registry member has no partition",
-            )
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::invariant())?;
         validate_partition_record(&partition)?;
         if partition.binding.canister_id == canister {
             return Ok(Some((
@@ -3594,12 +3152,8 @@ impl ComponentRegistryOps {
                 partition.status,
             )));
         }
-        let child = RootComponentRegistryStore::child(component, canister).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "indexed Component Registry member has no normalized child row",
-            )
-        })?;
+        let child = RootComponentRegistryStore::child(component, canister)
+            .ok_or_else(|| InternalError::invariant())?;
         validate_child_record(&partition, &child)?;
         let traversal = ComponentRegistryChildTraversalRecord {
             component,
@@ -3618,10 +3172,7 @@ impl ComponentRegistryOps {
             .as_ref()
                 != Some(&traversal)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "indexed Component Registry child differs from its parent or traversal index",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(Some((
             ManagedCanisterBinding::ComponentChild(ComponentChildBinding {
@@ -3655,19 +3206,11 @@ impl ComponentRegistryOps {
             return Ok(None);
         };
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component subtree-removal operation has no root Registry authority",
-            )
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::invariant())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component subtree-removal operation has no owning partition",
-            )
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::invariant())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
         Ok(Some(subtree_removal_record_to_view(record)))
@@ -3703,12 +3246,10 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<RootComponentDrainingView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         require_ordinary_component_lifecycle(&partition)?;
         if let Some(existing) = RootComponentRegistryStore::component_draining(component) {
@@ -3718,9 +3259,7 @@ impl ComponentRegistryOps {
             {
                 Ok(component_draining_record_to_view(existing))
             } else {
-                Err(InternalError::conflict(
-                    "Component draining is already bound to different intent",
-                ))
+                Err(InternalError::conflict())
             };
         }
         let current_registry = component_partition_head(&partition);
@@ -3728,26 +3267,18 @@ impl ComponentRegistryOps {
             || partition.status != ComponentLifecycleStatus::Active
             || expected_registry != current_registry
         {
-            return Err(InternalError::conflict(
-                "Component draining authority changed before durable mutation",
-            ));
+            return Err(InternalError::conflict());
         }
         if started_at_ns <= partition.directory_synchronized_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component draining authority must advance its Directory time",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if partition.reserved_descendants != 0 {
-            return Err(InternalError::unavailable(
-                "Component has an incomplete child lifecycle operation",
-            ));
+            return Err(InternalError::unavailable());
         }
         for allocation in RootComponentRegistryStore::child_allocations(component) {
             validate_child_allocation_record(&allocation)?;
             if !child_allocation_is_terminal(&allocation) {
-                return Err(InternalError::unavailable(
-                    "Component has an incomplete child lifecycle operation",
-                ));
+                return Err(InternalError::unavailable());
             }
         }
         for removal in RootComponentRegistryStore::subtree_removals(component) {
@@ -3758,15 +3289,14 @@ impl ComponentRegistryOps {
                 removal.progress,
                 RootComponentSubtreeRemovalProgressRecord::Completed(_)
             ) {
-                return Err(InternalError::unavailable(
-                    "Component has an in-progress subtree-removal operation",
-                ));
+                return Err(InternalError::unavailable());
             }
         }
 
-        let revision = partition.revision.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry revision overflow")
-        })?;
+        let revision = partition
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
             &partition.provisioning_origin,
@@ -3832,22 +3362,16 @@ impl ComponentRegistryOps {
         prepared_at_ns: u64,
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
-        let record =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable("Component has not been durably fenced for draining")
-            })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &record)?;
         if operation_id != record.operation_id || expected_registry != record.registry {
-            return Err(InternalError::conflict(
-                "Component quiescence request differs from its durable draining fence",
-            ));
+            return Err(InternalError::conflict());
         }
         if record.quiescence.is_some() {
             return Ok(component_draining_record_to_view(record));
@@ -3856,14 +3380,10 @@ impl ComponentRegistryOps {
             || partition.committed_descendants != record.descendant_count
             || partition.descendant_content_hash != record.descendant_content_hash
         {
-            return Err(InternalError::conflict(
-                "Component quiescence must be prepared before descendant removal begins",
-            ));
+            return Err(InternalError::conflict());
         }
         if expected_module_hash == [0; 32] || prepared_at_ns < record.started_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component quiescence requires qualified module and time evidence",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let expected_binding = ManagedCanisterBinding::Component(partition.binding.clone());
         let (coverage, convergence) =
@@ -3871,9 +3391,7 @@ impl ComponentRegistryOps {
         if coverage.component_registry_revision != record.registry.revision
             || coverage.component_registry_content_hash != record.registry.content_hash
         {
-            return Err(InternalError::conflict(
-                "Component quiescence Directory evidence differs from its draining fence",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let mut intent = RootComponentQuiescenceStopIntentRecord {
@@ -3921,19 +3439,14 @@ impl ComponentRegistryOps {
         observed_module_hash: [u8; 32],
         quiesced_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
-        let record =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable("Component has not been durably fenced for draining")
-            })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &record)?;
         if operation_id != record.operation_id {
-            return Err(InternalError::conflict(
-                "Component quiescence operation differs from its draining fence",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = match &record.quiescence {
             Some(RootComponentQuiescenceProgressRecord::StopIntent(intent)) => intent,
@@ -3941,23 +3454,17 @@ impl ComponentRegistryOps {
                 return if receipt.observed_module_hash == observed_module_hash {
                     Ok(component_draining_record_to_view(record))
                 } else {
-                    Err(InternalError::conflict(
-                        "Component quiescence receipt differs from observed module authority",
-                    ))
+                    Err(InternalError::conflict())
                 };
             }
             None => {
-                return Err(InternalError::unavailable(
-                    "Component quiescence stop intent has not been durably prepared",
-                ));
+                return Err(InternalError::unavailable());
             }
         };
         if observed_module_hash != intent.expected_module_hash
             || quiesced_at_ns < intent.prepared_at_ns
         {
-            return Err(InternalError::conflict(
-                "Component quiescence observation differs from its durable stop intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let receipt = RootComponentQuiescentReceiptRecord {
             stop: intent.clone(),
@@ -3996,38 +3503,25 @@ impl ComponentRegistryOps {
         component: ComponentInstanceId,
         operation_id: [u8; 32],
     ) -> Result<RootComponentDrainingAdvanceView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
-        let draining =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component draining operation has not been durably fenced",
-                )
-            })?;
+        let draining = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_component_draining_record(&partition, &draining)?;
         if operation_id != draining.operation_id
             || partition.status != ComponentLifecycleStatus::Draining
             || !component_has_terminal_quiescence(&partition)?
         {
-            return Err(InternalError::conflict(
-                "Component draining advance differs from terminal quiescent authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
         if let Some(subtree_operation_id) = draining.subtree_operation_id {
             let existing =
                 RootComponentRegistryStore::subtree_removal(component, subtree_operation_id)
-                    .ok_or_else(|| {
-                        InternalError::invariant(
-                            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                            "Component draining cursor has no durable subtree removal",
-                        )
-                    })?;
+                    .ok_or_else(|| InternalError::invariant())?;
             validate_subtree_removal_record(&existing)?;
             validate_subtree_removal_root(&existing, &current.root)?;
             validate_subtree_removal_progress(&partition, &existing)?;
@@ -4047,10 +3541,7 @@ impl ComponentRegistryOps {
                 || partition.descendant_content_hash
                     != empty_component_descendant_content_hash(component)
             {
-                return Err(InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component draining inventory has descendants without a direct root child",
-                ));
+                return Err(InternalError::invariant());
             }
             return Ok(RootComponentDrainingAdvanceView::DescendantsEmpty {
                 registry: component_partition_head(&partition),
@@ -4066,10 +3557,7 @@ impl ComponentRegistryOps {
             validate_subtree_removal_root(&existing, &current.root)?;
             validate_subtree_removal_progress(&partition, &existing)?;
             if existing.target != target {
-                return Err(InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component draining cursor differs from its derived subtree operation",
-                ));
+                return Err(InternalError::invariant());
             }
             return Ok(RootComponentDrainingAdvanceView::DescendantRemoval(
                 Box::new(subtree_removal_record_to_view(existing)),
@@ -4090,37 +3578,27 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
         finalized_at_ns: u64,
     ) -> Result<RootComponentFinalInventoryView, InternalError> {
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
-        let draining =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component draining operation has not been durably fenced",
-                )
-            })?;
+        let draining = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_component_draining_record(&partition, &draining)?;
         if operation_id != draining.operation_id {
-            return Err(InternalError::conflict(
-                "Component final inventory is bound to different draining intent",
-            ));
+            return Err(InternalError::conflict());
         }
         if let Some(existing) = draining.final_inventory {
             return if expected_registry == existing.registry {
                 Ok(component_final_inventory_record_to_view(existing))
             } else {
-                Err(InternalError::conflict(
-                    "Component final inventory is already bound to a different Registry head",
-                ))
+                Err(InternalError::conflict())
             };
         }
 
         let current_registry = component_partition_head(&partition);
         ensure_component_final_inventory_candidate(&partition, &expected_registry)?;
-        let quiesced_at_ns = terminal_component_quiesced_at_ns(&draining).ok_or_else(|| {
-            InternalError::conflict("Component final inventory requires terminal quiescence")
-        })?;
+        let quiesced_at_ns = terminal_component_quiesced_at_ns(&draining)
+            .ok_or_else(|| InternalError::conflict())?;
         ensure_component_final_inventory_time(&partition, quiesced_at_ns, finalized_at_ns)?;
         ensure_component_final_inventory_indexes_are_empty(&partition)?;
         ensure_component_lifecycle_history_is_terminal(&partition)?;
@@ -4159,15 +3637,10 @@ impl ComponentRegistryOps {
         expected_inventory_hash: [u8; 32],
         prepared_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
-        let draining =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component draining operation has not been durably fenced",
-                )
-            })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
+        let draining = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &draining)?;
         ensure_component_deletion_operation(&draining, operation_id)?;
@@ -4176,23 +3649,18 @@ impl ComponentRegistryOps {
             return Ok(component_draining_record_to_view(draining));
         }
 
-        let final_inventory = draining.final_inventory.clone().ok_or_else(|| {
-            InternalError::unavailable("Component final inventory has not been durably frozen")
-        })?;
+        let final_inventory = draining
+            .final_inventory
+            .clone()
+            .ok_or_else(|| InternalError::unavailable())?;
         if final_inventory.inventory_hash != expected_inventory_hash {
-            return Err(InternalError::conflict(
-                "Component deletion request differs from frozen final inventory",
-            ));
+            return Err(InternalError::conflict());
         }
         let quiescence = terminal_component_quiescence(&draining)
             .cloned()
-            .ok_or_else(|| {
-                InternalError::unavailable("Component deletion requires terminal quiescence")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if prepared_at_ns < final_inventory.finalized_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component deletion preparation time precedes final inventory",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
         let mut next_draining = draining.clone();
@@ -4215,22 +3683,15 @@ impl ComponentRegistryOps {
         expected_inventory_hash: [u8; 32],
         deleted_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
-        let draining =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component draining operation has not been durably fenced",
-                )
-            })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
+        let draining = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &draining)?;
         ensure_component_deletion_operation(&draining, operation_id)?;
         let Some(progress) = &draining.deletion else {
-            return Err(InternalError::unavailable(
-                "Component deletion intent has not been durably prepared",
-            ));
+            return Err(InternalError::unavailable());
         };
         ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
         let intent = match progress {
@@ -4241,9 +3702,7 @@ impl ComponentRegistryOps {
             }
         };
         if deleted_at_ns < intent.prepared_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component deletion observation time precedes its durable intent",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
         let mut next_draining = draining.clone();
@@ -4265,19 +3724,15 @@ impl ComponentRegistryOps {
         expected_inventory_hash: [u8; 32],
         removed_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let draining =
-            RootComponentRegistryStore::component_draining(component).ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component draining operation has not been durably fenced",
-                )
-            })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let draining = RootComponentRegistryStore::component_draining(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         ensure_component_deletion_operation(&draining, operation_id)?;
-        let progress = draining.deletion.as_ref().ok_or_else(|| {
-            InternalError::unavailable("Component deletion intent has not been durably prepared")
-        })?;
+        let progress = draining
+            .deletion
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
         if matches!(
             progress,
@@ -4287,19 +3742,14 @@ impl ComponentRegistryOps {
             return Ok(component_draining_record_to_view(draining));
         }
         let RootComponentDeletionProgressRecord::Deleted(deleted) = progress else {
-            return Err(InternalError::unavailable(
-                "Component deletion has not been independently observed",
-            ));
+            return Err(InternalError::unavailable());
         };
         if removed_at_ns < deleted.deleted_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component membership removal time precedes deletion authority",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &draining)?;
         let allocation = committed_component_allocation(&partition)?;
@@ -4338,9 +3788,7 @@ impl ComponentRegistryOps {
             reserved_against_registry,
         } = Self::advance_component_draining(component, draining_operation_id)?
         else {
-            return Err(InternalError::conflict(
-                "Component draining has no new direct subtree to fence",
-            ));
+            return Err(InternalError::conflict());
         };
         Self::begin_subtree_removal_with_origin(
             component,
@@ -4381,12 +3829,10 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
         origin: SubtreeRemovalOrigin,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let lifecycle_matches_origin = match origin {
             SubtreeRemovalOrigin::Ordinary => partition.status == ComponentLifecycleStatus::Active,
@@ -4396,9 +3842,7 @@ impl ComponentRegistryOps {
             }
         };
         if !lifecycle_matches_origin {
-            return Err(InternalError::conflict(
-                "Component subtree-removal origin differs from lifecycle authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if let Some(existing) = RootComponentRegistryStore::subtree_removal(component, operation_id)
         {
@@ -4410,9 +3854,7 @@ impl ComponentRegistryOps {
             {
                 Ok(subtree_removal_record_to_view(existing))
             } else {
-                Err(InternalError::conflict(
-                    "Component subtree-removal operation is already bound to a different fence",
-                ))
+                Err(InternalError::conflict())
             };
         }
 
@@ -4423,9 +3865,7 @@ impl ComponentRegistryOps {
                 content_hash: partition.content_hash,
             })
         {
-            return Err(InternalError::conflict(
-                "Component subtree-removal fence authority changed before durable mutation",
-            ));
+            return Err(InternalError::conflict());
         }
         if origin == SubtreeRemovalOrigin::Ordinary
             && RootComponentRegistryStore::subtree_removals(component)
@@ -4437,29 +3877,19 @@ impl ComponentRegistryOps {
                     )
                 })
         {
-            return Err(InternalError::conflict(
-                "Component already has an in-progress subtree-removal operation",
-            ));
+            return Err(InternalError::conflict());
         }
 
-        let target =
-            RootComponentRegistryStore::child(component, target_canister_id).ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal target is not a registered child",
-                )
-            })?;
+        let target = RootComponentRegistryStore::child(component, target_canister_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_registered_child_record(&partition, &target)?;
         if target.status != ComponentLifecycleStatus::Active {
-            return Err(InternalError::conflict(
-                "Component subtree removal requires an Active target",
-            ));
+            return Err(InternalError::conflict());
         }
         let traversal_limit = partition
             .committed_descendants
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component descendant count overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         for allocation in RootComponentRegistryStore::child_allocations(component) {
             validate_child_allocation_record(&allocation)?;
             if !child_allocation_is_terminal(&allocation)
@@ -4470,9 +3900,7 @@ impl ComponentRegistryOps {
                     traversal_limit,
                 )?
             {
-                return Err(InternalError::unavailable(
-                    "Component subtree has an incomplete child lifecycle operation",
-                ));
+                return Err(InternalError::unavailable());
             }
         }
 
@@ -4489,35 +3917,22 @@ impl ComponentRegistryOps {
         validate_subtree_removal_record(&record)?;
         let (next_partition, registry_delta) = subtree_fence_partition(&partition, &record)?;
         if next_partition.encoded_bytes > maximum_component_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "Component subtree-removal fence requires {} bytes, exceeding protected Component limit {maximum_component_registry_bytes}",
-                next_partition.encoded_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         let mut next_meta = current.clone();
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_meta.encoded_bytes > next_meta.root.limits.maximum_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "Component subtree-removal fence requires {} root Registry bytes, exceeding protected limit {}",
-                next_meta.encoded_bytes, next_meta.root.limits.maximum_registry_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
 
         let draining_transition = match origin {
             SubtreeRemovalOrigin::Ordinary => None,
             SubtreeRemovalOrigin::DrainingDriver => {
                 let current_draining = RootComponentRegistryStore::component_draining(component)
-                    .ok_or_else(|| {
-                        InternalError::invariant(
-                            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                            "draining subtree fence has no Component draining authority",
-                        )
-                    })?;
+                    .ok_or_else(|| InternalError::invariant())?;
                 validate_component_draining_record(&partition, &current_draining)?;
                 let mut next_draining = current_draining.clone();
                 next_draining.subtree_operation_id = Some(operation_id);
@@ -4546,28 +3961,20 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
         if expected_traversal_steps < record.traversal_steps {
             return Ok(subtree_removal_record_to_view(record));
         }
         if expected_traversal_steps > record.traversal_steps {
-            return Err(InternalError::conflict(
-                "Component subtree-removal traversal expectation is ahead of durable progress",
-            ));
+            return Err(InternalError::conflict());
         }
         if matches!(
             &record.progress,
@@ -4603,12 +4010,10 @@ impl ComponentRegistryOps {
                 }
                 None => RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf: cursor },
             };
-            next_record.traversal_steps =
-                next_record.traversal_steps.checked_add(1).ok_or_else(|| {
-                    InternalError::resource_exhausted(
-                        "Component subtree-removal traversal step overflow",
-                    )
-                })?;
+            next_record.traversal_steps = next_record
+                .traversal_steps
+                .checked_add(1)
+                .ok_or_else(|| InternalError::resource_exhausted())?;
         }
         validate_subtree_removal_record(&next_record)?;
         validate_subtree_removal_root(&next_record, &current.root)?;
@@ -4641,19 +4046,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4672,37 +4071,24 @@ impl ComponentRegistryOps {
             RootComponentSubtreeRemovalProgressRecord::LeafSelected { leaf } => leaf,
             RootComponentSubtreeRemovalProgressRecord::Fenced
             | RootComponentSubtreeRemovalProgressRecord::Traversing { .. } => {
-                return Err(InternalError::unavailable(
-                    "Component subtree removal has not selected a leaf to stop",
-                ));
+                return Err(InternalError::unavailable());
             }
             progress => {
-                let durable_stop = retained_subtree_stop_effect(progress).ok_or_else(|| {
-                    InternalError::invariant(
-                        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                        "Component subtree stop progress has no retained stop authority",
-                    )
-                })?;
+                let durable_stop = retained_subtree_stop_effect(progress)
+                    .ok_or_else(|| InternalError::invariant())?;
                 if SubtreeLeafStopAuthority::from_record(record.traversal_steps, durable_stop)
                     == expected_stop
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree stop preparation differs from durable authority",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         if SubtreeLeafSelection::from_record(record.traversal_steps, leaf) != expected_selection {
-            return Err(InternalError::conflict(
-                "Component subtree stop preparation differs from the selected leaf",
-            ));
+            return Err(InternalError::conflict());
         }
         if current.root.fleet_subnet_root == Principal::anonymous() {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component subtree stop preparation has anonymous root authority",
-            ));
+            return Err(InternalError::invariant());
         }
 
         let mut next_record = record.clone();
@@ -4744,19 +4130,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4771,9 +4151,7 @@ impl ComponentRegistryOps {
             if history.observed_module_hash == observed_module_hash {
                 return Ok(subtree_removal_record_to_view(record));
             }
-            return Err(InternalError::conflict(
-                "Component subtree stopped observation differs from completed history",
-            ));
+            return Err(InternalError::conflict());
         }
         let expected_stop =
             SubtreeLeafStopAuthority::new(expected_selection, current.root.fleet_subnet_root);
@@ -4786,32 +4164,21 @@ impl ComponentRegistryOps {
             RootComponentSubtreeRemovalProgressRecord::Fenced
             | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
             | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => {
-                return Err(InternalError::unavailable(
-                    "Component subtree leaf has no durable stop intent",
-                ));
+                return Err(InternalError::unavailable());
             }
             progress => {
-                let durable_stopped =
-                    retained_subtree_stopped_effect(progress).ok_or_else(|| {
-                        InternalError::invariant(
-                            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                            "Component subtree stop progress has no retained stopped receipt",
-                        )
-                    })?;
+                let durable_stopped = retained_subtree_stopped_effect(progress)
+                    .ok_or_else(|| InternalError::invariant())?;
                 if SubtreeLeafStoppedAuthority::from_record(record.traversal_steps, durable_stopped)
                     == expected_stopped
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree stopped observation differs from durable authority",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         if SubtreeLeafStopAuthority::from_record(record.traversal_steps, stop) != expected_stop {
-            return Err(InternalError::conflict(
-                "Component subtree stopped observation differs from prepared authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let mut next_record = record.clone();
@@ -4856,19 +4223,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4893,9 +4254,7 @@ impl ComponentRegistryOps {
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree deletion preparation differs from durable intent",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::Deleted(receipt) => {
                 if SubtreeLeafStopAuthority::from_record(
@@ -4905,9 +4264,7 @@ impl ComponentRegistryOps {
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree deletion preparation differs from durable receipt",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) => {
                 if SubtreeLeafStopAuthority::from_record(
@@ -4917,9 +4274,7 @@ impl ComponentRegistryOps {
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree deletion preparation differs from durable membership-removal receipt",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
                 if SubtreeLeafStopAuthority::from_record(
@@ -4929,26 +4284,20 @@ impl ComponentRegistryOps {
                 {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree deletion preparation differs from durable Directory receipt",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::Fenced
             | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
             | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. }
             | RootComponentSubtreeRemovalProgressRecord::StopIntent(_)
             | RootComponentSubtreeRemovalProgressRecord::Completed(_) => {
-                return Err(InternalError::unavailable(
-                    "Component subtree leaf has no durable stopped receipt",
-                ));
+                return Err(InternalError::unavailable());
             }
         };
         if SubtreeLeafStopAuthority::from_record(record.traversal_steps, &stopped.stop)
             != expected_stop
         {
-            return Err(InternalError::conflict(
-                "Component subtree deletion preparation differs from stopped authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let mut next_record = record.clone();
@@ -4988,19 +4337,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -5018,9 +4361,7 @@ impl ComponentRegistryOps {
         let RootComponentSubtreeRemovalProgressRecord::DeleteIntent(deletion) = &record.progress
         else {
             let Some(receipt) = retained_subtree_deleted_effect(&record.progress) else {
-                return Err(InternalError::unavailable(
-                    "Component subtree leaf has no durable deletion intent",
-                ));
+                return Err(InternalError::unavailable());
             };
             let durable_stop = SubtreeLeafStopAuthority::from_record(
                 record.traversal_steps,
@@ -5029,16 +4370,12 @@ impl ComponentRegistryOps {
             if durable_stop == expected_stop {
                 return Ok(subtree_removal_record_to_view(record));
             }
-            return Err(InternalError::conflict(
-                "Component subtree deleted observation differs from durable receipt",
-            ));
+            return Err(InternalError::conflict());
         };
         if SubtreeLeafStopAuthority::from_record(record.traversal_steps, &deletion.stopped.stop)
             != expected_stop
         {
-            return Err(InternalError::conflict(
-                "Component subtree deleted observation differs from prepared authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let mut next_record = record.clone();
@@ -5085,19 +4422,13 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -5120,9 +4451,7 @@ impl ComponentRegistryOps {
                 if durable_selection == expected_selection {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree membership removal differs from durable authority",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) => {
                 let durable_selection = SubtreeLeafSelection::from_record(
@@ -5138,9 +4467,7 @@ impl ComponentRegistryOps {
                 if durable_selection == expected_selection {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree membership removal differs from durable Directory authority",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::Fenced
             | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
@@ -5149,26 +4476,18 @@ impl ComponentRegistryOps {
             | RootComponentSubtreeRemovalProgressRecord::Stopped(_)
             | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_)
             | RootComponentSubtreeRemovalProgressRecord::Completed(_) => {
-                return Err(InternalError::unavailable(
-                    "Component subtree leaf has no durable deletion receipt",
-                ));
+                return Err(InternalError::unavailable());
             }
         };
         let leaf = &deleted.deletion.stopped.stop.leaf;
         if SubtreeLeafSelection::from_record(record.traversal_steps, leaf) != expected_selection {
-            return Err(InternalError::conflict(
-                "Component subtree membership removal differs from the deleted leaf",
-            ));
+            return Err(InternalError::conflict());
         }
         if directory_synchronized_at_ns <= partition.directory_synchronized_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component subtree membership removal must advance the Component Directory authority time",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if first_registered_child(&partition, leaf.canister_id)?.is_some() {
-            return Err(InternalError::conflict(
-                "Component subtree membership removal requires a childless deleted leaf",
-            ));
+            return Err(InternalError::conflict());
         }
         let traversal = ComponentRegistryChildTraversalRecord {
             component,
@@ -5181,17 +4500,9 @@ impl ComponentRegistryOps {
             leaf.parent_canister_id,
             &leaf.role,
         )
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "deleted Component subtree leaf has no parent-role count",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
         if parent_role_count.instances == 0 {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "deleted Component subtree leaf has an empty parent-role count",
-            ));
+            return Err(InternalError::invariant());
         }
         let next_parent_role_count =
             parent_role_count
@@ -5206,19 +4517,14 @@ impl ComponentRegistryOps {
                     })
                 });
 
-        let revision = partition.revision.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry revision overflow")
-        })?;
-        let committed_descendants =
-            partition
-                .committed_descendants
-                .checked_sub(1)
-                .ok_or_else(|| {
-                    InternalError::invariant(
-                        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                        "Component Registry has no committed descendant to remove",
-                    )
-                })?;
+        let revision = partition
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
+        let committed_descendants = partition
+            .committed_descendants
+            .checked_sub(1)
+            .ok_or_else(|| InternalError::invariant())?;
         let descendant_content_hash = removed_component_descendant_content_hash(
             component,
             partition.descendant_content_hash,
@@ -5245,25 +4551,14 @@ impl ComponentRegistryOps {
             &fleet_directory,
         )?;
         let mut next_meta = current.clone();
-        next_meta.managed_descendants =
-            next_meta
-                .managed_descendants
-                .checked_sub(1)
-                .ok_or_else(|| {
-                    InternalError::invariant(
-                        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                        "root has no managed descendant to remove",
-                    )
-                })?;
+        next_meta.managed_descendants = next_meta
+            .managed_descendants
+            .checked_sub(1)
+            .ok_or_else(|| InternalError::invariant())?;
         next_meta.known_created_component_canisters = next_meta
             .known_created_component_canisters
             .checked_sub(1)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root has no known-created Component Canister to remove",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let registry = ComponentRegistryHead {
             component,
             revision,
@@ -5348,19 +4643,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -5389,9 +4678,7 @@ impl ComponentRegistryOps {
                 if durable_selection == expected_selection {
                     return Ok(subtree_removal_record_to_view(record));
                 }
-                return Err(InternalError::conflict(
-                    "Component subtree Directory synchronization differs from durable authority",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentSubtreeRemovalProgressRecord::Fenced
             | RootComponentSubtreeRemovalProgressRecord::Traversing { .. }
@@ -5401,16 +4688,12 @@ impl ComponentRegistryOps {
             | RootComponentSubtreeRemovalProgressRecord::DeleteIntent(_)
             | RootComponentSubtreeRemovalProgressRecord::Deleted(_)
             | RootComponentSubtreeRemovalProgressRecord::Completed(_) => {
-                return Err(InternalError::unavailable(
-                    "Component subtree leaf membership has not been removed",
-                ));
+                return Err(InternalError::unavailable());
             }
         };
         let leaf = &membership_removed.deleted.deletion.stopped.stop.leaf;
         if SubtreeLeafSelection::from_record(record.traversal_steps, leaf) != expected_selection {
-            return Err(InternalError::conflict(
-                "Component subtree Directory synchronization differs from the removed leaf",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let owning_binding = ManagedCanisterBinding::Component(partition.binding.clone());
@@ -5420,9 +4703,7 @@ impl ComponentRegistryOps {
                 let (observed_coverage, evidence) =
                     subtree_directory_convergence_record(&partition, &owning_binding, evidence)?;
                 if observed_coverage != coverage {
-                    return Err(InternalError::conflict(
-                        "Component owner Directory evidence differs from covered authority",
-                    ));
+                    return Err(InternalError::conflict());
                 }
                 Some(evidence)
             }
@@ -5432,9 +4713,7 @@ impl ComponentRegistryOps {
                 None
             }
             _ => {
-                return Err(InternalError::conflict(
-                    "Component owner Directory convergence differs from lifecycle authority",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         let parent = subtree_directory_parent_convergence_record(
@@ -5489,19 +4768,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component subtree-removal operation has not been durably fenced",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_record(&record)?;
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
         validate_subtree_removal_root(&record, &current.root)?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -5518,9 +4791,7 @@ impl ComponentRegistryOps {
         let RootComponentSubtreeRemovalProgressRecord::DirectorySynchronized(receipt) =
             &record.progress
         else {
-            return Err(InternalError::unavailable(
-                "Component subtree leaf Directory has not been synchronized",
-            ));
+            return Err(InternalError::unavailable());
         };
         let leaf = &receipt
             .membership_removed
@@ -5530,18 +4801,15 @@ impl ComponentRegistryOps {
             .stop
             .leaf;
         if SubtreeLeafSelection::from_record(record.traversal_steps, leaf) != expected_selection {
-            return Err(InternalError::conflict(
-                "Component subtree leaf finalization differs from synchronized authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
-        let completed_leaves = record.completed_leaves.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("Component subtree completed-leaf count overflow")
-        })?;
+        let completed_leaves = record
+            .completed_leaves
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if completed_leaves > record.maximum_completed_leaves {
-            return Err(InternalError::resource_exhausted(
-                "Component subtree completed-leaf history exceeded its frozen bound",
-            ));
+            return Err(InternalError::resource_exhausted());
         }
         let completed_leaf = completed_subtree_leaf_record(&record, receipt)?;
         validate_subtree_removal_completed_leaf(&record, &partition, &completed_leaf)?;
@@ -5577,12 +4845,7 @@ impl ComponentRegistryOps {
             completed_leaf,
         )
         .map_err(map_allocation_commit_error)?;
-        Self::subtree_removal(component, operation_id)?.ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "finalized Component subtree-removal operation disappeared",
-            )
-        })
+        Self::subtree_removal(component, operation_id)?.ok_or_else(|| InternalError::invariant())
     }
 
     pub(crate) fn parent_role_instances(
@@ -5602,10 +4865,7 @@ impl ComponentRegistryOps {
         if ComponentParentRoleIdentity::from_count(&record) != expected_identity
             || record.instances == 0
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry parent-role count index is invalid",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(record.instances)
     }
@@ -5620,13 +4880,10 @@ impl ComponentRegistryOps {
         application_init_args: Option<Vec<u8>>,
         reserved_against_registry: ComponentRegistryHead,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition =
-            RootComponentRegistryStore::partition(decision.component).ok_or_else(|| {
-                InternalError::unavailable("Component Registry partition has not been committed")
-            })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(decision.component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let record = RootComponentChildAllocationRecord {
             operation_id,
@@ -5649,9 +4906,7 @@ impl ComponentRegistryOps {
             return if existing.has_same_reservation(&record) {
                 Ok(child_allocation_record_to_view(existing))
             } else {
-                Err(InternalError::conflict(
-                    "Component Child allocation operation is already bound to different intent",
-                ))
+                Err(InternalError::conflict())
             };
         }
         let spec_authority_matches = partition.binding.component_spec == decision.component_spec
@@ -5667,16 +4922,12 @@ impl ComponentRegistryOps {
             || !partition_is_active
             || record.reserved_against_registry != expected_registry
         {
-            return Err(InternalError::conflict(
-                "Component Child reservation authority changed before durable mutation",
-            ));
+            return Err(InternalError::conflict());
         }
         let traversal_limit = partition
             .committed_descendants
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component descendant count overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         for removal in RootComponentRegistryStore::subtree_removals(record.component) {
             validate_subtree_removal_record(&removal)?;
             validate_subtree_removal_root(&removal, &current.root)?;
@@ -5692,9 +4943,7 @@ impl ComponentRegistryOps {
                 removal.target.canister_id,
                 traversal_limit,
             )? {
-                return Err(InternalError::conflict(
-                    "Component Child parent is fenced by an in-progress subtree removal",
-                ));
+                return Err(InternalError::conflict());
             }
         }
 
@@ -5711,53 +4960,34 @@ impl ComponentRegistryOps {
                 .as_ref()
                 .map_or(0, |count| count.instances)
                 .checked_add(1)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("per-parent child count overflow")
-                })?,
+                .ok_or_else(|| InternalError::resource_exhausted())?,
         };
         if next_count.instances > decision.maximum_instances_per_parent {
-            return Err(InternalError::resource_exhausted(
-                "registered parent exhausted its direct-child role capacity",
-            ));
+            return Err(InternalError::resource_exhausted());
         }
         let (next_partition, registry_delta) =
             child_reservation_partition(&partition, &record, current_count.as_ref(), &next_count)?;
         let component_descendants = next_partition
             .reserved_descendants
             .checked_add(next_partition.committed_descendants)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component descendant count overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if component_descendants > decision.maximum_descendants {
-            return Err(InternalError::resource_exhausted(
-                "Component descendant capacity is exhausted",
-            ));
+            return Err(InternalError::resource_exhausted());
         }
         if next_partition.encoded_bytes > decision.maximum_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "Component Child reservation requires {} bytes, exceeding protected Component limit {}",
-                next_partition.encoded_bytes, decision.maximum_registry_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         let mut next_meta = current.clone();
-        next_meta.managed_descendants =
-            next_meta
-                .managed_descendants
-                .checked_add(1)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("root managed descendant count overflow")
-                })?;
+        next_meta.managed_descendants = next_meta
+            .managed_descendants
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_meta.encoded_bytes > next_meta.root.limits.maximum_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "Component Child reservation requires {} root Registry bytes, exceeding protected limit {}",
-                next_meta.encoded_bytes, next_meta.root.limits.maximum_registry_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
 
         RootComponentRegistryStore::reserve_child_allocation(
@@ -5778,26 +5008,18 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         plan: &RootComponentCreationPlan,
     ) -> Result<(), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_child_creation_authority(&current, &partition, &record, plan)?;
         if !matches!(
             record.progress,
             RootComponentChildAllocationProgressRecord::Reserved
         ) {
-            return Err(InternalError::conflict(
-                "Component Child allocation has already crossed its creation-intent boundary",
-            ));
+            return Err(InternalError::conflict());
         }
         let charged_entry_bytes = child_creation_charged_entry_bytes(&record, plan);
         child_creation_capacity(&current, &partition, &record, charged_entry_bytes).map(|_| ())
@@ -5809,26 +5031,18 @@ impl ComponentRegistryOps {
         plan: RootComponentCreationPlan,
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_child_creation_authority(&current, &partition, &record, &plan)?;
         if !matches!(
             record.progress,
             RootComponentChildAllocationProgressRecord::Reserved
         ) {
-            return Err(InternalError::conflict(
-                "Component Child allocation has already crossed its creation-intent boundary",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let charged_entry_bytes = child_creation_charged_entry_bytes(&record, &plan);
@@ -5851,9 +5065,7 @@ impl ComponentRegistryOps {
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
 
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -5872,18 +5084,12 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         canister: Principal,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let effect = match &record.progress {
             RootComponentChildAllocationProgressRecord::CreationIntent(effect) => effect.clone(),
             RootComponentChildAllocationProgressRecord::Created {
@@ -5907,14 +5113,10 @@ impl ComponentRegistryOps {
             | RootComponentChildAllocationProgressRecord::Installed { .. }
             | RootComponentChildAllocationProgressRecord::Verified { .. }
             | RootComponentChildAllocationProgressRecord::Committed { .. } => {
-                return Err(InternalError::conflict(
-                    "Component Child allocation is already bound to a different created Canister",
-                ));
+                return Err(InternalError::conflict());
             }
             RootComponentChildAllocationProgressRecord::Reserved => {
-                return Err(InternalError::conflict(
-                    "Component Child allocation has no durable creation intent",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         let protected_principals = [
@@ -5927,9 +5129,7 @@ impl ComponentRegistryOps {
         if protected_principals.contains(&canister)
             || RootComponentRegistryStore::component_for_principal(canister).is_some()
         {
-            return Err(InternalError::conflict(
-                "created Component Child principal conflicts with protected Registry authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let charged_entry_bytes = effect.charged_entry_bytes;
@@ -5941,27 +5141,14 @@ impl ComponentRegistryOps {
         next_meta.known_created_component_canisters = next_meta
             .known_created_component_canisters
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "known-created Component Canister count overflowed",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let allocated_component_canisters = current
             .reserved_component_instances
             .checked_add(current.committed_component_instances)
             .and_then(|count| count.checked_add(current.managed_descendants))
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "allocated Component-tree Canister count overflowed",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if next_meta.known_created_component_canisters > allocated_component_canisters {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "known-created Component Canisters exceed allocated Component-tree capacity",
-            ));
+            return Err(InternalError::invariant());
         }
 
         RootComponentRegistryStore::replace_child_allocation(
@@ -5981,26 +5168,18 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         plan: &RootComponentChildInstallPlan,
     ) -> Result<(), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_child_install_authority(&current, &partition, &record, plan)?;
         if !matches!(
             record.progress,
             RootComponentChildAllocationProgressRecord::Created { .. }
         ) {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not ready to cross its install-intent boundary",
-            ));
+            return Err(InternalError::conflict());
         }
         let charged_entry_bytes = child_install_charged_entry_bytes(&record, plan)?;
         child_install_capacity(&current, &partition, &record, charged_entry_bytes).map(|_| ())
@@ -6012,27 +5191,19 @@ impl ComponentRegistryOps {
         plan: RootComponentChildInstallPlan,
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_child_install_authority(&current, &partition, &record, &plan)?;
         let (creation, canister) = match &record.progress {
             RootComponentChildAllocationProgressRecord::Created { effect, canister } => {
                 (effect.clone(), *canister)
             }
             _ => {
-                return Err(InternalError::conflict(
-                    "Component Child allocation is not ready for installation",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         let charged_entry_bytes = child_install_charged_entry_bytes(&record, &plan)?;
@@ -6055,9 +5226,7 @@ impl ComponentRegistryOps {
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
 
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -6077,18 +5246,12 @@ impl ComponentRegistryOps {
         plan: &RootComponentChildInstallPlan,
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_child_install_authority(&current, &partition, &record, plan)?;
         let (creation, canister, existing) = match &record.progress {
             RootComponentChildAllocationProgressRecord::InstallIntent {
@@ -6097,9 +5260,7 @@ impl ComponentRegistryOps {
                 installation,
             } => (creation.clone(), *canister, installation),
             _ => {
-                return Err(InternalError::conflict(
-                    "Component Child allocation has no renewable install intent",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         validate_child_install_effect_record(existing, plan)?;
@@ -6160,19 +5321,13 @@ impl ComponentRegistryOps {
         ),
         InternalError,
     > {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &record.progress
         {
@@ -6189,9 +5344,7 @@ impl ComponentRegistryOps {
             ));
         }
         if directory_synchronized_at_ns <= partition.directory_synchronized_at_ns {
-            return Err(InternalError::invalid_input(
-                "Component Child Directory synchronization must advance the current Component authority",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let RootComponentChildAllocationProgressRecord::Verified {
             creation,
@@ -6199,9 +5352,7 @@ impl ComponentRegistryOps {
             installation,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not ready for Registry commitment",
-            ));
+            return Err(InternalError::conflict());
         };
 
         let (next_record, next_partition, child, traversal) = committed_child_records(
@@ -6230,40 +5381,22 @@ impl ComponentRegistryOps {
                         component,
                     ))
                 })
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("Component Registry bytes overflow")
-                })?;
+                .ok_or_else(|| InternalError::resource_exhausted())?;
         if actual_terminal_bytes > installation.charged_entry_bytes {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Child commitment exceeds its pre-install Registry byte reservation",
-            ));
+            return Err(InternalError::invariant());
         }
         if next_partition.encoded_bytes > record.maximum_registry_bytes {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "pre-install child reservation exceeds the protected Component limit at commitment",
-            ));
+            return Err(InternalError::invariant());
         }
         let registry_reduction = partition
             .encoded_bytes
             .checked_sub(next_partition.encoded_bytes)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "exact Component Child commitment exceeded its maximum terminal precharge",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let mut next_meta = current.clone();
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_sub(registry_reduction)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root Component Registry cannot release excess child precharge",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
 
         RootComponentRegistryStore::commit_child(
             &current,
@@ -6287,19 +5420,13 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentChildAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -6307,15 +5434,11 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not committed for Directory preparation",
-            ));
+            return Err(InternalError::conflict());
         };
         let _committed = exact_committed_child_partition(&record, commitment)?;
         if commitment.directory_authority_hash != expected_authority_hash {
-            return Err(InternalError::conflict(
-                "Component Child Directory authority differs from its committed root receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         if commitment.directory_prepared {
             return Ok(child_allocation_record_to_view(record));
@@ -6334,10 +5457,7 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
             != RootComponentRegistryStore::child_allocation_entry_bytes(&record)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Child Directory receipt changed its precharged stable footprint",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -6356,19 +5476,13 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentChildAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -6376,17 +5490,13 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not committed for runtime activation",
-            ));
+            return Err(InternalError::conflict());
         };
         let _committed = exact_committed_child_partition(&record, commitment)?;
         if commitment.directory_authority_hash != expected_authority_hash
             || !commitment.directory_prepared
         {
-            return Err(InternalError::conflict(
-                "Component Child runtime activation requires its exact prepared Directory authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if commitment.runtime_activated {
             return Ok(child_allocation_record_to_view(record));
@@ -6405,10 +5515,7 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
             != RootComponentRegistryStore::child_allocation_entry_bytes(&record)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Child runtime receipt changed its precharged stable footprint",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -6435,28 +5542,20 @@ impl ComponentRegistryOps {
         ),
         InternalError,
     > {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentChildAllocationProgressRecord::Committed {
             canister,
             commitment,
             ..
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not committed for membership activation",
-            ));
+            return Err(InternalError::conflict());
         };
         let _committed = exact_committed_child_partition(&record, commitment)?;
         if let Some(membership) = &commitment.membership {
@@ -6473,26 +5572,16 @@ impl ComponentRegistryOps {
             ));
         }
         if !commitment.directory_prepared || !commitment.runtime_activated {
-            return Err(InternalError::conflict(
-                "Component Child membership activation requires terminal Directory and runtime receipts",
-            ));
+            return Err(InternalError::conflict());
         }
         if directory_synchronized_at_ns <= partition.directory_synchronized_at_ns {
-            return Err(InternalError::invalid_input(
-                "active Component Child Directory synchronization must follow current authority",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let child = RootComponentRegistryStore::child(component, *canister).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "committed Component Child allocation has no normalized row",
-            )
-        })?;
+        let child = RootComponentRegistryStore::child(component, *canister)
+            .ok_or_else(|| InternalError::invariant())?;
         validate_child_record(&partition, &child)?;
         if child.status != ComponentLifecycleStatus::Prepared {
-            return Err(InternalError::conflict(
-                "Component Child membership activation requires a Prepared Registry row",
-            ));
+            return Err(InternalError::conflict());
         }
 
         persist_child_membership_activation(
@@ -6511,19 +5600,13 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-            InternalError::unavailable("Component Registry partition has not been committed")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentChildAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -6531,18 +5614,15 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not committed for membership synchronization",
-            ));
+            return Err(InternalError::conflict());
         };
-        let membership = commitment.membership.as_ref().ok_or_else(|| {
-            InternalError::conflict("Component Child Registry membership has not been activated")
-        })?;
+        let membership = commitment
+            .membership
+            .as_ref()
+            .ok_or_else(|| InternalError::conflict())?;
         let _active = exact_active_child_partition(&record, commitment, membership)?;
         if membership.directory_authority_hash != expected_authority_hash {
-            return Err(InternalError::conflict(
-                "current Component Child Directory differs from its active membership authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if membership.directory_synchronized {
             return Ok(child_allocation_record_to_view(record));
@@ -6563,10 +5643,7 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::child_allocation_entry_bytes(&next_record)
             != RootComponentRegistryStore::child_allocation_entry_bytes(&record)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Child membership receipt changed its precharged stable footprint",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -6586,12 +5663,10 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         if let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &record.progress
         {
@@ -6603,9 +5678,7 @@ impl ComponentRegistryOps {
             ));
         }
         if directory_synchronized_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Component Directory synchronization timestamp must be positive",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let RootComponentAllocationProgressRecord::Verified {
             creation,
@@ -6613,9 +5686,7 @@ impl ComponentRegistryOps {
             installation,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation is not ready for Registry commitment",
-            ));
+            return Err(InternalError::conflict());
         };
 
         let (next_record, partition) = committed_records(
@@ -6627,50 +5698,29 @@ impl ComponentRegistryOps {
             &fleet_directory,
         )?;
         if partition.encoded_bytes > installation.charged_entry_bytes {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component commitment exceeds its pre-install Registry byte reservation",
-            ));
+            return Err(InternalError::invariant());
         }
         if partition.encoded_bytes > maximum_component_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "Component Registry commitment requires {} bytes, exceeding protected Component limit {maximum_component_registry_bytes}",
-                partition.encoded_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         let encoded_bytes = current
             .encoded_bytes
             .checked_sub(installation.charged_entry_bytes)
             .and_then(|value| value.checked_add(partition.encoded_bytes))
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root Component Registry byte accounting cannot commit its reserved partition",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if encoded_bytes > current.root.limits.maximum_registry_bytes {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "pre-install Registry reservation exceeds the protected root limit at commitment",
-            ));
+            return Err(InternalError::invariant());
         }
 
         let mut next_meta = current.clone();
         next_meta.reserved_component_instances = next_meta
             .reserved_component_instances
             .checked_sub(1)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root reserved Component count is zero at commitment",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         next_meta.committed_component_instances = next_meta
             .committed_component_instances
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("committed Component instance count overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         next_meta.encoded_bytes = encoded_bytes;
 
         RootComponentRegistryStore::commit_component(
@@ -6691,12 +5741,10 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -6704,14 +5752,10 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation is not committed for Directory preparation",
-            ));
+            return Err(InternalError::conflict());
         };
         if commitment.directory_authority_hash != expected_authority_hash {
-            return Err(InternalError::conflict(
-                "Component Directory authority differs from its committed root receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         if commitment.directory_prepared {
             return Ok(allocation_record_to_view(record));
@@ -6735,10 +5779,7 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::allocation_entry_bytes(&next_record)
             != RootComponentRegistryStore::allocation_entry_bytes(&record)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Directory receipt changed its precharged stable footprint",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_allocation(
             &current,
@@ -6756,23 +5797,17 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
         if expected_authority_hash == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "Component Group Directory authority transition is invalid",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         if !matches!(
             &record.provisioning_origin,
             ComponentProvisioningOrigin::ComponentGroup { .. }
         ) {
-            return Err(InternalError::conflict(
-                "Component Group Directory transition requires a grouped allocation",
-            ));
+            return Err(InternalError::conflict());
         }
         let RootComponentAllocationProgressRecord::Committed {
             creation,
@@ -6781,9 +5816,7 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component Group allocation is not committed for Directory publication",
-            ));
+            return Err(InternalError::conflict());
         };
         let replay_is_exact = [
             commitment.directory_authority_hash == expected_authority_hash,
@@ -6803,9 +5836,7 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|valid| valid);
         if !previous_hash_is_valid {
-            return Err(InternalError::invalid_input(
-                "Component Group Directory previous authority is invalid",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let transition_is_open = [
             commitment.directory_authority_hash == previous_authority_hash,
@@ -6816,9 +5847,7 @@ impl ComponentRegistryOps {
         .into_iter()
         .all(|open| open);
         if !transition_is_open {
-            return Err(InternalError::conflict(
-                "Component Group Directory authority differs from its unpublished root receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut next_commitment = commitment.clone();
         next_commitment.directory_authority_hash = expected_authority_hash;
@@ -6847,12 +5876,10 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -6860,16 +5887,12 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation is not committed for runtime activation",
-            ));
+            return Err(InternalError::conflict());
         };
         if commitment.directory_authority_hash != expected_authority_hash
             || !commitment.directory_prepared
         {
-            return Err(InternalError::conflict(
-                "Component runtime activation requires its exact prepared Directory authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if commitment.runtime_activated {
             return Ok(allocation_record_to_view(record));
@@ -6893,10 +5916,7 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::allocation_entry_bytes(&next_record)
             != RootComponentRegistryStore::allocation_entry_bytes(&record)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component runtime activation receipt changed its precharged stable footprint",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_allocation(
             &current,
@@ -6946,30 +5966,24 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
         component_group: Option<&ComponentGroupDirectory>,
     ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentAllocationProgressRecord::Committed {
             installation,
             commitment,
             ..
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation is not committed for membership activation",
-            ));
+            return Err(InternalError::conflict());
         };
         let allocation_is_grouped = matches!(
             &record.provisioning_origin,
             ComponentProvisioningOrigin::ComponentGroup { .. }
         );
         if allocation_is_grouped != component_group.is_some() {
-            return Err(InternalError::conflict(
-                "Component membership activation mode differs from its provisioning origin",
-            ));
+            return Err(InternalError::conflict());
         }
         let prepared = exact_committed_partition(&record, commitment)?;
         if let Some(membership) = &commitment.membership {
@@ -6986,14 +6000,10 @@ impl ComponentRegistryOps {
             ));
         }
         if !commitment.directory_prepared || !commitment.runtime_activated {
-            return Err(InternalError::conflict(
-                "Component membership activation requires terminal Directory and runtime receipts",
-            ));
+            return Err(InternalError::conflict());
         }
         if directory_synchronized_at_ns <= commitment.directory_synchronized_at_ns {
-            return Err(InternalError::invalid_input(
-                "active Component Directory synchronization must follow its prepared authority",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
         let (next_record, active) = active_membership_records(
@@ -7004,31 +6014,18 @@ impl ComponentRegistryOps {
             component_group,
         )?;
         if active.encoded_bytes > installation.charged_entry_bytes {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component membership exceeds its pre-install Registry byte reservation",
-            ));
+            return Err(InternalError::invariant());
         }
         if active.encoded_bytes > maximum_component_registry_bytes {
-            return Err(InternalError::resource_exhausted(format!(
-                "active Component Registry requires {} bytes, exceeding protected Component limit {maximum_component_registry_bytes}",
-                active.encoded_bytes
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         let encoded_bytes = current
             .encoded_bytes
             .checked_sub(prepared.encoded_bytes)
             .and_then(|value| value.checked_add(active.encoded_bytes))
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "root Component Registry byte accounting cannot activate membership",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if encoded_bytes > current.root.limits.maximum_registry_bytes {
-            return Err(InternalError::resource_exhausted(
-                "active Component Registry exceeds the protected root byte limit",
-            ));
+            return Err(InternalError::resource_exhausted());
         }
         let mut next_meta = current.clone();
         next_meta.encoded_bytes = encoded_bytes;
@@ -7051,12 +6048,10 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
-        let current = RootComponentRegistryStore::current().ok_or_else(|| {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
-        })?;
-        let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component allocation operation has not been reserved")
-        })?;
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+        let record = RootComponentRegistryStore::allocation(operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let RootComponentAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -7064,18 +6059,15 @@ impl ComponentRegistryOps {
             commitment,
         } = &record.progress
         else {
-            return Err(InternalError::conflict(
-                "Component allocation is not committed for membership synchronization",
-            ));
+            return Err(InternalError::conflict());
         };
-        let membership = commitment.membership.as_ref().ok_or_else(|| {
-            InternalError::conflict("Component Registry membership has not been activated")
-        })?;
+        let membership = commitment
+            .membership
+            .as_ref()
+            .ok_or_else(|| InternalError::conflict())?;
         let _active = exact_active_partition(&record, commitment, membership)?;
         if membership.directory_authority_hash != expected_authority_hash {
-            return Err(InternalError::conflict(
-                "current Component Directory differs from its active membership authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if membership.directory_synchronized {
             return Ok(allocation_record_to_view(record));
@@ -7102,10 +6094,7 @@ impl ComponentRegistryOps {
         if RootComponentRegistryStore::allocation_entry_bytes(&next_record)
             != RootComponentRegistryStore::allocation_entry_bytes(&record)
         {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component membership receipt changed its precharged stable footprint",
-            ));
+            return Err(InternalError::invariant());
         }
         RootComponentRegistryStore::replace_allocation(
             &current,
@@ -7122,50 +6111,30 @@ fn complete_initial_inventory(
     current: &RootComponentRegistryMetaRecord,
 ) -> Result<CompleteInitialInventory, InternalError> {
     if current.reserved_component_instances != 0 {
-        return Err(InternalError::unavailable(
-            "initial Component inventory still contains nonterminal allocations",
-        ));
+        return Err(InternalError::unavailable());
     }
 
     let mut allocations = RootComponentRegistryStore::allocations();
     allocations.sort_by_key(|record| record.allocation_sequence);
-    let component_count = u32::try_from(allocations.len()).map_err(|_| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "initial Component inventory exceeds u32",
-        )
-    })?;
+    let component_count =
+        u32::try_from(allocations.len()).map_err(|_| InternalError::invariant())?;
     if component_count != current.committed_component_instances
         || current.next_allocation_sequence != u64::from(component_count) + 1
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry counters differ from the initial allocation inventory",
-        ));
+        return Err(InternalError::invariant());
     }
     let maximum_known_created = component_count
         .checked_add(current.managed_descendants)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "initial Component-tree Canister count overflowed",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if current.known_created_component_canisters < component_count
         || current.known_created_component_canisters > maximum_known_created
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "known-created Canister counter differs from the complete initial inventory",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let partitions = RootComponentRegistryStore::partitions();
     if partitions.len() != allocations.len() {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "initial Component allocations and Registry partitions differ in cardinality",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let mut entries = Vec::with_capacity(allocations.len());
@@ -7173,17 +6142,14 @@ fn complete_initial_inventory(
     let mut encoded_bytes = 0_u64;
     for (index, record) in allocations.iter().enumerate() {
         let (entry, partition_bytes) = initial_inventory_hash_entry(record, index)?;
-        encoded_bytes = encoded_bytes.checked_add(partition_bytes).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry bytes overflow")
-        })?;
+        encoded_bytes = encoded_bytes
+            .checked_add(partition_bytes)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         operation_ids.push(record.operation_id);
         entries.push(entry);
     }
     if encoded_bytes != current.encoded_bytes {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "initial Component inventory differs from root Registry byte accounting",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let inventory_hash = initial_inventory_hash(&entries)?;
@@ -7199,29 +6165,21 @@ fn initial_inventory_hash_entry(
     index: usize,
 ) -> Result<(RootComponentInitialInventoryHashEntry, u64), InternalError> {
     if record.allocation_sequence != index as u64 + 1 {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "initial Component allocation sequences are not consecutive",
-        ));
+        return Err(InternalError::invariant());
     }
     let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
     else {
-        return Err(InternalError::unavailable(
-            "initial Component inventory contains an allocation without Registry commitment",
-        ));
+        return Err(InternalError::unavailable());
     };
-    let membership = commitment.membership.as_ref().ok_or_else(|| {
-        InternalError::unavailable(
-            "initial Component inventory contains an allocation without active membership",
-        )
-    })?;
+    let membership = commitment
+        .membership
+        .as_ref()
+        .ok_or_else(|| InternalError::unavailable())?;
     if !commitment.directory_prepared
         || !commitment.runtime_activated
         || !membership.directory_synchronized
     {
-        return Err(InternalError::unavailable(
-            "initial Component inventory lacks terminal Directory, runtime or membership evidence",
-        ));
+        return Err(InternalError::unavailable());
     }
     let active = exact_active_partition(record, commitment, membership)?;
     validate_partition_record(&active)?;
@@ -7258,12 +6216,7 @@ fn initial_inventory_hash(
     entries: &[RootComponentInitialInventoryHashEntry],
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.root-component-initial-inventory.v1";
-    let payload = candid::encode_one(entries).map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("initial Component inventory cannot be encoded: {error}"),
-        )
-    })?;
+    let payload = candid::encode_one(entries).map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -7278,18 +6231,13 @@ fn validate_initial_inventory_receipt(
     inventory_hash: [u8; 32],
 ) -> Result<(), InternalError> {
     if receipt.fleet_activation_operation_id != fleet_activation_operation_id {
-        return Err(InternalError::conflict(
-            "initial Component inventory is bound to a different Fleet activation",
-        ));
+        return Err(InternalError::conflict());
     }
     if receipt.component_count != component_count
         || receipt.inventory_hash != inventory_hash
         || receipt.sealed_at_ns == 0
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "sealed initial Component inventory differs from current protected authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7300,32 +6248,23 @@ fn update_initial_inventory_receipt(
     directories_converged: bool,
     root_runtime_activated: bool,
 ) -> Result<RootComponentInitialInventoryView, InternalError> {
-    let current = RootComponentRegistryStore::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
-    let mut receipt = current.initial_inventory.ok_or_else(|| {
-        InternalError::unavailable("initial Component inventory has not been sealed")
-    })?;
+    let current =
+        RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+    let mut receipt = current
+        .initial_inventory
+        .ok_or_else(|| InternalError::unavailable())?;
     if receipt.fleet_activation_operation_id != fleet_activation_operation_id
         || receipt.inventory_hash != expected_inventory_hash
     {
-        return Err(InternalError::conflict(
-            "root activation receipt differs from its sealed initial Component inventory",
-        ));
+        return Err(InternalError::conflict());
     }
     if root_runtime_activated && !directories_converged {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "root runtime activation cannot precede initial Directory convergence",
-        ));
+        return Err(InternalError::invariant());
     }
     receipt.directories_converged |= directories_converged;
     receipt.root_runtime_activated |= root_runtime_activated;
     if receipt.root_runtime_activated && !receipt.directories_converged {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "root runtime receipt has no initial Directory convergence evidence",
-        ));
+        return Err(InternalError::invariant());
     }
     if current.initial_inventory == Some(receipt) {
         return Ok(initial_inventory_record_to_view(receipt));
@@ -7361,44 +6300,29 @@ fn validate_root_draining_record(
     record: &RootFleetSubnetDrainingRecord,
 ) -> Result<(), InternalError> {
     if !record.is_valid_for_current(current) {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Fleet Subnet Root draining receipt differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if FleetSubnetRootDrainingReservationOps::content_hash(&record.reservation)?
         != record.reservation.reservation_hash
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Fleet Subnet Root draining reservation hash differs from retained authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if let Some(reclamation) = record.store_reclamation.as_ref() {
         let expected_hash = root_store_reclamation_hash(reclamation)?;
         if reclamation.reclamation_hash != expected_hash {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Fleet Subnet Root Store reclamation hash differs from retained authority",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     if let Some(finalization) = record.store_binding_finalization.as_ref() {
         let expected_hash = root_store_binding_finalization_hash(finalization)?;
         if finalization.finalization_hash != expected_hash {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Fleet Subnet Root Store binding finalization hash differs from retained authority",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     if let Some(deletion) = record.store_deletion.as_ref() {
         let expected_hash = root_store_deletion_hash(deletion)?;
         if deletion.deletion_hash != expected_hash {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Fleet Subnet Root Store deletion hash differs from retained authority",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -7416,17 +6340,9 @@ fn terminal_root_inventory_plan(
     let history = terminal_root_component_history()?;
     let expected_next_sequence = u64::from(history.removed_component_instances)
         .checked_add(1)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "terminal Component allocation sequence overflows",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if current.next_allocation_sequence != expected_next_sequence {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal Component allocation history is not contiguous",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let retained_registry_components: BTreeSet<_> =
@@ -7434,16 +6350,10 @@ fn terminal_root_inventory_plan(
             .into_iter()
             .collect();
     if !retained_registry_components.is_subset(&history.components) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal root Registry retains history for an unknown Component",
-        ));
+        return Err(InternalError::invariant());
     }
     if history.registry_bytes != current.encoded_bytes {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal root Registry byte ledger differs from retained history",
-        ));
+        return Err(InternalError::invariant());
     }
 
     Ok(RootFleetSubnetFinalInventoryPlan {
@@ -7465,21 +6375,14 @@ struct TerminalRootComponentHistory {
 fn terminal_root_component_history() -> Result<TerminalRootComponentHistory, InternalError> {
     let mut allocations = RootComponentRegistryStore::allocations();
     allocations.sort_by_key(|allocation| allocation.allocation_sequence);
-    let removed_component_instances = u32::try_from(allocations.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal Component allocation count exceeds u32",
-        )
-    })?;
+    let removed_component_instances =
+        u32::try_from(allocations.len()).map_err(|_| InternalError::invariant())?;
     let mut drainings: BTreeMap<_, _> = RootComponentRegistryStore::component_drainings()
         .into_iter()
         .map(|record| (record.component, record))
         .collect();
     if drainings.len() != allocations.len() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal Component allocation and draining histories differ",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let mut hash_entries = Vec::with_capacity(allocations.len());
@@ -7487,22 +6390,14 @@ fn terminal_root_component_history() -> Result<TerminalRootComponentHistory, Int
     let mut components = BTreeSet::new();
     for (index, allocation) in allocations.iter().enumerate() {
         ensure_terminal_allocation_sequence(index, allocation)?;
-        let draining = drainings.remove(&allocation.component).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "terminal Component allocation lacks draining history",
-            )
-        })?;
+        let draining = drainings
+            .remove(&allocation.component)
+            .ok_or_else(|| InternalError::invariant())?;
         validate_removed_component_authority(&draining)?;
         let receipt = removed_component_membership_receipt(&draining)?;
         registry_bytes = registry_bytes
             .checked_add(terminal_component_registry_bytes(allocation, &draining)?)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "terminal root Registry byte ledger overflows",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         components.insert(allocation.component);
         hash_entries.push(RootTerminalComponentHistoryHashEntry {
             allocation_sequence: allocation.allocation_sequence,
@@ -7527,12 +6422,7 @@ fn ensure_terminal_allocation_sequence(
     let sequence = u64::try_from(index)
         .ok()
         .and_then(|index| index.checked_add(1))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "terminal Component allocation index overflows",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let allocation_is_terminal = [
         allocation.allocation_sequence == sequence,
         matches!(
@@ -7543,9 +6433,7 @@ fn ensure_terminal_allocation_sequence(
     .into_iter()
     .all(|valid| valid);
     if !allocation_is_terminal {
-        return Err(InternalError::unavailable(
-            "Fleet Subnet Root still has nonterminal Component allocation history",
-        ));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -7556,23 +6444,17 @@ fn ensure_terminal_root_request(
     expected_registry: &FleetRegistryVersion,
 ) -> Result<(), InternalError> {
     if operation_id == [0; 32] {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root final inventory operation ID must be nonzero",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if operation_id != draining.operation_id {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root final inventory names a different draining operation",
-        ));
+        return Err(InternalError::conflict());
     }
     let publication_is_current_or_later = ComponentRegistryOps::registry_covers_preparation(
         &draining.active_registry,
         expected_registry,
     );
     if !publication_is_current_or_later {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root final inventory is not covered by its draining Registry",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -7589,9 +6471,7 @@ fn ensure_terminal_root_counters(
     .into_iter()
     .all(|count| count == 0);
     if !counters_are_empty {
-        return Err(InternalError::unavailable(
-            "Fleet Subnet Root still has live Component capacity or Canister inventory",
-        ));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -7604,9 +6484,7 @@ fn ensure_terminal_root_indexes_are_empty() -> Result<(), InternalError> {
     .into_iter()
     .all(|empty| empty);
     if !indexes_are_empty {
-        return Err(InternalError::unavailable(
-            "Fleet Subnet Root still has live Component Registry membership",
-        ));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -7641,12 +6519,9 @@ fn terminal_component_registry_bytes(
         draining,
     )));
     entries.try_fold(0_u64, |total, bytes| {
-        total.checked_add(bytes).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "terminal Component Registry byte ledger overflows",
-            )
-        })
+        total
+            .checked_add(bytes)
+            .ok_or_else(|| InternalError::invariant())
     })
 }
 
@@ -7677,22 +6552,14 @@ fn removed_component_membership_receipt(
             RootComponentDeletionProgressRecord::DeleteIntent(_)
             | RootComponentDeletionProgressRecord::Deleted(_),
         )
-        | None => Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal Component history lacks membership-removal authority",
-        )),
+        | None => Err(InternalError::invariant()),
     }
 }
 
 fn terminal_component_history_hash(
     entries: &[RootTerminalComponentHistoryHashEntry],
 ) -> Result<[u8; 32], InternalError> {
-    let payload = candid::encode_one(entries).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("terminal Component history cannot be encoded: {error}"),
-        )
-    })?;
+    let payload = candid::encode_one(entries).map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(
         ROOT_TERMINAL_COMPONENT_HISTORY_HASH_DOMAIN,
         &payload,
@@ -7710,22 +6577,14 @@ fn root_store_final_inventory_evidence(
     store: &RootStoreBootstrapResponse,
     status: &WasmStoreStatusResponse,
 ) -> Result<RootStoreFinalInventoryEvidence, InternalError> {
-    let catalog_entries = u32::try_from(store.catalog.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "root Store catalog entry count exceeds u32",
-        )
-    })?;
-    let template_entries = u32::try_from(status.templates.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "root Store template count exceeds u32",
-        )
-    })?;
+    let catalog_entries =
+        u32::try_from(store.catalog.len()).map_err(|_| InternalError::invariant())?;
+    let template_entries =
+        u32::try_from(status.templates.len()).map_err(|_| InternalError::invariant())?;
     let gc_prepared_at_secs = status
         .gc
         .prepared_at
-        .ok_or_else(|| InternalError::conflict("root Store lacks a prepared GC write fence"))?;
+        .ok_or_else(|| InternalError::conflict())?;
     let source_is_exact = [
         store.fleet_subnet_root == current.root.fleet_subnet_root,
         store.release_set == current.release_set,
@@ -7755,9 +6614,7 @@ fn root_store_final_inventory_evidence(
         .into_iter()
         .all(|valid| valid);
     if !evidence_is_exact {
-        return Err(InternalError::conflict(
-            "root Store is not one exact retained write-fenced final inventory",
-        ));
+        return Err(InternalError::conflict());
     }
 
     let mut catalog = store.catalog.clone();
@@ -7772,12 +6629,7 @@ fn root_store_final_inventory_evidence(
         release_count: status.release_count,
         gc_prepared_at_secs,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("root Store final catalog cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     Ok(RootStoreFinalInventoryEvidence {
         catalog_hash: domain_hash(ROOT_STORE_FINAL_CATALOG_HASH_DOMAIN, &payload),
         catalog_entries,
@@ -7808,10 +6660,7 @@ fn validate_root_final_inventory_record(
         .into_iter()
         .all(|valid| valid)
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Fleet Subnet Root final inventory differs from terminal local authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7834,10 +6683,7 @@ fn validate_root_final_inventory_intent_record(
     .into_iter()
     .all(|valid| valid);
     if !intent_is_exact {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Fleet Subnet Root final inventory intent differs from terminal local authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7865,12 +6711,7 @@ fn root_final_inventory_hash(
         wasm_store_gc_prepared_at_secs: inventory.wasm_store_gc_prepared_at_secs,
         finalized_at_ns: inventory.finalized_at_ns,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("Fleet Subnet Root final inventory cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(ROOT_FINAL_INVENTORY_HASH_DOMAIN, &payload))
 }
 
@@ -7883,11 +6724,10 @@ fn root_store_reclamation_record(
         .final_inventory
         .as_ref()
         .expect("validated final root inventory");
-    let intent = draining.store_reclamation_intent.as_ref().ok_or_else(|| {
-        InternalError::unavailable(
-            "Fleet Subnet Root Store reclamation intent has not been prepared",
-        )
-    })?;
+    let intent = draining
+        .store_reclamation_intent
+        .as_ref()
+        .ok_or_else(|| InternalError::unavailable())?;
     let terminal_store_is_exact = [
         evidence.wasm_store == intent.wasm_store,
         evidence.occupied_store_bytes == 0,
@@ -7903,9 +6743,7 @@ fn root_store_reclamation_record(
     .into_iter()
     .all(|valid| valid);
     if !terminal_store_is_exact {
-        return Err(InternalError::conflict(
-            "live root Store does not prove exact completed reclamation",
-        ));
+        return Err(InternalError::conflict());
     }
     let mut record = RootFleetSubnetStoreReclamationRecord {
         operation_id: draining.operation_id,
@@ -7945,12 +6783,7 @@ fn root_store_reclamation_hash(
         gc_runs_completed: reclamation.gc_runs_completed,
         completed_at_ns: reclamation.completed_at_ns,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("Fleet Subnet Root Store reclamation cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(ROOT_STORE_RECLAMATION_HASH_DOMAIN, &payload))
 }
 
@@ -7962,18 +6795,11 @@ fn root_store_binding_finalization_record(
     let intent = draining
         .store_binding_finalization_intent
         .as_ref()
-        .ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root Store binding finalization intent has not been prepared",
-            )
-        })?;
-    let expected_finalized_generation =
-        intent.source_generation.checked_add(3).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Store binding finalization generation overflows",
-            )
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
+    let expected_finalized_generation = intent
+        .source_generation
+        .checked_add(3)
+        .ok_or_else(|| InternalError::invariant())?;
     let terminal_binding_is_exact = [
         evidence.wasm_store == intent.wasm_store,
         evidence.binding.as_str() == intent.binding,
@@ -7985,9 +6811,7 @@ fn root_store_binding_finalization_record(
     .into_iter()
     .all(|valid| valid);
     if !terminal_binding_is_exact {
-        return Err(InternalError::conflict(
-            "root publication state does not prove exact Store binding finalization",
-        ));
+        return Err(InternalError::conflict());
     }
     let mut record = RootFleetSubnetStoreBindingFinalizationRecord {
         operation_id: draining.operation_id,
@@ -8021,12 +6845,7 @@ fn root_store_binding_finalization_hash(
         finalized_at_secs: finalization.finalized_at_secs,
         completed_at_ns: finalization.completed_at_ns,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("Fleet Subnet Root Store binding finalization cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(
         ROOT_STORE_BINDING_FINALIZATION_HASH_DOMAIN,
         &payload,
@@ -8038,20 +6857,16 @@ fn root_store_deletion_record(
     evidence: RootFleetSubnetStoreDeletionEvidence,
     completed_at_ns: u64,
 ) -> Result<RootFleetSubnetStoreDeletionRecord, InternalError> {
-    let intent = draining.store_deletion_intent.as_ref().ok_or_else(|| {
-        InternalError::unavailable("Fleet Subnet Root Store deletion intent has not been prepared")
-    })?;
-    let observed_cycles_after_reclamation =
-        intent.observed_cycles_after_reclamation.ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root Store cycle reclamation has not been recorded",
-            )
-        })?;
-    let cycles_reclaimed_at_ns = intent.cycles_reclaimed_at_ns.ok_or_else(|| {
-        InternalError::unavailable(
-            "Fleet Subnet Root Store cycle-reclamation time has not been recorded",
-        )
-    })?;
+    let intent = draining
+        .store_deletion_intent
+        .as_ref()
+        .ok_or_else(|| InternalError::unavailable())?;
+    let observed_cycles_after_reclamation = intent
+        .observed_cycles_after_reclamation
+        .ok_or_else(|| InternalError::unavailable())?;
+    let cycles_reclaimed_at_ns = intent
+        .cycles_reclaimed_at_ns
+        .ok_or_else(|| InternalError::unavailable())?;
     let terminal_absence_is_exact = [
         evidence.wasm_store == intent.wasm_store,
         evidence.binding.as_str() == intent.binding,
@@ -8067,9 +6882,7 @@ fn root_store_deletion_record(
     .into_iter()
     .all(|valid| valid);
     if !terminal_absence_is_exact {
-        return Err(InternalError::conflict(
-            "root Store deletion evidence differs from durable intent",
-        ));
+        return Err(InternalError::conflict());
     }
     let mut record = RootFleetSubnetStoreDeletionRecord {
         operation_id: draining.operation_id,
@@ -8111,12 +6924,7 @@ fn root_store_deletion_hash(
         observed_absent_at_ns: deletion.observed_absent_at_ns,
         completed_at_ns: deletion.completed_at_ns,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("Fleet Subnet Root Store deletion cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     Ok(domain_hash(ROOT_STORE_DELETION_HASH_DOMAIN, &payload))
 }
 
@@ -8149,9 +6957,7 @@ fn validate_root_store_deletion_authority(
     .into_iter()
     .all(|valid| valid);
     if !authority_is_complete {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root Store deletion authority is incomplete",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -8160,9 +6966,7 @@ fn ensure_root_accepts_top_level_allocation(
     current: &RootComponentRegistryMetaRecord,
 ) -> Result<(), InternalError> {
     if current.root_draining.is_some() {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root is draining and accepts no new top-level Component allocations",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -9004,10 +7808,7 @@ fn converge_directory_refresh_bytes(
         }
         next.encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        InternalErrorOrigin::Storage,
-        "Component Directory refresh byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn validate_refresh_plan_against_intent(
@@ -9024,9 +7825,7 @@ fn validate_refresh_plan_against_intent(
     .into_iter()
     .all(|matches| matches);
     if !exact {
-        return Err(InternalError::conflict(
-            "reconstructed Component Directory plan differs from durable intent",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -9035,17 +7834,12 @@ fn replace_encoded_bytes(
     current: u64,
     previous_entry: u64,
     next_entry: u64,
-    label: &str,
+    _label: &str,
 ) -> Result<u64, InternalError> {
     current
         .checked_sub(previous_entry)
         .and_then(|remaining| remaining.checked_add(next_entry))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!("{label} byte accounting overflowed"),
-            )
-        })
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn child_reservation_partition(
@@ -9059,10 +7853,7 @@ fn child_reservation_partition(
         ComponentParentRoleIdentity::from_count(count) == allocation_identity && count.instances > 0
     });
     if !current_count_is_valid {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry parent-role count index is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     let current_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(current);
     let current_count_bytes = current_count
@@ -9071,41 +7862,33 @@ fn child_reservation_partition(
     let allocation_bytes = RootComponentRegistryStore::child_allocation_entry_bytes(allocation);
     let next_count_bytes = RootComponentRegistryStore::parent_role_count_entry_bytes(next_count);
     let mut next = current.clone();
-    next.reserved_descendants = next.reserved_descendants.checked_add(1).ok_or_else(|| {
-        InternalError::resource_exhausted("reserved Component descendant count overflow")
-    })?;
+    next.reserved_descendants = next
+        .reserved_descendants
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
 
     for _ in 0..8 {
         let next_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(&next);
         let next_total = next_partition_bytes
             .checked_add(allocation_bytes)
             .and_then(|value| value.checked_add(next_count_bytes))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let current_total = current_partition_bytes
             .checked_add(current_count_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
-        let delta = next_total.checked_sub(current_total).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Child reservation unexpectedly reduced Registry bytes",
-            )
-        })?;
-        let encoded_bytes = current.encoded_bytes.checked_add(delta).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry bytes overflow")
-        })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
+        let delta = next_total
+            .checked_sub(current_total)
+            .ok_or_else(|| InternalError::invariant())?;
+        let encoded_bytes = current
+            .encoded_bytes
+            .checked_add(delta)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next.encoded_bytes == encoded_bytes {
             return Ok((next, delta));
         }
         next.encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component Child reservation byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn subtree_fence_partition(
@@ -9119,32 +7902,20 @@ fn subtree_fence_partition(
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
             .checked_add(removal_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let registry_delta = next_total
             .checked_sub(current_partition_bytes)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component subtree-removal fence unexpectedly reduced Registry bytes",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let encoded_bytes = current
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next.encoded_bytes == encoded_bytes {
             return Ok((next, registry_delta));
         }
         next.encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component subtree-removal fence byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn subtree_removal_progress_state(
@@ -9164,56 +7935,34 @@ fn subtree_removal_progress_state(
         .checked_add(RootComponentRegistryStore::subtree_removal_entry_bytes(
             current_record,
         ))
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let component_without_current = partition
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry bytes are below subtree traversal authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let root_without_current = current
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Registry bytes are below subtree traversal authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let next_record_bytes = RootComponentRegistryStore::subtree_removal_entry_bytes(next_record);
     let mut next_partition = partition.clone();
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(next_record_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_component_bytes = component_without_current
             .checked_add(next_total)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree-removal progress requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
-                )));
+                return Err(InternalError::resource_exhausted());
             }
-            let next_root_bytes =
-                root_without_current
-                    .checked_add(next_total)
-                    .ok_or_else(|| {
-                        InternalError::resource_exhausted("Component Registry bytes overflow")
-                    })?;
+            let next_root_bytes = root_without_current
+                .checked_add(next_total)
+                .ok_or_else(|| InternalError::resource_exhausted())?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree-removal progress requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let mut next_meta = current.clone();
             next_meta.encoded_bytes = next_root_bytes;
@@ -9221,10 +7970,7 @@ fn subtree_removal_progress_state(
         }
         next_partition.encoded_bytes = next_component_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component subtree-removal progress byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn component_draining_state(
@@ -9244,51 +7990,29 @@ fn component_draining_state(
     let component_without_partition = partition
         .encoded_bytes
         .checked_sub(current_partition_bytes)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry bytes are below the partition being drained",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let root_without_partition = current
         .encoded_bytes
         .checked_sub(current_partition_bytes)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Registry bytes are below the Component partition being drained",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let draining_bytes = RootComponentRegistryStore::component_draining_entry_bytes(record);
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(draining_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_component_bytes = component_without_partition
             .checked_add(next_total)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component draining requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
-                )));
+                return Err(InternalError::resource_exhausted());
             }
-            let next_root_bytes =
-                root_without_partition
-                    .checked_add(next_total)
-                    .ok_or_else(|| {
-                        InternalError::resource_exhausted("Component Registry bytes overflow")
-                    })?;
+            let next_root_bytes = root_without_partition
+                .checked_add(next_total)
+                .ok_or_else(|| InternalError::resource_exhausted())?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component draining requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let mut next_meta = current.clone();
             next_meta.encoded_bytes = next_root_bytes;
@@ -9296,10 +8020,7 @@ fn component_draining_state(
         }
         next_partition.encoded_bytes = next_component_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component draining byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn component_quiescence_terminal_entry_bytes(
@@ -9361,10 +8082,7 @@ fn component_quiescence_terminal_entry_bytes(
         }
         charged_entry_bytes = next;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component quiescence terminal byte reservation did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn charged_component_draining_entry_bytes(record: &RootComponentDrainingRecord) -> u64 {
@@ -9398,51 +8116,30 @@ fn component_quiescence_intent_state(
         .encoded_bytes
         .checked_sub(current_partition_bytes)
         .and_then(|bytes| bytes.checked_sub(current_draining_bytes))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry bytes are below its partition and draining authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let root_without_mutated_entries = current
         .encoded_bytes
         .checked_sub(current_partition_bytes)
         .and_then(|bytes| bytes.checked_sub(current_draining_bytes))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Registry bytes are below Component quiescence authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let next_draining_bytes = charged_component_draining_entry_bytes(next_draining);
     let mut next_partition = partition.clone();
     for _ in 0..8 {
         let next_mutated_bytes = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(next_draining_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_component_bytes = component_without_mutated_entries
             .checked_add(next_mutated_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component quiescence requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let next_root_bytes = root_without_mutated_entries
                 .checked_add(next_mutated_bytes)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("Component Registry bytes overflow")
-                })?;
+                .ok_or_else(|| InternalError::resource_exhausted())?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component quiescence requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let mut next_meta = current.clone();
             next_meta.encoded_bytes = next_root_bytes;
@@ -9450,10 +8147,7 @@ fn component_quiescence_intent_state(
         }
         next_partition.encoded_bytes = next_component_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component quiescence byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn subtree_removal_leaf_finalization_state(
@@ -9474,25 +8168,15 @@ fn subtree_removal_leaf_finalization_state(
         .checked_add(RootComponentRegistryStore::subtree_removal_entry_bytes(
             current_record,
         ))
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let component_without_current = partition
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry bytes are below completed-leaf authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let root_without_current = current
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Registry bytes are below completed-leaf authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let next_record_bytes = RootComponentRegistryStore::subtree_removal_entry_bytes(next_record);
     let history_bytes =
         RootComponentRegistryStore::subtree_removal_completed_leaf_entry_bytes(completed_leaf);
@@ -9502,31 +8186,19 @@ fn subtree_removal_leaf_finalization_state(
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(next_record_bytes)
             .and_then(|bytes| bytes.checked_add(history_bytes))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_component_bytes = component_without_current
             .checked_add(next_total)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree leaf finalization requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
-                )));
+                return Err(InternalError::resource_exhausted());
             }
-            let next_root_bytes =
-                root_without_current
-                    .checked_add(next_total)
-                    .ok_or_else(|| {
-                        InternalError::resource_exhausted("Component Registry bytes overflow")
-                    })?;
+            let next_root_bytes = root_without_current
+                .checked_add(next_total)
+                .ok_or_else(|| InternalError::resource_exhausted())?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree leaf finalization requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let mut next_meta = current.clone();
             next_meta.encoded_bytes = next_root_bytes;
@@ -9534,10 +8206,7 @@ fn subtree_removal_leaf_finalization_state(
         }
         next_partition.encoded_bytes = next_component_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component subtree leaf-finalization byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 #[expect(
@@ -9578,25 +8247,15 @@ fn converge_subtree_membership_removal_bytes(
                 parent_role_count,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let component_without_current = partition
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry bytes are below removed leaf authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let root_without_current = current
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Registry bytes are below removed leaf authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let next_count_bytes =
         next_parent_role_count.map_or(0, RootComponentRegistryStore::parent_role_count_entry_bytes);
 
@@ -9606,40 +8265,26 @@ fn converge_subtree_membership_removal_bytes(
                 next_record,
             ))
             .and_then(|bytes| bytes.checked_add(next_count_bytes))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_component_bytes = component_without_current
             .checked_add(next_total)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_root_bytes = root_without_current
             .checked_add(next_total)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) =
             &mut next_record.progress
         else {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "Component membership-removal byte convergence has no removal receipt",
-            ));
+            return Err(InternalError::invariant());
         };
         if next_partition.encoded_bytes == next_component_bytes
             && receipt.registry_encoded_bytes == next_component_bytes
         {
             if next_component_bytes > maximum_component_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree membership removal requires {next_component_bytes} bytes, exceeding protected Component limit {maximum_component_registry_bytes}"
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component subtree membership removal requires {next_root_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             next_meta.encoded_bytes = next_root_bytes;
             return Ok(());
@@ -9647,10 +8292,7 @@ fn converge_subtree_membership_removal_bytes(
         next_partition.encoded_bytes = next_component_bytes;
         receipt.registry_encoded_bytes = next_component_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component subtree membership-removal byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn validate_child_creation_authority(
@@ -9668,9 +8310,7 @@ fn validate_child_creation_authority(
         || !root_controls_creation
         || !plan.has_valid_store_artifact()
     {
-        return Err(InternalError::conflict(
-            "Component Child creation authority differs from its active reservation",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -9684,61 +8324,40 @@ fn child_creation_capacity(
     let current_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(partition);
     let current_record_bytes = RootComponentRegistryStore::child_allocation_entry_bytes(record);
     if charged_entry_bytes < current_record_bytes {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "Component Child creation charge is smaller than its reservation record",
-        ));
+        return Err(InternalError::invariant());
     }
     let current_total = current_partition_bytes
         .checked_add(current_record_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let mut next = partition.clone();
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
             .checked_add(charged_entry_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
-        let registry_delta = next_total.checked_sub(current_total).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "Component Child creation precharge unexpectedly reduced Registry bytes",
-            )
-        })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
+        let registry_delta = next_total
+            .checked_sub(current_total)
+            .ok_or_else(|| InternalError::invariant())?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next.encoded_bytes == encoded_bytes {
             if encoded_bytes > record.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component Child creation requires {encoded_bytes} bytes, exceeding protected Component limit {}",
-                    record.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let root_encoded_bytes = current
                 .encoded_bytes
                 .checked_add(registry_delta)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("Component Registry bytes overflow")
-                })?;
+                .ok_or_else(|| InternalError::resource_exhausted())?;
             if root_encoded_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component Child creation requires {root_encoded_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             return Ok((next, registry_delta));
         }
         next.encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component Child creation byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn child_creation_charged_entry_bytes(
@@ -9769,10 +8388,7 @@ fn validate_charged_child_record_size(
     charged_entry_bytes: u64,
 ) -> Result<(), InternalError> {
     if RootComponentRegistryStore::child_allocation_entry_bytes(record) > charged_entry_bytes {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Child allocation exceeded its precharged stable footprint",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -9793,9 +8409,7 @@ fn validate_child_install_authority(
         | RootComponentChildAllocationProgressRecord::Committed { canister, .. } => *canister,
         RootComponentChildAllocationProgressRecord::Reserved
         | RootComponentChildAllocationProgressRecord::CreationIntent(_) => {
-            return Err(InternalError::conflict(
-                "Component Child allocation has no created Canister",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let expected_binding = ComponentChildBinding {
@@ -9820,9 +8434,7 @@ fn validate_child_install_authority(
         maximum_registry_bytes: record.maximum_registry_bytes,
     };
     if observed_authority != expected_authority || !artifact_source_is_valid {
-        return Err(InternalError::conflict(
-            "Component Child install authority differs from its active reservation",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -9836,9 +8448,7 @@ fn child_install_charged_entry_bytes(
             (effect.clone(), *canister)
         }
         _ => {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not ready for installation",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let installation = RootComponentChildInstallEffectRecord {
@@ -9914,7 +8524,7 @@ fn child_install_charged_entry_bytes(
                 record.component,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))
+        .ok_or_else(|| InternalError::resource_exhausted())
 }
 
 fn child_install_capacity(
@@ -9928,61 +8538,41 @@ fn child_install_capacity(
             effect.charged_entry_bytes
         }
         _ => {
-            return Err(InternalError::conflict(
-                "Component Child allocation is not ready to reserve install capacity",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
         .checked_add(current_reserved_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let mut next = partition.clone();
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
             .checked_add(charged_entry_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
-        let registry_delta = next_total.checked_sub(current_total).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "Component Child install precharge unexpectedly reduced Registry bytes",
-            )
-        })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
+        let registry_delta = next_total
+            .checked_sub(current_total)
+            .ok_or_else(|| InternalError::invariant())?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next.encoded_bytes == encoded_bytes {
             if encoded_bytes > record.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component Child installation requires {encoded_bytes} bytes, exceeding protected Component limit {}",
-                    record.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             let root_encoded_bytes = current
                 .encoded_bytes
                 .checked_add(registry_delta)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("Component Registry bytes overflow")
-                })?;
+                .ok_or_else(|| InternalError::resource_exhausted())?;
             if root_encoded_bytes > current.root.limits.maximum_registry_bytes {
-                return Err(InternalError::resource_exhausted(format!(
-                    "Component Child installation requires {root_encoded_bytes} root Registry bytes, exceeding protected limit {}",
-                    current.root.limits.maximum_registry_bytes
-                )));
+                return Err(InternalError::resource_exhausted());
             }
             return Ok((next, registry_delta));
         }
         next.encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component Child installation byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn validate_child_install_effect_record(
@@ -9993,10 +8583,7 @@ fn validate_child_install_effect_record(
         || effect.chunk_hashes != plan.chunk_hashes
         || effect.binding != plan.binding
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "durable Component Child install intent differs from verified module or binding authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -10006,16 +8593,12 @@ fn advance_child_install_phase(
     operation_id: [u8; 32],
     verified: bool,
 ) -> Result<RootComponentChildAllocationView, InternalError> {
-    let current = RootComponentRegistryStore::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
-    let partition = RootComponentRegistryStore::partition(component).ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
-    let record =
-        RootComponentRegistryStore::child_allocation(component, operation_id).ok_or_else(|| {
-            InternalError::unavailable("Component Child allocation operation has not been reserved")
-        })?;
+    let current =
+        RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+    let partition = RootComponentRegistryStore::partition(component)
+        .ok_or_else(|| InternalError::unavailable())?;
+    let record = RootComponentRegistryStore::child_allocation(component, operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     let next_progress = match (&record.progress, verified) {
         (
             RootComponentChildAllocationProgressRecord::InstallIntent {
@@ -10048,11 +8631,7 @@ fn advance_child_install_phase(
             installation: installation.clone(),
         },
         _ => {
-            return Err(InternalError::conflict(if verified {
-                "Component Child allocation has not recorded successful installation"
-            } else {
-                "Component Child allocation has no durable install intent"
-            }));
+            return Err(InternalError::conflict());
         }
     };
     let charged_entry_bytes = match &next_progress {
@@ -10109,9 +8688,7 @@ fn install_charged_entry_bytes(
             (effect.clone(), *canister)
         }
         _ => {
-            return Err(InternalError::conflict(
-                "Component allocation is not ready for installation",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let mut maximum = record.clone();
@@ -10180,12 +8757,9 @@ fn install_charged_entry_bytes(
                 record.component,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if charged > plan.maximum_registry_bytes {
-        return Err(InternalError::resource_exhausted(format!(
-            "Component Registry commitment requires {charged} bytes, exceeding protected Component limit {}",
-            plan.maximum_registry_bytes
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     Ok(charged)
 }
@@ -10211,9 +8785,7 @@ fn committed_child_records(
     InternalError,
 > {
     if RootComponentRegistryStore::child(record.component, canister).is_some() {
-        return Err(InternalError::conflict(
-            "Component Child principal is already committed",
-        ));
+        return Err(InternalError::conflict());
     }
     let child = ComponentRegistryChildRecord {
         component: record.component,
@@ -10229,23 +8801,15 @@ fn committed_child_records(
     let revision = partition
         .revision
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry revision overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let reserved_descendants = partition
         .reserved_descendants
         .checked_sub(1)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry has no reserved descendant to commit",
-            )
-        })?;
-    let committed_descendants =
-        partition
-            .committed_descendants
-            .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("committed Component descendant count overflow")
-            })?;
+        .ok_or_else(|| InternalError::invariant())?;
+    let committed_descendants = partition
+        .committed_descendants
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let descendant_content_hash = committed_component_descendant_content_hash(
         partition.descendant_content_hash,
         partition.committed_descendants,
@@ -10314,7 +8878,7 @@ fn committed_child_records(
     };
     let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
         .checked_add(installation.charged_entry_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let child_bytes = RootComponentRegistryStore::child_entry_bytes(&child);
     let traversal_bytes = RootComponentRegistryStore::child_traversal_entry_bytes(&traversal);
     let index_bytes =
@@ -10325,36 +8889,21 @@ fn committed_child_records(
             .checked_add(child_bytes)
             .and_then(|value| value.checked_add(traversal_bytes))
             .and_then(|value| value.checked_add(index_bytes))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(terminal_bytes)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
-        let released_precharge = current_total.checked_sub(next_total).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "exact Component Child commitment exceeds its maximum terminal precharge",
-            )
-        })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
+        let released_precharge = current_total
+            .checked_sub(next_total)
+            .ok_or_else(|| InternalError::invariant())?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_sub(released_precharge)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component Registry cannot release excess child precharge",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "new Component Child commitment changed phase during byte accounting",
-            ));
+            return Err(InternalError::invariant());
         };
         if next_partition.encoded_bytes == encoded_bytes
             && commitment.registry_encoded_bytes == encoded_bytes
@@ -10364,10 +8913,7 @@ fn committed_child_records(
         next_partition.encoded_bytes = encoded_bytes;
         commitment.registry_encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component Child commitment byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn persist_child_membership_activation(
@@ -10391,10 +8937,7 @@ fn persist_child_membership_activation(
         ..
     } = &record.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "membership activation persistence requires a committed Component Child allocation",
-        ));
+        return Err(InternalError::invariant());
     };
     let (next_record, active_partition, active_child) = active_child_membership_records(
         record,
@@ -10424,33 +8967,20 @@ fn persist_child_membership_activation(
                 record.component,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if terminal_bytes > installation.charged_entry_bytes {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Child membership exceeds its pre-install Registry byte reservation",
-        ));
+        return Err(InternalError::invariant());
     }
     if active_partition.encoded_bytes > record.maximum_registry_bytes {
-        return Err(InternalError::resource_exhausted(format!(
-            "active Component Registry requires {} bytes, exceeding protected Component limit {}",
-            active_partition.encoded_bytes, record.maximum_registry_bytes
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     let encoded_bytes = current
         .encoded_bytes
         .checked_sub(partition.encoded_bytes)
         .and_then(|value| value.checked_add(active_partition.encoded_bytes))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Component Registry byte accounting cannot activate child membership",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if encoded_bytes > current.root.limits.maximum_registry_bytes {
-        return Err(InternalError::resource_exhausted(
-            "active Component Child Registry exceeds the protected root byte limit",
-        ));
+        return Err(InternalError::resource_exhausted());
     }
     let mut next_meta = current.clone();
     next_meta.encoded_bytes = encoded_bytes;
@@ -10498,15 +9028,12 @@ fn active_child_membership_records(
         ..
     } = &record.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "membership activation requires a committed Component Child allocation",
-        ));
+        return Err(InternalError::invariant());
     };
     let revision = partition
         .revision
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry revision overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let mut active_child = child.clone();
     active_child.status = ComponentLifecycleStatus::Active;
     let descendant_content_hash = activated_component_descendant_content_hash(
@@ -10583,7 +9110,7 @@ fn active_child_membership_records(
             record,
         ))
         .and_then(|value| value.checked_add(RootComponentRegistryStore::child_entry_bytes(child)))
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
 
     for _ in 0..8 {
         let next_variable_bytes =
@@ -10594,33 +9121,21 @@ fn active_child_membership_records(
                 .and_then(|value| {
                     value.checked_add(RootComponentRegistryStore::child_entry_bytes(&active_child))
                 })
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted("Component Registry bytes overflow")
-                })?;
+                .ok_or_else(|| InternalError::resource_exhausted())?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_sub(previous_variable_bytes)
             .and_then(|value| value.checked_add(next_variable_bytes))
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component Registry bytes cannot activate child membership",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "active Component Child commitment changed phase during byte accounting",
-            ));
+            return Err(InternalError::invariant());
         };
-        let membership = commitment.membership.as_mut().ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "active Component Child commitment lost membership during byte accounting",
-            )
-        })?;
+        let membership = commitment
+            .membership
+            .as_mut()
+            .ok_or_else(|| InternalError::invariant())?;
         if active_partition.encoded_bytes == encoded_bytes
             && membership.registry_encoded_bytes == encoded_bytes
         {
@@ -10629,10 +9144,7 @@ fn active_child_membership_records(
         active_partition.encoded_bytes = encoded_bytes;
         membership.registry_encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "active Component Child Registry byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn committed_records(
@@ -10719,16 +9231,11 @@ fn committed_records(
                 &partition,
             ))
             .and_then(|value| value.checked_add(index_bytes))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "new Component commitment changed phase during byte accounting",
-            ));
+            return Err(InternalError::invariant());
         };
         if partition.encoded_bytes == encoded_bytes
             && commitment.prepared_registry_encoded_bytes == encoded_bytes
@@ -10738,10 +9245,7 @@ fn committed_records(
         partition.encoded_bytes = encoded_bytes;
         commitment.prepared_registry_encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component Registry partition byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 #[expect(
@@ -10768,15 +9272,13 @@ fn active_membership_records(
         ..
     } = &record.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "membership activation requires a committed Component allocation",
-        ));
+        return Err(InternalError::invariant());
     };
-    let revision =
-        commitment.registry.revision.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry revision overflow")
-        })?;
+    let revision = commitment
+        .registry
+        .revision
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let content_hash = component_partition_content_hash(
         &installation.binding,
         &record.provisioning_origin,
@@ -10836,23 +9338,16 @@ fn active_membership_records(
         let encoded_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record)
             .checked_add(RootComponentRegistryStore::partition_entry_bytes(&active))
             .and_then(|value| value.checked_add(index_bytes))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted("Component Registry bytes overflow")
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "active Component commitment changed phase during byte accounting",
-            ));
+            return Err(InternalError::invariant());
         };
-        let membership = commitment.membership.as_mut().ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-                "active Component commitment lost membership during byte accounting",
-            )
-        })?;
+        let membership = commitment
+            .membership
+            .as_mut()
+            .ok_or_else(|| InternalError::invariant())?;
         if active.encoded_bytes == encoded_bytes
             && membership.registry_encoded_bytes == encoded_bytes
         {
@@ -10861,10 +9356,7 @@ fn active_membership_records(
         active.encoded_bytes = encoded_bytes;
         membership.registry_encoded_bytes = encoded_bytes;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "active Component Registry byte accounting did not converge",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn component_directory_authority_hash(
@@ -10921,25 +9413,13 @@ fn exact_committed_child_partition(
         ..
     } = &record.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "Component Child partition validation requires a committed allocation",
-        ));
+        return Err(InternalError::invariant());
     };
-    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component Child allocation has no Registry partition",
-        )
-    })?;
+    let current = RootComponentRegistryStore::partition(record.component)
+        .ok_or_else(|| InternalError::invariant())?;
     validate_partition_record(&current)?;
-    let child =
-        RootComponentRegistryStore::child(record.component, *canister).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "committed Component Child allocation has no normalized row",
-            )
-        })?;
+    let child = RootComponentRegistryStore::child(record.component, *canister)
+        .ok_or_else(|| InternalError::invariant())?;
     validate_child_record(&current, &child)?;
     let traversal = ComponentRegistryChildTraversalRecord {
         component: record.component,
@@ -10992,10 +9472,7 @@ fn exact_committed_child_partition(
                 || current.directory_synchronized_at_ns != committed.directory_synchronized_at_ns
                 || current.committed_descendants != committed.committed_descendants))
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component Child differs from its immutable Registry receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(committed)
 }
@@ -11005,12 +9482,8 @@ fn exact_active_child_partition(
     commitment: &RootComponentChildCommitmentRecord,
     membership: &RootComponentChildMembershipRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
-    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "active Component Child allocation has no Registry partition",
-        )
-    })?;
+    let current = RootComponentRegistryStore::partition(record.component)
+        .ok_or_else(|| InternalError::invariant())?;
     validate_active_child_partition(record, commitment, membership, &current)
 }
 
@@ -11026,18 +9499,10 @@ fn validate_active_child_partition(
         ..
     } = &record.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "active child validation requires a committed Component Child allocation",
-        ));
+        return Err(InternalError::invariant());
     };
-    let child =
-        RootComponentRegistryStore::child(record.component, *canister).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "active Component Child allocation has no normalized row",
-            )
-        })?;
+    let child = RootComponentRegistryStore::child(record.component, *canister)
+        .ok_or_else(|| InternalError::invariant())?;
     validate_child_record(current, &child)?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
@@ -11077,10 +9542,7 @@ fn validate_active_child_partition(
         || !current_identity_is_valid
         || !current_progress_is_valid
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "active Component Child partition differs from its immutable membership receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_partition_record(current)?;
     Ok(historical)
@@ -11092,17 +9554,10 @@ fn exact_committed_partition(
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
     let RootComponentAllocationProgressRecord::Committed { installation, .. } = &record.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "Component partition validation requires a committed allocation",
-        ));
+        return Err(InternalError::invariant());
     };
-    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component allocation has no Registry partition",
-        )
-    })?;
+    let current = RootComponentRegistryStore::partition(record.component)
+        .ok_or_else(|| InternalError::invariant())?;
     let prepared = ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
         provisioning_origin: record.provisioning_origin.clone(),
@@ -11121,10 +9576,7 @@ fn exact_committed_partition(
         || RootComponentRegistryStore::component_for_principal(prepared.binding.canister_id)
             != Some(record.component)
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component allocation differs from its prepared Registry receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_partition_snapshot(&prepared)?;
     match &commitment.membership {
@@ -11133,10 +9585,7 @@ fn exact_committed_partition(
             let _active = validate_active_partition(record, commitment, membership, &current)?;
         }
         None => {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "current Component partition differs from its prepared Registry receipt",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(prepared)
@@ -11147,12 +9596,8 @@ fn exact_active_partition(
     commitment: &RootComponentCommitmentRecord,
     membership: &RootComponentMembershipRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
-    let current = RootComponentRegistryStore::partition(record.component).ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "active Component allocation has no Registry partition",
-        )
-    })?;
+    let current = RootComponentRegistryStore::partition(record.component)
+        .ok_or_else(|| InternalError::invariant())?;
     validate_active_partition(record, commitment, membership, &current)
 }
 
@@ -11162,10 +9607,11 @@ fn validate_active_partition(
     membership: &RootComponentMembershipRecord,
     current: &ComponentRegistryPartitionRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
-    let expected_revision =
-        commitment.registry.revision.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("Component Registry revision overflow")
-        })?;
+    let expected_revision = commitment
+        .registry
+        .revision
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
         provisioning_origin: current.provisioning_origin.clone(),
@@ -11196,10 +9642,7 @@ fn validate_active_partition(
     let current_progress_is_valid =
         ComponentPartitionCoverage::new(current, &historical).is_monotonic();
     if !activation_evidence.is_valid() || !current_identity_is_valid || !current_progress_is_valid {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "active Component partition differs from its immutable membership receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_partition_record(current)?;
     Ok(historical)
@@ -11228,10 +9671,7 @@ fn validate_membership_directory_authority_hash(
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "active Component Directory authority differs from its membership receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -11259,10 +9699,7 @@ fn validate_child_directory_authority_hash(
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component Child Directory authority differs from its Registry receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -11290,10 +9727,7 @@ fn validate_child_membership_directory_authority_hash(
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != membership.directory_authority_hash
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "active Component Child Directory differs from its membership receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -11320,10 +9754,7 @@ fn validate_directory_authority_hash(
     if ComponentRuntimeOps::directory_authority_hash(&authority)?
         != commitment.directory_authority_hash
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "committed Component Directory authority hash differs from current Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -11355,9 +9786,7 @@ fn require_ordinary_component_lifecycle(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
     if component_uses_grouped_lifecycle(partition) {
-        return Err(InternalError::conflict(
-            "grouped Components require the aggregate Component Group removal protocol",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -11366,10 +9795,7 @@ fn validate_ordinary_component_lifecycle(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
     if component_uses_grouped_lifecycle(partition) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "grouped Component entered the ordinary draining lifecycle",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -11477,10 +9903,7 @@ fn validate_component_draining_record(
                 && partition.committed_descendants == record.descendant_count
                 && partition.directory_synchronized_at_ns == record.started_at_ns));
     if !valid {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component draining receipt differs from protected Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -11576,14 +9999,10 @@ fn ensure_component_final_inventory_candidate(
     expected_registry: &ComponentRegistryHead,
 ) -> Result<(), InternalError> {
     if expected_registry != &component_partition_head(partition) {
-        return Err(InternalError::conflict(
-            "Component final inventory differs from current Registry head",
-        ));
+        return Err(InternalError::conflict());
     }
     if !component_partition_is_empty_and_draining(partition) {
-        return Err(InternalError::conflict(
-            "Component final inventory differs from current empty draining authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -11596,9 +10015,7 @@ fn ensure_component_final_inventory_time(
     if component_final_inventory_time_is_monotonic(partition, quiesced_at_ns, finalized_at_ns) {
         return Ok(());
     }
-    Err(InternalError::invalid_input(
-        "Component final inventory time precedes its terminal authority",
-    ))
+    Err(InternalError::invalid_input())
 }
 
 fn ensure_component_final_inventory_indexes_are_empty(
@@ -11607,10 +10024,7 @@ fn ensure_component_final_inventory_indexes_are_empty(
     if component_final_inventory_indexes_are_empty(partition) {
         return Ok(());
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component final inventory still contains live descendant membership",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn ensure_component_final_inventory_fleet_authority(
@@ -11618,19 +10032,13 @@ fn ensure_component_final_inventory_fleet_authority(
     fleet_directory: &FleetDirectorySnapshot,
 ) -> Result<(), InternalError> {
     if fleet_directory.provenance.source_fleet_subnet_root != partition.binding.fleet_subnet_root {
-        return Err(InternalError::conflict(
-            "Component final inventory has a foreign Fleet Directory root",
-        ));
+        return Err(InternalError::conflict());
     }
     if fleet_directory.provenance.registry.revision == 0 {
-        return Err(InternalError::conflict(
-            "Component final inventory has an unversioned Fleet Directory",
-        ));
+        return Err(InternalError::conflict());
     }
     if fleet_directory.provenance.registry.content_hash == [0; 32] {
-        return Err(InternalError::conflict(
-            "Component final inventory has an empty Fleet Directory hash",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -11642,9 +10050,7 @@ fn ensure_component_deletion_operation(
     if draining.operation_id == operation_id {
         return Ok(());
     }
-    Err(InternalError::conflict(
-        "Component deletion is bound to different draining intent",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn ensure_component_deletion_inventory(
@@ -11661,9 +10067,7 @@ fn ensure_component_deletion_inventory(
     if intent.final_inventory.inventory_hash == expected_inventory_hash {
         return Ok(());
     }
-    Err(InternalError::conflict(
-        "Component deletion differs from durable final inventory authority",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn committed_component_allocation(
@@ -11672,27 +10076,18 @@ fn committed_component_allocation(
     let mut allocations = RootComponentRegistryStore::allocations()
         .into_iter()
         .filter(|allocation| allocation.component == partition.binding.component);
-    let allocation = allocations.next().ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry partition has no allocation history",
-        )
-    })?;
+    let allocation = allocations
+        .next()
+        .ok_or_else(|| InternalError::invariant())?;
     if allocations.next().is_some() {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry partition has duplicate allocation history",
-        ));
+        return Err(InternalError::invariant());
     }
     if ComponentAllocationPartitionAuthority::from_committed_allocation(&allocation)
         != Some(ComponentAllocationPartitionAuthority::from_partition(
             partition,
         ))
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component allocation history differs from its draining partition",
-        ));
+        return Err(InternalError::invariant());
     }
     let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &allocation.progress
     else {
@@ -11704,10 +10099,7 @@ fn committed_component_allocation(
             .as_ref()
             .is_some_and(|membership| membership.directory_synchronized);
     if !commitment.directory_prepared || !membership_is_terminal {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "draining Component allocation lacks terminal activation authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(allocation)
 }
@@ -11722,9 +10114,7 @@ fn removed_component_allocation(
         commitment,
     } = &allocation.progress
     else {
-        return Err(InternalError::conflict(
-            "Component allocation is not committed for membership removal",
-        ));
+        return Err(InternalError::conflict());
     };
     let mut removed = allocation.clone();
     removed.progress = RootComponentAllocationProgressRecord::Removed {
@@ -11736,10 +10126,7 @@ fn removed_component_allocation(
     if RootComponentRegistryStore::allocation_entry_bytes(&removed)
         > RootComponentRegistryStore::allocation_record_max_bytes() + 128
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "terminal Component allocation exceeds its stable record bound",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(removed)
 }
@@ -11757,31 +10144,16 @@ fn component_membership_removal_records(
     let remaining_spec_committed_instances = committed
         .checked_sub(1)
         .and_then(|count| u32::try_from(count).ok())
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Spec committed count cannot settle membership removal",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let mut next_meta = current.clone();
     next_meta.committed_component_instances = next_meta
         .committed_component_instances
         .checked_sub(1)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root committed Component count is empty before membership removal",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     next_meta.known_created_component_canisters = next_meta
         .known_created_component_canisters
         .checked_sub(1)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root known-created Canister count is empty before membership removal",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     next_meta.encoded_bytes =
         removed_component_root_registry_bytes(current, partition, allocation, &next_allocation)?;
 
@@ -11803,10 +10175,7 @@ fn component_membership_removal_records(
     if RootComponentRegistryStore::component_draining_entry_bytes(&next_draining)
         > deleted.deletion.quiescence.stop.charged_entry_bytes
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component membership-removal receipt exceeds its precharged stable footprint",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(ComponentMembershipRemovalRecords {
         next_meta,
@@ -11822,17 +10191,11 @@ fn removed_component_allocation_for_receipt(
     let mut allocations = RootComponentRegistryStore::allocations()
         .into_iter()
         .filter(|allocation| allocation.component == component);
-    let allocation = allocations.next().ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "terminal Component receipt has no retained allocation history",
-        )
-    })?;
+    let allocation = allocations
+        .next()
+        .ok_or_else(|| InternalError::invariant())?;
     if allocations.next().is_some() || allocation.operation_id != receipt.allocation_operation_id {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "terminal Component receipt differs from unique allocation history",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(allocation)
 }
@@ -11862,28 +10225,17 @@ fn removed_component_root_registry_bytes(
                 removed_allocation,
             ))
         })
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "root Registry byte ledger cannot settle Component membership removal",
-            )
-        })
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn validate_removed_component_authority(
     draining: &RootComponentDrainingRecord,
 ) -> Result<(), InternalError> {
     let Some(progress) = draining.deletion.as_ref() else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "absent Component partition lacks terminal membership-removal authority",
-        ));
+        return Err(InternalError::invariant());
     };
     let RootComponentDeletionProgressRecord::MembershipRemoved(receipt) = progress else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "absent Component partition lacks terminal membership-removal authority",
-        ));
+        return Err(InternalError::invariant());
     };
     let allocation = removed_component_allocation_for_receipt(draining.component, receipt)?;
     let partition = removed_component_partition(&allocation, receipt)?;
@@ -11892,10 +10244,7 @@ fn validate_removed_component_authority(
             &partition,
         ))
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "removed Component allocation differs from terminal membership authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let partition_is_absent = RootComponentRegistryStore::partition(draining.component).is_none();
     let live_inventory_is_empty =
@@ -11910,16 +10259,10 @@ fn validate_removed_component_authority(
     .into_iter()
     .all(|empty| empty)
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "removed Component retains live Registry membership",
-        ));
+        return Err(InternalError::invariant());
     }
     if component_membership_removal_hash(draining, receipt)? != receipt.removal_hash {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "removed Component receipt has a noncanonical authority hash",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_partition_shape(&partition)?;
     validate_removed_component_final_inventory(&partition, draining, receipt)?;
@@ -11932,10 +10275,7 @@ fn removed_component_partition(
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
     let RootComponentAllocationProgressRecord::Removed { installation, .. } = &allocation.progress
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "terminal Component receipt points to non-removed allocation history",
-        ));
+        return Err(InternalError::invariant());
     };
     let inventory = &receipt.deleted.deletion.final_inventory;
     Ok(ComponentRegistryPartitionRecord {
@@ -11975,10 +10315,7 @@ fn validate_removed_component_final_inventory(
     .into_iter()
     .all(|valid| valid)
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "removed Component differs from frozen final inventory",
-        ));
+        return Err(InternalError::invariant());
     }
     ensure_component_lifecycle_history_is_terminal(partition)
 }
@@ -11999,12 +10336,7 @@ fn component_membership_removal_hash(
         root_registry_encoded_bytes: receipt.root_registry_encoded_bytes,
         removed_at_ns: receipt.removed_at_ns,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("Component membership-removal hash input cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(COMPONENT_MEMBERSHIP_REMOVAL_HASH_DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -12016,12 +10348,7 @@ fn component_has_terminal_quiescence(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<bool, InternalError> {
     let draining = RootComponentRegistryStore::component_draining(partition.binding.component)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Draining Component partition has no durable draining authority",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     validate_component_draining_record(partition, &draining)?;
     Ok(matches!(
         draining.quiescence,
@@ -12036,10 +10363,7 @@ fn validate_partition_snapshot(
     if RootComponentRegistryStore::component_for_principal(partition.binding.canister_id)
         != Some(partition.binding.component)
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry partition principal index differs from its binding",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12068,10 +10392,7 @@ fn validate_partition_shape(
         && descendant_hash_matches_count
         && partition.content_hash == expected_content_hash;
     if !head_is_versioned || !directory_is_synchronized || !content_is_canonical {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry partition has invalid head or Directory authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12081,10 +10402,7 @@ fn validate_child_record(
     child: &ComponentRegistryChildRecord,
 ) -> Result<(), InternalError> {
     if !ComponentTreeBoundary::from_partition(partition).admits(child) {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry child row has invalid tree identity",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12113,10 +10431,7 @@ fn validate_registered_child_record(
         .as_ref()
             != Some(&traversal)
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry child differs from its principal or traversal index",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12156,9 +10471,7 @@ fn subtree_directory_coverage(
         && authority_hash != [0; 32]
         && authority_hash == expected_hash;
     if !coverage_is_exact {
-        return Err(InternalError::conflict(
-            "Component subtree Directory coverage differs from current protected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(SubtreeDirectoryCoverage {
         fleet_registry_revision: authority.fleet.provenance.registry.revision,
@@ -12188,9 +10501,7 @@ fn subtree_directory_convergence_record(
         && evidence.activation.directory_authority_hash != [0; 32]
         && evidence.activation.activated_at_ns > 0;
     if !evidence_is_exact {
-        return Err(InternalError::conflict(
-            "Component subtree Directory evidence differs from current protected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok((
         coverage,
@@ -12213,33 +10524,18 @@ fn subtree_directory_parent_convergence_record(
         return if evidence.is_none() {
             Ok(None)
         } else {
-            Err(InternalError::conflict(
-                "top-level Component parent must not have duplicate Directory evidence",
-            ))
+            Err(InternalError::conflict())
         };
     }
     let (binding, status) = ComponentRegistryOps::registered_parent(component, parent_canister_id)?
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "removed subtree leaf has no retained registered parent",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::conflict(
-            "removed subtree leaf parent is not Active",
-        ));
+        return Err(InternalError::conflict());
     }
-    let evidence = evidence.ok_or_else(|| {
-        InternalError::unavailable(
-            "removed subtree leaf parent has no Directory convergence evidence",
-        )
-    })?;
+    let evidence = evidence.ok_or_else(|| InternalError::unavailable())?;
     let (coverage, record) = subtree_directory_convergence_record(partition, &binding, evidence)?;
     if &coverage != expected_coverage {
-        return Err(InternalError::conflict(
-            "surviving Component subtree members covered different Directory authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(Some(record))
 }
@@ -12326,10 +10622,7 @@ fn validate_subtree_removal_record(
         || !progress_is_valid
         || !completion_count_is_valid
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree-removal fence has invalid protected identity",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12410,10 +10703,7 @@ fn validate_subtree_removal_root(
         | RootComponentSubtreeRemovalProgressRecord::LeafSelected { .. } => None,
     };
     if stop_controller.is_some_and(|controller| controller != root.fleet_subnet_root) {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree stop intent differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12436,20 +10726,11 @@ fn validate_subtree_removal_progress(
         return validate_subtree_directory_synchronized(partition, record, receipt);
     }
     let current_target =
-        RootComponentRegistryStore::child(record.component, record.target.canister_id).ok_or_else(
-            || {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component subtree-removal target is no longer registered",
-                )
-            },
-        )?;
+        RootComponentRegistryStore::child(record.component, record.target.canister_id)
+            .ok_or_else(|| InternalError::invariant())?;
     validate_registered_child_record(partition, &current_target)?;
     if current_target != record.target {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree-removal target differs from its frozen fence",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let node = match &record.progress {
@@ -12480,39 +10761,25 @@ fn validate_subtree_removal_progress(
         return Ok(());
     };
     let current_node = RootComponentRegistryStore::child(record.component, node.canister_id)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component subtree-removal cursor is no longer registered",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     validate_registered_child_record(partition, &current_node)?;
     if &current_node != node {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree-removal cursor differs from current Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let traversal_limit = partition
         .committed_descendants
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted("Component descendant count overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if !canister_is_in_subtree(
         partition,
         node.canister_id,
         record.target.canister_id,
         traversal_limit,
     )? {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree-removal cursor escaped its fenced subtree",
-        ));
+        return Err(InternalError::invariant());
     }
     if must_be_leaf && first_registered_child(partition, node.canister_id)?.is_some() {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree-removal selected a node that still has a registered child",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12592,40 +10859,22 @@ fn validate_subtree_membership_removed(
             == receipt
                 .previous_committed_descendants
                 .checked_sub(1)
-                .ok_or_else(|| {
-                    InternalError::invariant(
-                        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                        "Component membership-removal receipt has no previous descendant",
-                    )
-                })?
+                .ok_or_else(|| InternalError::invariant())?
         && current_parent_role_instances >= receipt.parent_role_instances;
     if !receipt_is_canonical
         || (!exact_head_is_current && !head_was_advanced)
         || !removed_indexes_are_absent
         || first_registered_child(partition, leaf.canister_id)?.is_some()
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree membership-removal receipt differs from Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if record.target.canister_id != leaf.canister_id {
-        let current_target = RootComponentRegistryStore::child(
-            record.component,
-            record.target.canister_id,
-        )
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component subtree-removal target disappeared before its selected descendant",
-            )
-        })?;
+        let current_target =
+            RootComponentRegistryStore::child(record.component, record.target.canister_id)
+                .ok_or_else(|| InternalError::invariant())?;
         validate_registered_child_record(partition, &current_target)?;
         if current_target != record.target {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component subtree-removal target differs from its frozen fence",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -12674,10 +10923,7 @@ fn validate_subtree_directory_synchronized(
         || !coverage_covers_membership
         || !parent_is_exact
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree Directory receipt differs from surviving Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12692,12 +10938,7 @@ fn validate_completed_subtree_removal(
         record.operation_id,
         record.traversal_steps,
     )
-    .ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "completed Component subtree removal has no terminal leaf history",
-        )
-    })?;
+    .ok_or_else(|| InternalError::invariant())?;
     validate_subtree_removal_completed_leaf(record, partition, &history)?;
     let terminal_authority_matches = history.leaf_canister_id == record.target.canister_id
         && completed.registry == history.registry
@@ -12708,10 +10949,7 @@ fn validate_completed_subtree_removal(
     if !terminal_authority_matches
         || RootComponentRegistryStore::child(record.component, record.target.canister_id).is_some()
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "completed Component subtree removal differs from terminal Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12742,12 +10980,8 @@ fn subtree_directory_synchronized_receipt_hash(
     receipt: &RootComponentSubtreeDirectorySynchronizedRecord,
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.component-subtree-removal.completed-leaf.v1";
-    let payload = canic_core::cdk::serialize::serialize(receipt).map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("completed subtree leaf receipt cannot be encoded: {error}"),
-        )
-    })?;
+    let payload = canic_core::cdk::serialize::serialize(receipt)
+        .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -12781,18 +11015,11 @@ fn finalized_subtree_removal_progress(
         ));
     }
 
-    let parent =
-        RootComponentRegistryStore::child(component, leaf.parent_canister_id).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "finalized Component subtree leaf has no retained parent row",
-            )
-        })?;
+    let parent = RootComponentRegistryStore::child(component, leaf.parent_canister_id)
+        .ok_or_else(|| InternalError::invariant())?;
     validate_registered_child_record(partition, &parent)?;
     if parent.status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::conflict(
-            "finalized Component subtree leaf parent is not Active",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(RootComponentSubtreeRemovalProgressRecord::Traversing { cursor: parent })
 }
@@ -12818,10 +11045,7 @@ fn validate_subtree_removal_completed_leaf(
         && history.directory_authority_hash != [0; 32]
         && history.receipt_hash != [0; 32];
     if !valid {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "completed Component subtree leaf history has invalid protected authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -12842,9 +11066,7 @@ fn completed_subtree_leaf_for_selection(
     if history.leaf_canister_id != selection.canister_id
         || history.leaf_parent_canister_id != selection.parent_canister_id
     {
-        return Err(InternalError::conflict(
-            "Component subtree leaf request differs from completed history",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(Some(history))
 }
@@ -12867,12 +11089,7 @@ fn first_registered_child(
     validate_child_traversal_record(partition.binding.component, &traversal)?;
     let child =
         RootComponentRegistryStore::child(partition.binding.component, traversal.canister_id)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component subtree traversal references an absent child row",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
     validate_registered_child_record(partition, &child)?;
     let expected_identity = ComponentTreeNodeIdentity::new(
         partition.binding.component,
@@ -12881,10 +11098,7 @@ fn first_registered_child(
         child.canister_id,
     );
     if ComponentTreeNodeIdentity::from_traversal(&traversal) != expected_identity {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component subtree traversal index differs from its child row",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(Some(child))
 }
@@ -12909,10 +11123,7 @@ fn ensure_component_lifecycle_history_is_terminal(
     for allocation in RootComponentRegistryStore::child_allocations(partition.binding.component) {
         validate_child_allocation_record(&allocation)?;
         if !child_allocation_is_terminal(&allocation) {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component final inventory has incomplete child lifecycle history",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     for removal in RootComponentRegistryStore::subtree_removals(partition.binding.component) {
@@ -12922,10 +11133,7 @@ fn ensure_component_lifecycle_history_is_terminal(
             removal.progress,
             RootComponentSubtreeRemovalProgressRecord::Completed(_)
         ) {
-            return Err(InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component final inventory has incomplete subtree-removal history",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -12946,19 +11154,11 @@ fn canister_is_in_subtree(
             return Ok(false);
         }
         let child = RootComponentRegistryStore::child(partition.binding.component, current)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                    "Component subtree ancestry references an unregistered child",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         validate_registered_child_record(partition, &child)?;
         current = child.parent_canister_id;
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-        "Component subtree ancestry exceeded its committed descendant bound",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn validate_child_traversal_record(
@@ -12966,10 +11166,7 @@ fn validate_child_traversal_record(
     traversal: &ComponentRegistryChildTraversalRecord,
 ) -> Result<(), InternalError> {
     if !ComponentTreeNodeIdentity::from_traversal(traversal).is_valid_for(component) {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Directory traversal has invalid tree identity",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -13012,10 +11209,7 @@ fn validate_child_allocation_record(
         || record.maximum_descendants == 0
         || record.maximum_registry_bytes == 0
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Child allocation record has invalid protected identity",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -13039,12 +11233,7 @@ fn component_partition_content_hash(
         descendant_content_hash,
         committed_descendants,
     ))
-    .map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("Component Registry hash input cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -13080,12 +11269,7 @@ fn component_final_inventory_hash(
         directory_authority_hash: inventory.directory_authority_hash,
         finalized_at_ns: inventory.finalized_at_ns,
     })
-    .map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("Component final inventory hash input cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(COMPONENT_FINAL_INVENTORY_HASH_DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -13116,10 +11300,7 @@ fn committed_component_descendant_content_hash(
 ) -> Result<[u8; 32], InternalError> {
     const DOMAIN: &[u8] = b"canic.component-registry.descendant-commit.v1";
     if previous == [0; 32] || child.status != ComponentLifecycleStatus::Prepared {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "Component descendant digest input is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     let payload = candid::encode_one((
         previous,
@@ -13132,12 +11313,7 @@ fn committed_component_descendant_content_hash(
         child.installed_artifact_hash,
         child.status,
     ))
-    .map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("Component descendant digest input cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -13157,10 +11333,7 @@ fn activated_component_descendant_content_hash(
         || revision <= previous_revision
         || child.status != ComponentLifecycleStatus::Active
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "Component descendant activation digest input is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     let payload = candid::encode_one((
         previous,
@@ -13174,12 +11347,7 @@ fn activated_component_descendant_content_hash(
         ComponentLifecycleStatus::Prepared,
         child.status,
     ))
-    .map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("Component descendant activation digest input cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -13203,10 +11371,7 @@ fn removed_component_descendant_content_hash(
         || child.component != component
         || child.status != ComponentLifecycleStatus::Active
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "Component descendant removal digest input is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     if previous_committed_descendants == 1 {
         return Ok(empty_component_descendant_content_hash(component));
@@ -13223,12 +11388,7 @@ fn removed_component_descendant_content_hash(
         child.installed_artifact_hash,
         child.status,
     ))
-    .map_err(|error| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            format!("Component descendant removal digest input cannot be encoded: {error}"),
-        )
-    })?;
+    .map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(DOMAIN);
     hasher.update((payload.len() as u64).to_be_bytes());
@@ -13244,28 +11404,18 @@ fn validate_install_capacity(
     let current_reserved_bytes = match &record.progress {
         RootComponentAllocationProgressRecord::Created { effect, .. } => effect.charged_entry_bytes,
         _ => {
-            return Err(InternalError::conflict(
-                "Component allocation is not ready to reserve install capacity",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let without_current = current
         .encoded_bytes
         .checked_sub(current_reserved_bytes)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry encoded-byte accounting is below its creation reservation",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let next_encoded_bytes = without_current
         .checked_add(charged_entry_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if next_encoded_bytes > current.root.limits.maximum_registry_bytes {
-        return Err(InternalError::resource_exhausted(format!(
-            "Component installation evidence requires {next_encoded_bytes} bytes, exceeding protected limit {}",
-            current.root.limits.maximum_registry_bytes
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     Ok(next_encoded_bytes)
 }
@@ -13278,10 +11428,7 @@ fn validate_install_effect_record(
         || effect.chunk_hashes != plan.chunk_hashes
         || effect.binding != plan.binding
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "durable Component install intent differs from verified module or binding authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -13290,12 +11437,10 @@ fn advance_install_phase(
     operation_id: [u8; 32],
     verified: bool,
 ) -> Result<RootComponentAllocationView, InternalError> {
-    let current = RootComponentRegistryStore::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
-    let record = RootComponentRegistryStore::allocation(operation_id).ok_or_else(|| {
-        InternalError::unavailable("Component allocation operation has not been reserved")
-    })?;
+    let current =
+        RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+    let record = RootComponentRegistryStore::allocation(operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     let next_progress = match (&record.progress, verified) {
         (
             RootComponentAllocationProgressRecord::InstallIntent {
@@ -13330,11 +11475,7 @@ fn advance_install_phase(
             installation: installation.clone(),
         },
         _ => {
-            return Err(InternalError::conflict(if verified {
-                "Component allocation has not recorded successful installation"
-            } else {
-                "Component allocation has no durable install intent"
-            }));
+            return Err(InternalError::conflict());
         }
     };
     let charged_entry_bytes = match &next_progress {
@@ -13363,28 +11504,18 @@ fn validate_creation_capacity(
     charged_entry_bytes: u64,
 ) -> Result<u64, InternalError> {
     if charged_entry_bytes > RootComponentRegistryStore::allocation_record_max_bytes() + 128 {
-        return Err(InternalError::resource_exhausted(
-            "Component creation evidence exceeds its stable record bound",
-        ));
+        return Err(InternalError::resource_exhausted());
     }
     let current_entry_bytes = RootComponentRegistryStore::allocation_entry_bytes(record);
     let without_current = current
         .encoded_bytes
         .checked_sub(current_entry_bytes)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Registry encoded-byte accounting is below its reserved record",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let next_encoded_bytes = without_current
         .checked_add(charged_entry_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted("Component Registry bytes overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if next_encoded_bytes > current.root.limits.maximum_registry_bytes {
-        return Err(InternalError::resource_exhausted(format!(
-            "Component creation evidence requires {next_encoded_bytes} bytes, exceeding protected limit {}",
-            current.root.limits.maximum_registry_bytes
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     Ok(next_encoded_bytes)
 }
@@ -13395,42 +11526,33 @@ fn validate_charged_record_size(
 ) -> Result<(), InternalError> {
     let entry_bytes = RootComponentRegistryStore::allocation_entry_bytes(record);
     if entry_bytes > charged_entry_bytes {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component allocation record exceeds its pre-effect Registry byte charge",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
 
 fn map_allocation_commit_error(error: RootComponentAllocationCommitError) -> InternalError {
     match error {
-        RootComponentAllocationCommitError::ComponentIdentityConflict => InternalError::conflict(
-            "derived Component identity is already reserved by another operation",
-        ),
-        RootComponentAllocationCommitError::ComponentPrincipalConflict => InternalError::conflict(
-            "Component Canister principal is already indexed by another Registry partition",
-        ),
-        RootComponentAllocationCommitError::ConflictingChildEntry => InternalError::conflict(
-            "Component Child reservation differs from its Registry partition or count index",
-        ),
-        RootComponentAllocationCommitError::ConflictingPartition => InternalError::conflict(
-            "Component Registry partition is already committed under different authority",
-        ),
-        RootComponentAllocationCommitError::ConflictingOperation => InternalError::conflict(
-            "Component allocation operation is already bound to different intent",
-        ),
-        RootComponentAllocationCommitError::ConflictingState => InternalError::conflict(
-            "Component Registry authority changed before allocation mutation",
-        ),
-        RootComponentAllocationCommitError::MissingOperation => {
-            InternalError::unavailable("Component allocation operation has not been reserved")
+        RootComponentAllocationCommitError::ComponentIdentityConflict
+        | RootComponentAllocationCommitError::ComponentPrincipalConflict
+        | RootComponentAllocationCommitError::ParentPrincipalConflict => {
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_CONFLICT)
         }
-        RootComponentAllocationCommitError::ParentPrincipalConflict => InternalError::forbidden(
-            "Component Child reservation parent is not indexed by its Component Registry",
-        ),
+        RootComponentAllocationCommitError::ConflictingChildEntry
+        | RootComponentAllocationCommitError::ConflictingPartition => {
+            InternalError::public(canic_core::diagnostics::codes::COLLECTION_CONFLICT)
+        }
+        RootComponentAllocationCommitError::ConflictingOperation => {
+            InternalError::public(canic_core::diagnostics::codes::REQUEST_CONFLICT)
+        }
+        RootComponentAllocationCommitError::ConflictingState => {
+            InternalError::public(canic_core::diagnostics::codes::STATE_CONFLICT)
+        }
+        RootComponentAllocationCommitError::MissingOperation => {
+            InternalError::public(canic_core::diagnostics::codes::REQUEST_UNAVAILABLE)
+        }
         RootComponentAllocationCommitError::Uninitialized => {
-            InternalError::unavailable("root Component Registry authority has not been prepared")
+            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
         }
     }
 }
@@ -14024,8 +12146,8 @@ mod tests {
         let invalid = ComponentRegistryOps::root_draining([13; 32])
             .expect_err("corrupt retained reservation must fail closed");
         assert_eq!(
-            invalid.class(),
-            canic_core::control_plane_support::error::InternalErrorClass::Invariant
+            invalid.code(),
+            canic_core::diagnostics::codes::STATE_INVALID
         );
         RootComponentRegistryStore::import(durable);
         ComponentRegistryOps::root_draining([15; 32])
@@ -14060,8 +12182,8 @@ mod tests {
         let error = ComponentRegistryOps::reserve_allocation(new_decision, [17; 32], origin, false)
             .expect_err("draining root must reject a new top-level allocation");
         assert_eq!(
-            error.public_error().map(|public| public.code),
-            Some(canic_core::dto::error::ErrorCode::Conflict)
+            error.public_error().code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert_eq!(RootComponentRegistryStore::export(), before_rejection);
     }
@@ -16010,8 +14132,8 @@ mod tests {
         .expect_err("grouped Component must reject the ordinary draining lifecycle");
 
         assert_eq!(
-            error.public_error().map(|public| public.code),
-            Some(canic_core::dto::error::ErrorCode::Conflict)
+            error.public_error().code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert_eq!(RootComponentRegistryStore::export(), before);
         RootComponentRegistryStore::import(RootComponentRegistryData::default());

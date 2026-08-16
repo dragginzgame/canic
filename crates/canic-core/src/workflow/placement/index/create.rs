@@ -5,7 +5,7 @@
 //! Boundary: performs claim-matching writes around asynchronous child creation.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     config::schema::IndexPool,
     dto::placement::index::PlacementIndexStatusResponse,
@@ -70,10 +70,7 @@ impl PlacementIndexWorkflow {
         };
         if !bound {
             MetricEvent::failed_reason(MetricOperation::Finalize, MetricReason::ClaimLost);
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "index claim lost between provisional attach and final bind",
-            ));
+            return Err(InternalError::invariant());
         }
         PlacementAllocationWorkflow::finish_registered_child(permit, pid)?;
 

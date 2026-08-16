@@ -161,19 +161,11 @@ impl AuthOps {
     ) -> Result<(), InternalError> {
         let root_pid = cert.root_pid;
         if root_pid != verifier_cfg.root_canister_id {
-            return Err(InternalError::invalid_input(
-                AuthValidationError::InvalidRootAuthority {
-                    expected: verifier_cfg.root_canister_id,
-                    found: root_pid,
-                }
-                .to_string(),
-            ));
+            return Err(InternalError::invalid_input());
         }
 
         let Some(chain_key_root) = verifier_cfg.chain_key_root.as_ref() else {
-            return Err(InternalError::auth_material_stale(
-                "chain-key root verifier policy is not configured",
-            ));
+            return Err(InternalError::auth_material_stale());
         };
         let policy = chain_key_policy_from_config(chain_key_root);
         verify_chain_key_batch_root_proof(
@@ -191,22 +183,18 @@ impl AuthOps {
 
 pub(super) fn map_chain_key_root_proof_error(err: ChainKeyRootProofError) -> InternalError {
     match err {
-        err @ (ChainKeyRootProofError::Expired {
+        _err @ (ChainKeyRootProofError::Expired {
             target: "root_key_policy",
         }
         | ChainKeyRootProofError::PolicyMismatch { .. }
         | ChainKeyRootProofError::ProofEpochTooOld { .. }
         | ChainKeyRootProofError::KeyVersionTooOld { .. }
         | ChainKeyRootProofError::RegistryEpochTooOld { .. }) => {
-            InternalError::auth_material_stale(err.to_string())
+            InternalError::auth_material_stale()
         }
-        err @ ChainKeyRootProofError::Expired { .. } => {
-            InternalError::auth_proof_expired(err.to_string())
-        }
-        err @ ChainKeyRootProofError::NotYetValid { .. } => {
-            InternalError::auth_proof_pending(err.to_string())
-        }
-        err => InternalError::invalid_input(err.to_string()),
+        _err @ ChainKeyRootProofError::Expired { .. } => InternalError::auth_proof_expired(),
+        _err @ ChainKeyRootProofError::NotYetValid { .. } => InternalError::auth_proof_pending(),
+        _err => InternalError::invalid_input(),
     }
 }
 

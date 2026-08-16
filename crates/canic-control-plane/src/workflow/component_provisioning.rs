@@ -79,9 +79,7 @@ pub async fn accept(
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != request.fleet_registry
     {
-        return Err(InternalError::conflict(
-            "root Component provisioning request differs from the exact active Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     let config = ConfigOps::get()?;
     let validation = ComponentProvisioningPlanOps::validate_root_batch(
@@ -107,9 +105,7 @@ pub async fn accept(
     validate_store_artifacts(&store, &validation.component_roles)?;
     let revalidated = current_registry_for_acceptance(&authority, root, &request, &validation)?;
     if revalidated != acceptance {
-        return Err(InternalError::conflict(
-            "root Component Registry or runtime authority changed across acceptance observation",
-        ));
+        return Err(InternalError::conflict());
     }
     let accepted = RootComponentProvisioningOps::accept(
         request,
@@ -185,9 +181,7 @@ pub async fn publish(
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
     })?;
-    let registry = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let registry = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     let runtime_mode = validate_component_registry_authority(
         &registry,
         &authority.binding,
@@ -204,9 +198,7 @@ pub async fn publish(
     )
     .await?;
     if mirror.fleet_subnet_root != root || mirror.version != request.published_fleet_registry {
-        return Err(InternalError::conflict(
-            "root Fleet Registry mirror differs from Component publication authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let current = RootComponentProvisioningOps::begin_publication(
         &request,
@@ -260,10 +252,8 @@ async fn activate_component_step(
     member: crate::view::component_provisioning::RootComponentPublicationMemberView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let provisioning_origin = activation_member_origin(request, &member)?;
-    let allocation =
-        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
-            InternalError::unavailable("grouped Component activation allocation is absent")
-        })?;
+    let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     let runtime_active = match &allocation.progress {
         crate::view::component_registry::RootComponentAllocationProgressView::Committed {
             commitment,
@@ -305,10 +295,7 @@ fn activation_member_origin(
         ..
     } = &member.deployment
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "root Component activation selected a non-group member",
-        ));
+        return Err(InternalError::invariant());
     };
     Ok(ComponentProvisioningOrigin::ComponentGroup {
         operation_id: request.operation_id,
@@ -349,9 +336,9 @@ async fn activate_fresh_root_runtime(
             observed
         };
     let active = if prepared.phase == FleetActivationPhase::Prepared {
-        let credential = prepared.credential.ok_or_else(|| {
-            InternalError::unavailable("prepared root runtime has no activation credential")
-        })?;
+        let credential = prepared
+            .credential
+            .ok_or_else(|| InternalError::unavailable())?;
         root_fleet_activation::resume_root(FleetActivationResumeRequest {
             operation_id: prepared.identity.operation_id,
             credential,
@@ -363,16 +350,14 @@ async fn activate_fresh_root_runtime(
     };
     let activated_at_ns = active
         .activated_at_ns
-        .ok_or_else(|| InternalError::unavailable("active root runtime has no activation time"))?;
+        .ok_or_else(|| InternalError::unavailable())?;
     let inventory = ComponentRegistryOps::initial_inventory(active.identity.operation_id)?;
     let activation_is_terminal = active.phase == FleetActivationPhase::Active
         && inventory.directories_converged
         && inventory.root_runtime_activated
         && inventory.component_count == provisioning.component_count;
     if !activation_is_terminal {
-        return Err(InternalError::conflict(
-            "root runtime and sealed Component inventory are not terminal",
-        ));
+        return Err(InternalError::conflict());
     }
     RootComponentProvisioningOps::finalize_runtimes_active(
         request,
@@ -394,7 +379,7 @@ fn activate_active_root_batch(
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let activated_at_ns = active
         .activated_at_ns
-        .ok_or_else(|| InternalError::unavailable("active root runtime has no activation time"))?;
+        .ok_or_else(|| InternalError::unavailable())?;
     let inventory = ComponentRegistryOps::initial_inventory(active.identity.operation_id)?;
     let initial_runtime_is_exact = active.phase == FleetActivationPhase::Active
         && activated_at_ns > 0
@@ -402,9 +387,7 @@ fn activate_active_root_batch(
         && inventory.directories_converged
         && inventory.root_runtime_activated;
     if !initial_runtime_is_exact {
-        return Err(InternalError::conflict(
-            "scale-out runtime activation requires the exact pre-existing active root inventory",
-        ));
+        return Err(InternalError::conflict());
     }
     let completed_at_ns = IcOps::now_nanos();
     RootComponentProvisioningOps::finalize_runtimes_active(
@@ -425,28 +408,16 @@ async fn publish_component_directory(
     member: crate::view::component_provisioning::RootComponentPublicationMemberView,
     fleet_directory: canic_core::dto::fleet_registry::FleetDirectorySnapshot,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let partition =
-        ComponentRegistryOps::partition(member.binding.component)?.ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "published Component has no Registry partition",
-            )
-        })?;
+    let partition = ComponentRegistryOps::partition(member.binding.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     validate_publication_partition(&member, &partition)?;
-    let allocation =
-        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "published Component has no retained allocation authority",
-            )
-        })?;
+    let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
+        .ok_or_else(|| InternalError::invariant())?;
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
     if retained.deployment != member.deployment
         || retained.component_group != member.component_group
     {
-        return Err(InternalError::conflict(
-            "published Component deployment or Group Directory differs from retained authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let previous_directory_authority_hash =
         super::component_registry::committed_directory_receipt(&allocation)?
@@ -471,19 +442,15 @@ async fn publish_component_directory(
         directory_authority_hash,
         IcOps::now_nanos(),
     )?;
-    let intent = current.publication_in_flight.as_ref().ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component publication pre-call intent was not retained",
-        )
-    })?;
+    let intent = current
+        .publication_in_flight
+        .as_ref()
+        .ok_or_else(|| InternalError::invariant())?;
     if intent.component_index != member.component_index
         || intent.canister_id != member.binding.canister_id
         || intent.directory_authority_hash != directory_authority_hash
     {
-        return Err(InternalError::conflict(
-            "Component publication pre-call intent differs from derived authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let binding = ManagedCanisterBinding::Component(member.binding.clone());
     let _observed = super::component_registry::prepare_grouped_component_directories(
@@ -501,10 +468,7 @@ async fn publish_component_directory(
     )?;
     let receipt = super::component_registry::committed_directory_receipt(&allocation)?;
     if !receipt.directory_prepared || receipt.directory_authority_hash != directory_authority_hash {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Group Directory publication did not commit its exact root receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     RootComponentProvisioningOps::record_publication_delivery(
         request,
@@ -523,9 +487,7 @@ fn validate_publication_partition(
         || partition.revision != member.component_registry_revision
         || partition.content_hash != member.component_registry_content_hash
     {
-        return Err(InternalError::conflict(
-            "Component publication Registry partition differs from provisioned authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -568,13 +530,8 @@ async fn advance_member_claim(
     let registry = current_registry_for_progress(authority, root, current)?;
     validate_claim_registry_progress(&registry, current.component_count)?;
     let member = RootComponentProvisioningOps::next_member_claim(current)?;
-    let allocation =
-        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Group member claim has no reserved Component identity",
-            )
-        })?;
+    let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
+        .ok_or_else(|| InternalError::invariant())?;
     let topology = ConfigOps::component_topology()?;
     super::component_registry::validate_allocation_record(
         &authority.binding,
@@ -587,9 +544,7 @@ async fn advance_member_claim(
     let store = root_store::status(registry.store_bootstrap.clone()).await?;
     let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
-        return Err(InternalError::conflict(
-            "root Component Registry Store authority changed across prepaid-Canister claim observation",
-        ));
+        return Err(InternalError::conflict());
     }
     let latest = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
         operation_id: request.operation_id,
@@ -601,13 +556,8 @@ async fn advance_member_claim(
         RootComponentProvisioningAdvanceDisposition::Advance => {}
     }
 
-    let allocation =
-        ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "Component Group member reservation disappeared across Store observation",
-            )
-        })?;
+    let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
+        .ok_or_else(|| InternalError::invariant())?;
     super::component_registry::validate_allocation_record(
         &authority.binding,
         authority.initial_release_set,
@@ -648,9 +598,7 @@ async fn advance_member_install(
     let store = root_store::status(registry.store_bootstrap.clone()).await?;
     let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
-        return Err(InternalError::conflict(
-            "root Component Registry Store authority changed across grouped install observation",
-        ));
+        return Err(InternalError::conflict());
     }
     let latest = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
         operation_id: request.operation_id,
@@ -662,9 +610,7 @@ async fn advance_member_install(
         RootComponentProvisioningAdvanceDisposition::Advance => {}
     }
     if RootComponentProvisioningOps::next_member_install(&latest)? != member {
-        return Err(InternalError::conflict(
-            "root Component provisioning install member changed across Store observation",
-        ));
+        return Err(InternalError::conflict());
     }
 
     let allocation = required_member_allocation(member.member_operation_id, "install")?;
@@ -734,15 +680,11 @@ async fn advance_member_registry_commit(
     let store = root_store::status(registry.store_bootstrap.clone()).await?;
     let revalidated = current_registry_for_progress(authority, root, current)?;
     if revalidated.store_bootstrap != registry.store_bootstrap {
-        return Err(InternalError::conflict(
-            "root Component Registry Store authority changed across grouped Registry commitment",
-        ));
+        return Err(InternalError::conflict());
     }
     let revalidated_directory = current_fleet_directory_for_progress(authority, root, current)?;
     if revalidated_directory != fleet_directory {
-        return Err(InternalError::conflict(
-            "Fleet Directory authority changed across grouped Registry commitment",
-        ));
+        return Err(InternalError::conflict());
     }
     let latest = RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
         operation_id: request.operation_id,
@@ -754,9 +696,7 @@ async fn advance_member_registry_commit(
         RootComponentProvisioningAdvanceDisposition::Advance => {}
     }
     if RootComponentProvisioningOps::next_member_registry_commit(&latest)? != member {
-        return Err(InternalError::conflict(
-            "root Component provisioning Registry member changed across Store observation",
-        ));
+        return Err(InternalError::conflict());
     }
 
     let allocation = required_member_allocation(member.member_operation_id, "Registry commit")?;
@@ -806,21 +746,14 @@ async fn advance_member_registry_commit(
 
 fn required_member_allocation(
     operation_id: [u8; 32],
-    phase: &str,
+    _phase: &str,
 ) -> Result<RootComponentAllocationView, InternalError> {
-    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            format!("Component Group member {phase} has no reserved Component identity"),
-        )
-    })
+    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| InternalError::invariant())
 }
 
 fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), InternalError> {
     if caller != coordinator {
-        return Err(InternalError::forbidden(format!(
-            "caller {caller} is not the protected Fleet Coordinator"
-        )));
+        return Err(InternalError::forbidden());
     }
     Ok(())
 }
@@ -842,13 +775,9 @@ fn current_registry_for_acceptance(
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != request.fleet_registry
     {
-        return Err(InternalError::conflict(
-            "root Component provisioning request differs from the exact active Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
-    let current = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let current = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     let runtime_mode = validate_component_registry_authority(
         &current,
         &authority.binding,
@@ -880,9 +809,7 @@ fn current_registry_for_progress(
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != provisioning.fleet_registry
     {
-        return Err(InternalError::conflict(
-            "root Component provisioning differs from the exact active Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     let config = ConfigOps::get()?;
     ComponentProvisioningPlanOps::validate_root_batch(
@@ -893,9 +820,7 @@ fn current_registry_for_progress(
         &authority.binding,
         &provisioning.batch,
     )?;
-    let current = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let current = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     let runtime_mode = validate_component_registry_authority(
         &current,
         &authority.binding,
@@ -917,9 +842,7 @@ fn current_fleet_directory_for_progress(
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.snapshot.version != provisioning.fleet_registry
     {
-        return Err(InternalError::conflict(
-            "root Component provisioning differs from the exact active Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(mirror.active.directory)
 }
@@ -931,16 +854,9 @@ fn validate_reservation_registry_progress(
 ) -> Result<(), InternalError> {
     let expected = aggregate_reserved_components
         .checked_add(u32::from(current_member_exists))
-        .ok_or_else(|| {
-            InternalError::resource_exhausted(
-                "root Component provisioning reservation count overflowed",
-            )
-        })?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if registry_reserved_components != expected {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry reservations differ from aggregate provisioning progress",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -950,10 +866,7 @@ fn validate_claim_registry_progress(
     component_count: u32,
 ) -> Result<(), InternalError> {
     if registry.reserved_component_instances != component_count {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry reservations differ from claim-ready aggregate provisioning progress",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -966,24 +879,12 @@ fn validate_registry_commit_progress(
 ) -> Result<(), InternalError> {
     let reconciled_committed = aggregate_registry_committed_components
         .checked_add(u32::from(current_member_is_committed))
-        .ok_or_else(|| {
-            InternalError::resource_exhausted(
-                "root Component provisioning Registry commitment count overflowed",
-            )
-        })?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let expected_reserved = component_count
         .checked_sub(reconciled_committed)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-                "aggregate Registry commitment count exceeds the accepted Component count",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if registry_reserved_components != expected_reserved {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "Component Registry reservations differ from aggregate Registry commitment progress",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -996,10 +897,7 @@ fn validate_group_member_context(
         ..
     } = context
     else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Ops,
-            "group provisioning derived an ordinary Component deployment context",
-        ));
+        return Err(InternalError::invariant());
     };
     ConfigOps::validate_protected_component_deployment(context, binding)
 }
@@ -1059,14 +957,10 @@ fn validate_component_registry_authority(
     ];
     let registry_authority_is_exact = registry_authority_facts.into_iter().all(|fact| fact);
     let Some(runtime_mode) = runtime_mode else {
-        return Err(InternalError::conflict(
-            "root Component provisioning authority differs from the current runtime and Component Registry",
-        ));
+        return Err(InternalError::conflict());
     };
     if !registry_authority_is_exact {
-        return Err(InternalError::conflict(
-            "root Component provisioning authority differs from the current runtime and Component Registry",
-        ));
+        return Err(InternalError::conflict());
     }
     ComponentRegistryOps::require_top_level_allocation_open()?;
     Ok(runtime_mode)
@@ -1101,9 +995,7 @@ fn require_runtime_mode(
     actual: RootComponentProvisioningRuntimeMode,
 ) -> Result<(), InternalError> {
     if expected != actual {
-        return Err(InternalError::conflict(
-            "root runtime mode differs from accepted Component provisioning authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1113,13 +1005,11 @@ fn validate_activation_runtime_authority(
     provisioning: &RootComponentProvisioningView,
 ) -> Result<(), InternalError> {
     let runtime = FleetActivationWorkflow::status()?;
-    let registry = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let registry = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     let published_registry = &provisioning
         .publication
         .as_ref()
-        .ok_or_else(|| InternalError::conflict("root Component activation is not published"))?
+        .ok_or_else(|| InternalError::conflict())?
         .fleet_registry;
     let actual = validate_component_registry_authority(
         &registry,
@@ -1134,9 +1024,7 @@ fn validate_activation_runtime_authority(
         && provisioning.activated_component_count == provisioning.component_count
         && runtime.phase == FleetActivationPhase::Active;
     if actual != provisioning.runtime_mode && !fresh_root_response_retry {
-        return Err(InternalError::conflict(
-            "root runtime mode changed before Component activation completed",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1146,22 +1034,15 @@ fn validate_component_capacity(
     validation: &RootComponentProvisioningBatchValidation,
 ) -> Result<(), InternalError> {
     if current.reserved_component_instances != 0 {
-        return Err(InternalError::unavailable(
-            "root has nonterminal top-level Component allocations",
-        ));
+        return Err(InternalError::unavailable());
     }
     let occupied = current
         .reserved_component_instances
         .checked_add(current.committed_component_instances)
         .and_then(|count| count.checked_add(validation.component_count))
-        .ok_or_else(|| {
-            InternalError::resource_exhausted("root Component instance accounting overflowed")
-        })?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if occupied > current.root.limits.maximum_component_instances {
-        return Err(InternalError::resource_exhausted(format!(
-            "root provisioning batch requires {occupied} Component instances, exceeding protected limit {}",
-            current.root.limits.maximum_component_instances
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     for (component_spec, requested) in &validation.component_spec_counts {
         let admission = current
@@ -1170,26 +1051,15 @@ fn validate_component_capacity(
             .binary_search_by(|candidate| candidate.component_spec.cmp(component_spec))
             .ok()
             .map(|index| &current.root.component_admissions[index])
-            .ok_or_else(|| {
-                InternalError::conflict(format!(
-                    "root has no admission for planned Component Spec '{component_spec}'"
-                ))
-            })?;
+            .ok_or_else(|| InternalError::conflict())?;
         let counts = ComponentRegistryOps::component_spec_counts(component_spec)?;
         let occupied = counts
             .reserved
             .checked_add(counts.committed)
             .and_then(|count| count.checked_add(*requested))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted(
-                    "root Component Spec instance accounting overflowed",
-                )
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if occupied > admission.maximum_root_instances {
-            return Err(InternalError::resource_exhausted(format!(
-                "root provisioning batch requires {occupied} instances of Component Spec '{component_spec}', exceeding admission {}",
-                admission.maximum_root_instances
-            )));
+            return Err(InternalError::resource_exhausted());
         }
     }
     Ok(())
@@ -1200,13 +1070,11 @@ fn validate_group_placement_capacity(
     requested: u32,
     maximum: u32,
 ) -> Result<(), InternalError> {
-    let required = tracked.checked_add(requested).ok_or_else(|| {
-        InternalError::resource_exhausted("root Component Group placement accounting overflowed")
-    })?;
+    let required = tracked
+        .checked_add(requested)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     if required > maximum {
-        return Err(InternalError::resource_exhausted(format!(
-            "root provisioning batch requires {required} group placements, exceeding protected limit {maximum}"
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     Ok(())
 }
@@ -1214,9 +1082,7 @@ fn validate_group_placement_capacity(
 fn validate_ready_pool_capacity(component_count: u32) -> Result<(), InternalError> {
     let ready = CanisterPoolOps::ready_count();
     if ready < component_count {
-        return Err(InternalError::unavailable(format!(
-            "root provisioning batch requires {component_count} Ready prepaid Canisters but only {ready} are available"
-        )));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -1232,9 +1098,7 @@ fn validate_store_artifacts(
             .filter(|artifact| &artifact.role == role)
             .count();
         if count != 1 {
-            return Err(InternalError::conflict(format!(
-                "root Wasm Store Catalog has {count} artifacts for planned Component role '{role}'"
-            )));
+            return Err(InternalError::conflict());
         }
     }
     Ok(())

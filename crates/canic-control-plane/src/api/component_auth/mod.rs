@@ -33,14 +33,17 @@ pub struct ActiveComponentMemberPredicate;
 #[async_trait]
 impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
     async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
-        crate::workflow::component_auth::active_component_member(ctx.transport_caller())
-            .map(|_| ())
-            .map_err(|_| {
-                AccessError::Denied(format!(
-                    "caller '{}' is not an active Component Registry member",
-                    ctx.transport_caller()
-                ))
-            })
+        match crate::workflow::component_auth::active_component_member_for_access(
+            ctx.transport_caller(),
+        ) {
+            Ok(_) => Ok(()),
+            Err(crate::workflow::component_auth::ActiveComponentMemberError::NotActive) => {
+                Err(AccessError::ActiveComponentRequired)
+            }
+            Err(crate::workflow::component_auth::ActiveComponentMemberError::Internal(error)) => {
+                Err(AccessError::Internal(error))
+            }
+        }
     }
 
     fn name(&self) -> &'static str {

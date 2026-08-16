@@ -16,7 +16,7 @@ pub mod metrics;
 pub mod ready;
 pub mod recent_failure;
 
-use crate::{InternalError, ops::OpsError};
+use crate::InternalError;
 use thiserror::Error as ThisError;
 
 ///
@@ -39,6 +39,10 @@ pub enum RuntimeOpsError {
 
 impl From<RuntimeOpsError> for InternalError {
     fn from(err: RuntimeOpsError) -> Self {
-        OpsError::from(err).into()
+        match err {
+            RuntimeOpsError::EnvOps(err) => err.into(),
+            RuntimeOpsError::LogStorage(err) => err.into(),
+            RuntimeOpsError::MemoryRegistryOps(err) => err.into(),
+        }
     }
 }

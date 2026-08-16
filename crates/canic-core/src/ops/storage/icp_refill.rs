@@ -9,7 +9,6 @@ use crate::{
     cdk::types::Cycles,
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, icp_refill_outcome_is_resumable},
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
-    ops::storage::StorageOpsError,
     storage::stable::icp_refill::{
         IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus, IcpRefillRecords,
     },
@@ -181,7 +180,21 @@ pub enum IcpRefillRecordOpsError {
 
 impl From<IcpRefillRecordOpsError> for InternalError {
     fn from(err: IcpRefillRecordOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            IcpRefillRecordOpsError::ConcurrentOperation { .. }
+            | IcpRefillRecordOpsError::OperationConflict { .. }
+            | IcpRefillRecordOpsError::RetryRequestMismatch { .. } => codes::REQUEST_CONFLICT,
+            IcpRefillRecordOpsError::CyclesSentOverflow { .. }
+            | IcpRefillRecordOpsError::IdOverflow => codes::CAPACITY_LIMIT,
+            IcpRefillRecordOpsError::DuplicateActiveIndex { .. }
+            | IcpRefillRecordOpsError::DuplicateOperationIndex { .. } => codes::POSITION_DUPLICATE,
+            IcpRefillRecordOpsError::IndexRecordMissing { .. } => codes::POSITION_UNAVAILABLE,
+            IcpRefillRecordOpsError::IndexRecordMismatch { .. } => codes::POSITION_CONFLICT,
+            IcpRefillRecordOpsError::RecordNotFound(_) => codes::STATE_UNAVAILABLE,
+        };
+        Self::public(code)
     }
 }
 

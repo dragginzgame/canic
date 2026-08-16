@@ -9,16 +9,18 @@ mod lifecycle;
 use canic_core::{
     api::rpc::RpcApi,
     control_plane_support::{
+        error::InternalError,
         ops::ic::IcOps,
         workflow::rpc::{
             RootCapabilityAuthority, RootCapabilityCallerAuthority, RootCapabilityMemberAuthority,
             RootCapabilityParentAuthority,
         },
     },
+    diagnostics::codes,
     dto::{
         capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
         component_registry::RootComponentSubtreeRemovalStatusRequest,
-        error::{Error, ErrorCode},
+        error::Error,
         rpc::{CreateCanisterParent, RecycleCanisterRequest, Request},
     },
     ids::ManagedCanisterBinding,
@@ -62,7 +64,7 @@ fn recycle_target_authority(
 ) -> Result<RootCapabilityAuthority, Error> {
     match resolve_active_member(request.canister_pid) {
         Ok(target) => Ok(authority.with_target(target)),
-        Err(error) if error.code == ErrorCode::Forbidden => {
+        Err(error) if error.code() == codes::AUTHORITY_UNAUTHORIZED.raw_code() => {
             recovered_recycle_target_authority(caller, authority, request, error)
         }
         Err(error) => Err(error),
@@ -90,13 +92,13 @@ fn recovered_recycle_target_authority(
     .map_err(Error::from)?
     .ok_or(missing_target)?;
     if removal.target_canister_id != request.canister_pid {
-        return Err(Error::forbidden(
-            "recycle target differs from the durable Component subtree-removal operation",
+        return Err(Error::from_registered(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     if removal.target_parent_canister_id != caller.canister_id() {
-        return Err(Error::forbidden(
-            "recycle target parent differs from the durable Component subtree-removal operation",
+        return Err(Error::from_registered(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     Ok(authority.with_recovery_target(
@@ -113,6 +115,7 @@ fn caller_authority(
         return Ok(RootCapabilityCallerAuthority::FleetSubnetRoot { canister_id: root });
     }
     let active = super::component_registry::active_component_member_authority(caller)
+        .map_err(InternalError::from)
         .map_err(Error::from)?;
     let member =
         RootCapabilityMemberAuthority::try_from_active_member(active.binding, active.registry)
@@ -122,7 +125,9 @@ fn caller_authority(
 
 /// Resolve membership after the enclosing request has established active-root authority.
 fn resolve_active_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
-    super::component_registry::active_component_member(caller).map_err(Into::into)
+    super::component_registry::active_component_member(caller)
+        .map_err(InternalError::from)
+        .map_err(Into::into)
 }
 
 fn resolve_provision_parent(
@@ -130,13 +135,13 @@ fn resolve_provision_parent(
     selector: &CreateCanisterParent,
 ) -> Result<RootCapabilityParentAuthority, Error> {
     if !matches!(selector, CreateCanisterParent::ThisCanister) {
-        return Err(Error::forbidden(
-            "root structural provision requires parent=ThisCanister",
+        return Err(Error::from_registered(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
     }
     match caller {
-        RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => Err(Error::forbidden(
-            "Fleet Subnet Root cannot provision application children through Component RPC",
+        RootCapabilityCallerAuthority::FleetSubnetRoot { .. } => Err(Error::from_registered(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         )),
         RootCapabilityCallerAuthority::ComponentMember(member) => Ok(member.clone().into()),
     }
@@ -162,7 +167,10 @@ mod tests {
         let error = resolve_provision_parent(&caller, &CreateCanisterParent::ThisCanister)
             .expect_err("infrastructure root cannot own an application child");
 
-        assert_eq!(error.code, ErrorCode::Forbidden);
+        assert_eq!(
+            error.code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
     }
 
     #[test]
@@ -178,7 +186,10 @@ mod tests {
         for selector in selectors {
             let error = resolve_provision_parent(&caller, &selector)
                 .expect_err("non-structural parent selector must reject");
-            assert_eq!(error.code, ErrorCode::Forbidden);
+            assert_eq!(
+                error.code(),
+                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            );
         }
     }
 }

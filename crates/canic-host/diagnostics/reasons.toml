@@ -1,0 +1,1131 @@
+# Canic diagnostic reason ledger.
+#
+# This host-only file is the sole numeric allocation and prose authority.
+# Runtime constants and the host catalogue are generated from its active rows.
+
+[[reason]]
+code = 1
+name = "ACCESS_UNAVAILABLE"
+origin = "access"
+summary = "Access is unavailable."
+retired = false
+
+[[reason]]
+code = 2
+name = "SECURITY_CAPACITY"
+origin = "authentication"
+summary = "Security has reached its limit."
+retired = false
+
+[[reason]]
+code = 3
+name = "SECURITY_CONFLICT"
+origin = "authentication"
+summary = "Security conflicts with current state."
+retired = false
+
+[[reason]]
+code = 4
+name = "SECURITY_EXPIRED"
+origin = "authentication"
+summary = "Security has expired."
+retired = false
+
+[[reason]]
+code = 5
+name = "SECURITY_FAILED"
+origin = "authentication"
+summary = "Security failed."
+retired = false
+
+[[reason]]
+code = 6
+name = "SECURITY_INACTIVE"
+origin = "authentication"
+summary = "Security is inactive."
+retired = false
+
+[[reason]]
+code = 7
+name = "SECURITY_INVALID"
+origin = "authentication"
+summary = "Security is invalid."
+retired = false
+
+[[reason]]
+code = 8
+name = "SECURITY_INVALID_STATE"
+origin = "authentication"
+summary = "Security is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 9
+name = "SECURITY_ORDERING"
+origin = "authentication"
+summary = "Security is out of order."
+retired = false
+
+[[reason]]
+code = 10
+name = "SECURITY_UNAVAILABLE"
+origin = "authentication"
+summary = "Security is unavailable."
+retired = false
+
+[[reason]]
+code = 11
+name = "CONFIGURATION_CAPACITY"
+origin = "configuration"
+summary = "Configuration has reached its limit."
+retired = false
+
+[[reason]]
+code = 12
+name = "CONFIGURATION_CONFLICT"
+origin = "configuration"
+summary = "Configuration conflicts with current state."
+retired = false
+
+[[reason]]
+code = 13
+name = "CONFIGURATION_DUPLICATE"
+origin = "configuration"
+summary = "Configuration is duplicated."
+retired = false
+
+[[reason]]
+code = 14
+name = "CONFIGURATION_EXPIRED"
+origin = "configuration"
+summary = "Configuration has expired."
+retired = false
+
+[[reason]]
+code = 15
+name = "CONFIGURATION_INACTIVE"
+origin = "configuration"
+summary = "Configuration is inactive."
+retired = false
+
+[[reason]]
+code = 16
+name = "CONFIGURATION_INCOMPLETE"
+origin = "configuration"
+summary = "Configuration is incomplete."
+retired = false
+
+[[reason]]
+code = 17
+name = "CONFIGURATION_INVALID"
+origin = "configuration"
+summary = "Configuration is invalid."
+retired = false
+
+[[reason]]
+code = 18
+name = "CONFIGURATION_INVALID_STATE"
+origin = "configuration"
+summary = "Configuration is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 19
+name = "CONFIGURATION_UNAVAILABLE"
+origin = "configuration"
+summary = "Configuration is unavailable."
+retired = false
+
+[[reason]]
+code = 20
+name = "RUNTIME_INVALID"
+origin = "runtime"
+summary = "Runtime is invalid."
+retired = false
+
+[[reason]]
+code = 21
+name = "AUTHORITY_CAPACITY"
+origin = "topology_authority"
+summary = "Authority has reached its limit."
+retired = false
+
+[[reason]]
+code = 22
+name = "AUTHORITY_CONFLICT"
+origin = "topology_authority"
+summary = "Authority conflicts with current state."
+retired = false
+
+[[reason]]
+code = 23
+name = "AUTHORITY_DUPLICATE"
+origin = "topology_authority"
+summary = "Authority is duplicated."
+retired = false
+
+[[reason]]
+code = 24
+name = "AUTHORITY_FAILED"
+origin = "topology_authority"
+summary = "Authority failed."
+retired = false
+
+[[reason]]
+code = 25
+name = "AUTHORITY_INACTIVE"
+origin = "topology_authority"
+summary = "Authority is inactive."
+retired = false
+
+[[reason]]
+code = 26
+name = "AUTHORITY_INCOMPLETE"
+origin = "topology_authority"
+summary = "Authority is incomplete."
+retired = false
+
+[[reason]]
+code = 27
+name = "AUTHORITY_INVALID"
+origin = "topology_authority"
+summary = "Authority is invalid."
+retired = false
+
+[[reason]]
+code = 28
+name = "AUTHORITY_INVALID_STATE"
+origin = "topology_authority"
+summary = "Authority is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 29
+name = "AUTHORITY_ORDERING"
+origin = "topology_authority"
+summary = "Authority is out of order."
+retired = false
+
+[[reason]]
+code = 30
+name = "AUTHORITY_UNAUTHORIZED"
+origin = "topology_authority"
+summary = "Authority is unauthorized."
+retired = false
+
+[[reason]]
+code = 31
+name = "AUTHORITY_UNAVAILABLE"
+origin = "topology_authority"
+summary = "Authority is unavailable."
+retired = false
+
+[[reason]]
+code = 32
+name = "AUTHORITY_UNEXPECTED_STATE"
+origin = "topology_authority"
+summary = "Authority is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 33
+name = "AUTHORITY_UNSUPPORTED"
+origin = "topology_authority"
+summary = "Authority is unsupported."
+retired = false
+
+[[reason]]
+code = 34
+name = "CATALOG_CONFLICT"
+origin = "registry_directory"
+summary = "Catalog conflicts with current state."
+retired = false
+
+[[reason]]
+code = 35
+name = "CATALOG_INACTIVE"
+origin = "registry_directory"
+summary = "Catalog is inactive."
+retired = false
+
+[[reason]]
+code = 36
+name = "CATALOG_INCOMPLETE"
+origin = "registry_directory"
+summary = "Catalog is incomplete."
+retired = false
+
+[[reason]]
+code = 37
+name = "CATALOG_INVALID"
+origin = "registry_directory"
+summary = "Catalog is invalid."
+retired = false
+
+[[reason]]
+code = 38
+name = "CATALOG_INVALID_STATE"
+origin = "registry_directory"
+summary = "Catalog is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 39
+name = "CATALOG_ORDERING"
+origin = "registry_directory"
+summary = "Catalog is out of order."
+retired = false
+
+[[reason]]
+code = 40
+name = "CATALOG_UNAVAILABLE"
+origin = "registry_directory"
+summary = "Catalog is unavailable."
+retired = false
+
+[[reason]]
+code = 41
+name = "CATALOG_UNEXPECTED_STATE"
+origin = "registry_directory"
+summary = "Catalog is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 42
+name = "LIFECYCLE_CAPACITY"
+origin = "canister_lifecycle"
+summary = "Lifecycle has reached its limit."
+retired = false
+
+[[reason]]
+code = 43
+name = "LIFECYCLE_CONFLICT"
+origin = "canister_lifecycle"
+summary = "Lifecycle conflicts with current state."
+retired = false
+
+[[reason]]
+code = 44
+name = "LIFECYCLE_DUPLICATE"
+origin = "canister_lifecycle"
+summary = "Lifecycle is duplicated."
+retired = false
+
+[[reason]]
+code = 45
+name = "LIFECYCLE_FAILED"
+origin = "canister_lifecycle"
+summary = "Lifecycle failed."
+retired = false
+
+[[reason]]
+code = 46
+name = "LIFECYCLE_INACTIVE"
+origin = "canister_lifecycle"
+summary = "Lifecycle is inactive."
+retired = false
+
+[[reason]]
+code = 47
+name = "LIFECYCLE_INCOMPLETE"
+origin = "canister_lifecycle"
+summary = "Lifecycle is incomplete."
+retired = false
+
+[[reason]]
+code = 48
+name = "LIFECYCLE_INSUFFICIENT"
+origin = "canister_lifecycle"
+summary = "Lifecycle is insufficient."
+retired = false
+
+[[reason]]
+code = 49
+name = "LIFECYCLE_INVALID"
+origin = "canister_lifecycle"
+summary = "Lifecycle is invalid."
+retired = false
+
+[[reason]]
+code = 50
+name = "LIFECYCLE_INVALID_STATE"
+origin = "canister_lifecycle"
+summary = "Lifecycle is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 51
+name = "LIFECYCLE_ORDERING"
+origin = "canister_lifecycle"
+summary = "Lifecycle is out of order."
+retired = false
+
+[[reason]]
+code = 52
+name = "LIFECYCLE_UNAVAILABLE"
+origin = "canister_lifecycle"
+summary = "Lifecycle is unavailable."
+retired = false
+
+[[reason]]
+code = 53
+name = "LIFECYCLE_UNEXPECTED_STATE"
+origin = "canister_lifecycle"
+summary = "Lifecycle is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 54
+name = "ARTIFACT_CONFLICT"
+origin = "artifact"
+summary = "Artifact conflicts with current state."
+retired = false
+
+[[reason]]
+code = 55
+name = "ARTIFACT_DUPLICATE"
+origin = "artifact"
+summary = "Artifact is duplicated."
+retired = false
+
+[[reason]]
+code = 56
+name = "ARTIFACT_INVALID"
+origin = "artifact"
+summary = "Artifact is invalid."
+retired = false
+
+[[reason]]
+code = 57
+name = "ARTIFACT_INVALID_STATE"
+origin = "artifact"
+summary = "Artifact is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 58
+name = "ARTIFACT_UNAVAILABLE"
+origin = "artifact"
+summary = "Artifact is unavailable."
+retired = false
+
+[[reason]]
+code = 59
+name = "PLATFORM_CAPACITY"
+origin = "platform"
+summary = "Platform has reached its limit."
+retired = false
+
+[[reason]]
+code = 60
+name = "PLATFORM_CONFLICT"
+origin = "platform"
+summary = "Platform conflicts with current state."
+retired = false
+
+[[reason]]
+code = 61
+name = "PLATFORM_FAILED"
+origin = "platform"
+summary = "Platform failed."
+retired = false
+
+[[reason]]
+code = 62
+name = "PLATFORM_INACTIVE"
+origin = "platform"
+summary = "Platform is inactive."
+retired = false
+
+[[reason]]
+code = 63
+name = "PLATFORM_INCOMPLETE"
+origin = "platform"
+summary = "Platform is incomplete."
+retired = false
+
+[[reason]]
+code = 64
+name = "PLATFORM_INVALID"
+origin = "platform"
+summary = "Platform is invalid."
+retired = false
+
+[[reason]]
+code = 65
+name = "PLATFORM_INVALID_STATE"
+origin = "platform"
+summary = "Platform is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 66
+name = "PLATFORM_UNAVAILABLE"
+origin = "platform"
+summary = "Platform is unavailable."
+retired = false
+
+[[reason]]
+code = 67
+name = "STORAGE_FAILED"
+origin = "storage"
+summary = "Storage failed."
+retired = false
+
+[[reason]]
+code = 68
+name = "STORAGE_INACTIVE"
+origin = "storage"
+summary = "Storage is inactive."
+retired = false
+
+[[reason]]
+code = 69
+name = "STORAGE_INVALID_STATE"
+origin = "storage"
+summary = "Storage is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 70
+name = "CODEC_CONFLICT"
+origin = "canonical_state"
+summary = "Codec conflicts with current state."
+retired = false
+
+[[reason]]
+code = 71
+name = "CODEC_FAILED"
+origin = "canonical_state"
+summary = "Codec failed."
+retired = false
+
+[[reason]]
+code = 72
+name = "CODEC_INVALID"
+origin = "canonical_state"
+summary = "Codec is invalid."
+retired = false
+
+[[reason]]
+code = 73
+name = "CODEC_INVALID_STATE"
+origin = "canonical_state"
+summary = "Codec is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 74
+name = "CODEC_UNAVAILABLE"
+origin = "canonical_state"
+summary = "Codec is unavailable."
+retired = false
+
+[[reason]]
+code = 75
+name = "CODEC_UNSUPPORTED"
+origin = "canonical_state"
+summary = "Codec is unsupported."
+retired = false
+
+[[reason]]
+code = 76
+name = "DIGEST_CONFLICT"
+origin = "canonical_state"
+summary = "Digest conflicts with current state."
+retired = false
+
+[[reason]]
+code = 77
+name = "DIGEST_FAILED"
+origin = "canonical_state"
+summary = "Digest failed."
+retired = false
+
+[[reason]]
+code = 78
+name = "DIGEST_INVALID"
+origin = "canonical_state"
+summary = "Digest is invalid."
+retired = false
+
+[[reason]]
+code = 79
+name = "DIGEST_UNAVAILABLE"
+origin = "canonical_state"
+summary = "Digest is unavailable."
+retired = false
+
+[[reason]]
+code = 80
+name = "DIGEST_UNEXPECTED_STATE"
+origin = "canonical_state"
+summary = "Digest is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 81
+name = "CAPACITY_LIMIT"
+origin = "control_plane_state"
+summary = "Capacity has reached its limit."
+retired = false
+
+[[reason]]
+code = 82
+name = "CAPACITY_CONFLICT"
+origin = "control_plane_state"
+summary = "Capacity conflicts with current state."
+retired = false
+
+[[reason]]
+code = 83
+name = "CAPACITY_INACTIVE"
+origin = "control_plane_state"
+summary = "Capacity is inactive."
+retired = false
+
+[[reason]]
+code = 84
+name = "CAPACITY_INCOMPLETE"
+origin = "control_plane_state"
+summary = "Capacity is incomplete."
+retired = false
+
+[[reason]]
+code = 85
+name = "CAPACITY_INSUFFICIENT"
+origin = "control_plane_state"
+summary = "Capacity is insufficient."
+retired = false
+
+[[reason]]
+code = 86
+name = "CAPACITY_INVALID"
+origin = "control_plane_state"
+summary = "Capacity is invalid."
+retired = false
+
+[[reason]]
+code = 87
+name = "CAPACITY_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Capacity is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 88
+name = "CAPACITY_ORDERING"
+origin = "control_plane_state"
+summary = "Capacity is out of order."
+retired = false
+
+[[reason]]
+code = 89
+name = "CAPACITY_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Capacity is unavailable."
+retired = false
+
+[[reason]]
+code = 90
+name = "CAPACITY_UNEXPECTED_STATE"
+origin = "control_plane_state"
+summary = "Capacity is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 91
+name = "CAPACITY_UNSUPPORTED"
+origin = "control_plane_state"
+summary = "Capacity is unsupported."
+retired = false
+
+[[reason]]
+code = 92
+name = "COLLECTION_CAPACITY"
+origin = "control_plane_state"
+summary = "Collection has reached its limit."
+retired = false
+
+[[reason]]
+code = 93
+name = "COLLECTION_CONFLICT"
+origin = "control_plane_state"
+summary = "Collection conflicts with current state."
+retired = false
+
+[[reason]]
+code = 94
+name = "COLLECTION_INCOMPLETE"
+origin = "control_plane_state"
+summary = "Collection is incomplete."
+retired = false
+
+[[reason]]
+code = 95
+name = "COLLECTION_INVALID"
+origin = "control_plane_state"
+summary = "Collection is invalid."
+retired = false
+
+[[reason]]
+code = 96
+name = "COLLECTION_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Collection is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 97
+name = "COLLECTION_ORDERING"
+origin = "control_plane_state"
+summary = "Collection is out of order."
+retired = false
+
+[[reason]]
+code = 98
+name = "COLLECTION_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Collection is unavailable."
+retired = false
+
+[[reason]]
+code = 99
+name = "COLLECTION_UNEXPECTED_STATE"
+origin = "control_plane_state"
+summary = "Collection is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 100
+name = "EVIDENCE_CONFLICT"
+origin = "control_plane_state"
+summary = "Evidence conflicts with current state."
+retired = false
+
+[[reason]]
+code = 101
+name = "EVIDENCE_DUPLICATE"
+origin = "control_plane_state"
+summary = "Evidence is duplicated."
+retired = false
+
+[[reason]]
+code = 102
+name = "EVIDENCE_EXPIRED"
+origin = "control_plane_state"
+summary = "Evidence has expired."
+retired = false
+
+[[reason]]
+code = 103
+name = "EVIDENCE_INVALID"
+origin = "control_plane_state"
+summary = "Evidence is invalid."
+retired = false
+
+[[reason]]
+code = 104
+name = "EVIDENCE_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Evidence is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 105
+name = "EVIDENCE_ORDERING"
+origin = "control_plane_state"
+summary = "Evidence is out of order."
+retired = false
+
+[[reason]]
+code = 106
+name = "EVIDENCE_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Evidence is unavailable."
+retired = false
+
+[[reason]]
+code = 107
+name = "EVIDENCE_UNEXPECTED_STATE"
+origin = "control_plane_state"
+summary = "Evidence is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 108
+name = "CONTROL_PLANE_STATE_INACTIVE"
+origin = "control_plane_state"
+summary = "Control plane state is inactive."
+retired = false
+
+[[reason]]
+code = 109
+name = "CONTROL_PLANE_STATE_INVALID"
+origin = "control_plane_state"
+summary = "Control plane state is invalid."
+retired = false
+
+[[reason]]
+code = 110
+name = "POSITION_CAPACITY"
+origin = "control_plane_state"
+summary = "Position has reached its limit."
+retired = false
+
+[[reason]]
+code = 111
+name = "POSITION_CONFLICT"
+origin = "control_plane_state"
+summary = "Position conflicts with current state."
+retired = false
+
+[[reason]]
+code = 112
+name = "POSITION_DUPLICATE"
+origin = "control_plane_state"
+summary = "Position is duplicated."
+retired = false
+
+[[reason]]
+code = 113
+name = "POSITION_INACTIVE"
+origin = "control_plane_state"
+summary = "Position is inactive."
+retired = false
+
+[[reason]]
+code = 114
+name = "POSITION_INCOMPLETE"
+origin = "control_plane_state"
+summary = "Position is incomplete."
+retired = false
+
+[[reason]]
+code = 115
+name = "POSITION_INVALID"
+origin = "control_plane_state"
+summary = "Position is invalid."
+retired = false
+
+[[reason]]
+code = 116
+name = "POSITION_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Position is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 117
+name = "POSITION_ORDERING"
+origin = "control_plane_state"
+summary = "Position is out of order."
+retired = false
+
+[[reason]]
+code = 118
+name = "POSITION_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Position is unavailable."
+retired = false
+
+[[reason]]
+code = 119
+name = "REQUEST_CAPACITY"
+origin = "control_plane_state"
+summary = "Request has reached its limit."
+retired = false
+
+[[reason]]
+code = 120
+name = "REQUEST_CONFLICT"
+origin = "control_plane_state"
+summary = "Request conflicts with current state."
+retired = false
+
+[[reason]]
+code = 121
+name = "REQUEST_DUPLICATE"
+origin = "control_plane_state"
+summary = "Request is duplicated."
+retired = false
+
+[[reason]]
+code = 122
+name = "REQUEST_FAILED"
+origin = "control_plane_state"
+summary = "Request failed."
+retired = false
+
+[[reason]]
+code = 123
+name = "REQUEST_INACTIVE"
+origin = "control_plane_state"
+summary = "Request is inactive."
+retired = false
+
+[[reason]]
+code = 124
+name = "REQUEST_INCOMPLETE"
+origin = "control_plane_state"
+summary = "Request is incomplete."
+retired = false
+
+[[reason]]
+code = 125
+name = "REQUEST_INSUFFICIENT"
+origin = "control_plane_state"
+summary = "Request is insufficient."
+retired = false
+
+[[reason]]
+code = 126
+name = "REQUEST_INVALID"
+origin = "control_plane_state"
+summary = "Request is invalid."
+retired = false
+
+[[reason]]
+code = 127
+name = "REQUEST_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Request is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 128
+name = "REQUEST_ORDERING"
+origin = "control_plane_state"
+summary = "Request is out of order."
+retired = false
+
+[[reason]]
+code = 129
+name = "REQUEST_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Request is unavailable."
+retired = false
+
+[[reason]]
+code = 130
+name = "REQUEST_UNEXPECTED_STATE"
+origin = "control_plane_state"
+summary = "Request is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 131
+name = "STATE_CAPACITY"
+origin = "control_plane_state"
+summary = "State has reached its limit."
+retired = false
+
+[[reason]]
+code = 132
+name = "STATE_CONFLICT"
+origin = "control_plane_state"
+summary = "State conflicts with current state."
+retired = false
+
+[[reason]]
+code = 133
+name = "STATE_FAILED"
+origin = "control_plane_state"
+summary = "State failed."
+retired = false
+
+[[reason]]
+code = 134
+name = "STATE_INACTIVE"
+origin = "control_plane_state"
+summary = "State is inactive."
+retired = false
+
+[[reason]]
+code = 135
+name = "STATE_INCOMPLETE"
+origin = "control_plane_state"
+summary = "State is incomplete."
+retired = false
+
+[[reason]]
+code = 136
+name = "STATE_INSUFFICIENT"
+origin = "control_plane_state"
+summary = "State is insufficient."
+retired = false
+
+[[reason]]
+code = 137
+name = "STATE_INVALID"
+origin = "control_plane_state"
+summary = "State is invalid."
+retired = false
+
+[[reason]]
+code = 138
+name = "STATE_INVALID_STATE"
+origin = "control_plane_state"
+summary = "State is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 139
+name = "STATE_ORDERING"
+origin = "control_plane_state"
+summary = "State is out of order."
+retired = false
+
+[[reason]]
+code = 140
+name = "STATE_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "State is unavailable."
+retired = false
+
+[[reason]]
+code = 141
+name = "STATE_UNEXPECTED_STATE"
+origin = "control_plane_state"
+summary = "State is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 142
+name = "TIME_CAPACITY"
+origin = "control_plane_state"
+summary = "Time has reached its limit."
+retired = false
+
+[[reason]]
+code = 143
+name = "TIME_CONFLICT"
+origin = "control_plane_state"
+summary = "Time conflicts with current state."
+retired = false
+
+[[reason]]
+code = 144
+name = "TIME_INVALID"
+origin = "control_plane_state"
+summary = "Time is invalid."
+retired = false
+
+[[reason]]
+code = 145
+name = "TIME_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Time is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 146
+name = "TIME_ORDERING"
+origin = "control_plane_state"
+summary = "Time is out of order."
+retired = false
+
+[[reason]]
+code = 147
+name = "TIME_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Time is unavailable."
+retired = false
+
+[[reason]]
+code = 148
+name = "TIME_UNEXPECTED_STATE"
+origin = "control_plane_state"
+summary = "Time is in an unexpected state."
+retired = false
+
+[[reason]]
+code = 149
+name = "VERSION_CAPACITY"
+origin = "control_plane_state"
+summary = "Version has reached its limit."
+retired = false
+
+[[reason]]
+code = 150
+name = "VERSION_CONFLICT"
+origin = "control_plane_state"
+summary = "Version conflicts with current state."
+retired = false
+
+[[reason]]
+code = 151
+name = "VERSION_DUPLICATE"
+origin = "control_plane_state"
+summary = "Version is duplicated."
+retired = false
+
+[[reason]]
+code = 152
+name = "VERSION_INACTIVE"
+origin = "control_plane_state"
+summary = "Version is inactive."
+retired = false
+
+[[reason]]
+code = 153
+name = "VERSION_INVALID"
+origin = "control_plane_state"
+summary = "Version is invalid."
+retired = false
+
+[[reason]]
+code = 154
+name = "VERSION_INVALID_STATE"
+origin = "control_plane_state"
+summary = "Version is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 155
+name = "VERSION_UNAVAILABLE"
+origin = "control_plane_state"
+summary = "Version is unavailable."
+retired = false
+
+[[reason]]
+code = 156
+name = "VERSION_UNSUPPORTED"
+origin = "control_plane_state"
+summary = "Version is unsupported."
+retired = false
+
+[[reason]]
+code = 157
+name = "BLOB_INVALID_STATE"
+origin = "blob"
+summary = "Blob is invalid for the current state."
+retired = false
+
+[[reason]]
+code = 158
+name = "AUTH_CERT_EXPIRED"
+origin = "authentication"
+summary = "The delegated authentication certificate has expired."
+retired = false
+
+[[reason]]
+code = 159
+name = "AUTH_TOKEN_EXPIRED"
+origin = "authentication"
+summary = "The delegated authentication token has expired."
+retired = false
+
+[[reason]]
+code = 160
+name = "WASM_STORE_CHUNK_MISSING"
+origin = "wasm_store"
+summary = "A required Wasm Store chunk or chunk set is missing."
+retired = false
+
+[[reason]]
+code = 161
+name = "WASM_STORE_MANIFEST_MISSING"
+origin = "wasm_store"
+summary = "A required Wasm Store manifest or exact release is missing."
+retired = false

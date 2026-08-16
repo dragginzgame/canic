@@ -31,12 +31,12 @@ use std::path::Path;
 
 use candid::Principal;
 use canic_core::{
+    diagnostics::codes,
     dto::{
         component_provisioning::{
             FleetComponentProvisioningPhase, FleetComponentProvisioningStatusRequest,
             FleetComponentProvisioningStatusResponse,
         },
-        error::ErrorCode,
         fleet_registry::FleetRegistry,
     },
     ids::FleetName,
@@ -154,7 +154,7 @@ fn query_or_prepare(
         &status_request,
     ) {
         Ok(status) => Ok(status),
-        Err(error) if error.is_rejected_with(ErrorCode::Unavailable) => call_with_arg(
+        Err(error) if error.is_rejected_with(codes::STATE_UNAVAILABLE) => call_with_arg(
             icp,
             coordinator,
             protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,

@@ -15,7 +15,7 @@ use crate::{
     version_text,
 };
 use canic_core::diagnostics::DiagnosticCode;
-use canic_host::diagnostics::{DiagnosticCatalogError, DiagnosticLookup, lookup_diagnostic};
+use canic_host::diagnostics::{DiagnosticLookup, lookup_diagnostic};
 use clap::Command;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -34,9 +34,6 @@ Examples:
 
 #[derive(Debug, ThisError)]
 pub enum DiagnosticCommandError {
-    #[error("diagnostic catalogue is invalid: {0}")]
-    Catalog(&'static DiagnosticCatalogError),
-
     #[error("invalid diagnostic code '{0}'; expected an unsigned decimal or uppercase E prefix")]
     InvalidCode(String),
 
@@ -58,7 +55,7 @@ where
         .map_err(|_| DiagnosticCommandError::Usage(usage()))?;
     let input = required_string(&matches, CODE_ARGUMENT);
     let code = parse_code(&input)?;
-    let lookup = lookup_diagnostic(code).map_err(DiagnosticCommandError::Catalog)?;
+    let lookup = lookup_diagnostic(code);
     println!("{}", render_lookup(lookup));
     Ok(())
 }
@@ -92,19 +89,20 @@ fn parse_code(input: &str) -> Result<DiagnosticCode, DiagnosticCommandError> {
 
 fn render_lookup(lookup: DiagnosticLookup<'_>) -> String {
     match lookup {
-        DiagnosticLookup::Current(entry) => format!(
-            "code: {}\nknown: true\nstatus: current\nlabel: {}\nclass: {}\norigin: {}\ndisposition: {}\nsummary: {}\naction: {}",
-            entry.code,
-            entry.label,
-            entry.class,
-            entry.origin,
-            entry.disposition,
-            entry.summary,
-            entry.action,
-        ),
+        DiagnosticLookup::Current(entry) => {
+            let mut rendered = format!(
+                "code: {}\nknown: true\nstatus: current\nname: {}\norigin: {}\nsummary: {}",
+                entry.code, entry.name, entry.origin, entry.summary,
+            );
+            if let Some(guidance) = entry.guidance {
+                rendered.push_str("\nguidance: ");
+                rendered.push_str(guidance);
+            }
+            rendered
+        }
         DiagnosticLookup::Retired(entry) => format!(
-            "code: {}\nknown: true\nstatus: retired\nlabel: {}\nsummary: {}",
-            entry.code, entry.label, entry.summary,
+            "code: {}\nknown: true\nstatus: retired\nname: {}",
+            entry.code, entry.name,
         ),
         DiagnosticLookup::Unknown(code) => {
             format!("code: {code}\nknown: false\nstatus: unknown")

@@ -56,10 +56,8 @@ pub(super) async fn execute_fresh_manual_refill(
     {
         Ok(operation) => operation,
         Err(err) => {
-            if let Err(recovery_error) = recover_icp_refill_cost_guard(cost_permit.as_ref()) {
-                return Err(err.with_diagnostic_context(format!(
-                    "ICP refill cost guard recovery failed: {recovery_error}"
-                )));
+            if let Err(_recovery_error) = recover_icp_refill_cost_guard(cost_permit.as_ref()) {
+                return Err(err);
             }
             return Err(abort_reserved_receipt_after_failure(
                 token,

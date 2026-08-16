@@ -19,7 +19,7 @@ use crate::{
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
-use canic_core::{cdk::utils::hash::DecodeHexError, dto::error::ErrorCode};
+use canic_core::{cdk::utils::hash::DecodeHexError, diagnostics::DiagnosticCode};
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
 };
@@ -65,8 +65,11 @@ pub enum CyclesCommandError {
     #[error("ICP refill response operation id mismatch: expected {expected}, got {actual}")]
     IcpRefillOperationIdMismatch { expected: String, actual: String },
 
-    #[error("ICP refill request rejected: [{code:?}] {message}")]
-    IcpRefillRejected { code: ErrorCode, message: String },
+    #[error("ICP refill request rejected: {diagnostic}")]
+    IcpRefillRejected {
+        code: DiagnosticCode,
+        diagnostic: String,
+    },
 
     #[error("live ICP refill returned a dry-run response")]
     IcpRefillUnexpectedResponse,

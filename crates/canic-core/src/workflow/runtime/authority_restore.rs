@@ -5,7 +5,7 @@
 //! Boundary: authority endpoints delegate here before host stop/capture/start operations.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     domain::policy::pure::{
         PolicyError, authority_restore::require_update_allowed as require_policy_update_allowed,
     },
@@ -127,21 +127,14 @@ fn trap_authority_transition(context: &str, error: InternalError) -> ! {
 }
 
 fn require_resumable_timer_state() -> Result<(), InternalError> {
-    TimerWorkflow::require_resumable().map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("timer snapshot is not resumable: {error}"),
-        )
-    })
+    TimerWorkflow::require_resumable().map_err(|_error| InternalError::invariant())
 }
 
 fn require_authority_runtime() -> Result<(), InternalError> {
     if is_authority_runtime()? {
         return Ok(());
     }
-    Err(InternalError::forbidden(
-        "authority snapshot fencing is available only on the Fleet Coordinator and Fleet Subnet Root",
-    ))
+    Err(InternalError::forbidden())
 }
 
 fn is_authority_runtime() -> Result<bool, InternalError> {

@@ -5,7 +5,6 @@ use crate::storage::stable::component_provisioning::{
     RootComponentProvisioningData, RootComponentProvisioningStore,
 };
 use canic_core::{
-    control_plane_support::error::InternalErrorClass,
     dto::{
         component_provisioning::RootComponentDirectorySynchronizationRequest,
         component_registry::ComponentRegistryHead, fleet_registry::FleetRegistryVersion,
@@ -112,7 +111,10 @@ fn synchronization_journals_intent_reconciles_and_replays_terminal_receipt() {
         101,
     )
     .expect_err("a second synchronization cannot overlap");
-    assert_eq!(other.class(), InternalErrorClass::Domain);
+    assert_eq!(
+        other.code(),
+        canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE
+    );
 
     let intent = intent();
     let first =
@@ -175,5 +177,5 @@ fn synchronization_exact_retry_rejects_changed_authority() {
     conflicting.plan_hash = [22; 32];
     let error = RootComponentDirectorySynchronizationOps::status(&conflicting)
         .expect_err("changed plan hash must reject");
-    assert_eq!(error.class(), InternalErrorClass::Domain);
+    assert_eq!(error.code(), canic_core::diagnostics::codes::STATE_CONFLICT);
 }

@@ -69,6 +69,14 @@ canisters:
           commands:
             - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- wenzelroll release . . apps/playground/canic.toml
 
+  - name: saltz_preview
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo build --locked --package saltz_preview --target wasm32-unknown-unknown --release
+            - cp target/wasm32-unknown-unknown/release/saltz_preview.wasm "$ICP_WASM_OUTPUT_PATH"
+
 networks:
   - name: local
     mode: managed
@@ -76,6 +84,13 @@ networks:
     gateway:
       bind: 127.0.0.1
       port: 8001
+
+  - name: saltz-local
+    mode: managed
+    version: "v13.0.0-2026-05-07-04-27"
+    gateway:
+      bind: 127.0.0.1
+      port: 8002
 
 environments:
   - name: demo
@@ -89,6 +104,14 @@ environments:
   - name: playground-ic
     network: ic
     canisters: [playground_root, playground_hub, wenzelroll]
+
+  - name: saltz-preview-ic
+    network: ic
+    canisters: [saltz_preview]
+
+  - name: saltz-preview-local
+    network: saltz-local
+    canisters: [saltz_preview]
 
   - name: test
     network: local

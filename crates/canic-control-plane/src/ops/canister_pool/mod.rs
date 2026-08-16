@@ -12,7 +12,7 @@ use crate::view::canister_pool::{
 };
 use canic_core::{
     cdk::types::{Cycles, Principal},
-    control_plane_support::error::{InternalError, InternalErrorOrigin},
+    control_plane_support::error::InternalError,
     control_plane_support::model::replay::ReplayCostGuardSettlement,
     dto::pool::{
         CanisterPoolAsset, CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolClaim,
@@ -57,9 +57,7 @@ impl CanisterPoolOps {
             {
                 Ok(())
             }
-            Some(_) => Err(InternalError::conflict(
-                "sibling Wasm Store principal conflicts with root physical Canister inventory",
-            )),
+            Some(_) => Err(InternalError::conflict()),
             None => {
                 CanisterPoolStore::insert(
                     canister_id,
@@ -84,24 +82,18 @@ impl CanisterPoolOps {
     ) -> Result<(), InternalError> {
         validate_config(config)?;
         if imports.len() > config.maximum_size as usize {
-            return Err(InternalError::invalid_input(
-                "Canister pool imports exceed the configured maximum_size",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let unique = imports.iter().copied().collect::<BTreeSet<_>>();
         if unique.len() != imports.len() {
-            return Err(InternalError::invalid_input(
-                "Canister pool imports contain duplicate principals",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
         for canister_id in imports {
             match CanisterPoolStore::get(canister_id) {
                 Some(existing) if existing.origin == CanisterPoolAssetOriginRecord::Imported => {}
                 Some(_) => {
-                    return Err(InternalError::conflict(format!(
-                        "Canister pool import {canister_id} conflicts with an existing asset"
-                    )));
+                    return Err(InternalError::conflict());
                 }
                 None => {
                     validate_new_asset_capacity(config, *canister_id)?;
@@ -143,9 +135,7 @@ impl CanisterPoolOps {
             {
                 Ok(())
             }
-            _ => Err(InternalError::conflict(format!(
-                "recycled Canister {canister_id} is not an exact workload asset"
-            ))),
+            _ => Err(InternalError::conflict()),
         }
     }
 
@@ -166,9 +156,7 @@ impl CanisterPoolOps {
                 }
             }
             _ => {
-                return Err(InternalError::conflict(
-                    "only pending, recycling or failed Canister pool assets may complete reset",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         asset.updated_at_ns = now_ns;
@@ -198,9 +186,7 @@ impl CanisterPoolOps {
                 }
             }
             _ => {
-                return Err(InternalError::conflict(
-                    "only a pending, recycling or failed Canister pool asset may enter reset failure",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         asset.updated_at_ns = now_ns;
@@ -220,9 +206,7 @@ impl CanisterPoolOps {
                 reset: CanisterPoolRecycleResetRecord::Pending,
             },
             _ => {
-                return Err(InternalError::conflict(
-                    "only a failed Canister pool asset may retry reset",
-                ));
+                return Err(InternalError::conflict());
             }
         };
         asset.updated_at_ns = now_ns;
@@ -268,10 +252,7 @@ impl CanisterPoolOps {
             .map(|entry| entry.canister_id)
             .collect::<Vec<_>>();
         if existing.len() > 1 {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "one Component allocation claims multiple Canister pool assets",
-            ));
+            return Err(InternalError::invariant());
         }
         if let Some(canister_id) = existing.first() {
             return Ok(Some(*canister_id));
@@ -321,10 +302,7 @@ impl CanisterPoolOps {
         match claimed.as_slice() {
             [] => Ok(None),
             [canister_id] => Ok(Some(*canister_id)),
-            _ => Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "one Component allocation claims multiple Canister pool assets",
-            )),
+            _ => Err(InternalError::invariant()),
         }
     }
 
@@ -343,9 +321,7 @@ impl CanisterPoolOps {
                 Ok(())
             }
             CanisterPoolAssetStatusRecord::Workload(current) if current == &expected => Ok(()),
-            _ => Err(InternalError::conflict(
-                "Canister pool claim differs from the Component allocation",
-            )),
+            _ => Err(InternalError::conflict()),
         }
     }
 
@@ -449,14 +425,10 @@ impl CanisterPoolOps {
             if creation_authority(&existing) == authority {
                 return Ok(());
             }
-            return Err(InternalError::conflict(
-                "another autonomous Canister pool refill is already pending",
-            ));
+            return Err(InternalError::conflict());
         }
         if authority.created_at_time_ns <= state.last_creation_timestamp_ns {
-            return Err(InternalError::conflict(
-                "Canister pool refill timestamp must advance monotonically",
-            ));
+            return Err(InternalError::conflict());
         }
         state.last_creation_timestamp_ns = authority.created_at_time_ns;
         state.creation = Some(CanisterPoolCreationRecord {
@@ -481,18 +453,15 @@ impl CanisterPoolOps {
         settlement: ReplayCostGuardSettlement,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_mut().ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(|| InternalError::unavailable())?;
         if creation.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "Canister pool refill attempt names another operation",
-            ));
+            return Err(InternalError::conflict());
         }
         if creation.cost_guard_settlement.is_some() {
-            return Err(InternalError::conflict(
-                "Canister pool refill attempt already has pending cost authority",
-            ));
+            return Err(InternalError::conflict());
         }
         match creation.progress {
             CanisterPoolCreationProgressRecord::Intent { .. } => {
@@ -503,9 +472,7 @@ impl CanisterPoolOps {
                 CanisterPoolStore::set_state(state);
                 Ok(())
             }
-            _ => Err(InternalError::conflict(
-                "Canister pool refill is not ready for another ledger attempt",
-            )),
+            _ => Err(InternalError::conflict()),
         }
     }
 
@@ -515,9 +482,10 @@ impl CanisterPoolOps {
         uncertain_result: bool,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_mut().ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(|| InternalError::unavailable())?;
         require_creation_attempt(creation, operation_id, settlement)?;
         creation.cost_guard_settlement = None;
         creation.progress = CanisterPoolCreationProgressRecord::Intent { uncertain_result };
@@ -531,13 +499,12 @@ impl CanisterPoolOps {
         canister_id: Principal,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_mut().ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(|| InternalError::unavailable())?;
         if creation.operation_id != operation_id {
-            return Err(InternalError::conflict(
-                "created pool Canister belongs to another refill operation",
-            ));
+            return Err(InternalError::conflict());
         }
         match creation.progress {
             CanisterPoolCreationProgressRecord::Intent { .. } => {
@@ -551,9 +518,7 @@ impl CanisterPoolOps {
                 canister_id: existing_canister,
             } if existing_block == block_index && existing_canister == canister_id => return Ok(()),
             _ => {
-                return Err(InternalError::conflict(
-                    "Canister pool refill already records contradictory terminal evidence",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         CanisterPoolStore::set_state(state);
@@ -565,14 +530,13 @@ impl CanisterPoolOps {
         settlement: ReplayCostGuardSettlement,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_mut().ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(|| InternalError::unavailable())?;
         require_creation_operation(creation, operation_id)?;
         if creation.cost_guard_settlement != Some(settlement) {
-            return Err(InternalError::conflict(
-                "settled Canister pool refill cost authority differs from the pending attempt",
-            ));
+            return Err(InternalError::conflict());
         }
         creation.cost_guard_settlement = None;
         CanisterPoolStore::set_state(state);
@@ -585,14 +549,13 @@ impl CanisterPoolOps {
     ) -> Result<(), InternalError> {
         let failure = creation_failure_from_dto(failure);
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_mut().ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state
+            .creation
+            .as_mut()
+            .ok_or_else(|| InternalError::unavailable())?;
         require_creation_operation(creation, operation_id)?;
         if creation.cost_guard_settlement.is_some() {
-            return Err(InternalError::conflict(
-                "Canister pool refill cannot enter blocked state with different or pending authority",
-            ));
+            return Err(InternalError::conflict());
         }
         match creation.progress {
             CanisterPoolCreationProgressRecord::Intent { .. } => {
@@ -604,9 +567,7 @@ impl CanisterPoolOps {
                 return Ok(());
             }
             _ => {
-                return Err(InternalError::conflict(
-                    "Canister pool refill cannot overwrite terminal progress",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         CanisterPoolStore::set_state(state);
@@ -619,9 +580,7 @@ impl CanisterPoolOps {
         now_ns: u64,
     ) -> Result<(), InternalError> {
         let state = CanisterPoolStore::state();
-        let creation = state.creation.ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state.creation.ok_or_else(|| InternalError::unavailable())?;
         require_creation_operation(&creation, operation_id)?;
         let created_principal_is_exact = matches!(
             creation.progress,
@@ -631,15 +590,11 @@ impl CanisterPoolOps {
             } if created == canister_id
         );
         if !created_principal_is_exact {
-            return Err(InternalError::conflict(
-                "created pool Canister differs from its durable ledger receipt",
-            ));
+            return Err(InternalError::conflict());
         }
         match CanisterPoolStore::get(&canister_id) {
             Some(existing) if created_asset_is_adopted(&existing) => Ok(()),
-            Some(_) => Err(InternalError::conflict(
-                "created pool Canister conflicts with root physical inventory",
-            )),
+            Some(_) => Err(InternalError::conflict()),
             None => {
                 CanisterPoolStore::insert(
                     canister_id,
@@ -659,22 +614,21 @@ impl CanisterPoolOps {
 
     pub fn commit_creation(operation_id: [u8; 32]) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_ref().ok_or_else(|| {
-            InternalError::unavailable("autonomous Canister pool refill is not pending")
-        })?;
+        let creation = state
+            .creation
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         let CanisterPoolCreationProgressRecord::Created { canister_id, .. } = creation.progress
         else {
-            return Err(InternalError::conflict(
-                "Canister pool refill has no created principal to commit",
-            ));
+            return Err(InternalError::conflict());
         };
         require_creation_operation(creation, operation_id)?;
         require_creation_cost_settled(creation)?;
         require_created_inventory_adoption(canister_id)?;
-        state.next_creation_sequence =
-            state.next_creation_sequence.checked_add(1).ok_or_else(|| {
-                InternalError::resource_exhausted("Canister pool refill sequence is exhausted")
-            })?;
+        state.next_creation_sequence = state
+            .next_creation_sequence
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(())
@@ -682,24 +636,21 @@ impl CanisterPoolOps {
 
     pub fn retry_blocked_creation() -> Result<[u8; 32], InternalError> {
         let mut state = CanisterPoolStore::state();
-        let creation = state.creation.as_ref().ok_or_else(|| {
-            InternalError::unavailable("no blocked Canister pool refill is pending")
-        })?;
+        let creation = state
+            .creation
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         let CanisterPoolCreationProgressRecord::Blocked { failure } = creation.progress else {
-            return Err(InternalError::conflict(
-                "only a blocked Canister pool refill may be retried explicitly",
-            ));
+            return Err(InternalError::conflict());
         };
         if failure == CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow {
-            return Err(InternalError::conflict(
-                "an unresolved expired creation may not issue another paid effect",
-            ));
+            return Err(InternalError::conflict());
         }
         let operation_id = creation.operation_id;
-        state.next_creation_sequence =
-            state.next_creation_sequence.checked_add(1).ok_or_else(|| {
-                InternalError::resource_exhausted("Canister pool refill sequence is exhausted")
-            })?;
+        state.next_creation_sequence = state
+            .next_creation_sequence
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(operation_id)
@@ -710,18 +661,16 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable("Canister pool refill is not pending"))?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if !creation_is_known_unapplied(creation) {
-            return Err(InternalError::conflict(
-                "Canister pool refill cannot be cancelled without known-unapplied evidence",
-            ));
+            return Err(InternalError::conflict());
         }
         require_creation_cost_settled(creation)?;
         let operation_id = creation.operation_id;
-        state.next_creation_sequence =
-            state.next_creation_sequence.checked_add(1).ok_or_else(|| {
-                InternalError::resource_exhausted("Canister pool refill sequence is exhausted")
-            })?;
+        state.next_creation_sequence = state
+            .next_creation_sequence
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(operation_id)
@@ -732,18 +681,16 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable("Canister pool refill is not pending"))?;
+            .ok_or_else(|| InternalError::unavailable())?;
         if !creation_is_known_unapplied_intent(creation) {
-            return Err(InternalError::conflict(
-                "only a known-unapplied expired refill may allocate a new operation",
-            ));
+            return Err(InternalError::conflict());
         }
         require_creation_cost_settled(creation)?;
         let operation_id = creation.operation_id;
-        state.next_creation_sequence =
-            state.next_creation_sequence.checked_add(1).ok_or_else(|| {
-                InternalError::resource_exhausted("Canister pool refill sequence is exhausted")
-            })?;
+        state.next_creation_sequence = state
+            .next_creation_sequence
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(operation_id)
@@ -759,11 +706,7 @@ impl CanisterPoolOps {
             .last_creation_timestamp_ns
             .checked_add(1)
             .map(|minimum| now_ns.max(minimum))
-            .ok_or_else(|| {
-                InternalError::resource_exhausted(
-                    "Canister pool refill timestamp sequence is exhausted",
-                )
-            })
+            .ok_or_else(|| InternalError::resource_exhausted())
     }
 
     #[must_use]
@@ -811,15 +754,11 @@ impl CanisterPoolOps {
         prepared_at_ns: u64,
     ) -> Result<CanisterPoolHandoffView, InternalError> {
         if CanisterPoolStore::handoff_receipt(&canister_id).is_some() {
-            return Err(InternalError::conflict(
-                "Canister pool asset handoff is already complete",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut state = CanisterPoolStore::state();
         if state.creation.is_some() {
-            return Err(InternalError::unavailable(
-                "autonomous Canister pool refill must reconcile before asset handoff",
-            ));
+            return Err(InternalError::unavailable());
         }
         if let Some(existing) = state.handoff {
             if existing.canister_id == canister_id && existing.recipient == recipient {
@@ -830,23 +769,16 @@ impl CanisterPoolOps {
                         recipient,
                     });
                 }
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "Canister pool handoff journal differs from asset state",
-                ));
+                return Err(InternalError::invariant());
             }
-            return Err(InternalError::conflict(
-                "another Canister pool handoff is already pending",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut asset = required_asset(canister_id)?;
         if !matches!(
             asset.status,
             CanisterPoolAssetStatusRecord::Ready | CanisterPoolAssetStatusRecord::Failed(_)
         ) {
-            return Err(InternalError::conflict(
-                "only a ready or failed Canister pool asset may be handed off",
-            ));
+            return Err(InternalError::conflict());
         }
         asset.status = CanisterPoolAssetStatusRecord::HandingOff { recipient };
         asset.updated_at_ns = prepared_at_ns;
@@ -869,25 +801,16 @@ impl CanisterPoolOps {
         completed_at_ns: u64,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let handoff = state
-            .handoff
-            .ok_or_else(|| InternalError::unavailable("Canister pool handoff is not pending"))?;
+        let handoff = state.handoff.ok_or_else(|| InternalError::unavailable())?;
         if handoff.canister_id != canister_id || handoff.recipient != recipient {
-            return Err(InternalError::conflict(
-                "Canister pool handoff completion differs from pending authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let asset = required_asset(canister_id)?;
         if asset.status != (CanisterPoolAssetStatusRecord::HandingOff { recipient }) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Canister pool handoff asset differs from pending authority",
-            ));
+            return Err(InternalError::invariant());
         }
         if CanisterPoolStore::handoff_receipt(&canister_id).is_some() {
-            return Err(InternalError::conflict(
-                "Canister pool handoff receipt already exists",
-            ));
+            return Err(InternalError::conflict());
         }
         CanisterPoolStore::remove(&canister_id);
         CanisterPoolStore::insert_handoff_receipt(
@@ -1085,9 +1008,7 @@ impl CanisterPoolOps {
                     | CanisterPoolAssetStatusRecord::StoreDeletionPending { .. }
             )
         {
-            return Err(InternalError::conflict(
-                "sibling Wasm Store differs from root physical Canister inventory",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(())
     }
@@ -1099,9 +1020,7 @@ impl CanisterPoolOps {
     ) -> Result<(), InternalError> {
         let mut asset = required_asset(canister_id)?;
         if asset.origin != CanisterPoolAssetOriginRecord::InfrastructureStore {
-            return Err(InternalError::conflict(
-                "Store deletion target is not root infrastructure inventory",
-            ));
+            return Err(InternalError::conflict());
         }
         match asset.status {
             CanisterPoolAssetStatusRecord::Store => {
@@ -1113,9 +1032,7 @@ impl CanisterPoolOps {
             CanisterPoolAssetStatusRecord::StoreDeletionPending {
                 operation_id: existing,
             } if existing == operation_id => Ok(()),
-            _ => Err(InternalError::conflict(
-                "Store deletion differs from root physical Canister inventory",
-            )),
+            _ => Err(InternalError::conflict()),
         }
     }
 
@@ -1130,9 +1047,7 @@ impl CanisterPoolOps {
             || asset.status
                 != (CanisterPoolAssetStatusRecord::StoreDeletionPending { operation_id })
         {
-            return Err(InternalError::conflict(
-                "completed Store deletion differs from root physical Canister inventory",
-            ));
+            return Err(InternalError::conflict());
         }
         CanisterPoolStore::remove(&canister_id);
         Ok(())
@@ -1146,19 +1061,13 @@ impl CanisterPoolOps {
 
 fn validate_config(config: &FleetSubnetCanisterPoolConfig) -> Result<(), InternalError> {
     if config.minimum_size == 0 {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root Canister pool minimum_size must be positive",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if config.maximum_size < config.minimum_size {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root Canister pool maximum_size is below minimum_size",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if config.canister_cycles.to_u128() == 0 {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root Canister pool canister_cycles must be positive",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -1181,17 +1090,13 @@ fn require_creation_attempt(
 ) -> Result<(), InternalError> {
     require_creation_operation(creation, operation_id)?;
     if creation.cost_guard_settlement != Some(settlement) {
-        return Err(InternalError::conflict(
-            "Canister pool refill attempt has different cost authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if !matches!(
         creation.progress,
         CanisterPoolCreationProgressRecord::Intent { .. }
     ) {
-        return Err(InternalError::conflict(
-            "Canister pool refill attempt is not in the intent phase",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1201,9 +1106,7 @@ fn require_creation_operation(
     operation_id: [u8; 32],
 ) -> Result<(), InternalError> {
     if creation.operation_id != operation_id {
-        return Err(InternalError::conflict(
-            "Canister pool refill names another durable operation",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1212,9 +1115,7 @@ fn require_creation_cost_settled(
     creation: &CanisterPoolCreationRecord,
 ) -> Result<(), InternalError> {
     if creation.cost_guard_settlement.is_some() {
-        return Err(InternalError::conflict(
-            "Canister pool refill still has pending cost authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1223,9 +1124,7 @@ fn require_created_inventory_adoption(canister_id: Principal) -> Result<(), Inte
     let adopted =
         CanisterPoolStore::get(&canister_id).is_some_and(|asset| created_asset_is_adopted(&asset));
     if !adopted {
-        return Err(InternalError::conflict(
-            "Canister pool refill cannot commit before exact inventory adoption",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1267,19 +1166,13 @@ fn validate_new_asset_capacity(
         return Ok(());
     }
     if CanisterPoolOps::standby_capacity_is_exhausted(config) {
-        return Err(InternalError::resource_exhausted(
-            "Canister pool maximum_size is exhausted",
-        ));
+        return Err(InternalError::resource_exhausted());
     }
     Ok(())
 }
 
 fn required_asset(canister_id: Principal) -> Result<CanisterPoolAssetRecord, InternalError> {
-    CanisterPoolStore::get(&canister_id).ok_or_else(|| {
-        InternalError::unavailable(format!(
-            "Canister pool asset {canister_id} is not registered"
-        ))
-    })
+    CanisterPoolStore::get(&canister_id).ok_or_else(|| InternalError::unavailable())
 }
 
 fn recycling_completion(
@@ -1294,14 +1187,10 @@ fn recycling_completion(
         return Ok(None);
     }
     let CanisterPoolAssetStatusRecord::Recycling { claim, reset } = &asset.status else {
-        return Err(InternalError::conflict(
-            "Component membership removal differs from physical recycling inventory",
-        ));
+        return Err(InternalError::conflict());
     };
     if claim.component != component {
-        return Err(InternalError::conflict(
-            "Component membership removal names a different physical workload owner",
-        ));
+        return Err(InternalError::conflict());
     }
     let next_status = match reset {
         CanisterPoolRecycleResetRecord::Ready => CanisterPoolAssetStatusRecord::Ready,
@@ -1309,9 +1198,7 @@ fn recycling_completion(
             CanisterPoolAssetStatusRecord::Failed(reason.clone())
         }
         CanisterPoolRecycleResetRecord::Pending => {
-            return Err(InternalError::unavailable(
-                "Component workload recycling reset has not reached a terminal outcome",
-            ));
+            return Err(InternalError::unavailable());
         }
     };
     Ok(Some((claim.clone(), next_status)))

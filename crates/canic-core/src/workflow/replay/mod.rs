@@ -14,12 +14,10 @@ use crate::{
 #[must_use]
 pub fn abort_reserved_receipt_after_failure(
     token: &ReplayReceiptToken,
-    mut error: InternalError,
-    context: &'static str,
+    error: InternalError,
+    _context: &'static str,
 ) -> InternalError {
-    if let Err(cleanup_error) = abort_reserved_receipt(token) {
-        error = error.with_diagnostic_context(format!("{context}: {cleanup_error}"));
-    }
+    let _ = abort_reserved_receipt(token);
     error
 }
 
@@ -29,12 +27,10 @@ pub fn mark_recovery_required_after_failure(
     token: &ReplayReceiptToken,
     reason: RecoveryReason,
     now_ns: u64,
-    mut error: InternalError,
-    context: &'static str,
+    error: InternalError,
+    _context: &'static str,
 ) -> InternalError {
-    if let Err(recovery_error) = mark_recovery_required(token, reason, now_ns) {
-        error = error.with_diagnostic_context(format!("{context}: {recovery_error}"));
-    }
+    let _ = mark_recovery_required(token, reason, now_ns);
     error
 }
 
@@ -43,7 +39,6 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        dto::error::{Error, ErrorCode},
         model::replay::{CommandKind, OperationId, ReplayActor},
         ops::{
             replay::receipt::{
@@ -76,13 +71,13 @@ mod tests {
     }
 
     fn primary_error() -> InternalError {
-        InternalError::public(Error::conflict("primary failure"))
+        InternalError::public(crate::diagnostics::codes::STATE_CONFLICT)
     }
 
     fn assert_primary_error_preserved(error: &InternalError) {
         assert_eq!(
-            error.public_error().map(|error| error.code),
-            Some(ErrorCode::Conflict)
+            error.public_error().code(),
+            crate::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 

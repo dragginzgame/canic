@@ -79,7 +79,7 @@ async fn test() -> Result<(), Error> {
 #[canic_update(public)]
 async fn begin_timer_probe_intent(resource_seed: u8, ttl_secs: Option<u64>) -> Result<u64, Error> {
     let resource_key = IntentResourceKey::try_new(format!("timer_probe:{resource_seed}"))
-        .map_err(|err| Error::invalid(err.to_string()))?;
+        .map_err(|err| Error::from_registered(canic::diagnostics::codes::REQUEST_INVALID))?;
     LocalIntentApi::begin(BeginLocalIntentInput {
         resource_key,
         quantity: 1,
@@ -212,7 +212,9 @@ fn dispatch_trapping_async_recovery_probe() -> bool {
 async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     if let Err(err) = canic::access::env::build_network_local() {
-        return Err(Error::forbidden(err.to_string()));
+        return Err(Error::from_registered(
+            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
 
     Ok(())

@@ -4,10 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::{
-    InternalError, InternalErrorClass, InternalErrorOrigin,
-    model::placement::sharding::CreateBlockedReason,
-};
+use crate::{InternalError, diagnostics::codes, model::placement::sharding::CreateBlockedReason};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -128,17 +125,23 @@ impl ShardingMetricReason {
 
     /// Classify one internal error into a bounded metric reason.
     #[must_use]
-    pub(crate) const fn from_error(err: &InternalError) -> Self {
-        match (err.class(), err.origin()) {
-            (InternalErrorClass::Infra, InternalErrorOrigin::Infra) => Self::ManagementCall,
-            (InternalErrorClass::Access | InternalErrorClass::Domain, _) => Self::PolicyDenied,
-            (
-                InternalErrorClass::Invariant
-                | InternalErrorClass::Ops
-                | InternalErrorClass::Workflow,
-                _,
-            ) => Self::InvalidState,
-            _ => Self::Unknown,
+    pub(crate) fn from_error(err: &InternalError) -> Self {
+        let code = err.code();
+        let public_code = err.public_error().code();
+        if code == codes::PLATFORM_FAILED {
+            Self::ManagementCall
+        } else if code == codes::STATE_CONFLICT
+            || public_code == codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            || public_code == codes::REQUEST_INVALID.raw_code()
+        {
+            Self::PolicyDenied
+        } else if code == codes::STATE_INVALID
+            || code == codes::STATE_FAILED
+            || code == codes::LIFECYCLE_FAILED
+        {
+            Self::InvalidState
+        } else {
+            Self::Unknown
         }
     }
 

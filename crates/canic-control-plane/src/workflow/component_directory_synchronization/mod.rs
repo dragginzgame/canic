@@ -20,7 +20,7 @@ use crate::{
 use candid::Principal;
 use canic_core::{
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::{
             component_provisioning_receipt::RootComponentProvisioningReceiptOps,
             component_runtime::ComponentRuntimeOps, fleet_registry::FleetRegistryOps, ic::IcOps,
@@ -47,13 +47,9 @@ pub async fn synchronize(
     let (authority, root) = validated_root_authority()?;
     require_coordinator(caller, authority.binding.authority.binding.coordinator)?;
     if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Active {
-        return Err(InternalError::conflict(
-            "scale-out Directory synchronization requires an Active root runtime",
-        ));
+        return Err(InternalError::conflict());
     }
-    let registry = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let registry = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     RootComponentDirectorySynchronizationOps::validate_command(&request)?;
 
     let prepared = RootComponentDirectorySynchronizationOps::is_prepared(request.operation_id)
@@ -70,9 +66,7 @@ pub async fn synchronize(
         prepare_and_commit(&request, root, registry.store_bootstrap.clone()).await?
     };
     if mirror.fleet_subnet_root != root || mirror.version != request.published_fleet_registry {
-        return Err(InternalError::conflict(
-            "root Fleet Registry mirror differs from Directory synchronization authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let view = prepared.map_or_else(
         || RootComponentDirectorySynchronizationOps::status(&request),
@@ -81,9 +75,7 @@ pub async fn synchronize(
     if view.fleet_directory_content_hash
         != RootComponentProvisioningReceiptOps::fleet_directory_content_hash(&mirror.directory)?
     {
-        return Err(InternalError::conflict(
-            "root Fleet Directory differs from the durable synchronization authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let started_at_ns = IcOps::now_nanos();
     let proposed = if view.in_flight.is_none() && !view.complete {
@@ -140,19 +132,13 @@ fn next_intent(
     fleet_directory: &canic_core::dto::fleet_registry::FleetDirectorySnapshot,
     started_at_ns: u64,
 ) -> Result<Option<RootComponentDirectorySynchronizationIntentView>, InternalError> {
-    let index = usize::try_from(view.synchronized_component_count).map_err(|_| {
-        InternalError::resource_exhausted("Component Directory cursor exceeds usize")
-    })?;
+    let index = usize::try_from(view.synchronized_component_count)
+        .map_err(|_| InternalError::resource_exhausted())?;
     let Some(target) = view.targets.get(index) else {
         return Ok(None);
     };
-    let allocation =
-        ComponentRegistryOps::allocation(target.allocation_operation_id).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "affected service Component allocation disappeared",
-            )
-        })?;
+    let allocation = ComponentRegistryOps::allocation(target.allocation_operation_id)
+        .ok_or_else(|| InternalError::invariant())?;
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
     let plan = ComponentRegistryOps::prepare_directory_refresh(
         target,
@@ -178,13 +164,8 @@ async fn synchronize_target(
     fleet_directory: &canic_core::dto::fleet_registry::FleetDirectorySnapshot,
     intent: &RootComponentDirectorySynchronizationIntentView,
 ) -> Result<RootComponentDirectorySynchronizationResponse, InternalError> {
-    let allocation =
-        ComponentRegistryOps::allocation(intent.allocation_operation_id).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "affected service Component allocation disappeared",
-            )
-        })?;
+    let allocation = ComponentRegistryOps::allocation(intent.allocation_operation_id)
+        .ok_or_else(|| InternalError::invariant())?;
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
     let (binding, maximum_registry_bytes) = group_member_runtime_limits(&retained.deployment)?;
     let plan = ComponentRegistryOps::directory_refresh_plan_for_intent(
@@ -194,10 +175,7 @@ async fn synchronize_target(
     )?;
     let partition = ComponentRegistryOps::commit_directory_refresh(&plan, maximum_registry_bytes)?;
     if component_registry::component_directory_head(&partition) != plan.authority.component {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "committed Component Directory refresh differs from its durable plan",
-        ));
+        return Err(InternalError::invariant());
     }
     let runtime_request = ComponentRuntimeDirectorySynchronizationRequest {
         operation_id: intent.allocation_operation_id,
@@ -229,12 +207,12 @@ fn validate_synchronized_target_coverage(
     committed_partition: &crate::view::component_registry::ComponentRegistryPartitionView,
     status: &canic_core::dto::component_registry::ComponentRuntimeStatusResponse,
 ) -> Result<(), InternalError> {
-    let current = ComponentRegistryOps::partition(intent.component)?.ok_or_else(|| {
-        InternalError::unavailable("synchronized service Component partition is absent")
-    })?;
-    let authority = status.authority.as_ref().ok_or_else(|| {
-        InternalError::conflict("synchronized service Component has no current Directory")
-    })?;
+    let current = ComponentRegistryOps::partition(intent.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
+    let authority = status
+        .authority
+        .as_ref()
+        .ok_or_else(|| InternalError::conflict())?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(authority)?;
     let direct_children =
         component_registry::active_component_direct_children(&current, intent.canister_id)?;
@@ -252,9 +230,7 @@ fn validate_synchronized_target_coverage(
     .into_iter()
     .all(|matches| matches);
     if !coverage_is_current {
-        return Err(InternalError::conflict(
-            "active service Component Directory does not cover durable synchronization intent",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -266,9 +242,7 @@ fn group_member_runtime_limits(
         binding, limits, ..
     } = deployment
     else {
-        return Err(InternalError::conflict(
-            "Fleet-service member is not protected by a Component Group deployment",
-        ));
+        return Err(InternalError::conflict());
     };
     Ok((binding.clone(), limits.maximum_registry_bytes))
 }
@@ -277,7 +251,5 @@ fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), 
     if caller == coordinator {
         return Ok(());
     }
-    Err(InternalError::forbidden(
-        "root Component Directory synchronization requires the protected Fleet Coordinator",
-    ))
+    Err(InternalError::forbidden())
 }

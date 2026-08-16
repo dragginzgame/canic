@@ -10,7 +10,7 @@ use super::{
 };
 use candid::{CandidType, Principal};
 use canic_core::{
-    control_plane_support::error::{InternalError, InternalErrorOrigin},
+    control_plane_support::error::InternalError,
     dto::{
         fleet_registry::{
             FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
@@ -52,9 +52,7 @@ impl FleetCoordinatorOps {
             if existing.request == request {
                 return Ok(existing.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion-readiness intent already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let removal = require_removed_root_publication(
             &current,
@@ -78,9 +76,7 @@ impl FleetCoordinatorOps {
         .into_iter()
         .all(|valid| valid);
         if !request_is_valid {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root deletion-readiness intent is incomplete",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let mut response = FleetSubnetRootDeletionReadinessIntentResponse {
             request,
@@ -118,20 +114,14 @@ impl FleetCoordinatorOps {
             if existing.request == request {
                 return Ok(existing.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion readiness already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = find_root_deletion_readiness_intent(
             &current,
             request.operation_id,
             request.fleet_subnet_root,
         )?
-        .ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root deletion-readiness intent has not been prepared",
-            )
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
         let request_is_valid = [
             request.expected_intent_hash == intent.intent_hash,
             request.observed_cycles_after_reclamation
@@ -143,9 +133,7 @@ impl FleetCoordinatorOps {
         .into_iter()
         .all(|valid| valid);
         if !request_is_valid {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion readiness differs from durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut response = FleetSubnetRootDeletionReadinessResponse {
             request,
@@ -190,18 +178,14 @@ impl FleetCoordinatorOps {
             if existing.executor == executor && existing.request == request {
                 return Ok(existing.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion execution already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let readiness = find_root_deletion_readiness(
             &current,
             request.operation_id,
             request.fleet_subnet_root,
         )?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root deletion readiness is not complete")
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
         validate_root_deletion_execution_request(executor, &request, readiness, prepared_at_ns)?;
         let mut response = FleetSubnetRootDeletionExecutionResponse {
             request,
@@ -230,7 +214,7 @@ impl FleetCoordinatorOps {
         let current = Self::current()?;
         find_root_deletion_execution(&current, request.operation_id, request.fleet_subnet_root)?
             .cloned()
-            .ok_or_else(|| InternalError::unavailable("Fleet Subnet Root deletion has not begun"))
+            .ok_or_else(|| InternalError::unavailable())
     }
 
     pub(crate) fn complete_root_deletion(
@@ -254,18 +238,14 @@ impl FleetCoordinatorOps {
             if retry_is_exact {
                 return Ok(existing.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion completion already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let execution = find_root_deletion_execution(
             &current,
             request.operation_id,
             request.fleet_subnet_root,
         )?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root deletion execution has not begun")
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
         let completion_is_exact = [
             execution.executor == executor,
             execution.execution_hash == request.expected_execution_hash,
@@ -275,9 +255,7 @@ impl FleetCoordinatorOps {
         .into_iter()
         .all(|valid| valid);
         if !completion_is_exact {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root deletion completion differs from execution intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut response = FleetSubnetRootDeletionResponse {
             operation_id: request.operation_id,
@@ -311,7 +289,7 @@ impl FleetCoordinatorOps {
         let current = Self::current()?;
         find_root_deletion(&current, request.operation_id, request.fleet_subnet_root)?
             .cloned()
-            .ok_or_else(|| InternalError::unavailable("Fleet Subnet Root deletion is not complete"))
+            .ok_or_else(|| InternalError::unavailable())
     }
 }
 
@@ -339,9 +317,7 @@ fn require_root_deletion_caller(
     fleet_subnet_root: Principal,
 ) -> Result<(), InternalError> {
     if caller != fleet_subnet_root {
-        return Err(InternalError::forbidden(
-            "Fleet Subnet Root deletion readiness caller differs from its root",
-        ));
+        return Err(InternalError::forbidden());
     }
     Ok(())
 }
@@ -351,10 +327,7 @@ fn require_coordinator_identity(
     coordinator: Principal,
 ) -> Result<(), InternalError> {
     if current.authority.binding.coordinator != coordinator {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Fleet Coordinator runtime principal differs from protected authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -369,9 +342,7 @@ fn require_removed_root_publication(
             && entry.status == FleetSubnetRootStatus::Removed
     });
     if !target_is_removed {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root deletion requires an exact Removed Registry row",
-        ));
+        return Err(InternalError::conflict());
     }
     current
         .root_removal_publication_receipts
@@ -380,18 +351,14 @@ fn require_removed_root_publication(
             receipt.request.final_inventory.operation_id == operation_id
                 && receipt.request.final_inventory.fleet_subnet_root == fleet_subnet_root
         })
-        .ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root deletion lacks its logical-removal publication receipt",
-            )
-        })
+        .ok_or_else(|| InternalError::unavailable())
 }
 
 fn find_root_deletion_record<'a, T>(
     records: &'a [T],
     requested: RootDeletionIdentity,
     identity: impl Fn(&T) -> RootDeletionIdentity,
-    label: &'static str,
+    _label: &'static str,
 ) -> Result<Option<&'a T>, InternalError> {
     let mut matching = records
         .iter()
@@ -400,9 +367,7 @@ fn find_root_deletion_record<'a, T>(
         return Ok(None);
     };
     if identity(found) != requested {
-        return Err(InternalError::conflict(format!(
-            "{label} identity already has different authority"
-        )));
+        return Err(InternalError::conflict());
     }
     if matching.next().is_some() {
         return Err(receipt_invariant(
@@ -499,15 +464,11 @@ fn root_deletion_retained_cycles_target(
 ) -> Result<u128, InternalError> {
     let freezing_reserve = idle_cycles_burned_per_day
         .checked_mul(freezing_threshold_seconds)
-        .ok_or_else(|| {
-            InternalError::invalid_input("Fleet Subnet Root freezing reserve overflows u128")
-        })?
+        .ok_or_else(|| InternalError::invalid_input())?
         .div_ceil(SECONDS_PER_DAY);
     freezing_reserve
         .checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
-        .ok_or_else(|| {
-            InternalError::invalid_input("Fleet Subnet Root deletion reserve overflows u128")
-        })
+        .ok_or_else(|| InternalError::invalid_input())
 }
 
 fn validate_root_deletion_execution_request(
@@ -538,9 +499,7 @@ fn validate_root_deletion_execution_request(
     .into_iter()
     .all(|valid| valid);
     if !execution_is_exact {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root deletion execution differs from durable readiness authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -548,14 +507,10 @@ fn validate_root_deletion_execution_request(
 fn response_hash<T: CandidType + Serialize>(
     domain: &[u8],
     response_with_zero_hash: &T,
-    label: &str,
+    _label: &str,
 ) -> Result<[u8; 32], InternalError> {
-    let payload = candid::encode_one(response_with_zero_hash).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("Fleet Subnet Root {label} cannot be encoded: {error}"),
-        )
-    })?;
+    let payload =
+        candid::encode_one(response_with_zero_hash).map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);
     hasher.update(payload);

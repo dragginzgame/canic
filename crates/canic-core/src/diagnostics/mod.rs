@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn raw_and_registered_formatting_is_compact_and_numeric() {
         let raw = DiagnosticCode::from_raw(65_000);
-        let registered = codes::ACCESS_DEPENDENCY_UNAVAILABLE;
+        let registered = codes::ACCESS_UNAVAILABLE;
 
         assert_eq!(raw.raw(), 65_000);
         assert_eq!(raw.to_string(), "E65000");

@@ -1,8 +1,6 @@
 use super::*;
-use crate::{
-    InternalErrorClass,
-    dto::error::ErrorCode,
-    storage::stable::authority_restore::{AuthorityRestoreFenceData, AuthorityRestoreFenceStore},
+use crate::storage::stable::authority_restore::{
+    AuthorityRestoreFenceData, AuthorityRestoreFenceStore,
 };
 
 fn principal(byte: u8) -> Principal {
@@ -27,8 +25,8 @@ fn restored_sealed_authority_cannot_resume_after_history_advances() {
     let error = AuthorityRestoreFenceOps::resume(request, authority, 12, 17)
         .expect_err("advanced history must remain fenced");
     assert_eq!(
-        error.public_error().map(|error| error.code),
-        Some(ErrorCode::Unavailable)
+        error.public_error().code(),
+        crate::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
     );
     assert_eq!(
         AuthorityRestoreFenceOps::status().expect("status").phase,
@@ -78,15 +76,15 @@ fn sealed_prepare_replays_exactly_and_rejects_another_operation() {
         AuthorityRestoreFenceOps::prepare(conflicting, authority, 59, 61)
             .expect_err("different prepare operation must fail")
             .public_error()
-            .map(|error| error.code),
-        Some(ErrorCode::Conflict)
+            .code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(
         AuthorityRestoreFenceOps::resume(conflicting, authority, 59, 61)
             .expect_err("different resume operation must fail")
             .public_error()
-            .map(|error| error.code),
-        Some(ErrorCode::Conflict)
+            .code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(AuthorityRestoreFenceOps::status().expect("status"), sealed);
 }
@@ -151,8 +149,8 @@ fn snapshot_seal_requires_a_nonzero_operation_identity() {
     )
     .expect_err("zero operation identity must fail");
     assert_eq!(
-        error.public_error().map(|error| error.code),
-        Some(ErrorCode::OperationIdRequired)
+        error.public_error().code(),
+        crate::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 }
 
@@ -160,13 +158,13 @@ fn snapshot_seal_requires_a_nonzero_operation_identity() {
 fn missing_or_mismatched_authority_fails_closed() {
     reset();
     let missing = AuthorityRestoreFenceOps::is_sealed_for(principal(4)).expect_err("missing state");
-    assert_eq!(missing.class(), InternalErrorClass::Invariant);
+    assert_eq!(missing.code(), crate::diagnostics::codes::STATE_INVALID);
 
     AuthorityRestoreFenceOps::initialize(principal(5)).expect("initialize");
     let mismatched =
         AuthorityRestoreFenceOps::is_sealed_for(principal(6)).expect_err("mismatched authority");
     assert_eq!(
-        mismatched.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        mismatched.public_error().code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }

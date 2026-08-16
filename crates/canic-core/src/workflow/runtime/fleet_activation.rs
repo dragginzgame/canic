@@ -5,7 +5,7 @@
 //! Boundary: the runtime role selects root-only projection before ops validates the record.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     domain::policy::pure::{
         PolicyError,
@@ -135,28 +135,21 @@ impl FleetActivationWorkflow {
         if root_status.identity.operation_id != request.operation_id
             || root_status.credential != Some(request.credential)
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "Fleet activation resume identity does not match protected root state",
-            ));
+            return Err(InternalError::invariant());
         }
-        let manifest = root_status.cascade_manifest.clone().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "Fleet activation resume requires a protected cascade manifest",
-            )
-        })?;
+        let manifest = root_status
+            .cascade_manifest
+            .clone()
+            .ok_or_else(|| InternalError::invariant())?;
 
         for entry in &manifest {
             resume_nonroot_activation(entry, &root_status, request).await?;
         }
 
-        let root_cascade = root_status.cascade.clone().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "Fleet activation resume requires protected root cascade evidence",
-            )
-        })?;
+        let root_cascade = root_status
+            .cascade
+            .clone()
+            .ok_or_else(|| InternalError::invariant())?;
         let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
             &root_status.identity,
             &root_cascade,
@@ -225,12 +218,9 @@ impl FleetActivationWorkflow {
         if root_status.phase == FleetActivationPhase::Prepared {
             return Ok(());
         }
-        let credential = root_status.credential.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "active root Fleet is missing its credential generation",
-            )
-        })?;
+        let credential = root_status
+            .credential
+            .ok_or_else(|| InternalError::invariant())?;
         let expected_cascade = FleetCascadeActivationEvidence::Applied {
             state_snapshot_hash: FleetActivationEvidenceOps::state_snapshot_hash(&state)?,
             topology_snapshot_hash: FleetActivationEvidenceOps::topology_snapshot_hash(&topology)?,
@@ -406,29 +396,20 @@ async fn reconcile_nonroot_activation_status_after_call_error(
     root_status: &FleetActivationStatusResponse,
     expected_cascade: &FleetCascadeActivationEvidence,
     required_phase: Option<FleetActivationPhase>,
-    operation: &str,
+    _operation: &str,
     call_error: InternalError,
 ) -> Result<FleetActivationStatusResponse, InternalError> {
-    let observed: FleetActivationStatusResponse = match RpcOps::call_rpc_result(
-        pid,
-        protocol::CANIC_FLEET_ACTIVATION_STATUS,
-        (),
-    )
-    .await
-    {
-        Ok(status) => status,
-        Err(observation_error) => {
-            return Err(call_error.with_diagnostic_context(format!(
-                "could not reconcile uncertain child {operation} outcome for {pid}: {observation_error}"
-            )));
-        }
-    };
-    if let Err(observation_error) =
+    let observed: FleetActivationStatusResponse =
+        match RpcOps::call_rpc_result(pid, protocol::CANIC_FLEET_ACTIVATION_STATUS, ()).await {
+            Ok(status) => status,
+            Err(_observation_error) => {
+                return Err(call_error);
+            }
+        };
+    if let Err(_observation_error) =
         validate_nonroot_activation_status(root_status, &observed, expected_cascade, required_phase)
     {
-        return Err(call_error.with_diagnostic_context(format!(
-            "child {operation} outcome for {pid} was not established by status: {observation_error}"
-        )));
+        return Err(call_error);
     }
     Ok(observed)
 }
@@ -450,10 +431,7 @@ fn validate_nonroot_activation_status(
         }
         || required_phase.is_some_and(|phase| child_status.phase != phase)
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "provisioned non-root status does not match the active root Fleet and propagated evidence",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -462,10 +440,7 @@ fn require_empty_prepared_credential_authority() -> Result<(), InternalError> {
     if !AuthStateOps::root_issuer_policies().is_empty()
         || !AuthStateOps::root_issuer_renewal_templates().is_empty()
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Fleet activation with configured issuer credentials requires the credential-bundle activation slice",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -475,16 +450,10 @@ fn require_root_activation_wasm_store(
     wasm_store: Principal,
 ) -> Result<(), InternalError> {
     if wasm_store == Principal::anonymous() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "fresh Fleet activation Wasm Store is anonymous",
-        ));
+        return Err(InternalError::invariant());
     }
     if wasm_store == root_pid {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "fresh Fleet activation Wasm Store equals the Fleet Subnet Root",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -508,7 +477,6 @@ fn require_endpoint_for_phase(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InternalErrorClass;
     use crate::ids::{
         AppId, CanonicalNetworkId, EndpointCallKind, EndpointId, FleetBinding, FleetId, FleetKey,
         ReleaseBuildId, ReleaseBuildNonce,
@@ -523,7 +491,7 @@ mod tests {
 
     fn assert_invariant(result: Result<(), InternalError>) {
         let error = result.expect_err("activation inventory must fail");
-        assert_eq!(error.class(), InternalErrorClass::Invariant);
+        assert_eq!(error.code(), crate::diagnostics::codes::STATE_INVALID);
     }
 
     #[test]

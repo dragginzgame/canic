@@ -19,9 +19,7 @@ pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> 
     if caller_is_controller(&caller) {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not a controller of this canister"
-        )))
+        Err(AccessError::ControllerRequired)
     }
 }
 
@@ -29,12 +27,9 @@ pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> 
 /// Missing whitelist configuration fails closed.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
-    let whitelisted = ConfigOps::is_whitelisted(&caller)
-        .map_err(|_| dependency_unavailable("config not initialized"))?;
+    let whitelisted = ConfigOps::is_whitelisted(&caller).map_err(dependency_unavailable)?;
     if !whitelisted {
-        return Err(AccessError::Denied(format!(
-            "caller '{caller}' is not on the whitelist"
-        )));
+        return Err(AccessError::WhitelistRequired);
     }
 
     Ok(())
@@ -46,42 +41,31 @@ pub(super) async fn is_child(caller: Principal) -> Result<(), AccessError> {
     if CanisterChildrenOps::contains_pid(&caller) {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not a child of this canister"
-        )))
+        Err(AccessError::DirectChildRequired)
     }
 }
 
 /// Require that the caller is the configured parent canister.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_parent(caller: Principal) -> Result<(), AccessError> {
-    let snapshot = EnvOps::snapshot();
-    let parent_pid = snapshot
-        .record
-        .parent_pid
-        .ok_or_else(|| dependency_unavailable("parent pid unavailable"))?;
+    let parent_pid = EnvOps::parent_pid().map_err(dependency_unavailable)?;
 
     if parent_pid == caller {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not the parent of this canister"
-        )))
+        Err(AccessError::ParentRequired)
     }
 }
 
 /// Require that the caller equals the configured root canister.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_root(caller: Principal) -> Result<(), AccessError> {
-    let root_pid =
-        EnvOps::root_pid().map_err(|_| dependency_unavailable("root pid unavailable"))?;
+    let root_pid = EnvOps::root_pid().map_err(dependency_unavailable)?;
 
     if caller == root_pid {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not root"
-        )))
+        Err(AccessError::RootRequired)
     }
 }
 
@@ -91,8 +75,6 @@ pub(super) async fn is_same_canister(caller: Principal) -> Result<(), AccessErro
     if caller == canister_self() {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not the current canister"
-        )))
+        Err(AccessError::SelfRequired)
     }
 }

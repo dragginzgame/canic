@@ -114,7 +114,6 @@ fn durable_publication_cost_guard_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::dto::error::ErrorCode;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -194,8 +193,8 @@ mod tests {
             .expect_err("publication must reject insufficient cycle headroom");
 
         assert_eq!(
-            err.public_error().map(|public| public.code),
-            Some(ErrorCode::ResourceExhausted)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 

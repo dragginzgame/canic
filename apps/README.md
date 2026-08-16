@@ -32,6 +32,12 @@ its configuration-compiled Fleet Subnet Root under its own directory.
   - `user_hub/` + `user_shard/` – local sharding walkthrough roles with
     human-readable planning, assignment, and shard inspection endpoints.
   - `canic.toml` – shared demo topology referenced by each demo App canister `build.rs`.
+- `saltz/` – non-destructive foundation for the Saltz Cycle Burn Rate artwork.
+  - `root/` – ordinary Fleet Subnet Root package.
+  - `burner/` – inert Component shell with no burn, timer or run-state surface.
+  - `preview/` – standalone data-only waveform preview with no image pipeline.
+  - `canic.toml` – single-Burner application topology; configuration alone
+    grants no experiment or mainnet authority.
 
 ## Local Workflow
 

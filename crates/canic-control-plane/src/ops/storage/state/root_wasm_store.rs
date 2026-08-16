@@ -19,8 +19,7 @@ use crate::{
     view::state::{PublicationStoreStateView, WasmStoreView},
 };
 use canic_core::{
-    cdk::types::Principal,
-    control_plane_support::error::{InternalError, InternalErrorOrigin},
+    cdk::types::Principal, control_plane_support::error::InternalError,
     dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
     ids::FleetSubnetWasmStoreAuthority,
 };
@@ -109,12 +108,7 @@ impl RootWasmStoreStateOps {
             adopted_at_ns: None,
         })
         .map(|_| ())
-        .map_err(|reason| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!("failed to begin sibling Wasm Store adoption: {reason:?}"),
-            )
-        })
+        .map_err(|_reason| InternalError::invariant())
     }
 
     pub fn commit_sibling_wasm_store_adoption(
@@ -124,12 +118,7 @@ impl RootWasmStoreStateOps {
     ) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
         let record =
             RootWasmStoreState::commit_sibling_wasm_store_adoption(operation_id, adopted_at_ns)
-                .map_err(|reason| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        format!("failed to commit sibling Wasm Store adoption: {reason:?}"),
-                    )
-                })?;
+                .map_err(|_reason| InternalError::invariant())?;
         adoption_response(record, authority)
     }
 
@@ -280,16 +269,11 @@ fn adoption_response(
 ) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
     validate_adoption_authority(&record, record.operation_id, &authority)?;
     if record.phase != SiblingWasmStoreAdoptionPhaseRecord::Verified {
-        return Err(InternalError::unavailable(
-            "sibling Wasm Store adoption has not reached terminal verification",
-        ));
+        return Err(InternalError::unavailable());
     }
-    let adopted_at_ns = record.adopted_at_ns.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "verified sibling Wasm Store adoption omitted its terminal timestamp",
-        )
-    })?;
+    let adopted_at_ns = record
+        .adopted_at_ns
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(FleetSubnetWasmStoreAdoptionResponse {
         operation_id: record.operation_id,
         authority,
@@ -324,9 +308,7 @@ fn validate_adoption_authority(
         final_controllers: record.final_controllers.clone(),
     };
     if observed != expected {
-        return Err(InternalError::conflict(
-            "sibling Wasm Store adoption receipt differs from protected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }

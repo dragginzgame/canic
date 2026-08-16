@@ -9,23 +9,32 @@ use super::super::delegated::{
 use crate::InternalError;
 
 pub(super) fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError) -> InternalError {
-    InternalError::invalid_input(err.to_string())
+    let code = match err {
+        PrepareDelegationCertError::CertTtlZero
+        | PrepareDelegationCertError::Audience(_)
+        | PrepareDelegationCertError::Canonical(_)
+        | PrepareDelegationCertError::CertRules(_) => crate::diagnostics::codes::SECURITY_INVALID,
+        PrepareDelegationCertError::CertExpiresAtOverflow => {
+            crate::diagnostics::codes::TIME_CAPACITY
+        }
+    };
+    InternalError::public(code)
 }
 
 pub(super) fn map_install_active_delegation_proof_error(
     err: InstallActiveDelegationProofError<InternalError>,
 ) -> InternalError {
     match err {
-        err @ (InstallActiveDelegationProofError::IssuerMismatch
-        | InstallActiveDelegationProofError::Canonical(_)) => {
-            InternalError::invalid_input(err.to_string())
+        InstallActiveDelegationProofError::IssuerMismatch => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
         }
-        err @ InstallActiveDelegationProofError::CertNotYetValid => {
-            InternalError::auth_proof_pending(err.to_string())
+        InstallActiveDelegationProofError::Canonical(_) => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID)
         }
-        err @ InstallActiveDelegationProofError::CertExpired => {
-            InternalError::auth_proof_expired(err.to_string())
+        InstallActiveDelegationProofError::CertNotYetValid => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
         }
+        InstallActiveDelegationProofError::CertExpired => InternalError::auth_proof_expired(),
         InstallActiveDelegationProofError::RootProofInvalid(cause) => cause,
     }
 }
@@ -37,28 +46,27 @@ pub(super) fn map_install_active_delegation_proof_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::error::ErrorCode;
 
     #[test]
     fn active_proof_install_time_and_identity_failures_keep_public_causes() {
         let cases = [
             (
                 InstallActiveDelegationProofError::CertNotYetValid,
-                ErrorCode::AuthProofPending,
+                crate::diagnostics::codes::SECURITY_INVALID_STATE.raw_code(),
             ),
             (
                 InstallActiveDelegationProofError::CertExpired,
-                ErrorCode::AuthProofExpired,
+                crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
             ),
             (
                 InstallActiveDelegationProofError::IssuerMismatch,
-                ErrorCode::InvalidInput,
+                crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
             ),
         ];
 
         for (err, expected) in cases {
             let mapped = map_install_active_delegation_proof_error(err);
-            assert_eq!(mapped.public_error().map(|err| err.code), Some(expected));
+            assert_eq!(mapped.public_error().code(), expected);
         }
     }
 
@@ -66,13 +74,13 @@ mod tests {
     fn active_proof_install_preserves_typed_root_proof_cause() {
         let mapped = map_install_active_delegation_proof_error(
             InstallActiveDelegationProofError::RootProofInvalid(
-                InternalError::auth_material_stale("root policy changed"),
+                InternalError::auth_material_stale(),
             ),
         );
 
         assert_eq!(
-            mapped.public_error().map(|err| err.code),
-            Some(ErrorCode::AuthMaterialStale)
+            mapped.public_error().code(),
+            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
         );
     }
 }

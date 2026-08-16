@@ -14,7 +14,7 @@ use canic_core::api::lifecycle::metrics::{
 };
 use canic_core::control_plane_support::{
     config::ComponentTopology,
-    error::{InternalError, InternalErrorOrigin},
+    error::InternalError,
     ops::{
         config::ConfigOps,
         ic::build_network::BuildNetworkOps,
@@ -275,12 +275,8 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 /// IC builds resolve the authoritative subnet from the NNS registry. Local and
 /// test builds use the explicit subnet identity seeded by lifecycle init.
 pub async fn root_set_subnet_id() -> Result<(), InternalError> {
-    let build_network = BuildNetworkOps::build_network().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "build network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
-        )
-    })?;
+    let build_network =
+        BuildNetworkOps::build_network().ok_or_else(|| InternalError::invariant())?;
 
     if build_network != BuildNetwork::Ic {
         let subnet_pid = EnvOps::subnet_pid()?;
@@ -298,15 +294,9 @@ pub async fn root_set_subnet_id() -> Result<(), InternalError> {
             Ok(())
         }
 
-        Ok(None) => Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "try_get_current_subnet_pid returned None on ic",
-        )),
+        Ok(None) => Err(InternalError::lifecycle_failure()),
 
-        Err(err) => Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("try_get_current_subnet_pid failed on ic: {err}"),
-        )),
+        Err(_err) => Err(InternalError::lifecycle_failure()),
     }
 }
 

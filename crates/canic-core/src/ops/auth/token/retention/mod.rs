@@ -75,17 +75,11 @@ pub(super) fn prune_and_admit(prepared_by: Principal, now_ns: u64) -> Result<(),
             .filter(|key| key.belongs_to(prepared_by))
             .count();
         if caller_count >= DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS.max_active_per_actor {
-            return Err(InternalError::resource_exhausted(format!(
-                "delegated token preparation capacity exceeded for caller; max_retained={}",
-                DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS.max_active_per_actor
-            )));
+            return Err(InternalError::resource_exhausted());
         }
 
         if retained.len() >= DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS.max_active_per_command_kind {
-            return Err(InternalError::resource_exhausted(format!(
-                "delegated token preparation global capacity exceeded; max_retained={}",
-                DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS.max_active_per_command_kind
-            )));
+            return Err(InternalError::resource_exhausted());
         }
 
         Ok(())

@@ -4,7 +4,6 @@ use crate::{
     config::schema::{CanisterKind, CyclesFundingPolicyConfig},
     dto::{
         component_registry::ComponentRegistryHead,
-        error::ErrorCode,
         rpc::{
             AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
             CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request, RootRequestMetadata,
@@ -367,7 +366,10 @@ fn authorize_recycle_rejects_non_child_caller() {
 
     let err =
         RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
-    assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::AUTHORITY_INVALID_STATE
+    );
 }
 
 #[test]
@@ -428,7 +430,10 @@ fn authorize_recycle_rejects_a_fresh_request_without_target_authority() {
     let error = RootResponseWorkflow::authorize(&ctx, &capability, &authority)
         .expect_err("fresh recycle without exact target authority must reject");
 
-    assert_eq!(error.class(), crate::InternalErrorClass::Workflow);
+    assert_eq!(
+        error.code(),
+        crate::diagnostics::codes::AUTHORITY_UNAVAILABLE
+    );
 }
 
 #[test]
@@ -455,7 +460,10 @@ fn authorize_denies_non_root_context() {
     ));
     let err =
         RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
-    assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::CONFIGURATION_UNAVAILABLE
+    );
 }
 
 #[test]
@@ -511,10 +519,8 @@ fn authorize_rejects_structural_child_provision_with_different_parent() {
     let err =
         RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
     assert_eq!(
-        err.public_error()
-            .expect("structural parent denial is public")
-            .code,
-        ErrorCode::Forbidden
+        err.public_error().code(),
+        crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 }
 
@@ -585,10 +591,11 @@ fn preflight_validates_replay_before_policy() {
     ));
     let err = RootResponseWorkflow::preflight(&ctx, &capability, &authority)
         .expect_err("preflight should validate replay first");
-    let public = err
-        .public_error()
-        .expect("missing operation id is a public hard-cut error");
-    assert_eq!(public.code, ErrorCode::OperationIdRequired);
+    let public = err.public_error();
+    assert_eq!(
+        public.code(),
+        crate::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+    );
 }
 
 #[test]
@@ -715,10 +722,8 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
     let err =
         RootResponseWorkflow::authorize(&ctx, &capability, &authority).expect_err("must deny");
     assert_eq!(
-        err.public_error()
-            .expect("kill-switch denial is public")
-            .code,
-        ErrorCode::Unavailable
+        err.public_error().code(),
+        crate::diagnostics::codes::CAPACITY_INACTIVE.raw_code()
     );
 
     let map = cycles_funding_snapshot_map();
@@ -801,10 +806,8 @@ fn root_cycles_funding_uses_child_role_policy_without_a_component_spec() {
     let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req, &authority)
         .expect_err("configured child budget must deny");
     assert_eq!(
-        err.public_error()
-            .expect("child budget denial is public")
-            .code,
-        ErrorCode::ResourceExhausted
+        err.public_error().code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
     );
 }
 
@@ -854,10 +857,8 @@ fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
         .expect_err("a second child funding operation must reject before ledger mutation");
 
     assert_eq!(
-        err.public_error()
-            .expect("concurrent funding denial is public")
-            .code,
-        ErrorCode::Conflict
+        err.public_error().code(),
+        crate::diagnostics::codes::REQUEST_INCOMPLETE.raw_code()
     );
     assert_eq!(
         CyclesFundingLedgerOps::snapshot(child),
@@ -930,8 +931,8 @@ fn request_cycles_value_transfer_cost_guard_enforces_actor_quota() {
     .expect_err("same actor quota bucket exhausted");
     let err = crate::workflow::cost_guard::map_cost_guard_reserve_error(err);
     assert_eq!(
-        err.public_error().expect("quota rejection is public").code,
-        ErrorCode::ResourceExhausted
+        err.public_error().code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
     );
 }
 
@@ -1025,13 +1026,7 @@ fn request_cycles_releases_cost_reservation_when_effect_marking_fails() {
     let err = nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77, &permit)
         .expect_err("missing replay receipt must reject before the external effect");
 
-    assert_eq!(
-        err.log_fields(),
-        (
-            crate::InternalErrorClass::Workflow,
-            crate::InternalErrorOrigin::Workflow,
-        )
-    );
+    assert_eq!(err.code(), crate::diagnostics::codes::EVIDENCE_UNAVAILABLE);
     assert_eq!(IntentStoreOps::pending_total().expect("pending intents"), 0);
     assert!(
         IntentStoreOps::is_committed_for_tests(settlement.quota_intent_id)
@@ -1102,14 +1097,14 @@ fn check_replay_rejects_invalid_ttl() {
         metadata: Some(meta(7, 0)),
     });
     let err = RootResponseWorkflow::check_replay(&ctx, &too_small).expect_err("must reject");
-    assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
+    assert_eq!(err.code(), crate::diagnostics::codes::TIME_INVALID);
 
     let too_large = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, MAX_ROOT_TTL_NS + 1)),
     });
     let err = RootResponseWorkflow::check_replay(&ctx, &too_large).expect_err("must reject");
-    assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
+    assert_eq!(err.code(), crate::diagnostics::codes::TIME_CAPACITY);
 }
 
 #[test]
@@ -1315,12 +1310,12 @@ fn abort_replay_cleanup_failure_preserves_primary_error_projection() {
 
     let error = replay::abort_replay_after_failure(
         pending,
-        InternalError::public(crate::dto::error::Error::conflict("primary failure")),
+        InternalError::public(crate::diagnostics::codes::STATE_CONFLICT),
     );
 
     assert_eq!(
-        error.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        error.public_error().code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
 

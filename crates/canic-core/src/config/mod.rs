@@ -14,7 +14,7 @@ mod topology;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod validation;
 
-use crate::{InternalError, InternalErrorOrigin};
+use crate::InternalError;
 use schema::ConfigSchemaError;
 use std::{cell::RefCell, sync::Arc};
 use thiserror::Error as ThisError;
@@ -135,7 +135,24 @@ pub enum ConfigTomlIssue {
 
 impl From<ConfigError> for InternalError {
     fn from(err: ConfigError) -> Self {
-        Self::domain(InternalErrorOrigin::Config, err.to_string())
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            ConfigError::AlreadyInitialized => codes::CONFIGURATION_INVALID_STATE,
+            ConfigError::NotInitialized => codes::CONFIGURATION_UNAVAILABLE,
+            ConfigError::CannotParseToml { .. } | ConfigError::ConfigSchema(_) => {
+                codes::CONFIGURATION_INVALID
+            }
+            ConfigError::ComponentTopology(_)
+            | ConfigError::ComponentGroupTopology(_)
+            | ConfigError::ComponentGroupDeploymentTopology(_)
+            | ConfigError::FleetServiceTopology(_) => codes::CONFIGURATION_INVALID,
+            ConfigError::ComponentDeploymentConfigurationCanonicalBytesBoundExceeded { .. } => {
+                codes::CONFIGURATION_CAPACITY
+            }
+            ConfigError::RuntimeRootKey(_) => codes::RUNTIME_INVALID,
+        };
+        Self::public(code)
     }
 }
 

@@ -8,7 +8,7 @@
 mod tests;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     model::replay::OperationId,
     storage::stable::async_recovery::{
         AsyncRecoveryLeaseRecord, AsyncRecoveryOwnerRecord, AsyncRecoveryPendingScheduleRecord,
@@ -92,10 +92,7 @@ impl AsyncTimerRecoveryOps {
         lease_expires_at_ns: u64,
     ) -> Result<AsyncRecoveryClaim, InternalError> {
         if lease_expires_at_ns <= now_ns {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                "async recovery lease deadline must be later than observed time",
-            ));
+            return Err(InternalError::invariant());
         }
         let mut state = AsyncTimerRecoveryStore::get();
         let current = owner_record_mut(&mut state, owner);
@@ -345,11 +342,8 @@ const fn owner_record_mut(
     }
 }
 
-fn generation_exhausted(kind: &str) -> InternalError {
-    InternalError::invariant(
-        InternalErrorOrigin::Ops,
-        format!("async recovery {kind} generation is exhausted"),
-    )
+fn generation_exhausted(_kind: &str) -> InternalError {
+    InternalError::invariant()
 }
 
 fn merge_ensure(

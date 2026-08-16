@@ -48,22 +48,16 @@ pub async fn synchronize(
     let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
     validate_snapshot(&authority, &snapshot, FleetSubnetRootStatus::Joining)?;
     if snapshot.version != request.expected_registry {
-        return Err(InternalError::conflict(
-            "Coordinator snapshot differs from the host-expected Registry version",
-        ));
+        return Err(InternalError::conflict());
     }
     let mirror = FleetRegistryMirrorOps::current();
     if mirror.active.is_some() {
-        return Err(InternalError::conflict(
-            "root already contains an active Fleet Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     let candidate = mirror.candidate;
     if let Some(existing) = &candidate {
         if existing.snapshot != snapshot {
-            return Err(InternalError::conflict(
-                "root already contains different Fleet Registry candidate authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if let Some(acknowledgement) = &existing.acknowledgement {
             return response(root, &snapshot, acknowledgement.clone());
@@ -78,9 +72,7 @@ pub async fn synchronize(
     )
     .await?;
     if acknowledgement.fleet_subnet_root != root || acknowledgement.version != snapshot.version {
-        return Err(InternalError::invalid_input(
-            "Coordinator acknowledgement differs from the staged root snapshot",
-        ));
+        return Err(InternalError::invalid_input());
     }
     FleetRegistryMirrorOps::commit_candidate(snapshot.clone(), Some(acknowledgement.clone()));
     response(root, &snapshot, acknowledgement)
@@ -94,20 +86,18 @@ pub async fn status(
     root_store::status(request.store_bootstrap).await?;
     let candidate = FleetRegistryMirrorOps::current()
         .candidate
-        .ok_or_else(|| InternalError::unavailable("root has no staged Fleet Registry snapshot"))?;
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_snapshot(
         &authority,
         &candidate.snapshot,
         FleetSubnetRootStatus::Joining,
     )?;
     if candidate.snapshot.version != request.expected_registry {
-        return Err(InternalError::conflict(
-            "stored root snapshot differs from the host-expected Registry version",
-        ));
+        return Err(InternalError::conflict());
     }
-    let acknowledgement = candidate.acknowledgement.ok_or_else(|| {
-        InternalError::unavailable("root snapshot has not been acknowledged by the Coordinator")
-    })?;
+    let acknowledgement = candidate
+        .acknowledgement
+        .ok_or_else(|| InternalError::unavailable())?;
     response(root, &candidate.snapshot, acknowledgement)
 }
 
@@ -145,29 +135,24 @@ pub async fn activate(
             }
         };
     }
-    let candidate = mirror.candidate.ok_or_else(|| {
-        InternalError::unavailable("root has no acknowledged Joining Registry candidate")
-    })?;
+    let candidate = mirror
+        .candidate
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_snapshot(
         &authority,
         &candidate.snapshot,
         FleetSubnetRootStatus::Joining,
     )?;
     if candidate.snapshot.version != request.previous_registry {
-        return Err(InternalError::conflict(
-            "root Joining candidate differs from the requested previous Registry",
-        ));
+        return Err(InternalError::conflict());
     }
-    let acknowledgement = candidate.acknowledgement.ok_or_else(|| {
-        InternalError::unavailable("root Joining candidate lacks its Coordinator acknowledgement")
-    })?;
+    let acknowledgement = candidate
+        .acknowledgement
+        .ok_or_else(|| InternalError::unavailable())?;
     if acknowledgement.fleet_subnet_root != root
         || acknowledgement.version != request.previous_registry
     {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "stored Joining acknowledgement differs from candidate authority",
-        ));
+        return Err(InternalError::invariant());
     }
 
     FleetRegistryMirrorOps::commit_active(request.previous_registry, snapshot, directory);
@@ -185,9 +170,7 @@ pub async fn active_status(
     let active = validated_active(&authority, root)?;
     match classify_active_transition(&active, &request)? {
         ActiveMirrorTransition::Current => Ok(active_response(root, &active)),
-        ActiveMirrorTransition::Advance => Err(InternalError::unavailable(
-            "root Fleet Registry mirror has not reached the requested version",
-        )),
+        ActiveMirrorTransition::Advance => Err(InternalError::unavailable()),
     }
 }
 
@@ -202,9 +185,7 @@ pub async fn advance_for_component_publication(
     if previous_registry == expected_registry {
         let active = validated_active(&authority, root)?;
         if active.snapshot.version != expected_registry {
-            return Err(InternalError::conflict(
-                "root Fleet Registry mirror differs from unchanged publication authority",
-            ));
+            return Err(InternalError::conflict());
         }
         return Ok(active_response(root, &active));
     }
@@ -244,9 +225,7 @@ pub(super) async fn prepare_component_publication_transition(
     root_store::status(store_bootstrap.clone()).await?;
     let current = validated_active(&authority, root)?;
     if current.snapshot.version != previous_registry {
-        return Err(InternalError::conflict(
-            "root Fleet Registry mirror differs from the Directory synchronization source",
-        ));
+        return Err(InternalError::conflict());
     }
     let target = if previous_registry == expected_registry {
         current.snapshot.clone()
@@ -288,9 +267,7 @@ pub(super) fn commit_component_publication_transition(
     }
     if current.snapshot != prepared.source || current.snapshot.version != prepared.previous_registry
     {
-        return Err(InternalError::conflict(
-            "root Fleet Registry mirror changed before its prepared Directory commit",
-        ));
+        return Err(InternalError::conflict());
     }
     FleetRegistryMirrorOps::commit_active(
         prepared.previous_registry.clone(),
@@ -311,7 +288,7 @@ async fn fetch_snapshot(
     .execute()
     .await?;
     let result: Result<FleetRegistrySnapshotResponse, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 async fn acknowledge_snapshot(
@@ -324,7 +301,7 @@ async fn acknowledge_snapshot(
             .execute()
             .await?;
     let result: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 fn validate_snapshot(
@@ -334,9 +311,7 @@ fn validate_snapshot(
 ) -> Result<(), InternalError> {
     let root_entry = validated_snapshot_root(authority, snapshot)?;
     if root_entry.status != expected_status {
-        return Err(InternalError::invalid_input(
-            "Fleet Registry snapshot root lifecycle differs from required authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -363,11 +338,7 @@ fn validated_snapshot_root(
         .iter()
         .find(|entry| entry.fleet_subnet_root == authority.binding.fleet_subnet_root)
         .cloned()
-        .ok_or_else(|| {
-            InternalError::invalid_input(
-                "Fleet Registry snapshot does not contain the protected root",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invalid_input())?;
     let expected = FleetSubnetRootEntry {
         placement_subnet: authority.binding.placement_subnet,
         fleet_subnet_root: authority.binding.fleet_subnet_root,
@@ -386,9 +357,7 @@ fn validated_snapshot_root(
         version: &version,
     };
     if supplied != canonical || root_entry != expected {
-        return Err(InternalError::invalid_input(
-            "Fleet Registry snapshot differs from protected root authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(root_entry)
 }
@@ -401,9 +370,7 @@ fn validate_target(
 ) -> Result<FleetDirectorySnapshot, InternalError> {
     let root_entry = validated_snapshot_root(authority, snapshot)?;
     if snapshot.version != request.expected_registry {
-        return Err(InternalError::conflict(
-            "Coordinator snapshot differs from the controller-expected Registry version",
-        ));
+        return Err(InternalError::conflict());
     }
     let topology = ConfigOps::component_topology()?;
     let directory = FleetRegistryOps::directory_for_root(
@@ -413,9 +380,7 @@ fn validate_target(
         root,
     )?;
     if directory != request.expected_directory {
-        return Err(InternalError::conflict(
-            "derived Fleet Directory differs from controller-expected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if root_entry.status == FleetSubnetRootStatus::Draining {
         ComponentRegistryOps::validate_published_root_draining(&snapshot.version)?;
@@ -437,9 +402,7 @@ fn validate_transition_request(
         .into_iter()
         .all(|valid| valid)
     {
-        return Err(InternalError::invalid_input(
-            "Registry mirror request does not name one exact monotonic authority transition",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -484,14 +447,10 @@ fn classify_active_transition(
         return Ok(ActiveMirrorTransition::Current);
     }
     if current == &request.expected_registry {
-        return Err(InternalError::conflict(
-            "current Registry mirror target is bound to different transition authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if current.authority != request.expected_registry.authority {
-        return Err(InternalError::conflict(
-            "current Registry mirror belongs to different authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if current.revision > request.expected_registry.revision {
         return Ok(ActiveMirrorTransition::Current);
@@ -499,9 +458,7 @@ fn classify_active_transition(
     if current == &request.previous_registry {
         return Ok(ActiveMirrorTransition::Advance);
     }
-    Err(InternalError::conflict(
-        "current Registry mirror does not match the requested transition source",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn validated_active_if_present(
@@ -543,10 +500,7 @@ fn response(
     acknowledgement: FleetSubnetRootSnapshotAcknowledgement,
 ) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
     if acknowledgement.fleet_subnet_root != root || acknowledgement.version != snapshot.version {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Storage,
-            "stored root snapshot acknowledgement differs from candidate authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(FleetSubnetRootRegistrySyncResponse {
         fleet_subnet_root: root,

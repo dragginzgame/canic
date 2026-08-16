@@ -4,10 +4,7 @@
 //! Does not own: reservation persistence, transport, or root lifecycle mutation.
 //! Boundary: Coordinator production and root consumption share this canonical authority.
 
-use crate::{
-    InternalError, InternalErrorOrigin,
-    dto::fleet_registry::FleetSubnetRootDrainingReservationResponse,
-};
+use crate::{InternalError, dto::fleet_registry::FleetSubnetRootDrainingReservationResponse};
 use sha2::{Digest, Sha256};
 
 const ROOT_DRAINING_RESERVATION_HASH_DOMAIN: &[u8] =
@@ -23,12 +20,7 @@ impl FleetSubnetRootDrainingReservationOps {
     ) -> Result<[u8; 32], InternalError> {
         let mut authority = response.clone();
         authority.reservation_hash = [0; 32];
-        let payload = candid::encode_one(authority).map_err(|error| {
-            InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                format!("Fleet Subnet Root draining reservation cannot be encoded: {error}"),
-            )
-        })?;
+        let payload = candid::encode_one(authority).map_err(|_error| InternalError::invariant())?;
         let mut hasher = Sha256::new();
         hasher.update(ROOT_DRAINING_RESERVATION_HASH_DOMAIN);
         hasher.update(payload);

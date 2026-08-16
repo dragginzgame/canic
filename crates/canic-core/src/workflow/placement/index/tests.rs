@@ -310,8 +310,8 @@ fn stale_pending_without_provisional_child_remains_claimed_for_exact_resume() {
     let error = block_on(PlacementIndexWorkflow::recover_entry("projects", "alpha"))
         .expect_err("untracked stale claim must remain fail-closed");
     assert_eq!(
-        error.public_error().map(|error| error.code),
-        Some(crate::dto::error::ErrorCode::Conflict)
+        error.public_error().code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert!(PlacementIndexRegistryOps::lookup_entry("projects", "alpha").is_some());
 }

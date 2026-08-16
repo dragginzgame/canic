@@ -8,7 +8,7 @@
 mod tests;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::authority_restore::{
         AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
@@ -34,13 +34,8 @@ impl AuthorityRestoreFenceOps {
         }
         match AuthorityRestoreFenceStore::get() {
             Some(existing) if existing == record => Ok(()),
-            Some(_) => Err(InternalError::conflict(
-                "authority restore fence is already initialized for different authority",
-            )),
-            None => Err(InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                "authority restore fence initialization did not persist",
-            )),
+            Some(_) => Err(InternalError::conflict()),
+            None => Err(InternalError::invariant()),
         }
     }
 
@@ -65,9 +60,7 @@ impl AuthorityRestoreFenceOps {
             {
                 Ok(())
             }
-            AuthorityRestoreFenceStateRecord::Sealed { .. } => Err(InternalError::conflict(
-                "authority is sealed by a different snapshot operation",
-            )),
+            AuthorityRestoreFenceStateRecord::Sealed { .. } => Err(InternalError::conflict()),
         }
     }
 
@@ -83,22 +76,16 @@ impl AuthorityRestoreFenceOps {
             AuthorityRestoreFenceStateRecord::Open {
                 last_resume: Some(receipt),
             } if receipt.operation_id == request.operation_id => Ok(()),
-            AuthorityRestoreFenceStateRecord::Open { .. } => Err(InternalError::conflict(
-                "authority snapshot operation is not sealed",
-            )),
+            AuthorityRestoreFenceStateRecord::Open { .. } => Err(InternalError::conflict()),
             AuthorityRestoreFenceStateRecord::Sealed { operation_id, .. }
                 if operation_id != request.operation_id =>
             {
-                Err(InternalError::conflict(
-                    "authority snapshot resume names a different sealed operation",
-                ))
+                Err(InternalError::conflict())
             }
             AuthorityRestoreFenceStateRecord::Sealed {
                 history_total_num_changes: sealed_history,
                 ..
-            } if sealed_history != history_total_num_changes => Err(InternalError::unavailable(
-                "authority management history advanced after the snapshot seal; restored or ambiguous authority remains mutation-fenced",
-            )),
+            } if sealed_history != history_total_num_changes => Err(InternalError::unavailable()),
             AuthorityRestoreFenceStateRecord::Sealed { .. } => Ok(()),
         }
     }
@@ -126,9 +113,7 @@ impl AuthorityRestoreFenceOps {
             {
                 Ok(record_to_status(record))
             }
-            AuthorityRestoreFenceStateRecord::Sealed { .. } => Err(InternalError::conflict(
-                "authority is sealed by a different snapshot operation",
-            )),
+            AuthorityRestoreFenceStateRecord::Sealed { .. } => Err(InternalError::conflict()),
         }
     }
 
@@ -145,22 +130,16 @@ impl AuthorityRestoreFenceOps {
             AuthorityRestoreFenceStateRecord::Open {
                 last_resume: Some(receipt),
             } if receipt.operation_id == request.operation_id => Ok(record_to_status(record)),
-            AuthorityRestoreFenceStateRecord::Open { .. } => Err(InternalError::conflict(
-                "authority snapshot operation is not sealed",
-            )),
+            AuthorityRestoreFenceStateRecord::Open { .. } => Err(InternalError::conflict()),
             AuthorityRestoreFenceStateRecord::Sealed { operation_id, .. }
                 if *operation_id != request.operation_id =>
             {
-                Err(InternalError::conflict(
-                    "authority snapshot resume names a different sealed operation",
-                ))
+                Err(InternalError::conflict())
             }
             AuthorityRestoreFenceStateRecord::Sealed {
                 history_total_num_changes: sealed_history,
                 ..
-            } if *sealed_history != history_total_num_changes => Err(InternalError::unavailable(
-                "authority management history advanced after the snapshot seal; restored or ambiguous authority remains mutation-fenced",
-            )),
+            } if *sealed_history != history_total_num_changes => Err(InternalError::unavailable()),
             AuthorityRestoreFenceStateRecord::Sealed { .. } => {
                 record.state = AuthorityRestoreFenceStateRecord::Open {
                     last_resume: Some(AuthorityRestoreResumeReceiptRecord {
@@ -196,9 +175,7 @@ fn require_authority(
 ) -> Result<AuthorityRestoreFenceRecord, InternalError> {
     let record = AuthorityRestoreFenceStore::get().ok_or_else(fence_uninitialized)?;
     if record.authority_canister != authority_canister {
-        return Err(InternalError::conflict(
-            "authority restore fence is bound to a different Canister",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(record)
 }
@@ -248,8 +225,5 @@ const fn record_to_status(
 }
 
 fn fence_uninitialized() -> InternalError {
-    InternalError::invariant(
-        InternalErrorOrigin::Ops,
-        "authority restore fence is not initialized",
-    )
+    InternalError::invariant()
 }

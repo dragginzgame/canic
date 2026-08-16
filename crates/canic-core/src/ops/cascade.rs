@@ -5,7 +5,7 @@
 //! Boundary: ops wrapper around the RPC transport for cascade message names.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::cascade::{TopologyPathNode, TopologySnapshotInput},
     ids::CanisterRole,
     ops::{prelude::*, rpc::RpcOps},
@@ -95,7 +95,29 @@ pub enum TopologySnapshotValidationError {
 
 impl From<TopologySnapshotValidationError> for InternalError {
     fn from(err: TopologySnapshotValidationError) -> Self {
-        Self::invariant(InternalErrorOrigin::Ops, err.to_string())
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            TopologySnapshotValidationError::EmptyParentChain => codes::SECURITY_INVALID,
+            TopologySnapshotValidationError::ReceiverMismatch { .. }
+            | TopologySnapshotValidationError::ReceiverRoleMismatch { .. }
+            | TopologySnapshotValidationError::ImmediateParentMismatch { .. }
+            | TopologySnapshotValidationError::BrokenParentLink { .. }
+            | TopologySnapshotValidationError::ConflictingChildParent { .. }
+            | TopologySnapshotValidationError::NextHopRoleMismatch { .. } => {
+                codes::AUTHORITY_CONFLICT
+            }
+            TopologySnapshotValidationError::DuplicatePathNode(_)
+            | TopologySnapshotValidationError::DuplicateChildrenRow(_)
+            | TopologySnapshotValidationError::DuplicateChild { .. } => codes::POSITION_DUPLICATE,
+            TopologySnapshotValidationError::MissingChildrenRow(_)
+            | TopologySnapshotValidationError::NextHopMissing { .. } => {
+                codes::COLLECTION_UNAVAILABLE
+            }
+            TopologySnapshotValidationError::UnexpectedChildrenRow(_) => codes::COLLECTION_INVALID,
+            TopologySnapshotValidationError::SelfChild { .. } => codes::COLLECTION_INVALID_STATE,
+        };
+        Self::public(code)
     }
 }
 

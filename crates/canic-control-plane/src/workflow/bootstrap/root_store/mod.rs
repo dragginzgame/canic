@@ -141,9 +141,7 @@ fn load_and_validate_manifest(
     if request.manifest_payload_size_bytes == 0
         || request.manifest_payload_size_bytes > ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES
     {
-        return Err(InternalError::invalid_input(format!(
-            "root release-set manifest bytes must be in 1..={ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES}"
-        )));
+        return Err(InternalError::invalid_input());
     }
 
     let release_set = authority.initial_release_set;
@@ -155,22 +153,15 @@ fn load_and_validate_manifest(
         release_set.manifest_digest.as_bytes(),
         request.manifest_payload_size_bytes,
     )?;
-    let manifest =
-        serde_json::from_slice::<RootStoreReleaseSetManifest>(&bytes).map_err(|error| {
-            InternalError::invalid_input(format!("invalid root release set: {error}"))
-        })?;
-    let canonical = serde_json::to_vec(&manifest).map_err(|error| {
-        InternalError::invalid_input(format!("could not canonicalize root release set: {error}"))
-    })?;
+    let manifest = serde_json::from_slice::<RootStoreReleaseSetManifest>(&bytes)
+        .map_err(|_error| InternalError::invalid_input())?;
+    let canonical =
+        serde_json::to_vec(&manifest).map_err(|_error| InternalError::invalid_input())?;
     if canonical != bytes {
-        return Err(InternalError::invalid_input(
-            "root release-set manifest bytes are not canonical",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if wasm_hash(&canonical) != release_set.manifest_digest.as_bytes() {
-        return Err(InternalError::invalid_input(
-            "root release-set manifest digest differs from protected authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     validate_manifest_projection(authority, &manifest)?;
@@ -182,33 +173,21 @@ fn validate_manifest_projection(
     manifest: &RootStoreReleaseSetManifest,
 ) -> Result<(), InternalError> {
     if manifest.release_build_id != authority.initial_release_set.release_build_id {
-        return Err(InternalError::invalid_input(
-            "root release-set build differs from protected authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if manifest.component_topology_digest != authority.binding.component_topology_digest {
-        return Err(InternalError::invalid_input(
-            "root release-set topology differs from protected authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     let topology = ConfigOps::component_topology()?;
     let projected = topology
         .project_for_admissions(&authority.binding.component_admissions)
-        .map_err(|error| {
-            InternalError::invalid_input(format!(
-                "protected root admissions cannot project topology: {error}"
-            ))
-        })?;
-    let projected_digest = projected.digest().map_err(|error| {
-        InternalError::invalid_input(format!(
-            "protected root topology digest cannot be reproduced: {error}"
-        ))
-    })?;
+        .map_err(|_error| InternalError::invalid_input())?;
+    let projected_digest = projected
+        .digest()
+        .map_err(|_error| InternalError::invalid_input())?;
     if projected_digest != authority.binding.component_topology_digest {
-        return Err(InternalError::invalid_input(
-            "protected root admissions do not reproduce the protected topology digest",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     let mut expected = Vec::new();
@@ -227,9 +206,7 @@ fn validate_manifest_projection(
         }));
     }
     if manifest.entries.len() != expected.len() {
-        return Err(InternalError::invalid_input(
-            "root release-set entry count differs from the admitted topology projection",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     let mut unique_artifacts = BTreeMap::<CanisterRole, ([u8; 32], u64)>::new();
@@ -243,9 +220,7 @@ fn validate_manifest_projection(
             release_build_id: &manifest.release_build_id,
         };
         if RootReleaseSetEntryAuthority::from_entry(entry) != expected_authority {
-            return Err(InternalError::invalid_input(
-                "root release-set entry differs from the admitted topology projection",
-            ));
+            return Err(InternalError::invalid_input());
         }
         validate_artifact_shape(entry)?;
         let payload_hash = decode_sha256(&entry.artifact.wasm_gz_sha256_hex)?;
@@ -253,21 +228,16 @@ fn validate_manifest_projection(
         if let Some(existing) = unique_artifacts.insert(role, payload)
             && existing != payload
         {
-            return Err(InternalError::invalid_input(
-                "one role resolves to conflicting root release-set artifacts",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if unique_payloads.insert(payload) {
             total_bytes = total_bytes
                 .checked_add(payload.1)
-                .ok_or_else(|| InternalError::invalid_input("root release-set bytes overflow"))?;
+                .ok_or_else(|| InternalError::invalid_input())?;
         }
     }
     if total_bytes > authority.binding.limits.maximum_wasm_store_bytes {
-        return Err(InternalError::resource_exhausted(format!(
-            "root release set requires {total_bytes} bytes, exceeding protected Store limit {}",
-            authority.binding.limits.maximum_wasm_store_bytes
-        )));
+        return Err(InternalError::resource_exhausted());
     }
     Ok(())
 }
@@ -285,9 +255,7 @@ fn validate_artifact_shape(
     .all(|value| !value.is_empty());
     let sizes_are_positive = artifact.wasm_size_bytes > 0 && artifact.wasm_gz_size_bytes > 0;
     if !paths_are_complete || !sizes_are_positive {
-        return Err(InternalError::invalid_input(
-            "root release-set artifact metadata is incomplete",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let _ = decode_sha256(&artifact.wasm_sha256_hex)?;
     let _ = decode_sha256(&artifact.wasm_gz_sha256_hex)?;
@@ -314,9 +282,7 @@ fn exact_staged_manifest_metadata(
         if let Some(existing) = artifacts.insert(entry.artifact.role.clone(), payload)
             && existing != payload
         {
-            return Err(InternalError::invalid_input(
-                "one role resolves to conflicting staged artifacts",
-            ));
+            return Err(InternalError::invalid_input());
         }
     }
 
@@ -338,9 +304,7 @@ fn exact_staged_manifest_metadata(
             if StagedArtifactAuthority::from_manifest(&observed) != expected
                 || !is_exact_bootstrap_source(&observed.store_binding)
             {
-                return Err(InternalError::invalid_input(format!(
-                    "staged artifact for role '{role}' differs from the protected root release set"
-                )));
+                return Err(InternalError::invalid_input());
             }
             Ok(observed)
         })
@@ -361,9 +325,7 @@ fn artifact_module_hashes(
         if let Some(existing) = module_hashes.insert(entry.artifact.role.clone(), module_hash)
             && existing != module_hash
         {
-            return Err(InternalError::invalid_input(
-                "one role resolves to conflicting raw Wasm module hashes",
-            ));
+            return Err(InternalError::invalid_input());
         }
     }
     Ok(module_hashes)
@@ -399,25 +361,23 @@ fn verify_live_catalog(
         })
         .collect::<Vec<_>>();
     if actual != expected {
-        return Err(InternalError::conflict(
-            "live Wasm Store Catalog differs from the exact root release set",
-        ));
+        return Err(InternalError::conflict());
     }
 
     observed
         .into_iter()
         .map(|entry| {
-            let raw_module_hash = module_hashes.get(&entry.role).copied().ok_or_else(|| {
-                InternalError::invalid_input(
-                    "live Store catalog role has no protected raw Wasm module hash",
-                )
-            })?;
+            let raw_module_hash = module_hashes
+                .get(&entry.role)
+                .copied()
+                .ok_or_else(|| InternalError::invalid_input())?;
             Ok(RootStoreCatalogEntry {
                 role: entry.role,
                 raw_module_hash,
-                payload_hash: entry.payload_hash.try_into().map_err(|_| {
-                    InternalError::invalid_input("live Store catalog contains a non-SHA-256 hash")
-                })?,
+                payload_hash: entry
+                    .payload_hash
+                    .try_into()
+                    .map_err(|_| InternalError::invalid_input())?,
                 payload_size_bytes: entry.payload_size_bytes,
             })
         })
@@ -438,9 +398,7 @@ fn decode_sha256(value: &str) -> Result<[u8; 32], InternalError> {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     {
-        return Err(InternalError::invalid_input(
-            "root release-set artifact SHA-256 must be 64 lowercase hexadecimal characters",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     let mut bytes = [0_u8; 32];

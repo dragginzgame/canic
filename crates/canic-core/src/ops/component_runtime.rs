@@ -5,7 +5,7 @@
 //! Boundary: callers supply a complete passive authority and receive one domain-separated hash.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::component_registry::{ComponentRuntimeDirectChild, ComponentRuntimeDirectoryAuthority},
 };
 use sha2::{Digest, Sha256};
@@ -22,12 +22,7 @@ impl ComponentRuntimeOps {
         authority: &ComponentRuntimeDirectoryAuthority,
     ) -> Result<[u8; 32], InternalError> {
         const DOMAIN: &[u8] = b"canic.component-runtime.directory-authority.v1";
-        let payload = candid::encode_one(authority).map_err(|error| {
-            InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                format!("Component runtime Directory authority cannot be encoded: {error}"),
-            )
-        })?;
+        let payload = candid::encode_one(authority).map_err(|_error| InternalError::invariant())?;
         let mut hasher = Sha256::new();
         hasher.update(DOMAIN);
         hasher.update((payload.len() as u64).to_be_bytes());
@@ -40,12 +35,8 @@ impl ComponentRuntimeOps {
         direct_children: &[ComponentRuntimeDirectChild],
     ) -> Result<[u8; 32], InternalError> {
         const DOMAIN: &[u8] = b"canic.component-runtime.direct-children.v1";
-        let payload = candid::encode_one(direct_children).map_err(|error| {
-            InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                format!("Component runtime direct children cannot be encoded: {error}"),
-            )
-        })?;
+        let payload =
+            candid::encode_one(direct_children).map_err(|_error| InternalError::invariant())?;
         let mut hasher = Sha256::new();
         hasher.update(DOMAIN);
         hasher.update((payload.len() as u64).to_be_bytes());

@@ -6,12 +6,8 @@
 
 use crate::{
     InternalError,
-    dto::error::Error,
     model::replay::ReplayCostGuardSettlement,
-    ops::cost_guard::{
-        CostGuardOps, CostGuardPermit, CostGuardRequest, CostGuardReserveError,
-        CostGuardReservePublicKind,
-    },
+    ops::cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest, CostGuardReserveError},
     workflow::runtime::intent::IntentCleanupWorkflow,
 };
 
@@ -52,10 +48,7 @@ impl CostGuardWorkflow {
     ) -> InternalError {
         match Self::complete(permit, now_secs) {
             Ok(()) => error,
-            Err(completion_error) => error.with_diagnostic_context(format!(
-                "cost guard completion failed for reservation {}: {completion_error}",
-                permit.reservation_id
-            )),
+            Err(_completion_error) => error,
         }
     }
 
@@ -82,10 +75,7 @@ impl CostGuardWorkflow {
     ) -> InternalError {
         match Self::recover(permit, now_secs) {
             Ok(()) => error,
-            Err(recovery_error) => error.with_diagnostic_context(format!(
-                "cost guard recovery failed for reservation {}: {recovery_error}",
-                permit.reservation_id
-            )),
+            Err(_recovery_error) => error,
         }
     }
 
@@ -98,13 +88,5 @@ impl CostGuardWorkflow {
 
 #[must_use]
 pub fn map_cost_guard_reserve_error(err: CostGuardReserveError) -> InternalError {
-    match err.public_kind() {
-        Some(CostGuardReservePublicKind::InvalidInput) => {
-            InternalError::public(Error::invalid(err.to_string()))
-        }
-        Some(CostGuardReservePublicKind::ResourceExhausted) => {
-            InternalError::public(Error::exhausted(err.to_string()))
-        }
-        None => err.into(),
-    }
+    err.into()
 }

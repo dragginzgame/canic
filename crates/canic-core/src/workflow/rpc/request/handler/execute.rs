@@ -8,9 +8,8 @@ use super::{
     RootCapability, RootContext, nonroot_cycles, nonroot_cycles::AuthorizedCyclesGrant, replay,
 };
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
-    dto::error::Error,
     dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CreateCanisterResponse,
         RecycleCanisterRequest, Response,
@@ -102,19 +101,19 @@ pub(super) fn execute_placement_receipt_acknowledgement(
         PlacementReceiptAcknowledgementDecision::Acknowledged
         | PlacementReceiptAcknowledgementDecision::AlreadyAbsent => {}
         PlacementReceiptAcknowledgementDecision::ActorMismatch => {
-            return Err(InternalError::public(Error::forbidden(format!(
-                "placement receipt {operation_id} is not owned by caller",
-            ))));
+            return Err(InternalError::public(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
         PlacementReceiptAcknowledgementDecision::NotCommitted => {
-            return Err(InternalError::public(Error::conflict(format!(
-                "placement receipt {operation_id} is not committed",
-            ))));
+            return Err(InternalError::public(
+                crate::diagnostics::codes::STATE_CONFLICT,
+            ));
         }
         PlacementReceiptAcknowledgementDecision::NotPlacementEffect => {
-            return Err(InternalError::public(Error::conflict(format!(
-                "placement receipt {operation_id} does not contain a placement-child effect",
-            ))));
+            return Err(InternalError::public(
+                crate::diagnostics::codes::STATE_CONFLICT,
+            ));
         }
     }
 
@@ -169,17 +168,13 @@ fn component_child_provision_request(
     req: &CreateCanisterRequest,
     authority: &RootCapabilityAuthority,
 ) -> Result<RootComponentChildProvisionRequest, InternalError> {
-    let component = authority.caller_component().ok_or_else(|| {
-        InternalError::public(Error::forbidden(
-            "Fleet Subnet Root cannot own an application Component Child operation",
-        ))
-    })?;
-    let expected_registry = authority.caller_registry().cloned().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "authorized Component caller has no protected Registry head",
-        )
-    })?;
+    let component = authority
+        .caller_component()
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED))?;
+    let expected_registry = authority
+        .caller_registry()
+        .cloned()
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(RootComponentChildProvisionRequest {
         operation_id: pending.receipt_token.receipt().operation_id.into_bytes(),
         component,
@@ -192,12 +187,9 @@ fn component_child_provision_request(
 fn resolve_provision_parent(
     authority: &RootCapabilityAuthority,
 ) -> Result<crate::cdk::types::Principal, InternalError> {
-    authority.provision_parent_canister_id().ok_or_else(|| {
-        InternalError::invariant(
-            crate::InternalErrorOrigin::Workflow,
-            "authorized provision request has no protected parent authority",
-        )
-    })
+    authority
+        .provision_parent_canister_id()
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn root_provision_command_kind(command_kind: &'static str) -> CommandKind {
@@ -238,7 +230,7 @@ fn preserve_root_provision_recovery_required(
     command_kind: &'static str,
     reason: RecoveryReason,
 ) -> InternalError {
-    let (error_class, error_origin) = err.log_fields();
+    let diagnostic = err.code();
     let err = mark_recovery_required_after_failure(
         &pending.receipt_token,
         reason,
@@ -249,13 +241,12 @@ fn preserve_root_provision_recovery_required(
     log!(
         Topic::Rpc,
         Error,
-        "root provision replay recovery required effect=provision_canister command_kind={} caller={} role={} parent={} error_class={} error_origin={}",
+        "root provision replay recovery required effect=provision_canister command_kind={} caller={} role={} parent={} diagnostic={}",
         command_kind,
         ctx.caller,
         req.canister_role,
         parent_pid,
-        error_class,
-        error_origin
+        diagnostic
     );
     err
 }
@@ -278,9 +269,7 @@ async fn execute_recycle(
     match lifecycle.recycle_component_child(recycle).await {
         Ok(RootComponentChildRecycleOutcome::Completed) => {}
         Ok(RootComponentChildRecycleOutcome::InProgress) => {
-            let error = InternalError::public(Error::unavailable(
-                "Component Child recycle is still in progress; retry the exact operation",
-            ));
+            let error = InternalError::public(crate::diagnostics::codes::STATE_UNAVAILABLE);
             return Err(preserve_root_recycle_recovery_required(
                 pending,
                 ctx,
@@ -319,17 +308,13 @@ fn component_child_recycle_request(
     req: &RecycleCanisterRequest,
     authority: &RootCapabilityAuthority,
 ) -> Result<RootComponentChildRecycleRequest, InternalError> {
-    let component = authority.caller_component().ok_or_else(|| {
-        InternalError::public(Error::forbidden(
-            "Fleet Subnet Root cannot recycle a top-level Component as a Component Child",
-        ))
-    })?;
-    let expected_registry = authority.caller_registry().cloned().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "authorized Component caller has no protected Registry head",
-        )
-    })?;
+    let component = authority
+        .caller_component()
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED))?;
+    let expected_registry = authority
+        .caller_registry()
+        .cloned()
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(RootComponentChildRecycleRequest {
         operation_id: pending.receipt_token.receipt().operation_id.into_bytes(),
         component,
@@ -345,7 +330,7 @@ fn preserve_root_recycle_recovery_required(
     error: InternalError,
     reason: RecoveryReason,
 ) -> InternalError {
-    let (error_class, error_origin) = error.log_fields();
+    let diagnostic = error.code();
     let error = mark_recovery_required_after_failure(
         &pending.receipt_token,
         reason,
@@ -356,11 +341,10 @@ fn preserve_root_recycle_recovery_required(
     log!(
         Topic::Rpc,
         Error,
-        "root recycle replay recovery required effect=component_subtree_removal caller={} target={} error_class={} error_origin={}",
+        "root recycle replay recovery required effect=component_subtree_removal caller={} target={} diagnostic={}",
         ctx.caller,
         target,
-        error_class,
-        error_origin
+        diagnostic
     );
     error
 }

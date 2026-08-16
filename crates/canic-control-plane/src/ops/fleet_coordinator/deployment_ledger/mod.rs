@@ -45,9 +45,7 @@ pub(super) fn scale_out_plan_hash(
         .iter()
         .find(|candidate| &candidate.deployment == deployment)
         .map(|candidate| candidate.next_placement_ordinal)
-        .ok_or_else(|| {
-            InternalError::invalid_input("scale-out plan names an unknown deployment")
-        })?;
+        .ok_or_else(|| InternalError::invalid_input())?;
     hash_with_next_ordinal(
         configuration,
         registry,
@@ -120,9 +118,7 @@ fn scale_out_deployment(
     plan: &FleetComponentProvisioningPlan,
 ) -> Result<&ComponentGroupDeploymentId, InternalError> {
     let FleetComponentProvisioningOperation::ScaleOut { deployment, .. } = &plan.operation else {
-        return Err(InternalError::invalid_input(
-            "deployment reservation requires a scale-out operation",
-        ));
+        return Err(InternalError::invalid_input());
     };
     Ok(deployment)
 }

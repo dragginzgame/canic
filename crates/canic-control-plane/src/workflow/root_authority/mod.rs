@@ -18,9 +18,7 @@ pub(super) fn validated_root_authority()
     let authority = FleetActivationWorkflow::root_authority()?;
     let root = IcOps::canister_self();
     if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok((authority, root))
 }

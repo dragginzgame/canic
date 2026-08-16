@@ -63,10 +63,7 @@ impl ShardingWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        InternalErrorClass, InternalErrorOrigin, ids::CanisterRole,
-        test::support::init_sharding_test_config,
-    };
+    use crate::{ids::CanisterRole, test::support::init_sharding_test_config};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -85,8 +82,7 @@ mod tests {
         let err = ShardingWorkflow::release_partition_key("stale", "pk1")
             .expect_err("unknown pool must fail before storage mutation");
 
-        assert_eq!(err.class(), InternalErrorClass::Domain);
-        assert_eq!(err.origin(), InternalErrorOrigin::Domain);
+        assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_UNAVAILABLE);
         assert_eq!(
             ShardingRegistryOps::partition_key_shard("stale", "pk1"),
             Some(shard)

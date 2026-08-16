@@ -5,7 +5,7 @@
 //! Boundary: bootstraps sharding workflow from configuration and records assignments.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     domain::policy::pure::placement::sharding::HrwSelector,
@@ -210,12 +210,7 @@ impl ShardingWorkflow {
         }
     }
 
-    fn no_active_shards_exhausted(pool: &str, partition_key: &str) -> InternalError {
-        InternalError::domain(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "no active shards in pool '{pool}' and max_shards exhausted; cannot assign partition_key '{partition_key}'"
-            ),
-        )
+    fn no_active_shards_exhausted(_pool: &str, _partition_key: &str) -> InternalError {
+        InternalError::public(crate::diagnostics::codes::CAPACITY_INSUFFICIENT)
     }
 }

@@ -14,7 +14,6 @@ Supporting implementation evidence does not belong here.
 - `coordinator-workers/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
-- `framework-neutral-local-application-authorization/`
 - `framework-neutral-synchronous-lifecycle-composition/`
 - `language-neutral-managed-guest-feasibility/`
 - `optional-encrypted-canister-snapshot-archives/`

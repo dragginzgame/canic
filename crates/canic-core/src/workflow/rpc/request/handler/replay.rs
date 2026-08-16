@@ -228,18 +228,14 @@ fn recover_staged_response(
     {
         Ok(receipt) => receipt,
         Err(err) => {
-            let mut err = map_replay_store_error(err);
-            if cost_settled
-                && let Err(recovery_err) = replay_ops::mark_root_replay_recovery_required(
+            let err = map_replay_store_error(err);
+            if cost_settled {
+                let _ = replay_ops::mark_root_replay_recovery_required(
                     pending,
                     RecoveryReason::ResponseCommitFailed,
                     secs_to_ns(ctx.now),
                 )
-                .map_err(map_replay_store_error)
-            {
-                err = err.with_diagnostic_context(format!(
-                    "root replay response recovery marker failed: {recovery_err}"
-                ));
+                .map_err(map_replay_store_error);
             }
             return Err(err);
         }
@@ -346,26 +342,18 @@ fn map_replay_finalize_error(err: ReplayFinalizeError) -> InternalError {
 
 pub(super) fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
-        ReplayReceiptStoreError::ReceiptMissing => map_replay_decode_error(
-            ReplayDecodeError::DecodeFailed("reserved replay receipt is missing".to_string()),
-        ),
-        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
+        ReplayReceiptStoreError::ReceiptMissing
+        | ReplayReceiptStoreError::StagedResponseMissing => {
+            InternalError::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
+        }
+        ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
         }
         ReplayReceiptStoreError::ReceiptTokenMismatch => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
-                "replay receipt token no longer matches persisted receipt identity".to_string(),
-            ))
-        }
-        ReplayReceiptStoreError::StagedResponseMissing => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
-                "replay receipt is missing staged response data".to_string(),
-            ))
+            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
         }
         ReplayReceiptStoreError::CostGuardSettlementMissing => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
-                "replay receipt is missing cost guard settlement identity".to_string(),
-            ))
+            InternalError::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
         }
     }
 }
@@ -438,13 +426,9 @@ pub(super) fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> 
 #[must_use]
 pub(super) fn abort_replay_after_failure(
     pending: ReplayPending,
-    mut error: InternalError,
+    error: InternalError,
 ) -> InternalError {
-    if let Err(cleanup_error) = abort_replay(pending) {
-        error = error.with_diagnostic_context(format!(
-            "root replay reservation cleanup failed: {cleanup_error}"
-        ));
-    }
+    let _ = abort_replay(pending);
     error
 }
 

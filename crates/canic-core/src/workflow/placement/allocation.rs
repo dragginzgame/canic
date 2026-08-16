@@ -5,9 +5,9 @@
 //! Boundary: placement workflows register the returned child before settling the permit.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
-    dto::{error::Error, rpc::CreateCanisterParent},
+    dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
     model::{
         intent::{
@@ -119,10 +119,9 @@ impl PlacementAllocationWorkflow {
         request: PlacementAllocationRequest,
     ) -> Result<(PlacementAllocationPermit, Principal), InternalError> {
         if ReceiptBackedIntentOps::load(request.identity.operation_id)?.is_none() {
-            return Err(InternalError::public(Error::conflict(format!(
-                "placement allocation {} has no durable intent and cannot be resumed safely",
-                request.identity.operation_id
-            ))));
+            return Err(InternalError::public(
+                crate::diagnostics::codes::STATE_CONFLICT,
+            ));
         }
         Self::create_child(request).await
     }
@@ -191,39 +190,15 @@ fn settle_allocation(
         {
             Ok(())
         }
-        SettleReceiptBackedIntentResult::Settled { state, .. }
-        | SettleReceiptBackedIntentResult::AlreadySettled { state, .. } => {
-            Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "placement allocation {} settled to unexpected state {state:?}",
-                    permit.identity.operation_id
-                ),
-            ))
+        SettleReceiptBackedIntentResult::Settled { state: _, .. }
+        | SettleReceiptBackedIntentResult::AlreadySettled { state: _, .. } => {
+            Err(InternalError::invariant())
         }
-        SettleReceiptBackedIntentResult::NotFound => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "placement allocation intent {} disappeared before settlement",
-                permit.identity.operation_id
-            ),
-        )),
-        SettleReceiptBackedIntentResult::RevisionConflict { actual_revision } => {
-            Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "placement allocation intent {} revision changed from {} to {actual_revision}",
-                    permit.identity.operation_id, permit.revision
-                ),
-            ))
+        SettleReceiptBackedIntentResult::NotFound => Err(InternalError::invariant()),
+        SettleReceiptBackedIntentResult::RevisionConflict { actual_revision: _ } => {
+            Err(InternalError::invariant())
         }
-        SettleReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "placement allocation intent {} payload binding changed before settlement",
-                permit.identity.operation_id
-            ),
-        )),
+        SettleReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant()),
     }
 }
 
@@ -262,10 +237,7 @@ fn remove_terminal_intent(
         return Ok(());
     };
     if intent.payload_binding != expected_payload_binding {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("placement allocation {operation_id} payload binding changed before cleanup"),
-        ));
+        return Err(InternalError::invariant());
     }
     remove_exact_terminal_intent(&intent)
 }
@@ -282,29 +254,11 @@ pub(super) fn remove_exact_terminal_intent(
     match result {
         RemoveTerminalReceiptBackedIntentResult::Removed
         | RemoveTerminalReceiptBackedIntentResult::NotFound => Ok(()),
-        RemoveTerminalReceiptBackedIntentResult::NotTerminal => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "placement allocation {} is pending during receipt cleanup",
-                intent.operation_id
-            ),
-        )),
-        RemoveTerminalReceiptBackedIntentResult::RevisionConflict { actual_revision } => {
-            Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "placement allocation {} revision changed from {} to {actual_revision} during receipt cleanup",
-                    intent.operation_id, intent.revision
-                ),
-            ))
+        RemoveTerminalReceiptBackedIntentResult::NotTerminal => Err(InternalError::invariant()),
+        RemoveTerminalReceiptBackedIntentResult::RevisionConflict { actual_revision: _ } => {
+            Err(InternalError::invariant())
         }
-        RemoveTerminalReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "placement allocation {} payload binding changed during receipt cleanup",
-                intent.operation_id
-            ),
-        )),
+        RemoveTerminalReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant()),
     }
 }
 
@@ -323,52 +277,32 @@ fn begin_allocation(
         BeginReceiptBackedIntentResult::Created { revision } => (revision, false),
         BeginReceiptBackedIntentResult::ExistingPending { revision } => (revision, true),
         BeginReceiptBackedIntentResult::ExistingCommitted { .. } => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "placement allocation intent {} is committed but domain membership is absent",
-                    request.identity.operation_id
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
         BeginReceiptBackedIntentResult::ExistingRolledBack { .. } => {
-            return Err(InternalError::public(Error::conflict(format!(
-                "placement allocation {} was durably rolled back",
-                request.identity.operation_id
-            ))));
+            return Err(InternalError::public(
+                crate::diagnostics::codes::STATE_CONFLICT,
+            ));
         }
         BeginReceiptBackedIntentResult::BindingConflict => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "placement allocation operation {} has conflicting bound input",
-                    request.identity.operation_id
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
         BeginReceiptBackedIntentResult::ReplayWindowClosed { .. }
         | BeginReceiptBackedIntentResult::ReplayWindowTooLong { .. } => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "placement admission unexpectedly applied an application replay window",
-            ));
+            return Err(InternalError::invariant());
         }
         BeginReceiptBackedIntentResult::CapacityExceeded {
-            current_quantity,
-            requested_quantity,
-            limit,
+            current_quantity: _,
+            requested_quantity: _,
+            limit: _,
         } => {
-            return Err(InternalError::resource_exhausted(format!(
-                "placement allocation capacity exceeded: current={current_quantity} requested={requested_quantity} limit={limit}"
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         BeginReceiptBackedIntentResult::StoreCapacityReached {
-            current_records,
-            limit,
+            current_records: _,
+            limit: _,
         } => {
-            return Err(InternalError::resource_exhausted(format!(
-                "placement allocation intent capacity reached: current={current_records} limit={limit}"
-            )));
+            return Err(InternalError::resource_exhausted());
         }
     };
 
@@ -472,8 +406,8 @@ mod tests {
             futures::executor::block_on(PlacementAllocationWorkflow::recover_child(request(0, 1)))
                 .expect_err("untracked operation must not invent a replacement effect");
         assert_eq!(
-            error.public_error().map(|error| error.code),
-            Some(crate::dto::error::ErrorCode::Conflict)
+            error.public_error().code(),
+            crate::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 

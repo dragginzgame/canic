@@ -1,26 +1,7 @@
-use crate::{InternalError, InternalErrorClass, InternalErrorOrigin, dto::error::Error};
+use crate::{InternalError, dto::error::Error};
 
 fn internal_error_to_public(err: &InternalError) -> Error {
-    if let Some(public) = err.public_error() {
-        return public.clone();
-    }
-
-    let message = err.to_string();
-
-    match err.class() {
-        InternalErrorClass::Access => Error::unauthorized(message),
-
-        InternalErrorClass::Domain => match err.origin() {
-            InternalErrorOrigin::Config => Error::invalid(message),
-            _ => Error::conflict(message),
-        },
-
-        InternalErrorClass::Invariant => Error::invariant(message),
-
-        InternalErrorClass::Infra | InternalErrorClass::Ops | InternalErrorClass::Workflow => {
-            Error::internal(message)
-        }
-    }
+    err.public_error()
 }
 
 impl From<&InternalError> for Error {
@@ -48,48 +29,77 @@ mod tests {
             component_allocation::ComponentAllocationPolicyError,
             component_child_allocation::ComponentChildAllocationPolicyError,
         },
-        dto::error::ErrorCode,
         ids::CanisterRole,
     };
 
     #[test]
-    fn internal_error_mapping_matches_class_contract() {
-        let access: Error = InternalError::from(AccessError::Denied("denied".to_string())).into();
-        assert_eq!(access.code, ErrorCode::Unauthorized);
+    fn internal_error_mapping_uses_registered_semantic_causes() {
+        let access: Error = InternalError::from(AccessError::ControllerRequired).into();
+        assert_eq!(
+            access.code(),
+            crate::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        );
 
-        let domain_config: Error =
-            InternalError::domain(InternalErrorOrigin::Config, "bad config").into();
-        assert_eq!(domain_config.code, ErrorCode::InvalidInput);
+        let domain_config: Error = InternalError::projected(
+            crate::diagnostics::codes::CONFIGURATION_INVALID,
+            crate::diagnostics::codes::REQUEST_INVALID,
+        )
+        .into();
+        assert_eq!(
+            domain_config.code(),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
 
-        let domain_other: Error =
-            InternalError::domain(InternalErrorOrigin::Domain, "conflict").into();
-        assert_eq!(domain_other.code, ErrorCode::Conflict);
+        let domain_other: Error = InternalError::conflict().into();
+        assert_eq!(
+            domain_other.code(),
+            crate::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
 
-        let invariant: Error =
-            InternalError::invariant(InternalErrorOrigin::Ops, "broken invariant").into();
-        assert_eq!(invariant.code, ErrorCode::InvariantViolation);
+        let invariant: Error = InternalError::invariant().into();
+        assert_eq!(
+            invariant.code(),
+            crate::diagnostics::codes::STATE_INVALID.raw_code()
+        );
 
-        let infra: Error = InternalError::infra(InternalErrorOrigin::Infra, "infra fail").into();
-        assert_eq!(infra.code, ErrorCode::Internal);
+        let infra: Error = InternalError::platform_failure().into();
+        assert_eq!(
+            infra.code(),
+            crate::diagnostics::codes::STATE_FAILED.raw_code()
+        );
 
-        let ops: Error = InternalError::ops(InternalErrorOrigin::Ops, "ops fail").into();
-        assert_eq!(ops.code, ErrorCode::Internal);
+        let ops: Error = InternalError::state_failure().into();
+        assert_eq!(
+            ops.code(),
+            crate::diagnostics::codes::STATE_FAILED.raw_code()
+        );
 
-        let workflow: Error =
-            InternalError::workflow(InternalErrorOrigin::Workflow, "workflow fail").into();
-        assert_eq!(workflow.code, ErrorCode::Internal);
+        let workflow: Error = InternalError::lifecycle_failure().into();
+        assert_eq!(
+            workflow.code(),
+            crate::diagnostics::codes::STATE_FAILED.raw_code()
+        );
 
         let invalid_allocation: Error =
             InternalError::from(ComponentAllocationPolicyError::EmptyOperationId).into();
-        assert_eq!(invalid_allocation.code, ErrorCode::InvalidInput);
+        assert_eq!(
+            invalid_allocation.code(),
+            crate::diagnostics::codes::REQUEST_INCOMPLETE.raw_code()
+        );
 
         let exhausted_allocation: Error =
             InternalError::from(ComponentAllocationPolicyError::ComponentCapacityExhausted).into();
-        assert_eq!(exhausted_allocation.code, ErrorCode::ResourceExhausted);
+        assert_eq!(
+            exhausted_allocation.code(),
+            crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+        );
 
         let invalid_authority: Error =
             InternalError::from(ComponentAllocationPolicyError::RootTopologyDigestMismatch).into();
-        assert_eq!(invalid_authority.code, ErrorCode::InvariantViolation);
+        assert_eq!(
+            invalid_authority.code(),
+            crate::diagnostics::codes::DIGEST_CONFLICT.raw_code()
+        );
 
         let forbidden_child: Error =
             InternalError::from(ComponentChildAllocationPolicyError::SpawnGrantMissing {
@@ -97,31 +107,47 @@ mod tests {
                 child_role: CanisterRole::new("project_ledger"),
             })
             .into();
-        assert_eq!(forbidden_child.code, ErrorCode::Forbidden);
+        assert_eq!(
+            forbidden_child.code(),
+            crate::diagnostics::codes::CONFIGURATION_UNAVAILABLE.raw_code()
+        );
 
         let stale_child: Error = InternalError::from(
             ComponentChildAllocationPolicyError::ComponentRegistryAuthorityMismatch,
         )
         .into();
-        assert_eq!(stale_child.code, ErrorCode::Conflict);
+        assert_eq!(
+            stale_child.code(),
+            crate::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
+        );
 
         let exhausted_child: Error = InternalError::from(
             ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted,
         )
         .into();
-        assert_eq!(exhausted_child.code, ErrorCode::ResourceExhausted);
+        assert_eq!(
+            exhausted_child.code(),
+            crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+        );
 
         let token_expired: Error = AccessError::DelegatedAuthTokenExpired.into();
-        assert_eq!(token_expired.code, ErrorCode::AuthTokenExpired);
+        assert_eq!(
+            token_expired.code(),
+            crate::diagnostics::codes::AUTH_TOKEN_EXPIRED.raw_code()
+        );
 
         let cert_expired: Error = AccessError::DelegatedAuthCertExpired.into();
-        assert_eq!(cert_expired.code, ErrorCode::AuthProofExpired);
+        assert_eq!(
+            cert_expired.code(),
+            crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code()
+        );
     }
 
     #[test]
     fn public_error_is_preserved_without_remap() {
-        let public = Error::not_found("missing");
-        let remapped: Error = InternalError::public(public.clone()).into();
+        let public = Error::from_registered(crate::diagnostics::codes::COLLECTION_UNAVAILABLE);
+        let remapped: Error =
+            InternalError::public(crate::diagnostics::codes::COLLECTION_UNAVAILABLE).into();
         assert_eq!(remapped, public);
     }
 }

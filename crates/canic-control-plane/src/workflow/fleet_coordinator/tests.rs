@@ -26,7 +26,6 @@ use canic_core::{
     cdk::types::Cycles,
     control_plane_support::{
         config::ConfigModel,
-        error::InternalErrorClass,
         ops::{
             component_provisioning_plan::ComponentProvisioningPlanOps,
             component_provisioning_receipt::{
@@ -56,7 +55,6 @@ use canic_core::{
             RootComponentPublicationEvidence, RootComponentPublicationRequest,
             RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
-        error::ErrorCode,
         fleet_registry::{
             FleetRegistryActivationRequest, FleetSubnetRootDeletionCompletionRequest,
             FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionReadinessIntentRequest,
@@ -403,8 +401,8 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     )
     .expect_err("reject non-controller init");
     assert_eq!(
-        unauthorized.public_error().map(|error| error.code),
-        Some(ErrorCode::Forbidden)
+        unauthorized.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let wrong_canister = FleetCoordinatorWorkflow::initialize(
@@ -415,8 +413,8 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     )
     .expect_err("reject wrong Coordinator binding");
     assert_eq!(
-        wrong_canister.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        wrong_canister.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 
     let durable = FleetCoordinatorRegistryStore::export();
@@ -432,7 +430,10 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("corrupt durable compiled configuration must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     FleetCoordinatorRegistryStore::import(durable);
 }
 
@@ -497,8 +498,8 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     })
     .expect_err("a new root cannot commit against stale Registry authority");
     assert_eq!(
-        stale.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        stale.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let mut conflicting_entry = first_entry;
@@ -509,8 +510,8 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     })
     .expect_err("an existing root identity cannot change authority");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let mut corrupted = FleetCoordinatorRegistryStore::export();
@@ -524,7 +525,10 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
         .expect_err("reject corrupted historical receipt");
-    assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+    );
 }
 
 #[test]
@@ -573,8 +577,8 @@ fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
     )
     .expect_err("foreign caller cannot read reservation");
     assert_eq!(
-        forbidden.public_error().map(|error| error.code),
-        Some(ErrorCode::Forbidden)
+        forbidden.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     FleetCoordinatorWorkflow::publish_root_draining(root_draining_publication_request(
@@ -612,7 +616,10 @@ fn root_draining_reservation_is_durable_hash_bound_and_target_readable() {
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("corrupt reservation hash must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     FleetCoordinatorRegistryStore::import(durable);
 }
 
@@ -631,8 +638,8 @@ fn root_draining_reservation_rejects_stale_and_reused_authority() {
         )
         .expect_err("zero reservation operation rejects");
     assert_eq!(
-        invalid.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 
     let mut stale = request.clone();
@@ -643,8 +650,8 @@ fn root_draining_reservation_rejects_stale_and_reused_authority() {
         )
         .expect_err("stale Registry hash rejects");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 
@@ -670,8 +677,8 @@ fn root_draining_reservation_rejects_stale_and_reused_authority() {
     )
     .expect_err("status cannot substitute another root");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
 
@@ -700,8 +707,8 @@ fn component_plan_and_root_draining_reservation_have_one_atomic_winner() {
         )
         .expect_err("plan cannot select reserved root");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_plan);
 
@@ -760,8 +767,8 @@ fn scale_out_cannot_select_a_root_reserved_after_fresh_provisioning() {
         )
         .expect_err("scale-out cannot select reserved root");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
@@ -837,8 +844,8 @@ fn root_draining_publication_requires_one_exact_retained_reservation() {
     let unavailable = FleetCoordinatorWorkflow::publish_root_draining(missing)
         .expect_err("publication without retained reservation must fail closed");
     assert_eq!(
-        unavailable.public_error().map(|error| error.code),
-        Some(ErrorCode::Unavailable)
+        unavailable.public_error().code(),
+        canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
     );
 
     let reservation =
@@ -856,8 +863,8 @@ fn root_draining_publication_requires_one_exact_retained_reservation() {
     let conflict = FleetCoordinatorWorkflow::publish_root_draining(wrong_hash)
         .expect_err("publication with substituted reservation hash must fail closed");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 }
 
@@ -871,8 +878,8 @@ fn assert_reservation_conflict(
         )
         .expect_err(message);
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
 
@@ -1002,8 +1009,8 @@ fn assert_invalid_service_publication_time(
         )
         .expect_err("publication cannot predate complete provisioning");
     assert_eq!(
-        invalid.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before.clone());
 }
@@ -1081,7 +1088,10 @@ fn assert_service_publication_replay_and_corruption(
             },
         )
         .expect_err("publication phase without its atomic receipt must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
 
     let mut duplicated = durable.clone();
     let current = duplicated.current.as_mut().expect("Coordinator state");
@@ -1101,7 +1111,10 @@ fn assert_service_publication_replay_and_corruption(
             },
         )
         .expect_err("one operation cannot retain duplicate publication receipts");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
 
     let mut corrupted = durable;
     corrupted
@@ -1115,7 +1128,10 @@ fn assert_service_publication_replay_and_corruption(
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
         .expect_err("corrupted terminal publication evidence must fail closed");
-    assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+    );
 }
 
 #[test]
@@ -1308,7 +1324,10 @@ fn scale_out_publishes_all_new_pool_members_in_one_atomic_registry_append() {
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("scale-out publication cannot remove its appended member");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
 }
 
 #[test]
@@ -1444,7 +1463,10 @@ fn assert_restored_service_and_placement_authority(
     FleetCoordinatorRegistryStore::import(invalid_ordinal.clone());
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("restored next ordinal cannot diverge from placement receipts");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     assert_eq!(FleetCoordinatorRegistryStore::export(), invalid_ordinal);
 
     let mut invalid_service = durable.clone();
@@ -1460,7 +1482,10 @@ fn assert_restored_service_and_placement_authority(
     FleetCoordinatorRegistryStore::import(invalid_service.clone());
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("restored service member cannot diverge from publication authority");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     assert_eq!(FleetCoordinatorRegistryStore::export(), invalid_service);
 
     FleetCoordinatorRegistryStore::import(durable.clone());
@@ -1482,7 +1507,7 @@ fn assert_packed_root_limit_rejects_without_mutation(
             2_000,
         )
         .expect_err("a third placement cannot enter the already-full root");
-    assert_eq!(invalid.class(), InternalErrorClass::Ops);
+    assert_eq!(invalid.code(), canic_core::diagnostics::codes::STATE_FAILED);
     assert_eq!(FleetCoordinatorRegistryStore::export(), *durable);
 }
 
@@ -1773,8 +1798,8 @@ fn assert_retired_scale_out_replays(scenario: &RepeatedScaleOutScenario) {
         prepare_component_provisioning_for_test(config, conflicting_retry, 10_000)
         .expect_err("retired operation cannot select different plan authority");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), *rolled);
 }
@@ -1816,7 +1841,10 @@ fn complete_repeated_scale_out(scenario: RepeatedScaleOutScenario) {
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("corrupted retired placement authority must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     FleetCoordinatorRegistryStore::import(terminal.clone());
 
     let mut corrupted = FleetCoordinatorRegistryStore::export();
@@ -1829,7 +1857,10 @@ fn complete_repeated_scale_out(scenario: RepeatedScaleOutScenario) {
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = FleetCoordinatorWorkflow::registry()
         .expect_err("corrupted retired replay-only count must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     FleetCoordinatorRegistryStore::import(terminal);
     assert_second_rollover_retains_ordered_history(&config, &second);
 }
@@ -1890,8 +1921,8 @@ fn assert_current_terminal_operation_rejects_conflicting_plan(
         prepare_component_provisioning_for_test(config, conflicting, 1_999)
         .expect_err("active terminal operation cannot select different plan authority");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
@@ -1910,7 +1941,10 @@ fn assert_next_scale_out_rejects_time_regression(
     let invalid = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         prepare_component_provisioning_for_test(config, request.clone(), regressed_at_ns)
         .expect_err("next scale-out cannot predate retired terminal history");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before);
 }
 
@@ -2207,8 +2241,8 @@ fn assert_invalid_plan_identity_rejects_before_persistence(
         prepare_component_provisioning_for_test(config, zero_operation, 92)
         .expect_err("zero operation ID must reject before persistence");
     assert_eq!(
-        invalid.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert!(
         FleetCoordinatorRegistryStore::export()
@@ -2268,8 +2302,8 @@ fn assert_prepared_plan_replays_exactly(
         )
         .expect_err("status cannot cross protected plan authority");
     assert_eq!(
-        wrong_status.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        wrong_status.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(
         crate::ops::fleet_coordinator::FleetCoordinatorOps::
@@ -2300,8 +2334,8 @@ fn assert_conflicting_plan_authority_fails_closed(
         prepare_component_provisioning_for_test(config, conflicting, 93)
         .expect_err("one operation cannot replace its complete plan");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable.clone());
 
@@ -2312,8 +2346,8 @@ fn assert_conflicting_plan_authority_fails_closed(
         )
         .expect_err("a planned grouped Fleet fences root lifecycle");
     assert_eq!(
-        drain.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        drain.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let mut corrupted = durable.clone();
@@ -2335,7 +2369,10 @@ fn assert_conflicting_plan_authority_fails_closed(
             },
         )
         .expect_err("corrupt durable plan authority must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     FleetCoordinatorRegistryStore::import(durable.clone());
 }
 
@@ -2380,8 +2417,8 @@ fn coordinator_journals_each_root_acceptance_and_reconciles_lost_responses() {
         )
         .expect_err("root acceptance cannot predate its durable call intent");
     assert_eq!(
-        invalid_time.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        invalid_time.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
@@ -2507,7 +2544,10 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
             },
         )
         .expect_err("corrupt terminal root receipt must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
 }
 
 fn assert_terminal_root_provisioning_status(
@@ -2593,8 +2633,8 @@ fn assert_invalid_root_provision_responses(
         )
         .expect_err("root response cannot skip a provisioning cursor");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     let early = crate::ops::fleet_coordinator::FleetCoordinatorOps::
         record_component_provisioning_root_for_test(
@@ -2605,8 +2645,8 @@ fn assert_invalid_root_provision_responses(
         )
         .expect_err("root response cannot predate its durable call intent");
     assert_eq!(
-        early.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        early.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     let mut substituted = response.clone();
     substituted.fleet_subnet_root = principal(200);
@@ -2619,8 +2659,8 @@ fn assert_invalid_root_provision_responses(
         )
         .expect_err("root response cannot substitute its protected root");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(
         FleetCoordinatorRegistryStore::export(),
@@ -3198,8 +3238,8 @@ fn assert_conflicting_synchronization_cursor_rejects(
         panic!("a substituted synchronization root must reject")
     };
     assert_eq!(
-        invalid.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable);
 }
@@ -3728,8 +3768,8 @@ fn accept_second_root_and_reject_substitution(config: &ConfigModel, plan_hash: [
         )
         .expect_err("substituted root response must reject");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
 
@@ -3771,7 +3811,10 @@ fn assert_corrupt_root_acceptance_fails_closed(config: &ConfigModel, plan_hash: 
             },
         )
         .expect_err("corrupt accepted root evidence must fail closed");
-    assert_eq!(invalid.class(), InternalErrorClass::Invariant);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
     FleetCoordinatorRegistryStore::import(exact);
 }
 
@@ -4095,8 +4138,8 @@ fn assert_snapshot_acknowledgements(
     let unauthorized_snapshot = FleetCoordinatorWorkflow::snapshot_for_root(principal(99))
         .expect_err("unregistered caller cannot fetch snapshot");
     assert_eq!(
-        unauthorized_snapshot.public_error().map(|error| error.code),
-        Some(ErrorCode::Forbidden)
+        unauthorized_snapshot.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let request = canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
@@ -4121,8 +4164,8 @@ fn assert_snapshot_acknowledgements(
     let incomplete = FleetCoordinatorWorkflow::activate_registry(activation_request.clone())
         .expect_err("activation requires every root acknowledgement");
     assert_eq!(
-        incomplete.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        incomplete.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
     FleetCoordinatorWorkflow::acknowledge_root_snapshot(second_entry.fleet_subnet_root, request)
         .expect("second acknowledgement");
@@ -4192,8 +4235,8 @@ fn assert_root_draining_publication(
     let invalid = FleetCoordinatorWorkflow::publish_root_draining(oversized)
         .expect_err("reject root draining receipt outside protected limits");
     assert_eq!(
-        invalid.public_error().map(|error| error.code),
-        Some(ErrorCode::InvalidInput)
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_invalid);
 
@@ -4234,8 +4277,8 @@ fn assert_root_draining_publication(
     let conflict = FleetCoordinatorWorkflow::publish_root_draining(conflicting)
         .expect_err("one root cannot publish different draining authority");
     assert_eq!(
-        conflict.public_error().map(|error| error.code),
-        Some(ErrorCode::Conflict)
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 
     let valid = FleetCoordinatorRegistryStore::export();
@@ -4251,7 +4294,10 @@ fn assert_root_draining_publication(
     FleetCoordinatorRegistryStore::import(corrupted);
     let invalid = crate::api::fleet_coordinator::FleetCoordinatorApi::registry()
         .expect_err("reject corrupted root Draining publication receipt");
-    assert_eq!(invalid.code, ErrorCode::InvariantViolation);
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+    );
     FleetCoordinatorRegistryStore::import(valid);
 
     assert_root_removal_publication(first_entry, second_entry, &published);
@@ -4293,8 +4339,8 @@ fn assert_root_removal_publication(
     )
     .expect_err("only the exact draining root can publish its removal");
     assert_eq!(
-        unauthorized.public_error().map(|error| error.code),
-        Some(ErrorCode::Forbidden)
+        unauthorized.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_unauthorized);
 
@@ -4338,8 +4384,8 @@ fn assert_root_removal_publication(
         FleetCoordinatorWorkflow::snapshot_for_root(first_entry.fleet_subnet_root)
             .expect_err("Removed root cannot fetch a later Registry snapshot");
     assert_eq!(
-        removed_snapshot.public_error().map(|error| error.code),
-        Some(ErrorCode::Forbidden)
+        removed_snapshot.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     let surviving_snapshot =
         FleetCoordinatorWorkflow::snapshot_for_root(second_entry.fleet_subnet_root)

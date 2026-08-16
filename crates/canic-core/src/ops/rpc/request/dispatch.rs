@@ -7,7 +7,7 @@
 use super::RequestOpsError;
 use crate::model::replay::OperationId;
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::rpc::{
         AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
         CreateCanisterResponse, CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request,
@@ -99,12 +99,10 @@ impl RequestOps {
     where
         A: CandidType + Send + Sync,
     {
-        let extra_arg = extra.map(encode_one).transpose().map_err(|err| {
-            InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                format!("failed to encode create_canister extra arg: {err}"),
-            )
-        })?;
+        let extra_arg = extra
+            .map(encode_one)
+            .transpose()
+            .map_err(|_err| InternalError::invariant())?;
 
         let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(
@@ -129,12 +127,10 @@ impl RequestOps {
     where
         A: CandidType + Send + Sync,
     {
-        let extra_arg = extra.map(encode_one).transpose().map_err(|err| {
-            InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                format!("failed to encode placement child extra arg: {err}"),
-            )
-        })?;
+        let extra_arg = extra
+            .map(encode_one)
+            .transpose()
+            .map_err(|_err| InternalError::invariant())?;
 
         let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(

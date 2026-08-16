@@ -441,18 +441,18 @@ impl AccessFailure {
         }
     }
 
-    fn no_predicates(context: &'static str) -> Self {
+    const fn no_predicates(context: &'static str) -> Self {
         Self {
-            error: AccessError::Denied("one or more rules must be defined".to_string()),
+            error: AccessError::ExpressionRuleRequired,
             metric_kind: AccessMetricKind::Auth,
             predicate: "no_rules",
             context: Some(context),
         }
     }
 
-    fn negated() -> Self {
+    const fn negated() -> Self {
         Self {
-            error: AccessError::Denied("negated predicate matched".to_string()),
+            error: AccessError::NegatedPredicateMatched,
             metric_kind: AccessMetricKind::Auth,
             predicate: "not",
             context: Some("not"),
@@ -467,15 +467,28 @@ impl AccessFailure {
 
 fn record_access_failure(ctx: &AccessContext, failure: AccessFailure) -> AccessError {
     AccessMetrics::increment(ctx.call, failure.metric_kind, failure.predicate);
-    log!(
-        Topic::Auth,
-        Warn,
-        "access denied kind={} predicate={} context={:?}: {}",
-        failure.metric_kind.as_str(),
-        failure.predicate,
-        failure.context,
-        failure.error,
-    );
+    if let Some(codes) = failure.error.diagnostic_codes() {
+        log!(
+            Topic::Auth,
+            Warn,
+            "access denied code={} public_code={} kind={} predicate={} context={:?}",
+            codes.exact,
+            codes.public,
+            failure.metric_kind.as_str(),
+            failure.predicate,
+            failure.context,
+        );
+    } else {
+        log!(
+            Topic::Auth,
+            Warn,
+            "access denied kind={} predicate={} context={:?}: {}",
+            failure.metric_kind.as_str(),
+            failure.predicate,
+            failure.context,
+            failure.error,
+        );
+    }
     failure.error
 }
 

@@ -10,13 +10,14 @@ mod replay;
 use crate::{
     InternalError,
     cdk::types::Principal,
+    diagnostics::codes,
     dto::{
         auth::{
             DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, RoleAttestationGetRequest,
             RoleAttestationPrepareResponse, RoleAttestationRequest, RootDelegationProofBatchProof,
             SignedRoleAttestation,
         },
-        error::{Error, ErrorCode},
+        error::Error,
     },
     model::replay::{RecoveryReason, ReplayActor},
     ops::{
@@ -56,8 +57,7 @@ impl RuntimeAuthWorkflow {
     pub async fn prepare_delegated_token(
         request: DelegatedTokenPrepareRequest,
     ) -> Result<DelegatedTokenPrepareResponse, InternalError> {
-        let label = "delegated token prepare";
-        let metadata = token_replay_metadata(request.metadata, label)?;
+        let metadata = token_replay_metadata(request.metadata)?;
         let caller = IcOps::msg_caller();
         validate_token_prepare_public_request(caller, &request)?;
         let command_kind = token_prepare_replay_command_kind();
@@ -71,7 +71,6 @@ impl RuntimeAuthWorkflow {
             payload_hash,
             now_ns,
             metadata.ttl_ns,
-            "delegated token prepare replay metadata ttl_ns overflows nanoseconds",
         )?;
         crate::perf!("delegated_token_validate_request");
 
@@ -83,15 +82,15 @@ impl RuntimeAuthWorkflow {
             Ok(decision) => {
                 return map_token_prepare_replay_decision(decision);
             }
-            Err(ReplayReceiptRetentionError::ActorQuotaExceeded { max_retained, .. }) => {
-                return Err(InternalError::resource_exhausted(format!(
-                    "delegated token prepare retained replay response quota exceeded for caller; max_retained={max_retained}"
-                )));
+            Err(ReplayReceiptRetentionError::ActorQuotaExceeded {
+                max_retained: _, ..
+            }) => {
+                return Err(InternalError::resource_exhausted());
             }
-            Err(ReplayReceiptRetentionError::CommandQuotaExceeded { max_retained, .. }) => {
-                return Err(InternalError::resource_exhausted(format!(
-                    "delegated token prepare retained replay response quota exceeded globally; max_retained={max_retained}"
-                )));
+            Err(ReplayReceiptRetentionError::CommandQuotaExceeded {
+                max_retained: _, ..
+            }) => {
+                return Err(InternalError::resource_exhausted());
             }
             Err(ReplayReceiptRetentionError::Store(err)) => {
                 return Err(map_token_prepare_replay_store_error(err));
@@ -175,7 +174,6 @@ impl RuntimeAuthWorkflow {
             payload_hash,
             now_ns,
             metadata.ttl_ns,
-            "role attestation replay metadata ttl_ns overflows nanoseconds",
         )?;
 
         let token = match reserve_or_replay_receipt(replay_input)
@@ -275,21 +273,16 @@ fn commit_auth_prepare_response(
 
 fn preserve_auth_response_failure(
     token: &ReplayReceiptToken,
-    mut err: InternalError,
+    err: InternalError,
     map_store_error: fn(ReplayReceiptStoreError) -> InternalError,
-    label: &'static str,
+    _label: &'static str,
 ) -> InternalError {
-    if let Err(recovery_err) = mark_recovery_required(
+    let _ = mark_recovery_required(
         token,
         RecoveryReason::ResponseCommitFailed,
         IcOps::now_nanos(),
     )
-    .map_err(map_store_error)
-    {
-        err = err.with_diagnostic_context(format!(
-            "{label} replay recovery marker failed: {recovery_err}"
-        ));
-    }
+    .map_err(map_store_error);
     err
 }
 
@@ -340,12 +333,11 @@ where
 }
 
 fn delegated_token_prepare_error_allows_lazy_repair(err: &InternalError) -> bool {
-    err.public_error().is_some_and(|public| {
-        matches!(
-            public.code,
-            ErrorCode::AuthMaterialStale | ErrorCode::AuthProofExpired
-        )
-    })
+    matches!(
+        err.public_error().raw_code(),
+        code if code == codes::SECURITY_CONFLICT.raw_code().raw()
+            || code == codes::AUTH_CERT_EXPIRED.raw_code().raw()
+    )
 }
 
 async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError> {
@@ -369,17 +361,14 @@ fn chain_key_delegation_proof_from_root_call(
     call: CallResult,
 ) -> Result<RootDelegationProofBatchProof, InternalError> {
     let result: Result<RootDelegationProofBatchProof, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        dto::{
-            auth::{AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience},
-            error::ErrorCode,
-        },
+        dto::auth::{AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience},
         ids::{CanisterRole, cap},
     };
     use futures::executor::block_on;
@@ -445,9 +434,7 @@ mod tests {
                 let call = prepare_calls.get();
                 prepare_calls.set(call + 1);
                 if call == 0 {
-                    Err(InternalError::auth_material_stale(
-                        "active delegation proof is stale",
-                    ))
+                    Err(InternalError::auth_material_stale())
                 } else {
                     Ok(42_u8)
                 }
@@ -477,9 +464,7 @@ mod tests {
             p(8),
             |_, _, _| -> Result<u8, InternalError> {
                 prepare_calls.set(prepare_calls.get() + 1);
-                Err(InternalError::auth_material_stale(
-                    "active delegation proof is stale",
-                ))
+                Err(InternalError::auth_material_stale())
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);
@@ -487,16 +472,16 @@ mod tests {
             },
             || {
                 validation_calls.set(validation_calls.get() + 1);
-                Err(InternalError::public(Error::conflict(
-                    "replay ownership changed",
-                )))
+                Err(InternalError::public(
+                    crate::diagnostics::codes::STATE_CONFLICT,
+                ))
             },
         ))
         .expect_err("stale replay ownership must prevent the second prepare");
 
         assert_eq!(
-            err.public_error().expect("public error").code,
-            ErrorCode::Conflict
+            err.public_error().code(),
+            crate::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         assert_eq!(prepare_calls.get(), 1);
         assert_eq!(repair_calls.get(), 1);
@@ -542,23 +527,19 @@ mod tests {
             p(8),
             |_, _, _| -> Result<u8, InternalError> {
                 prepare_calls.set(prepare_calls.get() + 1);
-                Err(InternalError::auth_proof_expired(
-                    "active delegation proof expired",
-                ))
+                Err(InternalError::auth_proof_expired())
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);
-                Err(InternalError::auth_proof_pending(
-                    "chain-key root delegation proof is not available yet; retry",
-                ))
+                Err(InternalError::auth_proof_pending())
             },
             || Ok(()),
         ))
         .expect_err("pending root repair must not issue a token");
 
         assert_eq!(
-            err.public_error().expect("public error").code,
-            ErrorCode::AuthProofPending
+            err.public_error().code(),
+            crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code()
         );
         assert_eq!(prepare_calls.get(), 1);
         assert_eq!(repair_calls.get(), 1);
@@ -576,9 +557,9 @@ mod tests {
             p(8),
             |_, _, _| -> Result<u8, InternalError> {
                 prepare_calls.set(prepare_calls.get() + 1);
-                Err(InternalError::public(Error::forbidden(
-                    "delegated token prepare subject must match caller",
-                )))
+                Err(InternalError::public(
+                    crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                ))
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);
@@ -589,8 +570,8 @@ mod tests {
         .expect_err("non-repairable error should pass through");
 
         assert_eq!(
-            err.public_error().expect("public error").code,
-            ErrorCode::Forbidden
+            err.public_error().code(),
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         assert_eq!(prepare_calls.get(), 1);
         assert_eq!(repair_calls.get(), 0);
@@ -598,27 +579,23 @@ mod tests {
 
     #[test]
     fn delegated_token_replay_metadata_rejects_missing_or_invalid_ttl() {
-        let missing = token_replay_metadata(None, "delegated token prepare").expect_err("required");
+        let missing = token_replay_metadata(None).expect_err("required");
         assert_eq!(
-            missing.public_error().expect("public error").code,
-            ErrorCode::OperationIdRequired
+            missing.public_error().code(),
+            crate::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
 
-        let zero = token_replay_metadata(Some(meta(1, 0)), "delegated token prepare")
-            .expect_err("zero ttl is invalid");
+        let zero = token_replay_metadata(Some(meta(1, 0))).expect_err("zero ttl is invalid");
         assert_eq!(
-            zero.public_error().expect("public error").code,
-            ErrorCode::InvalidInput
+            zero.public_error().code(),
+            crate::diagnostics::codes::TIME_INVALID.raw_code()
         );
 
-        let too_large = token_replay_metadata(
-            Some(meta(1, replay::MAX_TOKEN_REPLAY_TTL_NS + 1)),
-            "delegated token prepare",
-        )
-        .expect_err("oversized ttl is invalid");
+        let too_large = token_replay_metadata(Some(meta(1, replay::MAX_TOKEN_REPLAY_TTL_NS + 1)))
+            .expect_err("oversized ttl is invalid");
         assert_eq!(
-            too_large.public_error().expect("public error").code,
-            ErrorCode::InvalidInput
+            too_large.public_error().code(),
+            crate::diagnostics::codes::TIME_CAPACITY.raw_code()
         );
     }
 
@@ -632,8 +609,8 @@ mod tests {
             .expect_err("subject mismatch must fail");
 
         assert_eq!(
-            err.public_error().expect("public error").code,
-            ErrorCode::Forbidden
+            err.public_error().code(),
+            crate::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
         );
     }
 
@@ -646,8 +623,8 @@ mod tests {
             .expect_err("privileged self-grant must fail");
 
         assert_eq!(
-            err.public_error().expect("public error").code,
-            ErrorCode::Forbidden
+            err.public_error().code(),
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
     }
 

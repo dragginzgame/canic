@@ -10,29 +10,43 @@ pub(super) fn active_delegation_proof_unavailable_error(
     status: ActiveDelegationProofStatus,
 ) -> InternalError {
     match status {
-        ActiveDelegationProofStatus::Expired => InternalError::auth_proof_expired(
-            "active delegation proof expired; reprovision auth proof",
-        ),
-        ActiveDelegationProofStatus::Missing => InternalError::auth_material_stale(
-            "active delegation proof is unavailable; provision auth proof",
-        ),
-        ActiveDelegationProofStatus::RefreshNeeded | ActiveDelegationProofStatus::Valid => {
-            InternalError::auth_material_stale(
-                "active delegation proof is unavailable or stale; reprovision auth proof",
-            )
+        ActiveDelegationProofStatus::Expired => InternalError::auth_proof_expired(),
+        ActiveDelegationProofStatus::Missing => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
+        }
+        ActiveDelegationProofStatus::RefreshNeeded => InternalError::auth_material_stale(),
+        ActiveDelegationProofStatus::Valid => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
         }
     }
 }
 
 pub(super) fn map_prepare_delegated_token_error(err: PrepareDelegatedTokenError) -> InternalError {
     match err {
-        PrepareDelegatedTokenError::CertExpired => InternalError::auth_proof_expired(
-            "active delegation proof expired; reprovision auth proof",
-        ),
-        PrepareDelegatedTokenError::TokenOutlivesCert => InternalError::auth_material_stale(
-            "active delegation proof is too close to expiry; reprovision auth proof",
-        ),
-        err => AuthValidationError::Auth(err.to_string()).into(),
+        PrepareDelegatedTokenError::CertNotYetValid => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
+        }
+        PrepareDelegatedTokenError::CertExpired => InternalError::auth_proof_expired(),
+        PrepareDelegatedTokenError::TokenTtlZero
+        | PrepareDelegatedTokenError::Audience(_)
+        | PrepareDelegatedTokenError::Canonical(_) => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID)
+        }
+        PrepareDelegatedTokenError::TokenExpiresAtOverflow
+        | PrepareDelegatedTokenError::TokenTtlExceeded { .. } => {
+            InternalError::public(crate::diagnostics::codes::TIME_CAPACITY)
+        }
+        PrepareDelegatedTokenError::TokenOutlivesCert => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_ORDERING)
+        }
+        PrepareDelegatedTokenError::AudienceNotSubset
+        | PrepareDelegatedTokenError::GrantsNotSubset => {
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_INVALID_STATE)
+        }
+        #[cfg(test)]
+        PrepareDelegatedTokenError::IssuerProofFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_FAILED)
+        }
     }
 }
 
@@ -48,7 +62,7 @@ impl AuthProofCause for InternalError {
 
 impl AuthProofCause for String {
     fn into_internal_error(self) -> InternalError {
-        InternalError::invalid_input(self)
+        InternalError::public(crate::diagnostics::codes::SECURITY_INVALID)
     }
 }
 
@@ -60,21 +74,49 @@ where
     IssuerProofError: AuthProofCause,
 {
     match err {
-        err @ VerifyDelegatedTokenError::CertExpired => {
-            InternalError::auth_proof_expired(err.to_string())
+        VerifyDelegatedTokenError::CertExpired => InternalError::auth_proof_expired(),
+        VerifyDelegatedTokenError::CertNotYetValid
+        | VerifyDelegatedTokenError::TokenNotYetValid => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
         }
-        err @ VerifyDelegatedTokenError::CertNotYetValid => {
-            InternalError::auth_proof_pending(err.to_string())
-        }
-        err @ VerifyDelegatedTokenError::TokenExpired => {
-            InternalError::auth_token_expired(err.to_string())
-        }
-        VerifyDelegatedTokenError::IssuerProofUnavailable => {
-            InternalError::auth_material_stale("delegated auth issuer proof unavailable")
-        }
+        VerifyDelegatedTokenError::TokenExpired => InternalError::auth_token_expired(),
+        VerifyDelegatedTokenError::IssuerProofUnavailable => InternalError::auth_material_stale(),
         VerifyDelegatedTokenError::RootProofInvalid(cause) => cause.into_internal_error(),
         VerifyDelegatedTokenError::IssuerProofInvalid(cause) => cause.into_internal_error(),
-        err => InternalError::invalid_input(err.to_string()),
+        VerifyDelegatedTokenError::CertHashMismatch => {
+            InternalError::public(crate::diagnostics::codes::DIGEST_CONFLICT)
+        }
+        VerifyDelegatedTokenError::IssuerPidMismatch => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
+        }
+        VerifyDelegatedTokenError::TokenInvalidWindow
+        | VerifyDelegatedTokenError::Canonical(_)
+        | VerifyDelegatedTokenError::CertRules(_)
+        | VerifyDelegatedTokenError::Audience(_) => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_INVALID)
+        }
+        VerifyDelegatedTokenError::TokenTtlExceeded { .. } => {
+            InternalError::public(crate::diagnostics::codes::TIME_CAPACITY)
+        }
+        VerifyDelegatedTokenError::TokenIssuedBeforeCert
+        | VerifyDelegatedTokenError::TokenOutlivesCert => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_ORDERING)
+        }
+        VerifyDelegatedTokenError::AudienceNotSubset
+        | VerifyDelegatedTokenError::GrantsNotSubset => {
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_INVALID_STATE)
+        }
+        VerifyDelegatedTokenError::TokenAudienceRejected
+        | VerifyDelegatedTokenError::CertAudienceRejected => {
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_INACTIVE)
+        }
+        VerifyDelegatedTokenError::TokenGrantRejected
+        | VerifyDelegatedTokenError::ScopeRejected { .. } => {
+            InternalError::public(crate::diagnostics::codes::CONFIGURATION_INACTIVE)
+        }
+        VerifyDelegatedTokenError::MissingLocalRole => {
+            InternalError::public(crate::diagnostics::codes::CONFIGURATION_UNAVAILABLE)
+        }
     }
 }
 

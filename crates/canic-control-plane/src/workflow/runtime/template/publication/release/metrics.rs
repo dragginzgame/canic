@@ -3,7 +3,7 @@ use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
 use canic_core::control_plane_support::error::InternalError;
-use canic_core::dto::error::ErrorCode;
+use canic_core::diagnostics::codes;
 
 // Record one target-store release publish failure reason.
 pub(super) fn record_wasm_store_publish_failed(reason: WasmStoreMetricReason) {
@@ -22,16 +22,18 @@ pub(super) trait WasmStorePublicationError {
 
 impl WasmStorePublicationError for WasmStoreMetricReason {
     fn from_publication_error(err: &InternalError) -> Self {
-        match err.public_error().map(|public| public.code) {
-            Some(ErrorCode::WasmStoreCapacityExceeded) => Self::Capacity,
-            Some(ErrorCode::WasmStoreChunkMissing) => Self::MissingChunk,
-            Some(ErrorCode::WasmStoreHashMismatch) => Self::HashMismatch,
-            Some(ErrorCode::WasmStoreManifestMissing) => Self::MissingManifest,
-            Some(ErrorCode::Conflict | ErrorCode::InvariantViolation | ErrorCode::NotFound) => {
+        match err.public_error().code() {
+            code if code == codes::CAPACITY_LIMIT.raw_code() => Self::Capacity,
+            code if code == codes::WASM_STORE_CHUNK_MISSING.raw_code() => Self::MissingChunk,
+            code if code == codes::DIGEST_CONFLICT.raw_code() => Self::HashMismatch,
+            code if code == codes::WASM_STORE_MANIFEST_MISSING.raw_code() => Self::MissingManifest,
+            code if code == codes::STATE_CONFLICT.raw_code()
+                || code == codes::STATE_INVALID.raw_code()
+                || code == codes::COLLECTION_UNAVAILABLE.raw_code() =>
+            {
                 Self::InvalidState
             }
-            Some(_) => Self::StoreCall,
-            None => Self::InvalidState,
+            _ => Self::StoreCall,
         }
     }
 }
@@ -39,38 +41,31 @@ impl WasmStorePublicationError for WasmStoreMetricReason {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::dto::error::Error;
 
     #[test]
     fn publication_failure_reasons_use_public_codes() {
         let cases = [
+            (codes::CAPACITY_LIMIT, WasmStoreMetricReason::Capacity),
             (
-                ErrorCode::WasmStoreCapacityExceeded,
-                WasmStoreMetricReason::Capacity,
-            ),
-            (
-                ErrorCode::WasmStoreChunkMissing,
+                codes::WASM_STORE_CHUNK_MISSING,
                 WasmStoreMetricReason::MissingChunk,
             ),
+            (codes::DIGEST_CONFLICT, WasmStoreMetricReason::HashMismatch),
             (
-                ErrorCode::WasmStoreHashMismatch,
-                WasmStoreMetricReason::HashMismatch,
-            ),
-            (
-                ErrorCode::WasmStoreManifestMissing,
+                codes::WASM_STORE_MANIFEST_MISSING,
                 WasmStoreMetricReason::MissingManifest,
             ),
-            (ErrorCode::Conflict, WasmStoreMetricReason::InvalidState),
+            (codes::STATE_CONFLICT, WasmStoreMetricReason::InvalidState),
+            (codes::STATE_INVALID, WasmStoreMetricReason::InvalidState),
             (
-                ErrorCode::InvariantViolation,
+                codes::COLLECTION_UNAVAILABLE,
                 WasmStoreMetricReason::InvalidState,
             ),
-            (ErrorCode::NotFound, WasmStoreMetricReason::InvalidState),
-            (ErrorCode::Unavailable, WasmStoreMetricReason::StoreCall),
+            (codes::STATE_UNAVAILABLE, WasmStoreMetricReason::StoreCall),
         ];
 
         for (code, expected) in cases {
-            let err = InternalError::public(Error::new(code, "detail".to_string()));
+            let err = InternalError::public(code);
             assert!(WasmStoreMetricReason::from_publication_error(&err) == expected);
         }
     }

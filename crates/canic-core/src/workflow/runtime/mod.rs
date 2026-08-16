@@ -20,7 +20,7 @@ use crate::ops::storage::{
     intent::{IntentStoreOps, ReceiptBackedIntentOps},
 };
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     log::Topic,
     ops::runtime::{env::EnvOps, memory::MemoryRegistryOps},
     workflow,
@@ -51,12 +51,7 @@ impl RuntimeWorkflow {
 
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() -> Result<(), InternalError> {
-        EnvOps::require_root().map_err(|err| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("root context required: {err}"),
-            )
-        })?;
+        EnvOps::require_root().map_err(|_err| InternalError::invariant())?;
 
         // Start shared runtime owners before root-only services.
         workflow::runtime::log::LogRetentionWorkflow::start()?;
@@ -74,12 +69,7 @@ pub(super) fn log_memory_summary() {
 }
 
 fn init_post_upgrade_memory_registry() -> Result<(), InternalError> {
-    MemoryRegistryOps::bootstrap_registry().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("memory init failed: {err}"),
-        )
-    })
+    MemoryRegistryOps::bootstrap_registry().map_err(|_err| InternalError::invariant())
 }
 
 pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
@@ -87,19 +77,15 @@ pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
 }
 
 pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
-    IntentStoreOps::rebuild_expiry_index()
-        .map_err(|err| err.with_diagnostic_context("rebuild intent expiry derived index"))?;
-    ReceiptBackedIntentOps::reconcile_receipt_indexes()
-        .map_err(|err| err.with_diagnostic_context("reconcile receipt-backed intent indexes"))?;
-    let _receipt_capacity = ReceiptBackedIntentOps::receipt_capacity()
-        .map_err(|err| err.with_diagnostic_context("project receipt capacity"))?;
+    IntentStoreOps::rebuild_expiry_index().map_err(|err| err)?;
+    ReceiptBackedIntentOps::reconcile_receipt_indexes().map_err(|err| err)?;
+    let _receipt_capacity = ReceiptBackedIntentOps::receipt_capacity().map_err(|err| err)?;
 
     Ok(())
 }
 
 pub(super) fn rebuild_root_derived_storage_indexes() -> Result<(), InternalError> {
-    IcpRefillStoreOps::rebuild_indexes()
-        .map_err(|err| err.with_diagnostic_context("rebuild root ICP-refill derived indexes"))?;
+    IcpRefillStoreOps::rebuild_indexes().map_err(|err| err)?;
     rebuild_derived_storage_indexes()
 }
 
@@ -112,18 +98,12 @@ fn validate_refill_upgrade_admission(count: usize) -> Result<(), InternalError> 
         return Ok(());
     }
 
-    Err(InternalError::invariant(
-        InternalErrorOrigin::Workflow,
-        format!(
-            "root upgrade requires all ICP refill operations to be terminal; resumable_count={count}"
-        ),
-    ))
+    Err(InternalError::invariant())
 }
 
 #[cfg(test)]
 mod tests {
     use super::validate_refill_upgrade_admission;
-    use crate::{InternalErrorClass, InternalErrorOrigin};
 
     #[test]
     fn root_upgrade_accepts_terminal_refill_state() {
@@ -134,7 +114,6 @@ mod tests {
     fn root_upgrade_rejects_resumable_refill_state() {
         let error = validate_refill_upgrade_admission(1)
             .expect_err("resumable refill state must block upgrade");
-        assert_eq!(error.class(), InternalErrorClass::Invariant);
-        assert_eq!(error.origin(), InternalErrorOrigin::Workflow);
+        assert_eq!(error.code(), crate::diagnostics::codes::STATE_INVALID);
     }
 }

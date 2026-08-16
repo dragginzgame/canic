@@ -7,10 +7,14 @@
 use super::RuntimeAuthWorkflow;
 use crate::{
     InternalError,
-    domain::policy::pure::auth::{
-        AuthPolicyError, validate_root_issuer_policy_fleet_binding,
-        validate_root_issuer_policy_upsert, validate_root_issuer_renewal_template_fleet_binding,
-        validate_root_issuer_renewal_template_upsert,
+    domain::policy::pure::{
+        PolicyError,
+        auth::{
+            AuthPolicyError, validate_root_issuer_policy_fleet_binding,
+            validate_root_issuer_policy_upsert,
+            validate_root_issuer_renewal_template_fleet_binding,
+            validate_root_issuer_renewal_template_upsert,
+        },
     },
     dto::auth::{
         RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerRenewalStatusRequest,
@@ -102,20 +106,11 @@ fn protected_fleet() -> Result<FleetKey, InternalError> {
 }
 
 fn map_policy_upsert_error(err: AuthPolicyError) -> InternalError {
-    InternalError::invalid_input(err.to_string())
+    PolicyError::AuthPolicy(err).into()
 }
 
 fn map_renewal_template_upsert_error(err: AuthPolicyError) -> InternalError {
-    match err {
-        AuthPolicyError::RootIssuerCertTtlZero => InternalError::invalid_input(
-            "root issuer renewal certificate TTL must be greater than zero",
-        ),
-        AuthPolicyError::RootIssuerFleetMismatch
-        | AuthPolicyError::RootIssuerRenewalGrantRequired => {
-            InternalError::invalid_input(err.to_string())
-        }
-        _ => InternalError::forbidden(err.to_string()),
-    }
+    PolicyError::AuthPolicy(err).into()
 }
 
 #[cfg(test)]
@@ -123,10 +118,7 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        dto::{
-            auth::{DelegatedRoleGrant, DelegationAudience},
-            error::ErrorCode,
-        },
+        dto::auth::{DelegatedRoleGrant, DelegationAudience},
         ids::CanisterRole,
         ops::storage::auth::AuthStateOps,
     };
@@ -240,20 +232,23 @@ mod tests {
             crate::test::support::fleet_key(2),
         )];
 
-        for request in [
-            zero_ttl,
-            zero_ratio,
-            full_ratio,
-            no_audience,
-            no_grant,
-            wrong_fleet,
+        for (request, expected_code) in [
+            (zero_ttl, crate::diagnostics::codes::CONFIGURATION_INVALID),
+            (zero_ratio, crate::diagnostics::codes::CONFIGURATION_INVALID),
+            (full_ratio, crate::diagnostics::codes::CONFIGURATION_INVALID),
+            (
+                no_audience,
+                crate::diagnostics::codes::CONFIGURATION_INCOMPLETE,
+            ),
+            (
+                no_grant,
+                crate::diagnostics::codes::CONFIGURATION_INCOMPLETE,
+            ),
+            (wrong_fleet, crate::diagnostics::codes::AUTHORITY_CONFLICT),
         ] {
             let err =
                 upsert_policy(request).expect_err("invalid root issuer policy must be rejected");
-            assert_eq!(
-                err.public_error().map(|error| error.code),
-                Some(ErrorCode::InvalidInput)
-            );
+            assert_eq!(err.public_error().code(), expected_code.raw_code());
             assert_eq!(AuthStateOps::root_issuer_policy(issuer_pid), policy_before);
             assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), epoch_before);
         }
@@ -300,11 +295,26 @@ mod tests {
         wrong_fleet.aud = DelegationAudience::Fleet(crate::test::support::fleet_key(2));
 
         for (request, expected_code) in [
-            (zero_ttl, ErrorCode::InvalidInput),
-            (no_grant, ErrorCode::InvalidInput),
-            (widened, ErrorCode::Forbidden),
-            (unregistered, ErrorCode::Forbidden),
-            (wrong_fleet, ErrorCode::InvalidInput),
+            (
+                zero_ttl,
+                crate::diagnostics::codes::CONFIGURATION_INVALID.raw_code(),
+            ),
+            (
+                no_grant,
+                crate::diagnostics::codes::CONFIGURATION_INCOMPLETE.raw_code(),
+            ),
+            (
+                widened,
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code(),
+            ),
+            (
+                unregistered,
+                crate::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
+            ),
+            (
+                wrong_fleet,
+                crate::diagnostics::codes::AUTHORITY_CONFLICT.raw_code(),
+            ),
         ] {
             let rejected_issuer = request.issuer_pid;
             let err = upsert_root_issuer_renewal_template_with_reconcile(
@@ -318,10 +328,7 @@ mod tests {
             )
             .expect_err("invalid renewal template must be rejected");
 
-            assert_eq!(
-                err.public_error().map(|error| error.code),
-                Some(expected_code)
-            );
+            assert_eq!(err.public_error().code(), expected_code);
             assert!(AuthStateOps::root_issuer_renewal_template(rejected_issuer).is_none());
             assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), epoch_before);
             assert!(!reconciled.get());

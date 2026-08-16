@@ -17,11 +17,12 @@ fn parser_accepts_only_lossless_decimal_and_uppercase_prefixed_codes() {
 
 #[test]
 fn renderer_distinguishes_current_and_unknown_codes() {
-    let catalog = diagnostic_catalog().expect("embedded diagnostic catalogue");
+    let catalog = diagnostic_catalog();
     let current = render_lookup(catalog.lookup(DiagnosticCode::from_raw(1)));
     assert!(current.contains("code: E1\nknown: true\nstatus: current"));
-    assert!(current.contains("label: ACCESS_DEPENDENCY_UNAVAILABLE"));
-    assert!(current.contains("disposition: retry_after_state_change"));
+    assert!(current.contains("name: ACCESS_UNAVAILABLE"));
+    assert!(current.contains("origin: access"));
+    assert!(current.contains("summary: Access is unavailable."));
 
     assert_eq!(
         render_lookup(catalog.lookup(DiagnosticCode::from_raw(65_000))),

@@ -52,7 +52,7 @@ pub mod prelude {
     };
 }
 
-use crate::{InternalError, InternalErrorOrigin};
+use crate::InternalError;
 use thiserror::Error as ThisError;
 
 ///
@@ -93,6 +93,17 @@ pub enum OpsError {
 
 impl From<OpsError> for InternalError {
     fn from(err: OpsError) -> Self {
-        Self::ops(InternalErrorOrigin::Ops, err.to_string())
+        match err {
+            OpsError::ConfigOps(err) => err.into(),
+            OpsError::IcInfra(err) => err.into(),
+            OpsError::RpcOps(err) => err.into(),
+            OpsError::RuntimeOps(err) => err.into(),
+            OpsError::StorageOps(err) => err.into(),
+            OpsError::ComponentProvisioningPlan(_)
+            | OpsError::FleetRegistry(_)
+            | OpsError::FleetServiceBinding(_) => {
+                Self::public(crate::diagnostics::codes::STATE_FAILED)
+            }
+        }
     }
 }

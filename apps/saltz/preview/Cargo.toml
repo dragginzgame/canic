@@ -1,0 +1,24 @@
+[package]
+name = "saltz_preview"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+description = "Standalone read-only Saltz waveform preview canister"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[build-dependencies]
+sha2 = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -26,10 +26,9 @@ impl WasmStorePublicationWorkflow {
     -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
         let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "initial root bootstrap requires exactly one local wasm store, found {}",
-                stores.len()
-            ))
+            return Err(PublicationWorkflowError::SingleAdoptedStoreRequired {
+                observed_count: stores.len(),
+            }
             .into());
         }
         let store_pid = stores[0].pid;

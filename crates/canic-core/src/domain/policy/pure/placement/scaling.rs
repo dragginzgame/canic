@@ -43,7 +43,6 @@ impl From<ScalingPolicyError> for InternalError {
 pub struct ScalingPlan {
     pub should_spawn: bool,
     pub plan_reason: ScalingPlanReason,
-    pub reason: String,
     pub worker_entry: Option<ScalingWorkerEntry>,
 }
 
@@ -86,10 +85,6 @@ impl ScalingPolicy {
             return Ok(ScalingPlan {
                 should_spawn: false,
                 plan_reason: ScalingPlanReason::AtMaxWorkers,
-                reason: format!(
-                    "pool '{pool}' at max_workers ({}/{})",
-                    worker_count, pool_cfg.max_workers
-                ),
                 worker_entry: None,
             });
         }
@@ -104,10 +99,6 @@ impl ScalingPolicy {
             return Ok(ScalingPlan {
                 should_spawn: true,
                 plan_reason: ScalingPlanReason::BelowMinWorkers,
-                reason: format!(
-                    "pool '{pool}' below min_workers (current {worker_count}, min {})",
-                    pool_cfg.min_workers
-                ),
                 worker_entry: Some(entry),
             });
         }
@@ -115,10 +106,6 @@ impl ScalingPolicy {
         Ok(ScalingPlan {
             should_spawn: false,
             plan_reason: ScalingPlanReason::WithinBounds,
-            reason: format!(
-                "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
-                pool_cfg.min_workers, pool_cfg.max_workers
-            ),
             worker_entry: None,
         })
     }

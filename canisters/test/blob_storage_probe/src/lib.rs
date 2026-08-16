@@ -57,7 +57,7 @@ async fn blob_storage_probe_sync_gateways_from_cashier(
     max_gateway_principals: u64,
 ) -> Result<u64, Error> {
     let max_gateway_principals = usize::try_from(max_gateway_principals)
-        .map_err(|_| Error::invalid("max_gateway_principals exceeds usize"))?;
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::REQUEST_INVALID))?;
 
     canic::api::blob_storage::BlobStorageApi::sync_gateway_principals_from_cashier(
         cashier_canister_id,

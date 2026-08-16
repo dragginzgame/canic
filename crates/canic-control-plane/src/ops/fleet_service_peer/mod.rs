@@ -11,11 +11,10 @@ use crate::view::{
 use canic_core::{
     control_plane_support::{
         config::{ComponentProvisioningGrant, ComponentTopology},
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
     },
     dto::{
         component_registry::FleetServiceComponentRequester,
-        error::Error,
         fleet_registry::{
             FleetRegistryVersion, FleetServiceBinding, FleetServiceComponentBinding,
             FleetSubnetRootEntry, FleetSubnetRootStatus,
@@ -42,28 +41,22 @@ impl FleetServicePeerOps {
         expected_service: &FleetServiceId,
     ) -> Result<FleetServicePeerRequesterView, InternalError> {
         if mirror.root_entry.status != FleetSubnetRootStatus::Active {
-            return Err(InternalError::public(Error::forbidden(
-                "cross-root peer provisioning requires an Active target root",
-            )));
+            return Err(InternalError::public(
+                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
         let registry = &mirror.active.snapshot.registry;
         if registry.authority != target_root.authority {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "cross-root peer Registry authority differs from the target root",
-            ));
+            return Err(InternalError::invariant());
         }
         if mirror.active.directory.provenance.registry != mirror.active.snapshot.version {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "cross-root peer Fleet Directory authority differs from the current Registry",
-            ));
+            return Err(InternalError::invariant());
         }
         let (service, member) = exact_registry_service_caller(&registry.services, caller)?;
         if &service.service != expected_service {
-            return Err(InternalError::public(Error::forbidden(
-                "cross-root peer caller belongs to a different Fleet service",
-            )));
+            return Err(InternalError::public(
+                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
         let owner =
             exact_service_member_root(&registry.fleet_subnet_roots, member.fleet_subnet_root)?;
@@ -74,30 +67,20 @@ impl FleetServicePeerOps {
         .into_iter()
         .all(|valid| valid);
         if !owner_is_remote_and_active {
-            return Err(InternalError::public(Error::forbidden(
-                "cross-root peer caller requires a distinct Active owning root",
-            )));
+            return Err(InternalError::public(
+                canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
         let admission = owner
             .component_admissions
             .iter()
             .find(|admission| admission.component_spec == service.component_spec)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "cross-root peer requester Spec is absent from its owning root admission",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let requester_root = root_binding(&registry.authority, owner);
         let component = component_binding(&registry.authority, service, member, owner, admission);
         topology
             .validate_component_binding(&requester_root, &component)
-            .map_err(|error| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    format!("cross-root peer requester binding is invalid: {error}"),
-                )
-            })?;
+            .map_err(|_error| InternalError::invariant())?;
         Ok(FleetServicePeerRequesterView {
             requester: FleetServiceComponentRequester {
                 service: service.service.clone(),
@@ -130,10 +113,7 @@ impl FleetServicePeerOps {
         .all(|valid| valid);
         let requester_is_remote = component.fleet_subnet_root != target_root.fleet_subnet_root;
         let Some(spec) = topology.get(&component.component_spec) else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored cross-root requester Spec is absent from the protected topology",
-            ));
+            return Err(InternalError::invariant());
         };
         let component_is_exact = [
             component.spec_hash == spec.spec_hash,
@@ -155,10 +135,7 @@ impl FleetServicePeerOps {
         .into_iter()
         .all(|exact| exact);
         if !origin_is_exact {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored cross-root peer provisioning origin differs from protected authority",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(())
     }
@@ -176,15 +153,10 @@ fn exact_registry_service_caller(
             .map(move |member| (service, member))
     });
     let member = candidates.next().ok_or_else(|| {
-        InternalError::public(Error::forbidden(
-            "cross-root peer caller is not a current Fleet service member",
-        ))
+        InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     })?;
     if candidates.next().is_some() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "cross-root peer caller has ambiguous Fleet Registry service membership",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(member)
 }
@@ -196,17 +168,11 @@ fn exact_service_member_root(
     let mut candidates = roots
         .iter()
         .filter(|root| root.fleet_subnet_root == expected_root);
-    let root = candidates.next().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "cross-root peer requester owning root is absent from the Fleet Registry",
-        )
-    })?;
+    let root = candidates
+        .next()
+        .ok_or_else(|| InternalError::invariant())?;
     if candidates.next().is_some() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "cross-root peer requester owning root is ambiguous in the Fleet Registry",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(root)
 }

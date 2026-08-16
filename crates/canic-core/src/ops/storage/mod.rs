@@ -17,7 +17,7 @@ pub mod placement;
 pub mod replay;
 pub mod state;
 
-use crate::{InternalError, ops::OpsError};
+use crate::InternalError;
 use thiserror::Error as ThisError;
 
 ///
@@ -47,6 +47,45 @@ pub enum StorageOpsError {
 
 impl From<StorageOpsError> for InternalError {
     fn from(err: StorageOpsError) -> Self {
-        OpsError::StorageOps(err).into()
+        use crate::diagnostics::codes;
+
+        match err {
+            StorageOpsError::FleetActivationOps(err) => {
+                let code = match err {
+                    fleet_activation::FleetActivationOpsError::Admission(_) => {
+                        codes::CONFIGURATION_INVALID
+                    }
+                    fleet_activation::FleetActivationOpsError::Encode(_) => codes::CODEC_FAILED,
+                    fleet_activation::FleetActivationOpsError::RecordTooLarge { .. } => {
+                        codes::CAPACITY_LIMIT
+                    }
+                    fleet_activation::FleetActivationOpsError::AlreadyInitialized => {
+                        codes::STATE_INVALID_STATE
+                    }
+                    fleet_activation::FleetActivationOpsError::NotInitialized => {
+                        codes::STATE_UNAVAILABLE
+                    }
+                    fleet_activation::FleetActivationOpsError::InvalidRecord { .. } => {
+                        codes::STATE_INVALID
+                    }
+                    fleet_activation::FleetActivationOpsError::NotActive => codes::STATE_INACTIVE,
+                    fleet_activation::FleetActivationOpsError::IdentityMismatch => {
+                        codes::AUTHORITY_CONFLICT
+                    }
+                    fleet_activation::FleetActivationOpsError::EvidenceMismatch => {
+                        codes::EVIDENCE_CONFLICT
+                    }
+                    fleet_activation::FleetActivationOpsError::InvalidTransition { .. } => {
+                        codes::LIFECYCLE_INVALID_STATE
+                    }
+                };
+                Self::public(code)
+            }
+            StorageOpsError::IntentStoreOps(err) => err.into(),
+            StorageOpsError::IcpRefillRecordOps(err) => err.into(),
+            StorageOpsError::PlacementIndexRegistryOps(err) => err.into(),
+            #[cfg(feature = "sharding")]
+            StorageOpsError::ShardingRegistryOps(err) => err.into(),
+        }
     }
 }

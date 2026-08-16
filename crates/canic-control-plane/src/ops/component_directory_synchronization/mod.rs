@@ -24,7 +24,7 @@ use crate::{
 use candid::Principal;
 use canic_core::{
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES,
     },
     dto::component_provisioning::{
@@ -95,17 +95,11 @@ impl RootComponentDirectorySynchronizationOps {
         validate_request(request)?;
         let record =
             RootComponentProvisioningStore::directory_synchronization(request.operation_id)
-                .ok_or_else(|| {
-                    InternalError::unavailable(
-                        "root Component Directory synchronization operation is not prepared",
-                    )
-                })?;
+                .ok_or_else(|| InternalError::unavailable())?;
         let view = validated_record(record)?;
         require_request_authority(&view, request)?;
         if request.expected_synchronized_component_count > view.synchronized_component_count {
-            return Err(InternalError::conflict(
-                "Component Directory synchronization command expects later durable progress",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(view)
     }
@@ -140,12 +134,7 @@ impl RootComponentDirectorySynchronizationOps {
                 .map(Box::new)
                 .map(RootComponentDirectorySynchronizationDisposition::Current);
         }
-        let intent = intent.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                "next Component Directory synchronization target was not supplied",
-            )
-        })?;
+        let intent = intent.ok_or_else(|| InternalError::invariant())?;
         validate_next_intent(&view, &intent, started_at_ns)?;
         let mut next = view_to_record(&view)?;
         next.state = RootComponentDirectorySynchronizationStateRecord::Synchronizing {
@@ -170,24 +159,17 @@ impl RootComponentDirectorySynchronizationOps {
         recorded_at_ns: u64,
     ) -> Result<RootComponentDirectorySynchronizationResponse, InternalError> {
         let view = Self::status(request)?;
-        let in_flight = view.in_flight.as_ref().ok_or_else(|| {
-            InternalError::conflict(
-                "Component Directory synchronization response has no durable pre-call intent",
-            )
-        })?;
+        let in_flight = view
+            .in_flight
+            .as_ref()
+            .ok_or_else(|| InternalError::conflict())?;
         if in_flight != observed || recorded_at_ns < in_flight.started_at_ns {
-            return Err(InternalError::conflict(
-                "Component Directory synchronization observation differs from durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let synchronized_component_count = view
             .synchronized_component_count
             .checked_add(1)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted(
-                    "Component Directory synchronization cursor overflow",
-                )
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         let complete = synchronized_component_count == target_count(&view)?;
         let mut next = view_to_record(&view)?;
         next.state = if complete {
@@ -228,9 +210,7 @@ fn validate_request(
         && request.source_fleet_registry.content_hash != [0; 32]
         && request.published_fleet_registry.content_hash != [0; 32];
     if !authority_is_present || !registry_transition_is_valid {
-        return Err(InternalError::invalid_input(
-            "root Component Directory synchronization authority is invalid",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -249,14 +229,10 @@ fn validate_acceptance(
     .into_iter()
     .all(|matches| matches);
     if !authority_is_valid {
-        return Err(InternalError::invalid_input(
-            "root Component Directory synchronization acceptance is invalid",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if targets.len() > MAX_FLEET_COMPONENT_PROVISIONING_PLAN_ENTRIES {
-        return Err(InternalError::resource_exhausted(
-            "root Component Directory synchronization target count exceeds the Fleet Component bound",
-        ));
+        return Err(InternalError::resource_exhausted());
     }
     let canonical = targets.windows(2).all(|pair| {
         pair[0].component < pair[1].component
@@ -271,9 +247,7 @@ fn validate_acceptance(
             && target.source_registry.content_hash != [0; 32]
     });
     if !canonical || !targets_are_valid {
-        return Err(InternalError::invalid_input(
-            "root Component Directory synchronization targets are not canonical and exact",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -290,9 +264,7 @@ fn require_exact_authority(
         || view.fleet_directory_content_hash != fleet_directory_content_hash
         || view.targets != targets
     {
-        return Err(InternalError::conflict(
-            "root Component Directory synchronization retry changed protected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -310,9 +282,7 @@ fn require_request_authority(
     .into_iter()
     .all(|matches| matches);
     if !exact {
-        return Err(InternalError::conflict(
-            "root Component Directory synchronization request changed protected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -322,15 +292,12 @@ fn validate_next_intent(
     intent: &RootComponentDirectorySynchronizationIntentView,
     started_at_ns: u64,
 ) -> Result<(), InternalError> {
-    let index = usize::try_from(view.synchronized_component_count).map_err(|_| {
-        InternalError::resource_exhausted("Component Directory cursor exceeds usize")
-    })?;
-    let target = view.targets.get(index).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "Component Directory cursor has no canonical target",
-        )
-    })?;
+    let index = usize::try_from(view.synchronized_component_count)
+        .map_err(|_| InternalError::resource_exhausted())?;
+    let target = view
+        .targets
+        .get(index)
+        .ok_or_else(|| InternalError::invariant())?;
     let target_is_exact = [
         intent.component_index == view.synchronized_component_count,
         intent.component == target.component,
@@ -349,17 +316,13 @@ fn validate_next_intent(
     .into_iter()
     .all(|matches| matches);
     if !target_is_exact {
-        return Err(InternalError::conflict(
-            "next Component Directory synchronization intent differs from canonical target",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
 
 fn target_count(view: &RootComponentDirectorySynchronizationView) -> Result<u32, InternalError> {
-    u32::try_from(view.targets.len()).map_err(|_| {
-        InternalError::resource_exhausted("Component Directory target count exceeds u32")
-    })
+    u32::try_from(view.targets.len()).map_err(|_| InternalError::resource_exhausted())
 }
 
 fn terminal_record(
@@ -369,9 +332,7 @@ fn terminal_record(
     if synchronized_at_ns < view.planned_at_ns
         || view.synchronized_component_count != target_count(view)?
     {
-        return Err(InternalError::conflict(
-            "terminal Component Directory synchronization progress is incomplete",
-        ));
+        return Err(InternalError::conflict());
     }
     let mut response = response_from_view(view)?;
     response.complete = true;
@@ -395,10 +356,7 @@ fn status_response(
         && canic_core::control_plane_support::ops::component_provisioning_receipt::RootComponentProvisioningReceiptOps::directory_synchronization_content_hash(&response)?
             != view.receipt_content_hash
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "terminal Component Directory synchronization receipt hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(response)
 }
@@ -453,11 +411,7 @@ fn validated_record(
             receipt_content_hash,
         } => (
             *planned_at_ns,
-            u32::try_from(record.targets.len()).map_err(|_| {
-                InternalError::resource_exhausted(
-                    "Component Directory synchronization target count exceeds u32",
-                )
-            })?,
+            u32::try_from(record.targets.len()).map_err(|_| InternalError::resource_exhausted())?,
             None,
             Some(*synchronized_at_ns),
             *receipt_content_hash,
@@ -490,10 +444,7 @@ fn validated_record(
         view.planned_at_ns,
     )?;
     if view.synchronized_component_count > target_count(&view)? {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Directory synchronization cursor exceeds its target set",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(view)
 }
@@ -504,12 +455,9 @@ fn view_to_record(
     let state = if view.complete {
         RootComponentDirectorySynchronizationStateRecord::Synchronized {
             planned_at_ns: view.planned_at_ns,
-            synchronized_at_ns: view.synchronized_at_ns.ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "terminal Component Directory synchronization lacks completion time",
-                )
-            })?,
+            synchronized_at_ns: view
+                .synchronized_at_ns
+                .ok_or_else(|| InternalError::invariant())?,
             receipt_content_hash: view.receipt_content_hash,
         }
     } else if view.synchronized_component_count == 0 && view.in_flight.is_none() {
@@ -600,14 +548,20 @@ fn intent_record_to_view(
 
 fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
     match error {
-        RootComponentProvisioningCommitError::ActiveOperationConflict
-        | RootComponentProvisioningCommitError::ConflictingOperation
-        | RootComponentProvisioningCommitError::OperationChanged
-        | RootComponentProvisioningCommitError::PlacementConflict => {
-            InternalError::conflict("root Component Directory synchronization state changed")
+        RootComponentProvisioningCommitError::ActiveOperationConflict => {
+            InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)
+        }
+        RootComponentProvisioningCommitError::ConflictingOperation => {
+            InternalError::public(canic_core::diagnostics::codes::REQUEST_CONFLICT)
+        }
+        RootComponentProvisioningCommitError::OperationChanged => {
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_CONFLICT)
+        }
+        RootComponentProvisioningCommitError::PlacementConflict => {
+            InternalError::public(canic_core::diagnostics::codes::POSITION_CONFLICT)
         }
         RootComponentProvisioningCommitError::PlacementCountOverflow => {
-            InternalError::resource_exhausted("root Component placement count overflow")
+            InternalError::public(canic_core::diagnostics::codes::CAPACITY_LIMIT)
         }
     }
 }

@@ -37,28 +37,30 @@ impl AuthApi {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             record_session_bootstrap_rejected_disabled();
-            return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
 
         let wallet_caller = IcOps::msg_caller();
-        if let Err(reason) = validate_delegated_session_subject(wallet_caller) {
+        if let Err(_reason) = validate_delegated_session_subject(wallet_caller) {
             record_session_bootstrap_rejected_wallet_caller_rejected();
-            return Err(Error::forbidden(format!(
-                "delegated session wallet caller rejected: {reason}"
-            )));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
 
-        if let Err(reason) = validate_delegated_session_subject(delegated_subject) {
+        if let Err(_reason) = validate_delegated_session_subject(delegated_subject) {
             record_session_bootstrap_rejected_subject_rejected();
-            return Err(Error::forbidden(format!(
-                "delegated session subject rejected: {reason}"
-            )));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
 
         let issued_at = IcOps::now_secs();
         let issued_at_ns = issued_at
             .checked_mul(1_000_000_000)
-            .ok_or_else(|| Error::invalid("current time overflows nanoseconds"))?;
+            .ok_or_else(|| Error::from_registered(crate::diagnostics::codes::REQUEST_INVALID))?;
         let max_ttl_ns = Self::delegated_token_max_ttl_ns()?;
         let verified_subject = Self::verify_token_material(
             &bootstrap_token,
@@ -71,9 +73,9 @@ impl AuthApi {
 
         if verified_subject != delegated_subject {
             record_session_bootstrap_rejected_subject_mismatch();
-            return Err(Error::forbidden(format!(
-                "delegated session subject mismatch: requested={delegated_subject} token_subject={verified_subject}"
-            )));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+            ));
         }
 
         let configured_max_ttl_secs = cfg
@@ -123,9 +125,9 @@ impl AuthApi {
         );
         if !matches!(upsert_result, DelegatedSessionUpsertResult::Upserted) {
             record_session_bootstrap_rejected_capacity();
-            return Err(Error::exhausted(delegated_session_capacity_message(
-                upsert_result,
-            )));
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::CAPACITY_LIMIT,
+            ));
         }
 
         if had_active_session {
@@ -171,9 +173,8 @@ impl AuthApi {
     fn delegated_session_bootstrap_token_fingerprint(
         token: &DelegatedToken,
     ) -> Result<[u8; 32], Error> {
-        let token_bytes = crate::cdk::candid::encode_one(token).map_err(|err| {
-            Error::internal(format!("bootstrap token fingerprint encode failed: {err}"))
-        })?;
+        let token_bytes = crate::cdk::candid::encode_one(token)
+            .map_err(|_err| Error::from_registered(crate::diagnostics::codes::STATE_FAILED))?;
         let mut hasher = Sha256::new();
         hasher.update(Self::SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN);
         hasher.update(token_bytes);
@@ -206,16 +207,15 @@ impl AuthApi {
             }
 
             record_session_bootstrap_rejected_replay_reused();
-            return Err(Error::forbidden(
-                "delegated session bootstrap token replay rejected; use a fresh token",
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
             ));
         }
 
         record_session_bootstrap_rejected_replay_conflict();
-        Err(Error::forbidden(format!(
-            "delegated session bootstrap token already bound (wallet={} delegated_subject={})",
-            binding.wallet_pid, binding.delegated_pid
-        )))
+        Err(Error::from_registered(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ))
     }
 
     // Clamp delegated-session lifetime against token expiry, config, and request TTL.
@@ -232,39 +232,15 @@ impl AuthApi {
             requested_ttl_secs,
         ) {
             DelegatedSessionExpiryClamp::Accepted(expires_at) => Ok(expires_at),
-            DelegatedSessionExpiryClamp::InvalidConfiguredMaxTtl => Err(Error::invariant(
-                "delegated session configured max ttl_secs must be greater than zero",
+            DelegatedSessionExpiryClamp::InvalidConfiguredMaxTtl => Err(Error::from_registered(
+                crate::diagnostics::codes::STATE_INVALID,
             )),
-            DelegatedSessionExpiryClamp::InvalidRequestedTtl => Err(Error::invalid(
-                "delegated session requested ttl_secs must be greater than zero",
+            DelegatedSessionExpiryClamp::InvalidRequestedTtl => Err(Error::from_registered(
+                crate::diagnostics::codes::REQUEST_INVALID,
             )),
-            DelegatedSessionExpiryClamp::ExpiredToken => Err(Error::forbidden(
-                "delegated session bootstrap token is expired",
+            DelegatedSessionExpiryClamp::ExpiredToken => Err(Error::from_registered(
+                crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
             )),
         }
-    }
-}
-
-fn delegated_session_capacity_message(result: DelegatedSessionUpsertResult) -> String {
-    match result {
-        DelegatedSessionUpsertResult::Upserted => {
-            "delegated session state was already updated".to_string()
-        }
-        DelegatedSessionUpsertResult::SessionCapacityReached { capacity } => {
-            format!("delegated session capacity reached ({capacity})")
-        }
-        DelegatedSessionUpsertResult::SessionSubjectCapacityReached {
-            delegated_pid,
-            capacity,
-        } => format!("delegated session subject capacity reached for {delegated_pid} ({capacity})"),
-        DelegatedSessionUpsertResult::BootstrapBindingCapacityReached { capacity } => {
-            format!("delegated session bootstrap binding capacity reached ({capacity})")
-        }
-        DelegatedSessionUpsertResult::BootstrapBindingSubjectCapacityReached {
-            delegated_pid,
-            capacity,
-        } => format!(
-            "delegated session bootstrap binding subject capacity reached for {delegated_pid} ({capacity})"
-        ),
     }
 }

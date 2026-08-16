@@ -22,9 +22,7 @@ use canic_core::{
 pub async fn prepare_root() -> Result<FleetActivationStatusResponse, InternalError> {
     root_bootstrap::bootstrap_init_root_canister().await;
     if !root_bootstrap::activation_preparation_complete() {
-        return Err(InternalError::unavailable(
-            "root bootstrap has not prepared the complete managed inventory; inspect bootstrap status and retry activation preparation",
-        ));
+        return Err(InternalError::unavailable());
     }
     let current = FleetActivationWorkflow::status()?;
     if current.phase == FleetActivationPhase::Active {
@@ -47,16 +45,12 @@ pub async fn resume_root(
     }
     let transition = FleetActivationWorkflow::resume_root(request).await?;
     if transition.status.phase != FleetActivationPhase::Active {
-        return Err(InternalError::unavailable(
-            "Fleet activation resume did not activate the root runtime",
-        ));
+        return Err(InternalError::unavailable());
     }
     component_registry::mark_root_runtime_activated(request.operation_id)?;
     root_bootstrap::bootstrap_init_root_canister().await;
     if !ReadyOps::is_ready() {
-        return Err(InternalError::unavailable(
-            "Fleet activation completed but root bootstrap is not ready; inspect bootstrap status and retry activation resume",
-        ));
+        return Err(InternalError::unavailable());
     }
     crate::workflow::canister_pool::start()?;
     Ok(transition)

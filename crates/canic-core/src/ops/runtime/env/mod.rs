@@ -15,7 +15,7 @@ use crate::{
         runtime_kind::{self, CanicRuntimeKind},
     },
     ops::prelude::*,
-    ops::runtime::{RuntimeOpsError, env::mapper::EnvRecordMapper, memory::MemoryRegistryOps},
+    ops::runtime::{env::mapper::EnvRecordMapper, memory::MemoryRegistryOps},
     storage::stable::env::{Env, EnvData, EnvRecord},
 };
 use ic_cdk::api::canister_self;
@@ -68,7 +68,21 @@ pub enum EnvOpsError {
 
 impl From<EnvOpsError> for InternalError {
     fn from(err: EnvOpsError) -> Self {
-        RuntimeOpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            EnvOpsError::CanisterRoleUnavailable
+            | EnvOpsError::FleetSubnetRootPidUnavailable
+            | EnvOpsError::RootPidUnavailable
+            | EnvOpsError::SubnetPidUnavailable
+            | EnvOpsError::ComponentSpecUnavailable
+            | EnvOpsError::ParentPidUnavailable => codes::CONFIGURATION_UNAVAILABLE,
+            EnvOpsError::MissingFields(_) => codes::CONFIGURATION_INCOMPLETE,
+            EnvOpsError::NotRoot | EnvOpsError::IsRoot => codes::AUTHORITY_UNAUTHORIZED,
+            EnvOpsError::RootPidImmutable { .. } => codes::AUTHORITY_CONFLICT,
+            EnvOpsError::MemoryRegistryNotInitialized => codes::STORAGE_INACTIVE,
+        };
+        Self::public(code)
     }
 }
 
@@ -145,11 +159,7 @@ impl EnvOps {
 
     /// Return the immutable Registry-issued identity of this managed application Canister.
     pub fn managed_binding() -> Result<ManagedCanisterBinding, InternalError> {
-        Env::get_managed_binding().ok_or_else(|| {
-            InternalError::unavailable(
-                "current Canister has no Registry-issued managed Component binding",
-            )
-        })
+        Env::get_managed_binding().ok_or_else(|| InternalError::unavailable())
     }
 
     pub fn canister_role() -> Result<CanisterRole, InternalError> {

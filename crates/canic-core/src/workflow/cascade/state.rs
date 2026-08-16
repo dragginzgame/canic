@@ -54,13 +54,11 @@ struct FanoutFailures {
 }
 
 impl FanoutFailures {
-    fn push(&mut self, pid: Principal, error: InternalError) {
+    fn push(&mut self, _pid: Principal, error: InternalError) {
         self.count += 1;
         self.first = Some(match self.first.take() {
-            None => error.with_diagnostic_context(format!("state cascade child {pid} failed")),
-            Some(first) => first.with_diagnostic_context(format!(
-                "additional state cascade child {pid} failure: {error}"
-            )),
+            None => error,
+            Some(first) => first,
         });
     }
 
@@ -327,7 +325,7 @@ impl StateCascadeWorkflow {
                     MetricOutcome::Failed,
                     MetricReason::SendFailed,
                 );
-                Err(err.with_diagnostic_context(format!("state cascade rejected by child {pid}")))
+                Err(err)
             }
         }
     }
@@ -336,26 +334,24 @@ impl StateCascadeWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InternalErrorOrigin, dto::error::ErrorCode};
 
     #[test]
     fn fanout_failures_preserve_first_typed_cause() {
         let mut failures = FanoutFailures::default();
         failures.push(
             Principal::from_slice(&[1; 29]),
-            InternalError::auth_material_stale("child auth state is stale"),
+            InternalError::auth_material_stale(),
         );
         failures.push(
             Principal::from_slice(&[2; 29]),
-            InternalError::workflow(InternalErrorOrigin::Workflow, "transport failed"),
+            InternalError::lifecycle_failure(),
         );
 
         let err = failures.into_error().expect("failure must be retained");
-        assert_eq!(err.class(), crate::InternalErrorClass::Domain);
-        assert_eq!(err.origin(), InternalErrorOrigin::Domain);
+        assert_eq!(err.code(), crate::diagnostics::codes::SECURITY_CONFLICT);
         assert_eq!(
-            err.public_error().map(|public| public.code),
-            Some(ErrorCode::AuthMaterialStale)
+            err.public_error().code(),
+            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
         );
     }
 }

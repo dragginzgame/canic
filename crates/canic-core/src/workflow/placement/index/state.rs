@@ -5,7 +5,7 @@
 //! Boundary: provides workflow-local state helpers for index orchestration.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     config::schema::IndexConfig,
     ids::CanisterRole,
@@ -48,7 +48,20 @@ pub(super) enum PlacementIndexWorkflowError {
 
 impl From<PlacementIndexWorkflowError> for InternalError {
     fn from(err: PlacementIndexWorkflowError) -> Self {
-        Self::domain(InternalErrorOrigin::Workflow, err.to_string())
+        match err {
+            PlacementIndexWorkflowError::IndexDisabled => {
+                Self::public(crate::diagnostics::codes::POSITION_INACTIVE)
+            }
+            PlacementIndexWorkflowError::UnknownPool { .. } => {
+                Self::public(crate::diagnostics::codes::CAPACITY_INVALID)
+            }
+            PlacementIndexWorkflowError::InstanceNotDirectChild(_) => {
+                Self::public(crate::diagnostics::codes::POSITION_INVALID_STATE)
+            }
+            PlacementIndexWorkflowError::InstanceRoleMismatch { .. } => {
+                Self::public(crate::diagnostics::codes::AUTHORITY_CONFLICT)
+            }
+        }
     }
 }
 

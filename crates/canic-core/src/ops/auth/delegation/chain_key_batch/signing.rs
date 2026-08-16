@@ -6,7 +6,7 @@
 
 use super::{CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS, SignNextChainKeyRootDelegationBatchResult};
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     ops::{
         auth::delegated::chain_key_signing::{
             ChainKeySigner, ChainKeySigningPolicy, SignChainKeyBatchHeaderInput,
@@ -166,10 +166,7 @@ where
             ));
             batch.failure = Some(err.to_string());
             AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
-            Err(InternalError::ops(
-                InternalErrorOrigin::Ops,
-                format!("chain-key root delegation batch signing failed: {err}"),
-            ))
+            Err(InternalError::state_failure())
         }
     }
 }

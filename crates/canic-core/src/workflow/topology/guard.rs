@@ -4,7 +4,7 @@
 //! Does not own: topology storage mutation, endpoint authorization, or DTO schemas.
 //! Boundary: workflow-local mutation guard used by topology orchestration.
 
-use crate::{InternalError, InternalErrorOrigin};
+use crate::InternalError;
 use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,10 +39,7 @@ impl TopologyGuard {
         if entered {
             Ok(Self)
         } else {
-            Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "topology is currently being mutated",
-            ))
+            Err(InternalError::invariant())
         }
     }
 }

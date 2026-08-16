@@ -10,7 +10,7 @@ mod manual;
 mod replay;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::{
         candid::Nat,
         types::{Cycles, Principal},
@@ -60,7 +60,36 @@ pub enum IcpRefillWorkflowError {
 
 impl From<IcpRefillWorkflowError> for InternalError {
     fn from(err: IcpRefillWorkflowError) -> Self {
-        Self::workflow(InternalErrorOrigin::Workflow, err.to_string())
+        match err {
+            IcpRefillWorkflowError::DryRunRequest => {
+                Self::public(crate::diagnostics::codes::PLATFORM_INACTIVE)
+            }
+            IcpRefillWorkflowError::NatU64Overflow { .. }
+            | IcpRefillWorkflowError::UnexpectedLedgerDecimals(_) => {
+                Self::public(crate::diagnostics::codes::EVIDENCE_INVALID)
+            }
+            IcpRefillWorkflowError::PolicyDenied(violation) => match violation {
+                IcpRefillPolicyViolation::NotConfigured
+                | IcpRefillPolicyViolation::ConcurrentRefill => {
+                    Self::public(crate::diagnostics::codes::PLATFORM_INVALID_STATE)
+                }
+                IcpRefillPolicyViolation::CyclesFundingDisabled => {
+                    Self::public(crate::diagnostics::codes::CAPACITY_INACTIVE)
+                }
+                IcpRefillPolicyViolation::AmountZero => {
+                    Self::public(crate::diagnostics::codes::CAPACITY_INVALID)
+                }
+                IcpRefillPolicyViolation::MaxRefillPerCall { .. } => {
+                    Self::public(crate::diagnostics::codes::CAPACITY_LIMIT)
+                }
+                IcpRefillPolicyViolation::RateUnavailable { .. } => {
+                    Self::public(crate::diagnostics::codes::CAPACITY_UNAVAILABLE)
+                }
+                IcpRefillPolicyViolation::RateGateDenied { .. } => {
+                    Self::public(crate::diagnostics::codes::CAPACITY_INVALID_STATE)
+                }
+            },
+        }
     }
 }
 
@@ -271,18 +300,7 @@ const fn policy_input(
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {
-    let message = IcpRefillWorkflowError::PolicyDenied(violation).to_string();
-    match violation {
-        IcpRefillPolicyViolation::AmountZero
-        | IcpRefillPolicyViolation::MaxRefillPerCall { .. } => {
-            InternalError::invalid_input(message)
-        }
-        IcpRefillPolicyViolation::ConcurrentRefill => InternalError::conflict(message),
-        IcpRefillPolicyViolation::CyclesFundingDisabled
-        | IcpRefillPolicyViolation::NotConfigured
-        | IcpRefillPolicyViolation::RateGateDenied { .. }
-        | IcpRefillPolicyViolation::RateUnavailable { .. } => InternalError::unavailable(message),
-    }
+    IcpRefillWorkflowError::PolicyDenied(violation).into()
 }
 
 fn active_for_request(
@@ -300,12 +318,8 @@ fn active_for_request(
 fn require_build_network(
     build_network: Option<BuildNetwork>,
 ) -> Result<BuildNetwork, InternalError> {
-    build_network.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "ICP refill build network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
-        )
-    })
+    build_network
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::PLATFORM_UNAVAILABLE))
 }
 
 fn checked_nat_u64(field: &'static str, value: Nat) -> Result<u64, InternalError> {

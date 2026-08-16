@@ -21,9 +21,7 @@ pub fn is_fleet_subnet_root() -> Result<(), AccessError> {
     if EnvOps::is_fleet_subnet_root() {
         Ok(())
     } else {
-        Err(AccessError::Denied(
-            "this endpoint is only available on the Fleet Subnet Root".to_string(),
-        ))
+        Err(AccessError::FleetSubnetRootRequired)
     }
 }
 
@@ -53,13 +51,8 @@ pub fn check_build_network(expected: BuildNetwork) -> Result<(), AccessError> {
 
     match actual {
         Some(actual) if actual == expected => Ok(()),
-        Some(actual) => Err(AccessError::Denied(format!(
-            "this endpoint is only available when built for '{expected}' (ICP_ENVIRONMENT), but was built for '{actual}'"
-        ))),
-        None => Err(AccessError::Denied(
-            "this endpoint requires a build-time network (ICP_ENVIRONMENT) of either 'ic' or 'local'"
-                .to_string(),
-        )),
+        Some(_) => Err(AccessError::BuildNetworkMismatch),
+        None => Err(AccessError::BuildNetworkUnavailable),
     }
 }
 
@@ -75,13 +68,8 @@ mod tests {
         // Inline the same logic but with injected `actual`.
         match actual {
             Some(actual) if actual == expected => Ok(()),
-            Some(actual) => Err(AccessError::Denied(format!(
-                "this endpoint is only available when built for '{expected}' (ICP_ENVIRONMENT), but was built for '{actual}'"
-            ))),
-            None => Err(AccessError::Denied(
-                "this endpoint requires a build-time network (ICP_ENVIRONMENT) of either 'ic' or 'local'"
-                    .to_string(),
-            )),
+            Some(_) => Err(AccessError::BuildNetworkMismatch),
+            None => Err(AccessError::BuildNetworkUnavailable),
         }
     }
 
@@ -94,12 +82,12 @@ mod tests {
     #[test]
     fn build_network_mismatch_errors() {
         let err = check(BuildNetwork::Ic, Some(BuildNetwork::Local)).unwrap_err();
-        assert_eq!(err.kind(), crate::access::AccessErrorKind::Denied);
+        assert!(matches!(err, AccessError::BuildNetworkMismatch));
     }
 
     #[test]
     fn build_network_unknown_errors() {
         let err = check(BuildNetwork::Ic, None).unwrap_err();
-        assert_eq!(err.kind(), crate::access::AccessErrorKind::Denied);
+        assert!(matches!(err, AccessError::BuildNetworkUnavailable));
     }
 }

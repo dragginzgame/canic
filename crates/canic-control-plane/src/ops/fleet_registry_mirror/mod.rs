@@ -16,7 +16,7 @@ use crate::{
 };
 use canic_core::{
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
     },
     dto::{
@@ -58,13 +58,11 @@ impl FleetRegistryMirrorOps {
         root: candid::Principal,
     ) -> Result<ValidatedRootFleetRegistryMirrorView, InternalError> {
         if authority.binding.fleet_subnet_root != root {
-            return Err(InternalError::invalid_input(
-                "protected Fleet Subnet Root authority does not name this Canister",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let active = Self::current().active.ok_or_else(|| {
-            InternalError::unavailable("root has no active Fleet Registry mirror")
-        })?;
+        let active = Self::current()
+            .active
+            .ok_or_else(|| InternalError::unavailable())?;
         let topology = ConfigOps::component_topology()?;
         FleetRegistryOps::validate(
             &authority.binding.authority,
@@ -103,10 +101,7 @@ impl FleetRegistryMirrorOps {
             directory: &directory,
         };
         if stored != canonical || !version_precedes(&active.previous_registry, &version) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "active root Registry mirror evidence is not internally consistent",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(ValidatedRootFleetRegistryMirrorView { active, root_entry })
     }
@@ -143,12 +138,7 @@ fn validated_root_entry(
         .iter()
         .find(|entry| entry.fleet_subnet_root == root)
         .cloned()
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "active root Registry mirror does not contain this root",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let expected = FleetSubnetRootEntry {
         placement_subnet: authority.binding.placement_subnet,
         fleet_subnet_root: root,
@@ -163,10 +153,7 @@ fn validated_root_entry(
         FleetSubnetRootStatus::Active | FleetSubnetRootStatus::Draining
     );
     if root_entry != expected || !status_is_current {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active root Registry row differs from protected authority or is not current",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(root_entry)
 }

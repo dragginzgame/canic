@@ -12,9 +12,10 @@ Last amended: 2026-08-16
   could begin; mutating implementation remained held.
 - Release boundary: reinstall only across Canic releases. Same-release
   interruption recovery and exact retry remain required.
-- Scheduling posture: this idea does not gate the numbered 0.103-0.107 Fleet
-  path. Promotion requires a current release position, accepted B1 contract and
-  explicit maintainer authorization.
+- Scheduling posture: this idea does not gate the numbered 0.103-0.108 Fleet
+  path or standalone 0.109 authorization qualification. Promotion requires a
+  current release position, accepted B1 contract and explicit maintainer
+  authorization.
 - Production dependency posture: this is a Canic-owned seam. Production Canic
   imports no IcyDB type, lifecycle registry, timer provider or framework-
   specific runtime authority.

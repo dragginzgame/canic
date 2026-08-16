@@ -4,288 +4,143 @@ Date: 2026-08-16
 
 ## Status
 
-- State: B1 is closed and maintainer-approved. B2 has materialized its 991
-  codes as distinct registered runtime identities plus one permanent host
-  ledger, rich typed catalogue, language-neutral current registry and CLI
-  lookup. No public error shape, internal string-first propagation or
-  diagnostic-owned stable record has changed. The maintainer has explicitly
-  excluded unrelated timer/recovery and Saltz work from the 0.102.2
-  diagnostic release decision.
-- Baseline: clean `main` tag `v0.101.53` at
-  `23c0328f78b215580d734ef01b52b35fa3e38ade`; current-candidate
-  control-plane/core source is pinned at
-  `0750c309104b111fa6f5a1b3355c04fcb38faf71`.
-- Release boundary: 0.102 is reinstall-only. Every Canic-owned Fleet canister
-  must use one admitted release set before activation. Same-release retry,
-  backup, restore and interruption recovery remain required.
-- Published checkpoints: `v0.102.0` at
-  `e6dfd7d2d212f9fce4b1b16caba33d8062e3461d` and `v0.102.1` at
-  `86763c5f16478e2e548e2059e5efaa963bf9a966`.
-- Review work is the complete B2 allocation-authority batch in the existing
-  untagged `0.102.2` changelog draft. Diagnostic B2 changes runtime scaffolding
-  and host lookup but no Candid or diagnostic state. Package-version mutation
-  remains maintainer-owned.
-- Mutation gate: the maintainer approved the complete B1 register on
-  2026-08-16 and authorized B2 mutation. The B3 public hard cut remains a
-  separate review boundary. A four-digit initial allocation remains rejected.
+- State: Register, Map and the atomic Cut are complete in the untagged
+  `0.102.2` draft. The maintained model is: canisters send `u16`, runtime
+  reasons are typed and the host owns prose.
+- Release: the public wire is now exactly `Error { code: u16 }`.
+  `InternalError` owns an exact registered code and its explicit public
+  projection; it stores no message, class, origin or optional public DTO.
+- Superseded work: the 991-row candidate encoded cause together with handling,
+  exposure and context. It was never released, so its rows may be replaced
+  directly and are neither current nor retired identities.
+- Repository scope: Canic only. Timer and Saltz work is unrelated and neither
+  supplies evidence for nor blocks this line.
+- Release boundary: 0.102 is reinstall-only. Every Canic-owned canister in an
+  activated Fleet must use one admitted release set with matching callers.
 
-Detailed source-by-source working evidence is kept outside this design
-directory in the
-[0.102 diagnostic inventory](../../audits/working/0.102-diagnostic-inventory/index.md).
-The design directory retains only the normative design, this tracker, the
-complete allocation-review proposal and the permanent allocation-ledger
-contract.
+The detailed source inventory remains in the working
+[0.102 diagnostic audit](../../audits/working/0.102-diagnostic-inventory/index.md).
+It is temporary conversion evidence, not a recurring producer-registration
+workflow.
 
-## Release-Batch Plan
+## Implementation Phases
 
-| Batch | Outcome | Required evidence and cleanup | Status |
-| --- | --- | --- | --- |
-| B1 | Freeze current diagnostic authority and Wasm baseline | Complete producer, dynamic-context and durable-string inventories; many-to-one handling-identity compression map; compressed allocation proposal; host catalogue; projection owners; representative Wasm baseline | Accepted: complete guarded `1..=991` register approved on 2026-08-16 |
-| B2 | Add prose-free runtime identity and host catalogue | Distinct raw/registered types, approved allocations, permanent current/retired ledger, exhaustive host metadata, lookup and Wasm absence proof | Complete in the `.2` draft: implementation and direct evidence pass; public wire unchanged |
-| B3 | Hard-cut the Fleet-atomic public diagnostic contract | Replace enum-plus-message with `nat16`, update every owned endpoint and generated surface, reject mixed release sets | Pending |
-| B4 | Make internal propagation code-first | Remove owned prose concatenation, map typed causes, preserve explicit projections and masked-code observability | Pending |
-| B5 | Bound durable diagnostic ownership | Remove redundant prose, preserve recovery-significant state and prove changed lifecycle journeys | Pending |
-| B6 | Whole-program cleanup and measured closeout | Remove residue and temporary inventory tooling, regenerate bindings, remeasure Wasm and publish downstream source guidance | Pending |
+| Phase | Outcome | Status |
+| --- | --- | --- |
+| Register | Review the 167 mechanical buckets by semantic cause; create `reasons.toml`; generate runtime constants and the host catalogue only | Complete: 161 registered and ten local families |
+| Map | Map existing typed failures at qualifying boundaries; keep local failures local; select explicit safe public projections | Complete |
+| Cut | Make `InternalError` code-first and atomically replace `ErrorCode + message` with `Error { code: u16 }` across Rust, Candid, host, CLI and tests | Complete |
+| Clean and measure | Remove dead prose and temporary audit tooling/authority, archive useful conversion evidence, touch only directly affected durable fields and record representative Wasm deltas | Complete: targeted four-role evidence recorded |
 
-## B1 Completion Contract
+Historical B1/B2 labels may remain in audit and changelog evidence. They do not
+add phases or architecture to this plan.
 
-B1 is complete only when all of these are reviewable together:
+## Accepted Evidence
 
-1. one exact current producer and consumer manifest;
-2. complete dynamic public-value ownership and durable-string classifications;
-3. one reviewed many-to-one map from every producer observation to a shared
-   canonical-condition and handling identity or explicit non-diagnostic
-   disposition;
-4. one canonical condition, class, semantic origin, host disposition,
-   producer set and public projection for each compressed code;
-5. operation-correlated numeric observability for every masked diagnostic;
-6. nonzero unique allocation rows across permanent current and retired history,
-   with no four-digit initial allocation;
-7. a host catalogue and generated current registry bijective with active rows;
-8. proof that the coverage frontier and mapping table are absent from Wasm;
-9. a reproducible representative-Wasm baseline; and
-10. explicit maintainer approval recorded before B2 created runtime authority.
+- B1 found 2,895 provisional labels, 3,898 exact producer-qualified entries
+  and 31 public projections. These are coverage observations, not code counts.
+- The rejected tuple generated 991 rows and 503 singletons. A fresh comparison
+  showed 166 canonical conditions, 167 origin-qualified mechanical buckets,
+  348 rows after adding broad class, 572 after handling, 664 after projection
+  and 991 for the full tuple.
+- All 656 dynamic values formerly embedded in public messages are inventoried,
+  so operation IDs, deadlines and other meaningful values can be checked before
+  prose is removed.
+- The retained `CANIC-WASM-001/v3` baseline covers representative Component,
+  Fleet Subnet Root, Fleet Coordinator and Wasm Store artifacts from immutable
+  tag `v0.101.53`.
+- The superseded assets and their tests prove useful raw/registered type,
+  lookup and generation scaffolding. They do not approve the old taxonomy.
+- Finite typed Access and Store cleanup may be retained, but provisional
+  numeric mappings must be regenerated from the reviewed reason register.
 
-## Closed Coverage Frontier
+## Current Register Review
 
-- 2,208 mechanical `InternalError::*` references are classified as 2,514
-  effective helper/call-site dispositions by 98 bounded source passes.
-- Source-to-ledger reconciliation corrected a nineteen-observation omission in the
-  maintained delegated-session helper and one earlier arithmetic undercount of
-  the already materialized coverage tables. The qualified frontier now
-  contains 2,864 exact provisional identities and 31 safe-projection
-  identities, for 2,895 host-only labels. Qualifying the exact identities by
-  their symbolic producer anchors yields 3,898 entries and 3,929 total review
-  observations with projections. Neither count is an allocation count or a
-  proposed runtime identity set.
-- All 656 dynamic public-message values are classified: 287 caller-derivable,
-  67 sensitive operator-only, 234 authoritatively typed and 68 requiring
-  narrow request/status owners.
-- All 31 projection observations and eight exact producer observations reused
-  as projections have a proposed operation-correlated observability owner.
-  Every projection-only row
-  also has a proposed host summary, disposition, action and exposure rationale.
-- The nineteen corrected delegated-session rows have concrete producer owners
-  and complete proposed host/projection/observation metadata; their numeric
-  allocation remains unset with the rest of the producer frontier.
-- Every exact provisional identity is now a structured row with at least one
-  typed producer, source, decision, dependency-boundary, site or call evidence
-  cell and a symbolic producer-function anchor. This closes both typed-owner
-  materialization and the exhaustive current producer-function manifest.
-- The maintained production-consumer manifest is exact at the pinned
-  current-candidate source: twelve machine-decision consumers and six
-  transparent decode/render consumers have complete structured rows. The guard
-  pins their full row set separately from diagnostic-identity arithmetic.
-- A conservative producer-anchor pass finds all 2,864 exact provisional
-  identities name a symbolic source anchor in a structured owner cell. Its
-  empty debt set and fingerprint are pinned; a backticked symbol remains a
-  coverage anchor, not proof of production reachability by itself. All twenty
-  access-family identities now have exact function/branch anchors and a
-  family-specific completeness check. All twelve authority-restore identities
-  likewise have exact typed/function branch anchors; eleven were newly closed
-  and the endpoint-policy fence was already typed. The twenty direct-prose
-  authentication identities now have exact attestation, proof, retention,
-  verifier and signer/configuration anchors plus their own completeness check.
-  The remaining verifier/signer test-key and compiled-crypto sites are also
-  exact, so all 151 authentication identities pass a family-level guard. The
-  thirteen runtime-auth renewal/admission and eleven RPC/runtime-crypto
-  identities now have exact function/branch evidence and separate guards too.
-  The twenty-one prepare-replay and eight prepare/provisioning identities also
-  have complete source-addressed family guards. All eleven core chain-key
-  batch/approval identities now bind their exact validation, canonicalization,
-  planning and installation branches under another family guard. The first
-  core Canister-creation funding-overflow helper is also exact. The ten pool
-  initialization, reset and claim identities name their exact transition
-  functions under a range-completeness guard. All twenty-one
-  autonomous creation identities independently bind intent, paid-attempt,
-  terminal-evidence, adoption, commit, retry, cancel and rollover branches.
-  All ten exclusive-handoff identities bind their begin/completion authority,
-  asset-state and terminal-receipt branches under a separate guard.
-  Store deletion, configuration, cost/adoption helpers and recycling settlement
-  are also exact: all 56 distinct meanings across the pool ops file's 69
-  constructor sites are now symbol-addressed without treating repeated sites as
-  new codes. The pool workflow is exact too: its seventeen constructor sites
-  reference eighteen identities, with three ops reuses and fifteen net-new
-  maintenance, import, handoff and recoverable-refill meanings. All twenty-two
-  root/Store bootstrap meanings bind exact manifest-envelope, protected-
-  topology, artifact-capacity, staged-authority and live-catalog branches; its
-  two topology adapters remain transparent typed-cause propagation.
-  The root-Subnet/adoption-state ledger also anchors all nine referenced exact
-  identities: one access reuse plus eight net-new discovery and sibling-Store
-  state meanings; its Registry discovery failure stays a transparent cause.
-  All twenty-one Store-lifecycle coverage labels and all fifty Fleet Mirror
-  labels now bind their exact producer functions too; transparent Store-client
-  and Coordinator-result adapters remain typed cause propagation rather than
-  wrapper allocations.
-  The Component Directory/Fleet-service peer boundary now source-addresses all
-  forty-two exact meanings as well; its typed Component-binding adapter remains
-  transparent and the exact count-overflow projection is reused rather than
-  allocated again.
-  The adjacent durable Component Directory synchronization journal now binds
-  all fifty-five coverage meanings to its exact status, acceptance, retry,
-  intent, terminal and stable-commit functions; unreachable placement commit
-  variants remain non-diagnostic dispositions.
-  Fleet-activation/scaling and the five small core ops owners now bind their
-  thirteen referenced coverage labels too; typed configuration edges and the
-  two impossible scaling shapes remain non-allocating dispositions.
-  The five adjacent small workflow owners bind their six referenced topology
-  and deadline labels; cost-guard and capability adapters remain transparent.
-  The final small-adapter family now binds all twenty-seven candidate/reuse
-  identities to exact producers; its twenty-eight materialized coverage labels
-  include the exact `FLEET_ACTIVATION_STATE_INVALID` identity reused as a public
-  projection. Five typed adapters remain transparent and two impossible states
-  remain deliberately code-free, so only twenty-three previously unanchored
-  observations leave the global debt set.
-  The Component runtime family now binds all seventy-four exact identities to
-  its preparation, synchronization, activation, Directory-validation and
-  canonical-hash producers. Sixty-four are net-new meanings, ten are semantic
-  reuses and seventy-two were previously absent from the global anchor set;
-  three storage adapters remain transparent typed propagation.
-  The root-issuer/delegation-batch family also closes: its sole materialized
-  identity is the already anchored certificate-TTL policy code, while five
-  Fleet/storage/policy adapters preserve their typed causes. It therefore adds
-  no duplicate identity and does not change global debt.
-  Root/non-root lifecycle orchestration also closes without new codes: its two
-  materialized access/environment identities are already anchored, while nine
-  memory, environment, configuration and runtime-startup edges preserve their
-  typed causes across exact lifecycle functions.
-  Runtime coordination, restore and activation also bind all twelve referenced
-  identities. Existing access, restore and Fleet-activation codes remain
-  shared; only the resumable-refill upgrade fence and credential-bundle
-  capability fence were previously absent from global producer anchors. Three
-  memory/storage edges remain transparent.
-  The final Component Registry families now close too: all 239 workflow, 449
-  direct Registry-ops and 230 grouped-provisioning labels have exact function
-  or typed-predicate anchors. This includes the direct-child and arbitrary-depth
-  lifecycle, top-level commit/activation, Directory refresh, root/Store removal,
-  canonical accounting/hash and grouped cursor/result frontiers. The global
-  producer-function debt is therefore zero.
-- Seventeen IC-call families map to their durable operation or guarded status.
-  Store publication includes its previously missing attempt owner.
-- The 105-row authentication formatter, the native configuration zero-row
-  exclusion and the current Canister durable-string census are closed.
-- Publication binding/release authority, all 56 GC/reclamation/deletion
-  constructions and both management transports are fully expanded.
-- No decision parses retained failure text. Four current Cashier coverage
-  conditions remain in 0.102 scope; any resulting compressed codes retire
-  without reuse if the standalone blob-service extraction is promoted.
-
-These are exhaustive repository-evidence results. The 3,898 qualified exact
-entries map exactly once onto 960 shared
-exact-condition contracts; 31 safe public projections produce the dense
-`1..=991` register. Maintainer approval made those shared rows B2 allocation
-authority; their 503 singleton rows each retain an explicit handling/exposure
-rationale.
-The coverage labels and mapping table remain repository-only and do not enter
-Wasm. The maintained public error remains
-`ErrorCode + message`, `InternalError` remains string-first and the host still
-consumes typed enum variants.
+The code-free review began with 167 mechanical origin-qualified buckets and
+initial hints of 157 possible-global and ten possible-local groups. Four mixed
+global buckets required semantic splits. The accepted review therefore exactly
+partitions all 2,895 provisional identities into 161 qualifying registered
+cause families and ten local typed families across 171 reviewed rows. No
+exact-owner boundary decision remains open. A
+superseded granular pass produced 1,355 rows by splitting subsystem, field,
+phase and public target; it remains archived migration evidence and has no
+allocation authority. The final number of reasons is not a KPI, but handling,
+projection and producer context do not manufacture additional identities.
 
 ## Current Decisions
 
-- Use dense, monotonic, nonzero numbers with compact unpadded `E<decimal>`
-  rendering and no semantic bands.
-- Allocate codes for composable canonical conditions and handling contracts,
-  not source observations; physical origin, module, role, endpoint and prose
-  do not force another code.
-- Give each code one canonical semantic declaration path; declaration files
-  may be grouped by semantic domain, but producer-local aliases and copies are
-  forbidden.
-- Reject any four-digit initial allocation as failed semantic compression.
-- Keep lossless raw decoded identities distinct from registered producer
-  identities.
-- Keep class, origin, disposition, labels, summaries and remediation in
-  host-only code.
-- Retain every allocated number permanently as current or retired; never reuse
-  a retired number.
-- Install all Canic-owned Fleet canisters from one admitted release set before
-  activating the new public contract.
-- Do not add a dual protocol, compatibility decoder, diagnostic generation
-  name, message fallback or string-based classification.
+- The only public wire is `Error { code: u16 }`; delete `ErrorCode` and
+  `message` completely.
+- `DiagnosticCode` preserves any observed `u16` losslessly.
+  `RegisteredDiagnosticCode` is the Canic-owned producer identity, with Rust
+  privacy as the primary construction guard.
+- Codes identify semantic causes, not producer sites or handling. Existing
+  typed callers continue making retry, reconciliation and policy decisions from
+  their own typed state. 0.102 adds no generic handling framework.
+- `InternalError` is code-first. Public projection is explicit at typed mapping
+  or construction boundaries and exhaustively tested; there is no central
+  projection table and identity is never recovered by matching text.
+- Global codes are for public, retrievable operator, durable-evidence or
+  machine-decision boundaries. A sensitive exact failure is registered only if
+  that identity independently qualifies; otherwise it remains local typed
+  state and may map directly to a safe public registered reason.
+- `reasons.toml` contains code, name, origin, summary, optional guidance and
+  `retired`. It generates only runtime constants and the host catalogue.
+- Unreleased allocations may change freely. Once released, `code + name` is the
+  immutable semantic identity; summary and guidance may change, origin may
+  change after review and retirement may move only from false to true.
+- No JSON registry is generated until a concrete maintained non-Rust consumer
+  requires one.
+- A masked registered reason uses an existing suitable exact owner. Without
+  one, the exact failure stays local and maps directly to the safe public
+  reason; 0.102 does not create a status, receipt, correlation or lifecycle
+  subsystem solely to make it qualify.
+- Correctness-, recovery- and caller-required dynamic data receives the
+  smallest endpoint-specific typed owner when necessary. Nonessential operator
+  context may be deliberately dropped and recorded rather than forcing new
+  infrastructure.
+- Durable work is limited to fields directly disturbed by removal of the
+  diagnostic string representation. Independently meaningful operational and
+  recovery text remains unchanged.
+- B1's exhaustive tooling and allocation authority are removed at closeout;
+  useful inventory and review evidence remain archived conversion history.
+- General logs, protocol strings and application data remain owned and intact.
 
-The dense allocation proposal is in
-[allocation-proposal.md](allocation-proposal.md). The permanent allocation
-authority contract is in
-[code-allocation-ledger.md](code-allocation-ledger.md).
+## Focused Validation
 
-## Validation Evidence
+Targeted checks establish the accepted B1 arithmetic, the 161-row ledger and
+generated-code drift guard, raw/registered separation, explicit projection,
+lossless remote forwarding, host lookup, the exact one-field Candid wire, and
+the affected typed mappings in core and the control plane. Core,
+control-plane, host, CLI, Fleet Coordinator and Wasm Store feature builds
+compile. The complete broad validation recorded for the earlier release
+checkpoint remains historical evidence; it is not a reason to rerun broad
+suites during focused 0.102 development.
 
-- `CANIC-WASM-001/v3` passes at immutable tag `v0.101.53` over six Components,
-  Fleet Subnet Root, Fleet Coordinator and Wasm Store in release and debug
-  profiles at risk `5/10`.
-- Source-count, semantic-expansion, dynamic-category and projection arithmetic
-  reconcile in the working evidence.
-- A targeted repository guard derives 2,864 exact provisional identities and 31
-  additional projection observations exclusively from explicit coverage
-  columns, then pins the complete 2,895-label frontier with a deterministic
-  sorted-set fingerprint. No arbitrary prose scan or manual exclusion
-  participates in that coverage evidence. It does not authorize 2,895 codes. A
-  second check requires structured owner/source evidence for all 2,864 exact
-  identities, and a third pins all eighteen maintained production consumers.
-  A fourth pins the empty producer symbol-anchor debt set so later source drift
-  cannot silently reopen it. The semantic guard expands the identities to
-  3,898 producer-qualified entries, rejects every unclassified action and any
-  per-producer exposure, action or machine-class conflict, then requires all
-  3,929 observations to map exactly once. The 433 entries without one
-  unambiguous explicit exposure fail closed to their aggregate projection or
-  internal-only handling; the 424 without one producer-qualified action use
-  the narrow condition-derived conservative remediation. Both sets remain
-  visible review inputs. All 991 proposal rows name producers, all projections
-  have mapped exact inputs, the dense allocation stays below four digits and
-  the checked-in register equals its deterministic derivation byte for byte.
-  The same guard pins the maintainer-approved review checklist for semantic
-  grouping, handling contracts, host dispositions, projections, masked
-  observability, singleton rationale and non-producer-local reuse, and rejects
-  production source references to the review proposal, working evidence and
-  planned host allocation assets.
-- B2 deterministically derives 991 canonical registered constants, 991 current
-  and zero retired permanent ledger rows, the typed host catalogue and a
-  byte-identical current JSON registry from the approved register. Direct
-  numeric construction and host-asset imports stay outside canister producers.
-- Focused host tests prove the complete ledger/runtime/catalogue/JSON bijection,
-  anti-reuse and current/retired/unknown behavior. Focused CLI tests cover
-  strict numeric parsing, lookup rendering and recursive lexicographic help.
-- Warning-denied Clippy passes for the touched core, host, CLI and allocation-
-  generator targets. Changelog governance, diagnostic ownership, layering and
-  diff hygiene pass for the B2 review boundary. The repository-wide optional-
-  idea collection check observes unrelated maintainer work and is not used as
-  diagnostic B2 evidence.
-- A fresh complete `make validate` passes on 2026-08-16, including repository
-  release guards, full workspace tests and every serial PocketIC suite. That
-  repository-wide result does not promote unrelated maintainer work into this
-  scoped diagnostic release outcome.
-- Canonical role-scoped release builds pass for a representative Component,
-  Wasm Store and Fleet Subnet Root at 2,879,695, 2,773,920 and 7,497,834 raw
-  bytes. Bounded scans find no permanent-ledger header, host owner, catalogue
-  prose, symbolic label, working-audit path or projection-map marker in any of
-  the three artifacts. This is B2 absence evidence, not a new
-  `CANIC-WASM-001/v3` comparison run.
+For the simplified contract, targeted checks must cover only:
+
+- unique nonzero reason rows and no reuse relative to the latest released
+  ledger;
+- generated runtime-constant and host-catalogue drift;
+- raw decoding/forwarding and registered producer construction boundaries;
+- typed reason mappings and explicit public projection;
+- the exact one-field Candid wire and host known/retired/unknown rendering;
+- current encoding/lifecycle behavior for stable records actually changed; and
+- representative release-Wasm absence plus closeout measurement.
+
+The targeted [closeout Wasm evidence](../../audits/working/0.102-diagnostic-inventory/closeout-wasm.md)
+builds a representative Component, Fleet Subnet Root, Fleet Coordinator and
+Wasm Store through the canonical release builder. All four data sections are
+smaller than the retained baseline and bounded scans find no host catalogue or
+B1 register material. Root is smaller overall; the other three roles grow
+across the non-isolated release-line comparison, so 0.102 makes no causal
+diagnostic-savings claim.
+
 ## Next Action
 
-Diagnostic B2 is implemented and its 0.102.2 source, host, CLI, evidence and
-release-note surfaces have passed scoped and complete repository validation.
-The approved register materializes the permanent ledger, registered
-declarations and host catalogue; the public `ErrorCode + message` contract
-remains intentionally unchanged. Rerun the stable failure-string census
-immediately before B5 mutation. B3's Fleet-atomic public hard cut remains a
-separate later batch and is not part of the current handoff.
+The diagnostic batch is ready for maintainer commit/push validation. Do not
+generate JSON, add handling metadata or create new observability
+infrastructure. The maintainer owns the full validation performed when
+pushing. The repository-wide current-document guard's unrelated Saltz asset
+finding is outside this diagnostic decision and must be resolved with the
+Saltz work rather than by changing 0.102.

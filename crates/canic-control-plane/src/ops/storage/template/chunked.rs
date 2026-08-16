@@ -36,8 +36,6 @@ use canic_core::cdk::utils::hash::wasm_hash;
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::control_plane_support::ops::ic::mgmt::MgmtOps;
 use canic_core::control_plane_support::{error::InternalError, format::byte_size};
-#[cfg(test)]
-use canic_core::dto::error::ErrorCode;
 #[cfg(feature = "wasm-store-canister")]
 use ic_cdk::api::canister_self;
 #[cfg(feature = "root-control-plane")]
@@ -747,8 +745,8 @@ mod tests {
         .expect_err("second chunk should fail once its incremental bytes exceed the limit");
 
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreCapacityExceeded)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 
@@ -798,8 +796,8 @@ mod tests {
         let err = TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 0)
             .expect_err("old chunk must not satisfy replaced chunk metadata");
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreHashMismatch)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
         let staging = TemplateChunkedOps::staging_status_response(
             &TemplateManifestResponse {
@@ -880,8 +878,8 @@ mod tests {
             .expect_err("old out-of-range chunk must not be served");
 
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreChunkMissing)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::WASM_STORE_CHUNK_MISSING.raw_code()
         );
     }
 

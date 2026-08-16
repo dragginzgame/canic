@@ -15,8 +15,8 @@ use crate::{
 use candid::Principal;
 use canic_core::{
     cdk::utils::hash::decode_hex,
+    diagnostics::codes,
     dto::{
-        error::ErrorCode,
         fleet_registry::{
             FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
             FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionResponse,
@@ -910,7 +910,7 @@ where
 {
     match query_with_arg(icp, canister, method, input) {
         Ok(response) => Ok(Some(response)),
-        Err(error) if error.is_rejected_with(ErrorCode::Unavailable) => Ok(None),
+        Err(error) if error.is_rejected_with(codes::STATE_UNAVAILABLE) => Ok(None),
         Err(error) => Err(protocol_error(stage, error)),
     }
 }

@@ -7,7 +7,7 @@
 pub mod request;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::{
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
@@ -18,7 +18,6 @@ use crate::{
         rpc::{CreateCanisterParent, Request, Response},
     },
     ops::{
-        OpsError,
         ic::{
             IcOps,
             call::{CallOps, CallResult},
@@ -52,8 +51,8 @@ pub enum RpcOpsError {
 impl From<RpcOpsError> for InternalError {
     fn from(err: RpcOpsError) -> Self {
         match err {
-            RpcOpsError::RemoteRejected(err) => Self::public(err),
-            other @ RpcOpsError::RequestOps(_) => OpsError::from(other).into(),
+            RpcOpsError::RemoteRejected(err) => Self::observed_public(err),
+            RpcOpsError::RequestOps(err) => err.into(),
         }
     }
 }
@@ -152,10 +151,7 @@ impl RpcOps {
 
         let metadata = capability_metadata_from_request(&request);
         let Request::Cycles(capability) = request else {
-            return Err(InternalError::ops(
-                InternalErrorOrigin::Ops,
-                "structural capability path only supports cycles requests",
-            ));
+            return Err(InternalError::state_failure());
         };
         let envelope = NonrootCyclesCapabilityEnvelopeV1 {
             service: CapabilityService::Root,
@@ -184,14 +180,8 @@ const fn uses_structural_capability_proof(request: &Request) -> bool {
     }
 }
 
-fn non_structural_capability_proof_error(request: &Request) -> InternalError {
-    InternalError::ops(
-        InternalErrorOrigin::Ops,
-        format!(
-            "non-structural root capability proof is not supported for {}; use a structural capability path or delegated-token endpoint",
-            RequestConversionOps::diagnostic_variant_label(request)
-        ),
-    )
+fn non_structural_capability_proof_error(_request: &Request) -> InternalError {
+    InternalError::state_failure()
 }
 
 fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetadata {

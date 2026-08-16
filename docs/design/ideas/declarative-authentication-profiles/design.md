@@ -4,18 +4,19 @@ Date: 2026-08-03
 
 ## Status
 
-- Classification: deferred, unnumbered idea. Its former working number was
-  `0.108`; it is not a scheduled Fleet-expansion predecessor.
+- Classification: deferred, unnumbered idea. Its former `0.108` working number
+  is retired; the scheduled local application-authorization line is now 0.109.
 - Former review status: proposed for maintainer review.
-- Release boundary: reinstall only. 0.108 consumes no prior-release token,
-  certificate, issuer-policy, session or verifier state.
+- Release boundary: reinstall only. A future authentication-profile release
+  consumes no prior-release token, certificate, issuer-policy, session or
+  verifier state.
 - Implementation approval: none.
-- Sequence: this is the 0.108 design line. It follows the
+- Sequence: this idea follows the
   [0.100 Fleet Coordinator design](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md),
   the
   [0.101 Component provisioning design](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md),
-  the proposed
-  [framework-neutral local application authorization idea](../framework-neutral-local-application-authorization/design.md),
+  the scheduled
+  [0.109 framework-neutral local application authorization design](../../0.109-framework-neutral-local-application-authorization/0.109-design.md),
   the
   [direct transport idea](../cross-subnet-data-transport-groundwork/design.md)
   and the proposed
@@ -39,7 +40,7 @@ below.
 
 ## Summary
 
-0.108 proposes one declarative **authentication profile** as the application
+This idea proposes one declarative **authentication profile** as the application
 developer's sole authority surface for ordinary user authentication.
 
 An application declares once:
@@ -113,7 +114,7 @@ shared authority must be explicit, signed once and locally verifiable.
 
 ## Decision
 
-0.108 will make authentication profiles the canonical source of login-time
+The authentication-profile design will make profiles the canonical source of login-time
 role and scope grants.
 
 The client requests a bounded profile identity and context. It does not
@@ -169,7 +170,7 @@ Canic recognizes only protocol identities:
 | transport caller | Principal authenticated by the IC for this request |
 | authenticated subject | application subject selected by the maintained Canic identity boundary |
 | delegated token | signed Canic audience, profile, grant, scope and lifetime authority |
-| local application session | 0.103 bounded local mapping from transport caller to verified subject, issuer, role scopes and expiry |
+| local application session | 0.109 bounded local mapping from transport caller to verified subject, issuer, role scopes and expiry |
 | role attestation | separate Canister-to-Canister service identity proof |
 
 The current `RootComponentMembershipApi` is also outside authentication-profile
@@ -183,7 +184,7 @@ No maintained runtime or configuration type may name a login provider, wallet
 product, frontend framework or transport library.
 
 An ordinary direct caller uses its transport Principal as the token subject.
-If a valid 0.103 local application session exists, its materialized authority
+If a valid 0.109 local application session exists, its materialized authority
 remains bound to the exact transport caller and verified subject under the
 existing caller-lane separation. A proof-bearing request remains bound to the
 same resolved subject directly. Topology predicates continue to consume the
@@ -348,7 +349,7 @@ nested application partition. Toko's Project Instance is a descendant of its
 Project Hub Component and its Ledger is a further descendant; several Project
 Instances may therefore share one top-level Component identity.
 
-Before this mode is implementation-approved, 0.108 must freeze:
+Before this mode is implementation-approved, the authentication-profile design must freeze:
 
 1. the canonical subtree-anchor identity;
 2. how that identity is allocated and never ambiguously reused;
@@ -448,7 +449,7 @@ caller -> issuer prepare update
 caller -> issuer get query
 ~~~
 
-0.108 does not claim to remove that initial token-signature operation. Its
+The authentication-profile design does not claim to remove that initial token-signature operation. Its
 guarantee is that adding project, ledger and other profile roles does not add
 another prepare, issuer signature, root signature or verifier update.
 
@@ -523,10 +524,10 @@ so the proof is visible and independently auditable. Client helpers may inject
 that argument but must not silently substitute a session for an endpoint that
 declared proof-bearing authorization.
 
-The independent 0.103 session-bearing lane exists for explicitly declared
+The independent 0.109 session-bearing lane exists for explicitly declared
 application or framework endpoints whose maintained ABI cannot carry Canic
 proof material. It consumes the same profile scopes and verified-authority
-policy. 0.108 must not create another tokenless session record, decision
+policy. The authentication-profile design must not create another tokenless session record, decision
 facade or grant authority.
 
 The role-contract catalog records every authenticated endpoint and scope.
@@ -663,7 +664,7 @@ decision boundary.
 
 ## Security Invariants
 
-0.108 must preserve:
+The authentication-profile design must preserve:
 
 1. The caller never chooses its token subject.
 2. The caller never submits raw roles or scopes for expansion.
@@ -698,13 +699,13 @@ The implementation must freeze finite limits for:
 - client-retained active tokens.
 
 The current delegated-token bounds of 16 role grants and 32 scopes per role
-are the starting point. 0.108 must either retain them with measured evidence
+are the starting point. The authentication-profile design must either retain them with measured evidence
 or replace them explicitly. It must not make profile configuration an
 unbounded stable or Wasm-resident catalog.
 
 ## Hard Cuts
 
-Once implemented, 0.108 removes:
+Once implemented, the authentication-profile design removes:
 
 - caller-supplied token subjects;
 - caller-supplied raw audience and grant lists on the public login surface;
@@ -721,7 +722,7 @@ behavior receives positive coverage instead.
 
 ## Non-Goals
 
-0.108 does not:
+The authentication-profile design does not:
 
 - implement a login provider or wallet;
 - merge Principals belonging to one human;
@@ -736,17 +737,17 @@ behavior receives positive coverage instead.
 - make every Component descendant an authenticated verifier implicitly; or
 - modify a downstream application repository.
 
-## Relationship To 0.103
+## Relationship To Canic 0.109
 
-0.103 owns proof-to-session materialization, exact transport-caller binding,
+0.109 owns proof-to-session materialization, exact transport-caller binding,
 bounded local scope lookup and the synchronous framework-neutral decision.
-0.108 owns declarative profile compilation, issuance, verifier projections and
-client acquisition.
+The authentication-profile idea owns declarative profile compilation, issuance,
+verifier projections and client acquisition.
 
-0.108 must:
+The authentication-profile design must:
 
-- use the 0.103 canonical application-scope identity;
-- let profile-issued tokens establish the same current 0.103 session record;
+- use the 0.109 canonical application-scope identity;
+- let profile-issued tokens establish the same current 0.109 session record;
 - bind the session authority generation to the installed profile projection;
 - report its maximum token/session revocation latency honestly; and
 - retain no parallel subject-only session or profile-specific tokenless guard.
@@ -869,7 +870,7 @@ Before implementation approval, maintainers must decide:
 
 ## Completion Gate
 
-0.108 is ready for implementation only when:
+The authentication-profile idea is ready for implementation only when:
 
 - one profile is the sole source of ordinary login grants;
 - issuer selection and application admission have typed, bounded authority;
@@ -880,5 +881,5 @@ Before implementation approval, maintainers must decide:
 - the hard-cut request and configuration removals are enumerated; and
 - component-subtree reach is either fully frozen or explicitly absent from the
   first implementation surface; and
-- profile-issued session authority reuses the complete 0.103 current surface
+- profile-issued session authority reuses the complete 0.109 current surface
   without a second local grant or session store.

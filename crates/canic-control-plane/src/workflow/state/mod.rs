@@ -11,9 +11,7 @@ use crate::ops::{
 use canic_core::{
     cdk::types::Principal,
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
-        ops::ic::IcOps,
-        workflow::state::execute_fleet_command_to,
+        error::InternalError, ops::ic::IcOps, workflow::state::execute_fleet_command_to,
     },
     dto::state::{FleetCommand, FleetCommandResponse},
 };
@@ -23,15 +21,6 @@ use std::collections::BTreeSet;
 enum RootChildAuthority {
     ComponentRegistry,
     StoreInventory,
-}
-
-impl RootChildAuthority {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::ComponentRegistry => "Component Registry",
-            Self::StoreInventory => "Store inventory",
-        }
-    }
 }
 
 struct RootStateCascadeTargets {
@@ -97,11 +86,8 @@ impl FleetStateWorkflow {
     }
 }
 
-fn invalid_root_child(authority: RootChildAuthority, reason: &'static str) -> InternalError {
-    InternalError::invariant(
-        InternalErrorOrigin::Workflow,
-        format!("{} root-state cascade Canister {reason}", authority.label()),
-    )
+fn invalid_root_child(_authority: RootChildAuthority, _reason: &'static str) -> InternalError {
+    InternalError::invariant()
 }
 
 // -----------------------------------------------------------------------------
@@ -132,7 +118,10 @@ mod tests {
             .insert(p(3), RootChildAuthority::ComponentRegistry)
             .expect_err("overlapping authority must reject");
 
-        assert!(duplicate.public_error().is_none());
+        assert_eq!(
+            duplicate.code(),
+            canic_core::diagnostics::codes::STATE_INVALID
+        );
         assert_eq!(targets.into_vec(), vec![p(2), p(3)]);
 
         let mut invalid_targets = RootStateCascadeTargets {
@@ -146,7 +135,10 @@ mod tests {
             .insert(p(1), RootChildAuthority::ComponentRegistry)
             .expect_err("root cannot be its own child");
 
-        assert!(anonymous.public_error().is_none());
-        assert!(root.public_error().is_none());
+        assert_eq!(
+            anonymous.code(),
+            canic_core::diagnostics::codes::STATE_INVALID
+        );
+        assert_eq!(root.code(), canic_core::diagnostics::codes::STATE_INVALID);
     }
 }

@@ -5,7 +5,7 @@
 //! Boundary: delegates to the registered resolver and returns Store-backed chunk sources.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     domain::metrics::{
         WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
@@ -137,10 +137,7 @@ impl ModuleSourceRuntimeApi {
                 WasmStoreMetricOutcome::Failed,
                 WasmStoreMetricReason::InvalidState,
             );
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                "module source resolver is not registered; root/control-plane install flows are unavailable".to_string(),
-            )
+            InternalError::lifecycle_failure()
         })?;
 
         match resolver.approved_module_source(role).await {

@@ -12,7 +12,8 @@ use crate::{
         candid::de::{DecoderConfig, IDLDeserialize},
         types::Principal,
     },
-    dto::{auth::DelegatedToken, error::ErrorCode},
+    diagnostics::codes,
+    dto::auth::DelegatedToken,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
@@ -66,10 +67,14 @@ fn verify_token(
 }
 
 fn access_error_from_verification(err: InternalError) -> AccessError {
-    match err.public_error().map(|error| error.code) {
-        Some(ErrorCode::AuthProofExpired) => AccessError::DelegatedAuthCertExpired,
-        Some(ErrorCode::AuthTokenExpired) => AccessError::DelegatedAuthTokenExpired,
-        _ => AccessError::Denied(err.to_string()),
+    match err.public_error().code() {
+        code if code == codes::AUTH_CERT_EXPIRED.raw_code() => {
+            AccessError::DelegatedAuthCertExpired
+        }
+        code if code == codes::AUTH_TOKEN_EXPIRED.raw_code() => {
+            AccessError::DelegatedAuthTokenExpired
+        }
+        _ => AccessError::Internal(err),
     }
 }
 
@@ -80,9 +85,7 @@ pub(super) fn enforce_subject_binding(
     if sub == caller {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "delegated token subject '{sub}' does not match caller '{caller}'"
-        )))
+        Err(AccessError::DelegatedTokenSubjectMismatch)
     }
 }
 
@@ -97,9 +100,7 @@ pub(super) fn enforce_required_scope(
     if token_scopes.iter().any(|scope| scope == required_scope) {
         Ok(())
     } else {
-        Err(AccessError::Denied(format!(
-            "delegated token missing required scope '{required_scope}'"
-        )))
+        Err(AccessError::RequiredScopeMissing)
     }
 }
 
@@ -110,11 +111,7 @@ fn delegated_token_from_args() -> Result<DelegatedToken, AccessError> {
 
 // Decode and size-check only the delegated token, not later endpoint payloads.
 fn delegated_token_from_ingress_bytes(bytes: &[u8]) -> Result<DelegatedToken, AccessError> {
-    delegated_token_from_bytes(bytes).map_err(|err| {
-        AccessError::Denied(format!(
-            "failed to decode DelegatedToken as first argument: {err}"
-        ))
-    })
+    delegated_token_from_bytes(bytes).map_err(|_| AccessError::DelegatedTokenMalformed)
 }
 
 // Decode the first ingress argument as a delegated token.
@@ -133,21 +130,17 @@ fn delegated_token_from_bytes(bytes: &[u8]) -> Result<DelegatedToken, String> {
 
 // Resolve the verifier-side TTL policy from delegated-token config.
 fn delegated_token_max_ttl_ns() -> Result<u64, AccessError> {
-    let cfg = ConfigOps::delegated_tokens_config()
-        .map_err(|_| dependency_unavailable("delegated token config unavailable"))?;
+    let cfg = ConfigOps::delegated_tokens_config().map_err(dependency_unavailable)?;
     if !cfg.enabled {
-        return Err(AccessError::Denied(
-            "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml"
-                .to_string(),
-        ));
+        return Err(AccessError::DelegatedTokensDisabled);
     }
 
     let max_ttl_secs = cfg
         .max_ttl_secs
         .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS);
-    max_ttl_secs.checked_mul(NS_PER_SEC).ok_or_else(|| {
-        AccessError::Denied("auth.delegated_tokens.max_ttl_secs overflows nanoseconds".to_string())
-    })
+    max_ttl_secs
+        .checked_mul(NS_PER_SEC)
+        .ok_or(AccessError::DelegatedTokenMaxTtlOverflow)
 }
 
 // -----------------------------------------------------------------------------
@@ -158,7 +151,7 @@ fn delegated_token_max_ttl_ns() -> Result<u64, AccessError> {
 mod tests {
     use super::{access_error_from_verification, delegated_token_from_ingress_bytes};
     use crate::{
-        InternalError, InternalErrorOrigin,
+        InternalError,
         access::AccessError,
         cdk::{
             candid::{Principal, encode_args},
@@ -173,17 +166,14 @@ mod tests {
 
     #[test]
     fn verification_expiry_codes_map_to_typed_access_denials() {
-        let token = access_error_from_verification(InternalError::auth_token_expired("expired"));
+        let token = access_error_from_verification(InternalError::auth_token_expired());
         assert!(matches!(token, AccessError::DelegatedAuthTokenExpired));
 
-        let cert = access_error_from_verification(InternalError::auth_proof_expired("expired"));
+        let cert = access_error_from_verification(InternalError::auth_proof_expired());
         assert!(matches!(cert, AccessError::DelegatedAuthCertExpired));
 
-        let other = access_error_from_verification(InternalError::ops(
-            InternalErrorOrigin::Ops,
-            "verification failed",
-        ));
-        assert!(matches!(other, AccessError::Denied(_)));
+        let other = access_error_from_verification(InternalError::state_failure());
+        assert!(matches!(other, AccessError::Internal(_)));
     }
 
     // Decode auth calls with large non-token arguments after the token.
@@ -208,7 +198,10 @@ mod tests {
         let err =
             delegated_token_from_ingress_bytes(&bytes).expect_err("oversized token must fail");
 
-        assert!(matches!(err, crate::access::AccessError::Denied(_)));
+        assert!(matches!(
+            err,
+            crate::access::AccessError::DelegatedTokenMalformed
+        ));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 pub mod error {
-    pub use crate::error::{InternalError, InternalErrorClass, InternalErrorOrigin};
+    pub use crate::error::InternalError;
 }
 
 pub mod config {
@@ -88,7 +88,7 @@ pub mod ops {
 
     pub mod cost_guard {
         pub use crate::ops::cost_guard::{
-            CostGuardPermit, CostGuardRequest, CostGuardReserveError, CostGuardReservePublicKind,
+            CostGuardPermit, CostGuardRequest, CostGuardReserveError,
         };
     }
 

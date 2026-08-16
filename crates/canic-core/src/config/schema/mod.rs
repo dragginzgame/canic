@@ -22,7 +22,7 @@ pub use log::*;
 pub use role::*;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::candid::Principal,
     ids::{
         AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupSpecId,
@@ -115,8 +115,8 @@ pub fn validate_app_name(value: &str) -> Result<(), AppNameIssue> {
 /// They are surfaced as InternalError with origin = Config.
 ///
 impl From<ConfigSchemaError> for InternalError {
-    fn from(err: ConfigSchemaError) -> Self {
-        Self::domain(InternalErrorOrigin::Config, err.to_string())
+    fn from(_err: ConfigSchemaError) -> Self {
+        Self::public(crate::diagnostics::codes::CONFIGURATION_INVALID)
     }
 }
 

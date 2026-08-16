@@ -16,19 +16,19 @@ Historical handoffs are archived at:
 
 ## Current Release
 
-- Workspace package version: `0.102.1`.
-- Latest published release: `v0.102.1` at
-  `86763c5f16478e2e548e2059e5efaa963bf9a966`.
-- The open `0.102.2` changelog draft contains the approved B1 allocation,
-  complete B2 runtime/host catalogue and operator lookup. Unrelated timer and
-  Saltz work is outside this diagnostic release decision;
-  package/version mutation remains maintainer-owned.
+- Workspace package version: `0.102.1`; latest published release: `v0.102.1`
+  at `86763c5f16478e2e548e2059e5efaa963bf9a966`.
+- The open `0.102.2` changelog draft contains accepted B1 evidence, the
+  completed 161-reason register and typed mappings, and the compact public
+  diagnostic hard cut. Unrelated timer and Saltz work is outside this
+  diagnostic release decision; package/version mutation remains
+  maintainer-owned. Active design and checklist:
+  [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - The published checkpoint contains the completed operator-performance/CLI-
-  diagnostics outcomes and evidence-only B1 snapshot; the `.2` draft advances
-  the approved register into prose-free B2 runtime identity and host lookup
-  without changing the public error wire.
-- Active design and checklist: [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Scheduled reserve-Fleet path: [0.103 `ic-timers` consumer hard cut](../design/0.103-ic-timers-consumer-hard-cut/status.md), [0.104 platform qualification](../design/0.104-fleet-estate-platform-qualification/status.md), [0.105 Coordinator-backed root funding](../design/0.105-coordinator-backed-root-funding/status.md), [0.106 reusable Fleet Subnet Canister estates](../design/0.106-fleet-subnet-canister-estates/status.md) and [0.107 Skynet T2 Fleet observatory](../design/0.107-skynet-fleet-observatory/status.md). Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+  diagnostics outcomes and evidence-only B1 snapshot. The `.2` draft changes
+  the public wire to `Error { code: u16 }`; its 161 assignments remain
+  unreleased and may be changed without retirement history until `.2` ships.
+- Scheduled reserve-Fleet path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 `ic-timers` consumer hard cut](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 platform qualification](../design/0.105-fleet-estate-platform-qualification/status.md), [0.106 Coordinator-backed root funding](../design/0.106-coordinator-backed-root-funding/status.md), [0.107 reusable Fleet Subnet Canister estates](../design/0.107-fleet-subnet-canister-estates/status.md) and [0.108 Skynet T2 Fleet observatory](../design/0.108-skynet-fleet-observatory/status.md). The scheduled post-path line is [0.109 framework-neutral local application authorization](../design/0.109-framework-neutral-local-application-authorization/status.md); implementation remains held pending accepted 0.108 closeout and explicit promotion. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
   pre-0.102. Every Canic-owned canister in a Fleet must come from one admitted
   release set before activation. Same-release interruption recovery, exact
@@ -36,162 +36,169 @@ Historical handoffs are archived at:
 
 ## Current Progress
 
-0.101 is closed at `0.101.53`; its historical design, status, closeout and
-changelog records remain intact. 0.102 B1 has been reread against the current
-source. The public error still carries a Candid `ErrorCode` plus owned message
-text, the maintained enum has 20 leaves, `InternalError` remains string-first,
-canonical infrastructure Candid retains the old shape and the host still
-matches typed variants. No diagnostic runtime, Candid or stable-state surface
-has changed in B1.
+B1's 2,895 labels expand to 3,898 producer-qualified entries plus 31 public
+projections. Combining cause with handling/exposure/context produced the
+rejected 991-row candidate and 503 singletons; it was never released. Review
+split four of 167 mechanical buckets and exactly partitions the frontier into
+161 registered causes and ten local typed families across 171 rows.
 
-The released operator-maintenance and performance outcomes retain exact Clap
-diagnostics, pre-parse argv tracing, one shared application build, concurrent
-artifact finalization, exact finalized-build reuse/recovery and additive install
-timings. The latest recorded Demo App builds took 110.31 seconds cold and 22.97
-seconds on a cache hit. Their targeted evidence is recorded in the active
-tracker and published changelogs; they do not implement compact diagnostics.
+All four simplified phases—Register, Map, Cut, Clean and measure—are complete.
+The maintained model is lossless `DiagnosticCode`, producer-only
+`RegisteredDiagnosticCode`, public `Error { code: u16 }`, code-first
+`InternalError` and a host catalogue generated with runtime constants from
+`reasons.toml`. There is no JSON or generic handling framework. Once released,
+`code + name` is immutable; the current assignments remain freely changeable.
 
-The independent timer/query candidate resolves exact `ic-timers 0.6.1`, removes
-raw production `ic-cdk-timers` access and projects one cross-framework atomic
-inventory through neutral `CanisterTimerStatus` records, metrics and explicit
-availability. Its native and PocketIC evidence proves useful claim custody,
-inventory and same-operation interruption behavior. The maintainer has
-explicitly kept this candidate outside the 0.102.2 diagnostic closeout.
+The scheduled 0.103 line owns the role-owned Candid and autonomous-operation
+hard cut. Root, Coordinator, Store and managed applications own methods;
+capabilities add variants, each command/status variant owns its authority and
+workflows own phases. Only async/durable commands get operation identities;
+atomic commands return typed responses. B1 classifies the 118-Root/20-Burner
+working signal through six dispositions with `private/delete` as the default.
+Root/Coordinator emit two methods and managed roles at most two. Store starts
+with two; each later method needs independent evidence and six is an emergency
+ceiling. B2/B3 stay unreleased until exact pruning. B1 repository evidence is
+approved; no product implementation batch or mutation is promoted.
 
-The ownership hard cut is not complete. Canic still duplicates provider
-directive/result vocabulary, exposes an application timer facade and stores
-generic `Ensure`/`Reconcile` commands, watchdog-owned deadlines, schedule-
-ownership state and copied retry/terminal state in the private memory-ID-60
-record. Scheduled 0.103 now owns removal of those timer mechanics while
-retaining replay-safe business operation identity, attempt fencing, leases,
-domain demand, one native watchdog and shared-inventory projection.
+The scheduled 0.104 line owns the `ic-timers` consumer and domain async-job
+recovery hard cut after 0.103 establishes the final autonomous-operation
+consumers. Repository-only 0.105 B1 evidence may continue, but its final
+Candid, timer and state inventory must reconcile against accepted 0.103 and
+0.104 before B2.
 
-The host Subnet catalogue adapter uses published `ic-query 0.40.1` with only
-`subnet-catalog-host`; portable Governance analytics remain unused.
-
-The approved allocation uses dense monotonic numbers with no semantic bands,
-compact unpadded `E<decimal>` rendering and nine host-only broad classes. The
-complete guarded register expands 2,895 provisional labels into
-3,898 exact producer-qualified entries plus 31 public projections. They map
-exactly once onto 960 composable exact-condition contracts and 31 safe public
-projections, yielding the dense `1..=991` allocation with full host metadata
-and 503 singleton rationales.
-
-Maintainer review first approved the architectural direction and required four
-P1 corrections before mutation: permanent current/retired allocation history,
-a Fleet-atomic activation boundary, mechanically enforced registered producer
-identities distinct from raw decoded numbers, and a complete ownership audit of
-dynamic values currently embedded in public messages. B1 closed all four, and
-the maintainer approved the complete register and authorized B2 on 2026-08-16.
-
-B2 now derives 991 canonical registered runtime constants, 991 current and zero
-retired permanent ledger rows, a typed host catalogue, a byte-identical current
-JSON registry and `canic diagnostic` lookup. Raw decoded values remain lossless
-and cannot acquire producer authority. The public `ErrorCode + message`,
-internal string propagation, Candid and diagnostic-owned stable state remain
-unchanged. The timer record at ID 60 is an independent private runtime
-contract, not a diagnostic schema generation.
-
-The scheduled 0.103 line owns the `ic-timers` consumer and domain async-job
-recovery hard cut. No implementation batch is promoted by the planning cut.
-Repository-only 0.104 B1 evidence may continue, but its final timer/state
-inventory must reconcile against accepted 0.103 before B2.
-
-The scheduled 0.104 B1 is approved to freeze current pool/platform provenance,
+The scheduled 0.105 B1 is approved to freeze current pool/platform provenance,
 measurement/reset protocol, horizon-qualified standby semantics and production
 reachability for a 1,000-Canister reserve Fleet. B2 execution is held pending
 accepted B1 and separate exact authorization for every external effect.
 
-The scheduled 0.105 line closes replay-safe Coordinator-backed root operating
+The scheduled 0.106 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
-completed 0.103 plus accepted 0.104 B1 ownership/cost evidence, not 0.104 B2,
-plus its own proof.
+completed 0.103 and 0.104 plus accepted 0.105 B1 ownership/cost evidence, not
+0.105 B2, plus its own proof. Its public work adds Root/Coordinator command and
+status variants rather than funding methods.
 
-Scheduled 0.106 owns indexed estates, parallel creation/reset, transfer and
-the 10/100/1,000 proof; 0.107 then serves an evidence-labelled T2 topology and
+Scheduled 0.107 owns indexed estates, parallel creation/reset, transfer and
+the 10/100/1,000 proof; 0.108 then serves an evidence-labelled T2 topology and
 Fleet overview from every installed Skynet Fleet Canister. Empty estate assets
-remain visible module-free inventory. Framework composition, transport,
-Workers, authentication profiles, blob/archive storage and Motoko stay ideas.
+remain visible module-free inventory. Scheduled 0.109 owns framework-neutral
+local application authorization after that path. Framework composition,
+transport, Workers, authentication profiles, blob/archive storage and Motoko
+stay ideas.
 
 ## Current Decision
 
-Diagnostic B2 is implemented as the 0.102.2 release outcome. The maintainer has
-explicitly separated unrelated timer and Saltz work from this diagnostic
-decision; neither supplies evidence for nor blocks B2 push-readiness.
-The exhaustive host-only diagnostic frontier maps many-to-one onto approved
-canonical conditions and handling contracts. The same condition and contract
-share a code across roles, modules and wrappers; orthogonal operation context
-does not create compound codes. Every registered code has one canonical path
-and no producer-local alias. The complete allocation stays at 991, below the
-four-digit rejection gate.
+Diagnostic registration is active on untagged 0.102.2. Timer and Saltz work is
+explicitly separate: neither supplies evidence for nor blocks diagnostic
+progress.
 
-Do not fold B3-B6 into this B2 handoff. The coverage frontier and mapping remain
-repository evidence and must never enter release Wasm.
-The public cut must install all Canic-owned Fleet canisters from one admitted
-release set before activation, with matching host/CLI callers and regenerated
-external bindings. Do not introduce a temporary dual protocol, generation
-name, compatibility decoder, diagnostic protocol version or message fallback.
+Saltz now has an independent non-destructive `apps/saltz` foundation: inert
+Root/Burner roles plus a deterministic exact-image host compiler, checked-in
+CSV and extraction overlay. No burn, timer, stable run state or external effect
+exists; destructive B1 remains gated by its accepted prerequisites. A separate
+standalone `saltz_preview` package renders the exact compiled trace through one
+read-only HTTP query and has no Fleet, Canic runtime, update, timer, stable-state
+or intentional-burn path. Mainnet deployment remains a separately authorized
+external effect. The graph is now code-native and data-only: no restaurant
+image, embedded raster bytes or image route remains. The pinned source
+photograph stays offline as waveform-extraction evidence. A dated 865-point
+global sample measured a
+`31.671..=49.918 Bcycles/second` range, `6.192 Bcycles/second` maximum
+100-second change and approximately `6.148 Bcycles/second` p99 absolute
+residual from an 18-point trailing mean. The provisional mapping is therefore
+`100..=150 Bcycles/second`,
+with `50 Bcycles/second` relief and approximately `10_464.206204 Tcycles`
+zero-background exposure; B0 visibility and economic qualification remain
+open.
 
-The 0.103 design is scheduled, but B1 source mutation awaits explicit
-promotion. The 0.104 B1 may freeze experiment semantics, inventory current
+The preview presentation now has a factual semantic contract: it reports only
+that the current raw response was served, never infers a network or certified
+"online" state, labels the yellow line as an unqualified proposed Dashboard
+total, uses the exact dated `31.671..=49.918 Bcycles/second` observation for the
+red band, and explicitly reports that no raster image is served. Its runtime
+panel and machine-readable status both state that no live metric fetch, armed
+run or burn capability exists while ordinary query execution still costs
+cycles. The footer links `Canic` to
+`https://github.com/dragginzgame/canic`.
+The served HTML, status JSON and CSV are otherwise deliberately anonymous: no
+`Saltz`, `neon` or publisher-name token and no source-article link remain. The
+long German title is the only public textual clue; internal package names and
+offline extraction evidence retain their truthful identities.
+
+Codes identify semantic causes; typed callers retain handling decisions. Only
+public, retrievable operator, durable-evidence or machine-decision boundaries
+qualify global codes. Projection is explicit, never text-derived or table-led;
+masked reasons without an independent exact owner stay local. Required dynamic
+data remains typed, while nonessential context may be dropped rather than
+creating infrastructure.
+
+The unreleased 991 candidate was replaced, not retired. The reviewed 161-row
+register, raw/registered split, host catalogue and typed mappings own `.2`.
+B1 tooling/allocation authority is removed while its evidence remains archived.
+Activation requires one admitted release set and matching callers. Do not add a
+dual protocol, compatibility decoder, message fallback, diagnostic version or
+observability subsystem.
+
+The 0.103 design is scheduled, but B1 inventory awaits explicit promotion and
+no endpoint mutation is authorized. 0.104 then consumes its completed
+autonomous-operation surface; 0.104 B1 source mutation also awaits explicit
+promotion. The 0.105 B1 may freeze experiment semantics, inventory current
 repository state/reachability and build local harnesses. No external effect is
-authorized. B2 needs accepted B1, accepted 0.103 reconciliation and an exact
-approved run plan; absent mainnet approval, 0.104 is blocked rather than
+authorized. B2 needs accepted B1, accepted 0.103/0.104 reconciliation and an
+exact approved run plan; absent mainnet approval, 0.105 is blocked rather than
 failed.
 
-The 0.105 B1 PocketIC proof follows completed 0.103 and accepted 0.104 B1 root
-ownership/current-cost evidence. Its mutation waits for those outputs and its
-own passing proof, not 0.104 B2.
+The 0.106 B1 PocketIC proof follows completed 0.103 and 0.104 and accepted
+0.105 B1 root ownership/current-cost evidence. Its mutation waits for those
+outputs and its own passing proof, not 0.105 B2.
 
-The 0.106 estate B1 waits for completed 0.103, accepted 0.104, completed 0.105
-and explicit promotion. 0.107 implementation waits for accepted 0.106 closeout
-and its own B1 promotion. Deferred ideas do not gate this five-line path.
+The 0.107 estate B1 waits for completed 0.103 and 0.104, accepted 0.105,
+completed 0.106 and explicit promotion. 0.108 implementation waits for
+accepted 0.107 closeout and its own B1 promotion. Scheduled 0.109 then waits
+for accepted 0.108 closeout and a separate maintainer implementation decision.
+Deferred ideas do not gate the six-line reserve-Fleet path or authorize 0.109
+mutation.
 
 ## Validation
 
-Freshly observed baseline identity:
-
-```text
-branch: main
-commit: 23c0328f78b215580d734ef01b52b35fa3e38ade
-tag: v0.101.53
-worktree: clean before 0.102 documentation work
-```
-
-The fresh retained `CANIC-WASM-001/v3` baseline passes at risk `5/10` over six
+The retained clean `v0.101.53` baseline at
+`23c0328f78b215580d734ef01b52b35fa3e38ade` passes
+`CANIC-WASM-001/v3` at risk `5/10` over six
 Components plus Fleet Subnet Root, Fleet Coordinator and Wasm Store in both
 release and debug profiles. It uses immutable tag `v0.101.53`, a clean detached
 worktree, isolated local/offline build state and the checksum-pinned toolchain.
 Valid v2 evidence remains superseded and non-comparable. Previously recorded
 0.101 test and release claims remain historical evidence only.
 
-Fresh B2 validation passes all 64 targeted diagnostic-ledger tests, the complete
-991-way runtime/ledger/catalogue/JSON bijection, current/retired/unknown lookup,
-strict CLI parsing and recursive help ordering. The symbolic public-error
-protocol guard continues to pin the unchanged pre-cut wire. Canonical
-role-scoped release builds for a representative Component, Wasm Store and Fleet
-Subnet Root contain none of the bounded host-ledger, JSON, catalogue-prose or
-review-map markers. Warning-denied Clippy passes for the touched core, host,
-CLI and asset-generator targets. A fresh complete `make validate` passed on
-2026-08-16, including release guards, full workspace tests and every serial
-PocketIC suite. The repository-wide result does not make unrelated maintainer
-work part of the scoped 0.102.2 diagnostic claim.
+The simplified candidate passes targeted reason-ledger/generation, compact
+Candid wire, host lookup, typed projection and mapping checks. Core and
+control-plane production and test targets compile; host diagnostics, CLI,
+Fleet Coordinator and Wasm Store feature builds compile. Focused RPC, ICP
+refill, delegated-authentication, cost-guard, metric, retry, publication,
+template and directory-synchronization tests pass. Targeted release builds for
+`app`, Root, Fleet Coordinator and Wasm Store pass through the canonical
+builder with gzip integrity, `ic-wasm` structure evidence and bounded absence
+scans. All four data sections are smaller than the retained baseline; only Root
+is smaller overall across the non-isolated release-line comparison, so no
+causal diagnostic-savings claim is made. A complete `make validate` recorded on
+2026-08-16 is historical push evidence and must not be repeated during focused
+development; automated agents run targeted checks only.
 
-Separate timer-recovery validation passes ten durable-state tests, eleven timer
-workflow tests, role/state contracts, pool outcomes, cycle-request replay and
-warning-denied Clippy for core, control-plane and the runtime probe. The
-four-test PocketIC timer suite passes; its adversarial probe traps after one
-self-call, preserves the lease and proves one same-identity watchdog takeover
-clears only its exact attempt. These checks are unrelated to 0.102.2 and do not
-establish completion of the 0.103 ownership hard cut.
+Separate timer-recovery checks remain useful pre-0.104 evidence but do not
+establish completion of the 0.104 ownership hard cut.
+
+The standalone Saltz preview passes its seven focused render/router/provenance
+tests, including exact source-to-display aspect-ratio preservation, and
+warning-clean package Clippy. Its release Wasm is 482,621 bytes;
+extracted Candid contains only `http_request`, and `ic-wasm info` reports no
+update method, timer/stable import or cycle-burn primitive. A local install at
+`t63gs-up777-77776-aaaba-cai` on the dedicated port-8002 Saltz network returned
+the exact checked-in CSV and illustrated-room asset digests through the raw
+gateway. This local smoke evidence authorizes no IC-mainnet effect.
 
 ## Next Action
 
-Diagnostic B2 remains implemented and its register deterministically derives
-the canonical runtime declarations, permanent ledger and current JSON. Its
-scoped patch and release notes are ready for the maintainer's human-owned
-version/stage/commit/push flow. The public Candid surface, internal string
-propagation and diagnostic stable schema remain intentionally unchanged for
-later diagnostic batches.
+The diagnostic batch is ready for maintainer commit/push validation. Do not
+rerun the broad census/full suite or add JSON, generic handling metadata,
+observability infrastructure, compatibility decoding or retired 991 rows.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

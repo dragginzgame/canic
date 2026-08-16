@@ -63,7 +63,7 @@ pub(crate) mod storage;
 pub(crate) mod view;
 pub(crate) mod workflow;
 
-pub(crate) use error::{InternalError, InternalErrorClass, InternalErrorOrigin};
+pub(crate) use error::InternalError;
 
 /// Internal re-exports required for macro expansion.
 /// Not part of the public API.

@@ -44,7 +44,7 @@ pub async fn response_capability_v1_nonroot(
 ) -> Result<NonrootCyclesCapabilityResponseV1, InternalError> {
     nonroot::response_capability_v1_nonroot(envelope)
         .await
-        .map_err(InternalError::public)
+        .map_err(InternalError::observed_public)
 }
 
 /// Handle a v1 root capability envelope.
@@ -55,7 +55,7 @@ pub async fn response_capability_v1_root(
 ) -> Result<crate::dto::capability::RootCapabilityResponseV1, InternalError> {
     root::response_capability_v1_root(envelope, authority, lifecycle)
         .await
-        .map_err(InternalError::public)
+        .map_err(InternalError::observed_public)
 }
 
 fn validate_root_capability_envelope(

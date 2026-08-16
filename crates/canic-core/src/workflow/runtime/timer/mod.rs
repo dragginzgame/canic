@@ -5,7 +5,7 @@
 //! Boundary: Canic retains only bounded opaque registration claims; `ic-timers` is canonical.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     domain::runtime::TimerExecutionOutcome,
     ops::{
         ic::IcOps,
@@ -208,11 +208,8 @@ pub enum TimerError {
 }
 
 impl From<TimerError> for InternalError {
-    fn from(error: TimerError) -> Self {
-        Self::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("Canic timer runtime failed: {error}"),
-        )
+    fn from(_error: TimerError) -> Self {
+        Self::invariant()
     }
 }
 

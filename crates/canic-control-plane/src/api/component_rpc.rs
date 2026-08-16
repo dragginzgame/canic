@@ -29,12 +29,20 @@ pub struct RootCapabilityCallerPredicate;
 impl AsyncAccessPredicate for RootCapabilityCallerPredicate {
     async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError> {
         if ctx.transport_caller() == IcOps::canister_self() {
-            return crate::workflow::component_auth::require_active_fleet_subnet_root()
-                .map_err(|_| root_capability_denial(ctx));
+            return crate::workflow::component_auth::require_active_fleet_subnet_root_internal()
+                .map_err(AccessError::Internal);
         }
-        crate::workflow::component_auth::active_component_member(ctx.transport_caller())
-            .map(|_| ())
-            .map_err(|_| root_capability_denial(ctx))
+        match crate::workflow::component_auth::active_component_member_for_access(
+            ctx.transport_caller(),
+        ) {
+            Ok(_) => Ok(()),
+            Err(crate::workflow::component_auth::ActiveComponentMemberError::NotActive) => {
+                Err(root_capability_denial())
+            }
+            Err(crate::workflow::component_auth::ActiveComponentMemberError::Internal(error)) => {
+                Err(AccessError::Internal(error))
+            }
+        }
     }
 
     fn name(&self) -> &'static str {
@@ -59,9 +67,6 @@ impl ComponentRpcApi {
     }
 }
 
-fn root_capability_denial(ctx: &AccessContext) -> AccessError {
-    AccessError::Denied(format!(
-        "caller '{}' is neither the Fleet Subnet Root nor an active Component Registry member",
-        ctx.transport_caller()
-    ))
+const fn root_capability_denial() -> AccessError {
+    AccessError::RootOrActiveComponentRequired
 }

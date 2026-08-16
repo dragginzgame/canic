@@ -4,10 +4,10 @@
 //! Does not own: renewal policy, proof preparation internals, or issuer installs.
 
 use crate::{
-    InternalError, InternalErrorClass, InternalErrorOrigin,
+    InternalError,
     config::schema::DelegatedTokenConfig,
+    diagnostics::codes,
     domain::runtime::{FailureSeverity, TimerExecutionOutcome},
-    dto::error::ErrorCode,
     log,
     log::Topic,
     ops::{
@@ -106,12 +106,8 @@ impl RootIssuerRenewalWorkflow {
         let mut work_count = if prepared.reused_in_flight {
             0
         } else {
-            u64::try_from(prepared.prepared_issuers).map_err(|_| {
-                RenewalSweepFailure::new(InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "delegated-proof renewal work count exceeded u64",
-                ))
-            })?
+            u64::try_from(prepared.prepared_issuers)
+                .map_err(|_| RenewalSweepFailure::new(InternalError::invariant()))?
         };
         let signed = AuthOps::sign_next_chain_key_root_delegation_batch(build_network, now_ns)
             .await
@@ -161,10 +157,7 @@ impl RootIssuerRenewalWorkflow {
             Some(deadline_ns) if deadline_ns > now_ns => TimerDirective::ScheduleAt(deadline_ns),
             Some(_) if work_count > 0 => TimerDirective::ContinueImmediately,
             Some(_) => {
-                let err = InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "delegated-proof renewal remained due without making progress",
-                );
+                let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
                 return TimerRunResult::invariant_failure();
             }
@@ -201,10 +194,7 @@ impl RootIssuerRenewalWorkflow {
         let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::AuthRenewal);
         let mut delay = retry_delay(streak, now_ns, active_proof_expires_at_ns);
         let Some(retry_after_ns) = retry_deadline_ns(now_ns, delay) else {
-            let err = InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "delegated-proof renewal retry deadline overflowed",
-            );
+            let err = InternalError::invariant();
             Self::record_timer_failure(&err);
             return TimerRunResult {
                 outcome: TimerExecutionOutcome::InvariantFailure,
@@ -239,10 +229,7 @@ impl RootIssuerRenewalWorkflow {
                 }
             };
             let Some(exact_deadline_ns) = exact_timing.next_deadline_ns else {
-                let err = InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "retryable delegated-proof batch lost its durable deadline",
-                );
+                let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
                 return TimerRunResult {
                     outcome: TimerExecutionOutcome::InvariantFailure,
@@ -251,10 +238,7 @@ impl RootIssuerRenewalWorkflow {
                 };
             };
             let Some(exact_delay_ns) = exact_deadline_ns.checked_sub(now_ns) else {
-                let err = InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "durable delegated-proof retry deadline preceded the timing observation",
-                );
+                let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
                 return TimerRunResult {
                     outcome: TimerExecutionOutcome::InvariantFailure,
@@ -277,19 +261,19 @@ impl RootIssuerRenewalWorkflow {
     }
 
     fn record_timer_failure(err: &InternalError) {
-        let (class, origin) = err.log_fields();
+        let code = err.code();
         RecentFailureOps::record(RecentFailureInput {
             occurred_at_ns: IcOps::now_nanos(),
             subsystem: "auth_renewal".to_string(),
-            code: renewal_failure_code(class, origin),
+            code: code.to_string(),
             severity: FailureSeverity::Error,
-            summary: format!("class={class} origin={origin}: {err}"),
+            summary: format!("diagnostic={code}"),
             correlation_id: None,
         });
         log!(
             Topic::Auth,
             Warn,
-            "root delegated-proof renewal sweep failed class={class} origin={origin}: {err}"
+            "root delegated-proof renewal sweep failed diagnostic={code}"
         );
     }
 }
@@ -307,24 +291,18 @@ fn checked_work_count(work_count: u64, additional_work: u64) -> Result<u64, Rene
     work_count
         .checked_add(additional_work)
         .ok_or_else(|| RenewalSweepFailure {
-            cause: InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "delegated-proof renewal work count overflowed",
-            ),
+            cause: InternalError::invariant(),
             work_count,
         })
 }
 
 fn is_retryable_renewal_error(err: &InternalError) -> bool {
-    matches!(
-        err.class(),
-        InternalErrorClass::Infra | InternalErrorClass::Ops
-    ) || err.public_error().is_some_and(|err| {
-        matches!(
-            err.code,
-            ErrorCode::AuthProofPending | ErrorCode::Conflict | ErrorCode::Unavailable
-        )
-    })
+    let public_code = err.public_error().code();
+    err.code() == codes::PLATFORM_FAILED
+        || err.code() == codes::STATE_FAILED
+        || public_code == codes::SECURITY_UNAVAILABLE.raw_code()
+        || public_code == codes::STATE_CONFLICT.raw_code()
+        || public_code == codes::STATE_UNAVAILABLE.raw_code()
 }
 
 fn retry_delay(streak: u64, now_ns: u64, active_proof_expires_at_ns: Option<u64>) -> Duration {
@@ -357,47 +335,11 @@ fn retry_deadline_ns(now_ns: u64, delay: Duration) -> Option<u64> {
     now_ns.checked_add(delay_ns)
 }
 
-fn renewal_failure_code(class: InternalErrorClass, origin: InternalErrorOrigin) -> String {
-    format!(
-        "renewal_sweep_failed/{}/{}",
-        internal_error_class_code(class),
-        internal_error_origin_code(origin)
-    )
-}
-
-const fn internal_error_class_code(class: InternalErrorClass) -> &'static str {
-    match class {
-        InternalErrorClass::Access => "access",
-        InternalErrorClass::Domain => "domain",
-        InternalErrorClass::Infra => "infra",
-        InternalErrorClass::Ops => "ops",
-        InternalErrorClass::Workflow => "workflow",
-        InternalErrorClass::Invariant => "invariant",
-    }
-}
-
-const fn internal_error_origin_code(origin: InternalErrorOrigin) -> &'static str {
-    match origin {
-        InternalErrorOrigin::Access => "access",
-        InternalErrorOrigin::Config => "config",
-        InternalErrorOrigin::Domain => "domain",
-        InternalErrorOrigin::Infra => "infra",
-        InternalErrorOrigin::Ops => "ops",
-        InternalErrorOrigin::Storage => "storage",
-        InternalErrorOrigin::Workflow => "workflow",
-    }
-}
-
 fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {
     config
         .chain_key_root_proof
         .min_accepted_proof_epoch
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "auth.delegated_tokens.chain_key_root_proof.min_accepted_proof_epoch is required for chain-key renewal",
-            )
-        })
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
@@ -405,9 +347,9 @@ fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
     let max_ttl_secs = cfg
         .max_ttl_secs
         .unwrap_or(DEFAULT_DELEGATED_TOKEN_MAX_TTL_SECS);
-    max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
-        InternalError::invalid_input("auth.delegated_tokens.max_ttl_secs overflows nanoseconds")
-    })
+    max_ttl_secs
+        .checked_mul(1_000_000_000)
+        .ok_or_else(|| InternalError::invalid_input())
 }
 
 // -----------------------------------------------------------------------------
@@ -420,19 +362,18 @@ mod tests {
     use crate::test::seams;
 
     #[test]
-    fn timer_failure_preserves_typed_classification_in_recent_diagnostics() {
+    fn timer_failure_records_the_exact_diagnostic_in_recent_failures() {
         let _guard = seams::lock();
         RecentFailureOps::reset();
-        let err = InternalError::invariant(InternalErrorOrigin::Workflow, "renewal invariant");
+        let err = InternalError::invariant();
 
         RootIssuerRenewalWorkflow::record_timer_failure(&err);
 
         let failures = RecentFailureOps::snapshot();
-        assert_eq!(err.class(), InternalErrorClass::Invariant);
-        assert_eq!(err.origin(), InternalErrorOrigin::Workflow);
+        assert_eq!(err.code(), codes::STATE_INVALID);
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].subsystem, "auth_renewal");
-        assert_eq!(failures[0].code, "renewal_sweep_failed/invariant/workflow");
+        assert_eq!(failures[0].code, codes::STATE_INVALID.to_string());
         assert_eq!(failures[0].severity, FailureSeverity::Error);
         RecentFailureOps::reset();
     }
@@ -461,7 +402,7 @@ mod tests {
         let failure = checked_work_count(u64::MAX, 1)
             .expect_err("unrepresentable work count must fail closed");
 
-        assert_eq!(failure.cause.class(), InternalErrorClass::Invariant);
+        assert_eq!(failure.cause.code(), codes::STATE_INVALID);
         assert_eq!(failure.work_count, u64::MAX);
     }
 }

@@ -7,7 +7,7 @@
 pub mod query;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::{BoundedString64, Principal},
     config::schema::{ScalePool, ScalingConfig},
     domain::policy::pure::placement::scaling::{
@@ -88,7 +88,6 @@ impl ScalingWorkflow {
         let ScalingPlan {
             should_spawn,
             plan_reason,
-            reason,
             worker_entry,
         } = match ScalingPolicy::plan_create_worker(pool, worker_count, scaling_policy.as_ref()) {
             Ok(plan) => plan,
@@ -104,7 +103,9 @@ impl ScalingWorkflow {
                 MetricOperation::PlanCreate,
                 MetricReason::from_plan_reason(plan_reason),
             );
-            return Err(InternalError::domain(InternalErrorOrigin::Workflow, reason));
+            return Err(InternalError::public(
+                crate::diagnostics::codes::CAPACITY_INVALID_STATE,
+            ));
         }
 
         let entry_plan = worker_entry.ok_or_else(|| {
@@ -112,10 +113,7 @@ impl ScalingWorkflow {
                 MetricOperation::PlanCreate,
                 MetricReason::MissingWorkerEntry,
             );
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "worker entry missing for spawn plan",
-            )
+            InternalError::invariant()
         })?;
 
         MetricEvent::completed(
@@ -125,12 +123,7 @@ impl ScalingWorkflow {
         let pool_cfg = scaling
             .as_ref()
             .and_then(|config| config.pools.get(pool))
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    format!("scaling plan admitted missing pool '{pool}'"),
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let available_capacity =
             available_worker_capacity(pool_cfg.policy.max_workers, worker_count);
         Self::create_worker_from_plan(entry_plan, available_capacity).await

@@ -7,10 +7,7 @@
 use super::{RootCapability, RootContext, nonroot_cycles};
 use crate::{
     InternalError,
-    dto::{
-        error::Error,
-        rpc::{CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest},
-    },
+    dto::rpc::{CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest},
     log,
     log::Topic,
     ops::{
@@ -112,15 +109,15 @@ fn authorize_provision(
     }
 
     if !matches!(&req.parent, CreateCanisterParent::ThisCanister) {
-        return Err(InternalError::public(Error::forbidden(
-            "structural provision requires parent=ThisCanister",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
 
     if authority.provision_parent_canister_id() != Some(ctx.caller) {
-        return Err(InternalError::public(Error::forbidden(
-            "structural provision requires exact caller parent authority",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
 
     Ok(())
@@ -140,9 +137,9 @@ fn authorize_recycle(
     authority: &RootCapabilityAuthority,
 ) -> Result<(), InternalError> {
     if authority.caller_component().is_none() {
-        return Err(InternalError::public(Error::forbidden(
-            "Fleet Subnet Root cannot recycle a top-level Component as a Component Child",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     require_exact_target(req.canister_pid, authority)?;
     if authority.target_parent_canister_id() != Some(ctx.caller) {
@@ -157,19 +154,19 @@ fn require_exact_caller_authority(
     authority: &RootCapabilityAuthority,
 ) -> Result<(), InternalError> {
     if authority.caller_canister_id() != ctx.caller {
-        return Err(InternalError::public(Error::forbidden(
-            "root capability caller differs from protected Component Registry authority",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     if ctx.caller == ctx.self_pid && !authority.caller_is_fleet_subnet_root() {
-        return Err(InternalError::public(Error::forbidden(
-            "Fleet Subnet Root self-call lacks root caller authority",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     if ctx.caller != ctx.self_pid && authority.caller_is_fleet_subnet_root() {
-        return Err(InternalError::public(Error::forbidden(
-            "Component caller cannot use Fleet Subnet Root caller authority",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     Ok(())
 }

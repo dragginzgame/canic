@@ -187,13 +187,11 @@ impl RootResponseWorkflow {
         };
         crate::perf!("execute_capability");
         if let Err(err) = Self::commit_replay(&prepared.pending) {
-            if let Err(recovery_err) = Self::mark_replay_recovery_required(
+            if let Err(_recovery_err) = Self::mark_replay_recovery_required(
                 &prepared.pending,
                 crate::model::replay::RecoveryReason::ResponseCommitFailed,
             ) {
-                return Err(err.with_diagnostic_context(format!(
-                    "root replay recovery marker failed: {recovery_err}"
-                )));
+                return Err(err);
             }
             log!(
                 Topic::Rpc,

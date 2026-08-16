@@ -2,13 +2,14 @@ use super::*;
 use crate::{cli::globals, run};
 use candid::{CandidType, Encode, Principal};
 use canic_core::cdk::utils::hash::hex_bytes;
+use canic_core::diagnostics::codes;
 use canic_core::dto::{
     auth::{
         ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, DelegationAudience,
         RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
         RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateView,
     },
-    error::{Error as CanicError, ErrorCode},
+    error::Error as CanicError,
 };
 use canic_core::ids::{CanonicalNetworkId, FleetId, FleetKey};
 use canic_host::icp::IcpJsonResponseError;
@@ -271,10 +272,9 @@ fn renewal_status_rejects_invalid_issuer_principal() {
 
 #[test]
 fn renewal_response_preserves_typed_remote_error() {
-    let response = icp_json_response(Err::<RootIssuerRenewalStatusResponse, _>(CanicError::new(
-        ErrorCode::Unauthorized,
-        "caller is not authorized".to_string(),
-    )));
+    let response = icp_json_response(Err::<RootIssuerRenewalStatusResponse, _>(
+        CanicError::from_registered(codes::AUTHORITY_UNAUTHORIZED),
+    ));
 
     let error = codec::parse_renewal_status_summary(&response)
         .expect_err("remote rejection should remain typed");
@@ -282,8 +282,7 @@ fn renewal_response_preserves_typed_remote_error() {
         panic!("expected typed remote rejection");
     };
 
-    assert_eq!(error.code, ErrorCode::Unauthorized);
-    assert_eq!(error.message, "caller is not authorized");
+    assert_eq!(error.code(), codes::AUTHORITY_UNAUTHORIZED.raw_code());
 }
 
 #[test]

@@ -13,7 +13,7 @@ use canic::{
             RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
             SignedRoleAttestation,
         },
-        error::{Error, ErrorCode},
+        error::Error,
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
         rpc::RootRequestMetadata,
@@ -131,7 +131,10 @@ fn assert_role_attestation_verification(
         without_subnet,
     )
     .expect_err("local-Subnet access must reject an attestation without a Subnet claim");
-    assert_eq!(missing_subnet.code, ErrorCode::Unauthorized);
+    assert_eq!(
+        missing_subnet.code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+    );
 
     let attestation =
         issue_role_attestation(pic, root, issuer, verifier.canister_id, 60_000_000_000, 22);
@@ -143,7 +146,10 @@ fn assert_role_attestation_verification(
         0,
     )
     .expect_err("role attestation caller mismatch must fail");
-    assert_eq!(caller_mismatch.code, ErrorCode::Internal);
+    assert_eq!(
+        caller_mismatch.code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+    );
 
     let attestation = issue_role_attestation(pic, root, issuer, root, 60_000_000_000, 23);
     let audience_mismatch = verify_role_attestation(
@@ -154,7 +160,10 @@ fn assert_role_attestation_verification(
         0,
     )
     .expect_err("role attestation audience mismatch must fail");
-    assert_eq!(audience_mismatch.code, ErrorCode::Internal);
+    assert_eq!(
+        audience_mismatch.code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+    );
 
     let attestation =
         issue_role_attestation(pic, root, issuer, verifier.canister_id, 60_000_000_000, 24);
@@ -166,7 +175,10 @@ fn assert_role_attestation_verification(
         issuer.authority.epoch.saturating_add(1),
     )
     .expect_err("role attestation epoch floor mismatch must fail");
-    assert_eq!(epoch_mismatch.code, ErrorCode::Internal);
+    assert_eq!(
+        epoch_mismatch.code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+    );
 
     let attestation =
         issue_role_attestation(pic, root, issuer, verifier.canister_id, 1_000_000_000, 25);
@@ -180,7 +192,10 @@ fn assert_role_attestation_verification(
         0,
     )
     .expect_err("expired role attestation must fail");
-    assert_eq!(expired.code, ErrorCode::Internal);
+    assert_eq!(
+        expired.code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+    );
 }
 
 fn role_attestation_request(
@@ -215,8 +230,8 @@ fn assert_role_prepare_forbidden(
     assert_eq!(
         response
             .expect_err("invalid Component attestation request must fail")
-            .code,
-        ErrorCode::Forbidden
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 }
 
@@ -302,8 +317,8 @@ fn assert_issuer_guard_metrics(pic: &PocketIc, root: Principal, issuer: Principa
         .update_candid_as(issuer, Principal::anonymous(), "issuer_guard_is_root", ())
         .expect("issuer root-guard denial transport");
     assert_eq!(
-        denied.expect_err("anonymous root guard").code,
-        ErrorCode::Unauthorized
+        denied.expect_err("anonymous root guard").code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     assert_eq!(
         metric_count_for_labels(pic, issuer, MetricsKind::Security, &denial_labels),

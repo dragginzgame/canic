@@ -18,7 +18,7 @@ pub fn guard_fleet_query() -> Result<(), AccessError> {
     if FleetStateOps::is_query_allowed() {
         Ok(())
     } else {
-        Err(AccessError::Denied("Fleet is disabled".to_string()))
+        Err(AccessError::FleetDisabled)
     }
 }
 
@@ -37,8 +37,8 @@ pub fn guard_fleet_update() -> Result<(), AccessError> {
     }
 
     if FleetStateOps::is_readonly() {
-        Err(AccessError::Denied("Fleet is in readonly mode".to_string()))
+        Err(AccessError::FleetReadonly)
     } else {
-        Err(AccessError::Denied("Fleet is disabled".to_string()))
+        Err(AccessError::FleetDisabled)
     }
 }

@@ -5,17 +5,36 @@
 //! Boundary: combines active root runtime authority with exact Registry membership.
 
 use canic_core::{
-    control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow,
-    dto::error::Error, ids::ManagedCanisterBinding,
+    control_plane_support::{
+        error::InternalError, workflow::runtime::fleet_activation::FleetActivationWorkflow,
+    },
+    dto::error::Error,
+    ids::ManagedCanisterBinding,
 };
+
+pub use super::component_registry::ActiveComponentMemberError;
 
 /// Resolve one exact active member under an active Fleet Subnet Root.
 pub fn active_component_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {
-    require_active_fleet_subnet_root()?;
-    super::component_registry::active_component_member(caller).map_err(Into::into)
+    active_component_member_for_access(caller)
+        .map_err(InternalError::from)
+        .map_err(Into::into)
+}
+
+/// Preserve runtime and Registry causes while evaluating endpoint access.
+pub fn active_component_member_for_access(
+    caller: candid::Principal,
+) -> Result<ManagedCanisterBinding, ActiveComponentMemberError> {
+    require_active_fleet_subnet_root_internal()?;
+    super::component_registry::active_component_member(caller)
 }
 
 /// Require the local Fleet Subnet Root runtime to be active.
 pub fn require_active_fleet_subnet_root() -> Result<(), Error> {
-    FleetActivationWorkflow::require_active().map_err(Into::into)
+    require_active_fleet_subnet_root_internal().map_err(Into::into)
+}
+
+/// Preserve the exact activation failure for endpoint access predicates.
+pub fn require_active_fleet_subnet_root_internal() -> Result<(), InternalError> {
+    FleetActivationWorkflow::require_active()
 }

@@ -119,14 +119,10 @@ impl TopologySnapshotBuilder {
         target_role: CanisterRole,
     ) -> Result<Self, InternalError> {
         if target_pid == Principal::anonymous() {
-            return Err(InternalError::invalid_input(
-                "Fleet activation child Canister is anonymous",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if target_pid == root_pid {
-            return Err(InternalError::invalid_input(
-                "Fleet activation child equals the Fleet Subnet Root",
-            ));
+            return Err(InternalError::invalid_input());
         }
 
         Ok(Self {

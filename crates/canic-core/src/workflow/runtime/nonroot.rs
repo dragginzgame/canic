@@ -5,7 +5,7 @@
 //! Boundary: lifecycle adapters call this after stable-memory restore or init input decode.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         env::EnvBootstrapArgs,
@@ -122,12 +122,8 @@ pub fn init_wasm_store_canister(
         canister_role: Some(canister_role.clone()),
         parent_pid: Some(root),
     };
-    EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("sibling Wasm Store env import failed: {err}"),
-        )
-    })?;
+    EnvWorkflow::init_env_from_args(env, canister_role.clone())
+        .map_err(|_err| InternalError::invariant())?;
     register_nonroot_runtime_contract(&canister_role)
 }
 
@@ -138,23 +134,14 @@ pub fn init_local_nonroot_canister(
 ) -> Result<(), InternalError> {
     initialize_nonroot_base(&canister_role)?;
     FleetActivationRuntimeOps::set_standalone_local();
-    EnvWorkflow::init_env_from_args(env, canister_role.clone()).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("env import failed: {err}"),
-        )
-    })?;
+    EnvWorkflow::init_env_from_args(env, canister_role.clone())
+        .map_err(|_err| InternalError::invariant())?;
     register_nonroot_runtime_contract(&canister_role)?;
     RuntimeWorkflow::start_all()
 }
 
 fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalError> {
-    MemoryRegistryOps::bootstrap_registry().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("memory init failed: {err}"),
-        )
-    })?;
+    MemoryRegistryOps::bootstrap_registry().map_err(|_err| InternalError::invariant())?;
     rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
@@ -179,12 +166,7 @@ fn register_managed_nonroot_authority(
 }
 
 fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(), InternalError> {
-    let app_mode = ConfigOps::app_init_mode().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("app mode init failed: {err}"),
-        )
-    })?;
+    let app_mode = ConfigOps::app_init_mode().map_err(|_err| InternalError::invariant())?;
     FleetStateOps::init_mode(app_mode);
     let canister_cfg = ConfigOps::current_canister()?;
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(canister_role, &canister_cfg)?;
@@ -234,12 +216,7 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
     log_memory_summary();
 
     // --- Phase 2 intentionally omitted: post-upgrade does not re-import env or directories.
-    let canister_cfg = ConfigOps::current_canister().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("current canister config unavailable during post-upgrade runtime init: {err}"),
-        )
-    })?;
+    let canister_cfg = ConfigOps::current_canister().map_err(|_err| InternalError::invariant())?;
     if !FleetActivationRuntimeOps::is_standalone_local() && !canister_role.is_wasm_store() {
         let binding = crate::ops::runtime::env::EnvOps::managed_binding()?;
         let deployment = FleetActivationOps::component_deployment()

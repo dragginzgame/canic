@@ -17,6 +17,7 @@ pub mod access;
 pub mod api;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod build_support;
+pub mod diagnostics;
 pub mod dto;
 pub mod ids;
 mod instructions;
@@ -81,10 +82,10 @@ pub use canic_core::memory;
 // -----------------------------------------------------------------------------
 // Re-exports
 // -----------------------------------------------------------------------------
-pub use canic_core::diagnostics::{DiagnosticCode, RegisteredDiagnosticCode};
 pub use canic_core::dto::error::Error;
 pub use canic_core::{impl_storable_bounded, impl_storable_unbounded};
 pub use canic_macros::{canic_query, canic_update};
+pub use diagnostics::{DiagnosticCode, RegisteredDiagnosticCode};
 
 // -----------------------------------------------------------------------------
 // Constants
