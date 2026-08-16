@@ -22,7 +22,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   host-only simulator now projects bounded proposals onto the current
   144-point `1D` surface, while a separately authorized plateau probe composes
   Start, exact indexed Step and terminal Abort behind one command method and
-  can never continue without host calls.
+  can never continue without host calls. Its bounded mainnet qualification
+  completed eighteen exact `200 Bcycle` steps, retained more than `1 Tcycle`
+  and produced a clean approximately `0.990 Bcycles/second` observed Subnet
+  rise without promoting the full waveform.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

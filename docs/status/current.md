@@ -146,29 +146,39 @@ development; automated agents run targeted checks only.
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
 
-The standalone cycle-burn waveform idea completed its sole authorized B0b
-mainnet calibration on 2026-08-16. Canister
+The standalone cycle-burn waveform idea completed its bounded B0b pulse and
+B0c plateau mainnet calibrations on 2026-08-16. Canister
 `w47na-gaaaa-aaaad-qmclq-cai` burned exactly `4 Tcycles` on the frozen public
 13-node `verified_application` Subnet and retained more than `1 Tcycle`.
 Direct-burn visibility passed, but the public Subnet peak rose only
 approximately `0.883 Bcycles/second` and stayed elevated across the observed
 tail, rejecting the assumed independent approximately 100-second buckets by
-approximately a `45.3x` flattening factor. B1 and any further destructive
-effect remain held; the current 860-point executor/economic model is invalid
-until a complete dated aggregation kernel and a different bounded strategy
-are accepted. Exact evidence is retained in the
+approximately a `45.3x` flattening factor. The later exact `3.6 Tcycle`
+host-driven plateau proved that repeated bounded input accumulates cleanly,
+raising the observed series approximately `0.990 Bcycles/second`. B1 and any
+additional destructive effect remain held; the current 860-point executor and
+economic model remain invalid until a complete dated aggregation kernel and a
+different bounded strategy are accepted. Exact evidence is retained in the
 [B0b calibration report](../audits/working/saltz-b0b-calibration/mainnet-calibration.md).
 
 A host-only simulator now binds the 860-point digest, resamples the current
 600-second/144-point `1D` frontend surface and fails proposals across total,
 rate and non-negative-control constraints. The separately authorized B0c
-plateau is capped at eighteen host-driven `200 Bcycle` steps with no timer,
-retry or catch-up; it does not promote the 24-hour Burner.
+plateau completed eighteen exact host-driven `200 Bcycle` steps and raised the
+owning Subnet series from approximately `0.312` to `1.303 Bcycles/second` while
+retaining more than `1 Tcycle`. Accumulation passed; the complete decay kernel,
+B1 and the 24-hour waveform remain held. The exact mint request produced an
+`8_750 cycle` conversion overage, so later envelopes must bind discrete ICP
+e8s and their maximum cycle result.
 
 ## Next Action
 
 The diagnostic batch is ready for maintainer commit/push validation. Do not
 rerun the broad census/full suite or add JSON, generic handling metadata,
 observability infrastructure, compatibility decoding or retired 991 rows.
+
+For the standalone waveform idea, observe the B0c post-stop Subnet tail
+read-only and fit the dated kernel before proposing a new controller or
+financial envelope. No additional mint, top-up or burn is authorized.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

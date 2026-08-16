@@ -12,8 +12,8 @@ Date: 2026-08-16
   Burn Rate band over one complete ICP Dashboard `1D` window. Its authoring
   provenance and permission remain promotion gates.
 * This is not yet a numbered release design. The idea alone authorizes no
-  IC-mainnet effect; the separately recorded B0b calibration below is the sole
-  current exception and does not promote B1 or B4.
+  IC-mainnet effect; the separately recorded B0b pulse and B0c plateau are
+  complete exceptions and do not promote B1 or B4.
 * Burner implementation requires Canic's accepted role-owned Candid surface
   and shared `ic-timers` consumer hard cut. Its Canic-owned managed-role base
   contains only compiled status/command variants; Saltz run control remains an
@@ -29,9 +29,11 @@ Date: 2026-08-16
   remained elevated across the observed tail. The complete dated aggregation
   kernel remains open. B1 implementation remains held until the promotion
   gates close.
-* Follow-on disposition: the maintainer separately authorized one host-driven
-  B0c plateau of at most eighteen `200 Bcycle` steps on the existing probe.
-  It has no timer, retry or catch-up and remains distinct from Burner B1.
+* Follow-on disposition: the separately authorized host-driven B0c plateau
+  completed eighteen exact `200 Bcycle` steps. The public Subnet series rose
+  approximately `0.990 Bcycles/second`, establishing clean accumulated signal
+  while leaving the complete decay kernel open. The probe has no timer, retry
+  or catch-up and remains distinct from Burner B1.
 * Implementation disposition: the non-destructive `apps/saltz` foundation and
   numeric preview may proceed independently. The checked-in Burner shell is
   inert and contains no burn, timer, run-state or authorization path. The
@@ -1494,6 +1496,14 @@ calls stop. A committed index is idempotent, a future index rejects, a late
 index aborts terminally without burn, and the total cannot exceed
 `3.6 Tcycles` per installation. This B0 evidence does not execute the waveform
 or promote B1.
+
+The authorized run completed all eighteen steps exactly and retained more than
+`1 Tcycle`. The current-time-bounded Subnet series rose from approximately
+`0.312` to `1.303 Bcycles/second`. This qualifies bounded accumulation, not an
+exact kernel or production controller. One mint command deposited `8_750`
+cycles above its requested `3 Tcycle` target because the CLI converted a
+discrete ICP-e8s amount; future external-effect envelopes bind that discrete
+input and maximum result explicitly.
 
 ### B1 — Burner Component
 
