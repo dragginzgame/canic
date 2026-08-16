@@ -1193,6 +1193,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cycle_burn_probe"
+version = "0.102.1"
+dependencies = [
+ "candid",
+ "ic-cdk",
+]
+
+[[package]]
 name = "cycles_ledger_stub"
 version = "0.102.1"
 dependencies = [

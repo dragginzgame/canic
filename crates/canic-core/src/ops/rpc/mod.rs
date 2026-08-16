@@ -180,7 +180,7 @@ const fn uses_structural_capability_proof(request: &Request) -> bool {
     }
 }
 
-fn non_structural_capability_proof_error(_request: &Request) -> InternalError {
+const fn non_structural_capability_proof_error(_request: &Request) -> InternalError {
     InternalError::state_failure()
 }
 

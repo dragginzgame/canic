@@ -224,6 +224,6 @@ const fn record_to_status(
     }
 }
 
-fn fence_uninitialized() -> InternalError {
+const fn fence_uninitialized() -> InternalError {
     InternalError::invariant()
 }

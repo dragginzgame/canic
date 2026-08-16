@@ -77,7 +77,7 @@ pub(super) fn pending_chain_key_root_delegation_batch_count(now_ns: u64) -> usiz
         .count()
 }
 
-pub(super) fn chain_key_root_delegation_batch_quota_exceeded(
+pub(super) const fn chain_key_root_delegation_batch_quota_exceeded(
     _pending_batches: usize,
 ) -> InternalError {
     InternalError::resource_exhausted()

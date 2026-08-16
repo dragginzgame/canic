@@ -79,6 +79,23 @@ uses a raw gateway URL. Locally, open the deployed principal as:
 http://<canister-id>.raw.localhost:8002/
 ```
 
+The repository also contains a separate local-only `cycle_burn_probe` test
+canister. It is not the Burner Component and cannot schedule or replay a
+waveform. Its single controller-only `burn_once` update accepts at most
+`100 Bcycles`, retains at least `1 Tcycles`, succeeds only once per install and
+returns the requested burn, actual burn and same-message balances. Deploy it
+with explicit local funding, then invoke the bounded calibration:
+
+```sh
+icp deploy cycle_burn_probe -e cycle-burn-local --cycles 2t
+icp canister call cycle_burn_probe burn_once '(50_000_000_000 : nat)' \
+  -e cycle-burn-local
+```
+
+The returned receipt proves the local burn primitive and accounting path. It
+does not populate or reproduce the public ICP Dashboard, whose cycle-burn-rate
+series observes mainnet Subnets only.
+
 The preview is excluded from every checked-in IC-mainnet environment,
 including the explicitly narrowed `ic` environment that replaces the CLI's
 all-canister implicit default. Adding it is a separate external-effect decision
