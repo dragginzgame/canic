@@ -256,6 +256,10 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreAsyncTimerRecovery,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
         StateAllocationKey::CorePlacementAcknowledgement,
     ),
     capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreAuthState),

@@ -138,6 +138,22 @@ For password-protected ICP CLI PEM identities, use
 password prompts during operator sessions. This affects the local ICP CLI
 identity session only.
 
+## Diagnostic Lookup
+
+Look up one compact diagnostic using either its canonical uppercase form or raw
+decimal number:
+
+```bash
+canic diagnostic E123
+canic diagnostic 123
+```
+
+Current allocations show their label, class, semantic origin, typed
+disposition, summary and action. Retired allocations retain their former label
+and last summary; never-allocated values remain lossless and are reported as
+unknown. Labels, lowercase prefixes, signs and surrounding whitespace are not
+accepted as code input.
+
 ## Local Install And Fleet Inspection Commands
 
 For local managed-Fleet workflows, the CLI also exposes install, inspection,

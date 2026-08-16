@@ -11,6 +11,10 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         error::InternalError,
+        ops::async_recovery::{
+            AsyncRecoveryAttempt, AsyncRecoveryClaim, AsyncRecoveryCompletion, AsyncRecoveryOwner,
+            AsyncTimerRecoveryOps,
+        },
         ops::ic::{
             IcOps,
             build_network::BuildNetworkOps,
@@ -27,43 +31,20 @@ use canic_core::{
     },
     ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
 };
-use std::{
-    cell::{Cell, RefCell},
-    time::Duration,
-};
+use std::{cell::RefCell, time::Duration};
 
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
+const MAINTENANCE_LEASE_NS: u64 = 5 * 60 * 1_000_000_000;
 const MAX_STATUS_PAGE_ENTRIES: u16 = 256;
 
 thread_local! {
     static MAINTENANCE_TIMER: RefCell<Option<TimerHandle>> = const { RefCell::new(None) };
-    static MAINTENANCE_IN_FLIGHT: Cell<bool> = const { Cell::new(false) };
-}
-
-struct MaintenanceLease;
-
-impl MaintenanceLease {
-    fn acquire() -> Option<Self> {
-        MAINTENANCE_IN_FLIGHT.with(|in_flight| {
-            if in_flight.replace(true) {
-                None
-            } else {
-                Some(Self)
-            }
-        })
-    }
-}
-
-impl Drop for MaintenanceLease {
-    fn drop(&mut self) {
-        MAINTENANCE_IN_FLIGHT.with(|in_flight| in_flight.set(false));
-    }
 }
 
 /// Reserve inactive maintenance in the shared inventory before application hooks run.
 pub fn declare() {
     let handle = TimerApi::declare_canister_pool_maintenance(MAINTENANCE_INTERVAL, || async {
-        maintenance_timer_result(maintain_once().await)
+        run_maintenance_timer().await
     })
     .unwrap_or_else(|error| {
         ic_cdk::trap(format!(
@@ -81,7 +62,7 @@ pub fn start() -> Result<(), InternalError> {
         }
         *current = Some(
             TimerApi::set_canister_pool_maintenance(MAINTENANCE_INTERVAL, || async {
-                maintenance_timer_result(maintain_once().await)
+                run_maintenance_timer().await
             })
             .map_err(InternalError::from)?,
         );
@@ -90,7 +71,7 @@ pub fn start() -> Result<(), InternalError> {
     TimerApi::defer_lifecycle_result_required(
         Duration::ZERO,
         "canic:canister_pool:maintain_initial",
-        async { maintenance_timer_result(maintain_once().await) },
+        async { run_maintenance_timer().await },
     )
     .detach();
     Ok(())
@@ -104,7 +85,7 @@ pub fn resume_after_authority_snapshot() -> Result<(), canic_core::api::timer::T
         }
         *current = Some(TimerApi::set_canister_pool_maintenance(
             MAINTENANCE_INTERVAL,
-            || async { maintenance_timer_result(maintain_once().await) },
+            || async { run_maintenance_timer().await },
         )?);
         Ok(())
     })
@@ -117,7 +98,9 @@ pub fn stop() -> Result<(), InternalError> {
             TimerApi::cancel(existing)?;
         }
         Ok(())
-    })
+    })?;
+    AsyncTimerRecoveryOps::abandon(AsyncRecoveryOwner::CanisterPoolMaintenance);
+    Ok(())
 }
 
 /// Return the exact immutable policy and durable asset inventory.
@@ -160,11 +143,22 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
 
 /// Reconcile one bounded reset or automatic refill operation.
 pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
-    let Some(_lease) = MaintenanceLease::acquire() else {
-        return Ok(PoolAdminResponse::MaintenancePaused {
-            reason: "another Canister pool maintenance pass is still in flight".to_string(),
-        });
+    let attempt = match claim_maintenance()? {
+        AsyncRecoveryClaim::Acquired(attempt) => attempt,
+        AsyncRecoveryClaim::Busy { .. } => {
+            return Ok(PoolAdminResponse::MaintenancePaused {
+                reason: "another Canister pool maintenance pass is still in flight".to_string(),
+            });
+        }
     };
+    let result = maintain_once_inner().await;
+    let completion = maintenance_result_completion(&result);
+    let recovery_due_at_ns = maintenance_recovery_deadline(completion)?;
+    AsyncTimerRecoveryOps::finish(attempt, completion, recovery_due_at_ns)?;
+    result
+}
+
+async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
     let status = FleetActivationWorkflow::status()?;
     if !matches!(
         status.phase,
@@ -209,6 +203,136 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
         return Ok(PoolAdminResponse::Maintained);
     }
     refill::start(&config).await
+}
+
+async fn run_maintenance_timer() -> TimerRunResult {
+    let attempt = match claim_maintenance() {
+        Ok(AsyncRecoveryClaim::Acquired(attempt)) => attempt,
+        Ok(AsyncRecoveryClaim::Busy { retry_at_ns }) => {
+            return TimerRunResult {
+                outcome: canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure,
+                work_count: 0,
+                directive: TimerDirective::ScheduleAt(retry_at_ns),
+            };
+        }
+        Err(_) => return TimerRunResult::invariant_failure(),
+    };
+    finish_maintenance_timer(attempt, maintain_once_inner().await)
+}
+
+/// Dispatch one watchdog-owned takeover without awaiting fallible work.
+pub fn dispatch_async_recovery() -> bool {
+    let attempt = match claim_maintenance() {
+        Ok(AsyncRecoveryClaim::Acquired(attempt)) => attempt,
+        Ok(AsyncRecoveryClaim::Busy { .. }) | Err(_) => return false,
+    };
+    spawn_maintenance(attempt);
+    true
+}
+
+fn spawn_maintenance(attempt: AsyncRecoveryAttempt) {
+    ic_cdk::futures::spawn(async move {
+        let _result = finish_maintenance_timer(attempt, maintain_once_inner().await);
+    });
+}
+
+fn claim_maintenance() -> Result<AsyncRecoveryClaim, InternalError> {
+    let now_ns = IcOps::now_nanos();
+    let lease_expires_at_ns = now_ns.checked_add(MAINTENANCE_LEASE_NS).ok_or_else(|| {
+        InternalError::invariant(
+            canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
+            "Canister pool maintenance lease deadline overflowed",
+        )
+    })?;
+    AsyncTimerRecoveryOps::claim(
+        AsyncRecoveryOwner::CanisterPoolMaintenance,
+        now_ns,
+        lease_expires_at_ns,
+    )
+}
+
+fn finish_maintenance_timer(
+    attempt: AsyncRecoveryAttempt,
+    result: Result<PoolAdminResponse, InternalError>,
+) -> TimerRunResult {
+    let timer_result = maintenance_timer_result(result);
+    let completion = timer_result_completion(timer_result.outcome);
+    let recovery_due_at_ns = maintenance_recovery_deadline(completion).ok().flatten();
+    let Ok(exact) = AsyncTimerRecoveryOps::finish(attempt, completion, recovery_due_at_ns) else {
+        return TimerRunResult::invariant_failure();
+    };
+    if exact && completion == AsyncRecoveryCompletion::InvariantFailure {
+        MAINTENANCE_TIMER.with_borrow_mut(|current| {
+            if let Some(handle) = current.take() {
+                let _ = TimerApi::cancel(handle);
+            }
+        });
+    }
+    if exact {
+        timer_result
+    } else {
+        TimerRunResult::no_work(TimerDirective::Stop)
+    }
+}
+
+const fn maintenance_result_completion(
+    result: &Result<PoolAdminResponse, InternalError>,
+) -> AsyncRecoveryCompletion {
+    match result {
+        Ok(_) => AsyncRecoveryCompletion::Success,
+        Err(error)
+            if matches!(
+                error.class(),
+                canic_core::control_plane_support::error::InternalErrorClass::Infra
+                    | canic_core::control_plane_support::error::InternalErrorClass::Ops
+            ) =>
+        {
+            AsyncRecoveryCompletion::RetryableFailure
+        }
+        Err(_) => AsyncRecoveryCompletion::InvariantFailure,
+    }
+}
+
+const fn timer_result_completion(
+    outcome: canic_core::dto::runtime::TimerExecutionOutcome,
+) -> AsyncRecoveryCompletion {
+    match outcome {
+        canic_core::dto::runtime::TimerExecutionOutcome::Success
+        | canic_core::dto::runtime::TimerExecutionOutcome::NoWork => {
+            AsyncRecoveryCompletion::Success
+        }
+        canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure => {
+            AsyncRecoveryCompletion::RetryableFailure
+        }
+        canic_core::dto::runtime::TimerExecutionOutcome::InvariantFailure
+        | canic_core::dto::runtime::TimerExecutionOutcome::Unacknowledged => {
+            AsyncRecoveryCompletion::InvariantFailure
+        }
+    }
+}
+
+fn maintenance_recovery_deadline(
+    completion: AsyncRecoveryCompletion,
+) -> Result<Option<u64>, InternalError> {
+    if completion == AsyncRecoveryCompletion::InvariantFailure
+        || !AsyncTimerRecoveryOps::recovery_owned(AsyncRecoveryOwner::CanisterPoolMaintenance)
+    {
+        return Ok(None);
+    }
+    IcOps::now_nanos()
+        .checked_add(MAINTENANCE_INTERVAL.as_nanos().try_into().map_err(|_| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
+                "Canister pool recovery cadence exceeds u64 nanoseconds",
+            )
+        })?)
+        .map(Some)
+        .ok_or_else(|| {
+            InternalError::invariant(
+                canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
+                "Canister pool recovery deadline overflowed",
+            )
+        })
 }
 
 fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> TimerRunResult {

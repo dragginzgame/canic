@@ -115,10 +115,15 @@ pub mod memory {
     pub mod authority_restore {
         pub const AUTHORITY_RESTORE_FENCE_ID: u8 = 59;
     }
+
+    pub mod async_recovery {
+        pub const ASYNC_TIMER_RECOVERY_ID: u8 = 60;
+    }
 }
 
 use memory::{
     application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
+    async_recovery::ASYNC_TIMER_RECOVERY_ID,
     auth::AUTH_STATE_ID,
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
@@ -211,6 +216,7 @@ const CORE_APPLICATION_RECEIPT_IDS: &[MemoryId] = &[
 const CORE_PLACEMENT_ACKNOWLEDGEMENT_IDS: &[MemoryId] =
     &[MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID)];
 const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
+const CORE_ASYNC_TIMER_RECOVERY_IDS: &[MemoryId] = &[MemoryId::new(ASYNC_TIMER_RECOVERY_ID)];
 const PLACEMENT_SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_SCALING_REGISTRY_ID)];
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
@@ -388,6 +394,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreAuthorityRestoreFence,
         AllocationOwner::CanicCore,
         CORE_AUTHORITY_RESTORE_FENCE_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreAsyncTimerRecovery,
+        AllocationOwner::CanicCore,
+        CORE_ASYNC_TIMER_RECOVERY_IDS,
     ),
 ];
 

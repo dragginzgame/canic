@@ -241,7 +241,7 @@ validate:
 check-invariants:
 	bash scripts/ci/run-layering-guards.sh
 	bash scripts/ci/check-current-document-semantics.sh
-	# Temporary product guards: remove with the 0.109 M7 blob hard cut.
+	# Temporary product guards: remove with a promoted standalone blob-service hard cut.
 	+@$(MAKE) --no-print-directory blob-storage-inventory-gate
 	+@$(MAKE) --no-print-directory blob-storage-cashier-inventory-gate
 	bash scripts/ci/test-dependency-risk-inventory.sh

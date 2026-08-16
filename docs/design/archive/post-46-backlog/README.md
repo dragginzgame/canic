@@ -4,9 +4,9 @@ These documents are archived source material for the completed 0.41 through
 0.46 deployment foundation and the backlog that followed it.
 
 The unfinished feature-shaped backlog is not an active numbered release line.
-Optional ideas that remain useful are preserved under:
-
-- [Post-46 Backlog Ideas](../../ideas/post-46-backlog/README.md)
+Its redundant loose ideas copy was deleted on 2026-08-16. Any renewed need
+must be promoted from this historical source into a fresh, bounded idea or
+scheduled design rather than restoring the collection wholesale.
 
 Use these files only for historical context and original source material.
 

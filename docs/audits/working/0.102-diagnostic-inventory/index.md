@@ -1,12 +1,13 @@
 # Canic 0.102 Implementation Status
 
-Date: 2026-08-15
+Date: 2026-08-16
 
 ## Status
 
-- State: evidence-only baseline and diagnostic inventory are active. No public
-  error shape, numeric assignment, stable record or runtime behavior has
-  changed.
+- State: B1 evidence is closed and approved. B2 has materialized the dense
+  `1..=991` runtime identities, permanent host ledger, rich catalogue,
+  language-neutral registry and CLI lookup. The public error shape, internal
+  string-first propagation and stable records remain unchanged.
 - Evidence baseline: clean `main` tag `v0.101.53` at
   `23c0328f78b215580d734ef01b52b35fa3e38ade`. The active constructor
   reconciliation is pinned separately to current-candidate control-plane/core
@@ -16,17 +17,18 @@ Date: 2026-08-15
   admitted release set before activation; matching host/CLI callers and
   regenerated external bindings move with that boundary. Same-release retry,
   backup, restore and interruption recovery remain required.
-- Design gate: direction is approved and evidence-only B1 work may continue.
-  Mutating batches B2-B6 remain blocked until the complete producer,
-  dynamic-public-context and durable-state inventories plus the initial
-  allocation ledger, host catalogue and projection table receive maintainer
-  approval.
+- Design gate: the maintainer approved the complete producer,
+  dynamic-public-context and durable-state inventories plus the compressed
+  allocation, host catalogue and projection table on 2026-08-16. That approval
+  authorizes B2 only; later public, propagation and durable-state hard cuts
+  retain their planned batch boundaries.
 - Published checkpoints: `v0.102.0` at
   `e6dfd7d2d212f9fce4b1b16caba33d8062e3461d` and `v0.102.1` at
   `86763c5f16478e2e548e2059e5efaa963bf9a966`. They preserve reviewable B1
   evidence without representing incomplete diagnostic behavior as released.
-- Open work is the unversioned remainder of the B1 allocation-authority batch.
-  It changes no runtime, Candid, stable state or package version.
+- Review work is the complete B2 allocation-authority batch in the existing
+  untagged `0.102.2` changelog draft. It changes runtime identity scaffolding
+  and host lookup without changing Candid, stable state or package version.
 - Measurement gate: the fresh current-source canonical Wasm baseline passes;
   every later material cut and closeout must remain comparable with v3.
 
@@ -38,8 +40,8 @@ remain part of the batch whose behavior caused them.
 
 | Batch | Bounded outcome and owner | Included direct evidence and fallout | Focused validation | Surface impact | Status |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Current diagnostic authority and Wasm baseline; whole program | Exact public/internal producer inventory, dynamic public-message ownership, durable-string classification, operation-correlated masked-code owners, proposed current/retired allocation ledger and representative canonical Wasm measurements | Inventory consistency checks, current-source scans and `CANIC-WASM-001` or an explicitly qualified successor | Evidence only; no runtime or wire change | Active |
-| B2 | Prose-free runtime identity and host catalogue; `canic-core`, `canic-host`, `canic-cli` | Distinct raw and registered code types, approved current allocations, permanent current/retired ledger, exhaustive host metadata with typed disposition, compact formatting, CLI lookup, generated language-neutral current registry and release-Wasm absence proof | Targeted core/host/CLI tests, current/retired allocation and catalogue bijection tests, direct-construction guards and role-scoped Wasm inspection | Adds the current diagnostic lookup surface; public endpoint error wire remains unchanged | Pending |
+| B1 | Current diagnostic authority and Wasm baseline; whole program | Exact public/internal producer inventory, dynamic public-message ownership, durable-string classification, operation-correlated masked-code owners, proposed current/retired allocation ledger and representative canonical Wasm measurements | Inventory consistency checks, current-source scans and `CANIC-WASM-001` or an explicitly qualified successor | Evidence only; no runtime or wire change | Accepted |
+| B2 | Prose-free runtime identity and host catalogue; `canic-core`, `canic-host`, `canic-cli` | Distinct raw and registered code types, approved current allocations, permanent current/retired ledger, exhaustive host metadata with typed disposition, compact formatting, CLI lookup, generated language-neutral current registry and release-Wasm absence proof | Targeted core/host/CLI tests, current/retired allocation and catalogue bijection tests, direct-construction guards and role-scoped Wasm inspection | Adds the current diagnostic lookup surface; public endpoint error wire remains unchanged | Ready |
 | B3 | Fleet-atomic public diagnostic hard cut; runtime facade, Candid, host and test owners | Replace the public enum-plus-message record with one `nat16`, update every owned endpoint, canonical/generated declaration, decoder, helper and fixture, delete the old shape without aliases, and require one admitted release set before Fleet activation | Exact Candid-shape guards, representative endpoint decode tests, mixed-release activation rejection, host failure rendering and focused Wasm remeasurement | Breaking public error contract; no mixed pre/post-0.102 Fleet operation | Pending |
 | B4 | Code-first internal propagation and security projection; `canic-core` and control plane | Remove owned diagnostic prose/context concatenation, exhaustively map typed causes, retain explicit internal/public identities, prove masked-code observability and remove canister-only derived prose | Targeted typed mapping, projection, authorization and retry-decision tests plus subsystem Wasm measurements | Internal runtime representation and operator diagnostics | Pending |
 | B5 | Bounded durable diagnostic ownership; stable model and lifecycle owners | Remove redundant prose, deterministically clear proven advisory state, preserve bounded owned operational text, and add a direct typed replacement only when current recovery behavior remains unchanged; defer broader state-machine redesign and retain its owned text | Record-level canonical encoding tests and the smallest lifecycle/PocketIC recovery journeys required by fields actually changed | Current stable schema only; reinstall boundary unchanged | Pending |
@@ -50,34 +52,24 @@ allocation authority must precede scaffolding; scaffolding must precede the
 atomic public cut; internal and stable ownership then hard-cut independently;
 the final batch proves the complete absence and footprint properties.
 
-## Current Batch: B1
+## Current Batch: B2
 
-B1 is complete only when all of the following are reviewable together:
+B2 is complete only when all of the following are reviewable together:
 
-1. the initial `v0.101.53` public-error, internal-conversion and host-consumer
-   inventories are reconciled against one exact current release-candidate
-   source snapshot;
-2. every dynamic public-message interpolation is classified as
-   caller-derivable, sensitive/operator-only, authoritatively typed or
-   caller-required but unowned, and every unowned required value has a proposed
-   endpoint-specific typed owner;
-3. every durable diagnostic-derived string is classified as redundant prose,
-   advisory context, recovery-significant state or owned operational text;
-4. every producer observation maps to one reviewed canonical condition and
-   handling contract or explicit non-diagnostic disposition, with equivalent
-   producers sharing a code;
-5. every compressed code has one meaning, class, semantic origin, typed host
-   disposition, public projection and, where masked, a retrievable operation-
-   correlated numeric observability owner;
-6. every proposed number is nonzero, unique across the permanent current and
-   retired allocation ledger and backed by a current producer when active;
-7. the current host catalogue and generated language-neutral registry are
-   bijective with the proposed current allocation rows;
-8. representative leaf, Fleet Subnet Root and Wasm Store artifacts have a
-   reproducible current-source baseline; and
-9. the maintainer can approve or amend the complete inventories, many-to-one
-   map and initial
-   allocation before B2 makes them authoritative.
+1. lossless raw identities and registered producer identities are distinct and
+   format only as compact unpadded `E<decimal>`;
+2. all approved rows have one canonical runtime declaration and no local alias
+   or second numeric construction path;
+3. all 991 current allocations and zero retired allocations are retained in the
+   permanent host ledger with complete typed catalogue metadata;
+4. the native registered inventory, ledger, host catalogue and generated JSON
+   are bijective, while retirement and never-allocated lookup remain distinct;
+5. `canic diagnostic` accepts only raw decimal or exact uppercase-prefixed
+   input and renders typed known, retired or unknown outcomes;
+6. canister-reachable source imports no host ledger, JSON, review frontier or
+   producer-to-code map; and
+7. representative Component, Fleet Subnet Root and Wasm Store release
+   artifacts contain none of those complete host-only assets.
 
 ## Current Evidence
 
@@ -92,22 +84,27 @@ B1 is complete only when all of the following are reviewable together:
   Historical v2 evidence remains valid superseded history and is not comparable
   with v3. Exact measurements and the preceding four-role development check are
   recorded in [inventory.md](inventory.md).
+- B2 canonical role-scoped release builds pass for a representative Component,
+  Wasm Store and Fleet Subnet Root at 2,879,695, 2,773,920 and 7,497,834 raw
+  bytes. Bounded scans find none of the permanent-ledger header, host owner,
+  rich catalogue prose, symbolic register label, working-audit path or
+  projection-map marker. This is focused absence evidence, not a new
+  `CANIC-WASM-001/v3` comparison run.
 - The design's
   [allocation proposal](../../../design/0.102-compact-diagnostic-codes/allocation-proposal.md)
-  recommends dense monotonic
-  codes, unpadded `E<decimal>` rendering and nine host-only broad classes. These
-  choices and the later compressed code table remain maintainer review gates.
+  records the approved dense monotonic codes, unpadded `E<decimal>` rendering
+  and nine host-only broad classes. Its complete register deterministically
+  derives the B2 assets but remains repository-only evidence.
 - The design's
   [code-allocation ledger](../../../design/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
-  now freezes the
-  repository-only permanent current/retired ledger contract and the contract
-  for a generated language-neutral current registry. No allocation or generated
-  registry exists yet, so both ledger sets remain empty until B1 approval.
+  now records the implemented permanent current/retired ledger contract and
+  generated language-neutral current registry. The initial ledger has 991
+  current rows and no retired rows.
 - The normative design now distinguishes lossless raw decoded identities from
   registered producer identities, makes typed host disposition authoritative
   for host automation, requires operation-correlated evidence for masked
   errors, and defines the one-release-set Fleet activation boundary. These are
-  design constraints, not implementation claims.
+  design constraints now enforced by the B2 identity and host-catalogue types.
 - [public-boundary.md](public-boundary.md) proves 151 explicit public
   constructions in 26 production files and records the exact maintained
   production-consumer surface: twelve code-dependent machine decisions and six
@@ -360,7 +357,8 @@ B1 is complete only when all of the following are reviewable together:
 - [bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 60 exact topology,
   runtime-log, refill, Placement Index and complete current blob candidates
   plus four safe projections. All 27 blob leaves are allocated in 0.102 and
-  their numbers retire without reuse when 0.109 removes the producers.
+  their numbers retire without reuse when a promoted extraction removes the
+  producers.
 - [cost-guard-leaves.md](cost-guard-leaves.md) maps seven exact reservation
   leaves and one safe projection, deletes the redundant public-kind classifier
   and keeps rollback failure as a secondary typed observation rather than a
@@ -400,8 +398,8 @@ B1 is complete only when all of the following are reviewable together:
   safe projections and eight exact leaves reused as projection targets. It
   names proposed numeric observation owners and leaves IC effect call-site
   ownership and the current string-coded recent-failure ring as explicit
-  approval gates. Cashier uses that guarded numeric owner until 0.109 retires
-  its codes.
+  approval gates. Cashier uses that guarded numeric owner until a promoted
+  extraction retires its codes.
 - [ic-observability-owners.md](ic-observability-owners.md) maps 17 current IC
   call families to their operation authority or guarded runtime status and
   identifies the missing narrow Store-publication attempt owner. Mutating calls
@@ -596,12 +594,12 @@ from those columns, proves that all 31 projections are members of the set and
 pins the sorted label set. A second check proves that every one of the 2,864
 exact provisional identities occurs in at least one row with structured typed producer,
 source, decision, dependency-boundary, site or call evidence. The function and
-consumer manifests are now closed, while the derived numeric register remains
-a maintainer-review proposal rather than runtime allocation authority.
+consumer manifests are closed, and their approved derived numeric register is
+now permanent allocation authority without entering Wasm.
 
 The complete composition register establishes a 3.96:1 coverage-to-code
-reduction and stays below the four-digit rejection gate. It does not authorize
-runtime numeric assignments before maintainer approval.
+reduction and stays below the four-digit rejection gate. Maintainer approval on
+2026-08-16 authorized its exact B2 numeric assignments.
 
 ## Next Action
 
@@ -611,9 +609,8 @@ references expand to 2,514 effective helper/call-site dispositions and the
 closed label frontier is 2,864 exact provisional identities plus 31
 projections. Its producer-qualified review frontier is 3,929 observations.
 
-Review the complete guarded many-to-one register in the allocation proposal.
-It maps the closed frontier onto 960 exact-condition contracts plus 31 safe
-public projections and proposes dense codes `1..=991`; the source frontier and
-register remain repository-only. Rerun the stable failure-string census
-immediately before B5 mutation. Do not begin B2 or expose a second diagnostic
-protocol before the maintainer approves or corrects that allocation.
+Review the complete B2 implementation over the materialized `1..=991`
+declarations, permanent ledger, host catalogue, current JSON and CLI lookup.
+The source frontier and register remain repository-only. Rerun the stable
+failure-string census immediately before B5 mutation. Do not begin the B3
+public hard cut as part of this B2 authority batch.

@@ -54,7 +54,7 @@ a generic projection.
 | `IC_PLATFORM_EFFECT_FAILED` | 22 management, NNS and Store-call failures that cannot safely expose target or raw reject detail | `Unavailable` | exact owning effect journal before/after external effects; guarded recent-failure ring for read-only calls |
 | `RUNTIME_LOG_STATE_INVALID` | four runtime-log counter/sequence/time contradictions | `Invariant` | guarded recent-failure ring; never the contradicted runtime log itself |
 | `ICP_REFILL_RESPONSE_INVALID` | two refill value/decimal response contradictions | `Invariant` | durable refill operation diagnostic plus guarded recent-failure ring |
-| `BLOB_CASHIER_RESPONSE_INVALID` | four current Cashier decode contradictions plus `TopUpWithoutCycles` after Canic attached admitted cycles | `Invariant` | guarded recent-failure ring before projection; allocate in 0.102 and retire without reuse in the 0.109 hard cut |
+| `BLOB_CASHIER_RESPONSE_INVALID` | four current Cashier decode contradictions plus `TopUpWithoutCycles` after Canic attached admitted cycles | `Invariant` | guarded recent-failure ring before projection; allocate in 0.102 and retire without reuse if the standalone blob-service extraction is promoted |
 | `COST_GUARD_CONFIGURATION_INVALID` | six protected cost-manifest/accounting failures | `Invariant` | owning intent/cleanup diagnostic for durable work; guarded recent-failure ring otherwise |
 | `ACCESS_DEPENDENCY_UNAVAILABLE` | typed environment, verifier, Registry or runtime dependency cause | `Unavailable` | preserve and record the nested exact code in the guarded access recent-failure entry |
 | `ACCESS_CONFIGURATION_INVALID` | malformed static service guard or empty access expression | `Invariant` | lifecycle numeric log and guarded access recent-failure entry |
@@ -152,7 +152,8 @@ decisions remain implementation gates:
    competing generic effect journal or losing retrievable operation-ID
    correlation; and
 3. preserve all 27 current blob identities through 0.102 allocation and retire
-   their numbers without reuse when 0.109 removes their producers.
+   their numbers without reuse when a promoted extraction removes their
+   producers.
 
 These are not reasons to broaden the public error. If an individual path has no
 approved numeric owner, its exact code must become safely public or the path

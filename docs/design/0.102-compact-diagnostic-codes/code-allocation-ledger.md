@@ -4,27 +4,24 @@ Date: 2026-08-13
 
 ## Status
 
-This B1 document freezes the allocation-ledger contract before any proposed
-number becomes runtime authority. It changes no runtime or wire behavior.
+This document freezes the allocation-ledger contract and records its B2
+materialization. B2 changes no public wire behavior.
 
-The complete review register proposes dense rows `1..=991` for 960 exact
-handling contracts and 31 safe public projections. The proposal covers all
-3,929 producer-qualified observations exactly once, but it is not the implemented
-permanent ledger. Consequently there are no authoritative current rows yet,
-and no numeric code has ever shipped under the 0.102 protocol to retire. Empty
-current and retired sets remain the only truthful runtime-ledger state until
-the maintainer approves the complete register and B2 installs it through the
-maintained owners below.
+The maintainer approved dense rows `1..=991` for 960 exact handling contracts
+and 31 safe public projections on 2026-08-16. The checked-in ledger is now
+permanent numeric authority and contains 991 authoritative current rows. There
+are no retired rows in the initial allocation. The approved rows cover all
+3,929 producer-qualified observations exactly once.
 
 ## Maintained Owners
 
-The implemented ledger will live at:
+The implemented ledger lives at:
 
 ```text
 crates/canic-host/diagnostics/allocations.toml
 ```
 
-The language-neutral current-code projection will live at:
+The language-neutral current-code projection lives at:
 
 ```text
 crates/canic-host/diagnostics/current-codes.json

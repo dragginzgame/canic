@@ -1,11 +1,12 @@
 //! Module: diagnostic_inventory_ledger
 //!
-//! Responsibility: guard the provisional 0.102 producer-coverage arithmetic.
-//! Does not own: runtime diagnostics, numeric allocation or host catalogue data.
-//! Boundary: reads checked-in B1 evidence and rejects coverage-ledger drift.
+//! Responsibility: guard the 0.102 producer map and its approved B2 derived assets.
+//! Does not own: runtime producer mapping, public error conversion, or host lookup behavior.
+//! Boundary: B1 evidence derives one permanent allocation, runtime declaration, and host registry.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Write as _,
     fs,
     path::{Path, PathBuf},
 };
@@ -28,6 +29,10 @@ fn read(path: &Path) -> String {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
+fn compact_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn markdown_files(root: &Path) -> Vec<PathBuf> {
     let mut files = fs::read_dir(root)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", root.display()))
@@ -40,6 +45,54 @@ fn markdown_files(root: &Path) -> Vec<PathBuf> {
         .collect::<Vec<_>>();
     files.sort();
     files
+}
+
+fn rust_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_rust_files(root, &mut files);
+    files.sort();
+    files
+}
+
+fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    if !directory.exists() {
+        return;
+    }
+    let mut entries = fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap_or_else(|error| {
+            panic!(
+                "failed to read entry below {}: {error}",
+                directory.display()
+            )
+        });
+    entries.sort_by_key(std::fs::DirEntry::path);
+
+    for entry in entries {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_files(&path, files);
+            continue;
+        }
+        if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+fn relative_source_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or_else(|error| panic!("failed to relativize {}: {error}", path.display()))
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn excluded_production_source(path: &str) -> bool {
+    path.contains("/tests/")
+        || path.ends_with("/tests.rs")
+        || path.ends_with("/test_support.rs")
+        || path.starts_with("canisters/test/")
 }
 
 fn uppercase_tokens(value: &str) -> BTreeSet<String> {
@@ -2036,6 +2089,400 @@ fn compression_register_from_proposal() -> String {
     register.to_string()
 }
 
+fn snake_case_name(value: &str) -> String {
+    let mut rendered = String::with_capacity(value.len() + 4);
+    for (index, character) in value.chars().enumerate() {
+        if character.is_ascii_uppercase() {
+            if index != 0 {
+                rendered.push('_');
+            }
+            rendered.push(character.to_ascii_lowercase());
+        } else {
+            rendered.push(character);
+        }
+    }
+    rendered
+}
+
+fn quoted_value(value: &str) -> String {
+    let mut rendered = String::with_capacity(value.len() + 2);
+    rendered.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => rendered.push_str("\\\""),
+            '\\' => rendered.push_str("\\\\"),
+            '\n' => rendered.push_str("\\n"),
+            '\r' => rendered.push_str("\\r"),
+            '\t' => rendered.push_str("\\t"),
+            character if character.is_control() => {
+                write!(&mut rendered, "\\u{:04x}", u32::from(character))
+                    .expect("writing to a String cannot fail");
+            }
+            character => rendered.push(character),
+        }
+    }
+    rendered.push('"');
+    rendered
+}
+
+fn render_string_array(values: &BTreeSet<String>) -> String {
+    format!(
+        "[{}]",
+        values
+            .iter()
+            .map(|value| quoted_value(value))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn proposal_exposure(exposure: &str) -> &'static str {
+    match exposure {
+        "internal; no public return boundary" => "internal",
+        "internal; projected before return" => "masked",
+        "safe public identity" | "safe public projection" => "public",
+        _ => panic!("unknown proposal exposure: {exposure}"),
+    }
+}
+
+fn allocation_public_code(
+    row: &CompressionProposalRow,
+    code: usize,
+    rows: &[CompressionProposalRow],
+    code_by_label: &BTreeMap<&str, usize>,
+) -> Option<usize> {
+    if row.projection == "none" {
+        return None;
+    }
+    if row.projection == "self" {
+        return Some(code);
+    }
+
+    let candidates = rows
+        .iter()
+        .enumerate()
+        .filter_map(|(index, candidate)| {
+            candidate
+                .provisional_identities
+                .contains(&row.projection)
+                .then_some(index + 1)
+        })
+        .collect::<Vec<_>>();
+    match candidates.as_slice() {
+        [candidate] => Some(*candidate),
+        [] => Some(
+            *code_by_label
+                .get(row.projection.as_str())
+                .unwrap_or_else(|| {
+                    panic!("projection target lacks an allocation: {}", row.projection)
+                }),
+        ),
+        _ => panic!(
+            "projection target has ambiguous allocations: {} -> {candidates:?}",
+            row.projection
+        ),
+    }
+}
+
+fn render_allocation_ledger(rows: &[CompressionProposalRow]) -> String {
+    let code_by_label = rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| (row.label.as_str(), index + 1))
+        .collect::<BTreeMap<_, _>>();
+    let mut rendered = String::from(
+        "# Generated from the maintainer-approved 0.102 allocation register.\n\
+# This permanent host-only ledger retains current and retired identities.\n",
+    );
+
+    for (index, row) in rows.iter().enumerate() {
+        let code = index + 1;
+        rendered.push_str("\n[[allocation]]\n");
+        writeln!(&mut rendered, "code = {code}").expect("writing to a String cannot fail");
+        writeln!(&mut rendered, "label = {}", quoted_value(&row.label))
+            .expect("writing to a String cannot fail");
+        rendered.push_str("status = \"current\"\n");
+        writeln!(&mut rendered, "summary = {}", quoted_value(&row.summary))
+            .expect("writing to a String cannot fail");
+        rendered.push_str("catalog_owner = \"canic_host::diagnostics\"\n");
+        writeln!(
+            &mut rendered,
+            "class = {}",
+            quoted_value(&snake_case_name(&row.class))
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(&mut rendered, "origin = {}", quoted_value(&row.origin))
+            .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "disposition = {}",
+            quoted_value(&snake_case_name(&row.disposition))
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "condition = {}",
+            quoted_value(&row.condition)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "handling_key = {}",
+            quoted_value(&row.handling_key)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "producers = {}",
+            render_string_array(&row.producers)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "split_rationale = {}",
+            quoted_value(&row.split_rationale)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "exposure = {}",
+            quoted_value(proposal_exposure(row.exposure))
+        )
+        .expect("writing to a String cannot fail");
+        if let Some(public_code) = allocation_public_code(row, code, rows, &code_by_label) {
+            writeln!(&mut rendered, "public_code = {public_code}")
+                .expect("writing to a String cannot fail");
+        }
+        writeln!(
+            &mut rendered,
+            "observability = {}",
+            quoted_value(&row.observability)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "remediation = {}",
+            quoted_value(&row.remediation)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(&mut rendered, "action = {}", quoted_value(&row.action))
+            .expect("writing to a String cannot fail");
+    }
+
+    rendered
+}
+
+fn render_current_codes_json(rows: &[CompressionProposalRow]) -> String {
+    let mut rendered = String::from("[\n");
+    for (index, row) in rows.iter().enumerate() {
+        let comma = if index + 1 == rows.len() { "" } else { "," };
+        rendered.push_str("  {\n");
+        writeln!(&mut rendered, "    \"code\": {},", index + 1)
+            .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "    \"label\": {},",
+            quoted_value(&row.label)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "    \"class\": {},",
+            quoted_value(&snake_case_name(&row.class))
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "    \"origin\": {},",
+            quoted_value(&row.origin)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "    \"disposition\": {},",
+            quoted_value(&snake_case_name(&row.disposition))
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "    \"summary\": {},",
+            quoted_value(&row.summary)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(
+            &mut rendered,
+            "    \"action\": {}",
+            quoted_value(&row.action)
+        )
+        .expect("writing to a String cannot fail");
+        writeln!(&mut rendered, "  }}{comma}").expect("writing to a String cannot fail");
+    }
+    rendered.push_str("]\n");
+    rendered
+}
+
+fn render_runtime_declarations(rows: &[CompressionProposalRow]) -> String {
+    let mut rendered = String::from("declare_diagnostic_codes! {\n");
+    for (index, row) in rows.iter().enumerate() {
+        writeln!(&mut rendered, "    {} = {};", row.label, index + 1)
+            .expect("writing to a String cannot fail");
+    }
+    rendered.push_str("}\n");
+    rendered
+}
+
+fn replace_generated_block(source: &str, start: &str, end: &str, body: &str) -> String {
+    let (prefix, remainder) = source
+        .split_once(start)
+        .unwrap_or_else(|| panic!("generated source lost start marker: {start}"));
+    let (_, suffix) = remainder
+        .split_once(end)
+        .unwrap_or_else(|| panic!("generated source lost end marker: {end}"));
+    format!("{prefix}{start}\n{body}{end}{suffix}")
+}
+
+fn write_generated_asset(path: &Path, source: &str) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .unwrap_or_else(|error| panic!("failed to create {}: {error}", parent.display()));
+    }
+    fs::write(path, source)
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", path.display()));
+}
+
+#[test]
+fn allocation_review_approval_materializes_exact_b2_authority() {
+    let root = workspace_root();
+    let design_root = root.join("docs/design/0.102-compact-diagnostic-codes");
+    let proposal = compact_whitespace(&read(&design_root.join("allocation-proposal.md")));
+    let ledger = compact_whitespace(&read(&design_root.join("code-allocation-ledger.md")));
+
+    for required in [
+        "## Maintainer Review Checklist",
+        "review the generated register as one coherent allocation surface",
+        "correct or approve each row's canonical semantic group, handling contract and host disposition",
+        "correct or approve every public projection and masked-code observability owner",
+        "correct or approve every singleton split rationale",
+        "no code exists only because an operation, source location or producer role is different",
+        "approved as one coherent allocation surface",
+        "B2 runtime and permanent-ledger authority",
+        "The approved allocation is exactly `1..=991`",
+        "This approval authorizes B2 runtime constants",
+        "B2 does not change the public error contract",
+    ] {
+        assert!(
+            proposal.contains(required),
+            "allocation proposal lost its approved B2 boundary: {required}",
+        );
+    }
+
+    for required in [
+        "991 authoritative current rows",
+        "There are no retired rows in the initial allocation",
+        "The checked-in ledger is now permanent numeric authority",
+    ] {
+        assert!(
+            ledger.contains(required),
+            "allocation ledger lost its empty-authority boundary: {required}",
+        );
+    }
+
+    for current_asset in [
+        "crates/canic-host/diagnostics",
+        "crates/canic-host/diagnostics/allocations.toml",
+        "crates/canic-host/diagnostics/current-codes.json",
+    ] {
+        let path = root.join(current_asset);
+        assert!(
+            path.exists(),
+            "approved B2 allocation asset is missing: {}",
+            path.display(),
+        );
+    }
+}
+
+#[test]
+fn allocation_review_material_stays_out_of_canister_production_sources() {
+    let root = workspace_root();
+    let forbidden_fragments = [
+        "docs/design/0.102-compact-diagnostic-codes",
+        "docs/audits/working/0.102-diagnostic-inventory",
+        "allocation-proposal.md",
+        "code-allocation-ledger.md",
+        "diagnostics/allocations.toml",
+        "diagnostics/current-codes.json",
+    ];
+
+    for source_root in [
+        "crates/canic-core",
+        "crates/canic-control-plane",
+        "crates/canic-macros",
+        "crates/canic",
+        "canisters",
+        "apps",
+    ] {
+        for path in rust_files(&root.join(source_root)) {
+            let relative = relative_source_path(&root, &path);
+            if excluded_production_source(&relative) {
+                continue;
+            }
+            let source = read(&path);
+            for forbidden in forbidden_fragments {
+                assert!(
+                    !source.contains(forbidden),
+                    "host-only allocation review material is embedded in canister production source {relative}: {forbidden}",
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn registered_code_construction_stays_centralized() {
+    let root = workspace_root();
+    let constructor_owner = "crates/canic-core/src/diagnostics/mod.rs";
+    let declaration_owner = "crates/canic-core/src/diagnostics/codes/mod.rs";
+
+    for source_root in ["crates", "canisters", "apps"] {
+        for path in rust_files(&root.join(source_root)) {
+            let relative = relative_source_path(&root, &path);
+            if excluded_production_source(&relative) {
+                continue;
+            }
+            let source = read(&path);
+            if relative != constructor_owner {
+                assert!(
+                    !source.contains("RegisteredDiagnosticCode("),
+                    "registered diagnostic tuple construction escaped its owner: {relative}",
+                );
+            }
+            if relative != constructor_owner && relative != declaration_owner {
+                assert!(
+                    !source.contains("registered("),
+                    "registered diagnostic numeric construction escaped its declaration tree: {relative}",
+                );
+            }
+        }
+    }
+
+    let declarations = read(&root.join(declaration_owner));
+    assert_eq!(
+        declarations.matches("pub const ").count(),
+        2,
+        "canonical declaration source gained an ungenerated constant or alias",
+    );
+    assert_eq!(
+        declarations.matches("registered(").count(),
+        1,
+        "canonical declaration source gained a second numeric constructor path",
+    );
+    assert_eq!(
+        declarations.matches("declare_diagnostic_codes! {").count(),
+        1,
+        "canonical declaration macro must have one invocation",
+    );
+}
+
 fn update_compression_register_in_proposal(register: &str) {
     let path =
         workspace_root().join("docs/design/0.102-compact-diagnostic-codes/allocation-proposal.md");
@@ -3893,6 +4340,46 @@ fn reviewed_compression_register_matches_the_complete_proposal() {
         compression_register_from_proposal(),
         register,
         "reviewed compression register drifted from its complete guarded map"
+    );
+}
+
+#[test]
+fn approved_b2_assets_match_the_complete_register() {
+    let root = workspace_root();
+    let rows = compression_proposal_rows(&inventory_root());
+    let codes_path = root.join("crates/canic-core/src/diagnostics/codes/mod.rs");
+    let allocations_path = root.join("crates/canic-host/diagnostics/allocations.toml");
+    let current_codes_path = root.join("crates/canic-host/diagnostics/current-codes.json");
+    let codes_source = read(&codes_path);
+    let expected_codes = replace_generated_block(
+        &codes_source,
+        "// BEGIN GENERATED DIAGNOSTIC DECLARATIONS",
+        "// END GENERATED DIAGNOSTIC DECLARATIONS",
+        &render_runtime_declarations(&rows),
+    );
+    let expected_allocations = render_allocation_ledger(&rows);
+    let expected_current_codes = render_current_codes_json(&rows);
+
+    if std::env::var_os("CANIC_UPDATE_DIAGNOSTIC_B2_ASSETS").is_some() {
+        write_generated_asset(&codes_path, &expected_codes);
+        write_generated_asset(&allocations_path, &expected_allocations);
+        write_generated_asset(&current_codes_path, &expected_current_codes);
+    }
+
+    assert_eq!(
+        read(&codes_path),
+        expected_codes,
+        "registered runtime declarations drifted from the approved allocation",
+    );
+    assert_eq!(
+        read(&allocations_path),
+        expected_allocations,
+        "permanent allocation ledger drifted from the approved allocation",
+    );
+    assert_eq!(
+        read(&current_codes_path),
+        expected_current_codes,
+        "language-neutral current-code registry drifted from the approved allocation",
     );
 }
 

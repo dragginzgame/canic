@@ -88,12 +88,14 @@ enum ReceiptDecisionView {
 
 #[ic_cdk::init]
 fn init() {
+    init_timers();
     init_memory();
     ic_cdk::println!("intent_authority: init");
 }
 
 #[ic_cdk::post_upgrade]
 fn post_upgrade() {
+    init_timers();
     init_memory();
     ic_cdk::println!("intent_authority: post_upgrade memory initialized");
 }
@@ -226,6 +228,10 @@ fn settle_receipt(
 fn init_memory() {
     canic::api::runtime::MemoryRuntimeApi::bootstrap_registry()
         .expect("memory registry init should succeed");
+}
+
+fn init_timers() {
+    canic::__internal::core::api::timer::TimerApi::initialize_nonroot_runtime_required();
 }
 
 fn receipt_key(seed: u8) -> Result<IntentResourceKey, String> {

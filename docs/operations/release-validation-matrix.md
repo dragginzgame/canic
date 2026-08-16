@@ -157,7 +157,7 @@ mainnet as an incidental test default.
 
 The two Canic-owned blob inventory gates are temporary product guards. They
 remain required while Canic owns the embedded blob subsystem and retire with
-the complete 0.109 M7 hard cut; historical inventory documents remain evidence
+a promoted standalone blob-service hard cut; historical inventory documents remain evidence
 after their executable gate wiring is removed.
 
 ## Final Release And Artifact Gates

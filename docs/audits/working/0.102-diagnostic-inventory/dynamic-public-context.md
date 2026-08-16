@@ -4,9 +4,10 @@ Date: 2026-08-14
 
 ## Status
 
-This is a required evidence-only B1 ledger. It allocates no diagnostic code and
+This is the closed evidence-only B1 ledger. It allocates no diagnostic code and
 changes no endpoint. The current-source census and row-by-row classification
-are not yet complete, so mutating batches B2-B6 remain blocked.
+were completed and approved before B2 materialized the separate permanent
+allocation; this producer evidence remains repository-only.
 
 Diagnostic labels in this ledger are reconciliation links or provisional row
 anchors. They do not add to the qualified symbolic count until their producer,

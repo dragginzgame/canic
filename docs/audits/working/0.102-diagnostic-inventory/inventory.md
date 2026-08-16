@@ -90,8 +90,9 @@ keeps destination-invalid absence as typed evidence before projection.
 [bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 60 current exact
 topology, runtime-log, refill, Placement Index and complete current blob
 candidates plus four safe projections. One projection is shared with
-configuration. Because 0.102 precedes the 0.109 extraction, all 27 current blob
-leaves are allocated now and retired without reuse by that later hard cut.
+configuration. Because all 27 blob producers still exist in 0.102, their
+leaves are allocated now and retire without reuse only if a later promoted
+extraction removes them.
 
 [runtime-ops-leaves.md](runtime-ops-leaves.md) maps configuration lookup,
 protected deployment validation, runtime environment and request/RPC wrapper
@@ -195,7 +196,7 @@ identities plus five exact leaves reused as projection targets. It names the
 required observation class for every masked family and records three remaining
 approval gaps: numeric conversion of the guarded recent-failure ring and
 call-site-specific IC effect-journal wiring. Cashier uses the guarded numeric
-runtime observation until its 0.109 retirement.
+runtime observation until a promoted extraction retires it.
 
 [ic-observability-owners.md](ic-observability-owners.md) resolves the IC gap to
 17 current call families and their operation-specific recovery/status
@@ -451,7 +452,7 @@ Related non-stable or boundary-only text is classified separately:
 | Runtime bootstrap `last_error` | Advisory transient context | Process-local, cleared on phase changes and rebuilt by current lifecycle execution |
 | Runtime recent-failure summaries/details | Owned operational text | Bounded runtime diagnostic/log projection, not stable recovery authority |
 | Pool response reasons | Owned operational text | Projection of typed stable status; not an independent state owner |
-| Blob billing `skipped_reason` | Owned operational text pending 0.109 extraction | Application-service response context; 0.102 must not pre-empt the later blob hard cut |
+| Blob billing `skipped_reason` | Owned operational text pending any promoted extraction | Application-service response context; 0.102 must not pre-empt a later blob hard cut |
 | Scaling-plan `reason` | Owned operational text | Explanatory projection beside typed `ScalingPlanReason`; policy does not parse it |
 | Configuration and state-contract validation details | Owned operational text | Host/operator explanation; typed owner determines the failure branch |
 
@@ -500,12 +501,12 @@ WASM_AUDIT_PRODUCT_ROOT=/tmp/canic-0102-baseline \
   bash scripts/ci/wasm-audit-report.sh
 ```
 
-The first attempt stopped before build because the installed tool is
-`ic-wasm 0.11.1` while `tool-versions.env` requires `0.11.0`. The checksum-
-pinned installer then placed `0.11.0` under `/tmp` without replacing the user's
-tool. With the exact pinned tool, the method stopped at its frozen-roster gate:
-it expects six roles, while current source reports
-`app,test,user_hub,scale_hub,user_shard,scale_replica,root`.
+The first attempt stopped before build because the installed tool was
+`ic-wasm 0.11.1` while the then-current `tool-versions.env` required
+`0.11.0`. The checksum-pinned installer then placed `0.11.0` under `/tmp`
+without replacing the user's tool. With that exact pinned tool, the method
+stopped at its frozen-roster gate: it expects six roles, while current source
+reports `app,test,user_hub,scale_hub,user_shard,scale_replica,root`.
 
 The frozen gate correctly detected product-scope drift. V2 also predates the
 0.102 requirement to measure the separately built Fleet Coordinator and Wasm
@@ -528,10 +529,13 @@ baseline, not a `CANIC-WASM-001` result:
 | `wasm_store` | Wasm Store infrastructure | 2,597,251 | 855,665 | 5,046 | 3 / 216,224 | 31 |
 
 `ic-wasm 0.11.0 info` accepted each release artifact, and bounded `twiggy top`
-plus retained-top inspection completed. The builds left the immutable product
-worktree tracked-clean with only permitted `.icp/` output. These values are the
-pre-cut reference for B1/B2 development decisions; the retained full audit
-below owns release evidence and comparisons.
+plus retained-top inspection completed. This development check is historical:
+the open `0.102.2` tooling contract now pins checksum-verified
+`ic-wasm 0.11.1`, and later material slices must use the current repository
+pin. The builds left the immutable product worktree tracked-clean with only
+permitted `.icp/` output. These values are the pre-cut reference for B1/B2
+development decisions; the retained full audit below owns release evidence and
+comparisons.
 
 ### Retained V3 Baseline
 

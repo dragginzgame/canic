@@ -52,6 +52,10 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Plan and check deployment truth before mutation",
     },
     CommandSpec {
+        name: "diagnostic",
+        about: "Look up one compact Canic diagnostic code",
+    },
+    CommandSpec {
         name: "evidence",
         about: "Evaluate stable evidence envelopes",
     },

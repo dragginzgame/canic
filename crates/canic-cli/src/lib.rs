@@ -6,6 +6,7 @@ mod build;
 mod cli;
 mod cycles;
 mod deploy;
+mod diagnostic;
 mod endpoints;
 mod evidence;
 mod evidence_support;
@@ -67,6 +68,9 @@ pub enum CliError {
 
     #[error("deploy: {0}")]
     Deploy(#[from] deploy::DeployCommandError),
+
+    #[error("diagnostic: {0}")]
+    Diagnostic(#[from] diagnostic::DiagnosticCommandError),
 
     #[error("evidence: {0}")]
     Evidence(#[from] evidence::EvidenceCommandError),
@@ -200,6 +204,7 @@ where
         "build" => build::run(tail).map_err(CliError::from),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
+        "diagnostic" => diagnostic::run(tail).map_err(CliError::from),
         "evidence" => evidence::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "inspect" => inspect::run(tail).map_err(CliError::from),

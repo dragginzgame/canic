@@ -1,9 +1,31 @@
 # Design Ideas
 
-This directory holds optional future design ideas.
+This directory holds unnumbered, deferred design concepts. Files here are not
+release requirements, scheduled lines or implementation authority. A moved
+draft may retain its former working number internally as historical review
+context; that number is retired and has no current planning meaning.
 
-Files here are not release requirements, approved numbered release lines, or
-implementation plans. Move an idea out of this directory only when a concrete
-feature need, owner, and release scope exist.
+Each idea uses one descriptive topic directory with `design.md` and, only
+where it preserves useful prior context, `status.md` or `exploration.md`.
+Supporting implementation evidence does not belong here.
+
+## Current Topics
+
+- `coordinator-workers/`
+- `cross-subnet-data-transport-groundwork/`
+- `declarative-authentication-profiles/`
+- `framework-neutral-local-application-authorization/`
+- `framework-neutral-synchronous-lifecycle-composition/`
+- `language-neutral-managed-guest-feasibility/`
+- `optional-encrypted-canister-snapshot-archives/`
+- `saltz/`
+- `standalone-blob-service-extraction/`
+
+Move an idea to a top-level numbered directory only when it has a concrete
+need and owner, an accepted release position, a complete release-batch plan
+and explicit maintainer approval. Update this index and the document-semantics
+guard in the same planning cut.
 
 Archived historical source material remains under `docs/design/archive/`.
+The former loose post-46 idea backlog was deleted; its durable historical
+record remains under `docs/design/archive/post-46-backlog/`.

@@ -25,10 +25,12 @@ scale-out to one Skynet service member on every prepared root, up to 32 members.
 Each service node starts with one T-800 scaling worker and one memory-cell
 shard; both pools may grow independently to four children per node.
 
-Every application Component and Fleet Subnet Root serves the themed console.
-The canonical Canic Coordinator and Wasm Stores intentionally remain standard
-Canic infrastructure rather than pretending to be application Canisters.
-They remain visible through Canic's operator inventory.
+Every application Component and Fleet Subnet Root currently serves the themed
+console. Scheduled Canic 0.106 extends one application-neutral observatory
+renderer and data-only T2 profile to the canonical Coordinator and Wasm Stores
+so every installed Canister serves the experience without pretending
+infrastructure is an application role. Empty module-free estate assets remain
+visible inventory and cannot serve HTTP.
 
 ## What the Consoles Show
 
@@ -104,9 +106,10 @@ full-Fleet asset reprovisioning, so that is a future design invariant rather
 than a current teardown command. Do not treat a label or Wasm replacement as
 proof that Skynet state and authority were safely detached.
 
-## Future Design
+## Scheduled Design
 
-Prospective Skynet presentation and product ideas are centralized in the
-[provisional 0.113 design reservoir](../../docs/design/0.113-skynet-fleet-observatory/0.113-design.md).
-It is expected to move forward in the release sequence while its prerequisite
-Canic designs are completed, and it does not approve implementation by itself.
+[Canic 0.107](../../docs/design/0.107-skynet-fleet-observatory/0.107-design.md)
+is the accepted post-estate design for an exceptionally informative T2-themed
+topology and Fleet overview served by every installed Skynet Fleet Canister.
+Implementation remains gated on accepted 0.106 closeout and explicit 0.107 B1
+promotion.
