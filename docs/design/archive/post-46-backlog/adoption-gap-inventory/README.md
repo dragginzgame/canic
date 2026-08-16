@@ -9,8 +9,9 @@ Open items from this inventory that remain relevant are optional ideas, not
 active release requirements.
 
 The normative design remains in the per-line design docs and
-`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`. Optional
-feature ideas live under `docs/design/ideas/post-46-backlog/`.
+`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`. The redundant
+loose post-46 ideas copy was deleted on 2026-08-16; renewed work requires a
+fresh bounded idea or scheduled design.
 
 Status markers:
 
@@ -523,6 +524,6 @@ simple operator guide that explains when backup is unnecessary remains open.
 | --- | --- |
 | `docs/design/0.41-deployment-flexibility/` | Superseded by `0.41-deployment-truth-model/` — remove or redirect to avoid duplicate truths. |
 | INSTALLING vs deployment roadmap | Adopters read install guide, not 0.41 design — gap between “what works now” and “what’s planned” should be one page (`DEPLOYMENT-STATUS.md` or section in OBSERVATIONS). |
-| This inventory | Must remain archived source material under `docs/design/archive/post-46-backlog/`; unfinished feature ideas now live in `docs/design/ideas/post-46-backlog/` and are not active release requirements. |
+| This inventory | Must remain archived source material under `docs/design/archive/post-46-backlog/`; its deleted loose ideas copy conferred no active release requirement. |
 
 ---

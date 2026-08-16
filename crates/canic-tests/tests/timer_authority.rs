@@ -199,6 +199,60 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
 }
 
 #[test]
+fn async_recovery_watchdog_rekicks_an_expired_durable_attempt() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister_id = fixture.install_runtime_probe_canister();
+    fixture
+        .pic
+        .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
+
+    let started: Result<(), Error> = fixture
+        .pic
+        .update_candid(canister_id, "begin_trapped_async_recovery_probe", ())
+        .expect("begin trapped async recovery attempt");
+    started.expect("start async recovery probe");
+
+    fixture.pic.advance_time(Duration::from_secs(31));
+    tick(&fixture.pic, 12);
+    let first: Result<(u64, bool, Vec<[u8; 32]>), Error> = fixture
+        .pic
+        .query_candid(canister_id, "trapped_async_recovery_probe_status", ())
+        .expect("query first trapped async recovery attempt");
+    assert_eq!(first.expect("first recovery status").0, 1);
+
+    fixture.pic.advance_time(Duration::from_secs(31));
+    tick(&fixture.pic, 12);
+    let recovered: Result<(u64, bool, Vec<[u8; 32]>), Error> = fixture
+        .pic
+        .query_candid(canister_id, "trapped_async_recovery_probe_status", ())
+        .expect("query recovered async attempt");
+    let (continuations, cleared, operation_ids) = recovered.expect("recovered async status");
+    assert_eq!(
+        continuations, 2,
+        "watchdog must dispatch one exact takeover"
+    );
+    assert_eq!(operation_ids.len(), 2);
+    assert_ne!(operation_ids[0], [0; 32]);
+    assert_eq!(
+        operation_ids[0], operation_ids[1],
+        "bounded takeover must reuse the exact durable operation identity"
+    );
+    assert!(
+        cleared,
+        "watchdog must re-kick the owner and clear its exact expired attempt"
+    );
+
+    let status = runtime_status(&fixture.pic, canister_id);
+    let watchdog = status
+        .timers
+        .iter()
+        .find(|timer| timer.subsystem == "async_recovery" && timer.name == "watchdog")
+        .expect("async recovery watchdog status");
+    assert_eq!(watchdog.registration, TimerRegistrationStatus::Scheduled);
+    assert_eq!(watchdog.condition, TimerProcessCondition::Active);
+}
+
+#[test]
 fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();

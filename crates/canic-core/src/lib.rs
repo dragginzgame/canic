@@ -28,6 +28,7 @@ pub mod bootstrap;
 pub mod cdk;
 #[doc(hidden)]
 pub mod control_plane_support;
+pub mod diagnostics;
 #[doc(hidden)]
 pub mod dispatch;
 pub mod dto;

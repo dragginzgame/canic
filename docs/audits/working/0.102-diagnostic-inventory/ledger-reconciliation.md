@@ -383,8 +383,6 @@ must record:
 6. its proposed dense nonzero number after final same-semantics review.
 
 Projection-only rows require their safe exposure rationale and every exact leaf
-that maps to them. B2 remains blocked until that complete table and the policy
-choices in the
+that maps to them. The complete table and the policy choices in the
 [allocation proposal](../../../design/0.102-compact-diagnostic-codes/allocation-proposal.md)
-are approved
-together.
+were approved together on 2026-08-16 and now derive the B2 permanent ledger.

@@ -59,6 +59,20 @@ impl TimerApi {
         TimerWorkflow::register_snapshot_resume_participant(participant);
     }
 
+    /// Register the root control-plane's synchronous async-recovery dispatcher.
+    #[doc(hidden)]
+    pub fn register_async_recovery_participant(participant: fn() -> bool) {
+        TimerWorkflow::register_async_recovery_participant(participant);
+    }
+
+    /// Arm the internal watchdog after a recovery owner reconstructs durable demand.
+    #[doc(hidden)]
+    pub fn ensure_async_recovery_watchdog_required() {
+        TimerWorkflow::ensure_async_recovery_watchdog().unwrap_or_else(|error| {
+            ic_cdk::trap(format!("async recovery watchdog rejected: {error}"))
+        });
+    }
+
     /// Schedule a cancellable application one-shot.
     pub fn set(
         delay: Duration,

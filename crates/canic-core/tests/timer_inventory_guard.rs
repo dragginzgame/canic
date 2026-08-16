@@ -83,7 +83,7 @@ fn direct_ic_timer_access_is_removed_from_production() {
     assert!(reexport_users.is_empty());
 
     let manifest = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace manifest");
-    assert!(manifest.contains("ic-timers = \"=0.5.0\""));
+    assert!(manifest.contains("ic-timers = \"=0.6.1\""));
     assert!(!manifest.contains("ic-cdk-timers ="));
 }
 
@@ -98,14 +98,14 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
         ),
         (
             "crates/canic-control-plane/src/api/lifecycle.rs".to_string(),
-            3,
+            5,
         ),
         (
             "crates/canic-control-plane/src/workflow/canister_pool/mod.rs".to_string(),
-            6,
+            7,
         ),
         ("crates/canic-core/src/api/runtime/mod.rs".to_string(), 1),
-        ("crates/canic-core/src/api/timer.rs".to_string(), 13),
+        ("crates/canic-core/src/api/timer.rs".to_string(), 15),
         (
             "crates/canic-core/src/lifecycle/init/nonroot.rs".to_string(),
             2,

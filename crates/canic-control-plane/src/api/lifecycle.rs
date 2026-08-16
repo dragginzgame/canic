@@ -86,6 +86,9 @@ impl LifecycleApi {
         canic_core::api::timer::TimerApi::register_snapshot_resume_participant(
             crate::workflow::canister_pool::resume_after_authority_snapshot,
         );
+        canic_core::api::timer::TimerApi::register_async_recovery_participant(
+            crate::workflow::canister_pool::dispatch_async_recovery,
+        );
         let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
         let canister_pool_imports = args.canister_pool_imports.clone();
         let wasm_store = args.authority.wasm_store_authority.wasm_store;
@@ -663,6 +666,9 @@ impl LifecycleApi {
     ) -> bool {
         canic_core::api::timer::TimerApi::register_snapshot_resume_participant(
             crate::workflow::canister_pool::resume_after_authority_snapshot,
+        );
+        canic_core::api::timer::TimerApi::register_async_recovery_participant(
+            crate::workflow::canister_pool::dispatch_async_recovery,
         );
         crate::runtime::install::register_template_module_source_resolver();
         let active =

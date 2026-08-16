@@ -94,13 +94,13 @@ The current `UnknownPool` prose embeds the requested name and a joined list of
 available pools. Those values remain available from typed configuration/status
 surfaces and do not enter the compact diagnostic.
 
-## Current Blob-Storage Boundary And The 0.109 Hard Cut
+## Current Blob-Storage Boundary And Any Future Hard Cut
 
-The 0.109 standalone-blob design removes this entire owner from Canic, but a
-future hard cut is not evidence that a current 0.102 producer is absent. The
-maintained release order is 0.102 before 0.109, so every current producer below
-must receive a 0.102 identity and its number must retire without reuse when the
-later design removes the subsystem. There is no temporary generic blob code.
+The deferred standalone-blob idea would remove this entire owner from Canic,
+but a future hard cut is not evidence that a current 0.102 producer is absent.
+Every current producer below must therefore receive a 0.102 identity, and its
+number must retire without reuse if a later promoted design removes the
+subsystem. There is no temporary generic blob code.
 
 ### Root Hash And Lifecycle: 7
 
@@ -169,15 +169,15 @@ The current-source frontier contains **60 exact semantic candidates**:
 - four runtime-log leaves;
 - ten typed refill leaves plus one direct build-network leaf;
 - four Placement Index leaves; and
-- 27 current blob-storage leaves whose numbers retire when 0.109 removes their
-  producers.
+- 27 current blob-storage leaves whose numbers retire when a promoted
+  extraction removes their producers.
 
 It introduces four safe projections:
 
 - `RUNTIME_LOG_STATE_INVALID`;
 - `ICP_REFILL_RESPONSE_INVALID`;
 - `RUNTIME_CONFIGURATION_UNAVAILABLE`; and
-- `BLOB_CASHIER_RESPONSE_INVALID` until its 0.109 retirement.
+- `BLOB_CASHIER_RESPONSE_INVALID` until a promoted extraction retires it.
 
 ## Required Tests
 
@@ -190,5 +190,5 @@ It introduces four safe projections:
 - exhaustive blob hash, lifecycle, billing-policy, conversion, Cashier and
   funding mapping in 0.102, including transparent wrapper tests;
 - exact guarded Cashier observations before safe projection and
-  retirement-without-reuse evidence in 0.109;
+  retirement-without-reuse evidence in the promoted extraction;
 - no durable refill recovery decision based on `error_message`.

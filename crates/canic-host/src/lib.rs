@@ -18,6 +18,7 @@ mod cargo_metadata;
 pub mod component_topology;
 pub mod cycle_balance;
 pub mod deployment_truth;
+pub mod diagnostics;
 pub mod durable_io;
 mod entropy;
 pub mod evidence_envelope;

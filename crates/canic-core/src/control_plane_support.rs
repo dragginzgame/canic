@@ -45,6 +45,13 @@ pub mod policy {
 }
 
 pub mod ops {
+    pub mod async_recovery {
+        pub use crate::ops::storage::async_recovery::{
+            AsyncRecoveryAttempt, AsyncRecoveryClaim, AsyncRecoveryCompletion, AsyncRecoveryOwner,
+            AsyncTimerRecoveryOps,
+        };
+    }
+
     pub mod config {
         pub use crate::ops::config::ConfigOps;
     }

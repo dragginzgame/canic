@@ -1,15 +1,16 @@
 # Canic 0.102 Implementation Status
 
-Date: 2026-08-15
+Date: 2026-08-16
 
 ## Status
 
-- State: the evidence-only B1 producer frontier, function manifest and complete
-  many-to-one compression register are closed. The guarded review proposal
-  maps 3,929 producer-qualified observations exactly once onto 991 proposed
-  codes with full host metadata. Maintainer approval remains required before those proposal
-  numbers become permanent or runtime authority. No public error shape, stable
-  record or diagnostic runtime behavior has changed.
+- State: B1 is closed and maintainer-approved. B2 has materialized its 991
+  codes as distinct registered runtime identities plus one permanent host
+  ledger, rich typed catalogue, language-neutral current registry and CLI
+  lookup. No public error shape, internal string-first propagation or
+  diagnostic-owned stable record has changed. The maintainer has explicitly
+  excluded unrelated timer/recovery and Saltz work from the 0.102.2
+  diagnostic release decision.
 - Baseline: clean `main` tag `v0.101.53` at
   `23c0328f78b215580d734ef01b52b35fa3e38ade`; current-candidate
   control-plane/core source is pinned at
@@ -20,12 +21,13 @@ Date: 2026-08-15
 - Published checkpoints: `v0.102.0` at
   `e6dfd7d2d212f9fce4b1b16caba33d8062e3461d` and `v0.102.1` at
   `86763c5f16478e2e548e2059e5efaa963bf9a966`.
-- Open work is the unversioned remainder of the B1 allocation-authority batch.
-  It changes no runtime, Candid, stable state or package version.
-- Mutation gate: B2-B6 remain blocked until the producer manifest, reviewed
-  coverage-to-code compression map, compressed dense allocation rows, host
-  catalogue and projection table receive maintainer approval. A four-digit
-  initial allocation is rejected.
+- Review work is the complete B2 allocation-authority batch in the existing
+  untagged `0.102.2` changelog draft. Diagnostic B2 changes runtime scaffolding
+  and host lookup but no Candid or diagnostic state. Package-version mutation
+  remains maintainer-owned.
+- Mutation gate: the maintainer approved the complete B1 register on
+  2026-08-16 and authorized B2 mutation. The B3 public hard cut remains a
+  separate review boundary. A four-digit initial allocation remains rejected.
 
 Detailed source-by-source working evidence is kept outside this design
 directory in the
@@ -38,8 +40,8 @@ contract.
 
 | Batch | Outcome | Required evidence and cleanup | Status |
 | --- | --- | --- | --- |
-| B1 | Freeze current diagnostic authority and Wasm baseline | Complete producer, dynamic-context and durable-string inventories; many-to-one handling-identity compression map; compressed allocation proposal; host catalogue; projection owners; representative Wasm baseline | Ready for maintainer allocation review: complete guarded `1..=991` proposal; no runtime authority |
-| B2 | Add prose-free runtime identity and host catalogue | Distinct raw/registered types, approved allocations, permanent current/retired ledger, exhaustive host metadata, lookup and Wasm absence proof | Pending |
+| B1 | Freeze current diagnostic authority and Wasm baseline | Complete producer, dynamic-context and durable-string inventories; many-to-one handling-identity compression map; compressed allocation proposal; host catalogue; projection owners; representative Wasm baseline | Accepted: complete guarded `1..=991` register approved on 2026-08-16 |
+| B2 | Add prose-free runtime identity and host catalogue | Distinct raw/registered types, approved allocations, permanent current/retired ledger, exhaustive host metadata, lookup and Wasm absence proof | Complete in the `.2` draft: implementation and direct evidence pass; public wire unchanged |
 | B3 | Hard-cut the Fleet-atomic public diagnostic contract | Replace enum-plus-message with `nat16`, update every owned endpoint and generated surface, reject mixed release sets | Pending |
 | B4 | Make internal propagation code-first | Remove owned prose concatenation, map typed causes, preserve explicit projections and masked-code observability | Pending |
 | B5 | Bound durable diagnostic ownership | Remove redundant prose, preserve recovery-significant state and prove changed lifecycle journeys | Pending |
@@ -62,7 +64,7 @@ B1 is complete only when all of these are reviewable together:
 7. a host catalogue and generated current registry bijective with active rows;
 8. proof that the coverage frontier and mapping table are absent from Wasm;
 9. a reproducible representative-Wasm baseline; and
-10. explicit maintainer approval before B2 creates runtime authority.
+10. explicit maintainer approval recorded before B2 created runtime authority.
 
 ## Closed Coverage Frontier
 
@@ -186,14 +188,15 @@ B1 is complete only when all of these are reviewable together:
   constructions and both management transports are fully expanded.
 - No decision parses retained failure text. Four current Cashier coverage
   conditions remain in 0.102 scope; any resulting compressed codes retire
-  without reuse in the 0.109 hard cut.
+  without reuse if the standalone blob-service extraction is promoted.
 
-These are exhaustive evidence results, not allocated runtime authority. The
-3,898 qualified exact entries now map exactly once onto 960 shared
-exact-condition contracts; 31 safe public projections produce a dense proposed
-`1..=991` register. Its 503 singleton rows each carry an explicit
-handling/exposure rationale.
-The coverage labels and mapping table remain host-only and must never enter
+These are exhaustive repository-evidence results. The 3,898 qualified exact
+entries map exactly once onto 960 shared
+exact-condition contracts; 31 safe public projections produce the dense
+`1..=991` register. Maintainer approval made those shared rows B2 allocation
+authority; their 503 singleton rows each retain an explicit handling/exposure
+rationale.
+The coverage labels and mapping table remain repository-only and do not enter
 Wasm. The maintained public error remains
 `ErrorCode + message`, `InternalError` remains string-first and the host still
 consumes typed enum variants.
@@ -250,16 +253,39 @@ authority contract is in
   visible review inputs. All 991 proposal rows name producers, all projections
   have mapped exact inputs, the dense allocation stays below four digits and
   the checked-in register equals its deterministic derivation byte for byte.
-- No number, host catalogue, generated diagnostic registry, runtime code,
-  Candid surface or stable schema has changed during B1 inventory work.
-
+  The same guard pins the maintainer-approved review checklist for semantic
+  grouping, handling contracts, host dispositions, projections, masked
+  observability, singleton rationale and non-producer-local reuse, and rejects
+  production source references to the review proposal, working evidence and
+  planned host allocation assets.
+- B2 deterministically derives 991 canonical registered constants, 991 current
+  and zero retired permanent ledger rows, the typed host catalogue and a
+  byte-identical current JSON registry from the approved register. Direct
+  numeric construction and host-asset imports stay outside canister producers.
+- Focused host tests prove the complete ledger/runtime/catalogue/JSON bijection,
+  anti-reuse and current/retired/unknown behavior. Focused CLI tests cover
+  strict numeric parsing, lookup rendering and recursive lexicographic help.
+- Warning-denied Clippy passes for the touched core, host, CLI and allocation-
+  generator targets. Changelog governance, diagnostic ownership, layering and
+  diff hygiene pass for the B2 review boundary. The repository-wide optional-
+  idea collection check observes unrelated maintainer work and is not used as
+  diagnostic B2 evidence.
+- A fresh complete `make validate` passes on 2026-08-16, including repository
+  release guards, full workspace tests and every serial PocketIC suite. That
+  repository-wide result does not promote unrelated maintainer work into this
+  scoped diagnostic release outcome.
+- Canonical role-scoped release builds pass for a representative Component,
+  Wasm Store and Fleet Subnet Root at 2,879,695, 2,773,920 and 7,497,834 raw
+  bytes. Bounded scans find no permanent-ledger header, host owner, catalogue
+  prose, symbolic label, working-audit path or projection-map marker in any of
+  the three artifacts. This is B2 absence evidence, not a new
+  `CANIC-WASM-001/v3` comparison run.
 ## Next Action
 
-Review the complete 991-row register in
-[allocation-proposal.md](allocation-proposal.md). Correct any semantic group,
-handling contract, projection or singleton rationale before approval; do not
-change the implementation to preserve a provisional number. Once the
-maintainer explicitly approves the register, B2 may materialize the permanent
-ledger, registered declarations and host catalogue. Rerun the stable failure-
-string census immediately before B5 mutation. Do not begin B2 before the
-compressed allocation review passes.
+Diagnostic B2 is implemented and its 0.102.2 source, host, CLI, evidence and
+release-note surfaces have passed scoped and complete repository validation.
+The approved register materializes the permanent ledger, registered
+declarations and host catalogue; the public `ErrorCode + message` contract
+remains intentionally unchanged. Rerun the stable failure-string census
+immediately before B5 mutation. B3's Fleet-atomic public hard cut remains a
+separate later batch and is not part of the current handoff.

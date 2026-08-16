@@ -95,10 +95,11 @@ pub fn platform_entries() -> Vec<MetricEntry> {
 #[must_use]
 pub fn runtime_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("intent", intent_entries());
-    if let Ok(timer_snapshots) = ic_timers::timer_snapshots() {
-        entries.extend(prefix_entries("perf", perf_entries(&timer_snapshots)));
+    if let Ok(timer_inventory) = ic_timers::timer_inventory() {
+        let timer_snapshots = timer_inventory.timers();
+        entries.extend(prefix_entries("perf", perf_entries(timer_snapshots)));
         let mut timer_metrics = vec![timer_inventory_availability(true)];
-        timer_metrics.extend(timer_entries(&timer_snapshots));
+        timer_metrics.extend(timer_entries(timer_snapshots));
         entries.extend(prefix_entries("timer", timer_metrics));
     } else {
         entries.extend(prefix_entries("perf", perf_entries(&[])));

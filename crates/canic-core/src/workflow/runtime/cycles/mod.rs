@@ -14,6 +14,7 @@ use crate::{
     dto::error::ErrorCode,
     log,
     log::Topic,
+    model::replay::OperationId,
     ops::{
         config::ConfigOps,
         ic::IcOps,
@@ -100,7 +101,7 @@ impl CycleWorkflow {
         Ok(())
     }
 
-    pub(crate) async fn run_topup() -> TimerRunResult {
+    pub(crate) async fn run_topup(operation_id: OperationId) -> TimerRunResult {
         let config = match Self::automatic_topup_config() {
             Ok(Some(config)) => config,
             Ok(None) => return TimerRunResult::no_work(TimerDirective::Stop),
@@ -131,7 +132,7 @@ impl CycleWorkflow {
             };
         }
 
-        let result = Self::request_parent_funding(&config.amount).await;
+        let result = Self::request_parent_funding(&config.amount, operation_id).await;
         let after = Self::read_sample();
         Self::record_observation(&after);
 
@@ -203,10 +204,13 @@ impl CycleWorkflow {
         }
     }
 
-    async fn request_parent_funding(amount: &Cycles) -> Result<(), InternalError> {
+    async fn request_parent_funding(
+        amount: &Cycles,
+        operation_id: OperationId,
+    ) -> Result<(), InternalError> {
         CyclesTopupMetrics::record_request_scheduled();
         CycleTopupEventOps::record_scheduled(IcOps::now_secs(), amount.clone());
-        match RequestOps::request_cycles(amount.to_u128()).await {
+        match RequestOps::request_cycles_with_operation_id(amount.to_u128(), operation_id).await {
             Ok(response) => {
                 let transferred = Cycles::from(response.cycles_transferred);
                 CyclesTopupMetrics::record_request_ok();

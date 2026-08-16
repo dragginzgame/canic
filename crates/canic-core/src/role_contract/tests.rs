@@ -114,6 +114,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::BlobStorageGatewayPrincipals, vec![57]),
         (StateAllocationKey::BlobStorageBilling, vec![58]),
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
+        (StateAllocationKey::CoreAsyncTimerRecovery, vec![60]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -157,7 +158,7 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     assert_eq!(
         ids(AllocationOwner::CanicCore),
         (allocation::CANIC_CORE_MIN_ID
-            ..=allocation::memory::authority_restore::AUTHORITY_RESTORE_FENCE_ID)
+            ..=allocation::memory::async_recovery::ASYNC_TIMER_RECOVERY_ID)
             .collect::<Vec<_>>()
     );
 }
@@ -378,6 +379,7 @@ fn surplus_state_feature_allocates_normally() {
         allocation_ids(&contract.allocations),
         vec![
             30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 55, 56, 57, 58,
+            60,
         ]
     );
 }
@@ -415,7 +417,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59,
+            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60,
         ]
     );
 }
@@ -435,7 +437,7 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 14, 30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-            49,
+            49, 60,
         ]
     );
     assert_eq!(

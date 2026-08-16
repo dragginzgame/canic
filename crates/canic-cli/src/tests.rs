@@ -137,6 +137,7 @@ fn command_family_help_returns_ok() {
         &["deploy", "inspect", "catalog", "list", "--help"],
         &["deploy", "inspect", "catalog", "inspect", "--help"],
         &["deploy", "inspect", "resume-report", "--help"],
+        &["diagnostic", "--help"],
         &["info", "--help"],
         &["info", "list", "--help"],
         &["info", "cycles", "--help"],

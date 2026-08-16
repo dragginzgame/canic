@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,6 +40,7 @@ use canic::{
     },
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
+    dto::error::{Error as CanicError, ErrorCode},
     dto::fleet_activation::FleetActivationStatusResponse,
     dto::fleet_registry::{
         FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
@@ -97,6 +99,49 @@ fn candid_type_env<T: candid::CandidType>() -> String {
     types.env.to_string()
 }
 
+fn candid_variant_leaves<'a>(source: &'a str, type_name: &str) -> BTreeSet<&'a str> {
+    let marker = format!("type {type_name} = variant {{");
+    let (_, rest) = source
+        .split_once(&marker)
+        .unwrap_or_else(|| panic!("missing Candid variant type {type_name}"));
+    let (block, _) = rest
+        .split_once('}')
+        .unwrap_or_else(|| panic!("unterminated Candid variant type {type_name}"));
+
+    block
+        .split(';')
+        .map(str::trim)
+        .filter(|leaf| !leaf.is_empty())
+        .collect()
+}
+
+fn current_public_error_code_leaves() -> BTreeSet<&'static str> {
+    [
+        "AuthMaterialStale",
+        "AuthProofExpired",
+        "AuthProofPending",
+        "AuthTokenExpired",
+        "Conflict",
+        "Forbidden",
+        "Internal",
+        "InternalRpcMalformed",
+        "InvalidInput",
+        "InvariantViolation",
+        "NotFound",
+        "OperationIdRequired",
+        "ResourceExhausted",
+        "RootDataCertificateUnavailable",
+        "Unauthorized",
+        "Unavailable",
+        "WasmStoreCapacityExceeded",
+        "WasmStoreChunkMissing",
+        "WasmStoreHashMismatch",
+        "WasmStoreManifestMissing",
+    ]
+    .into_iter()
+    .collect()
+}
+
 #[test]
 fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
     assert_eq!(canic::protocol::CANIC_FLEET_ADMIN, "canic_fleet_admin");
@@ -117,6 +162,53 @@ fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
     );
 
     assert_candid_roundtrip(FleetMode::Readonly);
+}
+
+#[test]
+fn public_error_contract_remains_symbolic_before_compact_diagnostic_hard_cut() {
+    let error_env = candid_type_env::<CanicError>();
+    assert!(
+        error_env.contains("type Error = record { code : ErrorCode; message : text }"),
+        "public Error Candid shape changed before the B3 hard cut:\n{error_env}"
+    );
+    assert!(
+        !error_env.contains("code : nat16")
+            && !error_env.contains("diagnostic_code")
+            && !error_env.contains("masked_code"),
+        "public Error gained compact diagnostic fields before the B3 hard cut:\n{error_env}"
+    );
+    assert_eq!(
+        candid_variant_leaves(&error_env, "ErrorCode"),
+        current_public_error_code_leaves(),
+        "public ErrorCode leaves changed before the B3 hard cut:\n{error_env}"
+    );
+    assert_candid_roundtrip(CanicError::new(
+        ErrorCode::InvalidInput,
+        "current symbolic error".to_string(),
+    ));
+
+    for relative_path in [
+        "crates/canic-fleet-coordinator/fleet_coordinator.did",
+        "crates/canic-wasm-store/wasm_store.did",
+    ] {
+        let did_path = workspace_root().join(relative_path);
+        let did = read_text(&did_path);
+        assert!(
+            did.contains("type Error = record { code : ErrorCode; message : text };"),
+            "checked-in service DID changed public Error shape in {relative_path}"
+        );
+        assert!(
+            !did.contains("code : nat16")
+                && !did.contains("diagnostic_code")
+                && !did.contains("masked_code"),
+            "checked-in service DID gained compact diagnostic fields before the B3 hard cut in {relative_path}"
+        );
+        assert_eq!(
+            candid_variant_leaves(&did, "ErrorCode"),
+            current_public_error_code_leaves(),
+            "checked-in service DID changed public ErrorCode leaves in {relative_path}"
+        );
+    }
 }
 
 #[test]

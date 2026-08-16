@@ -105,7 +105,10 @@ its slices and completion evidence into the minor-line target.
 
 ### Design Directory Shape
 
-An active design directory normally contains exactly:
+A top-level numbered design directory is part of the maintained release
+lineage: the current/recent baseline or an accepted, scheduled future line.
+An unscheduled future concept never belongs there. Each numbered directory
+normally contains exactly:
 
 - the versioned normative design; and
 - `status.md`, the compact implementation and release-batch tracker.
@@ -138,10 +141,18 @@ their content and repair references, but keep the archived design directory at
 the same compact design/status boundary. Historical collection directories
 that contain several independent design/status pairs may retain a single index.
 
-The historical post-46 and optional-ideas collections are frozen at their
-current directory and file ceilings. Adding another collection, topic or idea
+`docs/design/ideas/` contains unnumbered deferred concepts, one descriptive
+topic directory per idea. A topic normally contains only `design.md`; it may
+also retain one compact `status.md` or `exploration.md` when that file preserves
+material prior review context. Idea text confers no schedule or implementation
+authority. Promotion requires a concrete need and owner, accepted release
+position, complete batch plan, explicit maintainer approval and a deliberate
+index/guard update.
+
+The historical post-46 and optional-ideas collections remain bounded by their
+approved directory and file ceilings. Adding another collection or topic
 requires explicit maintainer approval and a deliberate guard update; a new
-implementation slice must use the owning numbered design/status instead.
+implementation slice must use its owning numbered design/status instead.
 
 Use stable batch labels such as `B1`, `B2` and `B3` while planning. Do not
 invent patch numbers. A patch number belongs to the maintainer-owned release

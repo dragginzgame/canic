@@ -178,6 +178,22 @@ impl RequestOps {
         )
         .await
     }
+
+    /// Dispatch a cycles request under one caller-owned durable retry identity.
+    pub(crate) async fn request_cycles_with_operation_id(
+        cycles: u128,
+        operation_id: OperationId,
+    ) -> Result<CyclesResponse, InternalError> {
+        let parent_pid = EnvOps::parent_pid()?;
+        RpcOps::execute_response_rpc(
+            parent_pid,
+            CyclesRpc {
+                cycles,
+                metadata: Some(operation_request_metadata(operation_id)),
+            },
+        )
+        .await
+    }
 }
 
 ///

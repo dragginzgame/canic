@@ -36,7 +36,7 @@ inline test modules in 26 production files. They are distributed as follows:
 | `canic-control-plane/workflow/component_rpc` | 4 | Component capability parent/recycle authority |
 | `canic-control-plane/workflow/runtime/template` | 5 | Store calls, response decoding, manifest lookup and publication mapping |
 | `canic-core/api/auth` | 17 | Delegated-token API and session admission |
-| `canic-core/api/blob_storage` | 11 | Current blob lifecycle and Cashier mapping pending the 0.109 hard cut |
+| `canic-core/api/blob_storage` | 11 | Current blob lifecycle and Cashier mapping pending any promoted standalone blob-service hard cut |
 | `canic-core/api/error` | 5 | Broad fallback projection, not five final leaf meanings |
 | `canic-core/workflow/cost_guard` | 2 | Invalid permit and exhausted protected-operation budget |
 | `canic-core/workflow/ic/icp_refill/replay` | 7 | ICP-refill replay conflict and quota decisions |
@@ -74,10 +74,10 @@ The current 20-leaf enum is an inventory input, not the proposed allocation:
 | `Conflict` | Replay, operation, lifecycle, Registry, Directory, GC and funding states | Broad class only; split by owner, retry and operation identity behavior |
 | `Forbidden` | Authenticated denial, missing membership, authority mismatch and disabled policy | Broad class only; split before any recovery consumer is converted |
 | `Internal` | Encoding, invalid response and unprojected infra/ops/workflow failures | Broad class only; internal leaves need explicit safe projection and observability |
-| `InternalRpcMalformed` | Cashier response mapping in the current blob subsystem | Cover while current; do not preserve after the independent 0.109 hard cut removes its producer |
+| `InternalRpcMalformed` | Cashier response mapping in the current blob subsystem | Cover while current; do not preserve after a promoted standalone blob-service hard cut removes its producer |
 | `InvalidInput` | Configuration, envelope, proof, replay metadata and request validation | Broad class only; split by owner and caller correction |
 | `InvariantViolation` | Publication, decoding and impossible state | Broad class only; most leaves require masking plus numeric observability |
-| `NotFound` | Current blob object not live | Cover the current producer; 0.109 determines its later retirement |
+| `NotFound` | Current blob object not live | Cover the current producer; any promoted standalone extraction determines its later retirement |
 | `OperationIdRequired` | Missing replay identity in several unrelated command families | Split by owning command family because origin and remediation differ |
 | `ResourceExhausted` | Quotas, capacities, overflow and funding policy | Broad class only; preserve capacity-specific machine decisions |
 | `RootDataCertificateUnavailable` | Certified-query proof requested without a data certificate | Already narrow; retain only for this exact query-context failure |

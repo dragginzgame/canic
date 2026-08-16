@@ -79,6 +79,14 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
             "$design_dir/code-allocation-ledger.md"
     fi
 
+    if [[ "$design_dir" == "$ROOT/docs/design/0."* ]]; then
+        design_line="$(basename "$design_dir")"
+        design_line="${design_line%%-*}"
+        require_files "$GUARD_LABEL" \
+            "$design_dir/$design_line-design.md" \
+            "$design_dir/status.md"
+    fi
+
     design_file_count="$(find "$design_dir" -maxdepth 1 -type f | wc -l)"
     design_subdir_count="$(find "$design_dir" -mindepth 1 -maxdepth 1 -type d | wc -l)"
     [ "$design_file_count" -le "$max_files" ] || {
@@ -118,14 +126,72 @@ historical_backlog="$ROOT/docs/design/archive/post-46-backlog"
 }
 
 design_ideas="$ROOT/docs/design/ideas"
-[ "$(find "$design_ideas" -type f | wc -l)" -le 9 ] || {
+[ "$(find "$design_ideas" -type f | wc -l)" -le 14 ] || {
     echo "optional design-idea collection has grown without explicit approval" >&2
     exit 1
 }
-[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 1 ] || {
+[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 9 ] || {
     echo "optional design-idea topics have grown without explicit approval" >&2
     exit 1
 }
+
+for idea_dir in "$design_ideas"/*; do
+    [ -d "$idea_dir" ] || continue
+
+    max_idea_files=1
+    case "${idea_dir##*/}" in
+        coordinator-workers|cross-subnet-data-transport-groundwork|declarative-authentication-profiles|optional-encrypted-canister-snapshot-archives|standalone-blob-service-extraction)
+            ;;
+        framework-neutral-local-application-authorization|framework-neutral-synchronous-lifecycle-composition|language-neutral-managed-guest-feasibility)
+            max_idea_files=2
+            ;;
+        saltz)
+            max_idea_files=2
+            ;;
+        *)
+            echo "unapproved optional design-idea topic: $(guard_path "$idea_dir")" >&2
+            exit 1
+            ;;
+    esac
+
+    [ "$(find "$idea_dir" -type f | wc -l)" -le "$max_idea_files" ] || {
+        echo "optional design-idea topic exceeds its approved file boundary: $(guard_path "$idea_dir")" >&2
+        exit 1
+    }
+
+    [ -f "$idea_dir/design.md" ] || {
+        echo "optional design-idea topic is missing design.md: $(guard_path "$idea_dir")" >&2
+        exit 1
+    }
+    while IFS= read -r idea_file; do
+        case "${idea_file##*/}" in
+            design.md | exploration.md | status.md) ;;
+            saltz_24h_waveform_floor_100B_860.csv)
+                [ "${idea_dir##*/}" = "saltz" ] || {
+                    echo "waveform artifact exists outside the approved Saltz idea: $(guard_path "$idea_file")" >&2
+                    exit 1
+                }
+                ;;
+            *)
+                echo "optional design-idea topic has an unsupported file: $(guard_path "$idea_file")" >&2
+                exit 1
+                ;;
+        esac
+    done < <(find "$idea_dir" -maxdepth 1 -type f | sort)
+done
+
+saltz_waveform="$design_ideas/saltz/saltz_24h_waveform_floor_100B_860.csv"
+saltz_waveform_sha256="8a9b886a493db55989a4f2c119d5bf99dea237302970953dd98b2ed28f5a0f97"
+require_files "$GUARD_LABEL" \
+    "$design_ideas/saltz/design.md" \
+    "$saltz_waveform"
+require_text "$design_ideas/saltz/design.md" \
+    "$saltz_waveform_sha256" \
+    "$GUARD_LABEL"
+bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
+    sha256 \
+    "$saltz_waveform_sha256" \
+    "$saltz_waveform"
 
 for evidence_root in \
     "$ROOT/docs/audits/working" \

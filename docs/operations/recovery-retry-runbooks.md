@@ -23,6 +23,7 @@ These runbooks cover manual retry and recovery decisions for:
 - ICP refill and value-transfer replay;
 - cost-boundary refusals;
 - durable-publication ambiguity;
+- recovery-watchdog takeover of an orphaned asynchronous timer attempt;
 - same-release canister restart/upgrade or publication failures near
   replay-sensitive boundaries.
 
@@ -251,6 +252,20 @@ same release can settle it under the contract that created it.
 | Relevant validation command | `cargo test --locked -p canic-tests --test lifecycle_boundary -- --test-threads=1 --nocapture` |
 | Escalation criteria | Escalate if the current release cannot decode its own replay state or lifecycle ordering is ambiguous. |
 
+### Recovery Watchdog Takeover Of Async Work
+
+| Field | Guidance |
+| --- | --- |
+| Symptom | Root issuer renewal, automatic cycle top-up, placement-receipt acknowledgement, or root Canister-pool maintenance remains in flight after an inter-canister continuation traps or disappears. |
+| Likely cause | The asynchronous continuation did not return to its scheduler callback, leaving its durable attempt lease active until bounded takeover. |
+| Safety invariant | A live lease coalesces competing work. After expiry, takeover must reuse the same durable operation identity, and a late stale completion must not clear or reschedule the takeover. |
+| Safe operator action | Allow the retained recovery watchdog to advance. Inspect the shared timer inventory, the owner's replay or journal state, and the original operation identity before considering manual intervention. |
+| Unsafe operator action | Disabling the watchdog, deleting the stable recovery record, forcing a second operation identity, or treating a missing callback response as proof that no external effect occurred. |
+| Diagnostic, log, or public error to check | The `canic/async_recovery/watchdog` timer status, owner-specific retry or terminal-failure status, replay receipts, pool journals, and the original operation ID. |
+| Retry/idempotency rule | Automatic takeover is bounded by the five-minute lease and reuses the exact operation identity. An operator retry must still preserve the owner-specific replay or journal contract. |
+| Relevant validation command | `cargo test --locked -p canic-tests --test timer_authority -- --nocapture` |
+| Escalation criteria | Escalate if the watchdog is not scheduled while durable recovery demand exists, operation identity changes across takeover, more than one takeover commits, or current owner state cannot determine whether an external effect completed. |
+
 ### Receipt Mismatch Or Unexpected Receipt State
 
 | Field | Guidance |
@@ -283,6 +298,7 @@ cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
 cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture
 cargo test --locked -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+cargo test --locked -p canic-tests --test timer_authority -- --nocapture
 cargo test --locked -p canic-tests --test lifecycle_boundary -- --test-threads=1 --nocapture
 cargo test --locked -p canic-testing-internal prepared_root_bootstraps_and_reverifies_its_exact_local_store --lib -- --test-threads=1 --nocapture
 ```

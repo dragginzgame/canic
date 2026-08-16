@@ -261,9 +261,9 @@ reopens it.
 The remaining terminal owners are already bounded:
 
 - `TopologySnapshotValidationError`: 14 exact topology-authority violations;
-- `CashierDecodeError`: four response-shape violations scheduled for the 0.109
-  blob hard cut; they still require current 0.102 allocation if their producers
-  have not actually been deleted before the registry freezes;
+- `CashierDecodeError`: four response-shape violations that a future promoted
+  blob hard cut would remove; they still require current 0.102 allocation if
+  their producers have not actually been deleted before the registry freezes;
 - `StorageError`: four runtime-log invariants;
 - `IcpRefillWorkflowError`: three direct workflow failures plus seven typed
   `IcpRefillPolicyViolation` reasons beneath `PolicyDenied`;
@@ -276,8 +276,8 @@ The remaining terminal owners are already bounded:
 [bounded-runtime-leaves.md](bounded-runtime-leaves.md) completes that grouping:
 60 current exact candidates, including one adjacent untyped build-network
 producer and the complete 27-leaf blob hash/lifecycle/billing/Cashier family
-that allocates in 0.102 and retires without reuse under the later 0.109 hard
-cut, plus four safe public projections.
+that allocates in 0.102 and retires without reuse under any later promoted
+blob hard cut, plus four safe public projections.
 
 [rpc-workflow-error-leaves.md](rpc-workflow-error-leaves.md) separately closes
 the RPC owner because its broad codec strings cross shared replay receipt and
