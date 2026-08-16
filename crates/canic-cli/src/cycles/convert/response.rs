@@ -70,9 +70,10 @@ pub(super) fn decode_icp_refill_response(
             return Err(CyclesCommandError::IcpRefillUnexpectedResponse);
         }
         Err(error) => {
+            let code = error.code();
             return Err(CyclesCommandError::IcpRefillRejected {
-                code: error.code,
-                message: error.message,
+                code,
+                diagnostic: canic_host::diagnostics::render_diagnostic(code),
             });
         }
     };
@@ -97,9 +98,9 @@ fn optional_debug<T: std::fmt::Debug>(value: Option<T>) -> String {
 mod tests {
     use super::*;
     use candid::{Nat, encode_one};
-    use canic_core::dto::{
-        error::ErrorCode,
-        icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+    use canic_core::{
+        diagnostics::codes,
+        dto::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
     };
 
     #[test]
@@ -143,15 +144,18 @@ mod tests {
 
     #[test]
     fn endpoint_error_preserves_typed_code() {
-        let output = encoded_response(Err(Error::conflict("active operation")));
+        let output = encoded_response(Err(Error::from_registered(
+            canic_core::diagnostics::codes::STATE_CONFLICT,
+        )));
         let error = decode_icp_refill_response(&output, [7; 32]).expect_err("reject response");
 
         std::assert_matches!(
             error,
             CyclesCommandError::IcpRefillRejected {
-                code: ErrorCode::Conflict,
-                message,
-            } if message == "active operation"
+                code,
+                diagnostic,
+            } if code == codes::STATE_CONFLICT.raw_code()
+                && diagnostic == canic_host::diagnostics::render_diagnostic(code)
         );
     }
 

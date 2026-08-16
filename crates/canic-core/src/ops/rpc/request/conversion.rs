@@ -17,18 +17,6 @@ pub(in crate::ops::rpc) struct CapabilitySourceMetadata {
 pub(in crate::ops::rpc) struct RequestConversionOps;
 
 impl RequestConversionOps {
-    /// Return the stable diagnostic label for one boundary variant.
-    #[must_use]
-    pub(in crate::ops::rpc) const fn diagnostic_variant_label(request: &Request) -> &'static str {
-        match request {
-            Request::AcknowledgePlacementReceipt(_) => "AcknowledgePlacementReceipt",
-            Request::AllocatePlacementChild(_) => "AllocatePlacementChild",
-            Request::CreateCanister(_) => "Provision",
-            Request::RecycleCanister(_) => "RecycleCanister",
-            Request::Cycles(_) => "RequestCycles",
-        }
-    }
-
     /// Extract replay metadata without assigning it policy meaning.
     #[must_use]
     pub(in crate::ops::rpc) const fn source_metadata(

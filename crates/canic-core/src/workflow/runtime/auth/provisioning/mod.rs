@@ -6,15 +6,16 @@
 //! broadcast issuer-local install requests.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     config::schema::DelegatedTokenConfig,
+    diagnostics::codes,
     dto::{
         auth::{
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             RootDelegationProofBatchProof, RootProof,
         },
-        error::{Error, ErrorCode},
+        error::Error,
     },
     model::auth::ChainKeyRootDelegationInstallFailure,
     ops::{
@@ -77,25 +78,17 @@ impl RuntimeAuthWorkflow {
         )?;
         crate::perf!("root_proof_prepare_batch");
         let Some(batch_id) = prepared.batch_id else {
-            return Err(InternalError::auth_proof_pending(
-                "chain-key root delegation proof is not available yet; retry",
-            ));
+            return Err(InternalError::auth_proof_pending());
         };
         let signing =
             AuthOps::sign_chain_key_root_delegation_batch(build_network, batch_id, now_ns).await?;
         crate::perf!("root_proof_sign_batch");
         if signing.signing_in_flight {
-            return Err(InternalError::auth_proof_pending(
-                "chain-key root delegation proof is not available yet; retry",
-            ));
+            return Err(InternalError::auth_proof_pending());
         }
 
         let proof = AuthOps::signed_chain_key_delegation_proof_for_issuer(issuer_pid, now_ns)?
-            .ok_or_else(|| {
-                InternalError::auth_proof_pending(
-                    "chain-key root delegation proof is not available yet; retry",
-                )
-            })?;
+            .ok_or_else(|| InternalError::auth_proof_pending())?;
         crate::perf!("root_proof_load_issuer");
         Ok(proof)
     }
@@ -174,7 +167,7 @@ async fn install_delegation_proof_on_issuer(
     let builder =
         CallOps::unbounded_wait(issuer_pid, protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF)
             .with_arg(request)
-            .map_err(IssuerProofInstallError::RequestEncoding)?;
+            .map_err(|_| IssuerProofInstallError::RequestEncoding)?;
     let call = builder
         .execute()
         .await
@@ -185,7 +178,7 @@ async fn install_delegation_proof_on_issuer(
 fn issuer_install_outcome(call: CallResult) -> Result<(), IssuerProofInstallError> {
     let result: Result<InstallActiveDelegationProofResponse, Error> = call
         .candid()
-        .map_err(IssuerProofInstallError::InvalidResponse)?;
+        .map_err(|_| IssuerProofInstallError::InvalidResponse)?;
     issuer_install_response(result)
 }
 
@@ -215,92 +208,78 @@ impl ChainKeyDelegationProofBatchInstallResult {
         }
         match self.first_failure {
             Some(failure) => Err(failure.into_internal_error(issuer_pid)),
-            None => Err(InternalError::public(Error::unavailable(format!(
-                "chain-key delegation proof installation for issuer {issuer_pid} did not complete"
-            )))),
+            None => Err(InternalError::public(
+                crate::diagnostics::codes::SECURITY_UNAVAILABLE,
+            )),
         }
     }
 }
 
 enum IssuerProofInstallError {
-    RequestEncoding(InternalError),
+    RequestEncoding,
     Transport(InternalError),
-    InvalidResponse(InternalError),
+    InvalidResponse,
     RejectedByIssuer(Error),
 }
 
 impl IssuerProofInstallError {
     const fn record_failure(&self) -> ChainKeyRootDelegationInstallFailure {
         match self {
-            Self::RequestEncoding(_) | Self::Transport(_) | Self::InvalidResponse(_) => {
+            Self::RequestEncoding | Self::Transport(_) | Self::InvalidResponse => {
                 ChainKeyRootDelegationInstallFailure::CallFailed
             }
-            Self::RejectedByIssuer(err) => match err.code {
-                ErrorCode::AuthProofExpired => {
+            Self::RejectedByIssuer(err) => match err.raw_code() {
+                code if code == codes::AUTH_CERT_EXPIRED.raw_code().raw() => {
                     ChainKeyRootDelegationInstallFailure::ExpiredOrSuperseded
                 }
-                ErrorCode::AuthMaterialStale
-                | ErrorCode::AuthProofPending
-                | ErrorCode::InvalidInput => ChainKeyRootDelegationInstallFailure::ProofMismatch,
+                code if code == codes::SECURITY_CONFLICT.raw_code().raw()
+                    || code == codes::SECURITY_UNAVAILABLE.raw_code().raw()
+                    || code == codes::REQUEST_INVALID.raw_code().raw() =>
+                {
+                    ChainKeyRootDelegationInstallFailure::ProofMismatch
+                }
                 _ => ChainKeyRootDelegationInstallFailure::RejectedBySigner,
             },
         }
     }
 
-    fn into_internal_error(self, issuer_pid: Principal) -> InternalError {
+    fn into_internal_error(self, _issuer_pid: Principal) -> InternalError {
         match self {
-            Self::RequestEncoding(cause) => InternalError::public(Error::internal(format!(
-                "chain-key delegation proof request for issuer {issuer_pid} could not be encoded"
-            )))
-            .with_diagnostic_context(cause.to_string()),
-            Self::Transport(cause) => InternalError::public(Error::unavailable(format!(
-                "chain-key delegation proof installation transport for issuer {issuer_pid} failed"
-            )))
-            .with_diagnostic_context(cause.to_string()),
-            Self::InvalidResponse(cause) => InternalError::public(Error::internal(format!(
-                "chain-key delegation proof installation response from issuer {issuer_pid} was invalid"
-            )))
-            .with_diagnostic_context(cause.to_string()),
-            Self::RejectedByIssuer(err) => InternalError::public(err),
+            Self::RequestEncoding | Self::InvalidResponse => {
+                InternalError::projected(codes::CODEC_FAILED, codes::CONTROL_PLANE_STATE_INVALID)
+            }
+            Self::Transport(cause) => {
+                InternalError::projected(cause.code(), codes::PLATFORM_UNAVAILABLE)
+            }
+            Self::RejectedByIssuer(err) => InternalError::observed_public(err),
         }
     }
 
     fn into_renewal_error(self) -> InternalError {
         match self {
-            Self::RequestEncoding(cause) => InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("chain-key delegation proof request encoding failed: {cause}"),
-            ),
-            Self::Transport(cause) => InternalError::infra(
-                InternalErrorOrigin::Infra,
-                format!("chain-key delegation proof installation transport failed: {cause}"),
-            ),
-            Self::InvalidResponse(cause) => InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("chain-key delegation proof installation response was invalid: {cause}"),
-            ),
-            Self::RejectedByIssuer(err) => InternalError::public(err),
+            Self::RequestEncoding | Self::InvalidResponse => {
+                InternalError::projected(codes::CODEC_FAILED, codes::CONTROL_PLANE_STATE_INVALID)
+            }
+            Self::Transport(cause) => {
+                InternalError::projected(cause.code(), codes::PLATFORM_UNAVAILABLE)
+            }
+            Self::RejectedByIssuer(err) => InternalError::observed_public(err),
         }
     }
 }
 
 fn delegated_token_max_ttl_ns(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {
     let max_ttl_secs = config.max_ttl_secs.unwrap_or(24 * 60 * 60);
-    max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
-        InternalError::invalid_input("auth.delegated_tokens.max_ttl_secs overflows nanoseconds")
-    })
+    max_ttl_secs
+        .checked_mul(1_000_000_000)
+        .ok_or_else(|| InternalError::public(codes::TIME_CAPACITY))
 }
 
 fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {
     config
         .chain_key_root_proof
         .min_accepted_proof_epoch
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "auth.delegated_tokens.chain_key_root_proof.min_accepted_proof_epoch is required for chain-key lazy repair",
-            )
-        })
+        .ok_or_else(|| InternalError::public(codes::CONFIGURATION_UNAVAILABLE))
 }
 
 // -----------------------------------------------------------------------------
@@ -377,10 +356,9 @@ mod tests {
                 assert_eq!(issuer_pid, p(2));
                 calls.set(calls.get() + 1);
                 async {
-                    Err(IssuerProofInstallError::Transport(InternalError::infra(
-                        InternalErrorOrigin::Infra,
-                        "transport failed",
-                    )))
+                    Err(IssuerProofInstallError::Transport(
+                        InternalError::platform_failure(),
+                    ))
                 }
             },
         ));
@@ -394,27 +372,23 @@ mod tests {
     fn explicit_provisioning_transport_failure_is_typed_as_unavailable() {
         let result = ChainKeyDelegationProofBatchInstallResult {
             installed_count: 0,
-            first_failure: Some(IssuerProofInstallError::Transport(InternalError::infra(
-                InternalErrorOrigin::Infra,
-                "transport failed",
-            ))),
+            first_failure: Some(IssuerProofInstallError::Transport(
+                InternalError::platform_failure(),
+            )),
         };
         let err = result
             .into_explicit_result(p(2))
             .expect_err("transport failure must reject explicit provisioning");
 
         assert_eq!(
-            err.public_error().map(|err| err.code),
-            Some(crate::dto::error::ErrorCode::Unavailable)
+            err.public_error().code(),
+            crate::diagnostics::codes::PLATFORM_UNAVAILABLE.raw_code()
         );
     }
 
     #[test]
     fn explicit_provisioning_preserves_issuer_application_error() {
-        let rejected = Error::new(
-            ErrorCode::AuthProofExpired,
-            "issuer rejected expired proof".to_string(),
-        );
+        let rejected = Error::from_registered(crate::diagnostics::codes::AUTH_CERT_EXPIRED);
         let failure = issuer_install_response(Err(rejected.clone()))
             .expect_err("issuer application rejection must remain an error");
         assert_eq!(
@@ -430,47 +404,33 @@ mod tests {
             .into_explicit_result(p(2))
             .expect_err("issuer application rejection must reach the root facade");
 
-        assert_eq!(err.public_error(), Some(&rejected));
+        assert_eq!(err.public_error(), rejected);
     }
 
     #[test]
-    fn renewal_install_failures_preserve_retry_and_terminal_classification() {
-        let transport = IssuerProofInstallError::Transport(InternalError::infra(
-            InternalErrorOrigin::Infra,
-            "transport failed",
-        ))
-        .into_renewal_error();
-        assert_eq!(transport.class(), crate::InternalErrorClass::Infra);
-        assert_eq!(transport.origin(), InternalErrorOrigin::Infra);
+    fn renewal_install_failures_preserve_exact_and_public_causes() {
+        let transport = IssuerProofInstallError::Transport(InternalError::platform_failure())
+            .into_renewal_error();
+        assert_eq!(transport.code(), codes::PLATFORM_FAILED);
+        assert_eq!(transport.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
 
-        let invalid_response = IssuerProofInstallError::InvalidResponse(InternalError::infra(
-            InternalErrorOrigin::Infra,
-            "invalid response",
-        ))
-        .into_renewal_error();
+        let invalid_response = IssuerProofInstallError::InvalidResponse.into_renewal_error();
+        assert_eq!(invalid_response.code(), codes::CODEC_FAILED);
         assert_eq!(
-            invalid_response.class(),
-            crate::InternalErrorClass::Invariant
+            invalid_response.public_code(),
+            Some(codes::CONTROL_PLANE_STATE_INVALID)
         );
-        assert_eq!(invalid_response.origin(), InternalErrorOrigin::Workflow);
 
-        let request_encoding = IssuerProofInstallError::RequestEncoding(InternalError::infra(
-            InternalErrorOrigin::Infra,
-            "encoding failed",
-        ))
-        .into_renewal_error();
+        let request_encoding = IssuerProofInstallError::RequestEncoding.into_renewal_error();
+        assert_eq!(request_encoding.code(), codes::CODEC_FAILED);
         assert_eq!(
-            request_encoding.class(),
-            crate::InternalErrorClass::Invariant
+            request_encoding.public_code(),
+            Some(codes::CONTROL_PLANE_STATE_INVALID)
         );
-        assert_eq!(request_encoding.origin(), InternalErrorOrigin::Workflow);
 
-        let rejected = Error::new(
-            ErrorCode::AuthProofExpired,
-            "issuer rejected expired proof".to_string(),
-        );
+        let rejected = Error::from_registered(crate::diagnostics::codes::AUTH_CERT_EXPIRED);
         let public =
             IssuerProofInstallError::RejectedByIssuer(rejected.clone()).into_renewal_error();
-        assert_eq!(public.public_error(), Some(&rejected));
+        assert_eq!(public.public_error(), rejected);
     }
 }

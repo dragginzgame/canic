@@ -15,7 +15,7 @@ use super::{
     root_issuer_policy::{delegated_role_grant_views, delegation_audience_view},
 };
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::auth::{
         ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, IssuerProofAlgorithm, IssuerProofBinding,
@@ -222,12 +222,10 @@ pub(in crate::ops::auth) fn plan_due_chain_key_root_delegation_batch(
         input.max_cert_ttl_ns,
         input.max_revocation_latency_ns,
     )?;
-    let expires_at_ns = input.now_ns.checked_add(cert_ttl_ns).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "chain-key root delegation batch expiry overflow",
-        )
-    })?;
+    let expires_at_ns = input
+        .now_ns
+        .checked_add(cert_ttl_ns)
+        .ok_or_else(|| InternalError::invariant())?;
 
     Ok(ChainKeyRootDelegationBatchPreparation::RequiresPolicy(
         ChainKeyRootDelegationBatchPreparePlan {
@@ -482,14 +480,12 @@ fn shared_batch_cert_ttl_ns(
         .iter()
         .map(|due| due.template.cert_ttl_ns)
         .min()
-        .ok_or_else(|| InternalError::invalid_input("chain-key batch must include an issuer"))?;
+        .ok_or_else(|| InternalError::invalid_input())?;
     let ttl_ns = template_ttl_ns
         .min(max_cert_ttl_ns)
         .min(max_revocation_latency_ns);
     if ttl_ns == 0 {
-        return Err(InternalError::invalid_input(
-            "chain-key root delegation batch TTL must be greater than zero",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(ttl_ns)
 }
@@ -539,12 +535,8 @@ fn build_chain_key_batch_leaf(
         registry_epoch: plan.registry_epoch,
         registry_hash: plan.registry_hash,
     };
-    let leaf_hash = chain_key_delegation_cert_hash(&chain_key_delegation_cert).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("chain-key delegation cert canonicalization failed: {err}"),
-        )
-    })?;
+    let leaf_hash = chain_key_delegation_cert_hash(&chain_key_delegation_cert)
+        .map_err(|_err| InternalError::invariant())?;
 
     Ok(ChainKeyBatchLeaf {
         delegation_cert: prepared.cert,
@@ -560,10 +552,7 @@ fn validate_issuer_approvals(
     approvals: &[ChainKeyRootDelegationIssuerApproval],
 ) -> Result<(), InternalError> {
     if plan.due_templates.len() != approvals.len() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "chain-key root delegation issuer approval count mismatch",
-        ));
+        return Err(InternalError::invariant());
     }
 
     for (due, approval) in plan.due_templates.iter().zip(approvals) {
@@ -578,16 +567,10 @@ fn ensure_issuer_approval_matches_plan(
     approval: ChainKeyRootDelegationIssuerApproval,
 ) -> Result<(), InternalError> {
     if approval.issuer_pid != due.template.issuer_pid {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "chain-key root delegation issuer approval identity mismatch",
-        ));
+        return Err(InternalError::invariant());
     }
     if approval.expires_at_ns != plan.expires_at_ns {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "chain-key root delegation issuer approval expiry mismatch",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }

@@ -1,7 +1,5 @@
 use crate::{ids::CanisterRole, schema::WasmStoreConfig};
 use canic_core::control_plane_support::error::InternalError;
-#[cfg(feature = "wasm-store-canister")]
-use canic_core::control_plane_support::error::InternalErrorOrigin;
 #[cfg(feature = "root-control-plane")]
 use canic_core::control_plane_support::ops::config::ConfigOps;
 #[cfg(feature = "wasm-store-canister")]
@@ -37,9 +35,6 @@ pub fn current_wasm_store() -> Result<WasmStoreConfig, InternalError> {
     if canister_role == CanisterRole::WASM_STORE {
         Ok(WasmStoreConfig::implicit())
     } else {
-        Err(InternalError::ops(
-            InternalErrorOrigin::Ops,
-            format!("current canister '{canister_role}' is not configured as a wasm store"),
-        ))
+        Err(InternalError::state_failure())
     }
 }

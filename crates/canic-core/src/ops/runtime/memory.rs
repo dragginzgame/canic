@@ -15,7 +15,6 @@ use crate::{
         MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemorySchemaMetadataEntry,
     },
     memory::{self, ledger, registry::MemoryRegistryError, runtime::init_eager_tls},
-    ops::runtime::RuntimeOpsError,
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
@@ -48,7 +47,15 @@ pub enum MemoryRegistryOpsError {
 
 impl From<MemoryRegistryOpsError> for InternalError {
     fn from(err: MemoryRegistryOpsError) -> Self {
-        RuntimeOpsError::MemoryRegistryOps(err).into()
+        let code = match err {
+            MemoryRegistryOpsError::Registry(_) | MemoryRegistryOpsError::Runtime(_) => {
+                crate::diagnostics::codes::STORAGE_INVALID_STATE
+            }
+            MemoryRegistryOpsError::Diagnostic(_) | MemoryRegistryOpsError::State(_) => {
+                crate::diagnostics::codes::STATE_INVALID
+            }
+        };
+        Self::public(code)
     }
 }
 

@@ -5,7 +5,7 @@
 //! Boundary: every runtime-log mutation reaches storage through this workflow.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     config::schema::LogConfig,
     domain::policy::pure as policy,
     log::{Level, Topic},
@@ -112,24 +112,16 @@ impl LogRetentionWorkflow {
         let Some(created_at) = LogOps::oldest_created_at() else {
             return Ok(None);
         };
-        let deadline_secs =
-            policy::log::age_expiry_at(created_at, max_age_secs).ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "runtime-log age deadline overflowed seconds",
-                )
-            })?;
+        let deadline_secs = policy::log::age_expiry_at(created_at, max_age_secs)
+            .ok_or_else(|| InternalError::invariant())?;
         seconds_to_nanos(deadline_secs).map(Some)
     }
 }
 
 fn seconds_to_nanos(seconds: u64) -> Result<u64, InternalError> {
-    seconds.checked_mul(NANOS_PER_SECOND).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "runtime-log age deadline overflowed nanoseconds",
-        )
-    })
+    seconds
+        .checked_mul(NANOS_PER_SECOND)
+        .ok_or_else(|| InternalError::invariant())
 }
 
 #[cfg(test)]
@@ -168,8 +160,7 @@ mod tests {
         let err = LogRetentionWorkflow::next_deadline_ns(0)
             .expect_err("unrepresentable nanosecond deadline must reject");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Invariant);
-        assert_eq!(err.origin(), InternalErrorOrigin::Workflow);
+        assert_eq!(err.code(), crate::diagnostics::codes::STATE_INVALID);
     }
 
     #[test]

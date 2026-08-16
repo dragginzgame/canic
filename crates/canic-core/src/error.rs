@@ -3,9 +3,11 @@ use crate::domain::policy::pure::{
     component_allocation::ComponentAllocationPolicyError,
     component_child_allocation::ComponentChildAllocationPolicyError,
 };
-use crate::dto::error::{Error as PublicError, ErrorCode as PublicErrorCode};
+use crate::{
+    diagnostics::{RegisteredDiagnosticCode, codes},
+    dto::error::Error as PublicError,
+};
 use std::fmt;
-use thiserror::Error as ThisError;
 
 ///
 /// InternalError
@@ -21,294 +23,244 @@ use thiserror::Error as ThisError;
 /// defined in dto/.
 ///
 
-#[derive(Debug, ThisError)]
-#[error("{message}")]
+#[derive(Debug)]
 pub struct InternalError {
-    class: InternalErrorClass,
-    origin: InternalErrorOrigin,
-    message: String,
-    public_error: Option<PublicError>,
+    code: RegisteredDiagnosticCode,
+    projection: PublicProjection,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum PublicProjection {
+    Registered(RegisteredDiagnosticCode),
+    Forwarded(PublicError),
 }
 
 impl InternalError {
-    pub fn new(
-        class: InternalErrorClass,
-        origin: InternalErrorOrigin,
-        message: impl Into<String>,
-    ) -> Self {
+    fn new(code: RegisteredDiagnosticCode, public_code: RegisteredDiagnosticCode) -> Self {
         Self {
-            class,
-            origin,
-            message: message.into(),
-            public_error: None,
+            code,
+            projection: PublicProjection::Registered(public_code),
         }
     }
 
     #[must_use]
-    pub fn public(err: PublicError) -> Self {
+    pub fn public(code: RegisteredDiagnosticCode) -> Self {
+        Self::projected(code, code)
+    }
+
+    #[must_use]
+    pub fn projected(
+        code: RegisteredDiagnosticCode,
+        public_code: RegisteredDiagnosticCode,
+    ) -> Self {
         Self {
-            class: InternalErrorClass::Domain,
-            origin: InternalErrorOrigin::Domain,
-            message: err.message.clone(),
-            public_error: Some(err),
+            code,
+            projection: PublicProjection::Registered(public_code),
         }
     }
 
-    pub fn forbidden(message: impl Into<String>) -> Self {
-        Self::public(PublicError::forbidden(message))
+    /// Preserve a decoded remote rejection while assigning its local transport
+    /// failure a registered exact identity.
+    #[must_use]
+    pub fn observed_public(err: PublicError) -> Self {
+        Self {
+            code: codes::PLATFORM_FAILED,
+            projection: PublicProjection::Forwarded(err),
+        }
     }
 
-    pub fn invalid_input(message: impl Into<String>) -> Self {
-        Self::public(PublicError::invalid(message))
+    pub fn forbidden() -> Self {
+        Self::public(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     }
 
-    pub fn conflict(message: impl Into<String>) -> Self {
-        Self::public(PublicError::conflict(message))
+    pub fn invalid_input() -> Self {
+        Self::public(crate::diagnostics::codes::REQUEST_INVALID)
     }
 
-    pub fn unavailable(message: impl Into<String>) -> Self {
-        Self::public(PublicError::unavailable(message))
+    pub fn conflict() -> Self {
+        Self::public(crate::diagnostics::codes::STATE_CONFLICT)
     }
 
-    pub fn resource_exhausted(message: impl Into<String>) -> Self {
-        Self::public(PublicError::exhausted(message))
+    pub fn unavailable() -> Self {
+        Self::public(crate::diagnostics::codes::STATE_UNAVAILABLE)
     }
 
-    pub fn auth_material_stale(message: impl Into<String>) -> Self {
-        Self::public(PublicError::new(
-            PublicErrorCode::AuthMaterialStale,
-            message.into(),
-        ))
+    pub fn resource_exhausted() -> Self {
+        Self::public(crate::diagnostics::codes::CAPACITY_LIMIT)
     }
 
-    pub fn auth_proof_expired(message: impl Into<String>) -> Self {
-        Self::public(PublicError::new(
-            PublicErrorCode::AuthProofExpired,
-            message.into(),
-        ))
+    pub fn auth_material_stale() -> Self {
+        Self::public(codes::SECURITY_CONFLICT)
     }
 
-    pub fn auth_token_expired(message: impl Into<String>) -> Self {
-        Self::public(PublicError::auth_token_expired(message))
+    pub fn auth_proof_expired() -> Self {
+        Self::public(codes::AUTH_CERT_EXPIRED)
     }
 
-    pub fn auth_proof_pending(message: impl Into<String>) -> Self {
-        Self::public(PublicError::auth_proof_pending(message))
+    pub fn auth_token_expired() -> Self {
+        Self::public(crate::diagnostics::codes::AUTH_TOKEN_EXPIRED)
+    }
+
+    pub fn auth_proof_pending() -> Self {
+        Self::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
     }
 
     #[must_use]
     pub fn operation_id_required() -> Self {
-        Self::public(PublicError::operation_id_required())
+        Self::public(crate::diagnostics::codes::AUTHORITY_UNAVAILABLE)
     }
 
     #[must_use]
     pub fn root_data_certificate_unavailable() -> Self {
-        Self::public(PublicError::root_data_certificate_unavailable())
+        Self::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
     }
 
-    pub fn domain(origin: InternalErrorOrigin, message: impl Into<String>) -> Self {
-        Self::new(InternalErrorClass::Domain, origin, message)
+    pub fn invariant() -> Self {
+        Self::new(codes::STATE_INVALID, codes::STATE_INVALID)
     }
 
-    pub fn invariant(origin: InternalErrorOrigin, message: impl Into<String>) -> Self {
-        Self::new(InternalErrorClass::Invariant, origin, message)
+    pub fn platform_failure() -> Self {
+        Self::new(codes::PLATFORM_FAILED, codes::STATE_FAILED)
     }
 
-    pub fn infra(origin: InternalErrorOrigin, message: impl Into<String>) -> Self {
-        Self::new(InternalErrorClass::Infra, origin, message)
+    pub fn state_failure() -> Self {
+        Self::new(codes::STATE_FAILED, codes::STATE_FAILED)
     }
 
-    pub fn ops(origin: InternalErrorOrigin, message: impl Into<String>) -> Self {
-        Self::new(InternalErrorClass::Ops, origin, message)
+    pub fn lifecycle_failure() -> Self {
+        Self::new(codes::LIFECYCLE_FAILED, codes::STATE_FAILED)
     }
 
-    pub fn workflow(origin: InternalErrorOrigin, message: impl Into<String>) -> Self {
-        Self::new(InternalErrorClass::Workflow, origin, message)
-    }
-
-    /// Append internal diagnostic context without changing the error's typed
-    /// classification or public projection.
+    /// Return the exact registered diagnostic identity.
     #[must_use]
-    pub(crate) fn with_diagnostic_context(mut self, context: impl Into<String>) -> Self {
-        self.message = format!("{}; {}", self.message, context.into());
-        self
+    pub const fn code(&self) -> RegisteredDiagnosticCode {
+        self.code
     }
 
+    /// Return the reviewed safe public projection.
     #[must_use]
-    pub const fn class(&self) -> InternalErrorClass {
-        self.class
+    pub const fn public_code(&self) -> Option<RegisteredDiagnosticCode> {
+        match self.projection {
+            PublicProjection::Registered(code) => Some(code),
+            PublicProjection::Forwarded(_) => None,
+        }
     }
 
+    /// Construct the reviewed public projection or preserve a decoded remote
+    /// rejection unchanged.
     #[must_use]
-    pub const fn origin(&self) -> InternalErrorOrigin {
-        self.origin
-    }
-
-    #[must_use]
-    pub const fn log_fields(&self) -> (InternalErrorClass, InternalErrorOrigin) {
-        (self.class, self.origin)
-    }
-
-    #[must_use]
-    pub const fn public_error(&self) -> Option<&PublicError> {
-        self.public_error.as_ref()
+    pub const fn public_error(&self) -> PublicError {
+        match self.projection {
+            PublicProjection::Registered(code) => PublicError::from_registered(code),
+            PublicProjection::Forwarded(error) => error,
+        }
     }
 
     #[must_use]
     pub fn is_public_resource_exhausted(&self) -> bool {
-        self.public_error
-            .as_ref()
-            .is_some_and(|err| err.code == PublicErrorCode::ResourceExhausted)
+        self.public_error().code() == codes::CAPACITY_LIMIT.raw_code()
     }
 }
 
+impl fmt::Display for InternalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.code, f)
+    }
+}
+
+impl std::error::Error for InternalError {}
+
 impl From<AccessError> for InternalError {
     fn from(err: AccessError) -> Self {
-        let kind = err.kind();
-        let message = err.to_string();
-        match kind {
-            crate::access::AccessErrorKind::DelegatedAuthCertExpired => {
-                Self::auth_proof_expired(message)
+        match err {
+            AccessError::Internal(error) => error,
+            error => {
+                let diagnostic = error
+                    .diagnostic_codes()
+                    .expect("non-internal access errors have registered reasons");
+                Self::projected(diagnostic.exact, diagnostic.public)
             }
-            crate::access::AccessErrorKind::DelegatedAuthTokenExpired => {
-                Self::auth_token_expired(message)
-            }
-            crate::access::AccessErrorKind::Denied => Self::new(
-                InternalErrorClass::Access,
-                InternalErrorOrigin::Access,
-                message,
-            ),
         }
     }
 }
 
 impl From<ComponentAllocationPolicyError> for InternalError {
     fn from(err: ComponentAllocationPolicyError) -> Self {
-        let message = err.to_string();
-        match err {
-            ComponentAllocationPolicyError::EmptyOperationId
-            | ComponentAllocationPolicyError::ComponentSpecNotAdmitted(_)
-            | ComponentAllocationPolicyError::ComponentSpecUnknown(_) => {
-                Self::invalid_input(message)
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            ComponentAllocationPolicyError::EmptyOperationId => codes::REQUEST_INCOMPLETE,
+            ComponentAllocationPolicyError::AllocationSequenceExhausted => codes::VERSION_CAPACITY,
+            ComponentAllocationPolicyError::InvalidRootTopologyProjection => {
+                codes::COLLECTION_INVALID
             }
-            ComponentAllocationPolicyError::AllocationSequenceExhausted
-            | ComponentAllocationPolicyError::ComponentCountOverflow
+            ComponentAllocationPolicyError::RootTopologyDigestMismatch
+            | ComponentAllocationPolicyError::ComponentSpecHashMismatch(_) => {
+                codes::DIGEST_CONFLICT
+            }
+            ComponentAllocationPolicyError::ComponentSpecNotAdmitted(_) => {
+                codes::AUTHORITY_INVALID_STATE
+            }
+            ComponentAllocationPolicyError::ComponentSpecUnknown(_) => {
+                codes::CONFIGURATION_UNAVAILABLE
+            }
+            ComponentAllocationPolicyError::ComponentCountOverflow
             | ComponentAllocationPolicyError::ComponentCapacityExhausted
             | ComponentAllocationPolicyError::ComponentSpecCountOverflow(_)
             | ComponentAllocationPolicyError::ComponentSpecCapacityExhausted(_)
             | ComponentAllocationPolicyError::PeerProvisioningCountOverflow
             | ComponentAllocationPolicyError::PeerProvisioningCapacityExhausted { .. } => {
-                Self::resource_exhausted(message)
+                codes::CAPACITY_LIMIT
             }
-            ComponentAllocationPolicyError::InvalidRootTopologyProjection
-            | ComponentAllocationPolicyError::RootTopologyDigestMismatch
-            | ComponentAllocationPolicyError::ComponentSpecHashMismatch(_)
-            | ComponentAllocationPolicyError::InvalidPeerRequesterBinding => {
-                Self::invariant(InternalErrorOrigin::Domain, message)
+            ComponentAllocationPolicyError::InvalidPeerRequesterBinding => codes::AUTHORITY_INVALID,
+            ComponentAllocationPolicyError::PeerRootRuntimeInactive
+            | ComponentAllocationPolicyError::PeerRequesterRegistryMemberInactive => {
+                codes::AUTHORITY_INACTIVE
             }
-            ComponentAllocationPolicyError::PeerRootRuntimeInactive => Self::unavailable(message),
-            ComponentAllocationPolicyError::PeerRequesterRegistryMemberInactive
-            | ComponentAllocationPolicyError::PeerProvisioningGrantMissing { .. } => {
-                Self::forbidden(message)
+            ComponentAllocationPolicyError::PeerProvisioningGrantMissing { .. } => {
+                codes::CONFIGURATION_UNAVAILABLE
             }
-        }
+        };
+        Self::public(code)
     }
 }
 
 impl From<ComponentChildAllocationPolicyError> for InternalError {
     fn from(err: ComponentChildAllocationPolicyError) -> Self {
-        let message = err.to_string();
-        match err {
-            ComponentChildAllocationPolicyError::EmptyOperationId
-            | ComponentChildAllocationPolicyError::ChildRoleNotAdmitted { .. } => {
-                Self::invalid_input(message)
-            }
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            ComponentChildAllocationPolicyError::EmptyOperationId => codes::REQUEST_INCOMPLETE,
+            ComponentChildAllocationPolicyError::InvalidComponentBinding
+            | ComponentChildAllocationPolicyError::InvalidParentBinding => codes::AUTHORITY_INVALID,
             ComponentChildAllocationPolicyError::ParentComponentMismatch
             | ComponentChildAllocationPolicyError::ParentCallerMismatch
-            | ComponentChildAllocationPolicyError::ParentRegistryMemberNotActive
-            | ComponentChildAllocationPolicyError::SpawnGrantMissing { .. } => {
-                Self::forbidden(message)
+            | ComponentChildAllocationPolicyError::ComponentRegistryAuthorityMismatch => {
+                codes::AUTHORITY_CONFLICT
             }
             ComponentChildAllocationPolicyError::FleetRegistryRootNotActive
             | ComponentChildAllocationPolicyError::RootRuntimeNotActive
-            | ComponentChildAllocationPolicyError::ComponentRegistryNotActive => {
-                Self::unavailable(message)
+            | ComponentChildAllocationPolicyError::ComponentRegistryNotActive
+            | ComponentChildAllocationPolicyError::ParentRegistryMemberNotActive => {
+                codes::AUTHORITY_INACTIVE
             }
-            ComponentChildAllocationPolicyError::ComponentRegistryAuthorityMismatch => {
-                Self::conflict(message)
+            ComponentChildAllocationPolicyError::ComponentSpecUnknown(_) => {
+                codes::CONFIGURATION_UNAVAILABLE
+            }
+            ComponentChildAllocationPolicyError::ChildRoleNotAdmitted { .. } => {
+                codes::AUTHORITY_INVALID_STATE
+            }
+            ComponentChildAllocationPolicyError::SpawnGrantMissing { .. } => {
+                codes::CONFIGURATION_UNAVAILABLE
             }
             ComponentChildAllocationPolicyError::ParentRoleCountOverflow
             | ComponentChildAllocationPolicyError::ParentRoleCapacityExhausted { .. }
             | ComponentChildAllocationPolicyError::ComponentDescendantCapacityExhausted
-            | ComponentChildAllocationPolicyError::ComponentCountOverflow => {
-                Self::resource_exhausted(message)
+            | ComponentChildAllocationPolicyError::ComponentCountOverflow => codes::CAPACITY_LIMIT,
+            ComponentChildAllocationPolicyError::InvalidDeploymentLimits => {
+                codes::CONFIGURATION_INVALID
             }
-            ComponentChildAllocationPolicyError::InvalidComponentBinding
-            | ComponentChildAllocationPolicyError::InvalidParentBinding
-            | ComponentChildAllocationPolicyError::ComponentSpecUnknown(_)
-            | ComponentChildAllocationPolicyError::InvalidDeploymentLimits => {
-                Self::invariant(InternalErrorOrigin::Domain, message)
-            }
-        }
-    }
-}
-
-///
-/// InternalErrorClass
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InternalErrorClass {
-    Access,
-    Domain,
-    Infra,
-    Ops,
-    Workflow,
-    Invariant,
-}
-
-///
-/// InternalErrorOrigin
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InternalErrorOrigin {
-    Access,
-    Config,
-    Domain,
-    Infra,
-    Ops,
-    Storage,
-    Workflow,
-}
-
-impl fmt::Display for InternalErrorClass {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = match self {
-            Self::Access => "Access",
-            Self::Domain => "Domain",
-            Self::Infra => "Infra",
-            Self::Ops => "Ops",
-            Self::Workflow => "Workflow",
-            Self::Invariant => "Invariant",
         };
-
-        f.write_str(label)
-    }
-}
-
-impl fmt::Display for InternalErrorOrigin {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = match self {
-            Self::Access => "Access",
-            Self::Config => "Config",
-            Self::Domain => "Domain",
-            Self::Infra => "Infra",
-            Self::Ops => "Ops",
-            Self::Storage => "Storage",
-            Self::Workflow => "Workflow",
-        };
-
-        f.write_str(label)
+        Self::public(code)
     }
 }

@@ -85,6 +85,16 @@ rg -F 'bash scripts/ci/test-dependency-risk-inventory.sh' "$CI" >/dev/null ||
     fail "the dependency risk rejection tests are not active in CI"
 rg -F 'run: bash scripts/ci/check-current-document-semantics.sh' "$CI" >/dev/null ||
     fail "the current document semantics guard is not active in CI"
+rg -F 'cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked' "$CI" >/dev/null ||
+    fail "CI does not install the pinned cargo-get release helper"
+rg -F 'cargo get --version' "$CI" >/dev/null ||
+    fail "CI does not verify the cargo-get release helper"
+test_unit_job="$(sed -n '/^  test-unit:/,/^  build:/p' "$CI")"
+rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
+    <<<"$test_unit_job" >/dev/null ||
+    fail "CI test-unit does not install the feature-qualified ripgrep test helper"
+rg -F 'rg --version' <<<"$test_unit_job" >/dev/null ||
+    fail "CI test-unit does not verify the ripgrep test helper"
 validate_recipe="$(sed -n '/^validate:/,/^$/p' "$MAKEFILE")"
 required_validate_targets=(
     fmt-check

@@ -5,7 +5,7 @@
 //! Enforces cascade invariants and delegates transport to `CascadeOps`.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::cascade::TopologySnapshotInput,
     ops::{
@@ -152,8 +152,7 @@ impl TopologyCascadeWorkflow {
             MetricReason::Ok,
         );
 
-        CycleWorkflow::reconcile_after_topology_change()
-            .map_err(|err| err.with_diagnostic_context("reconcile cycle top-up after topology"))?;
+        CycleWorkflow::reconcile_after_topology_change().map_err(|err| err)?;
 
         if let Some(next_pid) = next {
             let next_snapshot = match Self::slice_snapshot_for_child(next_pid, &snapshot) {
@@ -254,8 +253,7 @@ impl TopologyCascadeWorkflow {
                     MetricOutcome::Failed,
                     MetricReason::SendFailed,
                 );
-                Err(err
-                    .with_diagnostic_context(format!("topology cascade rejected by child {pid}")))
+                Err(err)
             }
         }
     }
@@ -266,17 +264,11 @@ impl TopologyCascadeWorkflow {
         parents: &[TopologyPathNode],
     ) -> Result<Option<Principal>, InternalError> {
         let Some(first) = parents.first() else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "topology parent chain is empty",
-            ));
+            return Err(InternalError::invariant());
         };
 
         if first.pid != self_pid {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("topology parent chain does not start with self pid {self_pid}"),
-            ));
+            return Err(InternalError::invariant());
         }
 
         Ok(parents.get(1).map(|p| p.pid))
@@ -300,10 +292,7 @@ impl TopologyCascadeWorkflow {
         }
 
         if sliced_parents.is_empty() {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("topology next hop {next_pid} not found in parent chain"),
-            ));
+            return Err(InternalError::invariant());
         }
 
         let mut sliced_children_map = HashMap::new();

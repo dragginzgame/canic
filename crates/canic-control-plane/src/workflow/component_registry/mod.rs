@@ -44,7 +44,7 @@ use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::{
     control_plane_support::{
         config::schema::ComponentChildKind,
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::{
             component_runtime::ComponentRuntimeOps,
             config::ConfigOps,
@@ -486,9 +486,7 @@ fn terminal_component_membership_removal_response(
     let durable_authority =
         ComponentDeletionRequestAuthority::from_durable(&draining, &receipt.deleted.deletion);
     if request_authority != durable_authority {
-        return Err(InternalError::conflict(
-            "Component deletion request differs from terminal removal authority",
-        ));
+        return Err(InternalError::conflict());
     }
     CanisterPoolOps::complete_recycling(
         receipt.deleted.deletion.quiescence.stop.canister_id,
@@ -560,9 +558,7 @@ pub async fn status(
     root_store::status(request.store_bootstrap.clone()).await?;
     validate_current_mirror_authority(&authority, root, &request)?;
 
-    let prepared = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let prepared = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     let expected = ComponentRegistryPreparationAuthority::new(
         &authority.binding,
         &request.expected_fleet_registry,
@@ -570,9 +566,7 @@ pub async fn status(
         &request.store_bootstrap,
     );
     if ComponentRegistryPreparationAuthority::from_registry(&prepared) != expected {
-        return Err(InternalError::conflict(
-            "durable Component Registry authority differs from the active root",
-        ));
+        return Err(InternalError::conflict());
     }
     response(root, &prepared)
 }
@@ -598,9 +592,7 @@ pub async fn reserve_allocation(
         if existing.component_spec != request.component_spec
             || existing.provisioning_origin != provisioning_origin
         {
-            return Err(InternalError::conflict(
-                "Component allocation operation is already bound to different intent",
-            ));
+            return Err(InternalError::conflict());
         }
         validate_allocation_record(
             &authority.binding,
@@ -782,9 +774,7 @@ fn peer_requester_authority(
                 authority.binding.fleet_subnet_root,
             )?;
             if &mirror.active.snapshot.version != expected_registry.as_ref() {
-                return Err(InternalError::conflict(
-                    "cross-root peer request requires the target root's exact current Registry",
-                ));
+                return Err(InternalError::conflict());
             }
             let resolved = FleetServicePeerOps::resolve(
                 &authority.binding,
@@ -810,20 +800,14 @@ fn peer_component_requester(
 ) -> Result<ComponentRegistryPartitionView, InternalError> {
     let requester_component =
         ComponentRegistryOps::component_for_principal(caller).ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered Component"
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
-    let requester = ComponentRegistryOps::partition(requester_component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "registered peer-provisioning requester has no Component Registry partition",
-        )
-    })?;
+    let requester = ComponentRegistryOps::partition(requester_component)?
+        .ok_or_else(|| InternalError::invariant())?;
     if requester.binding.canister_id != caller {
-        return Err(InternalError::public(Error::forbidden(format!(
-            "caller {caller} is a Component Child and cannot provision a peer Component"
-        ))));
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     validate_partition(root, release_set, topology, &requester)?;
     Ok(requester)
@@ -837,9 +821,7 @@ fn replay_peer_allocation(
     existing: RootComponentAllocationView,
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     if existing.component_spec != request.component_spec {
-        return Err(InternalError::conflict(
-            "peer Component allocation operation is already bound to different intent",
-        ));
+        return Err(InternalError::conflict());
     }
     validate_allocation_record(root, release_set, topology, &existing, request.operation_id)?;
     allocation_response(existing)
@@ -905,9 +887,8 @@ pub fn allocation_status(
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
-        InternalError::unavailable("Component allocation operation has not been reserved")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     let topology = ConfigOps::component_topology()?;
     validate_allocation_record(
         &authority.binding,
@@ -944,10 +925,7 @@ pub async fn reserve_child_allocation(
     let topology = ConfigOps::component_topology()?;
     let parent =
         ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {}",
-                request.component
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     if let Some(existing) =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
@@ -963,9 +941,8 @@ pub async fn reserve_child_allocation(
         return Ok(child_allocation_response(existing));
     }
 
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -990,7 +967,7 @@ pub async fn reserve_child_allocation(
     let component_descendants = partition
         .reserved_descendants
         .checked_add(partition.committed_descendants)
-        .ok_or_else(|| InternalError::resource_exhausted("Component descendant count overflow"))?;
+        .ok_or_else(|| InternalError::resource_exhausted())?;
     let parent_role_instances = ComponentRegistryOps::parent_role_instances(
         request.component,
         caller,
@@ -1034,18 +1011,11 @@ pub fn child_allocation_status(
     let caller = IcOps::msg_caller();
     let parent =
         ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {}",
-                request.component
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
     validate_child_allocation(
         &authority.binding,
         authority.initial_release_set,
@@ -1073,9 +1043,8 @@ pub async fn begin_component_draining(
     require_active_root_runtime("Component draining requires an Active Fleet Subnet Root runtime")?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1084,12 +1053,7 @@ pub async fn begin_component_draining(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "draining Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let draining = ComponentRegistryOps::begin_component_draining(
@@ -1100,12 +1064,8 @@ pub async fn begin_component_draining(
         maximum_registry_bytes,
         fleet_directory.clone(),
     )?;
-    let current = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "draining Component partition disappeared after mutation",
-        )
-    })?;
+    let current = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1122,21 +1082,13 @@ pub fn component_draining_status(
 ) -> Result<RootComponentDrainingResponse, InternalError> {
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let draining =
-        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
-            InternalError::unavailable("Component draining operation has not been durably fenced")
-        })?;
+    let draining = ComponentRegistryOps::component_draining(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     if draining.operation_id != request.operation_id {
-        return Err(InternalError::conflict(
-            "Component draining operation is bound to different intent",
-        ));
+        return Err(InternalError::conflict());
     }
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component draining authority has no Registry partition",
-        )
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1165,9 +1117,8 @@ pub async fn quiesce_component(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1176,25 +1127,16 @@ pub async fn quiesce_component(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "quiescing Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
-    let draining =
-        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
-            InternalError::unavailable("Component draining operation has not been durably fenced")
-        })?;
+    let draining = ComponentRegistryOps::component_draining(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_component_draining(&partition, &draining, None, None)?;
     let operation_matches = request.operation_id == draining.operation_id;
     let registry_matches = request.expected_registry == draining.registry;
     if !operation_matches || !registry_matches {
-        return Err(InternalError::conflict(
-            "Component quiescence request differs from its durable draining authority",
-        ));
+        return Err(InternalError::conflict());
     }
 
     let draining = if draining.quiescence.is_none() {
@@ -1230,12 +1172,8 @@ pub async fn quiesce_component(
         plan.expected_status_module_hash,
         IcOps::now_nanos(),
     )?;
-    let current = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "quiescent Component partition disappeared after terminal mutation",
-        )
-    })?;
+    let current = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1252,21 +1190,13 @@ pub fn component_quiescence_status(
 ) -> Result<RootComponentQuiescenceResponse, InternalError> {
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let draining =
-        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
-            InternalError::unavailable("Component draining operation has not been durably fenced")
-        })?;
+    let draining = ComponentRegistryOps::component_draining(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     if request.operation_id != draining.operation_id {
-        return Err(InternalError::conflict(
-            "Component quiescence status is bound to different draining intent",
-        ));
+        return Err(InternalError::conflict());
     }
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component quiescence authority has no Registry partition",
-        )
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1329,9 +1259,8 @@ pub async fn delete_component(
         request.expected_inventory_hash,
         IcOps::now_nanos(),
     )?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_component_draining(&partition, &draining, None, None)?;
     let plan = prepared_component_deletion_plan(
         &prepared.root,
@@ -1387,12 +1316,7 @@ pub fn remove_component_membership(
             RootComponentDeletionProgressView::DeleteIntent(_)
             | RootComponentDeletionProgressView::Deleted(_) => None,
         })
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component membership removal returned no terminal physical Canister",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     CanisterPoolOps::complete_recycling(canister_id, request.component, IcOps::now_nanos())?;
     component_deletion_response(removed)
 }
@@ -1400,18 +1324,14 @@ pub fn remove_component_membership(
 fn component_recycling_canister(
     request: &RootComponentDeletionRequest,
 ) -> Result<candid::Principal, InternalError> {
-    let draining =
-        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
-            InternalError::unavailable("Component draining operation has not been durably fenced")
-        })?;
+    let draining = ComponentRegistryOps::component_draining(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     if draining.operation_id != request.operation_id {
-        return Err(InternalError::conflict(
-            "Component membership removal is bound to a different operation",
-        ));
+        return Err(InternalError::conflict());
     }
-    let deletion = draining.deletion.ok_or_else(|| {
-        InternalError::unavailable("Component workload deletion has not been prepared")
-    })?;
+    let deletion = draining
+        .deletion
+        .ok_or_else(|| InternalError::unavailable())?;
     match deletion {
         RootComponentDeletionProgressView::Deleted(receipt) => {
             Ok(receipt.deletion.quiescence.stop.canister_id)
@@ -1419,9 +1339,7 @@ fn component_recycling_canister(
         RootComponentDeletionProgressView::MembershipRemoved(receipt) => {
             Ok(receipt.deleted.deletion.quiescence.stop.canister_id)
         }
-        RootComponentDeletionProgressView::DeleteIntent(_) => Err(InternalError::unavailable(
-            "Component workload deletion has not reached terminal recycling evidence",
-        )),
+        RootComponentDeletionProgressView::DeleteIntent(_) => Err(InternalError::unavailable()),
     }
 }
 
@@ -1431,14 +1349,10 @@ pub fn component_deletion_status(
 ) -> Result<RootComponentDeletionResponse, InternalError> {
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let draining =
-        ComponentRegistryOps::component_draining(request.component)?.ok_or_else(|| {
-            InternalError::unavailable("Component draining operation has not been durably fenced")
-        })?;
+    let draining = ComponentRegistryOps::component_draining(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     if request.operation_id != draining.operation_id {
-        return Err(InternalError::conflict(
-            "Component deletion status is bound to different draining intent",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(partition) = ComponentRegistryOps::partition(request.component)? {
         validate_partition(
@@ -1452,10 +1366,7 @@ pub fn component_deletion_status(
         draining.deletion,
         Some(RootComponentDeletionProgressView::MembershipRemoved(_))
     ) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component deletion authority has no live partition or terminal removal receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     component_deletion_response(draining)
 }
@@ -1526,9 +1437,8 @@ async fn prepared_component_draining_boundary(
     require_active_root_runtime("Component draining requires an Active Fleet Subnet Root runtime")?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition =
+        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1537,12 +1447,7 @@ async fn prepared_component_draining_boundary(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "draining Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     Ok(PreparedComponentDrainingBoundary {
@@ -1579,14 +1484,8 @@ async fn advance_subtree_removal_phase(
             finalize_subtree_leaf(request).await?
         }
     };
-    ComponentRegistryOps::subtree_removal(response.component, response.operation_id)?.ok_or_else(
-        || {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component subtree-removal phase removed its durable cursor",
-            )
-        },
-    )
+    ComponentRegistryOps::subtree_removal(response.component, response.operation_id)?
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn subtree_removal_action(
@@ -1678,10 +1577,7 @@ fn subtree_removal_action(
             )
         }
         RootComponentSubtreeRemovalProgressView::Completed(_) => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component draining cursor retained a completed subtree target",
-            ));
+            return Err(InternalError::invariant());
         }
     };
     Ok(action)
@@ -1742,9 +1638,8 @@ pub async fn begin_subtree_removal(
         )?;
         return Ok(subtree_removal_response(existing));
     }
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1753,12 +1648,7 @@ pub async fn begin_subtree_removal(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::begin_subtree_removal(
@@ -1795,9 +1685,8 @@ pub async fn advance_subtree_removal(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1806,12 +1695,7 @@ pub async fn advance_subtree_removal(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::advance_subtree_removal(
@@ -1847,9 +1731,8 @@ pub async fn prepare_subtree_leaf_stop(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1858,12 +1741,7 @@ pub async fn prepare_subtree_leaf_stop(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::prepare_subtree_leaf_stop(
@@ -1901,9 +1779,8 @@ pub async fn stop_subtree_leaf(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -1912,20 +1789,11 @@ pub async fn stop_subtree_leaf(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| {
-        InternalError::unavailable(
-            "Component subtree-removal operation has not been durably fenced",
-        )
-    })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -1989,9 +1857,8 @@ pub async fn prepare_subtree_leaf_delete(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2000,12 +1867,7 @@ pub async fn prepare_subtree_leaf_delete(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::prepare_subtree_leaf_delete(
@@ -2043,9 +1905,8 @@ pub async fn delete_subtree_leaf(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2054,20 +1915,11 @@ pub async fn delete_subtree_leaf(
     )?;
     let maximum_component_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| {
-        InternalError::unavailable(
-            "Component subtree-removal operation has not been durably fenced",
-        )
-    })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -2131,9 +1983,8 @@ pub async fn remove_subtree_leaf_membership(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2142,12 +1993,7 @@ pub async fn remove_subtree_leaf_membership(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     CanisterPoolOps::validate_complete_recycling(
@@ -2201,9 +2047,8 @@ pub async fn synchronize_subtree_leaf_directory(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2212,20 +2057,11 @@ pub async fn synchronize_subtree_leaf_directory(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| {
-        InternalError::unavailable(
-            "Component subtree-removal operation has not been durably fenced",
-        )
-    })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -2256,9 +2092,7 @@ pub async fn synchronize_subtree_leaf_directory(
         | RootComponentSubtreeRemovalProgressView::DeleteIntent(_)
         | RootComponentSubtreeRemovalProgressView::Deleted(_)
         | RootComponentSubtreeRemovalProgressView::Completed(_) => {
-            return Err(InternalError::unavailable(
-                "Component subtree leaf membership has not been removed",
-            ));
+            return Err(InternalError::unavailable());
         }
     };
     validate_subtree_directory_request(&removal, membership_removed, &request)?;
@@ -2312,9 +2146,8 @@ pub async fn finalize_subtree_leaf(
     )?;
 
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -2323,12 +2156,7 @@ pub async fn finalize_subtree_leaf(
     )?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "removal target Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let removal = ComponentRegistryOps::finalize_subtree_leaf(
@@ -2353,11 +2181,7 @@ pub async fn finalize_subtree_leaf(
 pub fn subtree_removal_status(
     request: RootComponentSubtreeRemovalStatusRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
-    existing_subtree_removal(request)?.ok_or_else(|| {
-        InternalError::unavailable(
-            "Component subtree-removal operation has not been durably fenced",
-        )
-    })
+    existing_subtree_removal(request)?.ok_or_else(|| InternalError::unavailable())
 }
 
 /// Read one durable removal when present, preserving absence for nested lifecycle admission.
@@ -2386,11 +2210,7 @@ pub(super) async fn advance_existing_subtree_removal(
     request: RootComponentSubtreeRemovalStatusRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
-        .ok_or_else(|| {
-        InternalError::unavailable(
-            "Component subtree-removal operation has not been durably fenced",
-        )
-    })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     let removal = Box::pin(advance_subtree_removal_phase(removal)).await?;
     Ok(subtree_removal_response(removal))
 }
@@ -2414,18 +2234,11 @@ pub async fn create_child_allocation(
     let caller = IcOps::msg_caller();
     let parent =
         ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {}",
-                request.component
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
     validate_child_allocation(
         &authority.binding,
         authority.initial_release_set,
@@ -2452,9 +2265,8 @@ pub async fn create_allocation(
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
-        InternalError::unavailable("Component allocation operation has not been reserved")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_allocation_caller(&allocation)?;
     validate_allocation_record(
         &authority.binding,
@@ -2490,12 +2302,7 @@ pub(super) async fn advance_group_member_install(
     let plan =
         component_install_plan_with_deployment(root, store, &allocation, Some(deployment)).await?;
     let _response = advance_install(operation_id, allocation, plan).await?;
-    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "verified grouped Component allocation disappeared after installation",
-        )
-    })
+    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| InternalError::invariant())
 }
 
 /// Reuse the ordinary top-level Registry commitment with plan-derived grouped limits.
@@ -2517,9 +2324,7 @@ pub(super) async fn advance_group_member_registry_commit(
     if mirror.root_entry.status != FleetSubnetRootStatus::Active
         || mirror.active.directory != fleet_directory
     {
-        return Err(InternalError::conflict(
-            "Fleet Directory authority changed before grouped Registry commitment",
-        ));
+        return Err(InternalError::conflict());
     }
     let (committed, partition) = ComponentRegistryOps::commit_verified(
         operation_id,
@@ -2559,9 +2364,8 @@ pub async fn install_allocation(
     validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
-        InternalError::unavailable("Component allocation operation has not been reserved")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_allocation_caller(&allocation)?;
     validate_allocation_record(
         &authority.binding,
@@ -2602,18 +2406,11 @@ pub async fn install_child_allocation(
     let caller = IcOps::msg_caller();
     let parent =
         ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {}",
-                request.component
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
     validate_child_allocation(
         &authority.binding,
         authority.initial_release_set,
@@ -2647,18 +2444,11 @@ pub async fn commit_child_allocation(
     let caller = IcOps::msg_caller();
     let parent =
         ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {}",
-                request.component
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
         ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Component Child allocation operation has not been reserved",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
     let topology = ConfigOps::component_topology()?;
     validate_child_allocation(
         &authority.binding,
@@ -2752,10 +2542,7 @@ pub async fn prepare_child_directories(
         plan.directory_authority_hash,
     )?;
     if !committed_child_directory_receipt(&allocation)?.directory_prepared {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child Directory preparation did not commit its terminal root receipt",
-        ));
+        return Err(InternalError::invariant());
     }
 
     Ok(RootComponentChildDirectoryPreparationResponse {
@@ -2772,9 +2559,7 @@ pub async fn activate_child_runtime(
 ) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
     let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
     if !committed_child_directory_receipt(&plan.allocation)?.directory_prepared {
-        return Err(InternalError::unavailable(
-            "Component Child runtime activation requires its terminal Directory preparation receipt",
-        ));
+        return Err(InternalError::unavailable());
     }
 
     let child = activate_directory_prepared_runtime_for_deployment(
@@ -2792,10 +2577,7 @@ pub async fn activate_child_runtime(
         plan.directory_authority_hash,
     )?;
     if !committed_child_directory_receipt(&allocation)?.runtime_activated {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child runtime activation did not commit its terminal root receipt",
-        ));
+        return Err(InternalError::invariant());
     }
 
     Ok(RootComponentChildRuntimeActivationResponse {
@@ -2810,9 +2592,7 @@ pub async fn activate_child_membership(
 ) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
     let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
     if !committed_child_directory_receipt(&plan.allocation)?.runtime_activated {
-        return Err(InternalError::unavailable(
-            "Component Child membership activation requires its terminal runtime receipt",
-        ));
+        return Err(InternalError::unavailable());
     }
     let observed = query_component_runtime_status(plan.child_canister).await?;
     validate_active_target_runtime_status_for_deployment(
@@ -2874,17 +2654,9 @@ fn activate_and_validate_child_membership(
     )?;
     let registered =
         ComponentRegistryOps::registered_parent(plan.allocation.component, plan.child_canister)?
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "active Component Child membership has no registered principal",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
     if registered != (plan.child_binding.clone(), ComponentLifecycleStatus::Active) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active Component Child Registry row differs from its protected binding",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let synchronization_request = ComponentRuntimeDirectorySynchronizationRequest {
@@ -2914,22 +2686,14 @@ fn validate_child_membership_receipt(
     let membership = committed_child_directory_receipt(allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "active Component Child partition has no membership receipt",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let membership_authority =
         ComponentPartitionSnapshotAuthority::from_child_membership(membership);
     let partition_authority = ComponentPartitionSnapshotAuthority::from_partition(partition);
     if membership_authority.state != partition_authority.state
         || membership.directory_authority_hash != authority_hash
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active child membership receipt differs from its derived current Directory",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -2962,9 +2726,8 @@ pub async fn commit_allocation(
         validate_current_mirror_authority(&authority, root, &preparation_request)?;
 
     let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id).ok_or_else(|| {
-        InternalError::unavailable("Component allocation operation has not been reserved")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(request.operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_allocation_caller(&allocation)?;
     validate_allocation_record(
         &authority.binding,
@@ -3041,10 +2804,7 @@ pub async fn prepare_component_directories(
         plan.directory_authority_hash,
     )?;
     if !committed_directory_receipt(&allocation)?.directory_prepared {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Directory preparation did not commit its terminal root receipt",
-        ));
+        return Err(InternalError::invariant());
     }
 
     Ok(RootComponentDirectoryPreparationResponse {
@@ -3074,9 +2834,7 @@ pub(super) async fn prepare_grouped_component_directories(
         }
         ComponentRuntimePhase::DirectoryPrepared => observed,
         ComponentRuntimePhase::Active => {
-            return Err(InternalError::conflict(
-                "initial Component runtime became Active before the publication barrier",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let _ = prepared_target_directory_status_for_deployment(
@@ -3095,9 +2853,7 @@ pub(super) async fn prepare_grouped_component_directories(
         directory_authority_hash,
     )?;
     if independently_prepared.phase == ComponentRuntimePhase::Active {
-        return Err(InternalError::conflict(
-            "initial Component runtime became Active during Directory publication",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(independently_prepared)
 }
@@ -3146,9 +2902,7 @@ pub(super) async fn synchronize_grouped_component_directory(
     if synchronized_activation != activation
         || !active_directory_refresh_covers(&synchronized, request, directory_authority_hash)?
     {
-        return Err(InternalError::conflict(
-            "active Component changed immutable activation authority during Directory refresh",
-        ));
+        return Err(InternalError::conflict());
     }
     let independently_observed = query_component_runtime_status(canister).await?;
     let independently_observed_activation = validate_active_directory_refresh_identity(
@@ -3164,9 +2918,7 @@ pub(super) async fn synchronize_grouped_component_directory(
             directory_authority_hash,
         )?
     {
-        return Err(InternalError::unavailable(
-            "active Component did not retain a current Directory covering the refresh",
-        ));
+        return Err(InternalError::unavailable());
     }
     Ok(independently_observed)
 }
@@ -3211,9 +2963,7 @@ async fn activate_component_runtime_with_plan(
     plan: PreparedComponentRuntimePlan,
 ) -> Result<RootComponentRuntimeActivationResponse, InternalError> {
     if !committed_directory_receipt(&plan.allocation)?.directory_prepared {
-        return Err(InternalError::unavailable(
-            "Component runtime activation requires its terminal Directory preparation receipt",
-        ));
+        return Err(InternalError::unavailable());
     }
 
     let response_target = activate_directory_prepared_runtime_for_deployment(
@@ -3229,10 +2979,7 @@ async fn activate_component_runtime_with_plan(
         plan.directory_authority_hash,
     )?;
     if !committed_directory_receipt(&allocation)?.runtime_activated {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component runtime activation did not commit its terminal root receipt",
-        ));
+        return Err(InternalError::invariant());
     }
 
     Ok(RootComponentRuntimeActivationResponse {
@@ -3281,9 +3028,7 @@ async fn activate_component_membership_with_plan(
     plan: PreparedComponentRuntimePlan,
 ) -> Result<RootComponentMembershipActivationResponse, InternalError> {
     if !committed_directory_receipt(&plan.allocation)?.runtime_activated {
-        return Err(InternalError::unavailable(
-            "Component membership activation requires its terminal runtime receipt",
-        ));
+        return Err(InternalError::unavailable());
     }
     let observed = query_component_runtime_status(plan.target_canister).await?;
     validate_active_target_runtime_status_for_deployment(
@@ -3318,10 +3063,7 @@ async fn activate_component_membership_with_plan(
         &active_partition,
     )?;
     if active_partition.status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "membership activation did not produce an Active Component partition",
-        ));
+        return Err(InternalError::invariant());
     }
     let synchronization_request = ComponentRuntimeDirectorySynchronizationRequest {
         operation_id: request.operation_id,
@@ -3337,17 +3079,9 @@ async fn activate_component_membership_with_plan(
     let membership = committed_directory_receipt(&activated_allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Active Component partition has no membership receipt",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if membership.directory_authority_hash != active_authority_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active membership receipt differs from its derived current Directory",
-        ));
+        return Err(InternalError::invariant());
     }
 
     synchronize_active_membership(
@@ -3423,19 +3157,14 @@ pub async fn converge_root_activation_inventory(
     if unchanged.receipt.inventory_hash != sealed.receipt.inventory_hash
         || unchanged.operation_ids != sealed.operation_ids
     {
-        return Err(InternalError::conflict(
-            "initial Component inventory changed during root activation verification",
-        ));
+        return Err(InternalError::conflict());
     }
     let receipt = ComponentRegistryOps::mark_initial_inventory_directories_converged(
         fleet_activation_operation_id,
         sealed.receipt.inventory_hash,
     )?;
     if !receipt.directories_converged {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "initial Component Directory convergence did not commit its root receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(receipt)
 }
@@ -3446,19 +3175,14 @@ pub fn mark_root_runtime_activated(
 ) -> Result<RootComponentInitialInventoryView, InternalError> {
     let receipt = ComponentRegistryOps::initial_inventory(fleet_activation_operation_id)?;
     if !receipt.directories_converged {
-        return Err(InternalError::unavailable(
-            "root runtime activation requires terminal initial Directory convergence",
-        ));
+        return Err(InternalError::unavailable());
     }
     let terminal = ComponentRegistryOps::mark_initial_inventory_root_runtime_activated(
         fleet_activation_operation_id,
         receipt.inventory_hash,
     )?;
     if !terminal.root_runtime_activated {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root runtime activation did not commit its terminal Component inventory receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(terminal)
 }
@@ -3473,27 +3197,75 @@ pub fn root_runtime_activation_receipt_complete() -> bool {
 /// Resolve one active member from current protected Component Registry authority.
 pub fn active_component_member(
     canister: candid::Principal,
-) -> Result<ManagedCanisterBinding, InternalError> {
+) -> Result<ManagedCanisterBinding, ActiveComponentMemberError> {
     Ok(active_component_member_authority(canister)?.binding)
+}
+
+///
+/// ActiveComponentMemberError
+///
+/// Distinguishes an ordinary negative membership predicate from a protected
+/// Registry or runtime failure that must retain its typed cause.
+///
+
+#[derive(Debug)]
+pub enum ActiveComponentMemberError {
+    Internal(InternalError),
+    NotActive,
+}
+
+impl From<InternalError> for ActiveComponentMemberError {
+    fn from(error: InternalError) -> Self {
+        Self::Internal(error)
+    }
+}
+
+impl From<ActiveComponentMemberError> for InternalError {
+    fn from(error: ActiveComponentMemberError) -> Self {
+        match error {
+            ActiveComponentMemberError::Internal(error) => error,
+            ActiveComponentMemberError::NotActive => {
+                Self::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod active_component_member_error_tests {
+    use super::*;
+
+    #[test]
+    fn negative_membership_and_registry_failures_remain_distinct() {
+        let inactive = InternalError::from(ActiveComponentMemberError::NotActive);
+        assert_eq!(
+            inactive.public_error().code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
+
+        let internal = InternalError::platform_failure();
+        let recovered = InternalError::from(ActiveComponentMemberError::Internal(internal));
+        assert_eq!(
+            recovered.code(),
+            canic_core::diagnostics::codes::PLATFORM_FAILED
+        );
+        assert_eq!(
+            recovered.public_error().code(),
+            canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        );
+    }
 }
 
 /// Resolve one active member together with its current owning Registry head.
 pub fn active_component_member_authority(
     canister: candid::Principal,
-) -> Result<ActiveComponentMemberView, InternalError> {
+) -> Result<ActiveComponentMemberView, ActiveComponentMemberError> {
     let (authority, _) = root_authority()?;
     prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let component = ComponentRegistryOps::component_for_principal(canister).ok_or_else(|| {
-        InternalError::public(Error::forbidden(format!(
-            "caller {canister} has no Component Registry identity"
-        )))
-    })?;
-    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component principal index has no Registry partition",
-        )
-    })?;
+    let component = ComponentRegistryOps::component_for_principal(canister)
+        .ok_or(ActiveComponentMemberError::NotActive)?;
+    let partition =
+        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::invariant())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3501,18 +3273,11 @@ pub fn active_component_member_authority(
         &partition,
     )?;
     let (member, member_status) = ComponentRegistryOps::registered_parent(component, canister)?
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component principal index has no registered member",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if partition.status != ComponentLifecycleStatus::Active
         || member_status != ComponentLifecycleStatus::Active
     {
-        return Err(InternalError::public(Error::forbidden(format!(
-            "caller {canister} is not an active Component Registry member"
-        ))));
+        return Err(ActiveComponentMemberError::NotActive);
     }
     Ok(ActiveComponentMemberView {
         binding: member,
@@ -3529,20 +3294,12 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
     let membership = committed_directory_receipt(&plan.allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| {
-            InternalError::unavailable(
-                "initial Component has no active Registry membership receipt",
-            )
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     if !membership.directory_synchronized {
-        return Err(InternalError::unavailable(
-            "initial Component has no terminal current-Directory receipt",
-        ));
+        return Err(InternalError::unavailable());
     }
-    let active_partition =
-        ComponentRegistryOps::partition(plan.allocation.component)?.ok_or_else(|| {
-            InternalError::unavailable("initial Component has no current Registry partition")
-        })?;
+    let active_partition = ComponentRegistryOps::partition(plan.allocation.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &plan.root_binding,
         plan.allocation.release_set,
@@ -3550,9 +3307,7 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
         &active_partition,
     )?;
     if active_partition.status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::unavailable(
-            "initial Component Registry partition is not Active",
-        ));
+        return Err(InternalError::unavailable());
     }
     let active_request = ComponentRuntimeDirectorySynchronizationRequest {
         operation_id,
@@ -3566,10 +3321,7 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
     let active_authority_hash =
         ComponentRuntimeOps::directory_authority_hash(&active_request.authority)?;
     if membership.directory_authority_hash != active_authority_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "initial Component membership receipt differs from active Directory authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let observed = query_component_runtime_status(plan.target_canister).await?;
     if !validate_target_membership_status_for_deployment(
@@ -3581,9 +3333,7 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
         &active_request,
         active_authority_hash,
     )? {
-        return Err(InternalError::unavailable(
-            "initial Component has not converged on its active current Directory",
-        ));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -3591,9 +3341,8 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
 async fn prepared_initial_component_runtime_plan(
     operation_id: [u8; 32],
 ) -> Result<PreparedComponentRuntimePlan, InternalError> {
-    let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
-        InternalError::unavailable("initial Component allocation operation is absent")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     if !matches!(
         &allocation.provisioning_origin,
         ComponentProvisioningOrigin::ComponentGroup { .. }
@@ -3619,9 +3368,8 @@ pub fn registry_partition(
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3638,9 +3386,8 @@ pub fn directory_head(
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let topology = ConfigOps::component_topology()?;
-    let partition = ComponentRegistryOps::partition(request.component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition = ComponentRegistryOps::partition(request.component)?
+        .ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3655,18 +3402,15 @@ pub fn directory_page(
     request: ComponentDirectoryPageRequest,
 ) -> Result<ComponentDirectoryPageResponse, InternalError> {
     if request.limit == 0 || request.limit > MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES {
-        return Err(InternalError::invalid_input(format!(
-            "Component Directory page limit must be between 1 and {MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES}",
-        )));
+        return Err(InternalError::invalid_input());
     }
 
     let (authority, _root) = root_authority()?;
     let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let topology = ConfigOps::component_topology()?;
     let component = request.directory.provenance.component.component;
-    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Registry partition has not been committed")
-    })?;
+    let partition =
+        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::unavailable())?;
     validate_partition(
         &authority.binding,
         authority.initial_release_set,
@@ -3676,44 +3420,29 @@ pub fn directory_page(
     let caller = IcOps::msg_caller();
     let (member, status) =
         ComponentRegistryOps::registered_parent(component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {component}"
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     validate_directory_member(&authority.binding, &topology, &partition, &member)?;
     if !component_directory_member_can_read(status) {
-        return Err(InternalError::unavailable(
-            "Component Directory pages require a live registered member",
-        ));
+        return Err(InternalError::unavailable());
     }
 
     let directory = component_directory_head(&partition);
     if request.directory != directory {
-        return Err(InternalError::conflict(
-            "requested Component Directory head is not the exact current authority",
-        ));
+        return Err(InternalError::conflict());
     }
 
     if let Some(parent_canister_id) = request.parent_canister_id
         && ComponentRegistryOps::registered_parent(component, parent_canister_id)?.is_none()
     {
-        return Err(InternalError::invalid_input(
-            "Component Directory parent filter is not a registered member of this Component",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if let Some(role) = request.role.as_ref() {
         let spec = topology
             .get(&partition.binding.component_spec)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "Component Directory Spec is absent from protected topology",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if spec.child(role).is_none() {
-            return Err(InternalError::invalid_input(
-                "Component Directory role filter is absent from the Component Spec",
-            ));
+            return Err(InternalError::invalid_input());
         }
     }
 
@@ -3767,9 +3496,7 @@ fn advance_creation(
     {
         return claim_component_pool_asset(operation_id, plan, pool_claim, canister);
     }
-    Err(InternalError::resource_exhausted(
-        "no Ready prepaid Canister is available; root-local pool maintenance or an operator import must replenish an asset",
-    ))
+    Err(InternalError::resource_exhausted())
 }
 
 fn advance_child_creation(
@@ -3799,9 +3526,7 @@ fn advance_child_creation(
             canister,
         );
     }
-    Err(InternalError::resource_exhausted(
-        "no Ready prepaid Canister is available; root-local pool maintenance or an operator import must replenish an asset",
-    ))
+    Err(InternalError::resource_exhausted())
 }
 
 fn claim_component_pool_asset(
@@ -3821,10 +3546,7 @@ fn claim_component_pool_asset(
         return Err(CostGuardWorkflow::recover_after_failure(
             &permit,
             IcOps::now_secs(),
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component pool claim intent commit returned an invalid phase",
-            ),
+            InternalError::invariant(),
         ));
     };
     validate_creation_effect(effect, &plan).map_err(|error| {
@@ -3857,10 +3579,7 @@ fn claim_component_child_pool_asset(
         return Err(CostGuardWorkflow::recover_after_failure(
             &permit,
             IcOps::now_secs(),
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component Child pool claim intent commit returned an invalid phase",
-            ),
+            InternalError::invariant(),
         ));
     };
     validate_creation_effect(effect, &plan).map_err(|error| {
@@ -3939,16 +3658,11 @@ fn require_component_progress_canister(
         | RootComponentAllocationProgressView::Removed { canister, .. } => *canister,
         RootComponentAllocationProgressView::Reserved
         | RootComponentAllocationProgressView::CreationIntent(_) => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "Component pool claim reached an unhandled allocation phase",
-            ));
+            return Err(InternalError::invariant());
         }
     };
     if actual != expected {
-        return Err(InternalError::conflict(
-            "Component allocation principal differs from its Canister pool claim",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -3965,16 +3679,11 @@ fn require_component_child_progress_canister(
         | RootComponentChildAllocationProgressView::Committed { canister, .. } => *canister,
         RootComponentChildAllocationProgressView::Reserved
         | RootComponentChildAllocationProgressView::CreationIntent(_) => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "Component Child pool claim reached an unhandled allocation phase",
-            ));
+            return Err(InternalError::invariant());
         }
     };
     if actual != expected {
-        return Err(InternalError::conflict(
-            "Component Child allocation principal differs from its Canister pool claim",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -4106,19 +3815,13 @@ async fn component_install_plan_with_deployment(
     )
     .await?;
     if source.source_canister() != &store.wasm_store {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "resolved Component module source differs from the verified root Store",
-        ));
+        return Err(InternalError::invariant());
     }
     let chunk_hashes = source.chunk_hashes().to_vec();
     if source.module_hash() != artifact.payload_hash
         || source.payload_size_bytes() != artifact.payload_size_bytes
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "resolved Component module source differs from verified Store artifact evidence",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let binding = ComponentBinding {
@@ -4134,19 +3837,10 @@ async fn component_install_plan_with_deployment(
     let topology = ConfigOps::component_topology()?;
     topology
         .validate_component_binding(root, &binding)
-        .map_err(|error| {
-            InternalError::invalid_input(format!(
-                "derived Component install binding is invalid: {error}"
-            ))
-        })?;
+        .map_err(|_error| InternalError::invalid_input())?;
     let spec_maximum_registry_bytes = topology
         .get(&allocation.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Config,
-                "installed Component Spec is absent from the protected topology",
-            )
-        })?
+        .ok_or_else(|| InternalError::invariant())?
         .limits
         .maximum_registry_bytes;
     let deployment =
@@ -4204,19 +3898,13 @@ async fn child_component_install_plan(
     )
     .await?;
     if source.source_canister() != &store.wasm_store {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "resolved Component Child module source differs from the verified root Store",
-        ));
+        return Err(InternalError::invariant());
     }
     let chunk_hashes = source.chunk_hashes().to_vec();
     if source.module_hash() != artifact.payload_hash
         || source.payload_size_bytes() != artifact.payload_size_bytes
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "resolved Component Child module source differs from verified Store artifact evidence",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let component = match parent {
@@ -4231,17 +3919,9 @@ async fn child_component_install_plan(
     };
     ConfigOps::component_topology()?
         .validate_component_child_binding(root, &binding)
-        .map_err(|error| {
-            InternalError::invalid_input(format!(
-                "derived Component Child install binding is invalid: {error}"
-            ))
-        })?;
-    let partition = ComponentRegistryOps::partition(allocation.component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Child install requires its owning Component Registry partition",
-        )
-    })?;
+        .map_err(|_error| InternalError::invalid_input())?;
+    let partition = ComponentRegistryOps::partition(allocation.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     let deployment_authority = RootComponentProvisioningOps::component_deployment_authority(
         &partition.provisioning_origin,
         &binding.component,
@@ -4289,15 +3969,11 @@ async fn advance_child_install(
     match &allocation.progress {
         RootComponentChildAllocationProgressView::Reserved
         | RootComponentChildAllocationProgressView::CreationIntent(_) => {
-            Err(InternalError::conflict(
-                "Component Child allocation must be created before installation",
-            ))
+            Err(InternalError::conflict())
         }
         RootComponentChildAllocationProgressView::Created { .. } => {
             if observed_child_install_state(&plan).await? {
-                return Err(InternalError::conflict(
-                    "created Component Child has unjournalled installed code",
-                ));
+                return Err(InternalError::conflict());
             }
             ComponentRegistryOps::validate_child_install_capacity(
                 component,
@@ -4442,10 +4118,7 @@ async fn verify_and_mark_child_installed(
         verified.progress,
         RootComponentChildAllocationProgressView::Verified { .. }
     ) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child verification commit returned an invalid phase",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(child_allocation_response(verified))
 }
@@ -4455,31 +4128,23 @@ async fn observed_child_install_state(
 ) -> Result<bool, InternalError> {
     let status = MgmtOps::canister_status(plan.canister).await?;
     if status.settings.controllers != vec![plan.durable.binding.component.fleet_subnet_root] {
-        return Err(InternalError::conflict(
-            "Component Child Canister controllers differ from its sole root authority",
-        ));
+        return Err(InternalError::conflict());
     }
     match status.module_hash {
         None => Ok(false),
         Some(module_hash) if module_hash == plan.expected_status_module_hash => Ok(true),
-        Some(_) => Err(InternalError::conflict(
-            "Component Child Canister module hash differs from its install intent",
-        )),
+        Some(_) => Err(InternalError::conflict()),
     }
 }
 
 async fn verify_installed_child(plan: &ComponentChildInstallPlan) -> Result<(), InternalError> {
     if !observed_child_install_state(plan).await? {
-        return Err(InternalError::unavailable(
-            "Component Child Canister has no installed module after installation",
-        ));
+        return Err(InternalError::unavailable());
     }
     let observed = query_managed_binding(plan.canister).await?;
     let expected = ManagedCanisterBinding::ComponentChild(plan.durable.binding.clone());
     if observed != expected {
-        return Err(InternalError::conflict(
-            "installed Component Child retained binding differs from root install authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -4490,10 +4155,7 @@ fn removed_allocation_response(
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     let RootComponentAllocationProgressView::Removed { installation, .. } = &allocation.progress
     else {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "removed Component response requires removed allocation authority",
-        ));
+        return Err(InternalError::invariant());
     };
     validate_install_effect(installation, &plan.durable)?;
     CostGuardWorkflow::recover_replay_settlement(
@@ -4510,14 +4172,10 @@ async fn advance_install(
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     match &allocation.progress {
         RootComponentAllocationProgressView::Reserved
-        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict(
-            "Component allocation must be created before installation",
-        )),
+        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict()),
         RootComponentAllocationProgressView::Created { .. } => {
             if observed_install_state(&plan).await? {
-                return Err(InternalError::conflict(
-                    "created Component has unjournalled installed code",
-                ));
+                return Err(InternalError::conflict());
             }
             ComponentRegistryOps::validate_install_capacity(operation_id, &plan.durable)?;
             let permit = deployment::reserve_component_install_cost_guard()?;
@@ -4620,10 +4278,7 @@ async fn verify_committed_or_verified_install(
         RootComponentAllocationProgressView::Committed { .. } => {
             verify_installed_component(plan).await
         }
-        _ => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component install verification reached an invalid allocation phase",
-        )),
+        _ => Err(InternalError::invariant()),
     }
 }
 
@@ -4673,10 +4328,7 @@ async fn verify_and_mark_installed(
         verified.progress,
         RootComponentAllocationProgressView::Verified { .. }
     ) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component verification commit returned an invalid phase",
-        ));
+        return Err(InternalError::invariant());
     }
     allocation_response(verified)
 }
@@ -4684,16 +4336,12 @@ async fn verify_and_mark_installed(
 async fn observed_install_state(plan: &ComponentInstallPlan) -> Result<bool, InternalError> {
     let status = MgmtOps::canister_status(plan.canister).await?;
     if status.settings.controllers != vec![plan.durable.binding.fleet_subnet_root] {
-        return Err(InternalError::conflict(
-            "Component Canister controllers differ from its sole root authority",
-        ));
+        return Err(InternalError::conflict());
     }
     match status.module_hash {
         None => Ok(false),
         Some(module_hash) if module_hash == plan.expected_status_module_hash => Ok(true),
-        Some(_) => Err(InternalError::conflict(
-            "Component Canister module hash differs from its install intent",
-        )),
+        Some(_) => Err(InternalError::conflict()),
     }
 }
 
@@ -4701,16 +4349,12 @@ async fn installed_component_status(
     plan: &ComponentInstallPlan,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     if !observed_install_state(plan).await? {
-        return Err(InternalError::unavailable(
-            "Component Canister has no installed module after installation",
-        ));
+        return Err(InternalError::unavailable());
     }
     let observed = query_managed_binding(plan.canister).await?;
     let expected = ManagedCanisterBinding::Component(plan.durable.binding.clone());
     if observed != expected {
-        return Err(InternalError::conflict(
-            "installed Component retained binding differs from root install authority",
-        ));
+        return Err(InternalError::conflict());
     }
     query_component_runtime_status(plan.canister).await
 }
@@ -4750,9 +4394,7 @@ fn validate_prepared_install_status(
         && directory_is_empty
         && status.activation.is_none();
     if !runtime_is_prepared {
-        return Err(InternalError::conflict(
-            "installed Component did not remain behind the empty AwaitingDirectory fence",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -4764,19 +4406,13 @@ fn validate_installed_component_status(
     deployment: &ProtectedComponentDeployment,
 ) -> Result<(), InternalError> {
     if status.operation_id != operation_id {
-        return Err(InternalError::conflict(
-            "installed Component retained a different installation operation",
-        ));
+        return Err(InternalError::conflict());
     }
     if &status.binding != binding {
-        return Err(InternalError::conflict(
-            "installed Component runtime status retained a different binding",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.deployment.as_ref() != deployment {
-        return Err(InternalError::conflict(
-            "installed Component retained a different protected deployment context",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -4787,11 +4423,13 @@ async fn query_managed_binding(
     let call = CallOps::bounded_wait(canister, protocol::CANIC_MANAGED_CANISTER_BINDING)
         .execute()
         .await
-        .map_err(|error| InternalError::public(Error::unavailable(error.to_string())))?;
+        .map_err(|_error| {
+            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+        })?;
     let result: Result<ManagedCanisterBinding, Error> = call
         .candid()
-        .map_err(|error| InternalError::public(Error::invariant(error.to_string())))?;
-    result.map_err(InternalError::public)
+        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
+    result.map_err(InternalError::observed_public)
 }
 
 async fn prepared_component_runtime_plan(
@@ -4821,9 +4459,8 @@ async fn prepared_component_runtime_plan_with_group_authority(
     let fleet_directory =
         validate_current_mirror_authority(&root_authority, root, &preparation_request)?;
     let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
-        InternalError::unavailable("Component allocation operation has not been reserved")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     let retained_group_authority =
         validated_group_component_runtime_authority(&allocation, group_authority)?;
     validate_allocation_record(
@@ -4853,10 +4490,7 @@ async fn prepared_component_runtime_plan_with_group_authority(
         &partition,
     )?;
     if partition.status != ComponentLifecycleStatus::Prepared {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "prepared Component receipt did not reconstruct a Prepared Registry partition",
-        ));
+        return Err(InternalError::invariant());
     }
     let authority = ComponentRuntimeDirectoryAuthority {
         fleet: fleet_directory,
@@ -4867,10 +4501,7 @@ async fn prepared_component_runtime_plan_with_group_authority(
     if committed_directory_receipt(&allocation)?.directory_authority_hash
         != directory_authority_hash
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "committed root Directory receipt differs from current Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(PreparedComponentRuntimePlan {
         root_binding: root_authority.binding,
@@ -4901,17 +4532,13 @@ fn validated_group_component_runtime_authority(
         return Ok(None);
     };
     if &allocation.provisioning_origin != group_authority.provisioning_origin {
-        return Err(InternalError::conflict(
-            "grouped Component runtime origin differs from aggregate authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(allocation)?;
     let authority_is_exact = retained.deployment == *group_authority.deployment
         && retained.component_group == *group_authority.component_group;
     if !authority_is_exact {
-        return Err(InternalError::conflict(
-            "grouped Component runtime deployment or Directory differs from aggregate authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(Some(retained))
 }
@@ -4936,19 +4563,13 @@ async fn prepared_child_runtime_plan(
     let caller = IcOps::msg_caller();
     let (parent_binding, parent_status) =
         ComponentRegistryOps::registered_parent(component, caller)?.ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is not a registered member of Component {component}"
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     if parent_status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::unavailable(
-            "Component Child lifecycle requires its exact parent to remain Active",
-        ));
+        return Err(InternalError::unavailable());
     }
-    let allocation =
-        ComponentRegistryOps::child_allocation(component, operation_id)?.ok_or_else(|| {
-            InternalError::unavailable("Component Child allocation operation has not been reserved")
-        })?;
+    let allocation = ComponentRegistryOps::child_allocation(component, operation_id)?
+        .ok_or_else(|| InternalError::unavailable())?;
     let topology = ConfigOps::component_topology()?;
     validate_child_allocation(
         &root_authority.binding,
@@ -5025,14 +4646,10 @@ fn validate_requesting_parent_still_active(
     let caller = IcOps::msg_caller();
     let (current, status) = ComponentRegistryOps::registered_parent(component, caller)?
         .ok_or_else(|| {
-            InternalError::public(Error::forbidden(format!(
-                "caller {caller} is no longer a registered member of Component {component}"
-            )))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     if current != *expected || status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::conflict(
-            "Component Child parent changed before terminal lifecycle commitment",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -5044,21 +4661,14 @@ fn current_child_partition(
     component: canic_core::ids::ComponentInstanceId,
     committed: &ComponentRegistryPartitionView,
 ) -> Result<ComponentRegistryPartitionView, InternalError> {
-    let current = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "committed Component Child has no current owning Registry partition",
-        )
-    })?;
+    let current =
+        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::invariant())?;
     validate_partition(root, release_set, topology, &current)?;
     if current.status != ComponentLifecycleStatus::Active
         || current.binding != committed.binding
         || current.revision < committed.revision
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "committed Component Child differs from its current owning Component authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(current)
 }
@@ -5082,10 +4692,7 @@ fn child_directory_request(
     };
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
     if committed_child_directory_receipt(allocation)?.directory_authority_hash != authority_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "committed Component Child Directory receipt differs from its Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok((request, authority_hash))
 }
@@ -5095,13 +4702,10 @@ fn active_component_direct_children_for_authority(
     parent_canister_id: candid::Principal,
 ) -> Result<Vec<ComponentRuntimeDirectChild>, InternalError> {
     let component = authority.component.provenance.component.component;
-    let partition = ComponentRegistryOps::partition(component)?.ok_or_else(|| {
-        InternalError::unavailable("Component Directory partition has not been committed")
-    })?;
+    let partition =
+        ComponentRegistryOps::partition(component)?.ok_or_else(|| InternalError::unavailable())?;
     if component_directory_head(&partition) != authority.component {
-        return Err(InternalError::conflict(
-            "Component direct-child projection authority is not current",
-        ));
+        return Err(InternalError::conflict());
     }
     active_component_direct_children(&partition, parent_canister_id)
 }
@@ -5124,10 +4728,7 @@ pub(super) fn active_component_direct_children(
         scan_limit,
     )?;
     if page.next_cursor.is_some() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component direct-child projection exceeded its committed descendant bound",
-        ));
+        return Err(InternalError::invariant());
     }
     let mut direct_children = page
         .entries
@@ -5142,10 +4743,7 @@ pub(super) fn active_component_direct_children(
         .windows(2)
         .any(|pair| pair[0].canister_id == pair[1].canister_id)
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component direct-child projection contains a duplicate principal",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(direct_children)
 }
@@ -5156,11 +4754,13 @@ async fn query_component_runtime_status(
     let call = CallOps::bounded_wait(canister, protocol::CANIC_COMPONENT_RUNTIME_STATUS)
         .execute()
         .await
-        .map_err(|error| InternalError::public(Error::unavailable(error.to_string())))?;
+        .map_err(|_error| {
+            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+        })?;
     let result: Result<ComponentRuntimeStatusResponse, Error> = call
         .candid()
-        .map_err(|error| InternalError::public(Error::invariant(error.to_string())))?;
-    result.map_err(InternalError::public)
+        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
+    result.map_err(InternalError::observed_public)
 }
 
 async fn activate_target_component_runtime(
@@ -5171,11 +4771,13 @@ async fn activate_target_component_runtime(
         .with_arg(request)?
         .execute()
         .await
-        .map_err(|error| InternalError::public(Error::unavailable(error.to_string())))?;
+        .map_err(|_error| {
+            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+        })?;
     let result: Result<ComponentRuntimeStatusResponse, Error> = call
         .candid()
-        .map_err(|error| InternalError::public(Error::invariant(error.to_string())))?;
-    result.map_err(InternalError::public)
+        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
+    result.map_err(InternalError::observed_public)
 }
 
 async fn activate_directory_prepared_runtime_for_deployment(
@@ -5194,9 +4796,7 @@ async fn activate_directory_prepared_runtime_for_deployment(
         directory_authority_hash,
     )? {
         ComponentRuntimePhase::AwaitingDirectory => {
-            return Err(InternalError::unavailable(
-                "Component runtime has not retained its Directory authority",
-            ));
+            return Err(InternalError::unavailable());
         }
         ComponentRuntimePhase::DirectoryPrepared => {
             let request = ComponentRuntimeActivationRequest {
@@ -5296,9 +4896,7 @@ async fn converge_active_membership_directory_for_deployment(
         active_request,
         active_authority_hash,
     )? {
-        return Err(InternalError::unavailable(
-            "Component runtime has not retained its active membership Directory",
-        ));
+        return Err(InternalError::unavailable());
     }
 
     let independently_observed = query_component_runtime_status(canister).await?;
@@ -5324,11 +4922,11 @@ async fn synchronize_target_component_directory(
     .with_arg(request)?
     .execute()
     .await
-    .map_err(|error| InternalError::public(Error::unavailable(error.to_string())))?;
+    .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE))?;
     let result: Result<ComponentRuntimeStatusResponse, Error> = call
         .candid()
-        .map_err(|error| InternalError::public(Error::invariant(error.to_string())))?;
-    result.map_err(InternalError::public)
+        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
+    result.map_err(InternalError::observed_public)
 }
 
 async fn prepare_target_component_directories(
@@ -5342,11 +4940,11 @@ async fn prepare_target_component_directories(
     .with_arg(request)?
     .execute()
     .await
-    .map_err(|error| InternalError::public(Error::unavailable(error.to_string())))?;
+    .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE))?;
     let result: Result<ComponentRuntimeStatusResponse, Error> = call
         .candid()
-        .map_err(|error| InternalError::public(Error::invariant(error.to_string())))?;
-    result.map_err(InternalError::public)
+        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
+    result.map_err(InternalError::observed_public)
 }
 
 async fn converge_subtree_directory_recipients(
@@ -5368,26 +4966,17 @@ async fn converge_subtree_directory_recipients(
         ),
         ComponentLifecycleStatus::Draining => {
             let draining = ComponentRegistryOps::component_draining(partition.binding.component)?
-                .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "Draining Component has no durable draining authority",
-                )
-            })?;
+                .ok_or_else(|| InternalError::invariant())?;
             if !matches!(
                 draining.quiescence,
                 Some(RootComponentQuiescenceProgressView::Quiescent(_))
             ) {
-                return Err(InternalError::unavailable(
-                    "Draining Component is not terminally quiescent",
-                ));
+                return Err(InternalError::unavailable());
             }
             None
         }
         ComponentLifecycleStatus::Prepared | ComponentLifecycleStatus::Removed => {
-            return Err(InternalError::conflict(
-                "Component subtree Directory convergence requires Active or Draining authority",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     let leaf = &membership.deleted.deletion.stopped.stop.leaf;
@@ -5398,16 +4987,9 @@ async fn converge_subtree_directory_recipients(
         partition.binding.component,
         leaf.parent_canister_id,
     )?
-    .ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "removed Component subtree leaf has no retained registered parent",
-        )
-    })?;
+    .ok_or_else(|| InternalError::invariant())?;
     if status != ComponentLifecycleStatus::Active {
-        return Err(InternalError::conflict(
-            "removed Component subtree leaf parent is not Active",
-        ));
+        return Err(InternalError::conflict());
     }
     let parent =
         converge_active_member_directory(&parent_binding, authority, authority_hash).await?;
@@ -5464,9 +5046,7 @@ async fn converge_active_member_directory(
         authority_hash,
         direct_children_hash,
     )? {
-        return Err(InternalError::unavailable(
-            "active Component-tree member has not retained the committed Directory authority",
-        ));
+        return Err(InternalError::unavailable());
     }
 
     let independently_observed = query_component_runtime_status(canister).await?;
@@ -5486,18 +5066,17 @@ fn active_member_directory_is_converged(
     expected_hash: [u8; 32],
     expected_direct_children_hash: [u8; 32],
 ) -> Result<bool, InternalError> {
-    let current = status.authority.as_ref().ok_or_else(|| {
-        InternalError::conflict("Active Component-tree member has no current Directory authority")
-    })?;
-    let current_hash = status.authority_hash.ok_or_else(|| {
-        InternalError::conflict("Active Component-tree member has no current Directory hash")
-    })?;
-    let current_direct_children_hash = status.direct_children_hash.ok_or_else(|| {
-        InternalError::conflict("Active Component-tree member has no direct-child projection hash")
-    })?;
-    let activation = status.activation.ok_or_else(|| {
-        InternalError::conflict("Active Component-tree member has no immutable activation receipt")
-    })?;
+    let current = status
+        .authority
+        .as_ref()
+        .ok_or_else(|| InternalError::conflict())?;
+    let current_hash = status
+        .authority_hash
+        .ok_or_else(|| InternalError::conflict())?;
+    let current_direct_children_hash = status
+        .direct_children_hash
+        .ok_or_else(|| InternalError::conflict())?;
+    let activation = status.activation.ok_or_else(|| InternalError::conflict())?;
     validate_active_member_protected_status(status, binding, current, current_hash, activation)?;
 
     let current_component = &current.component.provenance;
@@ -5506,14 +5085,10 @@ fn active_member_directory_is_converged(
     let expected_ownership = ComponentDirectoryOwnership::from_provenance(expected_component);
     let binding_ownership = ComponentDirectoryOwnership::from_binding(owning_component(binding));
     if current_ownership != expected_ownership {
-        return Err(InternalError::conflict(
-            "Component-tree member belongs to a different Component Directory authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if current_ownership != binding_ownership {
-        return Err(InternalError::conflict(
-            "Component-tree member Directory differs from its protected binding",
-        ));
+        return Err(InternalError::conflict());
     }
     match current_component
         .component_registry_revision
@@ -5533,24 +5108,18 @@ fn active_member_directory_is_converged(
             if current_identity == expected_identity {
                 Ok(true)
             } else {
-                Err(InternalError::conflict(
-                    "Component-tree member retained conflicting authority at the committed revision",
-                ))
+                Err(InternalError::conflict())
             }
         }
         std::cmp::Ordering::Less => {
             if !component_directory_progresses(current, expected) {
-                return Err(InternalError::conflict(
-                    "committed Component Directory cannot advance the active member safely",
-                ));
+                return Err(InternalError::conflict());
             }
             Ok(false)
         }
         std::cmp::Ordering::Greater => {
             if !component_directory_progresses(expected, current) {
-                return Err(InternalError::conflict(
-                    "active Component-tree member progressed through conflicting Directory authority",
-                ));
+                return Err(InternalError::conflict());
             }
             Ok(true)
         }
@@ -5565,29 +5134,19 @@ fn validate_active_member_protected_status(
     activation: ComponentRuntimeActivationEvidence,
 ) -> Result<(), InternalError> {
     if status.binding != *binding {
-        return Err(InternalError::conflict(
-            "Component-tree member status has a different protected binding",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.phase != ComponentRuntimePhase::Active {
-        return Err(InternalError::conflict(
-            "Component-tree member status is not Active",
-        ));
+        return Err(InternalError::conflict());
     }
     if activation.directory_authority_hash == [0; 32] {
-        return Err(InternalError::conflict(
-            "Component-tree member activation has no Directory authority hash",
-        ));
+        return Err(InternalError::conflict());
     }
     if activation.activated_at_ns == 0 {
-        return Err(InternalError::conflict(
-            "Component-tree member activation has no timestamp",
-        ));
+        return Err(InternalError::conflict());
     }
     if ComponentRuntimeOps::directory_authority_hash(current)? != current_hash {
-        return Err(InternalError::conflict(
-            "Component-tree member current Directory hash differs from its authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -5623,16 +5182,11 @@ fn exact_active_member_directory_receipt(
         authority_hash,
         direct_children_hash,
     )? {
-        return Err(InternalError::unavailable(
-            "active Component-tree member has not converged on the committed Directory authority",
-        ));
+        return Err(InternalError::unavailable());
     }
-    let activation = status.activation.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "converged Component-tree member lost its immutable activation receipt",
-        )
-    })?;
+    let activation = status
+        .activation
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(ComponentRuntimeDirectoryConvergenceEvidence {
         operation_id: status.operation_id,
         binding: binding.clone(),
@@ -5690,19 +5244,13 @@ fn validate_target_directory_status_for_deployment(
 ) -> Result<ComponentRuntimePhase, InternalError> {
     let direct_children_hash = ComponentRuntimeOps::direct_children_hash(&request.direct_children)?;
     if status.operation_id != request.operation_id {
-        return Err(InternalError::conflict(
-            "Component runtime Directory status has a different installation operation",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.binding != *binding {
-        return Err(InternalError::conflict(
-            "Component runtime Directory status has a different protected binding",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.deployment.as_ref() != deployment {
-        return Err(InternalError::conflict(
-            "Component runtime Directory status has a different protected deployment context",
-        ));
+        return Err(InternalError::conflict());
     }
     let identity = ComponentRuntimeDirectoryStatusIdentity::from_status(status);
     let prepared_identity = ComponentRuntimeDirectoryStatusIdentity::exact(
@@ -5730,9 +5278,7 @@ fn validate_target_directory_status_for_deployment(
         }
         ComponentRuntimePhase::AwaitingDirectory
         | ComponentRuntimePhase::DirectoryPrepared
-        | ComponentRuntimePhase::Active => Err(InternalError::conflict(
-            "Component runtime retained conflicting or incomplete Directory authority",
-        )),
+        | ComponentRuntimePhase::Active => Err(InternalError::conflict()),
     }
 }
 
@@ -5787,16 +5333,9 @@ fn validate_active_directory_refresh_identity(
     .into_iter()
     .all(|matches| matches);
     if !identity_is_exact {
-        return Err(InternalError::conflict(
-            "active Component Directory refresh target changed protected runtime identity",
-        ));
+        return Err(InternalError::conflict());
     }
-    status.activation.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active Component Directory refresh target lacks activation evidence",
-        )
-    })
+    status.activation.ok_or_else(|| InternalError::invariant())
 }
 
 fn active_directory_refresh_covers(
@@ -5892,9 +5431,7 @@ fn prepared_target_directory_status_for_deployment(
             )?),
             activation: None,
         }),
-        ComponentRuntimePhase::AwaitingDirectory => Err(InternalError::unavailable(
-            "Component runtime has not retained the complete Directory authority",
-        )),
+        ComponentRuntimePhase::AwaitingDirectory => Err(InternalError::unavailable()),
     }
 }
 
@@ -5913,9 +5450,7 @@ fn validate_active_target_runtime_status_for_deployment(
         authority_hash,
     )? != ComponentRuntimePhase::Active
     {
-        return Err(InternalError::unavailable(
-            "Component runtime has not completed exact Directory-bound activation",
-        ));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -5934,12 +5469,9 @@ fn active_target_runtime_status_for_deployment(
         request,
         authority_hash,
     )?;
-    let activation = status.activation.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Active Component runtime has no immutable activation receipt",
-        )
-    })?;
+    let activation = status
+        .activation
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(ComponentRuntimeStatusResponse {
         operation_id: request.operation_id,
         binding: binding.clone(),
@@ -5997,16 +5529,11 @@ fn active_membership_target_status_for_deployment(
         active_request,
         active_authority_hash,
     )? {
-        return Err(InternalError::unavailable(
-            "Component runtime did not converge on its active membership Directory",
-        ));
+        return Err(InternalError::unavailable());
     }
-    let activation = status.activation.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "active membership target lost its immutable activation receipt",
-        )
-    })?;
+    let activation = status
+        .activation
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(ComponentRuntimeStatusResponse {
         operation_id: prepared_request.operation_id,
         binding: binding.clone(),
@@ -6044,9 +5571,7 @@ fn allocation_creation_and_canister(
             creation, canister, ..
         } => Ok((creation, *canister)),
         RootComponentAllocationProgressView::Reserved
-        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict(
-            "Component allocation must be created before installation",
-        )),
+        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict()),
     }
 }
 
@@ -6071,9 +5596,7 @@ fn child_allocation_creation_and_canister(
         } => Ok((creation, *canister)),
         RootComponentChildAllocationProgressView::Reserved
         | RootComponentChildAllocationProgressView::CreationIntent(_) => {
-            Err(InternalError::conflict(
-                "Component Child allocation must be created before installation",
-            ))
+            Err(InternalError::conflict())
         }
     }
 }
@@ -6083,10 +5606,7 @@ fn install_effect(
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
     match &allocation.progress {
         RootComponentAllocationProgressView::InstallIntent { installation, .. } => Ok(installation),
-        _ => Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component install intent commit returned an invalid phase",
-        )),
+        _ => Err(InternalError::invariant()),
     }
 }
 
@@ -6097,10 +5617,7 @@ fn child_install_effect(
         RootComponentChildAllocationProgressView::InstallIntent { installation, .. } => {
             Ok(installation)
         }
-        _ => Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child install intent commit returned an invalid phase",
-        )),
+        _ => Err(InternalError::invariant()),
     }
 }
 
@@ -6110,9 +5627,7 @@ fn committed_or_verified_installation(
     match &allocation.progress {
         RootComponentAllocationProgressView::Verified { installation, .. }
         | RootComponentAllocationProgressView::Committed { installation, .. } => Ok(installation),
-        _ => Err(InternalError::conflict(
-            "Component allocation must be verified before Registry commitment",
-        )),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -6124,9 +5639,7 @@ fn committed_or_verified_child_installation(
         | RootComponentChildAllocationProgressView::Committed { installation, .. } => {
             Ok(installation)
         }
-        _ => Err(InternalError::conflict(
-            "Component Child allocation must be verified before Registry commitment",
-        )),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -6135,9 +5648,7 @@ fn committed_installation(
 ) -> Result<&RootComponentInstallEffectView, InternalError> {
     match &allocation.progress {
         RootComponentAllocationProgressView::Committed { installation, .. } => Ok(installation),
-        _ => Err(InternalError::conflict(
-            "Component allocation must be committed before Directory preparation",
-        )),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -6148,9 +5659,7 @@ fn committed_child_installation(
         RootComponentChildAllocationProgressView::Committed { installation, .. } => {
             Ok(installation)
         }
-        _ => Err(InternalError::conflict(
-            "Component Child allocation must be committed before Directory preparation",
-        )),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -6159,9 +5668,7 @@ pub(super) fn committed_directory_receipt(
 ) -> Result<&crate::view::component_registry::RootComponentCommitmentView, InternalError> {
     match &allocation.progress {
         RootComponentAllocationProgressView::Committed { commitment, .. } => Ok(commitment),
-        _ => Err(InternalError::conflict(
-            "Component allocation has no committed Directory authority",
-        )),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -6170,9 +5677,7 @@ fn committed_child_directory_receipt(
 ) -> Result<&crate::view::component_registry::RootComponentChildCommitmentView, InternalError> {
     match &allocation.progress {
         RootComponentChildAllocationProgressView::Committed { commitment, .. } => Ok(commitment),
-        _ => Err(InternalError::conflict(
-            "Component Child allocation has no committed Directory authority",
-        )),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -6180,13 +5685,9 @@ fn prepared_registry(
     root: &canic_core::ids::FleetSubnetRootBinding,
     release_set: canic_core::ids::FleetSubnetRootReleaseSet,
 ) -> Result<RootComponentRegistryView, InternalError> {
-    let prepared = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let prepared = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     if &prepared.root != root || prepared.release_set != release_set {
-        return Err(InternalError::conflict(
-            "durable Component Registry authority differs from the protected root",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(prepared)
 }
@@ -6200,9 +5701,7 @@ fn validate_preparation_authority(
     let target_is_exact = mirror.active.snapshot.version == request.expected_fleet_registry;
     let root_is_active = mirror.root_entry.status == FleetSubnetRootStatus::Active;
     if !target_is_exact || !root_is_active {
-        return Err(InternalError::conflict(
-            "Component Registry preparation requires this root's exact Active mirror authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(mirror.active.directory)
 }
@@ -6218,9 +5717,7 @@ fn validate_current_mirror_authority(
     let preparation_is_covered =
         ComponentRegistryOps::registry_covers_preparation(prepared, current);
     if !preparation_is_covered {
-        return Err(InternalError::conflict(
-            "current root Registry Mirror does not cover Component Registry preparation authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if mirror.root_entry.status == FleetSubnetRootStatus::Draining {
         ComponentRegistryOps::validate_published_root_draining(current)?;
@@ -6228,9 +5725,9 @@ fn validate_current_mirror_authority(
     Ok(mirror.active.directory)
 }
 
-fn require_active_root_runtime(unavailable_message: &'static str) -> Result<(), InternalError> {
+fn require_active_root_runtime(_unavailable_message: &'static str) -> Result<(), InternalError> {
     if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Active {
-        return Err(InternalError::unavailable(unavailable_message));
+        return Err(InternalError::unavailable());
     }
     Ok(())
 }
@@ -6240,10 +5737,7 @@ fn response(
     prepared: &RootComponentRegistryView,
 ) -> Result<RootComponentRegistryStatusResponse, InternalError> {
     if prepared.root.fleet_subnet_root != root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component Registry authority does not name this root",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(RootComponentRegistryStatusResponse {
         fleet_subnet_root: root,
@@ -6273,10 +5767,7 @@ fn allocation_response(
     allocation: RootComponentAllocationView,
 ) -> Result<RootComponentAllocationResponse, InternalError> {
     if allocation.allocation_sequence == 0 {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation sequence is zero",
-        ));
+        return Err(InternalError::invariant());
     }
     let (phase, creation, installation) = match allocation.progress {
         RootComponentAllocationProgressView::Reserved => {
@@ -6458,9 +5949,9 @@ const fn component_final_inventory_response(
 fn component_deletion_response(
     draining: RootComponentDrainingView,
 ) -> Result<RootComponentDeletionResponse, InternalError> {
-    let progress = draining.deletion.ok_or_else(|| {
-        InternalError::unavailable("Component deletion intent has not been durably prepared")
-    })?;
+    let progress = draining
+        .deletion
+        .ok_or_else(|| InternalError::unavailable())?;
     let phase = match progress {
         RootComponentDeletionProgressView::DeleteIntent(intent) => {
             RootComponentDeletionPhase::DeleteIntent(component_deletion_intent(intent))
@@ -6535,9 +6026,9 @@ const fn component_final_inventory(
 fn component_quiescence_response(
     draining: RootComponentDrainingView,
 ) -> Result<RootComponentQuiescenceResponse, InternalError> {
-    let phase = draining.quiescence.ok_or_else(|| {
-        InternalError::unavailable("Component quiescence stop intent has not been prepared")
-    })?;
+    let phase = draining
+        .quiescence
+        .ok_or_else(|| InternalError::unavailable())?;
     Ok(RootComponentQuiescenceResponse {
         operation_id: draining.operation_id,
         component: draining.component,
@@ -6750,18 +6241,12 @@ fn child_commit_response(
     let RootComponentChildAllocationProgressView::Committed { commitment, .. } =
         &allocation.progress
     else {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child Registry commit returned a non-committed allocation",
-        ));
+        return Err(InternalError::invariant());
     };
     if ComponentPartitionSnapshotAuthority::from_child_commitment(commitment)
         != ComponentPartitionSnapshotAuthority::from_partition(&partition)
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child receipt differs from its Registry or Directory authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let registry = partition_response(partition.clone());
     let directory = component_directory_head(&partition);
@@ -6778,10 +6263,7 @@ fn commit_response(
 ) -> Result<RootComponentCommitResponse, InternalError> {
     let RootComponentAllocationProgressView::Committed { commitment, .. } = &allocation.progress
     else {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Registry commit returned a non-committed allocation",
-        ));
+        return Err(InternalError::invariant());
     };
     let expected_head = ComponentRegistryHead {
         component: partition.binding.component,
@@ -6792,10 +6274,7 @@ fn commit_response(
         || commitment.prepared_registry_encoded_bytes != partition.encoded_bytes
         || commitment.directory_synchronized_at_ns != partition.directory_synchronized_at_ns
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component allocation receipt differs from its Registry or Directory authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let registry = partition_response(partition.clone());
     let directory = component_directory_head(&partition);
@@ -6814,21 +6293,13 @@ fn membership_response(
     let membership = committed_directory_receipt(&allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component allocation has no active membership receipt",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let encoded_bytes_covered = membership.registry_encoded_bytes <= partition.encoded_bytes;
     if !membership.directory_synchronized
         || !encoded_bytes_covered
         || membership.directory_synchronized_at_ns != partition.directory_synchronized_at_ns
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component membership receipt differs from active Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let directory = component_directory_head(&partition);
     let registry = partition_response(partition);
@@ -6849,20 +6320,12 @@ fn child_membership_response(
     let membership = committed_child_directory_receipt(&allocation)?
         .membership
         .as_ref()
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component Child allocation has no active membership receipt",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let membership_matches_partition =
         ComponentPartitionSnapshotAuthority::from_child_membership(membership)
             == ComponentPartitionSnapshotAuthority::from_partition(&active_partition);
     if !membership.directory_synchronized || !membership_matches_partition {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Child membership receipt differs from active Registry authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let directory = component_directory_head(&active_partition);
     let registry = partition_response(active_partition);
@@ -6936,12 +6399,7 @@ fn component_deployment_limits(
         ProtectedComponentDeployment::UngroupedOrdinary { .. } => {
             let spec = topology
                 .get(&partition.binding.component_spec)
-                .ok_or_else(|| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Config,
-                        "Component deployment limits reference an unknown protected Spec",
-                    )
-                })?;
+                .ok_or_else(|| InternalError::invariant())?;
             Ok(ComponentDeploymentLimits {
                 maximum_descendants: spec.limits.maximum_descendants,
                 maximum_registry_bytes: spec.limits.maximum_registry_bytes,
@@ -6959,20 +6417,14 @@ fn decode_component_directory_cursor(
         return Ok(None);
     };
     if cursor.0.is_empty() || cursor.0.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
-        return Err(InternalError::invalid_input(
-            "Component Directory cursor has an invalid encoded size",
-        ));
+        return Err(InternalError::invalid_input());
     }
-    let payload =
-        candid::decode_one::<ComponentDirectoryCursorPayload>(&cursor.0).map_err(|_| {
-            InternalError::invalid_input("Component Directory cursor is malformed or unsupported")
-        })?;
+    let payload = candid::decode_one::<ComponentDirectoryCursorPayload>(&cursor.0)
+        .map_err(|_| InternalError::invalid_input())?;
     if ComponentDirectoryCursorBinding::from_payload(&payload)
         != ComponentDirectoryCursorBinding::from_request(request)
     {
-        return Err(InternalError::conflict(
-            "Component Directory cursor is bound to a different head or filter",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(Some(ComponentDirectoryCanonicalCursor {
         parent_canister_id: payload.last_parent_canister_id,
@@ -6994,17 +6446,9 @@ fn encode_component_directory_cursor(
         last_role: cursor.role,
         last_canister_id: cursor.canister_id,
     };
-    let bytes = candid::encode_one(payload).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("Component Directory cursor encoding failed: {error}"),
-        )
-    })?;
+    let bytes = candid::encode_one(payload).map_err(|_error| InternalError::invariant())?;
     if bytes.len() > MAX_COMPONENT_DIRECTORY_CURSOR_BYTES {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Directory cursor exceeds its protocol byte bound",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(ComponentDirectoryPageCursor(bytes))
 }
@@ -7015,9 +6459,7 @@ fn creation_plan(
     allocation: &RootComponentAllocationView,
 ) -> Result<RootComponentCreationPlan, InternalError> {
     if store.fleet_subnet_root != root || store.release_set != allocation.release_set {
-        return Err(InternalError::conflict(
-            "verified Store evidence differs from the reserved Component authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let artifact = exact_store_artifact(store, &allocation.role)?;
     let config = ConfigOps::try_get_canister_by_role(&allocation.role)?;
@@ -7037,9 +6479,7 @@ fn child_creation_plan(
     allocation: &RootComponentChildAllocationView,
 ) -> Result<RootComponentCreationPlan, InternalError> {
     if store.fleet_subnet_root != root || store.release_set != allocation.release_set {
-        return Err(InternalError::conflict(
-            "verified Store evidence differs from the reserved Component Child authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let artifact = exact_store_artifact(store, &allocation.child_role)?;
     let config = ConfigOps::try_get_canister_by_role(&allocation.child_role)?;
@@ -7058,16 +6498,11 @@ fn exact_store_artifact<'a>(
     role: &canic_core::ids::CanisterRole,
 ) -> Result<&'a canic_core::dto::root_store::RootStoreCatalogEntry, InternalError> {
     let mut matching = store.catalog.iter().filter(|entry| &entry.role == role);
-    let artifact = matching.next().ok_or_else(|| {
-        InternalError::unavailable(format!(
-            "verified Store has no artifact for reserved Component role '{role}'"
-        ))
-    })?;
+    let artifact = matching
+        .next()
+        .ok_or_else(|| InternalError::unavailable())?;
     if matching.next().is_some() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "verified Store contains duplicate artifacts for one Component role",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(artifact)
 }
@@ -7086,9 +6521,7 @@ fn prepared_component_quiescence_plan(
             true,
         ),
         None => {
-            return Err(InternalError::unavailable(
-                "Component quiescence stop intent has not been durably prepared",
-            ));
+            return Err(InternalError::unavailable());
         }
     };
     let durable_authority = (
@@ -7106,26 +6539,18 @@ fn prepared_component_quiescence_plan(
         stop.controller,
     );
     if durable_authority != stop_authority {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component quiescence stop intent differs from protected draining authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if store.fleet_subnet_root != root.fleet_subnet_root
         || store.release_set != partition.release_set
     {
-        return Err(InternalError::conflict(
-            "verified Store differs from Component quiescence root authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let artifact = exact_store_artifact(store, &partition.binding.role)?;
     if stop.expected_module_hash != artifact.payload_hash
         || observed_module_hash.is_some_and(|hash| hash != artifact.payload_hash)
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component quiescence module authority differs from the verified Store artifact",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(PreparedComponentQuiescencePlan {
         component: draining.component,
@@ -7154,17 +6579,13 @@ fn prepared_component_deletion_plan(
             (receipt.deleted.deletion.clone(), true)
         }
         None => {
-            return Err(InternalError::unavailable(
-                "Component deletion intent has not been durably prepared",
-            ));
+            return Err(InternalError::unavailable());
         }
     };
     let request_authority = ComponentDeletionRequestAuthority::from_request(request);
     let durable_authority = ComponentDeletionRequestAuthority::from_durable(draining, &deletion);
     if request_authority != durable_authority {
-        return Err(InternalError::conflict(
-            "Component deletion request differs from durable final authority",
-        ));
+        return Err(InternalError::conflict());
     }
     validate_component_deletion_binding(root, partition, &deletion)?;
     let expected_status_module_hash =
@@ -7184,16 +6605,10 @@ fn validate_component_deletion_binding(
     deletion: &RootComponentDeletionIntentView,
 ) -> Result<(), InternalError> {
     if deletion.quiescence.stop.canister_id != partition.binding.canister_id {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component deletion Canister differs from protected Component binding",
-        ));
+        return Err(InternalError::invariant());
     }
     if deletion.quiescence.stop.controller != root.fleet_subnet_root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component deletion controller differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7205,28 +6620,17 @@ fn component_deletion_store_module(
     deletion: &RootComponentDeletionIntentView,
 ) -> Result<[u8; 32], InternalError> {
     if store.fleet_subnet_root != root.fleet_subnet_root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "verified Store differs from Component deletion root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if store.release_set != partition.release_set {
-        return Err(InternalError::conflict(
-            "verified Store release set differs from Component deletion authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let artifact = exact_store_artifact(store, &partition.binding.role)?;
     if deletion.quiescence.stop.expected_module_hash != artifact.payload_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component deletion intent differs from verified Store module authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if deletion.quiescence.observed_module_hash != artifact.payload_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component deletion quiescence differs from verified Store module authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(artifact.payload_hash)
 }
@@ -7284,9 +6688,7 @@ fn prepared_subtree_leaf_stop_plan(
         | RootComponentSubtreeRemovalProgressView::Traversing { .. }
         | RootComponentSubtreeRemovalProgressView::LeafSelected { .. }
         | RootComponentSubtreeRemovalProgressView::Completed(_) => {
-            return Err(InternalError::unavailable(
-                "Component subtree leaf has not prepared its stop intent",
-            ));
+            return Err(InternalError::unavailable());
         }
     };
     let requested_leaf_authority = (
@@ -7304,30 +6706,19 @@ fn prepared_subtree_leaf_stop_plan(
         stop.leaf.parent_canister_id,
     );
     if requested_leaf_authority != durable_leaf_authority {
-        return Err(InternalError::conflict(
-            "Component subtree stop request differs from durable leaf authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if stop.controller != root.fleet_subnet_root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "durable Component subtree stop controller differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if store.fleet_subnet_root != root.fleet_subnet_root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "verified Store differs from Component subtree stop root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let artifact = exact_store_artifact(store, &stop.leaf.role)?;
     if artifact.raw_module_hash != stop.leaf.installed_artifact_hash
         || durable_module_hash.is_some_and(|hash| hash != artifact.payload_hash)
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component subtree stop authority differs from verified Store artifact",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(PreparedSubtreeLeafStopPlan {
         component: removal.component,
@@ -7361,9 +6752,7 @@ fn validate_subtree_directory_request(
         leaf.parent_canister_id,
     );
     if requested_leaf_authority != durable_leaf_authority {
-        return Err(InternalError::conflict(
-            "Component subtree Directory request differs from durable leaf authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -7394,9 +6783,7 @@ fn prepared_subtree_leaf_delete_plan(
         | RootComponentSubtreeRemovalProgressView::StopIntent(_)
         | RootComponentSubtreeRemovalProgressView::Stopped(_)
         | RootComponentSubtreeRemovalProgressView::Completed(_) => {
-            return Err(InternalError::unavailable(
-                "Component subtree leaf has not prepared its deletion intent",
-            ));
+            return Err(InternalError::unavailable());
         }
     };
     let requested_leaf_authority = (
@@ -7414,30 +6801,19 @@ fn prepared_subtree_leaf_delete_plan(
         deletion.stopped.stop.leaf.parent_canister_id,
     );
     if requested_leaf_authority != durable_leaf_authority {
-        return Err(InternalError::conflict(
-            "Component subtree deletion request differs from durable leaf authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if deletion.stopped.stop.controller != root.fleet_subnet_root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "durable Component subtree deletion controller differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if store.fleet_subnet_root != root.fleet_subnet_root {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "verified Store differs from Component subtree deletion root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let artifact = exact_store_artifact(store, &deletion.stopped.stop.leaf.role)?;
     if artifact.raw_module_hash != deletion.stopped.stop.leaf.installed_artifact_hash
         || artifact.payload_hash != deletion.stopped.observed_module_hash
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component subtree deletion authority differs from verified Store artifact",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(PreparedSubtreeLeafDeletePlan {
         component: removal.component,
@@ -7456,9 +6832,7 @@ async fn observe_or_stop_component(
     match observed_component_quiescence_status(plan).await? {
         CanisterStatusType::Stopped => return Ok(()),
         CanisterStatusType::Stopping => {
-            return Err(InternalError::unavailable(
-                "Component quiescence stop is still in progress",
-            ));
+            return Err(InternalError::unavailable());
         }
         CanisterStatusType::Running => {}
     }
@@ -7466,14 +6840,10 @@ async fn observe_or_stop_component(
     let stop_error = MgmtOps::stop_canister(plan.stop.canister_id).await.err();
     match observed_component_quiescence_status(plan).await? {
         CanisterStatusType::Stopped => Ok(()),
-        CanisterStatusType::Stopping => Err(InternalError::unavailable(
-            "Component quiescence stop is still in progress",
-        )),
+        CanisterStatusType::Stopping => Err(InternalError::unavailable()),
         CanisterStatusType::Running => match stop_error {
             Some(error) => Err(error),
-            None => Err(InternalError::unavailable(
-                "Component remains running after its quiescence stop call completed",
-            )),
+            None => Err(InternalError::unavailable()),
         },
     }
 }
@@ -7483,14 +6853,10 @@ async fn observed_component_quiescence_status(
 ) -> Result<CanisterStatusType, InternalError> {
     let status = MgmtOps::canister_status(plan.stop.canister_id).await?;
     if status.settings.controllers != vec![plan.stop.controller] {
-        return Err(InternalError::conflict(
-            "Component controllers differ from its sole root quiescence authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.module_hash.as_deref() != Some(plan.expected_status_module_hash.as_slice()) {
-        return Err(InternalError::conflict(
-            "Component module differs from its verified Store quiescence authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(status.status)
 }
@@ -7501,9 +6867,7 @@ async fn observe_or_stop_subtree_leaf(
     match observed_subtree_leaf_status(plan).await? {
         CanisterStatusType::Stopped => return Ok(()),
         CanisterStatusType::Stopping => {
-            return Err(InternalError::unavailable(
-                "Component subtree leaf stop is still in progress",
-            ));
+            return Err(InternalError::unavailable());
         }
         CanisterStatusType::Running => {}
     }
@@ -7513,14 +6877,10 @@ async fn observe_or_stop_subtree_leaf(
         .err();
     match observed_subtree_leaf_status(plan).await? {
         CanisterStatusType::Stopped => Ok(()),
-        CanisterStatusType::Stopping => Err(InternalError::unavailable(
-            "Component subtree leaf stop is still in progress",
-        )),
+        CanisterStatusType::Stopping => Err(InternalError::unavailable()),
         CanisterStatusType::Running => match stop_error {
             Some(error) => Err(error),
-            None => Err(InternalError::unavailable(
-                "Component subtree leaf remains running after its stop call completed",
-            )),
+            None => Err(InternalError::unavailable()),
         },
     }
 }
@@ -7534,9 +6894,7 @@ async fn observe_or_recycle_subtree_leaf(
     }
     match observed_subtree_leaf_for_deletion(plan).await? {
         CanisterStatusObservation::Absent => {
-            return Err(InternalError::unavailable(
-                "Component subtree leaf is absent before its Canister can be recycled",
-            ));
+            return Err(InternalError::unavailable());
         }
         CanisterStatusObservation::Present(_) => {}
     }
@@ -7553,9 +6911,7 @@ async fn observe_or_recycle_component(
     }
     match observed_component_for_deletion(plan).await? {
         CanisterStatusObservation::Absent => {
-            return Err(InternalError::unavailable(
-                "top-level Component is absent before its Canister can be recycled",
-            ));
+            return Err(InternalError::unavailable());
         }
         CanisterStatusObservation::Present(_) => {}
     }
@@ -7581,19 +6937,13 @@ fn validate_component_deletion_live_status(
     expected_status_module_hash: [u8; 32],
 ) -> Result<(), InternalError> {
     if status.settings.controllers != vec![stop.controller] {
-        return Err(InternalError::conflict(
-            "Component controllers differ from its sole root deletion authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
-        return Err(InternalError::conflict(
-            "Component module differs from its verified Store deletion authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.status != CanisterStatusType::Stopped {
-        return Err(InternalError::conflict(
-            "Component is no longer stopped under its deletion authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -7619,9 +6969,7 @@ async fn observed_subtree_leaf_for_deletion(
         plan.expected_status_module_hash,
     )?;
     if status_type != CanisterStatusType::Stopped {
-        return Err(InternalError::conflict(
-            "Component subtree leaf is no longer stopped under its deletion authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(observation)
 }
@@ -7632,14 +6980,10 @@ fn validate_subtree_leaf_live_status(
     expected_status_module_hash: [u8; 32],
 ) -> Result<CanisterStatusType, InternalError> {
     if status.settings.controllers != vec![stop.controller] {
-        return Err(InternalError::conflict(
-            "Component subtree leaf controllers differ from its sole root authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
-        return Err(InternalError::conflict(
-            "Component subtree leaf module differs from its verified Store authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(status.status)
 }
@@ -7651,15 +6995,11 @@ fn validate_allocation_caller(
         ComponentProvisioningOrigin::FleetAdministrator { caller }
             if *caller != IcOps::msg_caller() =>
         {
-            Err(InternalError::conflict(
-                "Component creation caller differs from its reserved administrator origin",
-            ))
+            Err(InternalError::conflict())
         }
-        ComponentProvisioningOrigin::ComponentGroup { .. } => {
-            Err(InternalError::public(Error::forbidden(
-                "Component Group members advance only through the aggregate provisioning workflow",
-            )))
-        }
+        ComponentProvisioningOrigin::ComponentGroup { .. } => Err(InternalError::public(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        )),
         ComponentProvisioningOrigin::FleetAdministrator { .. }
         | ComponentProvisioningOrigin::Component { .. }
         | ComponentProvisioningOrigin::FleetServiceComponent { .. } => Ok(()),
@@ -7694,9 +7034,8 @@ fn require_active_peer_allocation_caller(operation_id: [u8; 32]) -> Result<(), I
     require_active_root_runtime(
         "peer Component lifecycle requires an Active Fleet Subnet Root runtime",
     )?;
-    let allocation = ComponentRegistryOps::allocation(operation_id).ok_or_else(|| {
-        InternalError::unavailable("peer Component allocation operation has not been reserved")
-    })?;
+    let allocation = ComponentRegistryOps::allocation(operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     revalidate_retained_peer_origin(
         &authority,
         &ConfigOps::component_topology()?,
@@ -7728,9 +7067,7 @@ fn revalidate_peer_provisioning_origin(
         _ => false,
     };
     if !request_matches_origin {
-        return Err(InternalError::conflict(
-            "peer Component allocation operation is already bound to a different requester proof",
-        ));
+        return Err(InternalError::conflict());
     }
     revalidate_retained_peer_origin(authority, topology, origin, caller)
 }
@@ -7754,7 +7091,7 @@ fn revalidate_retained_peer_origin(
         ),
         ComponentProvisioningOrigin::FleetAdministrator { .. }
         | ComponentProvisioningOrigin::ComponentGroup { .. } => Err(InternalError::public(
-            Error::forbidden("Component allocation was not requested through peer provisioning"),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         )),
     }
 }
@@ -7769,14 +7106,10 @@ fn revalidate_same_root_peer_origin(
     topology
         .validate_component_binding(&authority.binding, requester)
         .map_err(|_| {
-            InternalError::public(Error::forbidden(
-                "peer Component requester no longer belongs to this root",
-            ))
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let current = ComponentRegistryOps::partition(requester.component)?.ok_or_else(|| {
-        InternalError::public(Error::forbidden(
-            "peer Component allocation requester is no longer registered",
-        ))
+        InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     })?;
     let evidence = PeerRequesterAccessEvidence {
         caller,
@@ -7786,9 +7119,9 @@ fn revalidate_same_root_peer_origin(
         current_status: current.status,
     };
     if !evidence.is_exact_active() {
-        return Err(InternalError::public(Error::forbidden(
-            "peer Component allocation requester is no longer an exact Active Component",
-        )));
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     validate_retained_peer_grant(topology, requester, grant)
 }
@@ -7805,9 +7138,7 @@ fn revalidate_fleet_service_peer_origin(
         FleetRegistryMirrorOps::validated_current(authority, authority.binding.fleet_subnet_root)?;
     if !ComponentRegistryOps::registry_covers_preparation(registry, &mirror.active.snapshot.version)
     {
-        return Err(InternalError::conflict(
-            "current Fleet Registry does not cover the retained cross-root requester proof",
-        ));
+        return Err(InternalError::conflict());
     }
     let current = FleetServicePeerOps::resolve(
         &authority.binding,
@@ -7817,9 +7148,9 @@ fn revalidate_fleet_service_peer_origin(
         &requester.service,
     )?;
     if &current.requester != requester {
-        return Err(InternalError::public(Error::forbidden(
-            "cross-root peer caller no longer has its exact retained Fleet service identity",
-        )));
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     validate_retained_peer_grant(topology, &requester.component, grant)
 }
@@ -7832,10 +7163,7 @@ fn validate_retained_peer_grant(
     let current =
         topology.provisioning_grant(&requester.component_spec, &grant.target_component_spec);
     if current != Some(grant) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "retained peer Component grant differs from the protected topology",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7845,10 +7173,7 @@ fn validate_creation_effect(
     expected: &RootComponentCreationPlan,
 ) -> Result<(), InternalError> {
     if !expected.matches_effect(effect) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "durable Component creation intent differs from verified Store or root settings",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7858,10 +7183,7 @@ fn validate_install_effect(
     expected: &RootComponentInstallPlan,
 ) -> Result<(), InternalError> {
     if !expected.matches_effect(effect) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "durable Component install intent differs from verified module or binding authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7871,10 +7193,7 @@ fn validate_child_install_effect(
     expected: &RootComponentChildInstallPlan,
 ) -> Result<(), InternalError> {
     if !expected.matches_effect(effect) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "durable Component Child install intent differs from verified module or binding authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -7919,10 +7238,7 @@ pub(super) fn validate_allocation_record(
     expected_operation_id: [u8; 32],
 ) -> Result<(), InternalError> {
     if allocation.operation_id == [0; 32] || allocation.operation_id != expected_operation_id {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation operation identity is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     if allocation.allocation_sequence == 0
         || allocation.component
@@ -7933,51 +7249,28 @@ pub(super) fn validate_allocation_record(
                 allocation.allocation_sequence,
             )
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation identity differs from its root-local sequence",
-        ));
+        return Err(InternalError::invariant());
     }
     if allocation.release_set != release_set {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation release set differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let admission = root
         .component_admissions
         .binary_search_by(|candidate| candidate.component_spec.cmp(&allocation.component_spec))
         .ok()
         .map(|index| &root.component_admissions[index])
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored Component allocation Spec is not admitted by its protected root",
-            )
-        })?;
-    let spec = topology.get(&allocation.component_spec).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation Spec is absent from the protected topology",
-        )
-    })?;
+        .ok_or_else(|| InternalError::invariant())?;
+    let spec = topology
+        .get(&allocation.component_spec)
+        .ok_or_else(|| InternalError::invariant())?;
     if allocation.spec_hash != admission.spec_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation hash differs from its protected root admission",
-        ));
+        return Err(InternalError::invariant());
     }
     if allocation.spec_hash != spec.spec_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation hash differs from its protected Spec",
-        ));
+        return Err(InternalError::invariant());
     }
     if allocation.role != spec.component_role {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "stored Component allocation role differs from its protected Spec",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_provisioning_origin(root, topology, allocation)?;
     Ok(())
@@ -7993,19 +7286,11 @@ fn validate_provisioning_origin(
         ComponentProvisioningOrigin::Component { requester, grant } => {
             topology
                 .validate_component_binding(root, requester)
-                .map_err(|error| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        format!("stored peer Component requester binding is invalid: {error}"),
-                    )
-                })?;
+                .map_err(|_error| InternalError::invariant())?;
             let expected =
                 topology.provisioning_grant(&requester.component_spec, &allocation.component_spec);
             if expected != Some(grant.as_ref()) {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "stored peer Component provisioning origin differs from protected topology",
-                ));
+                return Err(InternalError::invariant());
             }
         }
         ComponentProvisioningOrigin::FleetServiceComponent {
@@ -8072,12 +7357,8 @@ fn validate_subtree_removal(
     removal: &RootComponentSubtreeRemovalView,
     request: Option<&RootComponentSubtreeRemovalRequest>,
 ) -> Result<(), InternalError> {
-    let partition = ComponentRegistryOps::partition(removal.component)?.ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "subtree-removal fence has no owning Component partition",
-        )
-    })?;
+    let partition = ComponentRegistryOps::partition(removal.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     validate_partition(root, release_set, topology, &partition)?;
     validate_subtree_removal_target(root, topology, removal)?;
     let reserved_registry_is_valid = removal.reserved_against_registry.component
@@ -8099,17 +7380,11 @@ fn validate_subtree_removal(
         || !reserved_registry_is_valid
         || !partition_covers_reservation
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "subtree-removal fence differs from protected Component authority",
-        ));
+        return Err(InternalError::invariant());
     }
     let stop_controller = retained_subtree_stop_controller(&removal.progress);
     if stop_controller.is_some_and(|controller| controller != root.fleet_subnet_root) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "subtree-removal stop intent differs from protected root authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if let Some(request) = request {
         let request_identity = (
@@ -8125,9 +7400,7 @@ fn validate_subtree_removal(
             &removal.reserved_against_registry,
         );
         if request_identity != durable_identity {
-            return Err(InternalError::conflict(
-                "Component subtree-removal operation is already bound to different intent",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     Ok(())
@@ -8142,32 +7415,17 @@ fn validate_subtree_removal_target(
         ComponentRegistryOps::registered_parent(removal.component, removal.target_canister_id)?;
     if subtree_target_membership_is_removed(&removal.progress) {
         if registered_target.is_some() {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "subtree-removal target remains registered after membership removal",
-            ));
+            return Err(InternalError::invariant());
         }
     } else {
-        let (target, _current_status) = registered_target.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "subtree-removal fence target is no longer registered",
-            )
-        })?;
+        let (target, _current_status) =
+            registered_target.ok_or_else(|| InternalError::invariant())?;
         let ManagedCanisterBinding::ComponentChild(target) = target else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "subtree-removal fence targets a top-level Component",
-            ));
+            return Err(InternalError::invariant());
         };
         topology
             .validate_component_child_binding(root, &target)
-            .map_err(|error| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    format!("subtree-removal target binding is invalid: {error}"),
-                )
-            })?;
+            .map_err(|_error| InternalError::invariant())?;
         let target_identity = (
             removal.component,
             removal.target_parent_canister_id,
@@ -8181,10 +7439,7 @@ fn validate_subtree_removal_target(
             ComponentLifecycleStatus::Active,
         );
         if target_identity != registered_target_identity {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "subtree-removal fence differs from registered target authority",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -8213,65 +7468,34 @@ fn validate_child_allocation(
         ManagedCanisterBinding::Component(binding) => {
             topology
                 .validate_component_binding(root, binding)
-                .map_err(|error| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        format!("registered Component parent binding is invalid: {error}"),
-                    )
-                })?;
+                .map_err(|_error| InternalError::invariant())?;
             (binding, binding.canister_id, &binding.role)
         }
         ManagedCanisterBinding::ComponentChild(binding) => {
             topology
                 .validate_component_child_binding(root, binding)
-                .map_err(|error| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        format!("registered Component Child parent binding is invalid: {error}"),
-                    )
-                })?;
+                .map_err(|_error| InternalError::invariant())?;
             (&binding.component, binding.canister_id, &binding.role)
         }
     };
     if parent_canister_id != allocation.parent_canister_id {
-        return Err(InternalError::public(Error::forbidden(
-            "Component Child allocation belongs to a different registered parent",
-        )));
+        return Err(InternalError::public(
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
     }
     let spec = topology
         .get(&parent_component.component_spec)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "registered Component parent Spec is absent from protected topology",
-            )
-        })?;
-    let child = spec.child(&allocation.child_role).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "reserved Component Child role is absent from protected Component Spec",
-        )
-    })?;
+        .ok_or_else(|| InternalError::invariant())?;
+    let child = spec
+        .child(&allocation.child_role)
+        .ok_or_else(|| InternalError::invariant())?;
     let grant = spec
         .spawn_grant(parent_role, &allocation.child_role)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "reserved Component Child has no protected parent spawn grant",
-            )
-        })?;
-    let partition =
-        ComponentRegistryOps::partition(parent_component.component)?.ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "reserved Component Child has no owning Component Registry partition",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
+    let partition = ComponentRegistryOps::partition(parent_component.component)?
+        .ok_or_else(|| InternalError::invariant())?;
     if partition.binding != *parent_component {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "reserved Component Child parent differs from its owning partition",
-        ));
+        return Err(InternalError::invariant());
     }
     let deployment_limits = component_deployment_limits(&partition, topology)?;
     let maximum_instances_per_parent = deployment_spawn_grant_maximum(
@@ -8294,15 +7518,10 @@ fn validate_child_allocation(
     if ComponentChildAllocationAuthority::from_allocation(allocation) != expected_authority
         || !reservation_is_versioned
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "durable Component Child allocation differs from protected tree authority",
-        ));
+        return Err(InternalError::invariant());
     }
     if request.is_some_and(|request| !child_allocation_request_matches(request, allocation)) {
-        return Err(InternalError::conflict(
-            "Component Child allocation operation is already bound to different intent",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -8319,10 +7538,7 @@ fn deployment_spawn_grant_maximum(
         .find(|limit| &limit.parent_role == parent_role && &limit.child_role == child_role)
         .map_or(spec_maximum, |limit| limit.maximum_instances_per_parent);
     if maximum == 0 || maximum > spec_maximum {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Config,
-            "Component deployment spawn-grant ceiling exceeds its protected Spec",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(maximum)
 }
@@ -8372,12 +7588,7 @@ fn validate_partition(
 ) -> Result<(), InternalError> {
     topology
         .validate_component_binding(root, &partition.binding)
-        .map_err(|error| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!("committed Component binding is invalid: {error}"),
-            )
-        })?;
+        .map_err(|_error| InternalError::invariant())?;
     let root_authority_matches = partition.release_set == release_set
         && partition.binding.fleet_subnet_root == root.fleet_subnet_root
         && partition.binding.placement_subnet == root.placement_subnet;
@@ -8392,10 +7603,7 @@ fn validate_partition(
         ComponentRegistryOps::component_for_principal(partition.binding.canister_id)
             == Some(partition.binding.component);
     if !root_authority_matches || !lifecycle_is_committed || !principal_index_matches {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "committed Component partition differs from protected root or principal authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -8425,9 +7633,7 @@ fn validate_component_draining(
         }
     };
     if !current_covers_receipt || !request_matches {
-        return Err(InternalError::conflict(
-            "Component draining receipt differs from protected intent or Registry authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(fleet_directory) = fleet_directory {
         let authority = ComponentRuntimeDirectoryAuthority {
@@ -8447,10 +7653,7 @@ fn validate_component_draining(
         if ComponentRuntimeOps::directory_authority_hash(&authority)?
             != draining.directory_authority_hash
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component draining Directory authority hash is invalid",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -8469,18 +7672,10 @@ fn validate_directory_member(
         {
             topology
                 .validate_component_child_binding(root, binding)
-                .map_err(|error| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        format!("Component Directory caller binding is invalid: {error}"),
-                    )
-                })
+                .map_err(|_error| InternalError::invariant())
         }
         ManagedCanisterBinding::Component(_) | ManagedCanisterBinding::ComponentChild(_) => {
-            Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component Directory caller differs from its protected partition",
-            ))
+            Err(InternalError::invariant())
         }
     }
 }

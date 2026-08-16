@@ -4,11 +4,17 @@ Date: 2026-08-16
 
 ## Status
 
-This document preserves the complete B1 semantic-compression and dense-
-allocation review register. On 2026-08-16 the maintainer approved it as one
-coherent allocation surface, making its 991 numbered rows B2 runtime and
-permanent-ledger authority. This repository-only review document still must not
-be imported by runtime code.
+Superseded unreleased candidate; preserved as review evidence only. On
+2026-08-16 the maintainer reopened registration after determining that this register
+multiplies canonical causes by class, disposition, exposure, remediation and
+projection. Its 991 rows are not current or retired permanent allocations and
+must not be imported as runtime authority. The Register phase starts from the
+complete coverage in this document, recompresses by canonical cause family and
+leaves handling with existing typed callers.
+
+Do not edit this generated register into the replacement in place, retire its
+numbers or continue producer mappings against it. The normative replacement
+rules and review target are in [0.102-design.md](0.102-design.md).
 [The working reconciliation ledger](../../audits/working/0.102-diagnostic-inventory/ledger-reconciliation.md)
 records the initial
 collision-free 708-label coverage subset, all ninety-eight constructor/
@@ -31,31 +37,28 @@ sorted set, and every exact label has at least one structured
 typed owner or source-evidence row and one symbolic producer-function anchor.
 Qualifying those labels by producer yields 3,898 exact entries; adding the 31
 public-projection entries yields 3,929 review observations. They map exactly
-once onto 960 composable exact handling contracts and 31 safe public
-projections. The result is the approved dense `1..=991` allocation with 503
-singleton rationales, not producer-local runtime aliases or one monolithic
-error enum.
-[code-allocation-ledger.md](code-allocation-ledger.md) freezes the permanent
-current/retired ledger contract. B2 has materialized all 991 approved rows as
-current; the initial retired set is empty.
+once onto 960 exact condition-plus-handling tuples and 31 safe public
+projections. The result was the sequential `1..=991` candidate with 503 singleton
+rationales, not producer-local runtime aliases or one monolithic error enum.
+[code-allocation-ledger.md](code-allocation-ledger.md) defines the smaller
+released-code no-reuse rule. The 991 rows were materialized provisionally; the
+replacement review has since accepted 161 registered cause families and ten
+local typed families.
 
-## Recommendation
+## Superseded Candidate Numbering
 
-Use one dense, monotonic numeric space:
+The rejected candidate used one sequential numeric space:
 
 - `0` is invalid and never allocated;
-- the initial approved shared handling identities receive `1..=N` with no
-  gaps;
-- a later genuinely new handling identity receives the next never-used number;
-- removing the final producer changes its permanent ledger row to `retired`;
+- unreleased assignments may change freely;
+- a code that appears in a released Canic version is never reused for another
+  cause, and a removed released reason remains minimally `retired = true`;
 - numbers do not encode class, origin, severity, retry policy or protocol
   generation.
 
-This is preferable to subsystem bands. The host catalogue already owns exact
-origin and meaning, while bands would either reserve unused identities or force
-future subsystem growth into misleading ranges. Dense assignment also makes it
-  obvious that every number corresponds to a real current canonical-condition
-  and handling contract at the initial cut.
+The maintained rule is smaller: codes are nonzero and unique, numbers encode
+no semantics and no ranges are reserved. Sequential allocation is convenient,
+not an invariant; gaps have no architectural meaning.
 
 The compact runtime format should be the ASCII letter `E` followed by the raw
 unsigned decimal value with no zero padding, for example `E1` or `E123`.
@@ -68,86 +71,56 @@ message text.
 The complete compressed initial ledger should be sorted by:
 
 1. `DiagnosticOrigin` catalogue order;
-2. symbolic label; and
-3. the stable handling-contract key when two labels still collide.
+2. symbolic label.
 
-Numbers are then assigned once in that order. The ordering is an initial review
-tool, not a promise that later labels remain alphabetically adjacent: new codes
-append, retired rows remain present and retired numbers never move.
+Numbers may then be assigned in that order. Until release, the ordering and
+numbers may still change. Released retired numbers remain reserved.
 
 ## Composable Identity Boundary
 
-Two producers share one code whenever one concise host label and summary
-truthfully identify the same canonical semantic condition and all of these are
-identical:
+Two producers share one code whenever one concise label and summary truthfully
+identify the same canonical cause. Physical subsystem, role, endpoint, module,
+function, source line, wording, interpolated values, class and handling do not
+split a reason. Exact execution context belongs to the command, endpoint,
+operation, receipt or status that observed it.
 
-- safe public exposure;
-- caller/operator action;
-- host disposition and runtime retry behavior;
-- operational remediation; and
-- machine decision.
+The superseded register below additionally required matching exposure, action,
+disposition, remediation and machine decision. That was the multiplication
+error: these operation properties created separate identities for the same
+cause. They remain useful review evidence but are no longer an allocation key.
 
-Physical subsystem, role, endpoint, module, function, source line, wording and
-interpolated values do not split a code. The host catalog records one semantic
-origin and may list many current producer owners. Exact execution context comes
-from the command, endpoint, operation, receipt or status that observed the
-code. Unrelated conditions do not collapse merely because their immediate
-retry action matches; that would stop the code from identifying what failed.
+Wrappers, context appenders and transparent conversions reuse their primary
+cause. Local typed variants stay local until a public, retrievable operator,
+durable or machine-contract boundary needs a stable number. A safe public
+projection may replace an exact internal reason at its exposure boundary, but
+projection does not synthesize a compound identity.
 
-Different interpolated values do not create codes when the canonical condition
-and handling contract are the same.
-For example, a mismatched expected and observed Registry revision remains one
-revision-mismatch diagnostic; the typed expected/observed values belong in the
-status or receipt that owns them. Conversely, capacity exhaustion and malformed
-input never share a code because their caller action and machine decision
-differ.
-
-The 1,154 constructor sites in the two largest Component Registry modules must
-therefore be grouped by actionable invariant, not allocated one number per
-line. Each group still lists every producer function so coverage is exhaustive.
-
-Wrappers, context appenders and transparent conversions reuse the primary
-code. Dependency variants collapse at their Canic adapter boundary unless
-exposure, disposition, action, remediation or machine decision differs.
-Internal invariant sites with the same canonical condition and recovery
-contract share one narrow identity; exact conflicting state belongs in typed
-operation evidence.
-
-Phase, role, endpoint, wrapper and operation state are orthogonal context, not
-code dimensions. They never form a Cartesian product with the primary cause.
-A safe public projection may replace an internal code at an exposure boundary;
-no boundary stacks codes or synthesizes a compound identity.
-
-## Mandatory Compression Gate
+## Replacement Review Lesson
 
 The 2,895-label frontier and its 3,929 producer-qualified observations are
-host-only evidence that current failures were not missed. B1 must produce a
-separate reviewed mapping with these invariants:
+temporary host-only evidence that current failures were not missed. Register
+uses them to prove only that:
 
-- every maintained producer observation maps to one internal code or one
-  explicit non-diagnostic disposition;
-- every masked observation also maps to one shared safe public code;
-- rows with the same canonical-condition and handling-contract key map to the
-  same code;
-- every code lists all current producer owners;
-- every singleton allocation explains the behavioral property that prevents
-  composition; and
+- every maintained producer observation maps to one canonical cause family or
+  one explicit non-diagnostic disposition;
+- every public-capable or masked observation maps to an explicit public code;
+  true operator-only types have no public conversion and local-only types have
+  no global code;
+- typed local variants with no public, retrievable operator, durable or
+  machine-contract boundary need no global code;
+- every mechanical bucket is accepted, renamed, merged, split or excluded;
+  each admitted row describes one cause; and
 - every code has one canonical semantic declaration path, with no producer-
   local alias or physical-subsystem copy; and
-- no source label, producer-to-code table or complete mapping enters Wasm.
+- no source label, producer-to-code table or complete mapping enters Wasm or
+  remains as a permanent development workflow.
 
-A four-digit initial allocation is rejected as failed semantic compression and
-blocks B2. This is not permission to allocate 999 codes and does not reserve a
-numeric range; the final count remains whatever the smallest truthful reviewed
-handling taxonomy requires.
+The 166 canonical-condition and 167 origin-qualified groups are mechanical
+starting buckets, not a cause ceiling. Mixed-cause buckets split even when that
+raises the total, and identical meanings may merge. Count is a smoke signal for
+the rejected tuple multiplication, not a KPI or admission rule.
 
-The review reports the number of producer observations, non-diagnostic
-dispositions, internal codes, public projections and singleton codes; the
-producers-per-code distribution; the overall compression ratio; and the
-distinct code count reachable by each representative role. Those metrics make
-accidental fragmentation visible without inventing a lower arbitrary quota.
-
-## Host Classification
+## Superseded Host Classification Evidence
 
 The proposed host-only broad classes are:
 
@@ -161,15 +134,14 @@ The proposed host-only broad classes are:
 - `Invariant`; and
 - `Internal`.
 
-They are catalogue metadata, not wire fields or canister lookup tables. A
-class does not replace the leaf identity and cannot be used to guess an unknown
-code.
+They are not wire fields or reason identity. Replacement B2 retains a class
+only in typed consumer handling where a real command or operation uses it. A
+class cannot replace a reason or be guessed from an unknown raw code.
 
-Every current catalog row also has one typed host disposition:
+Every superseded candidate row also had one typed host disposition:
 `DoNotRetry`, `ExactRetry`, `RetryAfterStateChange`, `BoundedRetry` or
-`Reconcile`. Labels are presentation-only. Host automation may consume the
-typed disposition; runtime policy continues to use its owning typed state and
-exact numeric constant rather than a catalog lookup.
+`Reconcile`. Replacement B2 does not create an exhaustive disposition table;
+runtime and host policy continue to use their owning typed operation state.
 
 The initial semantic origin families are:
 
@@ -191,7 +163,7 @@ The final `DiagnosticOrigin` variants should be as narrow as operational action
 requires, but physical producer ownership alone never creates an origin or
 code. These families are inventory headings, not reserved numeric bands.
 
-## Required Row Shape
+## Replacement Reason Row Shape
 
 Every approved code row contains:
 
@@ -200,33 +172,31 @@ Every approved code row contains:
 | code | Nonzero permanent `u16` identity |
 | label | Stable host-only symbolic label |
 | status | `current` in an approved producer row; retirement preserves the row as `retired` |
-| class | One host-only broad class |
 | origin | Narrow host-only semantic domain; physical ownership does not split a code |
-| disposition | One typed host retry/reconcile/permanent behavior |
 | summary | Concise host/operator meaning; retained as the last summary after retirement |
 | canonical condition | Smallest stable semantic statement that remains truthful for every producer sharing the code |
-| handling key | Canonical condition, exposure, action, disposition, remediation and machine-decision equivalence used for composition |
 | qualified coverage | Every provisional identity plus exact producer owner mapped to this code; repository-only, never a runtime alias |
-| provisional identities | Discovery labels represented by the qualified coverage entries; repository-only evidence |
 | producer owners | Every current function or exhaustive typed conversion producing the leaf |
-| split rationale | Required for a singleton or for adjacent codes whose handling keys appear equivalent |
 | public projection | Same code or one explicit safe public code |
-| observability owner | Structured numeric log, receipt/status field or `public` when no masking occurs |
-| action | One concise operator/caller action |
-| exposure note | Why the leaf is safe or why it is masked |
+| universal guidance | Optional advice that is safe for every use of the reason |
 
-The complete compressed row set is mechanically checked against the native-
-only runtime code inventory, and the separate host-only coverage map accounts
-for every producer observation. B2 guards keep that relation exact. A path or
+Class, disposition, remediation, action, exposure and machine decision belong
+to a real consumer's typed operation context and are not required reason-ledger
+columns. The superseded generated register below retains those columns solely
+to show the rejected multiplication and preserve review evidence.
+
+The candidate row set is mechanically checked against the native-only runtime
+code inventory, and the separate host-only coverage map accounts for every
+producer observation. Candidate B2 guards keep that relation exact. A path or
 line number alone is not identity; producer function and typed variant names
 remain review anchors when lines move, but they do not imply distinct codes.
 
 ## Complete Compression Register
 
-The generated register below is the complete approved B1 review surface. It
-maps all 3,929 producer-qualified coverage observations onto the dense 991-code
-allocation: 960 composable exact-condition contracts plus 31 deliberately
-separate safe public projections. It is repository-only evidence and must not
+The generated register below is the complete superseded tuple-review surface.
+It maps all 3,929 producer-qualified coverage observations onto the dense
+991-code candidate: 960 exact condition-plus-handling tuples plus 31
+deliberately separate safe public projections. It is repository-only evidence and must not
 enter release Wasm. The targeted inventory guard regenerates this register
 from the pinned source-addressed ledgers and rejects any byte-level drift.
 
@@ -1236,24 +1206,25 @@ code|label|class|origin|disposition|summary|condition|handling_key|coverage|prov
 ```
 <!-- END GENERATED COMPRESSION REGISTER -->
 
-## Public Projection Rules
+## Superseded Public Projection Rules
+
+The following rules describe the rejected candidate's evidence model. The
+replacement keeps explicit safe projection but does not require new
+observability infrastructure:
 
 - Input, authorization, admission, capacity and retry-state leaves are public
   when their exact identity reveals no private topology or stable contents.
 - Corrupt stable state, cryptographic internals, private topology mismatches,
   raw platform rejects and build/file paths receive an internal code plus one
   explicit safe public code.
-- A masked internal code is not admitted until its numeric observability owner
-  is named, already exists in the same coherent slice and is attached to the
-  same retrievable operation/status record or correlated through an existing
-  retrievable operation ID.
+- A masked internal code uses an existing appropriate operator owner when one
+  exists. Otherwise the owning-feature gap is recorded.
 - If there is no approved internal observability owner, allocate a safe but
   sufficiently specific public leaf instead of making the failure opaque.
 
 ## Maintainer Review Checklist
 
-Before approval, the checklist required the maintainer to review the generated
-register as one coherent allocation surface:
+The historical review used this checklist for the generated tuple register:
 
 1. correct or approve each row's canonical semantic group, handling contract
    and host disposition;
@@ -1265,25 +1236,21 @@ register as one coherent allocation surface:
 5. confirm that no code exists only because an operation, source location or
    producer role is different.
 
-The maintainer explicitly approved the complete register on 2026-08-16 without
-row corrections. It is approved as one coherent allocation surface. The
-approved allocation is exactly `1..=991`. This approval
-authorizes B2 runtime constants, permanent current rows, host catalogue files
-and the generated current-code registry. B2 does not change the public error
-contract, Candid or stable state.
+That review authorized the implementation candidate, which exposed the
+over-composed 991-row result before any public wire cut or admitted release.
+The later maintainer reorientation supersedes its allocation authority. The
+rows remain valuable evidence for the replacement cause-family review.
 
-## Decisions Requested
+## Replacement Outcome
 
-The direction review has accepted these five policy choices:
+The replacement design retains:
 
-1. dense monotonic codes rather than semantic numeric bands;
+1. nonzero unique codes with no semantic numeric bands or reserved ranges;
 2. compact runtime rendering as unpadded uppercase `E<decimal>`; and
-3. the nine host-only broad classes above;
-4. the mandatory many-to-one canonical-condition and handling-contract
-   compression key; and
-5. rejection of any four-digit initial allocation as failed composition.
+3. host-owned reason prose.
 
-The complete generated register is approved. Any later new condition appends
-the next never-used number; retirement preserves its row and never reassigns
-the number. B2 implements this allocation without changing the public error
-contract.
+It rejects the former condition-plus-handling key and introduces no generic
+handling registry. Register accepts, renames, merges, splits or excludes every
+mechanical bucket by semantic cause. The generated register above is not
+implementation authority; its unreleased numbers may be replaced without
+retirement history.

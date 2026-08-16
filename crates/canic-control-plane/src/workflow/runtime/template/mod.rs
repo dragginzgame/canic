@@ -19,10 +19,10 @@ use canic_core::api::lifecycle::metrics::{
 use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
+    error::InternalError,
     ops::ic::{IcOps, mgmt::MgmtOps},
 };
-use canic_core::dto::error::{Error, ErrorCode};
+use canic_core::diagnostics::codes;
 use std::collections::BTreeSet;
 
 pub const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
@@ -62,10 +62,7 @@ pub(in crate::workflow) async fn resolved_root_store_module_source(
             .iter()
             .any(|chunk_hash| chunk_hash.len() != 32)
     {
-        return Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("root Store artifact '{template_id}' has invalid chunk metadata"),
-        ));
+        return Err(InternalError::lifecycle_failure());
     }
 
     Ok(ApprovedModuleSource::chunked(
@@ -89,13 +86,7 @@ async fn approved_module_source_from_manifest(
                 WasmStoreMetricOutcome::Failed,
                 WasmStoreMetricReason::UnsupportedInline,
             );
-            Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "inline module sources are no longer supported; role '{}' source '{}' must be staged and published through a wasm_store",
-                    manifest.role, manifest.template_id
-                ),
-            ))
+            Err(InternalError::lifecycle_failure())
         }
         crate::ids::TemplateChunkingMode::Chunked => {
             if manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING {
@@ -182,13 +173,7 @@ async fn resolved_bootstrap_chunk_set_for_manifest(
         TemplateChunkedOps::chunk_set_info_response(&manifest.template_id, &manifest.version)?;
 
     if info.chunk_hashes.is_empty() {
-        return Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "template '{}' bootstrap chunk metadata is incomplete",
-                manifest.template_id
-            ),
-        ));
+        return Err(InternalError::lifecycle_failure());
     }
 
     ensure_bootstrap_chunk_hashes_present(&manifest.template_id, &manifest.version, &info).await?;
@@ -201,13 +186,7 @@ async fn resolved_store_chunk_set_for_manifest(
     manifest: &TemplateManifestResponse,
 ) -> Result<(Principal, TemplateChunkSetInfoResponse), InternalError> {
     if manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING {
-        return Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "template '{}' uses the local bootstrap store, which is only installable through the root control-plane path",
-                manifest.template_id
-            ),
-        ));
+        return Err(InternalError::lifecycle_failure());
     }
 
     let store_pid = store_pid_for_binding(&manifest.store_binding)?;
@@ -216,13 +195,7 @@ async fn resolved_store_chunk_set_for_manifest(
         .await?;
 
     if info.chunk_hashes.is_empty() {
-        return Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "template '{}' chunk metadata is incomplete for store {}",
-                manifest.template_id, store_pid
-            ),
-        ));
+        return Err(InternalError::lifecycle_failure());
     }
 
     Ok((store_pid, info))
@@ -278,12 +251,8 @@ async fn ensure_bootstrap_chunk_hashes_present(
             WasmStoreMetricOutcome::Started,
             WasmStoreMetricReason::CacheMiss,
         );
-        let chunk_index = u32::try_from(chunk_index).map_err(|_| {
-            InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!("template '{template_id}' exceeds supported chunk indexing bounds"),
-            )
-        })?;
+        let chunk_index =
+            u32::try_from(chunk_index).map_err(|_| InternalError::lifecycle_failure())?;
         let bytes = TemplateChunkedOps::chunk_response(template_id, version, chunk_index)?.bytes;
         let uploaded_hash = match MgmtOps::upload_chunk(store_pid, bytes).await {
             Ok(uploaded_hash) => uploaded_hash,
@@ -305,12 +274,7 @@ async fn ensure_bootstrap_chunk_hashes_present(
                 WasmStoreMetricOutcome::Failed,
                 WasmStoreMetricReason::HashMismatch,
             );
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "template '{template_id}' bootstrap chunk {chunk_index} uploaded hash mismatch for root {store_pid}",
-                ),
-            ));
+            return Err(InternalError::lifecycle_failure());
         }
 
         record_wasm_store_metric(
@@ -348,24 +312,19 @@ trait WasmStoreManifestSourceError {
 
 impl WasmStoreManifestSourceError for WasmStoreMetricReason {
     fn from_manifest_source_error(err: &InternalError) -> Self {
-        match err.public_error().map(|public| public.code) {
-            Some(ErrorCode::WasmStoreChunkMissing) => Self::MissingChunk,
-            Some(ErrorCode::WasmStoreHashMismatch) => Self::HashMismatch,
-            Some(ErrorCode::WasmStoreManifestMissing) => Self::MissingManifest,
-            Some(_) => Self::StoreCall,
-            None => Self::InvalidState,
+        match err.public_error().code() {
+            code if code == codes::WASM_STORE_CHUNK_MISSING.raw_code() => Self::MissingChunk,
+            code if code == codes::DIGEST_CONFLICT.raw_code() => Self::HashMismatch,
+            code if code == codes::WASM_STORE_MANIFEST_MISSING.raw_code() => Self::MissingManifest,
+            _ => Self::StoreCall,
         }
     }
 }
 
 // Resolve the currently configured store canister id for one approved binding.
 fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, InternalError> {
-    RootWasmStoreStateOps::wasm_store_pid(binding).ok_or_else(|| {
-        InternalError::public(Error::new(
-            ErrorCode::WasmStoreManifestMissing,
-            format!("wasm store binding '{binding}' is not registered"),
-        ))
-    })
+    RootWasmStoreStateOps::wasm_store_pid(binding)
+        .ok_or_else(|| InternalError::public(codes::WASM_STORE_MANIFEST_MISSING))
 }
 
 #[cfg(test)]

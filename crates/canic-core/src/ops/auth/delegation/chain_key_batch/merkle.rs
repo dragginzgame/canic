@@ -28,9 +28,7 @@ pub(super) fn reject_duplicate_chain_key_issuers(
     let mut previous: Option<Principal> = None;
     for leaf in leaves {
         if previous.is_some_and(|issuer| issuer == leaf.delegation_cert.issuer_pid) {
-            return Err(InternalError::invalid_input(
-                "chain-key root delegation batch contains duplicate issuer",
-            ));
+            return Err(InternalError::invalid_input());
         }
         previous = Some(leaf.delegation_cert.issuer_pid);
     }
@@ -41,9 +39,7 @@ pub(super) fn merkle_root_and_witnesses(
     leaf_hashes: &[[u8; 32]],
 ) -> Result<([u8; 32], Vec<ChainKeyBatchWitnessV1>), InternalError> {
     if leaf_hashes.is_empty() {
-        return Err(InternalError::invalid_input(
-            "chain-key Merkle batch must contain at least one leaf",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     let mut witnesses = vec![Vec::new(); leaf_hashes.len()];

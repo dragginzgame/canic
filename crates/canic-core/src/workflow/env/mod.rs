@@ -9,7 +9,7 @@ pub mod query;
 mod tests;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     config::ComponentTopologyError,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvBootstrapArgs,
@@ -36,12 +36,7 @@ impl EnvWorkflow {
         env_args: EnvBootstrapArgs,
         role: CanisterRole,
     ) -> Result<(), InternalError> {
-        BuildNetworkOps::build_network().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "build network unavailable; set ICP_ENVIRONMENT=local|ic at build time".to_string(),
-            )
-        })?;
+        BuildNetworkOps::build_network().ok_or_else(|| InternalError::invariant())?;
 
         let input = EnvInput {
             fleet_subnet_root_pid: env_args.fleet_subnet_root_pid,
@@ -54,11 +49,8 @@ impl EnvWorkflow {
 
         let validated = match validate_or_default(input) {
             Ok(validated) => validated,
-            Err(EnvPolicyError::MissingEnvFields(missing)) => {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    format!("env args missing {missing}; local builds require explicit env fields"),
-                ));
+            Err(EnvPolicyError::MissingEnvFields(_missing)) => {
+                return Err(InternalError::invariant());
             }
         };
 
@@ -76,8 +68,8 @@ impl EnvWorkflow {
             .validate_component_binding(root, &binding)
             .map_err(map_binding_error)?;
         if &binding.role != compiled_role || binding.canister_id != IcOps::canister_self() {
-            return Err(InternalError::invalid_input(
-                "Component init authority differs from the compiled role or target Canister",
+            return Err(InternalError::public(
+                crate::diagnostics::codes::AUTHORITY_CONFLICT,
             ));
         }
 
@@ -98,8 +90,8 @@ impl EnvWorkflow {
             .validate_component_child_binding(root, &binding)
             .map_err(map_binding_error)?;
         if &binding.role != compiled_role || binding.canister_id != IcOps::canister_self() {
-            return Err(InternalError::invalid_input(
-                "Component-child init authority differs from the compiled role or target Canister",
+            return Err(InternalError::public(
+                crate::diagnostics::codes::AUTHORITY_CONFLICT,
             ));
         }
 
@@ -141,5 +133,26 @@ fn validated_managed_env(
 }
 
 fn map_binding_error(error: ComponentTopologyError) -> InternalError {
-    InternalError::invalid_input(format!("managed init authority is invalid: {error}"))
+    use crate::diagnostics::codes;
+
+    let code = match error {
+        ComponentTopologyError::AdmissionSpecHashMismatch { .. }
+        | ComponentTopologyError::BindingSpecHashMismatch { .. }
+        | ComponentTopologyError::RootTopologyDigestMismatch { .. } => codes::DIGEST_CONFLICT,
+        ComponentTopologyError::AnonymousBindingPrincipal { .. } => codes::AUTHORITY_INVALID,
+        ComponentTopologyError::BindingAuthorityMismatch
+        | ComponentTopologyError::BindingComponentRoleMismatch { .. }
+        | ComponentTopologyError::BindingPlacementSubnetMismatch
+        | ComponentTopologyError::BindingRootMismatch
+        | ComponentTopologyError::ChildParentConflictsWithAuthority
+        | ComponentTopologyError::ChildPrincipalConflictsWithOwner
+        | ComponentTopologyError::ComponentPrincipalConflictsWithAuthority
+        | ComponentTopologyError::RootAuthorityMismatch
+        | ComponentTopologyError::RootPrincipalConflictsWithCoordinator => {
+            codes::AUTHORITY_CONFLICT
+        }
+        ComponentTopologyError::ChildRoleNotAdmitted { .. } => codes::AUTHORITY_INVALID_STATE,
+        _ => codes::CONFIGURATION_INVALID,
+    };
+    InternalError::public(code)
 }

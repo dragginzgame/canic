@@ -11,7 +11,7 @@ mod root_delegation_batch;
 mod root_issuer;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     config::ConfigModel,
     dto::auth::SignedRoleAttestation,
@@ -58,19 +58,13 @@ impl RuntimeAuthWorkflow {
         if root_requires_role_attestation_proofs(&cfg)
             && !AuthOps::root_canister_sig_create_enabled()
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "role attestation issuance is configured in canic.toml, but this root build does not include IC canister-signature creation support; enable the `auth-root-canister-sig-create` feature for the root canister build".to_string(),
-            ));
+            return Err(InternalError::invariant());
         }
 
         if AuthOps::has_enabled_root_issuer_renewal_templates()
             && !AuthOps::chain_key_root_sign_enabled()
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "root issuer delegation renewal is configured, but this root build does not include chain-key ECDSA signing support; enable the `auth-chain-key-root-sign` feature for the root canister build".to_string(),
-            ));
+            return Err(InternalError::invariant());
         }
 
         Ok(())
@@ -84,12 +78,7 @@ impl RuntimeAuthWorkflow {
         if nonroot_requires_delegated_token_issuer(canister_cfg)
             && !AuthOps::issuer_canister_sig_create_enabled()
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "canister '{canister_role}' is configured as a delegated auth issuer, but this build does not include IC canister-signature creation support; enable the `auth-issuer-canister-sig-create` feature for that canister build",
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
 
         Self::ensure_auth_proof_verifier_support_contract(canister_role, canister_cfg)?;
@@ -99,7 +88,7 @@ impl RuntimeAuthWorkflow {
 
     /// Fail fast when a non-root auth verifier lacks hard-cut trust anchors.
     fn ensure_auth_proof_verifier_support_contract(
-        canister_role: &CanisterRole,
+        _canister_role: &CanisterRole,
         canister_cfg: &crate::config::schema::CanisterConfig,
     ) -> Result<(), InternalError> {
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
@@ -109,34 +98,19 @@ impl RuntimeAuthWorkflow {
 
         if canister_cfg.auth.role_attestation_cache && !AuthOps::root_canister_sig_verify_enabled()
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "canister '{canister_role}' has role-attestation cache enabled, but this build does not include root IC canister-signature verification support; enable the `auth-root-canister-sig-verify` feature",
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
 
         if nonroot_requires_issuer_proof_verifier_support(canister_cfg)
             && !AuthOps::issuer_canister_sig_verify_enabled()
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "canister '{canister_role}' has delegated-token verification enabled, but this build does not include issuer IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-issuer-canister-sig-verify` feature",
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
 
         if nonroot_requires_chain_key_root_proof_support(canister_cfg)
             && !AuthOps::chain_key_ecdsa_enabled()
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "canister '{canister_role}' has delegated-token auth enabled, but this build does not include chain-key ECDSA root-proof support; enable the `auth-delegated-token-verify` feature",
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
 
         if delegated_tokens_cfg.enabled || canister_cfg.auth.role_attestation_cache {

@@ -19,7 +19,7 @@ pub mod intent;
 pub mod log;
 pub mod placement;
 
-use crate::{InternalError, InternalErrorOrigin};
+use crate::InternalError;
 use thiserror::Error as ThisError;
 
 ///
@@ -46,6 +46,48 @@ pub enum PolicyError {
 
 impl From<PolicyError> for InternalError {
     fn from(err: PolicyError) -> Self {
-        Self::domain(InternalErrorOrigin::Domain, err.to_string())
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            PolicyError::AuthPolicy(err) => match err {
+                auth::AuthPolicyError::PublicPrepareScopeNotSelfGrantable { .. }
+                | auth::AuthPolicyError::RootIssuerAudienceNotAllowed { .. }
+                | auth::AuthPolicyError::RootIssuerGrantNotAllowed { .. } => {
+                    codes::AUTHORITY_UNAUTHORIZED
+                }
+                auth::AuthPolicyError::RootIssuerFleetMismatch
+                | auth::AuthPolicyError::RootIssuerPolicyMismatch { .. }
+                | auth::AuthPolicyError::SubjectCallerMismatch => codes::AUTHORITY_CONFLICT,
+                auth::AuthPolicyError::RootIssuerAudienceRequired
+                | auth::AuthPolicyError::RootIssuerGrantRequired
+                | auth::AuthPolicyError::RootIssuerRenewalGrantRequired => {
+                    codes::CONFIGURATION_INCOMPLETE
+                }
+                auth::AuthPolicyError::RootIssuerCertTtlZero
+                | auth::AuthPolicyError::RootIssuerMaxCertTtlZero
+                | auth::AuthPolicyError::RootIssuerRefreshAfterInvalid
+                | auth::AuthPolicyError::RootIssuerRefreshRatioInvalid { .. } => {
+                    codes::CONFIGURATION_INVALID
+                }
+                auth::AuthPolicyError::RootIssuerCertTtlExceedsMax { .. } => {
+                    codes::TIME_INVALID_STATE
+                }
+                auth::AuthPolicyError::RootIssuerDisabled { .. } => codes::SECURITY_INACTIVE,
+                auth::AuthPolicyError::RootIssuerRefreshAfterOverflow => codes::TIME_CAPACITY,
+                auth::AuthPolicyError::RootIssuerUnregistered => codes::AUTHORITY_UNAVAILABLE,
+            },
+            PolicyError::AuthorityRestorePolicy(_) => codes::AUTHORITY_INACTIVE,
+            PolicyError::EnvPolicy(_) => codes::CONFIGURATION_INCOMPLETE,
+            PolicyError::FleetActivationPolicy(_) => codes::LIFECYCLE_INACTIVE,
+            PolicyError::ScalingPolicy(err) => match err {
+                placement::scaling::ScalingPolicyError::ScalingDisabled => {
+                    codes::CONFIGURATION_INACTIVE
+                }
+                placement::scaling::ScalingPolicyError::PoolNotFound(_) => {
+                    codes::CONFIGURATION_UNAVAILABLE
+                }
+            },
+        };
+        Self::public(code)
     }
 }

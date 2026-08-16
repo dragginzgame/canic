@@ -6,7 +6,7 @@ pub use hrw::HrwSelector;
 pub use metrics::{PoolMetrics, compute_pool_metrics};
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     domain::value::Principal,
     model::placement::sharding::{
         CreateBlockedReason, ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState,
@@ -39,7 +39,25 @@ pub enum ShardingPolicyError {
 
 impl From<ShardingPolicyError> for InternalError {
     fn from(err: ShardingPolicyError) -> Self {
-        Self::domain(InternalErrorOrigin::Domain, err.to_string())
+        let code = match err {
+            ShardingPolicyError::PoolNotFound { .. } => {
+                crate::diagnostics::codes::CAPACITY_UNAVAILABLE
+            }
+            ShardingPolicyError::ShardCreationBlocked {
+                reason: CreateBlockedReason::PoolAtCapacity,
+                ..
+            } => crate::diagnostics::codes::CAPACITY_LIMIT,
+            ShardingPolicyError::ShardCreationBlocked {
+                reason: CreateBlockedReason::NoFreeSlots,
+                ..
+            } => crate::diagnostics::codes::AUTHORITY_INVALID_STATE,
+            ShardingPolicyError::ShardCreationBlocked {
+                reason: CreateBlockedReason::PolicyViolation(_),
+                ..
+            } => crate::diagnostics::codes::CONFIGURATION_INVALID,
+            ShardingPolicyError::ShardingDisabled => crate::diagnostics::codes::AUTHORITY_INACTIVE,
+        };
+        Self::public(code)
     }
 }
 

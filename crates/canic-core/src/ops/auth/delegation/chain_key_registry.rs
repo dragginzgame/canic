@@ -9,7 +9,7 @@ use super::{
     root_issuer_renewal::renewal_template_fingerprint,
 };
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::auth::{
         DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant,
         DelegationAudience, IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1,
@@ -43,12 +43,8 @@ pub(in crate::ops::auth) fn current_chain_key_delegated_auth_registry(
     root_key_policy: &RootKeyPolicyV1,
 ) -> Result<ChainKeyDelegatedAuthRegistry, InternalError> {
     let snapshot = current_chain_key_delegated_auth_registry_snapshot(root_key_policy);
-    let hash = delegated_auth_registry_hash(&snapshot).map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("delegated-auth registry snapshot is not canonical: {err}"),
-        )
-    })?;
+    let hash =
+        delegated_auth_registry_hash(&snapshot).map_err(|_err| InternalError::invariant())?;
     Ok(ChainKeyDelegatedAuthRegistry { snapshot, hash })
 }
 

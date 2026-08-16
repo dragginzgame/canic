@@ -43,9 +43,7 @@ pub(super) async fn start(
         });
     }
     if CanisterPoolOps::standby_capacity_is_exhausted(config) {
-        return Err(InternalError::resource_exhausted(
-            "Canister pool is below minimum_size but maximum_size is exhausted",
-        ));
+        return Err(InternalError::resource_exhausted());
     }
 
     let authority = current_creation_authority(config)?;
@@ -65,9 +63,8 @@ pub(super) async fn start(
 }
 
 pub(super) async fn reconcile() -> Result<PoolAdminResponse, InternalError> {
-    let creation = CanisterPoolOps::pending_creation().ok_or_else(|| {
-        InternalError::unavailable("autonomous Canister pool refill is not pending")
-    })?;
+    let creation =
+        CanisterPoolOps::pending_creation().ok_or_else(|| InternalError::unavailable())?;
     validate_creation_authority(&creation)?;
     match creation.progress {
         CanisterPoolCreationProgressView::Created {
@@ -87,9 +84,8 @@ pub(super) async fn reconcile() -> Result<PoolAdminResponse, InternalError> {
 }
 
 pub(super) async fn reconcile_draining() -> Result<PoolAdminResponse, InternalError> {
-    let creation = CanisterPoolOps::pending_creation().ok_or_else(|| {
-        InternalError::unavailable("autonomous Canister pool refill is not pending")
-    })?;
+    let creation =
+        CanisterPoolOps::pending_creation().ok_or_else(|| InternalError::unavailable())?;
     validate_creation_authority(&creation)?;
     match creation.progress {
         CanisterPoolCreationProgressView::Intent {
@@ -119,9 +115,7 @@ pub(super) async fn reconcile_draining() -> Result<PoolAdminResponse, InternalEr
         }
         CanisterPoolCreationProgressView::Intent {
             uncertain_result: false,
-        } => Err(InternalError::unavailable(
-            "draining Canister pool refill still has pending cost authority",
-        )),
+        } => Err(InternalError::unavailable()),
     }
 }
 
@@ -137,9 +131,8 @@ async fn retry_intent(
     was_uncertain: bool,
 ) -> Result<PoolAdminResponse, InternalError> {
     reconcile_previous_cost_guard(&creation, was_uncertain)?;
-    let creation = CanisterPoolOps::pending_creation().ok_or_else(|| {
-        InternalError::unavailable("autonomous Canister pool refill disappeared during recovery")
-    })?;
+    let creation =
+        CanisterPoolOps::pending_creation().ok_or_else(|| InternalError::unavailable())?;
     let permit = deployment::reserve_canister_pool_creation_cost_guard()?;
     let settlement = permit.replay_settlement();
     CanisterPoolOps::begin_creation_attempt(creation.operation_id, settlement).map_err(
@@ -331,9 +324,7 @@ fn validate_creation_authority(creation: &CanisterPoolCreationView) -> Result<()
         creation.root,
     );
     if actual != expected {
-        return Err(InternalError::conflict(
-            "durable Canister pool refill differs from current protected root authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }

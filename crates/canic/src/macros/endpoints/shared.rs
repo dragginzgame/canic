@@ -171,9 +171,9 @@ macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
         -> Result<::canic::dto::memory::MemoryLedgerResponse, ::canic::Error> {
             let caller = $crate::__internal::cdk::api::msg_caller();
             if !$crate::__internal::cdk::api::is_controller(&caller) {
-                return Err(::canic::Error::unauthorized(format!(
-                    "caller '{caller}' is not a controller of this canister"
-                )));
+                return Err(::canic::Error::from_registered(
+                    ::canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+                ));
             }
 
             $crate::__internal::core::api::memory::MemoryQuery::ledger()
@@ -255,8 +255,8 @@ macro_rules! canic_emit_metrics_endpoints {
                 ::canic::dto::metrics::MetricsKind::Storage => {
                     Ok($crate::__internal::core::api::metrics::MetricsQuery::storage(page))
                 }
-                _ => Err(::canic::Error::invalid(
-                    "metrics tier is not enabled for this canister",
+                _ => Err(::canic::Error::from_registered(
+                    ::canic::diagnostics::codes::REQUEST_INVALID,
                 )),
             }
         }

@@ -22,22 +22,34 @@ release-batch plan and explicit maintainer acceptance.
 
 ## Scheduled Reserve-Fleet Critical Path
 
-1. [0.103 `ic-timers` consumer hard cut](0.103-ic-timers-consumer-hard-cut/status.md)
+1. [0.103 role-owned Candid surface](0.103-role-owned-candid-surface/status.md)
+   gives Root, Coordinator, Store and managed application canisters one
+   bounded command/status control plane; capabilities add variants, never
+   methods.
+2. [0.104 `ic-timers` consumer hard cut](0.104-ic-timers-consumer-hard-cut/status.md)
    removes Canic-owned timer mechanics while preserving domain recovery.
-2. [0.104 Fleet estate platform qualification](0.104-fleet-estate-platform-qualification/status.md)
+3. [0.105 Fleet estate platform qualification](0.105-fleet-estate-platform-qualification/status.md)
    freezes local and separately authorized live-platform evidence.
-3. [0.105 Coordinator-backed root funding](0.105-coordinator-backed-root-funding/status.md)
+4. [0.106 Coordinator-backed root funding](0.106-coordinator-backed-root-funding/status.md)
    closes replay-safe root operating funding without funding the estate
    Cycles Ledger budget implicitly.
-4. [0.106 Fleet Subnet Canister estates](0.106-fleet-subnet-canister-estates/status.md)
+5. [0.107 Fleet Subnet Canister estates](0.107-fleet-subnet-canister-estates/status.md)
    implements indexed reusable estates, bounded parallel work, transfer and
    the 10/100/1,000 proof.
-5. [0.107 Skynet T2 Fleet observatory](0.107-skynet-fleet-observatory/status.md)
+6. [0.108 Skynet T2 Fleet observatory](0.108-skynet-fleet-observatory/status.md)
    turns the completed platform into an every-installed-Canister topology and
    Fleet-overview demonstration.
 
-Deferred ideas do not gate this five-line path unless a later explicit
+Deferred ideas do not gate this six-line path unless a later explicit
 amendment moves one into a numbered design.
+
+## Scheduled Successor
+
+[0.109 framework-neutral local application authorization](0.109-framework-neutral-local-application-authorization/status.md)
+is accepted and scheduled after 0.108. It is not another reserve-Fleet
+critical-path dependency, and this scheduling cut authorizes no evidence or
+runtime implementation. B1 requires accepted 0.108 closeout and explicit
+maintainer promotion.
 
 ## Release-Batch Plan Template
 

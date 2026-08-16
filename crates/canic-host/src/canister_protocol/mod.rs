@@ -7,7 +7,7 @@
 
 use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response};
 use candid::{CandidType, Principal};
-use canic_core::dto::error::ErrorCode;
+use canic_core::diagnostics::RegisteredDiagnosticCode;
 use serde::de::DeserializeOwned;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
@@ -67,13 +67,13 @@ pub enum CanisterProtocolError {
 }
 
 impl CanisterProtocolError {
-    pub(crate) fn is_rejected_with(&self, code: ErrorCode) -> bool {
+    pub(crate) fn is_rejected_with(&self, code: RegisteredDiagnosticCode) -> bool {
         matches!(
             self,
             Self::Response {
                 source: IcpJsonResponseError::Rejected(error),
                 ..
-            } if error.code == code
+            } if error.code() == code.raw_code()
         )
     }
 }

@@ -1,10 +1,7 @@
 use super::BlobStorageApi;
 use crate::{
     cdk::types::Principal,
-    dto::{
-        blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
-        error::ErrorCode,
-    },
+    dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
 };
 
 #[cfg(feature = "blob-storage-billing")]
@@ -75,7 +72,10 @@ fn malformed_root_hash_maps_to_public_invalid_input() {
     let err = BlobStorageApi::canonical_root_hash_text("sha256:zz")
         .expect_err("short malformed hash should fail");
 
-    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
 }
 
 #[test]
@@ -128,32 +128,32 @@ fn malformed_api_inputs_do_not_mutate_blob_state() {
     assert_eq!(
         BlobStorageApi::create_certificate(malformed.to_string())
             .expect_err("malformed create fails")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(
         BlobStorageApi::register_live(malformed, 10)
             .expect_err("malformed register fails")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(
         BlobStorageApi::is_live(malformed)
             .expect_err("malformed live check fails")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(
         BlobStorageApi::mark_pending_delete(malformed, 20)
             .expect_err("malformed pending delete fails")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(
         BlobStorageApi::confirm_deleted_by_gateway_hash_bytes(&[0u8; 31])
             .expect_err("malformed gateway confirm fails")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
     assert_eq!(
         BlobStorageApi::local_counters(),
@@ -173,8 +173,8 @@ fn live_blob_lifecycle_maps_to_public_api() {
     assert_eq!(
         BlobStorageApi::require_live(hash)
             .expect_err("missing blob is not live")
-            .code,
-        ErrorCode::NotFound
+            .code(),
+        crate::diagnostics::codes::COLLECTION_UNAVAILABLE.raw_code()
     );
     assert!(BlobStorageApi::register_live(hash, 10).expect("register"));
     assert!(!BlobStorageApi::register_live(hash, 20).expect("register again"));
@@ -194,8 +194,8 @@ fn live_blob_lifecycle_maps_to_public_api() {
     assert_eq!(
         BlobStorageApi::require_live(hash)
             .expect_err("pending is not live")
-            .code,
-        ErrorCode::Conflict
+            .code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
 
@@ -286,13 +286,19 @@ fn cashier_decode_errors_map_to_rpc_malformed_code() {
         BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
             CashierDecodeError::EmptyGatewayPrincipalList,
         ));
-    assert_eq!(empty_gateway.code, ErrorCode::InternalRpcMalformed);
+    assert_eq!(
+        empty_gateway.code(),
+        crate::diagnostics::codes::CODEC_INVALID.raw_code()
+    );
 
     let invalid_balance =
         BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
             CashierDecodeError::InvalidCycleBalance { field: "total" },
         ));
-    assert_eq!(invalid_balance.code, ErrorCode::InternalRpcMalformed);
+    assert_eq!(
+        invalid_balance.code(),
+        crate::diagnostics::codes::CODEC_INVALID.raw_code()
+    );
 
     let invalid_gateway =
         BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
@@ -300,13 +306,19 @@ fn cashier_decode_errors_map_to_rpc_malformed_code() {
                 principal: Principal::anonymous(),
             },
         ));
-    assert_eq!(invalid_gateway.code, ErrorCode::InternalRpcMalformed);
+    assert_eq!(
+        invalid_gateway.code(),
+        crate::diagnostics::codes::CODEC_INVALID.raw_code()
+    );
 
     let too_many_gateways =
         BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
             CashierDecodeError::TooManyGatewayPrincipals { actual: 2, max: 1 },
         ));
-    assert_eq!(too_many_gateways.code, ErrorCode::InternalRpcMalformed);
+    assert_eq!(
+        too_many_gateways.code(),
+        crate::diagnostics::codes::CODEC_INVALID.raw_code()
+    );
 }
 
 #[cfg(feature = "blob-storage-billing")]
@@ -315,22 +327,34 @@ fn cashier_top_up_errors_map_to_stable_public_codes() {
     let unauthorized = BlobStorageApi::map_cashier_top_up_error(
         BlobStorageCashierAccountTopUpError::NotAuthorized(Principal::from_slice(&[1; 29])),
     );
-    assert_eq!(unauthorized.code, ErrorCode::Forbidden);
+    assert_eq!(
+        unauthorized.code(),
+        crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+    );
 
     let overflow = BlobStorageApi::map_cashier_top_up_error(
         BlobStorageCashierAccountTopUpError::AccountBalanceOverflow,
     );
-    assert_eq!(overflow.code, ErrorCode::ResourceExhausted);
+    assert_eq!(
+        overflow.code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+    );
 
     let internal = BlobStorageApi::map_cashier_top_up_error(
         BlobStorageCashierAccountTopUpError::InternalError("down".to_string()),
     );
-    assert_eq!(internal.code, ErrorCode::Internal);
+    assert_eq!(
+        internal.code(),
+        crate::diagnostics::codes::STATE_FAILED.raw_code()
+    );
 
     let without_cycles = BlobStorageApi::map_cashier_top_up_error(
         BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
     );
-    assert_eq!(without_cycles.code, ErrorCode::InvalidInput);
+    assert_eq!(
+        without_cycles.code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
 }
 
 #[cfg(feature = "blob-storage-billing")]
@@ -340,7 +364,10 @@ fn funding_in_progress_maps_to_conflict_code() {
         BlobStorageBillingWorkflowError::FundingInProgress(BlobStorageFundingInProgress),
     );
 
-    assert_eq!(err.code, ErrorCode::Conflict);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
 }
 
 #[cfg(feature = "blob-storage-billing")]
@@ -363,7 +390,10 @@ fn configure_billing_rejects_invalid_config_without_replacing_current_config() {
     for config in invalid_configs {
         let err = BlobStorageApi::configure_billing(config)
             .expect_err("invalid billing config should be rejected");
-        assert_eq!(err.code, ErrorCode::InvalidInput);
+        assert_eq!(
+            err.code(),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
         assert_eq!(BlobStorageApi::billing_config(), Some(valid.clone()));
     }
 }
@@ -391,7 +421,10 @@ fn configure_billing_rejects_oversized_nat_fields_without_replacing_current_conf
     ] {
         let err = BlobStorageApi::configure_billing(config)
             .expect_err("oversized billing nat should be rejected");
-        assert_eq!(err.code, ErrorCode::InvalidInput);
+        assert_eq!(
+            err.code(),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
         assert_eq!(BlobStorageApi::billing_config(), Some(valid.clone()));
     }
 }

@@ -997,9 +997,7 @@ async fn stop_store_for_deletion(
     match status.status {
         CanisterStatusType::Stopped => return Ok(()),
         CanisterStatusType::Stopping => {
-            return Err(InternalError::unavailable(
-                "root Store deletion stop is still in progress",
-            ));
+            return Err(InternalError::unavailable());
         }
         CanisterStatusType::Running => {}
     }
@@ -1011,14 +1009,10 @@ async fn stop_store_for_deletion(
             require_store_deletion_authority(&status, root, intent)?;
             match status.status {
                 CanisterStatusType::Stopped => Ok(()),
-                CanisterStatusType::Stopping => Err(InternalError::unavailable(
-                    "root Store deletion stop is still in progress",
-                )),
+                CanisterStatusType::Stopping => Err(InternalError::unavailable()),
                 CanisterStatusType::Running => match stop_error {
                     Some(error) => Err(error),
-                    None => Err(InternalError::unavailable(
-                        "root Store remains running after its stop call completed",
-                    )),
+                    None => Err(InternalError::unavailable()),
                 },
             }
         }
@@ -1049,9 +1043,7 @@ async fn delete_store_and_observe_absence(
             require_store_deletion_authority(&status, root, intent)?;
             match delete_error {
                 Some(error) => Err(error),
-                None => Err(InternalError::unavailable(
-                    "root Store remains present after its deletion call completed",
-                )),
+                None => Err(InternalError::unavailable()),
             }
         }
     }
@@ -1254,15 +1246,14 @@ mod tests {
     use crate::ops::storage::state::root_wasm_store::{
         PublicationStoreStateTestInput, WasmStoreStateTestInput,
     };
-    use canic_core::dto::error::ErrorCode;
 
     #[test]
     fn lifecycle_guard_rejects_concurrent_entry_and_releases_on_drop() {
         let guard = LifecycleOperationGuard::try_enter().expect("first operation enters");
         let err = LifecycleOperationGuard::try_enter().expect_err("second operation must reject");
         assert_eq!(
-            err.public_error().map(|public| public.code),
-            Some(ErrorCode::Conflict)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
 
         drop(guard);

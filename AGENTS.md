@@ -137,6 +137,14 @@ policy and ops independently; ops may call model. Policy never calls ops.
   PocketIC suites such as `make test`, `make clippy`, or workspace-wide Cargo
   test/Clippy commands unless the maintainer explicitly requests that exact
   broad gate.
+- Generic continuation or readiness wording such as `continue`, `finish the
+  batch`, `make it push-ready`, or `keep going until we can push` never counts
+  as an explicit request for a broad gate. Do not infer authorization for
+  `make validate` or any equivalent full-suite command from those requests.
+- The maintainer-owned version and release flow runs the complete validation
+  gate before versioning, tagging, and pushing. Automated agents must not
+  pre-run that gate; run it only when the maintainer explicitly names
+  `make validate` or the exact broad suite to execute.
 - The maintainer owns full deployment and publish validation. After targeted
   checks pass, agents should state whether the complete planned release batch,
   not merely the latest slice, is ready to push and whether its

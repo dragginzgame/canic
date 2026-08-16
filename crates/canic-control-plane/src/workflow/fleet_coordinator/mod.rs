@@ -66,14 +66,12 @@ pub struct FleetCoordinatorWorkflow;
 impl FleetCoordinatorWorkflow {
     pub(crate) fn initialize(
         args: FleetCoordinatorInitArgs,
-        caller: Principal,
+        _caller: Principal,
         caller_is_controller: bool,
         coordinator_canister: Principal,
     ) -> Result<(), InternalError> {
         if !caller_is_controller {
-            return Err(InternalError::forbidden(format!(
-                "Fleet Coordinator init caller {caller} is not a controller"
-            )));
+            return Err(InternalError::forbidden());
         }
         let record = FleetCoordinatorOps::compile_genesis(args, coordinator_canister)?;
         FleetCoordinatorOps::commit_genesis(record)?;
@@ -145,9 +143,7 @@ impl FleetCoordinatorWorkflow {
             {
                 Ok(current)
             } else {
-                Err(InternalError::conflict(
-                    "Fleet Component provisioning command expects a later phase than durable progress",
-                ))
+                Err(InternalError::conflict())
             };
         }
         if current.phase == FleetComponentProvisioningPhase::RuntimesActivated {
@@ -242,9 +238,7 @@ impl FleetCoordinatorWorkflow {
         request: FleetSubnetRootDrainingReservationStatusRequest,
     ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
         if !caller_is_controller && caller != request.fleet_subnet_root {
-            return Err(InternalError::forbidden(
-                "root-draining reservation status caller is neither a controller nor the target root",
-            ));
+            return Err(InternalError::forbidden());
         }
         FleetCoordinatorOps::root_draining_reservation_status(request)
     }
@@ -431,20 +425,14 @@ fn scale_out_service_publication_is_complete(
         | FleetComponentProvisioningPhase::ActivatingRuntimes
         | FleetComponentProvisioningPhase::RuntimesActivated => {}
     }
-    Err(InternalError::invariant(
-        canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-        "scale-out operation crossed its service-publication fence",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn validate_scale_out_current_root_progress(
     progress: Option<FleetComponentProvisioningRootProgress>,
 ) -> Result<(), InternalError> {
     let Some(progress) = progress else {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out root provisioning has no current root cursor",
-        ));
+        return Err(InternalError::invariant());
     };
     let claim_has_reserved_identity = match progress.claimed_component_count {
         0 => progress.reserved_component_count <= progress.component_count,
@@ -469,10 +457,7 @@ fn validate_scale_out_current_root_progress(
     .into_iter()
     .all(|matches| matches);
     if !remains_before_terminal_receipt {
-        return Err(InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "scale-out current-root provisioning progress is not canonical",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -523,7 +508,7 @@ async fn accept_root_component_provisioning(
     .execute()
     .await?;
     let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::public)
+    response.map_err(InternalError::observed_public)
 }
 
 async fn advance_root_component_provisioning(
@@ -537,7 +522,7 @@ async fn advance_root_component_provisioning(
     .execute()
     .await?;
     let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::public)
+    response.map_err(InternalError::observed_public)
 }
 
 enum RootComponentDirectoryAdvanceResponse {
@@ -565,7 +550,7 @@ async fn advance_root_component_directories(
                 result.candid()?;
             response
                 .map(RootComponentDirectoryAdvanceResponse::FreshPublication)
-                .map_err(InternalError::public)
+                .map_err(InternalError::observed_public)
         }
         FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
             fleet_subnet_root,
@@ -582,7 +567,7 @@ async fn advance_root_component_directories(
                 result.candid()?;
             response
                 .map(RootComponentDirectoryAdvanceResponse::ScaleOutPublication)
-                .map_err(InternalError::public)
+                .map_err(InternalError::observed_public)
         }
         FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
             fleet_subnet_root,
@@ -599,7 +584,7 @@ async fn advance_root_component_directories(
                 result.candid()?;
             response
                 .map(RootComponentDirectoryAdvanceResponse::Synchronization)
-                .map_err(InternalError::public)
+                .map_err(InternalError::observed_public)
         }
     }
 }
@@ -615,5 +600,5 @@ async fn activate_root_component_runtimes(
     .execute()
     .await?;
     let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::public)
+    response.map_err(InternalError::observed_public)
 }

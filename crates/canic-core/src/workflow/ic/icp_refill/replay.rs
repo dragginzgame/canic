@@ -5,12 +5,9 @@
 //! Boundary: maps generic replay ops into ICP refill workflow decisions.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
-    dto::{
-        error::Error,
-        icp_refill::{IcpRefillRequest, IcpRefillResponse},
-    },
+    dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
         ReplayPayloadHasher, ReplayReceipt,
@@ -88,50 +85,50 @@ pub(super) fn reserve_icp_refill_replay(
         }
         ReplayReceiptDecision::OperationInProgress => {
             log_icp_refill_replay_conflict(operation_id, "operation_in_progress");
-            Err(InternalError::public(Error::conflict(
-                "ICP refill request is already in progress; retry later with the same operation id",
-            )))
+            Err(InternalError::public(
+                crate::diagnostics::codes::REQUEST_INCOMPLETE,
+            ))
         }
         ReplayReceiptDecision::ActorMismatch => {
             log_icp_refill_replay_conflict(operation_id, "actor_mismatch");
-            Err(InternalError::public(Error::conflict(
-                "ICP refill operation id was reused by a different caller",
-            )))
+            Err(InternalError::public(
+                crate::diagnostics::codes::AUTHORITY_CONFLICT,
+            ))
         }
         ReplayReceiptDecision::PayloadMismatch => {
             log_icp_refill_replay_conflict(operation_id, "payload_mismatch");
-            Err(InternalError::public(Error::conflict(
-                "ICP refill operation id was reused with a different payload",
-            )))
+            Err(InternalError::public(
+                crate::diagnostics::codes::CODEC_CONFLICT,
+            ))
         }
         ReplayReceiptDecision::Expired => {
             log_icp_refill_replay_conflict(operation_id, "expired");
-            Err(InternalError::public(Error::conflict(
-                "ICP refill replay receipt expired; retry with a new operation id",
-            )))
+            Err(InternalError::public(
+                crate::diagnostics::codes::EVIDENCE_EXPIRED,
+            ))
         }
         ReplayReceiptDecision::RecoveryRequired {
             token,
             reason:
                 reason @ (RecoveryReason::CostSettlementFailed | RecoveryReason::ResponseCommitFailed),
         } => recover_icp_refill_response(&token, reason).map(IcpRefillReplayReservation::Replay),
-        ReplayReceiptDecision::RecoveryRequired { reason, .. } => {
+        ReplayReceiptDecision::RecoveryRequired { reason: _, .. } => {
             log_icp_refill_replay_conflict(operation_id, "recovery_required");
-            Err(InternalError::public(Error::conflict(format!(
-                "ICP refill request requires recovery before replay: {reason:?}"
-            ))))
+            Err(InternalError::public(
+                crate::diagnostics::codes::REQUEST_INVALID,
+            ))
         }
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
+        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending: _, .. } => {
             log_icp_refill_replay_conflict(operation_id, "pending_actor_quota_exceeded");
-            Err(InternalError::public(Error::exhausted(format!(
-                "ICP refill pending replay receipt quota exceeded for caller; max_pending={max_pending}"
-            ))))
+            Err(InternalError::public(
+                crate::diagnostics::codes::AUTHORITY_CAPACITY,
+            ))
         }
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending: _, .. } => {
             log_icp_refill_replay_conflict(operation_id, "pending_command_quota_exceeded");
-            Err(InternalError::public(Error::exhausted(format!(
-                "ICP refill pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
-            ))))
+            Err(InternalError::public(
+                crate::diagnostics::codes::REQUEST_CAPACITY,
+            ))
         }
     }
 }
@@ -174,32 +171,25 @@ pub(super) fn finish_icp_refill_replay(
     }
 
     if let Err(err) = complete_icp_refill_cost_guard(cost_permit) {
-        if let Err(recovery_err) = mark_recovery_required(
+        if let Err(_recovery_err) = mark_recovery_required(
             token,
             RecoveryReason::CostSettlementFailed,
             IcOps::now_nanos(),
         )
         .map_err(map_icp_refill_replay_store_error)
         {
-            return Err(err.with_diagnostic_context(format!(
-                "ICP refill replay recovery marker failed: {recovery_err}"
-            )));
+            return Err(err);
         }
         return Err(err);
     }
     if let Err(err) = commit_staged_receipt_response(token, IcOps::now_nanos()) {
-        let mut err = map_icp_refill_replay_store_error(err);
-        if let Err(recovery_err) = mark_recovery_required(
+        let err = map_icp_refill_replay_store_error(err);
+        let _ = mark_recovery_required(
             token,
             RecoveryReason::ResponseCommitFailed,
             IcOps::now_nanos(),
         )
-        .map_err(map_icp_refill_replay_store_error)
-        {
-            err = err.with_diagnostic_context(format!(
-                "ICP refill replay recovery marker failed: {recovery_err}"
-            ));
-        }
+        .map_err(map_icp_refill_replay_store_error);
         return Err(err);
     }
     log_icp_refill_commit(operation);
@@ -209,24 +199,14 @@ pub(super) fn finish_icp_refill_replay(
 fn preserve_icp_refill_response_failure(
     token: &ReplayReceiptToken,
     cost_permit: Option<&crate::ops::cost_guard::CostGuardPermit>,
-    mut err: InternalError,
+    err: InternalError,
 ) -> InternalError {
     let reason = match complete_icp_refill_cost_guard(cost_permit) {
         Ok(()) => RecoveryReason::ResponseCommitFailed,
-        Err(settlement_err) => {
-            err = err.with_diagnostic_context(format!(
-                "ICP refill cost settlement also failed: {settlement_err}"
-            ));
-            RecoveryReason::CostSettlementFailed
-        }
+        Err(_settlement_err) => RecoveryReason::CostSettlementFailed,
     };
-    if let Err(recovery_err) = mark_recovery_required(token, reason, IcOps::now_nanos())
-        .map_err(map_icp_refill_replay_store_error)
-    {
-        err = err.with_diagnostic_context(format!(
-            "ICP refill replay recovery marker failed: {recovery_err}"
-        ));
-    }
+    let _ = mark_recovery_required(token, reason, IcOps::now_nanos())
+        .map_err(map_icp_refill_replay_store_error);
     err
 }
 
@@ -243,18 +223,14 @@ fn recover_icp_refill_response(
     let receipt = match commit_staged_receipt_response(token, IcOps::now_nanos()) {
         Ok(receipt) => receipt,
         Err(err) => {
-            let mut err = map_icp_refill_replay_store_error(err);
-            if cost_settled
-                && let Err(recovery_err) = mark_recovery_required(
+            let err = map_icp_refill_replay_store_error(err);
+            if cost_settled {
+                let _ = mark_recovery_required(
                     token,
                     RecoveryReason::ResponseCommitFailed,
                     IcOps::now_nanos(),
                 )
-                .map_err(map_icp_refill_replay_store_error)
-            {
-                err = err.with_diagnostic_context(format!(
-                    "ICP refill response recovery marker failed: {recovery_err}"
-                ));
+                .map_err(map_icp_refill_replay_store_error);
             }
             return Err(err);
         }
@@ -321,7 +297,7 @@ pub(super) fn preserve_icp_refill_recovery_required(
     effect: &'static str,
     err: InternalError,
 ) -> InternalError {
-    let (error_class, error_origin) = err.log_fields();
+    let diagnostic = err.code();
     let err = mark_recovery_required_after_failure(
         token,
         RecoveryReason::ExternalEffectStatusUnknown,
@@ -332,7 +308,7 @@ pub(super) fn preserve_icp_refill_recovery_required(
     crate::log!(
         crate::log::Topic::Cycles,
         Error,
-        "icp refill replay recovery required effect={} command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={} error_class={} error_origin={}",
+        "icp refill replay recovery required effect={} command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={} diagnostic={}",
         effect,
         ICP_REFILL_REPLAY_COMMAND_KIND,
         operation_id_display(operation.operation_id),
@@ -340,8 +316,7 @@ pub(super) fn preserve_icp_refill_recovery_required(
         operation.source_canister,
         operation.target_canister,
         operation.amount_e8s,
-        error_class,
-        error_origin
+        diagnostic
     );
     err
 }
@@ -459,10 +434,9 @@ fn encode_icp_refill_replay_response(
     response: &IcpRefillResponse,
 ) -> Result<Vec<u8>, InternalError> {
     replay_ops::encode_replay_response(response).map_err(|err| match err {
-        replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to encode ICP refill replay response: {message}"),
-        ),
+        replay_ops::ReplayCommitError::EncodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
+        }
     })
 }
 
@@ -470,34 +444,27 @@ fn decode_icp_refill_replay_response(
     receipt: &ReplayReceipt,
 ) -> Result<IcpRefillResponse, InternalError> {
     replay_ops::decode_icp_refill_replay_response(receipt).map_err(|err| match err {
-        replay_ops::ReplayDecodeError::DecodeFailed(message) => {
-            InternalError::workflow(InternalErrorOrigin::Workflow, message)
+        replay_ops::ReplayDecodeError::DecodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
         }
     })
 }
 
 pub(super) fn map_icp_refill_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
-        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "ICP refill replay receipt is missing",
-        ),
-        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to decode ICP refill replay receipt: {message}"),
-        ),
-        ReplayReceiptStoreError::ReceiptTokenMismatch => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "ICP refill replay receipt token is stale",
-        ),
-        ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "ICP refill replay receipt is missing staged response data",
-        ),
-        ReplayReceiptStoreError::CostGuardSettlementMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "ICP refill replay receipt is missing cost guard settlement identity",
-        ),
+        ReplayReceiptStoreError::ReceiptMissing
+        | ReplayReceiptStoreError::StagedResponseMissing => {
+            InternalError::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
+        }
+        ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
+        }
+        ReplayReceiptStoreError::ReceiptTokenMismatch => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
+        }
+        ReplayReceiptStoreError::CostGuardSettlementMissing => {
+            InternalError::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
+        }
     }
 }
 

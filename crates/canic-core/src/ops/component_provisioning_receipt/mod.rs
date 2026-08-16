@@ -5,7 +5,7 @@
 //! Boundary: root and Coordinator code share this one canonical receipt authority.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::{
         component_provisioning::{
             ComponentGroupDirectory, FleetSubnetRootProvisioningBatch,
@@ -196,17 +196,10 @@ impl RootComponentProvisioningReceiptOps {
 fn receipt_content_hash(
     domain: &[u8],
     authority: impl CandidType,
-    label: &str,
+    _label: &str,
 ) -> Result<[u8; 32], InternalError> {
-    let bytes = candid::encode_one(authority).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("could not encode {label}: {error}"),
-        )
-    })?;
-    let byte_count = u64::try_from(bytes.len()).map_err(|_| {
-        InternalError::resource_exhausted(format!("{label} exceeds the canonical byte-count range"))
-    })?;
+    let bytes = candid::encode_one(authority).map_err(|_error| InternalError::invariant())?;
+    let byte_count = u64::try_from(bytes.len()).map_err(|_| InternalError::resource_exhausted())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);
     hasher.update(byte_count.to_be_bytes());

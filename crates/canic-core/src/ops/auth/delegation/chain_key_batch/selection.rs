@@ -4,9 +4,7 @@
 //! Does not own: proof materialization, signing, or issuer install retry state.
 //! Boundary: private helper for root-local chain-key batch preparation.
 
-use super::{
-    MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS, MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES,
-};
+use super::MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS;
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -80,9 +78,7 @@ pub(super) fn pending_chain_key_root_delegation_batch_count(now_ns: u64) -> usiz
 }
 
 pub(super) fn chain_key_root_delegation_batch_quota_exceeded(
-    pending_batches: usize,
+    _pending_batches: usize,
 ) -> InternalError {
-    InternalError::resource_exhausted(format!(
-        "chain-key root delegation batch quota exceeded: pending_batches={pending_batches} max_pending_batches={MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES}"
-    ))
+    InternalError::resource_exhausted()
 }

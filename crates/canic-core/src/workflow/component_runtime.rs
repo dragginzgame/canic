@@ -5,7 +5,7 @@
 //! Boundary: only exact protected binding and Directory evidence may cross each runtime phase.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::{
         component_deployment::{ComponentDeploymentPurpose, ProtectedComponentDeployment},
         component_provisioning::ComponentGroupDirectory,
@@ -98,23 +98,17 @@ pub fn synchronize_directory(
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
     let current = status()?;
     if request.operation_id != current.operation_id {
-        return Err(InternalError::conflict(
-            "Component runtime Directory operation differs from protected installation identity",
-        ));
+        return Err(InternalError::conflict());
     }
     validate_binding(&current.binding)?;
     validate_authority(&current.binding, &current.deployment, &request.authority)?;
     if current.phase != ComponentRuntimePhase::Active || current.activation.is_none() {
-        return Err(InternalError::conflict(
-            "current Component Directory synchronization requires an Active runtime",
-        ));
+        return Err(InternalError::conflict());
     }
-    let current_authority = current.authority.as_ref().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Active Component runtime has no current Directory authority",
-        )
-    })?;
+    let current_authority = current
+        .authority
+        .as_ref()
+        .ok_or_else(|| InternalError::invariant())?;
     validate_directory_progression(current_authority, &request.authority)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
     let direct_children_hash = validate_direct_children(&request.direct_children)?;
@@ -137,17 +131,13 @@ fn validate_direct_children(
     canonical.sort();
     canonical.dedup();
     if canonical != direct_children {
-        return Err(InternalError::conflict(
-            "Component runtime direct-child projection is not ordered and unique",
-        ));
+        return Err(InternalError::conflict());
     }
     if direct_children
         .iter()
         .any(|child| child.canister_id == IcOps::canister_self())
     {
-        return Err(InternalError::conflict(
-            "Component runtime direct-child projection contains its owning canister",
-        ));
+        return Err(InternalError::conflict());
     }
     ComponentRuntimeOps::direct_children_hash(direct_children)
 }
@@ -171,17 +161,11 @@ pub fn status() -> Result<ComponentRuntimeStatusResponse, InternalError> {
         (Some(authority), Some(authority_hash)) => {
             validate_authority(&status.binding, &status.deployment, authority)?;
             if ComponentRuntimeOps::directory_authority_hash(authority)? != authority_hash {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "retained Component runtime Directory authority hash does not match its value",
-                ));
+                return Err(InternalError::invariant());
             }
         }
         _ => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "retained Component runtime Directory authority and hash are incomplete",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(status)
@@ -189,12 +173,19 @@ pub fn status() -> Result<ComponentRuntimeStatusResponse, InternalError> {
 
 /// Require this exact active Component tree to own one service's protected write authority.
 pub fn require_service_authority(service: &FleetServiceId) -> Result<(), InternalError> {
-    let current = status()?;
-    if active_service_authority_matches(current.phase, &current.deployment, service) {
+    if service_authority_matches(service)? {
         return Ok(());
     }
-    Err(InternalError::forbidden(
-        "Component runtime does not hold the requested Fleet-service Authority purpose",
+    Err(InternalError::forbidden())
+}
+
+/// Resolve the protected runtime before evaluating the exact service-Authority predicate.
+pub fn service_authority_matches(service: &FleetServiceId) -> Result<bool, InternalError> {
+    let current = status()?;
+    Ok(active_service_authority_matches(
+        current.phase,
+        &current.deployment,
+        service,
     ))
 }
 
@@ -235,9 +226,7 @@ pub fn activate(
         || request.directory_authority_hash == [0; 32]
         || expected_authority_hash != Some(request.directory_authority_hash)
     {
-        return Err(InternalError::conflict(
-            "Component runtime activation differs from its protected Directory authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let transition = FleetActivationOps::activate_component_runtime(request, IcOps::now_nanos())
         .map_err(StorageOpsError::from)
@@ -257,9 +246,7 @@ fn validate_request(
     request: &ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<(), InternalError> {
     if request.operation_id != current.operation_id {
-        return Err(InternalError::conflict(
-            "Component runtime Directory operation differs from protected installation identity",
-        ));
+        return Err(InternalError::conflict());
     }
     validate_binding(&current.binding)?;
     validate_authority(&current.binding, &current.deployment, &request.authority)
@@ -271,10 +258,7 @@ fn validate_binding(binding: &ManagedCanisterBinding) -> Result<(), InternalErro
         ManagedCanisterBinding::ComponentChild(child) => child.canister_id,
     };
     if canister != IcOps::canister_self() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "protected Component runtime binding does not name this Canister",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -296,9 +280,7 @@ fn validate_authority(
     .into_iter()
     .all(|valid| valid);
     if !identity_matches || !head_is_versioned {
-        return Err(InternalError::invalid_input(
-            "Component Directory does not match the protected Component-tree binding",
-        ));
+        return Err(InternalError::invalid_input());
     }
     validate_fleet_directory(component, deployment, &authority.fleet)?;
     validate_component_group_directory(component, deployment, authority.component_group.as_ref())
@@ -331,9 +313,7 @@ fn validate_directory_progression(
         || !component_authority_advances
         || !fleet_authority_is_monotonic
     {
-        return Err(InternalError::conflict(
-            "next Component Directory does not advance exact current authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -352,9 +332,7 @@ fn validate_fleet_directory(
         .into_iter()
         .all(|valid| valid)
     {
-        return Err(InternalError::invalid_input(
-            "Fleet Directory does not match the protected Component-tree binding",
-        ));
+        return Err(InternalError::invalid_input());
     }
 
     let mut previous: Option<(&[u8], &[u8])> = None;
@@ -367,9 +345,7 @@ fn validate_fleet_directory(
         let status_is_published = entry.status != FleetSubnetRootStatus::Joining;
         let order_is_canonical = previous.is_none_or(|previous| previous < key);
         if !status_is_published || !order_is_canonical {
-            return Err(InternalError::invalid_input(
-                "Fleet Directory root entries are not unique, canonical and published",
-            ));
+            return Err(InternalError::invalid_input());
         }
         previous = Some(key);
         if entry.fleet_subnet_root == component.fleet_subnet_root {
@@ -385,17 +361,13 @@ fn validate_fleet_directory(
             .into_iter()
             .all(|valid| valid);
             if !source_is_exact {
-                return Err(InternalError::invalid_input(
-                    "Fleet Directory source root differs from the current Component binding",
-                ));
+                return Err(InternalError::invalid_input());
             }
             found_source = true;
         }
     }
     if !found_source {
-        return Err(InternalError::invalid_input(
-            "Fleet Directory omits the Component's source root",
-        ));
+        return Err(InternalError::invalid_input());
     }
     validate_fleet_services(component, deployment, directory)
 }
@@ -417,9 +389,7 @@ fn validate_fleet_services(
         .into_iter()
         .all(|valid| valid);
         if !service_is_valid {
-            return Err(InternalError::invalid_input(
-                "Fleet Directory services are not canonical and bounded",
-            ));
+            return Err(InternalError::invalid_input());
         }
         previous_service = Some(&service.service);
         let mut previous_member = None;
@@ -427,17 +397,13 @@ fn validate_fleet_services(
         for member in &service.members {
             let key = fleet_service_member_key(member);
             if previous_member.is_some_and(|previous| previous >= key) {
-                return Err(InternalError::invalid_input(
-                    "Fleet Directory service members are not canonical and unique",
-                ));
+                return Err(InternalError::invalid_input());
             }
             previous_member = Some(key);
             if member.member_purpose == crate::config::FleetServiceMemberPurpose::Authority {
-                authority_count = authority_count.checked_add(1).ok_or_else(|| {
-                    InternalError::resource_exhausted(
-                        "Fleet Directory Authority member count overflowed",
-                    )
-                })?;
+                authority_count = authority_count
+                    .checked_add(1)
+                    .ok_or_else(|| InternalError::resource_exhausted())?;
             }
             if member.component == component.component {
                 let protected_membership_is_exact = [
@@ -449,18 +415,14 @@ fn validate_fleet_services(
                 .into_iter()
                 .all(|valid| valid);
                 if !protected_membership_is_exact {
-                    return Err(InternalError::invalid_input(
-                        "Fleet Directory service membership differs from the protected Component",
-                    ));
+                    return Err(InternalError::invalid_input());
                 }
                 matched_membership = Some((service, member));
             }
         }
         let mode_is_valid = fleet_service_mode_is_valid(service, authority_count);
         if !mode_is_valid {
-            return Err(InternalError::invalid_input(
-                "Fleet Directory service mode differs from its configured members",
-            ));
+            return Err(InternalError::invalid_input());
         }
     }
     validate_component_service_membership(deployment, matched_membership)
@@ -538,9 +500,7 @@ fn validate_component_service_membership(
         (Some(expected), Some(actual)) if fleet_service_membership_matches(expected, actual) => {
             Ok(())
         }
-        _ => Err(InternalError::invalid_input(
-            "Fleet Directory service membership differs from protected deployment purpose",
-        )),
+        _ => Err(InternalError::invalid_input()),
     }
 }
 
@@ -589,16 +549,10 @@ fn validate_component_group_directory(
         return if directory.is_none() {
             Ok(())
         } else {
-            Err(InternalError::invalid_input(
-                "ordinary Component runtime received a Component Group Directory",
-            ))
+            Err(InternalError::invalid_input())
         };
     };
-    let directory = directory.ok_or_else(|| {
-        InternalError::invalid_input(
-            "grouped Component runtime lacks its Component Group Directory",
-        )
-    })?;
+    let directory = directory.ok_or_else(|| InternalError::invalid_input())?;
     let provenance = &directory.provenance;
     let provenance_is_exact = [
         provenance.authority == component.authority,
@@ -613,9 +567,7 @@ fn validate_component_group_directory(
     .into_iter()
     .all(|matches| matches);
     if !provenance_is_exact {
-        return Err(InternalError::invalid_input(
-            "Component Group Directory provenance differs from protected deployment",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let mut previous_path = None;
     let mut own_member_found = false;
@@ -632,9 +584,7 @@ fn validate_component_group_directory(
         .into_iter()
         .all(|valid| valid);
         if !member_is_valid {
-            return Err(InternalError::invalid_input(
-                "Component Group Directory members are not canonical, unique and root-local",
-            ));
+            return Err(InternalError::invalid_input());
         }
         previous_path = Some(&member.member_path);
         if &member.member_path == member_path {
@@ -648,17 +598,13 @@ fn validate_component_group_directory(
             .into_iter()
             .all(|matches| matches);
             if !own_member_is_exact {
-                return Err(InternalError::invalid_input(
-                    "Component Group Directory own member differs from protected deployment",
-                ));
+                return Err(InternalError::invalid_input());
             }
             own_member_found = true;
         }
     }
     if !own_member_found {
-        return Err(InternalError::invalid_input(
-            "Component Group Directory omits the protected Component member",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }

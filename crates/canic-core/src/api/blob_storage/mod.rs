@@ -28,14 +28,18 @@ use crate::{
 pub struct BlobStorageApi;
 
 impl BlobStorageApi {
-    fn map_conversion_error(err: BlobStorageConversionError) -> Error {
-        Error::invalid(err.to_string())
+    fn map_conversion_error(_err: BlobStorageConversionError) -> Error {
+        Error::from_registered(crate::diagnostics::codes::REQUEST_INVALID)
     }
 
     fn map_lifecycle_error(err: BlobStorageLifecycleError) -> Error {
         match err {
-            BlobStorageLifecycleError::BlobNotLive => Error::not_found(err.to_string()),
-            BlobStorageLifecycleError::BlobPendingDeletion => Error::conflict(err.to_string()),
+            BlobStorageLifecycleError::BlobNotLive => {
+                Error::from_registered(crate::diagnostics::codes::COLLECTION_UNAVAILABLE)
+            }
+            BlobStorageLifecycleError::BlobPendingDeletion => {
+                Error::from_registered(crate::diagnostics::codes::STATE_CONFLICT)
+            }
         }
     }
 }

@@ -19,9 +19,9 @@ Date: 2026-07-26
   - [0.100 Fleet coordination and Registry synchronization](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md);
   - [0.101 composable Component deployment and Fleet service publication](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md);
   - [0.102 compact diagnostic codes](../../0.102-compact-diagnostic-codes/0.102-design.md);
-  - the independent [local application authorization idea](../framework-neutral-local-application-authorization/design.md);
+  - the scheduled [0.109 local application authorization design](../../0.109-framework-neutral-local-application-authorization/0.109-design.md);
   - the independent [synchronous lifecycle-composition idea](../framework-neutral-synchronous-lifecycle-composition/design.md); and
-  - the evidence-only [0.104 Fleet-estate platform qualification](../../0.104-fleet-estate-platform-qualification/0.104-design.md), which supplies no transport authority.
+  - the evidence-only [0.105 Fleet-estate platform qualification](../../0.105-fleet-estate-platform-qualification/0.105-design.md), which supplies no transport authority.
 - Dependency posture: the Fleet-aware route model depends on the protected
   topology and Fleet service bindings designed by 0.100 and 0.101. The
   generic call-wrapper measurements can be implemented independently once the
@@ -38,9 +38,9 @@ Date: 2026-07-26
   introduced.
 - Repository scope: Canic only. IcyDB and other database repositories remain
   read-only downstream integrations.
-- Independence posture: 0.106 neither requires nor extends 0.103 application
-  sessions. Transport routes carry explicit Canister-to-Canister authority;
-  they do not substitute for an ingress application subject.
+- Independence posture: this transport idea neither requires nor extends 0.109
+  application sessions. Transport routes carry explicit Canister-to-Canister
+  authority; they do not substitute for an ingress application subject.
 - Lifecycle posture: 0.106 neither requires nor extends the 0.104 synchronous
   participant seam. Its call wrapper remains ordinary application/runtime work
   after lifecycle restoration.

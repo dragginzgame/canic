@@ -164,15 +164,17 @@ impl WasmStoreInternalClient {
     {
         let call = CallOps::bounded_wait(self.store_pid, method)
             .with_args(arg)
-            .map_err(|err| InternalError::public(Error::invariant(err.to_string())))?
+            .map_err(|_err| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?
             .execute()
             .await
-            .map_err(|err| InternalError::public(Error::unavailable(err.to_string())))?;
+            .map_err(|_err| {
+                InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+            })?;
         let call_res: Result<T, Error> = call
             .candid::<Result<T, Error>>()
-            .map_err(|err| InternalError::public(Error::invariant(err.to_string())))?;
+            .map_err(|_err| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
 
-        call_res.map_err(InternalError::public)
+        call_res.map_err(InternalError::observed_public)
     }
 }
 

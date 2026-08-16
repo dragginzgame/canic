@@ -106,9 +106,7 @@ pub fn stop() -> Result<(), InternalError> {
 /// Return the exact immutable policy and durable asset inventory.
 pub fn status(request: CanisterPoolStatusRequest) -> Result<CanisterPoolResponse, InternalError> {
     if request.limit == 0 || request.limit > MAX_STATUS_PAGE_ENTRIES {
-        return Err(InternalError::invalid_input(format!(
-            "Canister pool status limit must be between 1 and {MAX_STATUS_PAGE_ENTRIES}",
-        )));
+        return Err(InternalError::invalid_input());
     }
     Ok(CanisterPoolOps::response(
         pool_config()?,
@@ -123,9 +121,7 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
         PoolAdminCommand::Maintain => maintain_once().await,
         PoolAdminCommand::RetryRefill => {
             if root_is_draining() {
-                return Err(InternalError::conflict(
-                    "Canister pool refill retry is fenced while the root is draining",
-                ));
+                return Err(InternalError::conflict());
             }
             refill::retry_blocked()
         }
@@ -238,12 +234,9 @@ fn spawn_maintenance(attempt: AsyncRecoveryAttempt) {
 
 fn claim_maintenance() -> Result<AsyncRecoveryClaim, InternalError> {
     let now_ns = IcOps::now_nanos();
-    let lease_expires_at_ns = now_ns.checked_add(MAINTENANCE_LEASE_NS).ok_or_else(|| {
-        InternalError::invariant(
-            canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-            "Canister pool maintenance lease deadline overflowed",
-        )
-    })?;
+    let lease_expires_at_ns = now_ns
+        .checked_add(MAINTENANCE_LEASE_NS)
+        .ok_or_else(|| InternalError::invariant())?;
     AsyncTimerRecoveryOps::claim(
         AsyncRecoveryOwner::CanisterPoolMaintenance,
         now_ns,
@@ -280,13 +273,7 @@ const fn maintenance_result_completion(
 ) -> AsyncRecoveryCompletion {
     match result {
         Ok(_) => AsyncRecoveryCompletion::Success,
-        Err(error)
-            if matches!(
-                error.class(),
-                canic_core::control_plane_support::error::InternalErrorClass::Infra
-                    | canic_core::control_plane_support::error::InternalErrorClass::Ops
-            ) =>
-        {
+        Err(error) if is_retryable_maintenance_error(error) => {
             AsyncRecoveryCompletion::RetryableFailure
         }
         Err(_) => AsyncRecoveryCompletion::InvariantFailure,
@@ -320,19 +307,14 @@ fn maintenance_recovery_deadline(
         return Ok(None);
     }
     IcOps::now_nanos()
-        .checked_add(MAINTENANCE_INTERVAL.as_nanos().try_into().map_err(|_| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-                "Canister pool recovery cadence exceeds u64 nanoseconds",
-            )
-        })?)
+        .checked_add(
+            MAINTENANCE_INTERVAL
+                .as_nanos()
+                .try_into()
+                .map_err(|_| InternalError::invariant())?,
+        )
         .map(Some)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                canic_core::control_plane_support::error::InternalErrorOrigin::Workflow,
-                "Canister pool recovery deadline overflowed",
-            )
-        })
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> TimerRunResult {
@@ -341,28 +323,29 @@ fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) ->
             TimerRunResult::no_work(TimerDirective::Stop)
         }
         Ok(_) => TimerRunResult::success(1, TimerDirective::Stop),
-        Err(error)
-            if matches!(
-                error.class(),
-                canic_core::control_plane_support::error::InternalErrorClass::Infra
-                    | canic_core::control_plane_support::error::InternalErrorClass::Ops
-            ) =>
-        {
-            TimerRunResult {
-                outcome: canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure,
-                work_count: 0,
-                directive: TimerDirective::Stop,
-            }
-        }
+        Err(error) if is_retryable_maintenance_error(&error) => TimerRunResult {
+            outcome: canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure,
+            work_count: 0,
+            directive: TimerDirective::Stop,
+        },
         Err(_) => TimerRunResult::invariant_failure(),
     }
 }
 
+const fn is_retryable_maintenance_error(error: &InternalError) -> bool {
+    let code = error.code().raw_code().raw();
+    code == canic_core::diagnostics::codes::PLATFORM_FAILED
+        .raw_code()
+        .raw()
+        || code
+            == canic_core::diagnostics::codes::STATE_FAILED
+                .raw_code()
+                .raw()
+}
+
 async fn import(canister_id: Principal) -> Result<PoolAdminResponse, InternalError> {
     if root_is_draining() {
-        return Err(InternalError::conflict(
-            "Canister pool import is fenced while the Fleet Subnet Root is draining",
-        ));
+        return Err(InternalError::conflict());
     }
     require_import_candidate(canister_id)?;
     require_ic_import_on_root_subnet(canister_id).await?;
@@ -382,9 +365,7 @@ async fn handoff(
     recipient: Principal,
 ) -> Result<PoolAdminResponse, InternalError> {
     if !root_is_draining() {
-        return Err(InternalError::conflict(
-            "Canister pool assets may be handed off only while the Fleet Subnet Root is draining",
-        ));
+        return Err(InternalError::conflict());
     }
     let root = IcOps::canister_self();
     if recipient == Principal::anonymous()
@@ -392,9 +373,7 @@ async fn handoff(
         || recipient == root
         || recipient == canister_id
     {
-        return Err(InternalError::invalid_input(
-            "Canister pool handoff recipient must be distinct non-reserved replacement authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if let Some(existing) = CanisterPoolOps::completed_handoff_recipient(canister_id) {
         if existing == recipient {
@@ -403,9 +382,7 @@ async fn handoff(
                 recipient,
             });
         }
-        return Err(InternalError::conflict(
-            "Canister pool asset was already handed to different replacement authority",
-        ));
+        return Err(InternalError::conflict());
     }
     CanisterPoolOps::begin_handoff(canister_id, recipient, IcOps::now_nanos())?;
     MgmtOps::update_settings(&UpdateSettingsArgs {
@@ -432,14 +409,10 @@ fn require_import_candidate(canister_id: Principal) -> Result<(), InternalError>
             .iter()
             .any(|store| store.pid == canister_id)
     {
-        return Err(InternalError::conflict(
-            "Fleet infrastructure cannot be imported into the Canister pool",
-        ));
+        return Err(InternalError::conflict());
     }
     if ComponentRegistryOps::component_for_principal(canister_id).is_some() {
-        return Err(InternalError::conflict(
-            "a registered Component-tree member cannot be imported into the Canister pool",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -535,19 +508,13 @@ async fn require_ic_import_on_root_subnet(canister_id: Principal) -> Result<(), 
 }
 
 fn validate_import_subnet(
-    canister_id: Principal,
+    _canister_id: Principal,
     expected: SubnetId,
     actual: Option<Principal>,
 ) -> Result<(), InternalError> {
-    let actual = actual.ok_or_else(|| {
-        InternalError::unavailable(format!(
-            "NNS Registry has no Subnet route for Canister pool import {canister_id}"
-        ))
-    })?;
+    let actual = actual.ok_or_else(|| InternalError::unavailable())?;
     if actual != expected.into_principal() {
-        return Err(InternalError::conflict(format!(
-            "Canister pool import {canister_id} is routed to Subnet {actual}, not root Subnet {expected}"
-        )));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -562,7 +529,6 @@ fn pool_config() -> Result<FleetSubnetCanisterPoolConfig, InternalError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::control_plane_support::error::InternalErrorOrigin;
 
     #[test]
     fn import_subnet_requires_exact_nns_routing_evidence() {
@@ -588,19 +554,13 @@ mod tests {
             canic_core::dto::runtime::TimerExecutionOutcome::NoWork
         );
 
-        let retryable = maintenance_timer_result(Err(InternalError::infra(
-            InternalErrorOrigin::Infra,
-            "management call failed",
-        )));
+        let retryable = maintenance_timer_result(Err(InternalError::platform_failure()));
         assert_eq!(
             retryable.outcome,
             canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure
         );
 
-        let invariant = maintenance_timer_result(Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "state contradiction",
-        )));
+        let invariant = maintenance_timer_result(Err(InternalError::invariant()));
         assert_eq!(
             invariant.outcome,
             canic_core::dto::runtime::TimerExecutionOutcome::InvariantFailure

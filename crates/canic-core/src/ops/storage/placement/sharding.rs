@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    ops::{prelude::*, storage::StorageOpsError},
+    ops::prelude::*,
     storage::stable::sharding::{
         ShardEntryRecord, ShardKey, ShardingAssignmentRecord, ShardingRegistryData,
         ShardingRegistryEntryRecord, registry::ShardingRegistry,
@@ -57,7 +57,23 @@ pub enum ShardingRegistryOpsError {
 
 impl From<ShardingRegistryOpsError> for InternalError {
     fn from(err: ShardingRegistryOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            ShardingRegistryOpsError::InvalidKey(_) => codes::SECURITY_INVALID,
+            ShardingRegistryOpsError::PoolMismatch { .. } => codes::CAPACITY_CONFLICT,
+            ShardingRegistryOpsError::ShardNotFound(_) => codes::AUTHORITY_UNAVAILABLE,
+            ShardingRegistryOpsError::SlotOccupied { .. } => codes::STORAGE_INVALID_STATE,
+            ShardingRegistryOpsError::PartitionKeyNotAssigned { .. } => {
+                codes::AUTHORITY_INVALID_STATE
+            }
+            ShardingRegistryOpsError::ShardConflict { .. } => codes::AUTHORITY_CONFLICT,
+            ShardingRegistryOpsError::AssignmentCountUnderflow { .. } => {
+                codes::CAPACITY_INSUFFICIENT
+            }
+            ShardingRegistryOpsError::AssignmentCountOverflow { .. } => codes::CAPACITY_LIMIT,
+        };
+        Self::public(code)
     }
 }
 
@@ -387,8 +403,7 @@ mod tests {
         let err = ShardingRegistryOps::create(shard_pid, "poolA", 1, &role, 2, 20)
             .expect_err("same shard principal with a different slot must reject");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::AUTHORITY_CONFLICT);
         assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().slot, 0);
     }
 
@@ -397,8 +412,7 @@ mod tests {
         let err = ShardingRegistryOps::validate_assignment_key("poolA", &"x".repeat(129))
             .expect_err("oversized partition keys must reject before assignment");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::SECURITY_INVALID);
     }
 
     #[test]
@@ -416,8 +430,7 @@ mod tests {
         let err = ShardingRegistryOps::assign("poolA", "pk1", new_shard)
             .expect_err("a corrupt old counter must reject reassignment");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_INSUFFICIENT);
         assert_eq!(
             ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
             Some(old_shard)
@@ -438,8 +451,7 @@ mod tests {
         let err = ShardingRegistryOps::assign("poolA", "pk1", shard)
             .expect_err("a full-width counter must reject assignment");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_LIMIT);
         assert!(ShardingRegistryOps::partition_key_shard("poolA", "pk1").is_none());
         assert_eq!(ShardingRegistryOps::get(shard).unwrap().count, u32::MAX);
     }
@@ -453,8 +465,7 @@ mod tests {
         let err = ShardingRegistryOps::release("poolA", "pk1")
             .expect_err("a dangling assignment must fail closed");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::AUTHORITY_UNAVAILABLE);
         assert_eq!(
             ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
             Some(missing_shard)
@@ -474,8 +485,7 @@ mod tests {
         let err = ShardingRegistryOps::assign("poolA", "pk1", target_shard)
             .expect_err("a dangling old assignment must fail closed");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::AUTHORITY_UNAVAILABLE);
         assert_eq!(
             ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
             Some(missing_shard)
@@ -495,8 +505,7 @@ mod tests {
         let err = ShardingRegistryOps::release("poolA", "pk1")
             .expect_err("a zero counter must fail closed");
 
-        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_INSUFFICIENT);
         assert_eq!(
             ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
             Some(shard)

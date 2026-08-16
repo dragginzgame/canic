@@ -25,7 +25,7 @@ Date: 2026-08-09
 - Sequence: this design follows the
   [standalone blob-service extraction idea](../standalone-blob-service-extraction/design.md)
   and the
-  [0.105 Coordinator-backed root-funding design](../../0.105-coordinator-backed-root-funding/0.105-design.md).
+  [0.106 Coordinator-backed root-funding design](../../0.106-coordinator-backed-root-funding/0.106-design.md).
   Its approved M0 investigation may run alongside 0.109 M0 because the
   provider capability, retention and cost evidence overlap.
 - Default: remote archival is absent and disabled. Existing local backup
@@ -1576,7 +1576,7 @@ clear provider and secret boundary.
 ## Source Documents
 
 - [Standalone blob-service extraction idea](../standalone-blob-service-extraction/design.md)
-- [Canic 0.105 Coordinator-backed root funding](../../0.105-coordinator-backed-root-funding/0.105-design.md)
+- [Canic 0.106 Coordinator-backed root funding](../../0.106-coordinator-backed-root-funding/0.106-design.md)
 - [Archived 0.30 canister-snapshot design](../../archive/0.30-canister-snapshots/0.30-design.md)
 - [Archived 0.31 snapshot-cleanup design](../../archive/0.31-snapshot-cleanup/0.31-design.md)
 - [Archived 0.36 backup/restore design](../../archive/0.36-backup-restore/0.36-design.md)

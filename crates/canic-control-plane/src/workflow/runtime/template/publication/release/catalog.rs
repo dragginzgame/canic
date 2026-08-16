@@ -38,15 +38,24 @@ impl WasmStorePublicationWorkflow {
     pub(in crate::workflow::runtime::template::publication) fn reconciled_binding_for_manifest(
         store: &PublicationStoreSnapshot,
         manifest: &TemplateManifestResponse,
-    ) -> Result<WasmStoreBinding, InternalError> {
-        if !store.is_available_for_publication() || !store.has_exact_release(manifest) {
-            return Err(crate::workflow::runtime::template::publication::error::PublicationWorkflowError::ExactReleaseMissing {
-                role: manifest.role.clone(),
-                template_id: manifest.template_id.clone(),
-                version: manifest.version.clone(),
-                expected_binding: manifest.store_binding.clone(),
-            }
-            .into());
+    ) -> Result<WasmStoreBinding, super::super::error::PublicationWorkflowError> {
+        if !store.is_available_for_publication() {
+            return Err(
+                super::super::error::PublicationWorkflowError::GcWriteFenced {
+                    binding: store.binding.clone(),
+                    mode: store.status.gc.mode,
+                },
+            );
+        }
+        if !store.has_exact_release(manifest) {
+            return Err(
+                super::super::error::PublicationWorkflowError::ExactReleaseMissing {
+                    role: manifest.role.clone(),
+                    template_id: manifest.template_id.clone(),
+                    version: manifest.version.clone(),
+                    expected_binding: manifest.store_binding.clone(),
+                },
+            );
         }
         Ok(store.binding.clone())
     }
@@ -105,5 +114,89 @@ impl WasmStorePublicationWorkflow {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        dto::template::{WasmStoreGcStatusResponse, WasmStoreStatusResponse},
+        ids::{
+            CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateVersion,
+            WasmStoreGcMode,
+        },
+        workflow::runtime::template::publication::error::PublicationWorkflowError,
+    };
+    use canic_core::cdk::types::Principal;
+
+    fn manifest() -> TemplateManifestResponse {
+        TemplateManifestResponse {
+            template_id: crate::ids::TemplateId::new("embedded:app"),
+            role: CanisterRole::new("app"),
+            version: TemplateVersion::new("1"),
+            payload_hash: vec![1; 32],
+            payload_size_bytes: 10,
+            store_binding: WasmStoreBinding::new("primary"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(1),
+            created_at: 1,
+        }
+    }
+
+    fn snapshot(mode: WasmStoreGcMode) -> PublicationStoreSnapshot {
+        PublicationStoreSnapshot {
+            binding: WasmStoreBinding::new("primary"),
+            pid: Principal::anonymous(),
+            status: WasmStoreStatusResponse {
+                gc: WasmStoreGcStatusResponse {
+                    mode,
+                    changed_at: 1,
+                    prepared_at: None,
+                    started_at: None,
+                    completed_at: None,
+                    runs_completed: 0,
+                },
+                occupied_store_bytes: 0,
+                occupied_store_size: "0 B".to_string(),
+                max_store_bytes: 100,
+                max_store_size: "100 B".to_string(),
+                remaining_store_bytes: 100,
+                remaining_store_size: "100 B".to_string(),
+                headroom_bytes: None,
+                headroom_size: None,
+                within_headroom: false,
+                template_count: 0,
+                max_templates: None,
+                release_count: 0,
+                max_template_versions_per_template: None,
+                templates: Vec::new(),
+            },
+            releases: Vec::new(),
+            stored_chunk_hashes: None,
+        }
+    }
+
+    #[test]
+    fn catalog_reconciliation_distinguishes_gc_fence_from_missing_release() {
+        let manifest = manifest();
+        assert!(matches!(
+            WasmStorePublicationWorkflow::reconciled_binding_for_manifest(
+                &snapshot(WasmStoreGcMode::Prepared),
+                &manifest,
+            ),
+            Err(PublicationWorkflowError::GcWriteFenced {
+                mode: WasmStoreGcMode::Prepared,
+                ..
+            })
+        ));
+        assert!(matches!(
+            WasmStorePublicationWorkflow::reconciled_binding_for_manifest(
+                &snapshot(WasmStoreGcMode::Normal),
+                &manifest,
+            ),
+            Err(PublicationWorkflowError::ExactReleaseMissing { .. })
+        ));
     }
 }

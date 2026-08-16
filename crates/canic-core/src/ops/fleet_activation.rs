@@ -5,7 +5,7 @@
 //! Boundary: workflow supplies validated DTOs; this module returns domain-separated hashes.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::{
         cascade::{
             StateSnapshotInput, TopologyChildren, TopologyDirectChild, TopologyPathNode,
@@ -333,8 +333,8 @@ fn encode_value(value: &Value) -> Vec<u8> {
     bytes
 }
 
-fn canonical_error(message: impl Into<String>) -> InternalError {
-    InternalError::ops(InternalErrorOrigin::Ops, message)
+fn canonical_error(_message: impl Into<String>) -> InternalError {
+    InternalError::state_failure()
 }
 
 #[cfg(test)]

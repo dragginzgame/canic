@@ -6,7 +6,7 @@
 
 use super::{RootCapability, RootContext, replay};
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     domain::policy::pure::cycles_funding::{FundingPolicyViolation, evaluate},
     dto::rpc::{CyclesRequest, CyclesResponse},
@@ -112,10 +112,7 @@ async fn response_replay_first_with_child(
             return Ok(response);
         }
         replay::ReplayPreflight::Cached(_) => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "request cycles replay returned a non-cycles response",
-            ));
+            return Err(InternalError::invariant());
         }
     };
 
@@ -139,12 +136,10 @@ async fn response_replay_first_with_child(
     };
 
     if let Err(err) = replay::commit_replay(&pending) {
-        if let Err(recovery_err) =
+        if let Err(_recovery_err) =
             replay::mark_recovery_required(&pending, RecoveryReason::ResponseCommitFailed)
         {
-            return Err(err.with_diagnostic_context(format!(
-                "request cycles replay recovery marker failed: {recovery_err}"
-            )));
+            return Err(err);
         }
         return Err(err);
     }
@@ -407,31 +402,20 @@ pub(super) async fn execute_authorized_request_cycles(
         pending,
         &crate::dto::rpc::Response::Cycles(response.clone()),
     ) {
-        let mut err = err;
+        let err = err;
         let reason = match CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
             Ok(()) => RecoveryReason::ResponseCommitFailed,
-            Err(settlement_err) => {
-                err = err.with_diagnostic_context(format!(
-                    "request cycles cost settlement also failed: {settlement_err}"
-                ));
-                RecoveryReason::CostSettlementFailed
-            }
+            Err(_settlement_err) => RecoveryReason::CostSettlementFailed,
         };
-        if let Err(recovery_err) = replay::mark_recovery_required(pending, reason) {
-            err = err.with_diagnostic_context(format!(
-                "request cycles replay recovery marker failed: {recovery_err}"
-            ));
-        }
+        let _ = replay::mark_recovery_required(pending, reason);
         return Err(err);
     }
 
     if let Err(err) = CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
-        if let Err(recovery_err) =
+        if let Err(_recovery_err) =
             replay::mark_recovery_required(pending, RecoveryReason::CostSettlementFailed)
         {
-            return Err(err.with_diagnostic_context(format!(
-                "request cycles replay recovery marker failed: {recovery_err}"
-            )));
+            return Err(err);
         }
         return Err(err);
     }
@@ -568,7 +552,7 @@ fn preserve_request_cycles_recovery_required(
     approved_cycles: u128,
     err: InternalError,
 ) -> InternalError {
-    let (error_class, error_origin) = err.log_fields();
+    let diagnostic = err.code();
     let err = mark_recovery_required_after_failure(
         &pending.receipt_token,
         RecoveryReason::ExternalEffectStatusUnknown,
@@ -579,12 +563,11 @@ fn preserve_request_cycles_recovery_required(
     log!(
         Topic::Rpc,
         Error,
-        "request cycles replay recovery required effect=deposit_cycles command_kind={} caller={} approved_cycles={} error_class={} error_origin={}",
+        "request cycles replay recovery required effect=deposit_cycles command_kind={} caller={} approved_cycles={} diagnostic={}",
         ROOT_REQUEST_CYCLES_COMMAND_KIND,
         ctx.caller,
         approved_cycles,
-        error_class,
-        error_origin
+        diagnostic
     );
     err
 }

@@ -7,6 +7,7 @@
 use super::BlobStorageApi;
 use crate::{
     cdk::types::Principal,
+    diagnostics::codes,
     dto::{
         blob_storage::{
             BlobProjectCyclesTopUpReport, BlobStorageBillingConfig,
@@ -14,7 +15,7 @@ use crate::{
             BlobStorageCashierAccountTopUpRequest, BlobStorageCashierAccountTopUpResult,
             BlobStorageStatusRequest, BlobStorageStatusResponse,
         },
-        error::{Error, ErrorCode},
+        error::Error,
     },
     workflow::blob_storage::billing::{
         BlobStorageBillingWorkflow, BlobStorageBillingWorkflowError,
@@ -109,19 +110,19 @@ impl BlobStorageApi {
             BlobStorageBillingWorkflowError::BillingConfigMissing
             | BlobStorageBillingWorkflowError::BillingPolicy(_)
             | BlobStorageBillingWorkflowError::BoundaryConversion(_) => {
-                Error::invalid(err.to_string())
+                Error::from_registered(crate::diagnostics::codes::REQUEST_INVALID)
             }
-            BlobStorageBillingWorkflowError::CashierDecode(err) => {
-                Error::new(ErrorCode::InternalRpcMalformed, err.to_string())
+            BlobStorageBillingWorkflowError::CashierDecode(_err) => {
+                Error::from_registered(codes::CODEC_INVALID)
             }
-            BlobStorageBillingWorkflowError::CashierBalanceInternal(message) => {
-                Error::internal(message)
+            BlobStorageBillingWorkflowError::CashierBalanceInternal(_message) => {
+                Error::from_registered(crate::diagnostics::codes::STATE_FAILED)
             }
             BlobStorageBillingWorkflowError::CashierTopUp(err) => {
                 Self::map_cashier_top_up_error(err)
             }
-            BlobStorageBillingWorkflowError::FundingInProgress(err) => {
-                Error::conflict(err.to_string())
+            BlobStorageBillingWorkflowError::FundingInProgress(_err) => {
+                Error::from_registered(crate::diagnostics::codes::STATE_CONFLICT)
             }
             BlobStorageBillingWorkflowError::Internal(err) => Error::from(err),
         }
@@ -129,17 +130,17 @@ impl BlobStorageApi {
 
     pub(super) fn map_cashier_top_up_error(err: BlobStorageCashierAccountTopUpError) -> Error {
         match err {
-            BlobStorageCashierAccountTopUpError::NotAuthorized(principal) => {
-                Error::forbidden(format!("Cashier rejected top-up for account {principal}"))
+            BlobStorageCashierAccountTopUpError::NotAuthorized(_principal) => {
+                Error::from_registered(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
             }
             BlobStorageCashierAccountTopUpError::AccountBalanceOverflow => {
-                Error::exhausted("Cashier account balance overflow")
+                Error::from_registered(crate::diagnostics::codes::CAPACITY_LIMIT)
             }
-            BlobStorageCashierAccountTopUpError::InternalError(message) => {
-                Error::internal(format!("Cashier top-up failed: {message}"))
+            BlobStorageCashierAccountTopUpError::InternalError(_message) => {
+                Error::from_registered(crate::diagnostics::codes::STATE_FAILED)
             }
             BlobStorageCashierAccountTopUpError::TopUpWithoutCycles => {
-                Error::invalid("Cashier top-up rejected request without attached cycles")
+                Error::from_registered(crate::diagnostics::codes::REQUEST_INVALID)
             }
         }
     }

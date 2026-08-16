@@ -5,7 +5,7 @@
 //! Boundary: consumes the placement-only index through ops and schedules only known work.
 
 use crate::{
-    InternalError, InternalErrorClass, log,
+    InternalError, log,
     log::Topic,
     model::replay::OperationId,
     ops::{
@@ -119,9 +119,7 @@ impl PlacementAcknowledgementWorkflow {
             ACKNOWLEDGEMENT_BATCH_SIZE,
         )?;
         let mut work_count = 0u64;
-        let root_pid = EnvOps::root_pid().map_err(|err| {
-            err.with_diagnostic_context("resolve root before placement receipt acknowledgement")
-        })?;
+        let root_pid = EnvOps::root_pid().map_err(|err| err)?;
 
         for intent in page.intents {
             let operation_id = intent.operation_id;
@@ -139,9 +137,7 @@ impl PlacementAcknowledgementWorkflow {
                         directive: DrainDirective::Retry,
                     });
                 }
-                return Err(err.with_diagnostic_context(format!(
-                    "root rejected placement receipt acknowledgement for {operation_id}"
-                )));
+                return Err(err);
             }
 
             remove_exact_terminal_intent(&intent)?;
@@ -170,10 +166,8 @@ impl PlacementAcknowledgementWorkflow {
 }
 
 const fn is_retryable_root_failure(err: &InternalError) -> bool {
-    matches!(
-        err.class(),
-        InternalErrorClass::Infra | InternalErrorClass::Ops
-    )
+    err.code().raw_code().raw() == crate::diagnostics::codes::PLATFORM_FAILED.raw_code().raw()
+        || err.code().raw_code().raw() == crate::diagnostics::codes::STATE_FAILED.raw_code().raw()
 }
 
 fn retry_delay(streak: u8) -> Duration {
@@ -192,7 +186,6 @@ fn retry_delay(streak: u8) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::InternalErrorOrigin;
 
     #[test]
     fn placement_acknowledgement_retry_backoff_is_bounded_and_deterministic() {
@@ -207,20 +200,11 @@ mod tests {
 
     #[test]
     fn only_transport_classes_are_retryable() {
-        assert!(is_retryable_root_failure(&InternalError::ops(
-            InternalErrorOrigin::Ops,
-            "transport"
-        )));
-        assert!(is_retryable_root_failure(&InternalError::infra(
-            InternalErrorOrigin::Infra,
-            "transport"
-        )));
+        assert!(is_retryable_root_failure(&InternalError::state_failure()));
+        assert!(is_retryable_root_failure(&InternalError::platform_failure()));
         assert!(!is_retryable_root_failure(&InternalError::public(
-            crate::dto::error::Error::conflict("root rejection")
+            crate::diagnostics::codes::STATE_CONFLICT
         )));
-        assert!(!is_retryable_root_failure(&InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "local contradiction"
-        )));
+        assert!(!is_retryable_root_failure(&InternalError::invariant()));
     }
 }

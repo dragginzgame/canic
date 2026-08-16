@@ -17,7 +17,7 @@ use crate::{
     dto::component_deployment::ProtectedComponentDeployment,
     ids::{CanisterRole, ComponentBinding, ComponentSpecId},
     model::cycles_funding::FundingLimits,
-    ops::{OpsError, prelude::*, runtime::env::EnvOps},
+    ops::{prelude::*, runtime::env::EnvOps},
     storage::stable::state::fleet::FleetMode,
 };
 use std::sync::Arc;
@@ -48,7 +48,15 @@ pub enum ConfigOpsError {
 
 impl From<ConfigOpsError> for InternalError {
     fn from(err: ConfigOpsError) -> Self {
-        OpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        match err {
+            ConfigOpsError::Config(err) => err.into(),
+            ConfigOpsError::ComponentSpecNotFound(_) | ConfigOpsError::CanisterNotFound(_, _) => {
+                Self::public(codes::CONFIGURATION_UNAVAILABLE)
+            }
+            ConfigOpsError::CanisterRoleAmbiguous(_) => Self::public(codes::CONFIGURATION_CONFLICT),
+        }
     }
 }
 
@@ -116,11 +124,7 @@ impl ConfigOps {
     ) -> Result<(), InternalError> {
         Config::get()?
             .validate_protected_component_deployment(context, owning_component)
-            .map_err(|error| {
-                InternalError::invalid_input(format!(
-                    "protected Component deployment context is invalid: {error}"
-                ))
-            })
+            .map_err(|_error| InternalError::invalid_input())
     }
 
     /// Resolve the exact configured package identity for one declared application role.

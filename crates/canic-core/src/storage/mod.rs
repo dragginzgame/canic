@@ -24,7 +24,7 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 }
 
-use crate::{InternalError, InternalErrorOrigin};
+use crate::InternalError;
 use thiserror::Error as ThisError;
 
 ///
@@ -48,6 +48,14 @@ pub enum StorageError {
 
 impl From<StorageError> for InternalError {
     fn from(err: StorageError) -> Self {
-        Self::invariant(InternalErrorOrigin::Storage, err.to_string())
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            StorageError::LogCountInvariant => codes::STATE_INVALID,
+            StorageError::LogSequenceConflict(_) => codes::POSITION_CONFLICT,
+            StorageError::LogSequenceExhausted => codes::VERSION_CAPACITY,
+            StorageError::LogTimestampRegressed { .. } => codes::TIME_ORDERING,
+        };
+        Self::public(code)
     }
 }

@@ -1,15 +1,12 @@
 use candid::Principal;
 use canic::{
     Error,
-    dto::{
-        blob_storage::{
-            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
-            BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountTopUpError,
-            BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
-            BlobStorageLocalCounters, BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker,
-            BlobStorageStatusRequest, BlobStorageStatusResponse, CreateCertificateResult,
-        },
-        error::ErrorCode,
+    dto::blob_storage::{
+        BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
+        BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountTopUpError,
+        BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction, BlobStorageLocalCounters,
+        BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker, BlobStorageStatusRequest,
+        BlobStorageStatusResponse, CreateCertificateResult,
     },
     ids::CanisterRole,
     protocol::{
@@ -220,8 +217,8 @@ fn blob_storage_missing_billing_config_status_survives_upgrade_under_pocketic() 
     assert_eq!(
         top_up
             .expect_err("missing billing config should still block funding after upgrade")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 }
 
@@ -300,8 +297,8 @@ fn assert_direct_cashier_gateway_sync_bounds(
     assert_eq!(
         synced
             .expect_err("too many distinct Cashier gateways should fail sync")
-            .code,
-        ErrorCode::InternalRpcMalformed
+            .code(),
+        canic_core::diagnostics::codes::CODEC_INVALID.raw_code()
     );
     assert_direct_gateway_sync_failure_preserves_state(pic, probe_id, sync_at_before);
 
@@ -343,8 +340,8 @@ fn assert_billing_endpoints_require_controller(pic: &PocketIc, probe_id: Princip
     assert_eq!(
         sync_denied
             .expect_err("non-controller must not sync billing gateways")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let fund_denied: Result<BlobProjectCyclesTopUpReport, Error> = pic.update_candid_as_or_panic(
@@ -356,8 +353,8 @@ fn assert_billing_endpoints_require_controller(pic: &PocketIc, probe_id: Princip
     assert_eq!(
         fund_denied
             .expect_err("non-controller must not fund blob-storage billing")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let status_denied: Result<BlobStorageStatusResponse, Error> = pic.update_candid_as_or_panic(
@@ -371,8 +368,8 @@ fn assert_billing_endpoints_require_controller(pic: &PocketIc, probe_id: Princip
     assert_eq!(
         status_denied
             .expect_err("non-controller must not read guarded billing status")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 }
 
@@ -843,8 +840,8 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
     assert_eq!(
         balance_denied
             .expect_err("non-controller must not configure mock balance failures")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let top_up_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -858,8 +855,8 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
     assert_eq!(
         top_up_denied
             .expect_err("non-controller must not configure mock top-up failures")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let balance_total_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -871,8 +868,8 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
     assert_eq!(
         balance_total_denied
             .expect_err("non-controller must not configure mock malformed balance responses")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let top_up_total_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -884,8 +881,8 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
     assert_eq!(
         top_up_total_denied
             .expect_err("non-controller must not configure mock malformed top-up responses")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 
     let gateway_list_trap_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -897,8 +894,8 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
     assert_eq!(
         gateway_list_trap_denied
             .expect_err("non-controller must not configure mock gateway-list traps")
-            .code,
-        ErrorCode::Unauthorized
+            .code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
 }
 
@@ -927,8 +924,8 @@ fn assert_zero_cycle_funding_rejected(pic: &PocketIc, probe_id: Principal) {
     assert_eq!(
         zero_top_up
             .expect_err("zero-cycle funding should be rejected")
-            .code,
-        ErrorCode::InvalidInput
+            .code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 }
 
@@ -940,19 +937,19 @@ fn assert_cashier_top_up_errors_map_to_public_codes(
     for (error, expected_code) in [
         (
             BlobStorageCashierAccountTopUpError::NotAuthorized(probe_id),
-            ErrorCode::Forbidden,
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code(),
         ),
         (
             BlobStorageCashierAccountTopUpError::AccountBalanceOverflow,
-            ErrorCode::ResourceExhausted,
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code(),
         ),
         (
             BlobStorageCashierAccountTopUpError::InternalError("mock failure".to_string()),
-            ErrorCode::Internal,
+            canic_core::diagnostics::codes::STATE_FAILED.raw_code(),
         ),
         (
             BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
-            ErrorCode::InvalidInput,
+            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code(),
         ),
     ] {
         assert_cashier_top_up_error_maps_to_public_code(
@@ -982,8 +979,8 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
     assert_eq!(
         synced
             .expect_err("empty Cashier gateway list should fail sync")
-            .code,
-        ErrorCode::InternalRpcMalformed
+            .code(),
+        canic_core::diagnostics::codes::CODEC_INVALID.raw_code()
     );
 
     assert_failed_gateway_sync_preserves_state(pic, probe_id, sync_at_before, "empty gateway sync");
@@ -999,8 +996,8 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
     assert_eq!(
         synced
             .expect_err("invalid Cashier gateway list should fail sync")
-            .code,
-        ErrorCode::InternalRpcMalformed
+            .code(),
+        canic_core::diagnostics::codes::CODEC_INVALID.raw_code()
     );
 
     assert_failed_gateway_sync_preserves_state(
@@ -1016,8 +1013,8 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
     assert_eq!(
         synced
             .expect_err("trapped Cashier gateway list should fail sync")
-            .code,
-        ErrorCode::Internal
+            .code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
     );
 
     assert_failed_gateway_sync_preserves_state(
@@ -1134,7 +1131,7 @@ fn assert_cashier_top_up_error_maps_to_public_code(
     cashier_id: Principal,
     probe_id: Principal,
     error: BlobStorageCashierAccountTopUpError,
-    expected_code: ErrorCode,
+    expected_code: canic_core::diagnostics::DiagnosticCode,
 ) {
     configure_mock_top_up_error(pic, cashier_id, error);
 
@@ -1143,7 +1140,7 @@ fn assert_cashier_top_up_error_maps_to_public_code(
     assert_eq!(
         top_up
             .expect_err("mock Cashier top-up failure should propagate")
-            .code,
+            .code(),
         expected_code
     );
 
@@ -1165,8 +1162,8 @@ fn assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(
     assert_eq!(
         top_up
             .expect_err("malformed Cashier top-up balance should propagate")
-            .code,
-        ErrorCode::InternalRpcMalformed
+            .code(),
+        canic_core::diagnostics::codes::CODEC_INVALID.raw_code()
     );
 
     assert_eq!(
@@ -1241,8 +1238,8 @@ fn assert_funding_recovers_after_transient_cashier_failure(
     assert_eq!(
         failed_top_up
             .expect_err("transient Cashier top-up failure should propagate")
-            .code,
-        ErrorCode::Internal
+            .code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
     );
 
     let recovered_top_up = fund_from_project_cycles(pic, probe_id, 12);
@@ -1374,7 +1371,10 @@ fn assert_create_certificate_requires_controller(
     );
 
     let err = result.expect_err("non-controller create certificate must be denied");
-    assert_eq!(err.code, ErrorCode::Unauthorized);
+    assert_eq!(
+        err.code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+    );
     assert!(!blob_is_live(fixture, UNAUTHORIZED_ROOT_HASH_BYTES));
 }
 

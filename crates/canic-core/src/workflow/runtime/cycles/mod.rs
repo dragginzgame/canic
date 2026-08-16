@@ -7,11 +7,11 @@
 pub mod query;
 
 use crate::{
-    InternalError, InternalErrorClass, InternalErrorOrigin,
+    InternalError,
     cdk::types::Cycles,
     config::schema::TopupPolicy,
+    diagnostics::codes,
     domain::{policy::pure as policy, runtime::TimerExecutionOutcome},
-    dto::error::ErrorCode,
     log,
     log::Topic,
     model::replay::OperationId,
@@ -306,18 +306,12 @@ impl CycleWorkflow {
     }
 
     fn deadline_after_secs(now_ns: u64, delay_secs: u64) -> Result<u64, InternalError> {
-        let delay_ns = delay_secs.checked_mul(NANOS_PER_SECOND).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "cycle top-up deadline duration overflow",
-            )
-        })?;
-        now_ns.checked_add(delay_ns).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "cycle top-up deadline overflow",
-            )
-        })
+        let delay_ns = delay_secs
+            .checked_mul(NANOS_PER_SECOND)
+            .ok_or_else(|| InternalError::invariant())?;
+        now_ns
+            .checked_add(delay_ns)
+            .ok_or_else(|| InternalError::invariant())
     }
 }
 
@@ -340,12 +334,9 @@ fn select_automatic_topup_config(
 }
 
 fn is_retryable_funding_error(err: &InternalError) -> bool {
-    matches!(
-        err.class(),
-        InternalErrorClass::Infra | InternalErrorClass::Ops
-    ) || err
-        .public_error()
-        .is_some_and(|err| err.code == ErrorCode::Conflict)
+    err.code() == codes::PLATFORM_FAILED
+        || err.code() == codes::STATE_FAILED
+        || err.public_error().code() == codes::STATE_CONFLICT.raw_code()
 }
 
 fn claim_resource_exhaustion_recovery(err: &InternalError) -> bool {
@@ -369,7 +360,6 @@ fn retry_delay(streak: u64) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::error::Error as PublicError;
 
     #[test]
     fn automatic_topup_retry_backoff_is_bounded_and_deterministic() {
@@ -382,29 +372,23 @@ mod tests {
 
     #[test]
     fn only_transport_and_in_flight_funding_failures_retry() {
-        assert!(is_retryable_funding_error(&InternalError::ops(
-            InternalErrorOrigin::Ops,
-            "transport"
-        )));
+        assert!(is_retryable_funding_error(&InternalError::state_failure()));
         assert!(is_retryable_funding_error(&InternalError::public(
-            PublicError::conflict("in flight")
+            crate::diagnostics::codes::STATE_CONFLICT
         )));
         assert!(!is_retryable_funding_error(&InternalError::public(
-            PublicError::exhausted("cooldown")
+            crate::diagnostics::codes::CAPACITY_LIMIT
         )));
         assert!(!is_retryable_funding_error(&InternalError::public(
-            PublicError::forbidden("disabled")
+            crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED
         )));
-        assert!(!is_retryable_funding_error(&InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "contradiction"
-        )));
+        assert!(!is_retryable_funding_error(&InternalError::invariant()));
     }
 
     #[test]
     fn resource_exhaustion_gets_one_recovery_attempt_between_successes() {
-        let exhausted = InternalError::public(PublicError::exhausted("parent capacity"));
-        let forbidden = InternalError::public(PublicError::forbidden("disabled"));
+        let exhausted = InternalError::public(crate::diagnostics::codes::CAPACITY_LIMIT);
+        let forbidden = InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED);
 
         reset_resource_exhaustion_recovery();
         assert!(claim_resource_exhaustion_recovery(&exhausted));

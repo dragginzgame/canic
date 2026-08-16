@@ -5,14 +5,13 @@
 //! Boundary: deterministic adapter between auth prepare workflows and replay ops.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     dto::{
         auth::{
             AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenPrepareRequest,
             DelegatedTokenPrepareResponse, DelegationAudience, RoleAttestationPrepareResponse,
             RoleAttestationRequest,
         },
-        error::Error,
         rpc::RootRequestMetadata,
     },
     model::replay::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher, ReplayReceipt},
@@ -37,11 +36,10 @@ pub(super) fn replay_reserve_input(
     payload_hash: [u8; 32],
     now_ns: u64,
     ttl_ns: u64,
-    overflow_message: &'static str,
 ) -> Result<ReplayReceiptReserveInput, InternalError> {
     let expires_at_ns = now_ns
         .checked_add(ttl_ns)
-        .ok_or_else(|| InternalError::public(Error::invalid(overflow_message)))?;
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::TIME_CAPACITY))?;
     Ok(ReplayReceiptReserveInput::new(
         command_kind,
         OperationId::from_bytes(request_id),
@@ -55,36 +53,35 @@ pub(super) fn replay_reserve_input(
 pub(super) fn role_attestation_replay_metadata(
     metadata: Option<RootRequestMetadata>,
 ) -> Result<RootRequestMetadata, InternalError> {
-    let metadata = metadata.ok_or_else(|| InternalError::public(Error::operation_id_required()))?;
+    let metadata = metadata
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAVAILABLE))?;
     if metadata.ttl_ns == 0 {
-        return Err(InternalError::public(Error::invalid(
-            "role attestation replay metadata ttl_ns must be greater than zero",
-        )));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::TIME_INVALID,
+        ));
     }
     if metadata.ttl_ns > MAX_ROLE_ATTESTATION_REPLAY_TTL_NS {
-        return Err(InternalError::public(Error::invalid(format!(
-            "role attestation replay metadata ttl_ns={} exceeds max {}",
-            metadata.ttl_ns, MAX_ROLE_ATTESTATION_REPLAY_TTL_NS
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::TIME_CAPACITY,
+        ));
     }
     Ok(metadata)
 }
 
 pub(super) fn token_replay_metadata(
     metadata: Option<AuthRequestMetadata>,
-    label: &str,
 ) -> Result<AuthRequestMetadata, InternalError> {
-    let metadata = metadata.ok_or_else(|| InternalError::public(Error::operation_id_required()))?;
+    let metadata = metadata
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAVAILABLE))?;
     if metadata.ttl_ns == 0 {
-        return Err(InternalError::public(Error::invalid(format!(
-            "{label} replay metadata ttl_ns must be greater than zero"
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::TIME_INVALID,
+        ));
     }
     if metadata.ttl_ns > MAX_TOKEN_REPLAY_TTL_NS {
-        return Err(InternalError::public(Error::invalid(format!(
-            "{label} replay metadata ttl_ns={} exceeds max {}",
-            metadata.ttl_ns, MAX_TOKEN_REPLAY_TTL_NS
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::TIME_CAPACITY,
+        ));
     }
     Ok(metadata)
 }
@@ -167,74 +164,57 @@ pub(super) fn map_token_prepare_replay_decision(
     decision: ReplayReceiptDecision,
 ) -> Result<DelegatedTokenPrepareResponse, InternalError> {
     match decision {
-        ReplayReceiptDecision::Fresh(_) => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "fresh delegated token replay decision escaped",
+        ReplayReceiptDecision::Fresh(_) => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_INVALID_STATE,
         )),
         ReplayReceiptDecision::ReturnCommitted(receipt) => decode_token_prepare_response(&receipt),
         ReplayReceiptDecision::RecoveryRequired {
             token,
             reason: crate::model::replay::RecoveryReason::ResponseCommitFailed,
         } => recover_token_prepare_response(&token),
-        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
-            "delegated token prepare request is already in progress; retry later with the same request id",
-        ))),
-        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(Error::conflict(
-            "delegated token prepare request id was reused by a different caller",
-        ))),
-        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(Error::conflict(
-            "delegated token prepare request id was reused with a different payload",
-        ))),
-        ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
-            "delegated token prepare replay receipt expired; retry with a new request id",
-        ))),
-        ReplayReceiptDecision::RecoveryRequired { reason, .. } => {
-            Err(InternalError::public(Error::conflict(format!(
-                "delegated token prepare request requires recovery before replay: {reason:?}"
-            ))))
-        }
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
-            Err(InternalError::public(Error::exhausted(format!(
-                "delegated token prepare pending replay receipt quota exceeded for caller; max_pending={max_pending}"
-            ))))
-        }
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
-            Err(InternalError::public(Error::exhausted(format!(
-                "delegated token prepare pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
-            ))))
-        }
+        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_INCOMPLETE,
+        )),
+        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CONFLICT,
+        )),
+        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(
+            crate::diagnostics::codes::CODEC_CONFLICT,
+        )),
+        ReplayReceiptDecision::Expired => Err(InternalError::public(
+            crate::diagnostics::codes::EVIDENCE_EXPIRED,
+        )),
+        ReplayReceiptDecision::RecoveryRequired { reason: _, .. } => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_INVALID,
+        )),
+        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending: _, .. } => Err(
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_CAPACITY),
+        ),
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending: _, .. } => Err(
+            InternalError::public(crate::diagnostics::codes::REQUEST_CAPACITY),
+        ),
     }
 }
 
 pub(super) fn map_token_prepare_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    map_auth_prepare_replay_store_error(err, "delegated token prepare")
+    map_auth_prepare_replay_store_error(err)
 }
 
-fn map_auth_prepare_replay_store_error(
-    err: ReplayReceiptStoreError,
-    label: &'static str,
-) -> InternalError {
+fn map_auth_prepare_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
-        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("{label} replay receipt is missing"),
-        ),
-        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to decode {label} replay receipt: {message}"),
-        ),
-        ReplayReceiptStoreError::ReceiptTokenMismatch => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("{label} replay receipt token is stale"),
-        ),
-        ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("{label} replay receipt is missing staged response data"),
-        ),
-        ReplayReceiptStoreError::CostGuardSettlementMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("{label} replay receipt is missing cost guard settlement identity"),
-        ),
+        ReplayReceiptStoreError::ReceiptMissing
+        | ReplayReceiptStoreError::StagedResponseMissing => {
+            InternalError::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
+        }
+        ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
+        }
+        ReplayReceiptStoreError::ReceiptTokenMismatch => {
+            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
+        }
+        ReplayReceiptStoreError::CostGuardSettlementMissing => {
+            InternalError::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
+        }
     }
 }
 
@@ -242,10 +222,9 @@ pub(super) fn encode_token_prepare_response(
     response: &DelegatedTokenPrepareResponse,
 ) -> Result<Vec<u8>, InternalError> {
     replay_ops::encode_replay_response(response).map_err(|err| match err {
-        replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to encode delegated token prepare replay response: {message}"),
-        ),
+        replay_ops::ReplayCommitError::EncodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
+        }
     })
 }
 
@@ -253,8 +232,8 @@ fn decode_token_prepare_response(
     receipt: &ReplayReceipt,
 ) -> Result<DelegatedTokenPrepareResponse, InternalError> {
     replay_ops::decode_delegated_token_prepare_replay_response(receipt).map_err(|err| match err {
-        replay_ops::ReplayDecodeError::DecodeFailed(message) => {
-            InternalError::workflow(InternalErrorOrigin::Workflow, message)
+        replay_ops::ReplayDecodeError::DecodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
         }
     })
 }
@@ -271,9 +250,8 @@ pub(super) fn map_role_attestation_replay_decision(
     decision: ReplayReceiptDecision,
 ) -> Result<RoleAttestationPrepareResponse, InternalError> {
     match decision {
-        ReplayReceiptDecision::Fresh(_) => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "fresh role attestation replay decision escaped",
+        ReplayReceiptDecision::Fresh(_) => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_INVALID_STATE,
         )),
         ReplayReceiptDecision::ReturnCommitted(receipt) => {
             decode_role_attestation_prepare_response(&receipt)
@@ -282,50 +260,43 @@ pub(super) fn map_role_attestation_replay_decision(
             token,
             reason: crate::model::replay::RecoveryReason::ResponseCommitFailed,
         } => recover_role_attestation_prepare_response(&token),
-        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
-            "role attestation prepare request is already in progress; retry later with the same request id",
-        ))),
-        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(Error::conflict(
-            "role attestation prepare request id was reused by a different caller",
-        ))),
-        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(Error::conflict(
-            "role attestation prepare request id was reused with a different payload",
-        ))),
-        ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
-            "role attestation prepare replay receipt expired; retry with a new request id",
-        ))),
-        ReplayReceiptDecision::RecoveryRequired { reason, .. } => {
-            Err(InternalError::public(Error::conflict(format!(
-                "role attestation prepare request requires recovery before replay: {reason:?}"
-            ))))
-        }
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
-            Err(InternalError::public(Error::exhausted(format!(
-                "role attestation prepare pending replay receipt quota exceeded for caller; max_pending={max_pending}"
-            ))))
-        }
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
-            Err(InternalError::public(Error::exhausted(format!(
-                "role attestation prepare pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
-            ))))
-        }
+        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_INCOMPLETE,
+        )),
+        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CONFLICT,
+        )),
+        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(
+            crate::diagnostics::codes::CODEC_CONFLICT,
+        )),
+        ReplayReceiptDecision::Expired => Err(InternalError::public(
+            crate::diagnostics::codes::EVIDENCE_EXPIRED,
+        )),
+        ReplayReceiptDecision::RecoveryRequired { reason: _, .. } => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_INVALID,
+        )),
+        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending: _, .. } => Err(
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_CAPACITY),
+        ),
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending: _, .. } => Err(
+            InternalError::public(crate::diagnostics::codes::REQUEST_CAPACITY),
+        ),
     }
 }
 
 pub(super) fn map_role_attestation_replay_store_error(
     err: ReplayReceiptStoreError,
 ) -> InternalError {
-    map_auth_prepare_replay_store_error(err, "role attestation")
+    map_auth_prepare_replay_store_error(err)
 }
 
 pub(super) fn encode_role_attestation_prepare_response(
     response: &RoleAttestationPrepareResponse,
 ) -> Result<Vec<u8>, InternalError> {
     replay_ops::encode_replay_response(response).map_err(|err| match err {
-        replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to encode role attestation prepare replay response: {message}"),
-        ),
+        replay_ops::ReplayCommitError::EncodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
+        }
     })
 }
 
@@ -333,8 +304,8 @@ fn decode_role_attestation_prepare_response(
     receipt: &ReplayReceipt,
 ) -> Result<RoleAttestationPrepareResponse, InternalError> {
     replay_ops::decode_role_attestation_prepare_replay_response(receipt).map_err(|err| match err {
-        replay_ops::ReplayDecodeError::DecodeFailed(message) => {
-            InternalError::workflow(InternalErrorOrigin::Workflow, message)
+        replay_ops::ReplayDecodeError::DecodeFailed(_) => {
+            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
         }
     })
 }

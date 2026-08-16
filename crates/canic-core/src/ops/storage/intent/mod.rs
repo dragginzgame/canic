@@ -26,7 +26,6 @@ use crate::{
         placement::allocation::is_placement_resource_key,
         replay::OperationId,
     },
-    ops::storage::StorageOpsError,
     storage::stable::intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
         ApplicationReceiptEligibilityKeyRecord, ApplicationReceiptEligibilityRecord,
@@ -289,13 +288,90 @@ pub enum IntentStoreOpsError {
 
 impl From<IntentStoreOpsError> for InternalError {
     fn from(err: IntentStoreOpsError) -> Self {
-        if matches!(
-            err,
-            IntentStoreOpsError::ResourceTotalRecordCapacityReached { .. }
-        ) {
-            return Self::resource_exhausted(err.to_string());
-        }
-        StorageOpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            IntentStoreOpsError::AggregateUnderflow { .. } => codes::CAPACITY_INSUFFICIENT,
+            IntentStoreOpsError::AggregateOverflow { .. }
+            | IntentStoreOpsError::ResourceTotalRecordCapacityReached { .. }
+            | IntentStoreOpsError::ResourceTotalRecordLimitExceeded { .. }
+            | IntentStoreOpsError::ReceiptBackedRecordLimitExceeded { .. }
+            | IntentStoreOpsError::ApplicationReceiptEligibilityReservationOverflow
+            | IntentStoreOpsError::ApplicationReceiptReclamationCountOverflow => {
+                codes::CAPACITY_LIMIT
+            }
+            IntentStoreOpsError::Conflict(_) => codes::STATE_CONFLICT,
+            IntentStoreOpsError::Expired { .. } => codes::REQUEST_INACTIVE,
+            IntentStoreOpsError::IdOverflow => codes::CAPACITY_LIMIT,
+            IntentStoreOpsError::InvalidTransition { .. } => codes::STATE_INVALID,
+            IntentStoreOpsError::NotFound(_) => codes::STATE_UNAVAILABLE,
+            IntentStoreOpsError::RepeatedSettlementIntent(_) => codes::REQUEST_DUPLICATE,
+            IntentStoreOpsError::PendingIndexMissing(_)
+            | IntentStoreOpsError::ExpiryIndexMissing { .. }
+            | IntentStoreOpsError::PlacementAcknowledgementIndexMissing(_) => {
+                codes::POSITION_UNAVAILABLE
+            }
+            IntentStoreOpsError::PendingIndexExists(_)
+            | IntentStoreOpsError::ExpiryIndexExists { .. }
+            | IntentStoreOpsError::PlacementAcknowledgementIndexExists(_) => {
+                codes::POSITION_DUPLICATE
+            }
+            IntentStoreOpsError::PendingIndexMismatch(_)
+            | IntentStoreOpsError::ExpiryIndexValueMismatch { .. }
+            | IntentStoreOpsError::ExpiryIndexKeyMismatch { .. }
+            | IntentStoreOpsError::PlacementAcknowledgementIndexValueMismatch { .. } => {
+                codes::POSITION_CONFLICT
+            }
+            IntentStoreOpsError::PendingTotalMismatch { .. } => codes::CAPACITY_CONFLICT,
+            IntentStoreOpsError::ExpiryDeadlineOverflow { .. }
+            | IntentStoreOpsError::ApplicationReceiptEligibilityOverflow { .. } => {
+                codes::TIME_CAPACITY
+            }
+            IntentStoreOpsError::TtlFreeIntentInExpiryIndex(_) => codes::TIME_INVALID_STATE,
+            IntentStoreOpsError::PlacementAcknowledgementUnexpectedIndex(_) => {
+                codes::POSITION_INVALID
+            }
+            IntentStoreOpsError::PlacementAcknowledgementPrimaryMissing(_)
+            | IntentStoreOpsError::ApplicationReceiptReplayMissing(_)
+            | IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(_)
+            | IntentStoreOpsError::ApplicationReceiptEligibilityMissing(_) => {
+                codes::EVIDENCE_UNAVAILABLE
+            }
+            IntentStoreOpsError::PlacementAcknowledgementPrimaryMismatch(_)
+            | IntentStoreOpsError::ReceiptBackedEvidenceConflict(_)
+            | IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(_) => {
+                codes::EVIDENCE_CONFLICT
+            }
+            IntentStoreOpsError::SchemaMismatch { .. }
+            | IntentStoreOpsError::ApplicationReceiptReplaySchemaMismatch { .. }
+            | IntentStoreOpsError::ApplicationReceiptEligibilitySchemaMismatch { .. }
+            | IntentStoreOpsError::ReceiptBackedRecordSchemaMismatch { .. }
+            | IntentStoreOpsError::UnsupportedPayloadBindingSchema { .. }
+            | IntentStoreOpsError::UnsupportedTerminalEvidenceSchema { .. } => {
+                codes::VERSION_UNSUPPORTED
+            }
+            IntentStoreOpsError::TotalsMissing(_) => codes::CAPACITY_UNAVAILABLE,
+            IntentStoreOpsError::ReceiptBackedConflict(_) => codes::REQUEST_CONFLICT,
+            IntentStoreOpsError::ApplicationReceiptReplayUnexpected(_) => {
+                codes::EVIDENCE_UNEXPECTED_STATE
+            }
+            IntentStoreOpsError::ApplicationReceiptReplayIdentityMismatch { .. }
+            | IntentStoreOpsError::ApplicationReceiptEligibilityIdentityMismatch { .. }
+            | IntentStoreOpsError::ApplicationReceiptEligibilityBindingMismatch(_)
+            | IntentStoreOpsError::ReceiptBackedOwnershipMismatch { .. } => {
+                codes::AUTHORITY_CONFLICT
+            }
+            IntentStoreOpsError::ApplicationReceiptEligibilityExists(_) => {
+                codes::CONFIGURATION_DUPLICATE
+            }
+            IntentStoreOpsError::ApplicationReceiptEligibilityRevisionMismatch { .. } => {
+                codes::VERSION_CONFLICT
+            }
+            IntentStoreOpsError::ApplicationReceiptEligibilityCapacityUnavailable { .. } => {
+                codes::CAPACITY_UNAVAILABLE
+            }
+        };
+        Self::public(code)
     }
 }
 

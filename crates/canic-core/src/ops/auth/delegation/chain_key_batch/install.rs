@@ -7,7 +7,7 @@
 use super::super::root_issuer_renewal::renewal_template_fingerprint;
 use super::ChainKeyRootDelegationBatchInstallPlan;
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::auth::{
         ChainKeyRootSignatureV1, DelegationProof, IcChainKeyBatchSignatureProofV1,
@@ -114,12 +114,10 @@ pub(super) fn start_chain_key_root_delegation_batch_install(
         return Ok(None);
     }
 
-    let signature = batch.signature.clone().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "signed chain-key root delegation batch is missing a signature",
-        )
-    })?;
+    let signature = batch
+        .signature
+        .clone()
+        .ok_or_else(|| InternalError::invariant())?;
     let proofs = batch
         .issuers
         .iter()

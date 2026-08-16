@@ -7,13 +7,13 @@
 use crate::{
     InternalError,
     cdk::types::Principal,
-    domain::policy::pure::auth::{
-        AuthPolicyError, DelegatedRoleGrantPolicy, validate_public_delegated_token_prepare,
+    domain::policy::pure::{
+        PolicyError,
+        auth::{
+            AuthPolicyError, DelegatedRoleGrantPolicy, validate_public_delegated_token_prepare,
+        },
     },
-    dto::{
-        auth::{DelegatedRoleGrant, DelegatedTokenPrepareRequest, RoleAttestationRequest},
-        error::Error,
-    },
+    dto::auth::{DelegatedRoleGrant, DelegatedTokenPrepareRequest, RoleAttestationRequest},
     ids::{CanisterRole, ManagedCanisterBinding, SubnetId},
     ops::config::ConfigOps,
 };
@@ -26,11 +26,15 @@ pub(super) fn validate_role_attestation_request(
     validate_active_component_subject(caller, request, member)?;
 
     let max_ttl_ns = role_attestation_max_ttl_ns()?;
-    if request.ttl_ns == 0 || request.ttl_ns > max_ttl_ns {
-        return Err(InternalError::public(Error::invalid(format!(
-            "role attestation ttl_ns must satisfy 0 < ttl_ns <= {max_ttl_ns} (got {})",
-            request.ttl_ns
-        ))));
+    if request.ttl_ns == 0 {
+        return Err(InternalError::public(
+            crate::diagnostics::codes::TIME_INVALID,
+        ));
+    }
+    if request.ttl_ns > max_ttl_ns {
+        return Err(InternalError::public(
+            crate::diagnostics::codes::TIME_CAPACITY,
+        ));
     }
 
     Ok(())
@@ -43,32 +47,28 @@ fn validate_active_component_subject(
 ) -> Result<(), InternalError> {
     let authority = RoleAttestationMemberAuthority::from(member);
     if request.subject != caller {
-        return Err(InternalError::public(Error::forbidden(format!(
-            "role attestation subject {} must match caller {}",
-            request.subject, caller
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CONFLICT,
+        ));
     }
 
     if authority.canister_id != caller {
-        return Err(InternalError::public(Error::forbidden(format!(
-            "role attestation caller {} differs from active Component Registry member {}",
-            caller, authority.canister_id
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CONFLICT,
+        ));
     }
     if authority.role != &request.role {
-        return Err(InternalError::public(Error::forbidden(format!(
-            "role attestation role mismatch for subject {}: requested {}, registered {}",
-            request.subject, request.role, authority.role
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CONFLICT,
+        ));
     }
 
     if let Some(requested_subnet) = request.subnet_id
         && requested_subnet != authority.placement_subnet.into_principal()
     {
-        return Err(InternalError::public(Error::forbidden(format!(
-            "role attestation subnet mismatch for subject {}: requested {}, local {}",
-            request.subject, requested_subnet, authority.placement_subnet
-        ))));
+        return Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CONFLICT,
+        ));
     }
 
     Ok(())
@@ -99,11 +99,9 @@ impl<'a> From<&'a ManagedCanisterBinding> for RoleAttestationMemberAuthority<'a>
 
 fn role_attestation_max_ttl_ns() -> Result<u64, InternalError> {
     let cfg = ConfigOps::role_attestation_config()?;
-    cfg.max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
-        InternalError::public(Error::invalid(
-            "auth.role_attestation.max_ttl_secs overflows nanoseconds",
-        ))
-    })
+    cfg.max_ttl_secs
+        .checked_mul(1_000_000_000)
+        .ok_or_else(|| InternalError::public(crate::diagnostics::codes::TIME_CAPACITY))
 }
 
 pub(super) fn validate_token_prepare_public_request(
@@ -127,19 +125,16 @@ fn delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> DelegatedRoleGrant
 }
 
 fn map_token_prepare_policy_error(err: AuthPolicyError) -> InternalError {
-    InternalError::public(Error::forbidden(err.to_string()))
+    PolicyError::AuthPolicy(err).into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        dto::error::ErrorCode,
-        ids::{
-            AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
-            ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
-            FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
-        },
+    use crate::ids::{
+        AppId, CanisterRole, CanonicalNetworkId, ComponentBinding, ComponentChildBinding,
+        ComponentInstanceId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
+        FleetRegistryAuthority, ManagedCanisterBinding, SubnetId,
     };
 
     fn p(byte: u8) -> Principal {
@@ -234,8 +229,8 @@ mod tests {
             let error = validate_active_component_subject(caller, &request, &member)
                 .expect_err("binding drift must fail closed");
             assert_eq!(
-                error.public_error().expect("public rejection").code,
-                ErrorCode::Forbidden
+                error.public_error().code(),
+                crate::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
             );
         }
     }
@@ -251,8 +246,8 @@ mod tests {
             .expect_err("placement Subnet drift must fail closed");
 
         assert_eq!(
-            error.public_error().expect("public rejection").code,
-            ErrorCode::Forbidden
+            error.public_error().code(),
+            crate::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
         );
     }
 }

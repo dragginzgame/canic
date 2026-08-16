@@ -5,7 +5,7 @@
 //! Boundary: the control plane resolves protected membership; core validates and consumes it.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::component_registry::ComponentRegistryHead,
     ids::{CanisterRole, ComponentInstanceId, ManagedCanisterBinding},
@@ -60,10 +60,7 @@ impl RootCapabilityMemberAuthority {
             },
         };
         if authority.component != authority.registry.component {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "active Component member differs from its owning Registry head",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(authority)
     }

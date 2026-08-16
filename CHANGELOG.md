@@ -12,10 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
 
-- `0.102.2` materializes the approved compact-diagnostic runtime identities,
-  permanent host catalogue, language-neutral current registry and operator
-  lookup without cutting the public error contract, while excluding unrelated
-  timer/recovery and Saltz work sharing the maintainer's worktree.
+- `0.102.2` hard-cuts public errors to `Error { code: u16 }`, maps existing
+  typed failures onto 161 reviewed semantic reasons, keeps prose in the host
+  catalogue and preserves arbitrary decoded codes without adding JSON,
+  generic handling metadata or compatibility machinery.
 
 - `0.102.1` closes the evidence-only whole-program diagnostic inventory across
   every effective producer, dynamic public value, durable string and masked
@@ -122,16 +122,13 @@ Detailed patch breakdown: [docs/changelog/0.101.md](docs/changelog/0.101.md)
   freezing the Coordinator-first reservation required before local draining.
 
 - `0.101.36` adds bounded exact-replay history so terminal scale-out can roll
-  atomically into a later monotonic increase, and completes Wenzelroll's
-  chat-preview surface with a Fleet diagnostics social card, crawler-compatible
-  raw delivery and one canonical unversioned experience URL.
+  atomically into a later monotonic increase.
 
 - `0.101.35` activates only the new Components on selected scale-out roots,
   preserves each already-active root and its sealed initial inventory, and
   atomically commits new deployment placements under exact terminal receipts.
   Release dependency audits now isolate RustSec data from shared-cache
-  sediment, while Wenzelroll renders immediately with browser-compliant sound
-  recovery and neutral chat previews.
+  sediment.
 
 - `0.101.34` confirms scale-out Directories across every exact selected and
   affected existing service-member root with durable affected-Component

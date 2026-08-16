@@ -12,7 +12,7 @@ use crate::{
     dto::placement::index::{
         PlacementIndexRegistryEntry, PlacementIndexRegistryResponse, PlacementIndexStatusResponse,
     },
-    ops::{prelude::*, storage::StorageOpsError},
+    ops::prelude::*,
     storage::stable::placement_index::{
         PlacementIndexEntryRecord, PlacementIndexKey, PlacementIndexRegistry,
     },
@@ -50,7 +50,18 @@ pub enum PlacementIndexRegistryOpsError {
 
 impl From<PlacementIndexRegistryOpsError> for InternalError {
     fn from(err: PlacementIndexRegistryOpsError) -> Self {
-        StorageOpsError::from(err).into()
+        let code = match err {
+            PlacementIndexRegistryOpsError::InvalidKey(_) => {
+                crate::diagnostics::codes::SECURITY_INVALID
+            }
+            PlacementIndexRegistryOpsError::KeyBound { .. } => {
+                crate::diagnostics::codes::SECURITY_INVALID_STATE
+            }
+            PlacementIndexRegistryOpsError::ProvisionalPidMismatch { .. } => {
+                crate::diagnostics::codes::AUTHORITY_CONFLICT
+            }
+        };
+        Self::public(code)
     }
 }
 

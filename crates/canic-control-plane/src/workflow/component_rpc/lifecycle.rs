@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use canic_core::{
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::ic::IcOps,
         workflow::rpc::{
             RootCapabilityLifecycleExecutor, RootComponentChildProvisionRequest,
@@ -129,16 +129,10 @@ async fn provision_component_child(
     ))
     .await?;
     let ManagedCanisterBinding::ComponentChild(binding) = active.child.binding else {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Child lifecycle returned top-level Component authority",
-        ));
+        return Err(InternalError::invariant());
     };
     if ProvisionedChildIdentity::from_binding(&binding) != expected_identity {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Child lifecycle returned different protected identity",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(binding.canister_id)
 }
@@ -187,22 +181,13 @@ fn require_expected_recycle_identity(
     removal: &RootComponentSubtreeRemovalResponse,
 ) -> Result<(), InternalError> {
     if removal.component != request.component {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Child recycle returned a different Component",
-        ));
+        return Err(InternalError::invariant());
     }
     if removal.target_canister_id != request.target_canister_id {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Child recycle returned a different target",
-        ));
+        return Err(InternalError::invariant());
     }
     if removal.target_parent_canister_id != IcOps::msg_caller() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Component Child recycle target is no longer bound to the requesting parent",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }

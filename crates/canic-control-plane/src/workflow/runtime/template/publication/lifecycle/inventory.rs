@@ -5,8 +5,7 @@ use super::super::{
 };
 use crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps;
 use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
-    ops::cost_guard::CostGuardPermit,
+    error::InternalError, ops::cost_guard::CostGuardPermit,
     view::fleet_activation::FleetActivationWasmStoreView,
 };
 
@@ -15,13 +14,7 @@ impl WasmStorePublicationWorkflow {
     pub fn root_activation_wasm_store() -> Result<FleetActivationWasmStoreView, InternalError> {
         let stores = RootWasmStoreStateOps::wasm_stores();
         let [store] = stores.as_slice() else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!(
-                    "fresh Fleet activation requires exactly one root-owned Wasm Store, found {}",
-                    stores.len()
-                ),
-            ));
+            return Err(InternalError::invariant());
         };
         Ok(FleetActivationWasmStoreView { pid: store.pid })
     }
@@ -32,13 +25,7 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<PublicationStoreSnapshot, InternalError> {
         let stores = RootWasmStoreStateOps::wasm_stores();
         let [record] = stores.as_slice() else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!(
-                    "root publication requires exactly one adopted sibling Wasm Store, found {}",
-                    stores.len()
-                ),
-            ));
+            return Err(InternalError::invariant());
         };
         Ok(PublicationStoreSnapshot {
             binding: record.binding.clone(),

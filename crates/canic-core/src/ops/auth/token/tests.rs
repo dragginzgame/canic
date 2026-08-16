@@ -7,7 +7,6 @@ use crate::{
         schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
     },
     domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
-    dto::error::ErrorCode,
     ids::ComponentSpecId,
     ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
     storage::stable::env::{Env, EnvData, EnvRecord},
@@ -123,52 +122,56 @@ fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
 #[test]
 fn active_delegation_proof_unavailable_maps_to_auth_material_stale() {
     let err = active_delegation_proof_unavailable_error(ActiveDelegationProofStatus::Missing);
-    let public = err
-        .public_error()
-        .expect("missing active proof must be public");
+    let public = err.public_error();
 
-    assert_eq!(public.code, ErrorCode::AuthMaterialStale);
+    assert_eq!(
+        public.code(),
+        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
+    );
 }
 
 #[test]
 fn token_prepare_outliving_active_proof_maps_to_auth_material_stale() {
     let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::TokenOutlivesCert);
-    let public = err
-        .public_error()
-        .expect("stale active proof must be public");
+    let public = err.public_error();
 
-    assert_eq!(public.code, ErrorCode::AuthMaterialStale);
+    assert_eq!(
+        public.code(),
+        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
+    );
 }
 
 #[test]
 fn token_prepare_expired_active_proof_maps_to_auth_proof_expired() {
     let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::CertExpired);
-    let public = err
-        .public_error()
-        .expect("expired active proof must be public");
+    let public = err.public_error();
 
-    assert_eq!(public.code, ErrorCode::AuthProofExpired);
+    assert_eq!(
+        public.code(),
+        crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code()
+    );
 }
 
 #[test]
 fn delegated_token_verify_expiry_preserves_machine_readable_codes() {
-    let cases: [(VerifyDelegatedTokenError, ErrorCode); 2] = [
+    let cases: [(
+        VerifyDelegatedTokenError,
+        crate::diagnostics::DiagnosticCode,
+    ); 2] = [
         (
             VerifyDelegatedTokenError::TokenExpired,
-            ErrorCode::AuthTokenExpired,
+            crate::diagnostics::codes::AUTH_TOKEN_EXPIRED.raw_code(),
         ),
         (
             VerifyDelegatedTokenError::CertExpired,
-            ErrorCode::AuthProofExpired,
+            crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
     ];
 
     for (err, expected) in cases {
         let internal = map_verify_delegated_token_error(err);
-        let public = internal
-            .public_error()
-            .expect("expiry verification failures must be public");
-        assert_eq!(public.code, expected);
+        let public = internal.public_error();
+        assert_eq!(public.code(), expected);
     }
 }
 
@@ -178,22 +181,22 @@ fn delegated_token_verify_preserves_typed_proof_callback_causes() {
         InternalError,
         InternalError,
     >::RootProofInvalid(
-        InternalError::auth_material_stale("root policy changed"),
+        InternalError::auth_material_stale()
     ));
     let issuer = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
         InternalError,
         InternalError,
     >::IssuerProofInvalid(
-        InternalError::invalid_input("issuer signature invalid"),
+        InternalError::invalid_input()
     ));
 
     assert_eq!(
-        root.public_error().map(|err| err.code),
-        Some(ErrorCode::AuthMaterialStale)
+        root.public_error().code(),
+        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
     );
     assert_eq!(
-        issuer.public_error().map(|err| err.code),
-        Some(ErrorCode::InvalidInput)
+        issuer.public_error().code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
     );
 }
 
@@ -202,31 +205,31 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
     let cases = [
         (
             ChainKeyRootProofError::Expired { target: "batch" },
-            ErrorCode::AuthProofExpired,
+            crate::diagnostics::codes::AUTH_CERT_EXPIRED.raw_code(),
         ),
         (
             ChainKeyRootProofError::NotYetValid { target: "batch" },
-            ErrorCode::AuthProofPending,
+            crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code(),
         ),
         (
             ChainKeyRootProofError::Expired {
                 target: "root_key_policy",
             },
-            ErrorCode::AuthMaterialStale,
+            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
         (
             ChainKeyRootProofError::ProofEpochTooOld { min: 8, found: 7 },
-            ErrorCode::AuthMaterialStale,
+            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code(),
         ),
         (
             ChainKeyRootProofError::InvalidSignatureLength { len: 3 },
-            ErrorCode::InvalidInput,
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code(),
         ),
     ];
 
     for (err, expected) in cases {
         let mapped = map_chain_key_root_proof_error(err);
-        assert_eq!(mapped.public_error().map(|err| err.code), Some(expected));
+        assert_eq!(mapped.public_error().code(), expected);
     }
 }
 
@@ -369,9 +372,11 @@ fn delegated_token_context_fails_closed_without_protected_fleet() {
     let Err(err) = result else {
         panic!("missing protected Fleet must reject");
     };
-    assert_eq!(err.class(), crate::InternalErrorClass::Ops);
-    assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
-    assert!(err.public_error().is_none());
+    assert_eq!(err.code(), crate::diagnostics::codes::STATE_FAILED);
+    assert_eq!(
+        err.public_error().code(),
+        crate::diagnostics::codes::STATE_FAILED.raw_code()
+    );
 }
 
 fn install_verifier_test_config(

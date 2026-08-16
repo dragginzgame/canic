@@ -5,7 +5,7 @@
 //! Boundary: runtime workflow timer coordinating intent storage cleanup and metrics.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     domain::{policy::pure::intent::decide_receipt_replay_window, runtime::FailureSeverity},
     ids::IntentId,
     log,
@@ -42,18 +42,8 @@ impl IntentCleanupBatch {
         let total = self
             .application_receipts_removed
             .checked_add(self.local_intents_aborted)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "intent cleanup batch count overflow",
-                )
-            })?;
-        u64::try_from(total).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "intent cleanup batch count exceeds u64",
-            )
-        })
+            .ok_or_else(|| InternalError::invariant())?;
+        u64::try_from(total).map_err(|_| InternalError::invariant())
     }
 }
 
@@ -73,10 +63,7 @@ impl LocalIntentWorkflow {
                     IntentMetricOutcome::Failed,
                     IntentMetricReason::Overflow,
                 );
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "local intent reservation overflow",
-                )
+                InternalError::invariant()
             })?;
             if next > limit {
                 record_intent(
@@ -85,12 +72,8 @@ impl LocalIntentWorkflow {
                     IntentMetricOutcome::Failed,
                     IntentMetricReason::Capacity,
                 );
-                return Err(InternalError::domain(
-                    InternalErrorOrigin::Domain,
-                    format!(
-                        "local intent capacity exceeded key={} in_flight={current} requested={} limit={limit}",
-                        input.resource_key, input.quantity
-                    ),
+                return Err(InternalError::public(
+                    crate::diagnostics::codes::CAPACITY_LIMIT,
                 ));
             }
             record_intent(
@@ -286,9 +269,7 @@ fn ensure_consumer_resource_key(
     resource_key: &crate::ids::IntentResourceKey,
 ) -> Result<(), InternalError> {
     if is_canic_owned_intent_resource_key(resource_key) {
-        return Err(InternalError::invalid_input(
-            "intent resource keys beginning with 'canic:' are reserved for Canic runtime authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -304,10 +285,7 @@ fn ensure_canic_owned_resource_key(
     resource_key: &crate::ids::IntentResourceKey,
 ) -> Result<(), InternalError> {
     if !is_canic_owned_intent_resource_key(resource_key) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "Canic-owned intent must use the reserved 'canic:' resource namespace",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -397,20 +375,10 @@ impl IntentCleanupWorkflow {
         let application =
             ReceiptBackedIntentOps::reclaim_due_application_receipts(now_ns, CLEANUP_BATCH_SIZE)?;
         let application_receipts_removed =
-            usize::try_from(application.removed_records).map_err(|_| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "application receipt cleanup count exceeds usize",
-                )
-            })?;
+            usize::try_from(application.removed_records).map_err(|_| InternalError::invariant())?;
         let local_limit = CLEANUP_BATCH_SIZE
             .checked_sub(application_receipts_removed)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Workflow,
-                    "application receipt cleanup exceeded its batch limit",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let now_secs = now_ns / NANOS_PER_SECOND;
         let due = IntentStoreOps::list_due_expiry_intents(now_secs, local_limit)?;
         let mut aborted = 0;
@@ -425,10 +393,7 @@ impl IntentCleanupWorkflow {
                     aborted += 1;
                 }
                 Ok(false) => {
-                    return Err(InternalError::invariant(
-                        InternalErrorOrigin::Workflow,
-                        format!("due intent {intent_id} ceased to be pending before cleanup"),
-                    ));
+                    return Err(InternalError::invariant());
                 }
                 Err(err) => {
                     record_cleanup_intent(
@@ -436,9 +401,7 @@ impl IntentCleanupWorkflow {
                         IntentMetricOutcome::Failed,
                         IntentMetricReason::StorageFailed,
                     );
-                    return Err(
-                        err.with_diagnostic_context(format!("abort due local intent {intent_id}"))
-                    );
+                    return Err(err);
                 }
             }
         }
@@ -504,12 +467,9 @@ impl IntentCleanupWorkflow {
     }
 
     fn deadline_ns(due_at_secs: u64) -> Result<u64, InternalError> {
-        due_at_secs.checked_mul(NANOS_PER_SECOND).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("intent cleanup deadline overflows nanoseconds: {due_at_secs}"),
-            )
-        })
+        due_at_secs
+            .checked_mul(NANOS_PER_SECOND)
+            .ok_or_else(|| InternalError::invariant())
     }
 }
 
@@ -523,13 +483,13 @@ fn record_cleanup_intent(
 }
 
 fn record_cleanup_failure(err: &InternalError) {
-    let (class, origin) = err.log_fields();
+    let code = err.code();
     RecentFailureOps::record(RecentFailureInput {
         occurred_at_ns: IcOps::now_nanos(),
         subsystem: "intent_cleanup".to_string(),
-        code: "intent_cleanup_invariant".to_string(),
+        code: code.to_string(),
         severity: FailureSeverity::Error,
-        summary: format!("class={class} origin={origin}: {err}"),
+        summary: format!("diagnostic={code}"),
         correlation_id: None,
     });
 }
@@ -548,7 +508,6 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        dto::error::ErrorCode,
         ids::IntentResourceKey,
         model::{
             intent::{PayloadBinding, TerminalEvidence},
@@ -592,8 +551,8 @@ mod tests {
 
     fn assert_reserved_namespace_error(err: &InternalError) {
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::InvalidInput)
+            err.public_error().code(),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
     }
 

@@ -40,7 +40,7 @@ pub(super) fn prepare_due_chain_key_root_delegation_batch(
                             issued_at_ns: plan.issued_at_ns(),
                         },
                     )
-                    .map_err(|err| InternalError::forbidden(err.to_string()))?;
+                    .map_err(|_err| InternalError::forbidden())?;
 
                     Ok(ChainKeyRootDelegationIssuerApproval {
                         issuer_pid: template.issuer_pid,

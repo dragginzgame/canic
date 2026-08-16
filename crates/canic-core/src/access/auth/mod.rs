@@ -141,8 +141,8 @@ pub async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessErr
     attestation::is_attested_local_subnet(caller).await
 }
 
-fn dependency_unavailable(detail: &str) -> AccessError {
-    AccessError::Denied(format!("access dependency unavailable: {detail}"))
+const fn dependency_unavailable(error: crate::InternalError) -> AccessError {
+    AccessError::Internal(error)
 }
 
 // -----------------------------------------------------------------------------
@@ -195,7 +195,7 @@ mod tests {
         let caller = p(2);
         let err =
             token::enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
-        assert!(matches!(err, AccessError::Denied(_)));
+        assert!(matches!(err, AccessError::DelegatedTokenSubjectMismatch));
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
         let scopes = vec![cap::READ.to_string()];
         let err =
             token::enforce_required_scope(Some(cap::VERIFY), &scopes).expect_err("expected denial");
-        assert!(matches!(err, AccessError::Denied(_)));
+        assert!(matches!(err, AccessError::RequiredScopeMissing));
     }
 
     #[test]

@@ -38,10 +38,9 @@ impl WasmStoreGcOps {
         if current.mode == WasmStoreGcMode::Normal {
             Ok(())
         } else {
-            Err(Error::conflict(format!(
-                "wasm store is not writable while gc={:?}",
-                current.mode
-            )))
+            Err(Error::from_registered(
+                canic_core::diagnostics::codes::STATE_CONFLICT,
+            ))
         }
     }
 
@@ -114,10 +113,9 @@ fn transition_record(
 
             Ok(updated)
         }
-        _ => Err(Error::conflict(format!(
-            "wasm store gc transition {:?} -> {:?} is not allowed",
-            current.mode, next
-        ))),
+        _ => Err(Error::from_registered(
+            canic_core::diagnostics::codes::STATE_CONFLICT,
+        )),
     }
 }
 
@@ -128,7 +126,6 @@ mod tests {
         ids::WasmStoreGcMode,
         storage::stable::template::{WasmStoreGcStateRecord, WasmStoreGcStateStore},
     };
-    use canic_core::dto::error::ErrorCode;
 
     #[test]
     fn transition_record_advances_monotonically() {
@@ -220,7 +217,10 @@ mod tests {
         )
         .expect_err("normal -> in progress must fail");
 
-        assert_eq!(err.code, ErrorCode::Conflict);
+        assert_eq!(
+            err.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
     }
 
     #[test]
@@ -231,7 +231,10 @@ mod tests {
         WasmStoreGcOps::prepare(10).expect("prepare gc");
         let err = WasmStoreGcOps::require_writable()
             .expect_err("prepared store must reject publication writes");
-        assert_eq!(err.code, ErrorCode::Conflict);
+        assert_eq!(
+            err.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
 
         WasmStoreGcStateStore::set(WasmStoreGcStateRecord::default());
     }

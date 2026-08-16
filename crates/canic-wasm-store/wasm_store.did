@@ -110,29 +110,7 @@ type EnvBootstrapArgs = record {
   parent_pid : opt principal;
   subnet_pid : opt principal;
 };
-type Error = record { code : ErrorCode; message : text };
-type ErrorCode = variant {
-  Internal;
-  InvalidInput;
-  InvariantViolation;
-  WasmStoreChunkMissing;
-  NotFound;
-  AuthMaterialStale;
-  Unauthorized;
-  WasmStoreManifestMissing;
-  AuthProofExpired;
-  InternalRpcMalformed;
-  ResourceExhausted;
-  AuthProofPending;
-  WasmStoreCapacityExceeded;
-  AuthTokenExpired;
-  Unavailable;
-  RootDataCertificateUnavailable;
-  Forbidden;
-  OperationIdRequired;
-  WasmStoreHashMismatch;
-  Conflict;
-};
+type Error = record { code : nat16 };
 //
 // FleetActivationIdentity
 //

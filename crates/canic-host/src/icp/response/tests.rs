@@ -1,8 +1,7 @@
 use super::{IcpJsonResponseError, decode_json_response, decode_json_result_response};
 use candid::Encode;
 use canic_core::{
-    cdk::utils::hash::hex_bytes,
-    dto::error::{Error as CanicError, ErrorCode},
+    cdk::utils::hash::hex_bytes, diagnostics::codes, dto::error::Error as CanicError,
 };
 
 #[test]
@@ -27,14 +26,15 @@ fn decodes_successful_typed_result_response_bytes() {
 
 #[test]
 fn preserves_typed_canister_rejection() {
-    let output = response_json(&Err::<u64, _>(CanicError::forbidden("denied")));
+    let output = response_json(&Err::<u64, _>(CanicError::from_registered(
+        codes::AUTHORITY_UNAUTHORIZED,
+    )));
     let error = decode_json_result_response::<u64>(&output).expect_err("reject result");
 
     let IcpJsonResponseError::Rejected(error) = error else {
         panic!("expected typed canister rejection");
     };
-    assert_eq!(error.code, ErrorCode::Forbidden);
-    assert_eq!(error.message, "denied");
+    assert_eq!(error.code(), codes::AUTHORITY_UNAUTHORIZED.raw_code());
 }
 
 #[test]

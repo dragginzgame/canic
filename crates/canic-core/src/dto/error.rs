@@ -1,153 +1,60 @@
-use crate::{access::AccessError, dto::prelude::*};
+use crate::{
+    access::AccessError,
+    diagnostics::{DiagnosticCode, RegisteredDiagnosticCode},
+    dto::prelude::*,
+};
 use std::fmt::{self, Display};
 
-//
-// Error
-//
-// Public API error payload.
-//
+///
+/// Error
+///
+/// Public API error payload. Only registered runtime reasons may originate a
+/// value; Candid/Serde decoding may still preserve any raw `u16`.
+///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Error {
-    pub code: ErrorCode,
-    pub message: String,
+    code: u16,
 }
 
 impl Error {
+    /// Originate a public error from a registered reason.
     #[must_use]
-    pub const fn new(code: ErrorCode, message: String) -> Self {
-        Self { code, message }
+    pub const fn from_registered(code: RegisteredDiagnosticCode) -> Self {
+        Self {
+            code: code.raw_code().raw(),
+        }
     }
 
-    // 409 – Conflict with existing state or resource.
-    pub fn conflict(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::Conflict, message.into())
-    }
-
-    // 409 – Policy violation with a stable policy-specific code.
-    pub fn policy(code: ErrorCode, message: impl Into<String>) -> Self {
-        Self::new(code, message.into())
-    }
-
-    // 403 – Authenticated caller is not permitted to perform this action.
-    pub fn forbidden(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::Forbidden, message.into())
-    }
-
-    // 500 – Internal or unexpected failure.
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::Internal, message.into())
-    }
-
-    // 400 – Invalid input or malformed request.
-    pub fn invalid(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::InvalidInput, message.into())
-    }
-
-    // 400 – Replay-sensitive command omitted its client operation ID.
+    /// Observe the lossless diagnostic identity.
     #[must_use]
-    pub fn operation_id_required() -> Self {
-        Self::new(
-            ErrorCode::OperationIdRequired,
-            "operation_id is required for this command".to_string(),
-        )
+    pub const fn code(&self) -> DiagnosticCode {
+        DiagnosticCode::from_raw(self.code)
     }
 
-    // 500 – Broken invariant or impossible internal state.
-    pub fn invariant(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::InvariantViolation, message.into())
-    }
-
-    // 429 / 507 – Resource, quota, or capacity exhaustion.
-    pub fn exhausted(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::ResourceExhausted, message.into())
-    }
-
-    // 404 – Requested resource was not found.
-    pub fn not_found(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::NotFound, message.into())
-    }
-
-    // 401 – Caller is unauthenticated or has an invalid identity.
-    pub fn unauthorized(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::Unauthorized, message.into())
-    }
-
-    // 503 – Service is temporarily unavailable due to runtime controls.
-    pub fn unavailable(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::Unavailable, message.into())
-    }
-
-    // 401 – The delegated token itself expired and may be reminted.
-    pub fn auth_token_expired(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::AuthTokenExpired, message.into())
-    }
-
-    // 503 – Delegation proof generation is still in progress and may be retried.
-    pub fn auth_proof_pending(message: impl Into<String>) -> Self {
-        Self::new(ErrorCode::AuthProofPending, message.into())
-    }
-
-    // 503 – Role-attestation proof retrieval was not run in a direct root query context.
+    /// Observe the raw Candid `nat16` value.
     #[must_use]
-    pub fn root_data_certificate_unavailable() -> Self {
-        Self::new(
-            ErrorCode::RootDataCertificateUnavailable,
-            "root data certificate unavailable for role-attestation proof retrieval".to_string(),
-        )
+    pub const fn raw_code(&self) -> u16 {
+        self.code
     }
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{:?}] {}", self.code, self.message)
+        Display::fmt(&self.code(), f)
     }
 }
 
 impl From<AccessError> for Error {
     fn from(err: AccessError) -> Self {
-        let kind = err.kind();
-        let message = err.to_string();
-        match kind {
-            crate::access::AccessErrorKind::DelegatedAuthCertExpired => {
-                Self::new(ErrorCode::AuthProofExpired, message)
+        match err {
+            AccessError::Internal(error) => error.into(),
+            error => {
+                let diagnostic = error
+                    .diagnostic_codes()
+                    .expect("non-internal access errors have registered reasons");
+                Self::from_registered(diagnostic.public)
             }
-            crate::access::AccessErrorKind::DelegatedAuthTokenExpired => {
-                Self::auth_token_expired(message)
-            }
-            crate::access::AccessErrorKind::Denied => Self::unauthorized(message),
         }
     }
-}
-
-//
-// ErrorCode
-//
-// Stable public error codes.
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[non_exhaustive]
-#[remain::sorted]
-pub enum ErrorCode {
-    AuthMaterialStale,
-    AuthProofExpired,
-    AuthProofPending,
-    AuthTokenExpired,
-    Conflict,
-    Forbidden,
-    Internal,
-    InternalRpcMalformed,
-    InvalidInput,
-    InvariantViolation,
-    NotFound,
-    OperationIdRequired,
-    ResourceExhausted,
-    RootDataCertificateUnavailable,
-    Unauthorized,
-    Unavailable,
-    WasmStoreCapacityExceeded,
-    WasmStoreChunkMissing,
-    WasmStoreHashMismatch,
-    WasmStoreManifestMissing,
 }

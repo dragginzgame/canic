@@ -209,29 +209,7 @@ type ComponentTopology = record {
 // Positive aggregate cycles-funding ceiling applied over one bounded window.
 // 
 type CyclesFundingBudget = record { window_secs : nat64; maximum_cycles : nat };
-type Error = record { code : ErrorCode; message : text };
-type ErrorCode = variant {
-  Internal;
-  InvalidInput;
-  InvariantViolation;
-  WasmStoreChunkMissing;
-  NotFound;
-  AuthMaterialStale;
-  Unauthorized;
-  WasmStoreManifestMissing;
-  AuthProofExpired;
-  InternalRpcMalformed;
-  ResourceExhausted;
-  AuthProofPending;
-  WasmStoreCapacityExceeded;
-  AuthTokenExpired;
-  Unavailable;
-  RootDataCertificateUnavailable;
-  Forbidden;
-  OperationIdRequired;
-  WasmStoreHashMismatch;
-  Conflict;
-};
+type Error = record { code : nat16 };
 // One exact flattened Component occurrence within an independent deployment.
 type FlattenedComponentGroupDeploymentMember = record {
   labels : vec ComponentDeploymentLabel;

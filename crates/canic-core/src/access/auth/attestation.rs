@@ -21,15 +21,12 @@ const ROLE_ATTESTATION_MAX_TYPE_LEN: usize = 16 * 1024;
 pub(super) async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
     let attestation = role_attestation_from_args()?;
     if attestation.payload.subject != caller {
-        return Err(AccessError::Denied(format!(
-            "role attestation subject '{}' does not match caller '{caller}'",
-            attestation.payload.subject
-        )));
+        return Err(AccessError::RoleAttestationSubjectMismatch);
     }
 
     RuntimeAuthWorkflow::verify_local_subnet_role_attestation(&attestation, 0)
         .await
-        .map_err(|err| AccessError::Denied(err.to_string()))
+        .map_err(AccessError::Internal)
 }
 
 fn role_attestation_from_args() -> Result<SignedRoleAttestation, AccessError> {
@@ -38,11 +35,7 @@ fn role_attestation_from_args() -> Result<SignedRoleAttestation, AccessError> {
 }
 
 fn role_attestation_from_ingress_bytes(bytes: &[u8]) -> Result<SignedRoleAttestation, AccessError> {
-    role_attestation_from_bytes(bytes).map_err(|err| {
-        AccessError::Denied(format!(
-            "failed to decode SignedRoleAttestation as first argument: {err}"
-        ))
-    })
+    role_attestation_from_bytes(bytes).map_err(|_| AccessError::RoleAttestationMalformed)
 }
 
 fn role_attestation_from_bytes(bytes: &[u8]) -> Result<SignedRoleAttestation, String> {

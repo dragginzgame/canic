@@ -7,15 +7,26 @@ Date: 2026-08-16
 * Status: unnumbered design idea.
 * Repository: Canic.
 * Purpose: experimental Canic-managed Component capable of deliberately burning a bounded, pre-authorized quantity of cycles according to a time-domain waveform.
-* Initial demonstration target: reproduce the neon Swiss-mountain profile from the selected Saltz restaurant image over one complete ICP Dashboard `1D` Cycle Burn Rate window.
+* Initial demonstration target: reproduce the neon Swiss-mountain profile from
+  the final permitted Saltz reference image as a modest jagged trace near the
+  IC's ordinary Cycle Burn Rate band over one complete ICP Dashboard `1D`
+  window.
 * This is not yet a numbered release design and authorizes no IC-mainnet effect.
-* Burner implementation requires Canic's accepted shared `ic-timers` consumer
-  hard cut. Any mainnet run must use Canic's accepted external-effect
-  authorization contract for exact network, identity, asset, cycle,
-  concurrency and terminal-state bounds.
+* Burner implementation requires Canic's accepted role-owned Candid surface
+  and shared `ic-timers` consumer hard cut. Its Canic-owned managed-role base
+  contains only compiled status/command variants; Saltz run control remains an
+  application-owned protocol. Any mainnet run must use Canic's accepted
+  external-effect authorization contract for exact network, identity, asset,
+  cycle, concurrency and terminal-state bounds.
 * Qualification disposition: B0a and the B0b methodology are approved. B0b
   still requires a separate exact authorization before any live calibration
   effect. B1 implementation remains held until the promotion gates close.
+* Implementation disposition: the non-destructive `apps/saltz` foundation and
+  exact-image host compiler may proceed independently. The checked-in Burner
+  shell is inert and contains no burn, timer, run-state or authorization path.
+  A separate standalone read-only preview may render the compiled reference
+  graph without Canic/Fleet behavior. It is presentation evidence only and
+  does not satisfy Dashboard qualification or authorize a burn.
 
 The idea should remain under:
 
@@ -96,53 +107,159 @@ The host compiler and run-authoring surface are Saltz-specific. Promotion must
 not introduce a generic `canic burn` command or make deliberate cycle
 destruction a standard managed-Component capability.
 
+The standalone graph preview is intentionally outside the future Component.
+It exposes one `http_request` query, embeds the digest-verified CSV and renders
+the waveform as a code-native SVG. It has no update, timer, stable state,
+authorization or `cycles_burn` path. It does not embed or re-host the selected
+photograph's bytes, and it serves no raster image or image route. The pinned
+photograph remains offline design evidence for waveform extraction only. The
+preview's displayed zero means zero intentional waveform burn; ordinary query
+execution still incurs normal canister costs.
+
+Every preview label must describe an evidenced boundary rather than provide
+decorative operational language. A served response may say that it was served,
+but must not infer that the canister is mainnet, certified or generally
+"online." The yellow line is the proposed, unqualified global Dashboard total;
+the red band is the exact dated `31.671..=49.918 Bcycles/second` observation.
+The preview must state that it contains no restaurant image, no live metric is
+fetched, no run is armed, intentional burn capability is absent, and ordinary
+query execution still consumes cycles.
+
+The public preview does not name this experiment, the source installation or
+its publisher. The HTML, machine-readable status and CSV contain no `Saltz`,
+`neon` or publisher-name token, and there is no source-article link. The exact
+long German page title is the only public textual clue. This presentation rule
+does not rename internal packages or remove the pinned offline evidence needed
+to reproduce and audit waveform extraction.
+
 ## Initial Saltz Waveform
 
-The initial source is the selected public Saltz photograph.
+The artistic objective is a recognizable, slightly jagged Saltz silhouette
+that remains distinct from the IC's volatile ordinary burn-rate signal. The
+provisional target deliberately clears the dated `30..=60 Bcycles/second`
+planning band, but remains subject to an economic no-go ceiling and B0
+visibility qualification rather than treating signal dominance as unlimited.
 
-The current reference artifact is:
+### Selected Visual Reference
+
+![Saltz restaurant uninterrupted red neon Swiss-mountain installation](saltz_reference_dezeen_860x573.jpg)
+
+*Selected visual reference: the uninterrupted neon-wall photograph from
+[Dezeen's Saltz article](https://www.dezeen.com/2016/03/15/rolf-sachs-saltz-restaurant-interior-design-dolder-grand-hotel-zurich/).
+The repository-local `860x573` JPEG is the exact externally served derivative
+selected by the maintainer and observed on 2026-08-16. It has SHA-256
+`9cd20fa6de0ba665de8a956eb01dfe993af30c678e63fc03093ddd40b1acec06`.*
+
+The selected composition is final for this idea. The publisher-hosted
+`936x624` JPEG is the same composition but is not byte-identical to the
+selected `860x573` derivative, so it is not silently substituted as extraction
+authority. The local artifact freezes the selected bytes but does not by
+itself establish reuse permission. The host compiler now enforces these exact
+bytes and generates an extraction overlay. B2 must still record the source,
+permission and attribution and formally admit the pinned bytes, compiler and
+artifacts as run authority.
+
+The current generated reference artifacts are:
 
 ```text
 saltz_24h_waveform_floor_100B_860.csv
-SHA-256: 8a9b886a493db55989a4f2c119d5bf99dea237302970953dd98b2ed28f5a0f97
+SHA-256: 11fd75eb8fd0fed4f075d324051cc880db50619837bfe6c889fe9d654647d911
+
+saltz_reference_overlay.svg
+SHA-256: 87a99d442d1f55bce2a4ca1900343b8a1b8e78b7decfe0c170ba77ed7094aef0
+
+extracted point encoding
+SHA-256: c0b281f64e6f07e65ca6efd121919d8023f8640b6d429b54e0b739f3c84b6d50
 ```
 
 It contains exactly 860 indexed buckets with contiguous offsets covering
 `86_400_000_000_000` nanoseconds. Its normalized heights span
 `0..=1_000_000` parts per million and its provisional visible target spans
-`100_000_000_000..=116_666_666_667` cycles per second.
+`100_000_000_000..=150_000_000_000` cycles per second. The
+`50 Bcycles/second` vertical relief preserves the exact jagged source geometry
+while separating it from the measured background variation. Raising only the
+floor would not solve visibility: relief, rather than absolute height, is what
+makes the mountain distinguishable from baseline noise.
+
+For dated orientation, an
+[official global Cycle Burn Rate API sample](https://ic-api.internetcomputer.org/api/v3/metrics/cycle-burn-rate?start=1786812569&end=1786898969&step=100&format=json)
+from 2026-08-15 16:48:20 UTC through 2026-08-16 16:48:20 UTC, requested
+at a 100-second step, observed 865 points at approximately
+`31.671..=49.918 Bcycles/second`, with a `39.507 Bcycles/second` mean. The
+standard deviation was approximately `3.623 Bcycles/second`; absolute
+100-second changes reached `6.192 Bcycles/second`; and absolute residuals from
+an 18-point trailing mean had an approximately `6.148 Bcycles/second` p99. The
+former `16.667 Bcycles/second` relief was only `0.913` times the complete
+`18.247 Bcycles/second` observed band. The new `50 Bcycles/second` relief is
+approximately `2.740` times that complete band and `8.132` times that
+30-minute residual p99. This is dated evidence for the provisional mapping, not a
+timeless background guarantee or the frozen B0a observation contract.
 
 For feasibility orientation, integrating the CSV's provisional visible target
-over 24 hours yields approximately `9_249.610124 Tcycles`. Constant illustrative
+over 24 hours yields approximately `10_464.206204 Tcycles`. Constant illustrative
 background scenarios produce:
 
 | Assumed average background | Controlled burn over 24 hours |
 | --- | ---: |
-| `0 Bcycles/second` | `9_249.610124 Tcycles` |
-| `30 Bcycles/second` | `6_657.610124 Tcycles` |
-| `40 Bcycles/second` | `5_793.610124 Tcycles` |
-| `50 Bcycles/second` | `4_929.610124 Tcycles` |
+| `0 Bcycles/second` | `10_464.206204 Tcycles` |
+| `30 Bcycles/second` | `7_872.206204 Tcycles` |
+| `40 Bcycles/second` | `7_008.206204 Tcycles` |
+| `50 Bcycles/second` | `6_144.206204 Tcycles` |
+| `60 Bcycles/second` | `5_280.206204 Tcycles` |
 
 The zero-background row is the natural provisional funding upper bound before
 reserve and execution allowance. These are reference calculations, not a burn
 budget or authorization: the qualified request cadence, rounding policy,
 measured background and hard run ceilings remain authoritative.
 
-This CSV is immutable reference input, not an executable `RunPlan`. Its
+At the dated `39.507 Bcycles/second` mean, perfect future knowledge would imply
+approximately `7_050.805189 Tcycles` of controlled burn. The real executor has no
+such knowledge and cannot subtract an unexpected spike. The
+`100 Bcycles/second` floor and `50 Bcycles/second` relief are therefore accepted
+only if B0a/B0b establish that the measured background distribution, forecast
+error and rendered result meet
+the recognizability threshold within the economic no-go ceiling. A bucket
+whose background reaches its target receives no burn and records
+uncontrollable overshoot; no amount at this scale can guarantee an uncorrupted
+graph against arbitrary future IC activity.
+
+This CSV is digested reference input, not an executable `RunPlan`. Its
 approximately 100.465-second buckets and visible-rate mapping remain
 provisional until the exact Dashboard observation contract and economic
-feasibility gate are accepted. Promotion must additionally record the exact
-source-image bytes, source URL, reuse permission and canonical extracted-point
-encoding; public availability alone is not evidence of reuse permission.
+feasibility gate are accepted. Promotion must additionally record reuse
+permission and formally accept the pinned source URL, exact bytes and
+extracted-point encoding; public availability alone is not evidence of reuse
+permission.
 
-The extracted neon line contains approximately:
+The exact `saltz-neon-centreline-v1` extraction contains:
 
 ```text
 860 horizontal source samples
-55 pixels of vertical range
+source y = 93.000..=141.499 pixels
+48.499 pixels of vertical range
 ```
 
-The source geometry is preserved.
+The generated SVG overlays all 860 centreline points on the selected image and
+renders the same normalized points in the provisional Dashboard target band.
+This closes the former wrong-image trace: the checked-in CSV and overlay now
+come from the exact local JPEG. B2 acceptance and rendered Dashboard fidelity
+remain open.
+
+The v1 extractor is intentionally narrow and reproducible:
+
+```text
+verify exact JPEG SHA-256 and 860x573 RGB shape
+decode with jpeg-decoder's platform-independent path
+inspect y = 80..<170 for every x = 0..<860
+score = max(0, 4 * green + blue - abs(red - green))
+select the maximum-score pixel
+take the contiguous vertical run around it with score >= 75% of maximum
+record that run's score-weighted vertical centre in millipixels
+normalize only after all 860 independent columns are extracted
+```
+
+No horizontal neighbor, smoothing pass or independent Y-axis reconstruction
+enters the master trace.
 
 The profile compiler stores the original trace as normalized points:
 
@@ -1008,20 +1125,28 @@ initial balance
 = final balance
 ```
 
-## Proposed Candid Surface
+## Proposed Application-Owned Candid Surface
 
 This is illustrative until promoted.
 
 ```text
-prepare_run
-arm_run
-abort_run
+saltz_command(SaltzCommand)
+  where SaltzCommand =
+    PrepareRun(...)
+    ArmRun(...)
+    AbortRun(...)
+    SubmitBackgroundForecast(...)
 
-submit_background_forecasts
-
-run_status
-run_receipts
+saltz_status(SaltzStatusRequest)
+  where SaltzStatusRequest =
+    Run
+    Receipts(PageRequest)
 ```
+
+These two methods are Saltz-owned and are reported separately from the
+managed canister's Canic-owned role surface. Run operations and receipt pages
+are variants and data, not endpoint owners. Forecast revisions add command
+variants, not methods.
 
 No generic:
 
@@ -1279,6 +1404,11 @@ The Saltz run should only be described as successful if it passes a predeclared 
 
 ## Suggested Implementation Sequence
 
+The non-destructive application shell and compiler may be developed and
+reviewed before B1 so source geometry is no longer speculative. That work does
+not satisfy B2 or authorize an executable payload: formal B2 acceptance still
+consumes the qualified observation contract and the accepted Burner boundary.
+
 ### B0a — Observation Contract And Economic Feasibility
 
 * freeze the exact API and rendered `1D` target;
@@ -1300,6 +1430,7 @@ The Saltz run should only be described as successful if it passes a predeclared 
 
 ### B1 — Burner Component
 
+* require Canic's accepted role-owned Candid hard cut;
 * require Canic's accepted shared `ic-timers` consumer hard cut;
 * add bounded run model;
 * add immutable waveform storage;
@@ -1344,6 +1475,7 @@ This idea does not:
 * reserve large amounts of Subnet compute;
 * generate cycle burn by executing useless instruction loops;
 * introduce a generic cycle-burning endpoint;
+* add one method per run command, status view, receipt page or forecast;
 * fetch or process image files on-chain;
 * implement a generic Canic job scheduler;
 * automatically create Fleets;

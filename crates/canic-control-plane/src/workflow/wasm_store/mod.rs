@@ -45,11 +45,7 @@ pub async fn reclaim_deletion_cycles(
     let target_cycles_to_retain = request
         .retained_cycles_target
         .checked_sub(deposit_call_cost)
-        .ok_or_else(|| {
-            InternalError::invalid_input(
-                "Store retained-cycle target does not cover the exact deposit call cost",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invalid_input())?;
     let maximum_transfer =
         transferable_cycles(cycles_before, target_cycles_to_retain, deposit_call_cost);
     if maximum_transfer == 0 {
@@ -98,9 +94,7 @@ fn validate_request(
     request: WasmStoreDeletionCycleReclamationRequest,
 ) -> Result<(), InternalError> {
     if request.retained_cycles_target == 0 {
-        return Err(InternalError::invalid_input(
-            "Store retained-cycle target must be positive",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -120,9 +114,7 @@ fn require_empty_gc_complete_store() -> Result<(), InternalError> {
     .into_iter()
     .all(|valid| valid);
     if !is_empty_and_terminal {
-        return Err(InternalError::conflict(
-            "Store deletion cycles require one empty GC-complete Store",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }

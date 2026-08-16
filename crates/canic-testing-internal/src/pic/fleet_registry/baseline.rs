@@ -777,8 +777,10 @@ mod tests {
             )
             .expect("anonymous Store prepare transport");
         assert_eq!(
-            denied.expect_err("anonymous Store prepare must fail").code,
-            canic::dto::error::ErrorCode::Unauthorized
+            denied
+                .expect_err("anonymous Store prepare must fail")
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         assert_prepared(&pic, fixture.root_id);
     }
@@ -838,8 +840,8 @@ mod tests {
         assert_eq!(
             rejected
                 .expect_err("another Fleet's Registry must not enter the co-located root")
-                .code,
-            canic::dto::error::ErrorCode::Forbidden
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let _ = join_and_synchronize_root(&pic, second_coordinator, &second);
         assert_isolated_coordinator_registry(
@@ -1114,8 +1116,8 @@ mod tests {
         assert_eq!(
             rejected
                 .expect_err("another Fleet's co-located root must not write this Store")
-                .code,
-            canic::dto::error::ErrorCode::Unauthorized
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let accepted: Result<TemplateChunkSetInfoResponse, Error> = pic
             .update_candid_as(
@@ -1734,16 +1736,16 @@ mod tests {
             create_project_descendant(pic, instance, "create_project_ledger", [0xe3; 32])
                 .expect_err("a Project Instance may own only one Ledger");
         assert_eq!(
-            duplicate.code,
-            canic::dto::error::ErrorCode::ResourceExhausted
+            duplicate.code(),
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
         let wrong_parent =
             create_project_descendant(pic, hub, "attempt_project_ledger", [0xe4; 32]);
         assert_eq!(
             wrong_parent
                 .expect_err("Project Hub has no direct Ledger spawn grant")
-                .code,
-            canic::dto::error::ErrorCode::Forbidden
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
     }
 
@@ -1892,8 +1894,8 @@ mod tests {
         assert_eq!(
             stale
                 .expect_err("stale Fleet Registry proof must reject")
-                .code,
-            canic::dto::error::ErrorCode::Conflict
+                .code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
         let wrong_service = call_cross_root_service(
             fixture,
@@ -1906,8 +1908,8 @@ mod tests {
         assert_eq!(
             wrong_service
                 .expect_err("wrong Fleet service proof must reject")
-                .code,
-            canic::dto::error::ErrorCode::Forbidden
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         assert_forwarded_cross_root_allocation_rejects(
             fixture,
@@ -1988,7 +1990,10 @@ mod tests {
             Ok(response) => panic!("{subject} unexpectedly allocated {response:?}"),
             Err(error) => error,
         };
-        assert_eq!(error.code, canic::dto::error::ErrorCode::Forbidden);
+        assert_eq!(
+            error.code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        );
     }
 
     #[cfg(test)]
@@ -2420,8 +2425,8 @@ mod tests {
         assert_eq!(
             rejected_resume
                 .expect_err("restored root authority must remain mutation-fenced")
-                .code,
-            canic::dto::error::ErrorCode::Unavailable
+                .code(),
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         let fresh_allocation: Result<Result<RootComponentAllocationResponse, Error>, _> =
             fixture.pic().update_candid(
@@ -2808,8 +2813,8 @@ mod tests {
         assert_eq!(
             denied
                 .expect_err("anonymous caller must not reserve a peer Component")
-                .code,
-            canic::dto::error::ErrorCode::Forbidden
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let reserved: Result<RootComponentAllocationResponse, Error> = fixture
             .pic()
@@ -2975,8 +2980,8 @@ mod tests {
         assert_eq!(
             exhausted
                 .expect_err("peer provisioning grant must be exhausted")
-                .code,
-            canic::dto::error::ErrorCode::ResourceExhausted
+                .code(),
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 
@@ -3415,8 +3420,8 @@ mod tests {
         assert_eq!(
             absent_membership
                 .expect_err("removed Component membership must be absent")
-                .code,
-            canic::dto::error::ErrorCode::Unavailable
+                .code(),
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         let durable_fence: Result<FleetSubnetRootDrainingResponse, Error> = fixture
             .pic()
@@ -5327,8 +5332,8 @@ mod tests {
         assert_eq!(
             partition
                 .expect_err("grouped install must not publish Registry membership")
-                .code,
-            canic::dto::error::ErrorCode::Unavailable
+                .code(),
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
     }
 
@@ -6026,8 +6031,8 @@ mod tests {
         assert_eq!(
             rejected
                 .expect_err("root draining must reject a new top-level Component allocation")
-                .code,
-            canic::dto::error::ErrorCode::Conflict
+                .code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 
@@ -6189,8 +6194,8 @@ mod tests {
         assert_eq!(
             rejected
                 .expect_err("Draining mirror activation must not reopen root allocation")
-                .code,
-            canic::dto::error::ErrorCode::Conflict
+                .code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 
@@ -6336,8 +6341,8 @@ mod tests {
         assert_eq!(
             old_candidate
                 .expect_err("Joining candidate must be replaced")
-                .code,
-            canic::dto::error::ErrorCode::Unavailable
+                .code(),
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         component_registry_request
     }
@@ -6415,8 +6420,8 @@ mod tests {
             assert_eq!(
                 old_candidate
                     .expect_err("multi-root Joining candidate must be replaced")
-                    .code,
-                canic::dto::error::ErrorCode::Unavailable
+                    .code(),
+                canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
             );
         }
         activated.version
@@ -6523,8 +6528,8 @@ mod tests {
         assert_eq!(
             conflicting_retry
                 .expect_err("conflicting Component reservation retry must fail")
-                .code,
-            canic::dto::error::ErrorCode::Conflict
+                .code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
 
         let component_registry: Result<RootComponentRegistryStatusResponse, Error> = pic
@@ -6549,8 +6554,8 @@ mod tests {
         assert_eq!(
             incomplete_activation
                 .expect_err("reserved Component must prevent root activation preparation")
-                .code,
-            canic::dto::error::ErrorCode::Unavailable
+                .code(),
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         assert_eq!(
             component_registry_status(pic, fixture, component_registry_request.clone())

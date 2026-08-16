@@ -5,7 +5,7 @@
 //! Boundary: delegates subtree disposal and performs claim-matching cleanup writes.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     config::schema::IndexPool,
     dto::placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
@@ -196,10 +196,7 @@ impl PlacementIndexWorkflow {
         };
         if !repaired {
             MetricEvent::failed_reason(MetricOperation::RepairStale, MetricReason::ClaimLost);
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "index claim lost during stale repair without an await boundary",
-            ));
+            return Err(InternalError::invariant());
         }
         PlacementAllocationWorkflow::finish_registered_child(&permit, provisional_pid)?;
 

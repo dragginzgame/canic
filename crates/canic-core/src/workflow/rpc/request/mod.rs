@@ -35,9 +35,7 @@ impl RpcRequestWorkflow {
         A: CandidType + Send + Sync,
     {
         if operation_id == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "child creation operation ID must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         RequestOps::create_canister(
             OperationId::from_bytes(operation_id),
@@ -57,7 +55,6 @@ impl RpcRequestWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::error::ErrorCode;
     use futures::executor::block_on;
 
     #[test]
@@ -71,8 +68,8 @@ mod tests {
         .expect_err("zero child creation operation identity must reject");
 
         assert_eq!(
-            error.public_error().map(|error| error.code),
-            Some(ErrorCode::InvalidInput)
+            error.public_error().code(),
+            crate::diagnostics::codes::REQUEST_INVALID.raw_code()
         );
     }
 }

@@ -5,7 +5,7 @@
 //! Boundary: lifecycle adapters call this after stable-memory restore or init input decode.
 
 use crate::{
-    InternalError, InternalErrorOrigin, VERSION,
+    InternalError, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::{fleet_activation::FleetActivationPhase, fleet_subnet_root::FleetSubnetRootInitArgs},
     ids::CanisterRole,
@@ -35,12 +35,7 @@ pub fn init_root_canister(
     embedded_release_build_id: Option<&str>,
 ) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
-    MemoryRegistryOps::bootstrap_registry().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("memory init failed: {err}"),
-        )
-    })?;
+    MemoryRegistryOps::bootstrap_registry().map_err(|_err| InternalError::invariant())?;
     AuthorityRestoreWorkflow::initialize(IcOps::canister_self())?;
     rebuild_root_derived_storage_indexes()?;
     FleetActivationRuntimeOps::set_managed();
@@ -82,36 +77,21 @@ pub fn init_root_canister(
         parent_pid: Some(fleet_subnet_root_pid),
     };
 
-    let build_network = BuildNetworkOps::build_network().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "build network unavailable; set ICP_ENVIRONMENT=local|ic at build time".to_string(),
-        )
-    })?;
+    let build_network =
+        BuildNetworkOps::build_network().ok_or_else(|| InternalError::invariant())?;
     crate::log!(Topic::Init, Info, "build network: {build_network}");
     let validated = match validate_or_default(input) {
         Ok(validated) => validated,
-        Err(EnvPolicyError::MissingEnvFields(missing)) => {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("env args missing {missing}; local builds require explicit env fields"),
-            ));
+        Err(EnvPolicyError::MissingEnvFields(_missing)) => {
+            return Err(InternalError::invariant());
         }
     };
 
-    if let Err(err) = EnvOps::import_validated(validated) {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("env import failed: {err}"),
-        ));
+    if let Err(_err) = EnvOps::import_validated(validated) {
+        return Err(InternalError::invariant());
     }
 
-    let app_mode = ConfigOps::app_init_mode().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("app mode init failed: {err}"),
-        )
-    })?;
+    let app_mode = ConfigOps::app_init_mode().map_err(|_err| InternalError::invariant())?;
     FleetStateOps::init_mode(app_mode);
     RuntimeAuthWorkflow::ensure_root_crypto_contract()?;
 
@@ -141,12 +121,7 @@ pub fn post_upgrade_root_canister_after_memory_init() -> Result<bool, InternalEr
     let timers_suspended = crate::workflow::runtime::timer::TimerWorkflow::is_suspended();
     if active && !timers_suspended {
         // --- Phase 3: Service startup ---
-        RuntimeWorkflow::start_all_root().map_err(|err| {
-            InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                format!("root service startup failed: {err}"),
-            )
-        })?;
+        RuntimeWorkflow::start_all_root().map_err(|_err| InternalError::invariant())?;
     }
 
     Ok(active && !timers_suspended)

@@ -12,7 +12,7 @@ mod registry;
 mod release;
 
 use crate::{
-    InternalError, InternalErrorOrigin, config::schema::ShardPool,
+    InternalError, config::schema::ShardPool,
     domain::policy::pure::placement::sharding::ShardingPolicyError,
     model::placement::sharding::CreateBlockedReason, ops::config::ConfigOps,
 };
@@ -35,11 +35,9 @@ pub enum ShardingWorkflowError {
 impl From<ShardingWorkflowError> for InternalError {
     fn from(err: ShardingWorkflowError) -> Self {
         match err {
-            ShardingWorkflowError::Policy(err) => {
-                Self::domain(InternalErrorOrigin::Domain, err.to_string())
-            }
-            ShardingWorkflowError::Invariant(msg) => {
-                Self::invariant(InternalErrorOrigin::Workflow, msg)
+            ShardingWorkflowError::Policy(err) => err.into(),
+            ShardingWorkflowError::Invariant(_msg) => {
+                Self::public(crate::diagnostics::codes::STATE_INVALID)
             }
         }
     }

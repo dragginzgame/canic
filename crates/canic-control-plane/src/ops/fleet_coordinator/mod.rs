@@ -43,7 +43,7 @@ use candid::Principal;
 use canic_core::control_plane_support::config::ConfigModel;
 use canic_core::{
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::{
             component_provisioning_plan::{
                 ComponentProvisioningPlanOps, MAX_FLEET_COMPONENT_PROVISIONING_PLAN_BATCHES,
@@ -112,13 +112,11 @@ impl FleetCoordinatorOps {
         coordinator_canister: Principal,
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         if args.authority.binding.coordinator != coordinator_canister {
-            return Err(InternalError::invalid_input(
-                "Fleet Coordinator authority principal does not match the installed canister",
-            ));
+            return Err(InternalError::invalid_input());
         }
         args.component_deployment_configuration
             .digest()
-            .map_err(|error| InternalError::invalid_input(error.to_string()))?;
+            .map_err(|_error| InternalError::invalid_input())?;
         let component_topology = &args.component_deployment_configuration.component_topology;
         let registry = FleetRegistryOps::compile_genesis(
             &args.configured_app,
@@ -151,11 +149,7 @@ impl FleetCoordinatorOps {
     pub(crate) fn commit_genesis(
         record: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorCommitOutcome, InternalError> {
-        FleetCoordinatorRegistryStore::commit_genesis(record).map_err(|_| {
-            InternalError::conflict(
-                "Fleet Coordinator already contains different protected Registry state",
-            )
-        })
+        FleetCoordinatorRegistryStore::commit_genesis(record).map_err(|_| InternalError::conflict())
     }
 
     pub(crate) fn registry() -> Result<FleetRegistry, InternalError> {
@@ -176,14 +170,10 @@ impl FleetCoordinatorOps {
                     version: receipt.version.clone(),
                 });
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root join identity already has different protected authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if current.registry_activation_receipt.is_some() {
-            return Err(InternalError::conflict(
-                "initial Fleet Registry activation already committed",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let current_version = FleetRegistryOps::version(
@@ -194,9 +184,7 @@ impl FleetCoordinatorOps {
             &current.registry,
         )?;
         if request.expected_registry != current_version {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root join expected Registry version is stale",
-            ));
+            return Err(InternalError::conflict());
         }
         let next_registry = FleetRegistryOps::compile_joining(
             &current.authority,
@@ -207,10 +195,7 @@ impl FleetCoordinatorOps {
             request.entry.clone(),
         )?;
         if next_registry == current.registry {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Fleet Registry contains a root without its durable join receipt",
-            ));
+            return Err(InternalError::invariant());
         }
         let version = FleetRegistryOps::version(
             &current.authority,
@@ -285,9 +270,7 @@ impl FleetCoordinatorOps {
             &current.registry,
         )?;
         if request.version != current_version {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root snapshot acknowledgement is stale",
-            ));
+            return Err(InternalError::conflict());
         }
         let acknowledgement = FleetSubnetRootSnapshotAcknowledgement {
             fleet_subnet_root: caller,
@@ -301,9 +284,7 @@ impl FleetCoordinatorOps {
             if existing == &acknowledgement {
                 return Ok(existing.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root already acknowledged different Registry authority",
-            ));
+            return Err(InternalError::conflict());
         }
 
         let mut next = current.clone();
@@ -327,9 +308,7 @@ impl FleetCoordinatorOps {
             if receipt.request == request {
                 return Ok(receipt.response.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Registry activation already committed against different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         require_all_roots_joining(&current)?;
         let current_version = FleetRegistryOps::version(
@@ -340,9 +319,7 @@ impl FleetCoordinatorOps {
             &current.registry,
         )?;
         if request.expected_registry != current_version {
-            return Err(InternalError::conflict(
-                "Fleet Registry activation expected version is stale",
-            ));
+            return Err(InternalError::conflict());
         }
         require_complete_snapshot_acknowledgements(&current, &current_version)?;
 
@@ -382,14 +359,10 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         let current = Self::current()?;
         if request.operation_id == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "Fleet Component provisioning operation ID must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if planned_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Component provisioning planned time must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         match request.plan.operation {
             FleetComponentProvisioningOperation::FreshInstall => {
@@ -410,21 +383,15 @@ impl FleetCoordinatorOps {
             if existing.operation_id == request.operation_id && existing.plan == request.plan {
                 return component_provisioning_status_response(existing);
             }
-            return Err(InternalError::conflict(
-                "Fleet Component provisioning already contains different protected plan authority",
-            ));
+            return Err(InternalError::conflict());
         }
         require_component_plan_roots_unreserved(&current, &request.plan)?;
         if !current.service_publication_receipts.is_empty() {
-            return Err(InternalError::conflict(
-                "Fleet Component provisioning plan must precede Fleet-service publication",
-            ));
+            return Err(InternalError::conflict());
         }
         let source_registry = initial_active_registry(&current)?;
         if current.registry != source_registry {
-            return Err(InternalError::conflict(
-                "Fleet Component provisioning plan must precede later Registry transitions",
-            ));
+            return Err(InternalError::conflict());
         }
         ComponentProvisioningPlanOps::validate_compiled(
             &current.component_deployment_configuration,
@@ -462,18 +429,14 @@ impl FleetCoordinatorOps {
             if receipt.plan_hash == retry_hash {
                 return component_scale_out_receipt_response(receipt);
             }
-            return Err(InternalError::conflict(
-                "Fleet Component scale-out operation is already retired with different plan authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let terminal_receipt = match &current.component_scale_out {
             Some(existing) if existing.operation_id == request.operation_id => {
                 if existing.plan == request.plan {
                     return component_provisioning_status_response(existing);
                 }
-                return Err(InternalError::conflict(
-                    "Fleet Component scale-out operation already contains different protected plan authority",
-                ));
+                return Err(InternalError::conflict());
             }
             Some(existing)
                 if matches!(
@@ -487,29 +450,22 @@ impl FleetCoordinatorOps {
                 )?)
             }
             Some(_) => {
-                return Err(InternalError::conflict(
-                    "Fleet Component scale-out already contains different protected plan authority",
-                ));
+                return Err(InternalError::conflict());
             }
             None => None,
         };
-        let fresh = current.component_provisioning.as_ref().ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Component scale-out requires terminal fresh provisioning",
-            )
-        })?;
+        let fresh = current
+            .component_provisioning
+            .as_ref()
+            .ok_or_else(|| InternalError::unavailable())?;
         if fresh.operation_id == request.operation_id {
-            return Err(InternalError::conflict(
-                "Fleet Component scale-out operation ID is already used by fresh provisioning",
-            ));
+            return Err(InternalError::conflict());
         }
         if !matches!(
             fresh.state,
             FleetComponentProvisioningStateRecord::RuntimesActivated { .. }
         ) {
-            return Err(InternalError::unavailable(
-                "Fleet Component scale-out requires terminal fresh provisioning",
-            ));
+            return Err(InternalError::unavailable());
         }
         require_component_plan_roots_unreserved(&current, &request.plan)?;
         let plan_hash = deployment_ledger::scale_out_plan_hash(
@@ -551,13 +507,9 @@ impl FleetCoordinatorOps {
             &current.component_scale_out_receipts,
             request.operation_id,
         )?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Component provisioning operation is not prepared")
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
         if receipt.plan_hash != request.plan_hash {
-            return Err(InternalError::conflict(
-                "Fleet Component provisioning status names a reused operation with a different plan hash",
-            ));
+            return Err(InternalError::conflict());
         }
         component_scale_out_receipt_response(receipt)
     }
@@ -581,9 +533,7 @@ impl FleetCoordinatorOps {
             RootAcceptanceAdvance::Begin => {}
         }
         if started_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Component root acceptance start time must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if progress.accepted_root_count == progress.root_batch_count {
             let mut next = current.clone();
@@ -633,15 +583,11 @@ impl FleetCoordinatorOps {
             return replay_recorded_root_acceptance(record, request, &response, &progress);
         }
         if progress.accepted_root_count != request.expected_accepted_root_count {
-            return Err(InternalError::conflict(
-                "Fleet Component root acceptance cursor differs from durable progress",
-            ));
+            return Err(InternalError::conflict());
         }
-        let intent = progress.in_flight.ok_or_else(|| {
-            InternalError::conflict(
-                "Fleet Component root acceptance response has no durable pre-call intent",
-            )
-        })?;
+        let intent = progress
+            .in_flight
+            .ok_or_else(|| InternalError::conflict())?;
         let batch = root_batch(record, intent.root_index)?;
         validate_root_acceptance_response(record, batch, &response)?;
         validate_root_acceptance_observation(intent.started_at_ns, &response, recorded_at_ns)?;
@@ -652,9 +598,8 @@ impl FleetCoordinatorOps {
                 response,
                 recorded_at_ns,
             });
-        let accepted_root_count = u32::try_from(progress.acceptances.len()).map_err(|_| {
-            InternalError::resource_exhausted("Fleet Component root acceptance count exceeds u32")
-        })?;
+        let accepted_root_count = u32::try_from(progress.acceptances.len())
+            .map_err(|_| InternalError::resource_exhausted())?;
         let mut next = current.clone();
         let next_record =
             component_provisioning_operation_record_mut(&mut next, request.operation_id)?;
@@ -708,24 +653,19 @@ impl FleetCoordinatorOps {
             RootProvisionAdvance::Begin => {}
         }
         if started_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Component root provisioning start time must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let roots_accepted_at_ns = progress.roots_accepted_at_ns.ok_or_else(|| {
-            InternalError::conflict(
-                "Fleet Component root provisioning cannot precede complete root acceptance",
-            )
-        })?;
+        let roots_accepted_at_ns = progress
+            .roots_accepted_at_ns
+            .ok_or_else(|| InternalError::conflict())?;
         let previous_observed_at_ns = root_provision_previous_observed_at(&progress)?;
         if started_at_ns < previous_observed_at_ns {
-            return Err(InternalError::invalid_input(
-                "Fleet Component root provisioning start time regressed",
-            ));
+            return Err(InternalError::invalid_input());
         }
-        let response = progress.current_response.as_ref().ok_or_else(|| {
-            InternalError::conflict("Fleet Component root provisioning cursor is terminal")
-        })?;
+        let response = progress
+            .current_response
+            .as_ref()
+            .ok_or_else(|| InternalError::conflict())?;
         let call = root_provision_call(record, progress.provisioned_root_count, response)?;
         let intent = FleetComponentProvisioningRootProvisionIntentRecord {
             root_index: progress.provisioned_root_count,
@@ -765,18 +705,14 @@ impl FleetCoordinatorOps {
             return Ok(replayed);
         }
         if classify_root_provision_advance(request, &progress)? != RootProvisionAdvance::Reconcile {
-            return Err(InternalError::conflict(
-                "Fleet Component root provisioning response has no exact durable pre-call intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = progress
             .in_flight
             .take()
             .ok_or_else(|| receipt_invariant("root provisioning response intent disappeared"))?;
         if recorded_at_ns < intent.started_at_ns {
-            return Err(InternalError::invalid_input(
-                "Fleet Component root provisioning observation time regressed",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let previous = progress.current_response.as_ref().ok_or_else(|| {
             receipt_invariant("root provisioning response has no durable predecessor")
@@ -924,21 +860,15 @@ impl FleetCoordinatorOps {
             }
             RootProvisionAdvance::Publish => {}
             RootProvisionAdvance::Begin | RootProvisionAdvance::Reconcile => {
-                return Err(InternalError::conflict(
-                    "Fleet-service publication cannot precede complete root provisioning",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         if published_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet-service publication time must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let provisioned = components_provisioned_state(record)?;
         if published_at_ns < provisioned.components_provisioned_at_ns {
-            return Err(InternalError::invalid_input(
-                "Fleet-service publication time precedes complete root provisioning",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let publication = compile_service_publication(&current, record, &provisioned)?;
         let mut next = current.clone();
@@ -999,9 +929,7 @@ impl FleetCoordinatorOps {
             DirectoryConfirmationAdvance::Begin => {}
         }
         if started_at_ns == 0 || started_at_ns < progress.service_topology_published_at_ns {
-            return Err(InternalError::invalid_input(
-                "Directory confirmation start time is invalid",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let root_index = progress.confirmed_root_count;
         let previous = progress
@@ -1065,17 +993,13 @@ impl FleetCoordinatorOps {
             record.plan.operation,
             FleetComponentProvisioningOperation::ScaleOut { .. }
         ) {
-            return Err(InternalError::conflict(
-                "scale-out Directory confirmation requires its typed synchronization response",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut progress = component_directory_confirmation_progress(record)?;
         if classify_directory_confirmation_advance(request, &progress)?
             != DirectoryConfirmationAdvance::Reconcile
         {
-            return Err(InternalError::conflict(
-                "Directory confirmation response has no exact durable pre-call intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = progress
             .in_flight
@@ -1084,9 +1008,7 @@ impl FleetCoordinatorOps {
         let (intent_root_index, intent_root, intent_request, intent_started_at_ns) =
             fresh_confirmation_intent(&intent)?;
         if recorded_at_ns < intent_started_at_ns {
-            return Err(InternalError::invalid_input(
-                "Directory confirmation observation time regressed",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let previous = progress
             .current
@@ -1115,9 +1037,7 @@ impl FleetCoordinatorOps {
             true,
         )?;
         if intent_request.operation_id != request.operation_id {
-            return Err(InternalError::conflict(
-                "Directory confirmation intent changed its operation authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let observed = FleetComponentDirectoryConfirmationRecord::FreshPublication {
             started_at_ns: intent_started_at_ns,
@@ -1147,9 +1067,7 @@ impl FleetCoordinatorOps {
         if classify_directory_confirmation_advance(request, &progress)?
             != DirectoryConfirmationAdvance::Reconcile
         {
-            return Err(InternalError::conflict(
-                "scale-out Directory synchronization response has no durable pre-call intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = progress
             .in_flight
@@ -1197,9 +1115,7 @@ impl FleetCoordinatorOps {
         if classify_directory_confirmation_advance(request, &progress)?
             != DirectoryConfirmationAdvance::Reconcile
         {
-            return Err(InternalError::conflict(
-                "scale-out Directory publication response has no durable pre-call intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = progress
             .in_flight
@@ -1235,9 +1151,7 @@ impl FleetCoordinatorOps {
         .into_iter()
         .all(|matches| matches);
         if !intent_is_exact {
-            return Err(InternalError::conflict(
-                "scale-out Directory publication response changed durable intent authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let fleet_directory_content_hash = expected_fleet_directory_content_hash(
             &current,
@@ -1298,9 +1212,7 @@ impl FleetCoordinatorOps {
             RuntimeActivationAdvance::Begin => {}
         }
         if started_at_ns == 0 || started_at_ns < progress.directories_confirmed_at_ns {
-            return Err(InternalError::invalid_input(
-                "runtime activation start time is invalid",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let root_index = progress.activated_root_count;
         let publication = root_publication_response(record, &progress, root_index)?;
@@ -1361,18 +1273,14 @@ impl FleetCoordinatorOps {
         if classify_runtime_activation_advance(request, &progress)?
             != RuntimeActivationAdvance::Reconcile
         {
-            return Err(InternalError::conflict(
-                "runtime activation response has no exact durable pre-call intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let intent = progress
             .in_flight
             .take()
             .ok_or_else(|| receipt_invariant("runtime activation intent disappeared"))?;
         if recorded_at_ns < intent.started_at_ns {
-            return Err(InternalError::invalid_input(
-                "runtime activation observation time regressed",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let publication = root_publication_response(record, &progress, intent.root_index)?;
         let previous_record = progress.current;
@@ -1404,14 +1312,10 @@ impl FleetCoordinatorOps {
         prepared_at_ns: u64,
     ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
         if request.operation_id == [0; 32] {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root draining reservation operation ID must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if prepared_at_ns == 0 {
-            return Err(InternalError::invalid_input(
-                "Fleet Subnet Root draining reservation time must be nonzero",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let current = Self::current()?;
         if let Some(record) = current
@@ -1422,14 +1326,10 @@ impl FleetCoordinatorOps {
             if record.response.request == request {
                 return Ok(record.response.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining reservation identity already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if current.registry_activation_receipt.is_none() {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining reservation requires an active Fleet Registry",
-            ));
+            return Err(InternalError::conflict());
         }
         let current_version = FleetRegistryOps::version(
             &current.authority,
@@ -1466,16 +1366,12 @@ impl FleetCoordinatorOps {
             .root_draining_reservations
             .iter()
             .find(|record| draining_reservation_status_matches(&record.response, &request))
-            .ok_or_else(|| {
-                InternalError::unavailable("Fleet Subnet Root draining reservation is not prepared")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let response = &record.response;
         if response.request.operation_id != request.operation_id
             || response.request.expected_root.fleet_subnet_root != request.fleet_subnet_root
         {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining reservation status names conflicting authority",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(response.clone())
     }
@@ -1493,14 +1389,10 @@ impl FleetCoordinatorOps {
             if receipt.request == request {
                 return Ok(receipt.response.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining publication identity already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         if current.registry_activation_receipt.is_none() {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining publication requires an active Fleet Registry",
-            ));
+            return Err(InternalError::conflict());
         }
         let previous_version = FleetRegistryOps::version(
             &current.authority,
@@ -1510,9 +1402,7 @@ impl FleetCoordinatorOps {
             &current.registry,
         )?;
         if request.expected_registry != previous_version {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root draining publication expected Registry version is stale",
-            ));
+            return Err(InternalError::conflict());
         }
         let reservation = draining_reservation_for_publication(&current, &request)?;
         validate_draining_publication_request(
@@ -1521,7 +1411,7 @@ impl FleetCoordinatorOps {
             &request,
             reservation,
         )
-        .map_err(InternalError::invalid_input)?;
+        .map_err(|_| InternalError::invalid_input())?;
 
         let next_registry = FleetRegistryOps::compile_draining(
             &current.authority,
@@ -1561,9 +1451,7 @@ impl FleetCoordinatorOps {
         request: FleetSubnetRootRemovalPublicationRequest,
     ) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
         if caller != request.final_inventory.fleet_subnet_root {
-            return Err(InternalError::forbidden(
-                "Fleet Subnet Root removal publication caller differs from its terminal inventory",
-            ));
+            return Err(InternalError::forbidden());
         }
         let current = Self::current()?;
         require_grouped_root_lifecycle_open(&current, request.final_inventory.fleet_subnet_root)?;
@@ -1575,9 +1463,7 @@ impl FleetCoordinatorOps {
             if receipt.request == request {
                 return Ok(receipt.response.clone());
             }
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root removal publication identity already has different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let previous_version = FleetRegistryOps::version(
             &current.authority,
@@ -1587,9 +1473,7 @@ impl FleetCoordinatorOps {
             &current.registry,
         )?;
         if request.expected_registry != previous_version {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root removal publication expected Registry version is stale",
-            ));
+            return Err(InternalError::conflict());
         }
         let history = canonical_registry_lifecycle_history(&current)?;
         validate_removal_publication_request(
@@ -1599,7 +1483,7 @@ impl FleetCoordinatorOps {
             &history,
             &request,
         )
-        .map_err(InternalError::invalid_input)?;
+        .map_err(|_| InternalError::invalid_input())?;
 
         let next_registry = FleetRegistryOps::compile_removed(
             &current.authority,
@@ -1653,9 +1537,7 @@ impl FleetCoordinatorOps {
     fn current() -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         let current = FleetCoordinatorRegistryStore::export()
             .current
-            .ok_or_else(|| {
-                InternalError::unavailable("Fleet Coordinator genesis is not initialized")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         Self::validate_current(current)
     }
 
@@ -1688,16 +1570,10 @@ impl FleetCoordinatorOps {
         current: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorRegistryRecord, InternalError> {
         if current.authority != current.registry.authority {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored Fleet Coordinator authority does not match its Fleet Registry",
-            ));
+            return Err(InternalError::invariant());
         }
         if current.configured_app != current.authority.binding.fleet.app {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored Fleet Coordinator App does not match its authority",
-            ));
+            return Err(InternalError::invariant());
         }
         current
             .component_deployment_configuration
@@ -1726,12 +1602,8 @@ impl FleetCoordinatorOps {
     ) -> Result<FleetCoordinatorCommitOutcome, InternalError> {
         FleetCoordinatorRegistryStore::commit_transition(current, next).map_err(|error| match error
         {
-            FleetCoordinatorCommitError::ConflictingState => InternalError::conflict(
-                "Fleet Coordinator Registry changed before the requested transition committed",
-            ),
-            FleetCoordinatorCommitError::Uninitialized => {
-                InternalError::unavailable("Fleet Coordinator genesis is not initialized")
-            }
+            FleetCoordinatorCommitError::ConflictingState => InternalError::conflict(),
+            FleetCoordinatorCommitError::Uninitialized => InternalError::unavailable(),
         })
     }
 }
@@ -1742,16 +1614,12 @@ fn require_test_component_deployment_configuration(
 ) -> Result<(), InternalError> {
     let expected = config
         .compile_component_deployment_configuration()
-        .map_err(|error| InternalError::invalid_input(error.to_string()))?;
+        .map_err(|_error| InternalError::invalid_input())?;
     let current = FleetCoordinatorRegistryStore::export()
         .current
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Coordinator genesis is not initialized")
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     if current.component_deployment_configuration != expected {
-        return Err(InternalError::conflict(
-            "test Component deployment configuration differs from durable Coordinator authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -2960,12 +2828,7 @@ fn component_scale_out_receipt_content_hash(
 ) -> Result<[u8; 32], InternalError> {
     let mut authority = receipt.clone();
     authority.receipt_content_hash = [0; 32];
-    let payload = candid::encode_one(authority).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("retired scale-out receipt cannot be encoded: {error}"),
-        )
-    })?;
+    let payload = candid::encode_one(authority).map_err(|_error| InternalError::invariant())?;
     let mut hasher = Sha256::new();
     hasher.update(COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN);
     hasher.update(payload);
@@ -3344,9 +3207,7 @@ fn active_provisioning_record_for_status<'a>(
         if record.plan_hash == request.plan_hash {
             return Ok(Some(record));
         }
-        return Err(InternalError::conflict(
-            "Fleet Component provisioning status names a reused operation with a different plan hash",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(None)
 }
@@ -3440,9 +3301,7 @@ fn compile_service_publication(
 ) -> Result<ServicePublication, InternalError> {
     let source_registry = component_operation_source_registry(current, record)?;
     if current.registry != source_registry {
-        return Err(InternalError::conflict(
-            "Fleet-service publication source Registry is no longer current",
-        ));
+        return Err(InternalError::conflict());
     }
     if service_publication_receipt_for_operation(current, record.operation_id)?.is_some() {
         return Err(receipt_invariant(
@@ -3466,9 +3325,7 @@ fn compile_service_publication(
     let previous_version =
         FleetRegistryOps::version(&current.authority, topology, &current.registry)?;
     if previous_version != record.plan.fleet_registry {
-        return Err(InternalError::conflict(
-            "Fleet-service publication expected Registry version is stale",
-        ));
+        return Err(InternalError::conflict());
     }
     let registry = if services == current.registry.services {
         current.registry.clone()
@@ -3961,9 +3818,7 @@ fn component_directory_confirmation_progress(
             terminal_downstream_directory_progress(state, confirmation_root_count)?
         }
         _ => {
-            return Err(InternalError::conflict(
-                "Directory confirmation requires published Fleet-service topology",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     Ok(progress)
@@ -4106,9 +3961,7 @@ fn runtime_activation_authority(
             *directories_confirmed_at_ns,
         ),
         _ => {
-            return Err(InternalError::conflict(
-                "runtime activation requires confirmed Directories",
-            ));
+            return Err(InternalError::conflict());
         }
     };
     Ok(RuntimeActivationAuthority {
@@ -4192,24 +4045,18 @@ fn classify_runtime_activation_advance(
         {
             Ok(RuntimeActivationAdvance::Current)
         } else {
-            Err(InternalError::conflict(
-                "runtime activation cursor differs from terminal progress",
-            ))
+            Err(InternalError::conflict())
         };
     }
     if request.expected_runtime_activated_root_count < progress.activated_root_count {
         return if terminal_runtime_activation_replay(request, progress)? {
             Ok(RuntimeActivationAdvance::Current)
         } else {
-            Err(InternalError::conflict(
-                "runtime-activated root cursor differs from durable progress",
-            ))
+            Err(InternalError::conflict())
         };
     }
     if request.expected_runtime_activated_root_count != progress.activated_root_count {
-        return Err(InternalError::conflict(
-            "runtime-activated root cursor differs from durable progress",
-        ));
+        return Err(InternalError::conflict());
     }
     let actual = progress.current.map(|record| record.progress);
     if request.expected_current_activation != actual {
@@ -4222,9 +4069,7 @@ fn classify_runtime_activation_advance(
         return if replays_last || replays_first {
             Ok(RuntimeActivationAdvance::Current)
         } else {
-            Err(InternalError::conflict(
-                "runtime activation Component cursor differs from durable progress",
-            ))
+            Err(InternalError::conflict())
         };
     }
     if progress.in_flight.is_some() {
@@ -4300,9 +4145,7 @@ fn classify_directory_confirmation_advance(
         return if current_is_exact || replays_terminal_call {
             Ok(DirectoryConfirmationAdvance::Current)
         } else {
-            Err(InternalError::conflict(
-                "Directory confirmation cursor differs from terminal progress",
-            ))
+            Err(InternalError::conflict())
         };
     }
     if request.expected_directory_confirmed_root_count < progress.confirmed_root_count {
@@ -4313,15 +4156,11 @@ fn classify_directory_confirmation_advance(
         {
             Ok(DirectoryConfirmationAdvance::Current)
         } else {
-            Err(InternalError::conflict(
-                "Directory confirmation root cursor differs from durable progress",
-            ))
+            Err(InternalError::conflict())
         };
     }
     if request.expected_directory_confirmed_root_count != progress.confirmed_root_count {
-        return Err(InternalError::conflict(
-            "Directory confirmation root cursor differs from durable progress",
-        ));
+        return Err(InternalError::conflict());
     }
     let actual_synchronization = progress
         .current
@@ -4334,9 +4173,7 @@ fn classify_directory_confirmation_advance(
         ) {
             return Ok(DirectoryConfirmationAdvance::Current);
         }
-        return Err(InternalError::conflict(
-            "Directory synchronization Component cursor differs from durable progress",
-        ));
+        return Err(InternalError::conflict());
     }
     let actual_current = progress
         .current
@@ -4347,9 +4184,7 @@ fn classify_directory_confirmation_advance(
         if publication_progress_replays(request.expected_current_publication, actual_current) {
             return Ok(DirectoryConfirmationAdvance::Current);
         }
-        return Err(InternalError::conflict(
-            "Directory confirmation Component cursor differs from durable progress",
-        ));
+        return Err(InternalError::conflict());
     }
     if progress.in_flight.is_some() {
         Ok(DirectoryConfirmationAdvance::Reconcile)
@@ -4611,9 +4446,7 @@ fn classify_root_provision_advance(
                     RootProvisionAdvance::Publish
                 });
             }
-            return Err(InternalError::conflict(
-                "Fleet Component root provisioning expected cursor differs from durable progress",
-            ));
+            return Err(InternalError::conflict());
         };
         let actual = root_provisioning_progress(current);
         if request.expected_current_root.as_ref() == Some(&actual) {
@@ -4633,16 +4466,13 @@ fn classify_root_provision_advance(
         {
             return Ok(RootProvisionAdvance::Current);
         }
-        return Err(InternalError::conflict(
-            "Fleet Component root provisioning expected cursor differs from durable progress",
-        ));
+        return Err(InternalError::conflict());
     }
     if request.expected_provisioned_root_count.checked_add(1)
         == Some(progress.provisioned_root_count)
     {
-        let index = usize::try_from(request.expected_provisioned_root_count).map_err(|_| {
-            InternalError::resource_exhausted("provisioned root index does not fit usize")
-        })?;
+        let index = usize::try_from(request.expected_provisioned_root_count)
+            .map_err(|_| InternalError::resource_exhausted())?;
         let provision = progress.provisions.get(index).ok_or_else(|| {
             receipt_invariant("terminal root provisioning receipt is absent at its cursor")
         })?;
@@ -4652,9 +4482,7 @@ fn classify_root_provision_advance(
             return Ok(RootProvisionAdvance::Current);
         }
     }
-    Err(InternalError::conflict(
-        "Fleet Component provisioned root count differs from durable progress",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn root_provision_call(
@@ -4717,9 +4545,7 @@ fn advance_scale_out_directory_confirmation(
         DirectoryConfirmationAdvance::Begin => {}
     }
     if started_at_ns == 0 || started_at_ns < progress.service_topology_published_at_ns {
-        return Err(InternalError::invalid_input(
-            "scale-out Directory confirmation start time is invalid",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let root_index = progress.confirmed_root_count;
     let root = confirmation_root(record, root_index)?;
@@ -5067,9 +4893,7 @@ fn require_scale_out_operation(
     ) {
         return Ok(());
     }
-    Err(InternalError::conflict(
-        "Directory synchronization is reserved for scale-out operations",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn selected_root_batch(
@@ -5179,9 +5003,7 @@ fn validate_scale_out_synchronization_response(
     .into_iter()
     .all(|matches| matches);
     if !authority_is_exact {
-        return Err(InternalError::conflict(
-            "scale-out Directory synchronization response changed protected authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(current) = &context.progress.current {
         let (previous_response, publication) = scale_out_confirmation_progress(current)?;
@@ -5193,9 +5015,7 @@ fn validate_scale_out_synchronization_response(
         .into_iter()
         .any(|changed| changed);
         if retained_authority_changed {
-            return Err(InternalError::conflict(
-                "scale-out Directory synchronization changed its retained target authority",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     let expected_directory_hash = expected_fleet_directory_content_hash(
@@ -5204,9 +5024,7 @@ fn validate_scale_out_synchronization_response(
         context.root,
     )?;
     if response.fleet_directory_content_hash != expected_directory_hash {
-        return Err(InternalError::conflict(
-            "scale-out Directory synchronization names different Fleet Directory authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let terminal_evidence_is_exact = if response.complete {
         [
@@ -5231,9 +5049,7 @@ fn validate_scale_out_synchronization_response(
         .all(|matches| matches)
     };
     if !terminal_evidence_is_exact {
-        return Err(InternalError::conflict(
-            "scale-out Directory synchronization has invalid terminal evidence",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -5446,27 +5262,21 @@ fn validate_runtime_activation_response(
     validate_runtime_activation_authority(publication, response)?;
     let actual = root_activation_progress(response);
     if !activation_progress_advances(previous, actual) {
-        return Err(InternalError::conflict(
-            "runtime activation response did not advance exactly one bounded cursor",
-        ));
+        return Err(InternalError::conflict());
     }
-    let activation_started_at_ns = response.activation_started_at_ns.ok_or_else(|| {
-        InternalError::conflict("runtime activation response lacks its durable start time")
-    })?;
+    let activation_started_at_ns = response
+        .activation_started_at_ns
+        .ok_or_else(|| InternalError::conflict())?;
     if previous_activation_started_at_ns
         .is_some_and(|expected| expected != activation_started_at_ns)
     {
-        return Err(InternalError::conflict(
-            "runtime activation response changed its durable start time",
-        ));
+        return Err(InternalError::conflict());
     }
     let published_at_ns = response.published_at_ns.ok_or_else(|| {
         receipt_invariant("runtime activation publication lacks its completion time")
     })?;
     if activation_started_at_ns < published_at_ns || recorded_at_ns < activation_started_at_ns {
-        return Err(InternalError::conflict(
-            "runtime activation response has invalid time evidence",
-        ));
+        return Err(InternalError::conflict());
     }
     match response.phase {
         RootComponentProvisioningPhase::Published => {
@@ -5480,9 +5290,7 @@ fn validate_runtime_activation_response(
             .into_iter()
             .all(|matches| matches);
             if !progress_is_exact {
-                return Err(InternalError::conflict(
-                    "in-progress runtime activation changed terminal publication authority",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         RootComponentProvisioningPhase::RuntimesActive => {
@@ -5496,9 +5304,7 @@ fn validate_runtime_activation_response(
             )?;
         }
         _ => {
-            return Err(InternalError::conflict(
-                "runtime activation response has an invalid root phase",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     Ok(())
@@ -5512,9 +5318,7 @@ fn validate_runtime_activation_authority(
     let authority_is_exact = RootRuntimeActivationAuthority::from_response(response)
         == RootRuntimeActivationAuthority::from_response(publication);
     if !published || !authority_is_exact {
-        return Err(InternalError::conflict(
-            "runtime activation response changed protected publication authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -5586,12 +5390,12 @@ fn validate_terminal_runtime_activation(
     activation_started_at_ns: u64,
     recorded_at_ns: u64,
 ) -> Result<(), InternalError> {
-    let activation = response.activation.ok_or_else(|| {
-        InternalError::conflict("terminal runtime activation lacks activation evidence")
-    })?;
-    let runtimes_activated_at_ns = response.runtimes_activated_at_ns.ok_or_else(|| {
-        InternalError::conflict("terminal runtime activation lacks completion time")
-    })?;
+    let activation = response
+        .activation
+        .ok_or_else(|| InternalError::conflict())?;
+    let runtimes_activated_at_ns = response
+        .runtimes_activated_at_ns
+        .ok_or_else(|| InternalError::conflict())?;
     let progress_is_terminal = response.root_runtime_active
         && response.activated_component_count == response.component_count;
     let identity_is_exact = activation.component_count == response.component_count
@@ -5608,9 +5412,7 @@ fn validate_terminal_runtime_activation(
     let evidence_is_exact =
         progress_is_terminal && identity_is_exact && timing_is_exact && observation_is_exact;
     if !evidence_is_exact {
-        return Err(InternalError::conflict(
-            "terminal runtime activation evidence is invalid",
-        ));
+        return Err(InternalError::conflict());
     }
     let batch = root_batch(record, root_index)?;
     let expected = RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
@@ -5626,9 +5428,7 @@ fn validate_terminal_runtime_activation(
         },
     )?;
     if response.receipt_content_hash != expected {
-        return Err(InternalError::conflict(
-            "terminal runtime activation receipt hash is invalid",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -5710,9 +5510,7 @@ fn validate_directory_confirmation_response(
     let expected_authority =
         RootDirectoryConfirmationAuthority::expected(context.operation, context.root, previous);
     if RootDirectoryConfirmationAuthority::observed(response) != expected_authority {
-        return Err(InternalError::conflict(
-            "Directory confirmation response changed protected provisioning authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let count_advances = response.published_component_count == previous.published_component_count
         || previous.published_component_count.checked_add(1)
@@ -5720,19 +5518,16 @@ fn validate_directory_confirmation_response(
     if (require_bounded_advance && !count_advances)
         || response.published_component_count > response.component_count
     {
-        return Err(InternalError::conflict(
-            "Directory confirmation response skipped its bounded Component cursor",
-        ));
+        return Err(InternalError::conflict());
     }
-    let publication = response.publication.as_ref().ok_or_else(|| {
-        InternalError::conflict("Directory confirmation response lacks publication evidence")
-    })?;
+    let publication = response
+        .publication
+        .as_ref()
+        .ok_or_else(|| InternalError::conflict())?;
     if &publication.fleet_registry != context.published_registry
         || publication.fleet_directory_content_hash != context.fleet_directory_content_hash
     {
-        return Err(InternalError::conflict(
-            "Directory confirmation response names different Fleet publication authority",
-        ));
+        return Err(InternalError::conflict());
     }
     validate_root_publication_evidence(context.operation, batch, response, publication)?;
     match response.phase {
@@ -5740,9 +5535,7 @@ fn validate_directory_confirmation_response(
             if response.published_at_ns.is_some()
                 || response.receipt_content_hash != previous.receipt_content_hash
             {
-                return Err(InternalError::conflict(
-                    "in-progress Directory confirmation changed terminal receipt evidence",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         RootComponentProvisioningPhase::Published => {
@@ -5759,9 +5552,7 @@ fn validate_directory_confirmation_response(
                 || published_at_ns < provisioned_at_ns
                 || recorded_at_ns < published_at_ns
             {
-                return Err(InternalError::conflict(
-                    "Published Directory confirmation has invalid terminal progress",
-                ));
+                return Err(InternalError::conflict());
             }
             let expected = RootComponentProvisioningReceiptOps::published_content_hash(
                 RootComponentProvisioningPublishedReceiptAuthority {
@@ -5777,15 +5568,11 @@ fn validate_directory_confirmation_response(
                 },
             )?;
             if response.receipt_content_hash != expected {
-                return Err(InternalError::conflict(
-                    "Published Directory confirmation receipt hash is invalid",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         _ => {
-            return Err(InternalError::conflict(
-                "Directory confirmation response has an invalid root phase",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     Ok(())
@@ -5876,9 +5663,7 @@ fn validate_root_publication_evidence(
             .map_err(|_| receipt_invariant("published Component count exceeds usize"))?
         || publication.component_group_directories.len() != result.placements.len()
     {
-        return Err(InternalError::conflict(
-            "Directory confirmation evidence count differs from root progress",
-        ));
+        return Err(InternalError::conflict());
     }
     for (member, evidence) in result
         .placements
@@ -5889,9 +5674,7 @@ fn validate_root_publication_evidence(
         if evidence.component != member.binding.component
             || evidence.content_hash != member.component_registry_content_hash
         {
-            return Err(InternalError::conflict(
-                "Component Directory publication evidence differs from Registry authority",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     for (index, (planned, provisioned)) in
@@ -5907,9 +5690,7 @@ fn validate_root_publication_evidence(
         if evidence.group_placement != provisioned.group_placement
             || evidence.content_hash != expected_hash
         {
-            return Err(InternalError::conflict(
-                "Component Group Directory publication evidence is invalid",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     Ok(())
@@ -5999,8 +5780,7 @@ fn component_provisioning_root_acceptance(
     root_index: u32,
 ) -> Result<FleetComponentProvisioningRootAcceptanceRecord, InternalError> {
     let progress = component_provisioning_root_acceptance_progress(record)?;
-    let index = usize::try_from(root_index)
-        .map_err(|_| InternalError::resource_exhausted("accepted root index does not fit usize"))?;
+    let index = usize::try_from(root_index).map_err(|_| InternalError::resource_exhausted())?;
     progress
         .acceptances
         .get(index)
@@ -6017,9 +5797,8 @@ fn replay_recorded_root_provision(
     let replayed = if request.expected_provisioned_root_count.checked_add(1)
         == Some(progress.provisioned_root_count)
     {
-        let index = usize::try_from(request.expected_provisioned_root_count).map_err(|_| {
-            InternalError::resource_exhausted("provisioned root index does not fit usize")
-        })?;
+        let index = usize::try_from(request.expected_provisioned_root_count)
+            .map_err(|_| InternalError::resource_exhausted())?;
         progress.provisions.get(index)
     } else if request.expected_provisioned_root_count == progress.provisioned_root_count
         && progress.current.as_ref().is_some_and(|current| {
@@ -6042,9 +5821,7 @@ fn replay_recorded_root_provision(
         return Ok(None);
     };
     if &replayed.response != response {
-        return Err(InternalError::conflict(
-            "Fleet Component root provisioning retry returned different evidence",
-        ));
+        return Err(InternalError::conflict());
     }
     component_provisioning_status_response(record).map(Some)
 }
@@ -6068,9 +5845,7 @@ fn classify_root_acceptance_advance(
     if request.expected_accepted_root_count.checked_add(1) == Some(progress.accepted_root_count) {
         return Ok(RootAcceptanceAdvance::Current);
     }
-    Err(InternalError::conflict(
-        "Fleet Component root acceptance expected count differs from durable progress",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn root_acceptance_call(
@@ -6094,12 +5869,12 @@ fn root_batch(
     record: &FleetComponentProvisioningRecord,
     root_index: u32,
 ) -> Result<&FleetSubnetRootProvisioningBatch, InternalError> {
-    let index = usize::try_from(root_index).map_err(|_| {
-        InternalError::resource_exhausted("Fleet Component root index does not fit usize")
-    })?;
-    record.plan.batches.get(index).ok_or_else(|| {
-        InternalError::conflict("Fleet Component root acceptance cursor is terminal")
-    })
+    let index = usize::try_from(root_index).map_err(|_| InternalError::resource_exhausted())?;
+    record
+        .plan
+        .batches
+        .get(index)
+        .ok_or_else(|| InternalError::conflict())
 }
 
 fn replay_recorded_root_acceptance(
@@ -6109,20 +5884,15 @@ fn replay_recorded_root_acceptance(
     progress: &FleetComponentProvisioningRootAcceptanceProgress,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
     if request.expected_accepted_root_count.checked_add(1) != Some(progress.accepted_root_count) {
-        return Err(InternalError::conflict(
-            "Fleet Component root acceptance response is older than one durable step",
-        ));
+        return Err(InternalError::conflict());
     }
-    let index = usize::try_from(request.expected_accepted_root_count).map_err(|_| {
-        InternalError::resource_exhausted("Fleet Component root index does not fit usize")
-    })?;
+    let index = usize::try_from(request.expected_accepted_root_count)
+        .map_err(|_| InternalError::resource_exhausted())?;
     let recorded = progress.acceptances.get(index).ok_or_else(|| {
         receipt_invariant("recorded root acceptance is absent at its durable cursor")
     })?;
     if &recorded.response != response {
-        return Err(InternalError::conflict(
-            "Fleet Component root acceptance retry returned different evidence",
-        ));
+        return Err(InternalError::conflict());
     }
     component_provisioning_status_response(record)
 }
@@ -6303,9 +6073,7 @@ fn validate_root_acceptance_response(
         fleet_subnet_root: response.fleet_subnet_root,
     };
     if actual_identity != expected_identity {
-        return Err(InternalError::conflict(
-            "root acceptance response differs from protected Coordinator authority",
-        ));
+        return Err(InternalError::conflict());
     }
     let (placement_count, component_count) = root_batch_counts(batch)?;
     let expected_progress = RootAcceptanceResponseProgress {
@@ -6331,14 +6099,10 @@ fn validate_root_acceptance_response(
         provisioned_at_ns: response.provisioned_at_ns,
     };
     if actual_progress != expected_progress {
-        return Err(InternalError::conflict(
-            "root acceptance response does not describe the exact initial Accepted state",
-        ));
+        return Err(InternalError::conflict());
     }
     if response.accepted_at_ns == 0 {
-        return Err(InternalError::conflict(
-            "root acceptance response does not describe the exact initial Accepted state",
-        ));
+        return Err(InternalError::conflict());
     }
     let receipt_content_hash = RootComponentProvisioningReceiptOps::acceptance_content_hash(
         RootComponentProvisioningAcceptanceReceiptAuthority {
@@ -6353,9 +6117,7 @@ fn validate_root_acceptance_response(
         },
     )?;
     if response.receipt_content_hash != receipt_content_hash {
-        return Err(InternalError::conflict(
-            "root acceptance response receipt hash is not canonical",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -6366,9 +6128,7 @@ fn validate_root_acceptance_observation(
     recorded_at_ns: u64,
 ) -> Result<(), InternalError> {
     if response.accepted_at_ns < started_at_ns || recorded_at_ns < response.accepted_at_ns {
-        return Err(InternalError::invalid_input(
-            "Fleet Component root acceptance time evidence is invalid",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -6393,9 +6153,7 @@ fn validate_root_provision_response(
         ));
     }
     if response.accepted_at_ns != acceptance.response.accepted_at_ns {
-        return Err(InternalError::conflict(
-            "root provisioning response changed its accepted-time authority",
-        ));
+        return Err(InternalError::conflict());
     }
     match response.phase {
         RootComponentProvisioningPhase::Accepted => {
@@ -6403,43 +6161,33 @@ fn validate_root_provision_response(
             let previous_counts = RootProvisioningCounts::from_response(previous);
             let next_counts = RootProvisioningCounts::from_response(response);
             if !previous_counts.advances_one_step_to(next_counts, response.component_count) {
-                return Err(InternalError::conflict(
-                    "root provisioning response did not advance exactly one bounded cursor",
-                ));
+                return Err(InternalError::conflict());
             }
         }
         RootComponentProvisioningPhase::Provisioned => {
             if !RootProvisioningCounts::from_response(previous)
                 .is_terminal(previous.component_count)
             {
-                return Err(InternalError::conflict(
-                    "root provisioning terminal response preceded complete root-local cursors",
-                ));
+                return Err(InternalError::conflict());
             }
             FleetServiceBindingOps::validate_provisioned_root_receipt_compiled(
                 configuration,
                 &record.plan,
                 record.operation_id,
                 record.plan_hash,
-                usize::try_from(root_index).map_err(|_| {
-                    InternalError::resource_exhausted("root provisioning index does not fit usize")
-                })?,
+                usize::try_from(root_index).map_err(|_| InternalError::resource_exhausted())?,
                 response,
             )?;
-            let provisioned_at_ns = response.provisioned_at_ns.ok_or_else(|| {
-                InternalError::conflict("root Provisioned response has no completion time")
-            })?;
+            let provisioned_at_ns = response
+                .provisioned_at_ns
+                .ok_or_else(|| InternalError::conflict())?;
             if provisioned_at_ns < started_at_ns || recorded_at_ns < provisioned_at_ns {
-                return Err(InternalError::invalid_input(
-                    "root Provisioned response time evidence is invalid",
-                ));
+                return Err(InternalError::invalid_input());
             }
         }
         RootComponentProvisioningPhase::Published
         | RootComponentProvisioningPhase::RuntimesActive => {
-            return Err(InternalError::conflict(
-                "root provisioning advance crossed the Coordinator publication barrier",
-            ));
+            return Err(InternalError::conflict());
         }
     }
     Ok(())
@@ -6475,9 +6223,7 @@ fn validate_root_provision_current(
     let acceptance_is_exact = response.accepted_at_ns == acceptance.response.accepted_at_ns
         && response.receipt_content_hash == acceptance.response.receipt_content_hash;
     if actual_identity != expected_identity || !progress_is_valid || !acceptance_is_exact {
-        return Err(InternalError::conflict(
-            "root provisioning response differs from its exact accepted plan authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -6699,13 +6445,7 @@ fn validate_current_root_provision_record(
     if current.started_at_ns < previous_observed_at_ns
         || current.recorded_at_ns < current.started_at_ns
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            format!(
-                "current root provisioning observation time evidence is invalid: previous {previous_observed_at_ns}, started {}, recorded {}",
-                current.started_at_ns, current.recorded_at_ns
-            ),
-        ));
+        return Err(InternalError::invariant());
     }
     let batch = root_batch(record, progress.provisioned_root_count)?;
     let accepted = component_provisioning_root_acceptance(record, progress.provisioned_root_count)?;
@@ -6815,9 +6555,7 @@ fn require_component_plan_roots_unreserved(
             })
     });
     if selects_reserved_root {
-        return Err(InternalError::conflict(
-            "Fleet Component provisioning plan selects a root reserved for draining",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -6828,9 +6566,7 @@ fn require_grouped_root_lifecycle_open(
 ) -> Result<(), InternalError> {
     let references = grouped_root_lifecycle_references(current, fleet_subnet_root);
     if !references.is_empty() {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root lifecycle is fenced while grouped Component authority references the root",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -6882,11 +6618,7 @@ fn require_snapshot_root(
         .find(|entry| {
             entry.fleet_subnet_root == caller && entry.status != FleetSubnetRootStatus::Removed
         })
-        .ok_or_else(|| {
-            InternalError::forbidden(
-                "caller is not a current Fleet Subnet Root in the Fleet Registry",
-            )
-        })
+        .ok_or_else(|| InternalError::forbidden())
 }
 
 fn require_joining_root(
@@ -6900,11 +6632,7 @@ fn require_joining_root(
         .find(|entry| {
             entry.fleet_subnet_root == caller && entry.status == FleetSubnetRootStatus::Joining
         })
-        .ok_or_else(|| {
-            InternalError::forbidden(
-                "caller is not a Joining Fleet Subnet Root in the current Registry",
-            )
-        })
+        .ok_or_else(|| InternalError::forbidden())
 }
 
 fn require_all_roots_joining(
@@ -6917,9 +6645,7 @@ fn require_all_roots_joining(
             .iter()
             .any(|entry| entry.status != FleetSubnetRootStatus::Joining)
     {
-        return Err(InternalError::conflict(
-            "Fleet Registry snapshot synchronization requires a non-empty all-Joining root set",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -6966,9 +6692,7 @@ fn require_complete_snapshot_acknowledgements(
                 })
         })
     {
-        return Err(InternalError::conflict(
-            "Fleet Registry activation requires every current root acknowledgement",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -7099,9 +6823,7 @@ fn initial_active_registry(
     let joining = historical_joining_registry(current)?;
     let (active, _) = initial_lifecycle_history(current, joining)?;
     if current.registry_activation_receipt.is_none() {
-        return Err(InternalError::conflict(
-            "initial Fleet-service publication requires an active Fleet Registry",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(active)
 }
@@ -7621,17 +7343,11 @@ fn draining_reservation_for_publication<'a>(
             FleetSubnetRootDrainingIdentity::from_reservation_request(&record.response.request)
                 .conflicts_with(publication_identity)
         })
-        .ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root draining publication has no retained reservation",
-            )
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     let reservation_identity =
         FleetSubnetRootDrainingIdentity::from_reservation_request(&reservation.response.request);
     if reservation_identity != publication_identity {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root draining publication conflicts with retained reservation identity",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(&reservation.response)
 }
@@ -7695,14 +7411,10 @@ fn validate_root_draining_reservation_request(
     request: &FleetSubnetRootDrainingReservationRequest,
 ) -> Result<(), InternalError> {
     if request.expected_registry != *version {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root draining reservation expected Registry version is stale",
-        ));
+        return Err(InternalError::conflict());
     }
     if request.expected_root.status != FleetSubnetRootStatus::Active {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root draining reservation expected root is not Active",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let Some(target) = current
         .registry
@@ -7710,14 +7422,10 @@ fn validate_root_draining_reservation_request(
         .iter()
         .find(|entry| entry.fleet_subnet_root == request.expected_root.fleet_subnet_root)
     else {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root draining reservation target is missing",
-        ));
+        return Err(InternalError::conflict());
     };
     if target != &request.expected_root {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root draining reservation expected root differs from Registry authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -7975,6 +7683,6 @@ fn validate_root_draining_reservations(
     Ok(())
 }
 
-fn receipt_invariant(message: &'static str) -> InternalError {
-    InternalError::invariant(InternalErrorOrigin::Storage, message)
+fn receipt_invariant(_message: &'static str) -> InternalError {
+    InternalError::invariant()
 }

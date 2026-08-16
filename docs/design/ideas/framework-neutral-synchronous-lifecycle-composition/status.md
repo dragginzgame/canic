@@ -58,8 +58,9 @@ bootstrap timer or deferred application hook.
 
 ## Scheduling
 
-This idea has no working number and does not gate the scheduled 0.103-0.107
-Fleet path. Its former `0.104` planning references are historical only.
+This idea has no working number and does not gate the scheduled 0.103-0.108
+Fleet path or standalone 0.109 authorization qualification. Its former `0.104`
+planning references are historical only.
 
 ## Release-Batch Tracker
 

@@ -60,10 +60,12 @@ impl WasmStorePublicationWorkflow {
         .into_iter()
         .all(|valid| valid);
         if !is_exact {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "publication state does not name adopted sibling Store '{binding}' as its sole active binding"
-            ))
-            .into());
+            return Err(
+                PublicationWorkflowError::SoleActivePublicationBindingRequired {
+                    binding: binding.clone(),
+                }
+                .into(),
+            );
         }
         Ok(())
     }
@@ -74,21 +76,20 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<(), InternalError> {
         let stores = RootWasmStoreStateOps::wasm_stores();
         let [store] = stores.as_slice() else {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "initial publication binding requires exactly one adopted sibling Store, found {}",
-                stores.len()
-            ))
+            return Err(PublicationWorkflowError::SingleAdoptedStoreRequired {
+                observed_count: stores.len(),
+            }
             .into());
         };
         if store.binding != binding {
-            return Err(PublicationWorkflowError::InvalidState(format!(
-                "initial publication binding '{binding}' does not match adopted sibling Store '{}'",
-                store.binding
-            ))
+            return Err(PublicationWorkflowError::AdoptedBindingMismatch {
+                requested_binding: binding,
+                adopted_binding: store.binding.clone(),
+            }
             .into());
         }
         if store.gc.mode != WasmStoreGcMode::Normal {
-            return Err(PublicationWorkflowError::StoreNotWritable {
+            return Err(PublicationWorkflowError::GcWriteFenced {
                 binding,
                 mode: store.gc.mode,
             }
@@ -107,11 +108,7 @@ impl WasmStorePublicationWorkflow {
         .into_iter()
         .all(|empty| empty);
         if !state_is_empty {
-            return Err(PublicationWorkflowError::InvalidState(
-                "initial publication binding cannot replace or rotate existing Store authority"
-                    .to_string(),
-            )
-            .into());
+            return Err(PublicationWorkflowError::InitialPublicationAuthorityPresent.into());
         }
 
         let changed_at = IcOps::now_secs();
@@ -119,10 +116,7 @@ impl WasmStorePublicationWorkflow {
             store.binding.clone(),
             changed_at,
         ) {
-            return Err(PublicationWorkflowError::InvalidState(
-                "initial publication binding did not commit".to_string(),
-            )
-            .into());
+            return Err(PublicationWorkflowError::InitialPublicationBindingCommitFailed.into());
         }
         let current = RootWasmStoreStateOps::publication_store_state();
         Self::log_publication_state_transition(

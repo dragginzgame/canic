@@ -1,7 +1,6 @@
 use super::*;
 use crate::dto::{
     capability::{CAPABILITY_VERSION_V1, CapabilityProof},
-    error::ErrorCode,
     rpc::{CyclesRequest, Request, RootRequestMetadata},
 };
 
@@ -22,7 +21,10 @@ fn project_replay_metadata_rejects_expired_metadata() {
         1_000 * NS_PER_SEC,
     )
     .expect_err("expired metadata must fail");
-    assert_eq!(err.code, ErrorCode::Conflict);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
 }
 
 #[test]
@@ -32,7 +34,10 @@ fn project_replay_metadata_rejects_expiry_boundary() {
         950 * NS_PER_SEC,
     )
     .expect_err("metadata at expiry boundary must fail");
-    assert_eq!(err.code, ErrorCode::Conflict);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
 }
 
 #[test]
@@ -42,7 +47,10 @@ fn project_replay_metadata_rejects_future_metadata_beyond_skew() {
         1_000 * NS_PER_SEC,
     )
     .expect_err("future metadata must fail");
-    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
 }
 
 #[test]
@@ -94,7 +102,10 @@ fn validate_root_capability_envelope_rejects_capability_version_mismatch() {
         &CapabilityProof::Structural,
     )
     .expect_err("unsupported capability version must fail");
-    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert_eq!(
+        err.code(),
+        crate::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
 }
 
 #[test]

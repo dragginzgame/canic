@@ -15,7 +15,7 @@ use crate::workflow::placement::index::state::{
     PlacementIndexEntryClassification, validate_bind_target_with_reason,
 };
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::placement::index::{PlacementIndexRecoveryResponse, PlacementIndexStatusResponse},
     ops::{
@@ -243,10 +243,7 @@ impl PlacementIndexWorkflow {
                         bound_at,
                     } = repaired
                     else {
-                        return Err(InternalError::invariant(
-                            InternalErrorOrigin::Workflow,
-                            "index stale repair returned non-bound status",
-                        ));
+                        return Err(InternalError::invariant());
                     };
 
                     MetricEvent::completed(MetricOperation::Recover, MetricReason::StaleRepairable);

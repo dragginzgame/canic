@@ -25,7 +25,7 @@ use candid::Principal;
 use canic_core::{
     api::fleet_activation::FleetActivationApi,
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         model::replay::CommandKind,
         ops::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
@@ -159,28 +159,22 @@ pub fn wasm_store_adoption_status(
 ) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
     let authority = protected_sibling_wasm_store_authority(&request)?;
     RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(request.operation_id, authority)?
-        .ok_or_else(|| InternalError::unavailable("sibling Wasm Store adoption is not complete"))
+        .ok_or_else(|| InternalError::unavailable())
 }
 
 fn protected_sibling_wasm_store_authority(
     request: &FleetSubnetWasmStoreAdoptionRequest,
 ) -> Result<FleetSubnetWasmStoreAuthority, InternalError> {
     if request.operation_id == [0; 32] {
-        return Err(InternalError::invalid_input(
-            "sibling Wasm Store adoption operation ID must be nonzero",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let (root_authority, _) = crate::workflow::root_authority::validated_root_authority()?;
     let activation = FleetActivationWorkflow::status()?;
     if request.operation_id != activation.identity.operation_id {
-        return Err(InternalError::conflict(
-            "sibling Wasm Store adoption operation differs from protected install identity",
-        ));
+        return Err(InternalError::conflict());
     }
     if request.authority != root_authority.wasm_store_authority {
-        return Err(InternalError::conflict(
-            "sibling Wasm Store adoption request differs from protected root authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(root_authority.wasm_store_authority)
 }
@@ -211,9 +205,7 @@ async fn observe_sibling_wasm_store(
     };
     let module_is_exact = evidence.module_hash.as_deref() == Some(&authority.wasm_module_hash);
     if !evidence.running || !module_is_exact {
-        return Err(InternalError::conflict(
-            "sibling Wasm Store live status differs from protected module authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(evidence)
 }
@@ -229,9 +221,7 @@ fn require_sibling_wasm_store_controller_phase(
     if observed.controllers == final_controllers {
         return Ok(SiblingWasmStoreControllerPhase::Final);
     }
-    Err(InternalError::conflict(
-        "sibling Wasm Store controller set is neither planned temporary nor final authority",
-    ))
+    Err(InternalError::conflict())
 }
 
 fn require_final_sibling_wasm_store_controllers(
@@ -239,9 +229,7 @@ fn require_final_sibling_wasm_store_controllers(
     final_controllers: &[Principal],
 ) -> Result<(), InternalError> {
     if observed.controllers != final_controllers {
-        return Err(InternalError::conflict(
-            "sibling Wasm Store did not converge to sole root control",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -255,17 +243,13 @@ pub async fn begin_draining(
         return exact_draining_retry(&request, existing);
     }
     if state.root_entry.status != FleetSubnetRootStatus::Active {
-        return Err(InternalError::conflict(
-            "only an Active Fleet Subnet Root can begin draining",
-        ));
+        return Err(InternalError::conflict());
     }
     if !ComponentRegistryOps::registry_covers_preparation(
         &request.expected_registry,
         &state.fleet_registry,
     ) {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root draining source Registry is not covered by its active mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     RootComponentProvisioningOps::require_root_draining_open()?;
     let coordinator = state.fleet_registry.authority.binding.coordinator;
@@ -297,9 +281,7 @@ fn exact_draining_retry(
     existing: RootFleetSubnetDrainingView,
 ) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
     if request.expected_registry != existing.active_registry {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root draining retry names a different source Registry",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(draining_response(existing))
 }
@@ -316,7 +298,7 @@ async fn fetch_root_draining_reservation(
     .execute()
     .await?;
     let result: Result<FleetSubnetRootDrainingReservationResponse, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 fn validate_root_draining_reservation(
@@ -343,9 +325,7 @@ fn validate_root_draining_reservation(
     .into_iter()
     .all(|valid| valid);
     if !reservation_is_exact {
-        return Err(InternalError::conflict(
-            "Coordinator root-draining reservation differs from protected local authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -368,35 +348,25 @@ pub async fn finalize_inventory(
         ComponentRegistryOps::root_final_inventory_if_present(request.operation_id)?
     {
         if request.expected_registry != existing.registry {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root final inventory retry names a different Registry",
-            ));
+            return Err(InternalError::conflict());
         }
         return Ok(final_inventory_response(existing));
     }
     let retained_workload_assets = CanisterPoolOps::non_store_asset_count();
     if retained_workload_assets != 0 {
-        return Err(InternalError::unavailable(format!(
-            "Fleet Subnet Root final inventory cannot orphan {retained_workload_assets} pool, allocation or workload Canisters; recycling or handoff must complete first",
-        )));
+        return Err(InternalError::unavailable());
     }
     if CanisterPoolOps::has_pending_lifecycle_work() {
-        return Err(InternalError::unavailable(
-            "Fleet Subnet Root final inventory requires all Canister pool work to reconcile",
-        ));
+        return Err(InternalError::unavailable());
     }
     let intent_registry =
         ComponentRegistryOps::root_final_inventory_intent_registry(request.operation_id)?;
     if let Some(intent_registry) = intent_registry {
         if request.expected_registry != intent_registry {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root final inventory differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
     } else if request.expected_registry != state.fleet_registry {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root final inventory request differs from the active Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     ComponentRegistryOps::begin_root_final_inventory(
         request.operation_id,
@@ -407,10 +377,7 @@ pub async fn finalize_inventory(
         WasmStorePublicationWorkflow::quiesce_single_root_store_for_final_inventory().await?;
     let store = root_store::status(state.component_registry.store_bootstrap).await?;
     if store.wasm_store != wasm_store {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "write-fenced Store differs from the exact root release-set catalog",
-        ));
+        return Err(InternalError::invariant());
     }
     ComponentRegistryOps::finalize_root_inventory(
         request.operation_id,
@@ -441,27 +408,20 @@ pub async fn publish_removal(
         ComponentRegistryOps::root_removal_publication_if_present(request.operation_id)?
     {
         if existing.previous_registry != request.expected_registry {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root removal retry names a different Registry",
-            ));
+            return Err(InternalError::conflict());
         }
         let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
         return removal_publication_response(existing, inventory);
     }
     if request.expected_registry != state.fleet_registry {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root removal request differs from the active Registry mirror",
-        ));
+        return Err(InternalError::conflict());
     }
     let coordinator = state.component_registry.root.authority.binding.coordinator;
     let (wasm_store, store_status) =
         WasmStorePublicationWorkflow::verify_single_root_store_for_removal().await?;
     let store = root_store::status(state.component_registry.store_bootstrap).await?;
     if store.wasm_store != wasm_store {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "verified removal Store differs from the exact root release-set catalog",
-        ));
+        return Err(InternalError::invariant());
     }
     let inventory = ComponentRegistryOps::verify_root_final_inventory_store(
         request.operation_id,
@@ -492,9 +452,7 @@ pub fn removal_status(
     let _state = validated_root_state()?;
     let publication =
         ComponentRegistryOps::root_removal_publication_if_present(request.operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable("Fleet Subnet Root removal has not been published")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
     let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
     removal_publication_response(publication, inventory)
 }
@@ -506,9 +464,7 @@ pub async fn reclaim_store(
     let state = validated_root_state()?;
     let inventory = removed_root_inventory(request.operation_id)?;
     if request.expected_final_inventory_hash != inventory.inventory_hash {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root Store reclamation names a different final inventory",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(existing) =
         ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
@@ -526,9 +482,7 @@ pub async fn reclaim_store(
         .into_iter()
         .all(|valid| valid);
         if !intent_is_exact {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store reclamation differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
     } else {
         verify_store_before_reclamation(&state, &inventory).await?;
@@ -554,9 +508,7 @@ pub fn store_reclamation_status(
 ) -> Result<FleetSubnetRootStoreReclamationResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete")
-        })
+        .ok_or_else(|| InternalError::unavailable())
         .map(store_reclamation_response)
 }
 
@@ -567,13 +519,10 @@ pub async fn finalize_store_binding(
     let _state = validated_root_state()?;
     let inventory = removed_root_inventory(request.operation_id)?;
     let reclamation =
-        ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?.ok_or_else(
-            || InternalError::unavailable("Fleet Subnet Root Store reclamation is not complete"),
-        )?;
+        ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
+            .ok_or_else(|| InternalError::unavailable())?;
     if request.expected_reclamation_hash != reclamation.reclamation_hash {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root Store binding finalization names a different reclamation receipt",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(existing) =
         ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
@@ -593,9 +542,7 @@ pub async fn finalize_store_binding(
         .into_iter()
         .all(|valid| valid);
         if !intent_is_exact {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store binding finalization differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
         intent
     } else {
@@ -627,11 +574,7 @@ pub fn store_binding_finalization_status(
 ) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
-        .ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root Store binding finalization is not complete",
-            )
-        })
+        .ok_or_else(|| InternalError::unavailable())
         .map(store_binding_finalization_response)
 }
 
@@ -643,15 +586,9 @@ pub async fn delete_store(
     let inventory = removed_root_inventory(request.operation_id)?;
     let finalization =
         ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
-            .ok_or_else(|| {
-                InternalError::unavailable(
-                    "Fleet Subnet Root Store binding finalization is not complete",
-                )
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
     if request.expected_binding_finalization_hash != finalization.finalization_hash {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root Store deletion names a different binding finalization receipt",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(existing) =
         ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
@@ -670,9 +607,7 @@ pub async fn delete_store(
         .into_iter()
         .all(|valid| valid);
         if !intent_is_exact {
-            return Err(InternalError::conflict(
-                "Fleet Subnet Root Store deletion differs from its durable intent",
-            ));
+            return Err(InternalError::conflict());
         }
         intent
     } else {
@@ -724,9 +659,7 @@ pub fn store_deletion_status(
 ) -> Result<FleetSubnetRootStoreDeletionResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root Store deletion is not complete")
-        })
+        .ok_or_else(|| InternalError::unavailable())
         .map(store_deletion_response)
 }
 
@@ -741,13 +674,10 @@ pub async fn prepare_deletion(
         return validate_deletion_preparation_retry(&request, existing);
     }
     let store_deletion =
-        ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?.ok_or_else(
-            || InternalError::unavailable("Fleet Subnet Root Store deletion is not complete"),
-        )?;
+        ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
+            .ok_or_else(|| InternalError::unavailable())?;
     if request.expected_store_deletion_hash != store_deletion.deletion_hash {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root deletion preparation names a different Store deletion receipt",
-        ));
+        return Err(InternalError::conflict());
     }
     validate_root_deletion_cycle_reserve(&request)?;
     let coordinator = state.fleet_registry.authority.binding.coordinator;
@@ -818,9 +748,7 @@ pub fn deletion_preparation_status(
 ) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_deletion_preparation_if_present(request.operation_id)?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root deletion preparation is not complete")
-        })
+        .ok_or_else(|| InternalError::unavailable())
         .map(deletion_preparation_response)
 }
 
@@ -828,26 +756,13 @@ pub fn deletion_preparation_status(
 pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let state = validated_root_state()?;
     let stores = RootWasmStoreStateOps::wasm_stores();
-    let store_canisters = u32::try_from(stores.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root-local Wasm Store count exceeds u32",
-        )
-    })?;
+    let store_canisters = u32::try_from(stores.len()).map_err(|_| InternalError::invariant())?;
     if store_canisters != 1 {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            format!(
-                "active Fleet Subnet Root requires exactly one known local Wasm Store, found {store_canisters}"
-            ),
-        ));
+        return Err(InternalError::invariant());
     }
     CanisterPoolOps::require_store(stores[0].pid)?;
     if CanisterPoolOps::store_count() != store_canisters {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Store runtime and physical Canister inventories disagree",
-        ));
+        return Err(InternalError::invariant());
     }
 
     summary(
@@ -861,17 +776,16 @@ pub fn canister_summary() -> Result<FleetSubnetRootCanisterSummary, InternalErro
 }
 
 fn validated_root_state() -> Result<ValidatedFleetSubnetRootState, InternalError> {
-    let authority = FleetActivationApi::root_authority().map_err(InternalError::public)?;
-    FleetActivationApi::require_active().map_err(InternalError::public)?;
+    let authority = FleetActivationApi::root_authority().map_err(InternalError::observed_public)?;
+    FleetActivationApi::require_active().map_err(InternalError::observed_public)?;
     let root = IcOps::canister_self();
     validate_protected_root(&authority, root)?;
 
     let mirror = FleetRegistryMirrorOps::validated_current(&authority, root)?;
     let fleet_registry = mirror.active.snapshot.version;
     let root_entry = mirror.root_entry;
-    let component_registry = ComponentRegistryOps::current().ok_or_else(|| {
-        InternalError::unavailable("root Component Registry authority has not been prepared")
-    })?;
+    let component_registry =
+        ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
     validate_component_registry(&authority, &fleet_registry, &component_registry)?;
     validate_draining_evidence(&root_entry, &fleet_registry)?;
 
@@ -887,9 +801,7 @@ fn validate_protected_root(
     root: candid::Principal,
 ) -> Result<(), InternalError> {
     if authority.binding.fleet_subnet_root != root {
-        return Err(InternalError::invalid_input(
-            "protected Fleet Subnet Root authority does not name this Canister",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -913,27 +825,16 @@ fn validate_component_registry(
             fleet_registry,
         )
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Registry preparation authority is not covered by the current root mirror",
-        ));
+        return Err(InternalError::invariant());
     }
 
     let allocated_canisters = registry
         .reserved_component_instances
         .checked_add(registry.committed_component_instances)
         .and_then(|count| count.checked_add(registry.managed_descendants))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component Registry allocation counters overflow",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     if registry.known_created_component_canisters > allocated_canisters {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "known-created Component Canisters exceed allocated Component-tree capacity",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -953,9 +854,7 @@ fn ensure_root_is_published_draining(
     state: &ValidatedFleetSubnetRootState,
 ) -> Result<(), InternalError> {
     if state.root_entry.status != FleetSubnetRootStatus::Draining {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root final inventory requires a published Draining Registry entry",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -964,15 +863,10 @@ fn removed_root_inventory(
     operation_id: [u8; 32],
 ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
     let publication = ComponentRegistryOps::root_removal_publication_if_present(operation_id)?
-        .ok_or_else(|| {
-            InternalError::unavailable("Fleet Subnet Root logical removal has not been published")
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     let inventory = ComponentRegistryOps::root_final_inventory(operation_id)?;
     if publication.final_inventory_hash != inventory.inventory_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root removal publication differs from retained final inventory",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(inventory)
 }
@@ -985,10 +879,7 @@ async fn verify_store_before_reclamation(
         WasmStorePublicationWorkflow::verify_single_root_store_for_removal().await?;
     let store = root_store::status(state.component_registry.store_bootstrap.clone()).await?;
     if store.wasm_store != wasm_store {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "verified reclamation Store differs from the exact root release-set catalog",
-        ));
+        return Err(InternalError::invariant());
     }
     let verified = ComponentRegistryOps::verify_root_final_inventory_store(
         inventory.operation_id,
@@ -996,10 +887,7 @@ async fn verify_store_before_reclamation(
         &store_status,
     )?;
     if &verified != inventory {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "verified reclamation Store differs from retained final inventory",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -1012,27 +900,16 @@ fn summary(
     workload_canisters: u32,
     pooled_canisters: u32,
 ) -> Result<FleetSubnetRootCanisterSummary, InternalError> {
-    let infrastructure_canisters = 1_u32.checked_add(store_canisters).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root-local infrastructure Canister count overflow",
-        )
-    })?;
+    let infrastructure_canisters = 1_u32
+        .checked_add(store_canisters)
+        .ok_or_else(|| InternalError::invariant())?;
     if workload_canisters != registry.known_created_component_canisters {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "physical workload inventory differs from Component Registry principal accounting",
-        ));
+        return Err(InternalError::invariant());
     }
     let total_canisters = infrastructure_canisters
         .checked_add(workload_canisters)
         .and_then(|count| count.checked_add(pooled_canisters))
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Fleet Subnet Root Canister summary total overflow",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
 
     Ok(FleetSubnetRootCanisterSummary {
         fleet_registry,
@@ -1103,7 +980,7 @@ async fn publish_removed_to_coordinator(
     .execute()
     .await?;
     let result: Result<FleetSubnetRootRemovalPublicationResponse, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 fn validate_removal_publication_response(
@@ -1121,9 +998,7 @@ fn validate_removal_publication_response(
     .into_iter()
     .all(|valid| valid);
     if !response_is_exact {
-        return Err(InternalError::invalid_input(
-            "Coordinator root removal response differs from requested authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -1133,10 +1008,7 @@ fn removal_publication_response(
     inventory: RootFleetSubnetFinalInventoryView,
 ) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
     if publication.final_inventory_hash != inventory.inventory_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root removal publication differs from retained final inventory",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(FleetSubnetRootRemovalPublicationResponse {
         final_inventory: final_inventory_response(inventory),
@@ -1218,9 +1090,7 @@ fn validate_deletion_preparation_retry(
     .into_iter()
     .all(|valid| valid);
     if !retry_is_exact {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root deletion preparation differs from its durable receipt",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(deletion_preparation_response(existing))
 }
@@ -1262,9 +1132,7 @@ fn validate_root_deletion_cycle_reserve(
         || request.observed_reserved_cycles != 0
         || request.retained_cycles_target <= FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES
     {
-        return Err(InternalError::invalid_input(
-            "Fleet Subnet Root retained-cycle target differs from live freezing authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -1292,23 +1160,15 @@ fn root_deletion_readiness_request(
     Ok(FleetSubnetRootDeletionReadinessRequest {
         operation_id: intent.operation_id,
         fleet_subnet_root: IcOps::canister_self(),
-        expected_intent_hash: intent.coordinator_intent_hash.ok_or_else(|| {
-            InternalError::unavailable(
-                "Coordinator root-deletion readiness intent has not been recorded",
-            )
-        })?,
-        observed_cycles_after_reclamation: intent.observed_cycles_after_reclamation.ok_or_else(
-            || {
-                InternalError::unavailable(
-                    "Fleet Subnet Root cycle reclamation has not been recorded",
-                )
-            },
-        )?,
-        cycles_reclaimed_at_ns: intent.cycles_reclaimed_at_ns.ok_or_else(|| {
-            InternalError::unavailable(
-                "Fleet Subnet Root cycle-reclamation time has not been recorded",
-            )
-        })?,
+        expected_intent_hash: intent
+            .coordinator_intent_hash
+            .ok_or_else(|| InternalError::unavailable())?,
+        observed_cycles_after_reclamation: intent
+            .observed_cycles_after_reclamation
+            .ok_or_else(|| InternalError::unavailable())?,
+        cycles_reclaimed_at_ns: intent
+            .cycles_reclaimed_at_ns
+            .ok_or_else(|| InternalError::unavailable())?,
     })
 }
 
@@ -1324,7 +1184,7 @@ async fn prepare_root_deletion_readiness_with_coordinator(
     .execute()
     .await?;
     let result: Result<FleetSubnetRootDeletionReadinessIntentResponse, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 async fn record_root_deletion_readiness_with_coordinator(
@@ -1339,7 +1199,7 @@ async fn record_root_deletion_readiness_with_coordinator(
     .execute()
     .await?;
     let result: Result<FleetSubnetRootDeletionReadinessResponse, Error> = call.candid()?;
-    result.map_err(InternalError::public)
+    result.map_err(InternalError::observed_public)
 }
 
 fn validate_root_deletion_readiness_intent_response(
@@ -1356,9 +1216,7 @@ fn validate_root_deletion_readiness_intent_response(
     .into_iter()
     .all(|valid| valid);
     if !response_is_exact {
-        return Err(InternalError::invalid_input(
-            "Coordinator root-deletion readiness intent response differs from request",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -1386,9 +1244,7 @@ fn validate_root_deletion_readiness_response(
     .into_iter()
     .all(|valid| valid);
     if !response_is_exact {
-        return Err(InternalError::invalid_input(
-            "Coordinator root-deletion readiness response differs from local authority",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -1400,19 +1256,13 @@ async fn reclaim_root_deletion_cycles(
 ) -> Result<u128, InternalError> {
     let current_cycles = IcOps::canister_cycle_balance().to_u128();
     if current_cycles > observed_cycles_before_reclamation {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root cycle balance increased after deletion intent",
-        ));
+        return Err(InternalError::conflict());
     }
     let deposit_call_cost = MgmtOps::deposit_cycles_call_cost(coordinator)?;
     let target_cycles_to_retain = retained_cycles_target
         .checked_sub(FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES)
         .and_then(|remaining| remaining.checked_sub(deposit_call_cost))
-        .ok_or_else(|| {
-            InternalError::conflict(
-                "Fleet Subnet Root deletion reserve does not cover call-refund headroom and the exact deposit call cost",
-            )
-        })?;
+        .ok_or_else(|| InternalError::conflict())?;
     let maximum_transfer = transferable_root_deletion_cycles(
         current_cycles,
         target_cycles_to_retain,
@@ -1443,9 +1293,7 @@ async fn reclaim_root_deletion_cycles(
     .into_iter()
     .all(|valid| valid);
     if !balance_is_reclaimed {
-        return Err(InternalError::conflict(
-            "Fleet Subnet Root still exceeds its durable retained-cycle target",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(observed_after)
 }

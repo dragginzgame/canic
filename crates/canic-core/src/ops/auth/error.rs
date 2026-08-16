@@ -4,7 +4,7 @@
 //! Does not own: public error DTOs, endpoint mapping, or verification logic.
 //! Boundary: converts auth-local failures into internal errors.
 
-use crate::{InternalError, InternalErrorOrigin, ops::prelude::*};
+use crate::{InternalError, ops::prelude::*};
 use thiserror::Error as ThisError;
 
 ///
@@ -162,25 +162,45 @@ pub enum AuthExpiryError {
 
 impl From<AuthOpsError> for InternalError {
     fn from(err: AuthOpsError) -> Self {
-        Self::ops(InternalErrorOrigin::Ops, err.to_string())
+        match err {
+            AuthOpsError::Validation(err) => err.into(),
+            AuthOpsError::Signature(err) => err.into(),
+            AuthOpsError::Scope(err) => err.into(),
+            AuthOpsError::Expiry(err) => err.into(),
+        }
     }
 }
 
 impl From<AuthValidationError> for InternalError {
     fn from(err: AuthValidationError) -> Self {
-        AuthOpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            AuthValidationError::InvalidRootAuthority { .. } => codes::AUTHORITY_CONFLICT,
+            AuthValidationError::EncodeFailed { .. } => codes::CODEC_FAILED,
+            AuthValidationError::AttestationSubnetUnavailable
+            | AuthValidationError::AttestationSubnetRequired => codes::AUTHORITY_UNAVAILABLE,
+            AuthValidationError::AttestationProofFieldTooLarge { .. } => {
+                codes::SECURITY_INVALID_STATE
+            }
+            AuthValidationError::AttestationInvalidWindow { .. } | AuthValidationError::Auth(_) => {
+                codes::SECURITY_INVALID
+            }
+            AuthValidationError::DelegatedTokenAuthDisabled => codes::SECURITY_INACTIVE,
+        };
+        Self::public(code)
     }
 }
 
 impl From<AuthSignatureError> for InternalError {
     fn from(err: AuthSignatureError) -> Self {
         match err {
-            err @ AuthSignatureError::ProofUnavailable => {
-                Self::auth_material_stale(err.to_string())
+            AuthSignatureError::ProofUnavailable => {
+                Self::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
             }
-            err @ (AuthSignatureError::ProofInvalid(_)
-            | AuthSignatureError::AttestationProofInvalid(_)) => {
-                Self::invalid_input(err.to_string())
+            AuthSignatureError::ProofInvalid(_)
+            | AuthSignatureError::AttestationProofInvalid(_) => {
+                Self::public(crate::diagnostics::codes::SECURITY_INVALID)
             }
             AuthSignatureError::RootDataCertificateUnavailable => {
                 Self::root_data_certificate_unavailable()
@@ -190,14 +210,25 @@ impl From<AuthSignatureError> for InternalError {
 }
 
 impl From<AuthScopeError> for InternalError {
-    fn from(err: AuthScopeError) -> Self {
-        AuthOpsError::from(err).into()
+    fn from(_err: AuthScopeError) -> Self {
+        Self::public(crate::diagnostics::codes::AUTHORITY_CONFLICT)
     }
 }
 
 impl From<AuthExpiryError> for InternalError {
     fn from(err: AuthExpiryError) -> Self {
-        AuthOpsError::from(err).into()
+        use crate::diagnostics::codes;
+
+        let code = match err {
+            AuthExpiryError::CertExpired { .. } => codes::AUTH_CERT_EXPIRED,
+            AuthExpiryError::TokenExpired { .. } => codes::AUTH_TOKEN_EXPIRED,
+            AuthExpiryError::TokenNotYetValid { .. }
+            | AuthExpiryError::AttestationNotYetValid { .. } => codes::SECURITY_INVALID_STATE,
+            AuthExpiryError::TokenTtlExceeded { .. } => codes::TIME_CAPACITY,
+            AuthExpiryError::AttestationExpired { .. } => codes::SECURITY_EXPIRED,
+            AuthExpiryError::AttestationEpochRejected { .. } => codes::VERSION_INACTIVE,
+        };
+        Self::public(code)
     }
 }
 
@@ -208,16 +239,16 @@ impl From<AuthExpiryError> for InternalError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::error::ErrorCode;
 
     #[test]
     fn root_data_certificate_unavailable_maps_to_public_code() {
         let err: InternalError = AuthSignatureError::RootDataCertificateUnavailable.into();
-        let public = err
-            .public_error()
-            .expect("missing root data certificate must be public");
+        let public = err.public_error();
 
-        assert_eq!(public.code, ErrorCode::RootDataCertificateUnavailable);
+        assert_eq!(
+            public.code(),
+            crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code()
+        );
     }
 
     #[test]
@@ -227,12 +258,12 @@ mod tests {
             AuthSignatureError::ProofInvalid("bad signature".to_string()).into();
 
         assert_eq!(
-            unavailable.public_error().map(|err| err.code),
-            Some(ErrorCode::AuthMaterialStale)
+            unavailable.public_error().code(),
+            crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code()
         );
         assert_eq!(
-            invalid.public_error().map(|err| err.code),
-            Some(ErrorCode::InvalidInput)
+            invalid.public_error().code(),
+            crate::diagnostics::codes::SECURITY_INVALID.raw_code()
         );
     }
 }

@@ -15,15 +15,15 @@ pub(super) fn validate_root_capability_envelope(
     proof: &CapabilityProof,
 ) -> Result<(), Error> {
     if service != CapabilityService::Root {
-        return Err(Error::invalid(
-            "capability envelope service must be Root for root dispatch",
+        return Err(Error::from_registered(
+            crate::diagnostics::codes::REQUEST_INVALID,
         ));
     }
 
     if capability_version != CAPABILITY_VERSION_V1 {
-        return Err(Error::invalid(format!(
-            "unsupported capability_version: {capability_version}",
-        )));
+        return Err(Error::from_registered(
+            crate::diagnostics::codes::REQUEST_INVALID,
+        ));
     }
 
     match proof {

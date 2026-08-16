@@ -39,7 +39,7 @@ use crate::{
 use candid::{CandidType, Principal};
 use canic_core::{
     control_plane_support::{
-        error::{InternalError, InternalErrorOrigin},
+        error::InternalError,
         ops::component_provisioning_plan::RootComponentProvisioningBatchValidation,
         ops::component_provisioning_receipt::{
             RootComponentProvisioningAcceptanceReceiptAuthority,
@@ -253,9 +253,7 @@ impl RootComponentProvisioningOps {
         };
         let view = validated_record(record)?;
         if !request_matches_view(request, &view) {
-            return Err(InternalError::conflict(
-                "root Component provisioning operation is already bound to different intent",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(Some(view))
     }
@@ -273,9 +271,7 @@ impl RootComponentProvisioningOps {
             return if request_matches_view(&request, &view) && view.runtime_mode == runtime_mode {
                 Ok(view)
             } else {
-                Err(InternalError::conflict(
-                    "root Component provisioning operation is already bound to different intent",
-                ))
+                Err(InternalError::conflict())
             };
         }
 
@@ -283,24 +279,14 @@ impl RootComponentProvisioningOps {
         let next_placements = current
             .tracked_group_placements
             .checked_add(validation.placement_count)
-            .ok_or_else(|| {
-                InternalError::resource_exhausted(
-                    "root Component Group placement accounting overflowed",
-                )
-            })?;
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         if next_placements > request.batch.root.limits.maximum_group_placements {
-            return Err(InternalError::resource_exhausted(format!(
-                "root Component Group placement reservation requires {next_placements}, exceeding protected limit {}",
-                request.batch.root.limits.maximum_group_placements
-            )));
+            return Err(InternalError::resource_exhausted());
         }
         for placement in &request.batch.placements {
             let key = RootComponentProvisioningPlacementKey::from(&placement.group_placement);
             if RootComponentProvisioningStore::placement(&key).is_some() {
-                return Err(InternalError::conflict(format!(
-                    "Component Group placement '{:?}' is already reserved",
-                    placement.group_placement
-                )));
+                return Err(InternalError::conflict());
             }
         }
 
@@ -344,15 +330,11 @@ impl RootComponentProvisioningOps {
         request: RootComponentProvisioningStatusRequest,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
-        let record =
-            RootComponentProvisioningStore::operation(request.operation_id).ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+        let record = RootComponentProvisioningStore::operation(request.operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         let view = validated_record(record)?;
         if view.plan_hash != request.plan_hash {
-            return Err(InternalError::conflict(
-                "root Component provisioning status names a different plan",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(view)
     }
@@ -364,9 +346,7 @@ impl RootComponentProvisioningOps {
     ) -> Result<RootComponentProvisioningAdvanceDisposition, InternalError> {
         validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
         if request.operation_id != view.operation_id || request.plan_hash != view.plan_hash {
-            return Err(InternalError::conflict(
-                "root Component provisioning advance request names different authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let expected = ProvisioningProgress::from_request(request);
         let current = ProvisioningProgress::from_view(view);
@@ -385,9 +365,7 @@ impl RootComponentProvisioningOps {
         if expected.replays_one_step_before(current, view.component_count) {
             return Ok(RootComponentProvisioningAdvanceDisposition::Replay);
         }
-        Err(InternalError::conflict(
-            "root Component provisioning cursors differ from expected progress",
-        ))
+        Err(InternalError::conflict())
     }
 
     /// Select the next member in O(1) from the hash-bound canonical cursor.
@@ -395,9 +373,7 @@ impl RootComponentProvisioningOps {
         view: &RootComponentProvisioningView,
     ) -> Result<RootComponentProvisioningMemberView, InternalError> {
         if view.reservation_cursor.reserved_component_count >= view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning has no unreserved member",
-            ));
+            return Err(InternalError::conflict());
         }
         member_at_cursor(
             view,
@@ -411,14 +387,10 @@ impl RootComponentProvisioningOps {
         view: &RootComponentProvisioningView,
     ) -> Result<RootComponentProvisioningMemberView, InternalError> {
         if view.reservation_cursor.reserved_component_count != view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning cannot claim assets before all identities are reserved",
-            ));
+            return Err(InternalError::conflict());
         }
         if view.claim_cursor.claimed_component_count >= view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning has no unclaimed member",
-            ));
+            return Err(InternalError::conflict());
         }
         member_at_cursor(
             view,
@@ -432,14 +404,10 @@ impl RootComponentProvisioningOps {
         view: &RootComponentProvisioningView,
     ) -> Result<RootComponentProvisioningMemberView, InternalError> {
         if view.claim_cursor.claimed_component_count != view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning cannot install members before every Canister is claimed",
-            ));
+            return Err(InternalError::conflict());
         }
         if view.install_cursor.installed_component_count >= view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning has no uninstalled member",
-            ));
+            return Err(InternalError::conflict());
         }
         member_at_cursor(
             view,
@@ -453,14 +421,10 @@ impl RootComponentProvisioningOps {
         view: &RootComponentProvisioningView,
     ) -> Result<RootComponentProvisioningMemberView, InternalError> {
         if view.install_cursor.installed_component_count != view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning cannot commit Registry partitions before every member is installed",
-            ));
+            return Err(InternalError::conflict());
         }
         if view.registry_cursor.registry_committed_component_count >= view.component_count {
-            return Err(InternalError::conflict(
-                "root Component provisioning has no Registry-uncommitted member",
-            ));
+            return Err(InternalError::conflict());
         }
         member_at_cursor(
             view,
@@ -517,30 +481,18 @@ impl RootComponentProvisioningOps {
                 component_group: None,
             });
         };
-        let record = RootComponentProvisioningStore::operation(*operation_id).ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component deployment authority is absent",
-            )
-        })?;
+        let record = RootComponentProvisioningStore::operation(*operation_id)
+            .ok_or_else(|| InternalError::invariant())?;
         let view = validated_record(record)?;
         if view.plan_hash != *plan_hash {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component origin differs from its provisioning plan",
-            ));
+            return Err(InternalError::invariant());
         }
         let placement_index = view
             .batch
             .placements
             .iter()
             .position(|placement| &placement.group_placement == group_placement)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "grouped Component origin names an unknown placement",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         let member = member_by_path(&view, group_placement, member_path)?;
         let component_authority_is_exact = [
             view.batch.root.authority == binding.authority,
@@ -552,17 +504,12 @@ impl RootComponentProvisioningOps {
         .into_iter()
         .all(|valid| valid);
         if !component_authority_is_exact {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component binding differs from retained provisioning authority",
-            ));
+            return Err(InternalError::invariant());
         }
-        let result = view.result.as_ref().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component deployment authority has no provisioned result",
-            )
-        })?;
+        let result = view
+            .result
+            .as_ref()
+            .ok_or_else(|| InternalError::invariant())?;
         let component_group =
             derive_component_group_directory_from_view(&view, result, placement_index)?;
         let retained_binding = component_group
@@ -570,17 +517,9 @@ impl RootComponentProvisioningOps {
             .iter()
             .find(|candidate| candidate.member_path == member.member_path)
             .map(|candidate| &candidate.binding)
-            .ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "grouped Component Directory has no retained member binding",
-                )
-            })?;
+            .ok_or_else(|| InternalError::invariant())?;
         if retained_binding != binding {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component binding differs from its retained Directory member",
-            ));
+            return Err(InternalError::invariant());
         }
         Ok(RootComponentDeploymentAuthorityView {
             deployment: ProtectedComponentDeployment::GroupMember {
@@ -603,17 +542,13 @@ impl RootComponentProvisioningOps {
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
             || current.reservation_cursor.reserved_component_count == current.component_count
         {
-            return Err(InternalError::conflict(
-                "root Component provisioning reservation step is already committed",
-            ));
+            return Err(InternalError::conflict());
         }
         let member = Self::next_member_reservation(&current)?;
         validate_reserved_member(&current, &member, allocation)?;
@@ -630,10 +565,7 @@ impl RootComponentProvisioningOps {
             ..
         } = next_record.state
         else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning reservation reached a terminal aggregate phase",
-            ));
+            return Err(InternalError::invariant());
         };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
@@ -656,17 +588,13 @@ impl RootComponentProvisioningOps {
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
             || current.reservation_cursor.reserved_component_count != current.component_count
         {
-            return Err(InternalError::conflict(
-                "root Component provisioning claim step is already committed or not ready",
-            ));
+            return Err(InternalError::conflict());
         }
         let member = Self::next_member_claim(&current)?;
         validate_member_authority(&current, &member, allocation)?;
@@ -684,10 +612,7 @@ impl RootComponentProvisioningOps {
             ..
         } = next_record.state
         else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning claim reached a terminal aggregate phase",
-            ));
+            return Err(InternalError::invariant());
         };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
@@ -710,17 +635,13 @@ impl RootComponentProvisioningOps {
         allocation: &RootComponentAllocationView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
             || current.claim_cursor.claimed_component_count != current.component_count
         {
-            return Err(InternalError::conflict(
-                "root Component provisioning install step is already committed or not ready",
-            ));
+            return Err(InternalError::conflict());
         }
         let member = Self::next_member_install(&current)?;
         validate_installed_member(&current, &member, allocation)?;
@@ -737,10 +658,7 @@ impl RootComponentProvisioningOps {
             ..
         } = next_record.state
         else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning install reached a terminal aggregate phase",
-            ));
+            return Err(InternalError::invariant());
         };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
@@ -764,17 +682,13 @@ impl RootComponentProvisioningOps {
         partition: &crate::view::component_registry::ComponentRegistryPartitionView,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let current = validated_record(current_record.clone())?;
         if Self::advance_disposition(request, &current)?
             != RootComponentProvisioningAdvanceDisposition::Advance
             || current.install_cursor.installed_component_count != current.component_count
         {
-            return Err(InternalError::conflict(
-                "root Component provisioning Registry step is already committed or not ready",
-            ));
+            return Err(InternalError::conflict());
         }
         let member = Self::next_member_registry_commit(&current)?;
         validate_registry_committed_member(&current, &member, allocation, partition)?;
@@ -791,10 +705,7 @@ impl RootComponentProvisioningOps {
             ..
         } = next_record.state
         else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning Registry step reached a terminal aggregate phase",
-            ));
+            return Err(InternalError::invariant());
         };
         next_record.state = RootComponentProvisioningStateRecordPhase::Accepted {
             placement_count,
@@ -832,9 +743,7 @@ impl RootComponentProvisioningOps {
         started_at_ns: u64,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let current = validated_record(current_record.clone())?;
         validate_publication_request(request, &current)?;
         if current.phase == RootComponentProvisioningPhase::Published
@@ -843,17 +752,13 @@ impl RootComponentProvisioningOps {
             return Ok(current);
         }
         if started_at_ns < current.provisioned_at_ns.unwrap_or(u64::MAX) {
-            return Err(InternalError::invalid_input(
-                "root Component publication start time precedes provisioning",
-            ));
+            return Err(InternalError::invalid_input());
         }
         if fleet_directory.provenance.registry != request.published_fleet_registry
             || fleet_directory.provenance.source_fleet_subnet_root
                 != current.batch.root.fleet_subnet_root
         {
-            return Err(InternalError::conflict(
-                "root Component publication Fleet Directory differs from requested authority",
-            ));
+            return Err(InternalError::conflict());
         }
         let RootComponentProvisioningStateRecordPhase::Provisioned {
             placement_count,
@@ -864,9 +769,7 @@ impl RootComponentProvisioningOps {
             receipt_content_hash,
         } = current_record.state.clone()
         else {
-            return Err(InternalError::conflict(
-                "root Component publication requires a terminal provisioned result",
-            ));
+            return Err(InternalError::conflict());
         };
         let result_view = provisioning_result_from_record(&result);
         let component_group_directories =
@@ -936,17 +839,13 @@ impl RootComponentProvisioningOps {
             {
                 Ok(current)
             } else {
-                Err(InternalError::conflict(
-                    "root Component publication already has different in-flight authority",
-                ))
+                Err(InternalError::conflict())
             };
         }
         if directory_authority_hash == [0; 32]
             || started_at_ns < current.publication_started_at_ns.unwrap_or(u64::MAX)
         {
-            return Err(InternalError::invalid_input(
-                "root Component publication delivery authority is invalid",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let mut next = current_record.clone();
         let RootComponentProvisioningStateRecordPhase::Publishing { in_flight, .. } =
@@ -974,18 +873,15 @@ impl RootComponentProvisioningOps {
         let current_record = required_publishing_record(request)?;
         let current = validated_record(current_record.clone())?;
         validate_publication_request(request, &current)?;
-        let intent = current.publication_in_flight.as_ref().ok_or_else(|| {
-            InternalError::conflict(
-                "root Component publication delivery has no durable pre-call intent",
-            )
-        })?;
+        let intent = current
+            .publication_in_flight
+            .as_ref()
+            .ok_or_else(|| InternalError::conflict())?;
         if intent.component_index != member.component_index
             || intent.canister_id != member.binding.canister_id
             || intent.directory_authority_hash != directory_authority_hash
         {
-            return Err(InternalError::conflict(
-                "root Component publication observation differs from pre-call intent",
-            ));
+            return Err(InternalError::conflict());
         }
         let mut next = current_record.clone();
         let RootComponentProvisioningStateRecordPhase::Publishing {
@@ -1003,9 +899,9 @@ impl RootComponentProvisioningOps {
                 component: member.binding.component,
                 content_hash: member.component_registry_content_hash,
             });
-        *published_component_count = published_component_count.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("published Component count overflowed")
-        })?;
+        *published_component_count = published_component_count
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         *in_flight = None;
         RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
             .map_err(map_commit_error)?;
@@ -1023,9 +919,7 @@ impl RootComponentProvisioningOps {
         if current.published_component_count != current.component_count
             || current.publication_in_flight.is_some()
         {
-            return Err(InternalError::conflict(
-                "root Component publication is not complete",
-            ));
+            return Err(InternalError::conflict());
         }
         let RootComponentProvisioningStateRecordPhase::Publishing {
             placement_count,
@@ -1040,9 +934,7 @@ impl RootComponentProvisioningOps {
             unreachable!("required publishing record changed before finalization");
         };
         if published_at_ns < provisioned_at_ns {
-            return Err(InternalError::invalid_input(
-                "root Component publication completion time precedes provisioning",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let result_view = provisioning_result_from_record(&result);
         let receipt_content_hash = RootComponentProvisioningReceiptOps::published_content_hash(
@@ -1080,9 +972,7 @@ impl RootComponentProvisioningOps {
         started_at_ns: u64,
     ) -> Result<RootComponentProvisioningView, InternalError> {
         let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-            .ok_or_else(|| {
-                InternalError::unavailable("root Component provisioning operation is not accepted")
-            })?;
+            .ok_or_else(|| InternalError::unavailable())?;
         let current = validated_record(current_record.clone())?;
         validate_activation_request(request, &current)?;
         if current.phase == RootComponentProvisioningPhase::RuntimesActive
@@ -1101,14 +991,10 @@ impl RootComponentProvisioningOps {
             receipt_content_hash,
         } = current_record.state.clone()
         else {
-            return Err(InternalError::conflict(
-                "root Component runtime activation requires terminal Directory publication",
-            ));
+            return Err(InternalError::conflict());
         };
         if started_at_ns < published_at_ns {
-            return Err(InternalError::invalid_input(
-                "root Component runtime activation start time precedes publication",
-            ));
+            return Err(InternalError::invalid_input());
         }
         let mut next = current_record.clone();
         next.state = RootComponentProvisioningStateRecordPhase::Activating {
@@ -1147,14 +1033,10 @@ impl RootComponentProvisioningOps {
         let current = validated_record(current_record.clone())?;
         validate_activation_request(request, &current)?;
         if member.component_index != current.activated_component_count {
-            return Err(InternalError::conflict(
-                "root Component runtime activation member differs from its durable cursor",
-            ));
+            return Err(InternalError::conflict());
         }
-        let allocation =
-            ComponentRegistryOps::allocation(member.member_operation_id).ok_or_else(|| {
-                InternalError::unavailable("root Component runtime activation allocation is absent")
-            })?;
+        let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
+            .ok_or_else(|| InternalError::unavailable())?;
         validate_activation_member_authority(&current, member, &allocation)?;
         validate_terminal_component_activation(member, &allocation)?;
         let mut next = current_record.clone();
@@ -1165,9 +1047,9 @@ impl RootComponentProvisioningOps {
         else {
             unreachable!("required activating record changed before local mutation");
         };
-        *activated_component_count = activated_component_count.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted("activated Component count overflowed")
-        })?;
+        *activated_component_count = activated_component_count
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         RootComponentProvisioningStore::replace_operation(&current_record, next.clone())
             .map_err(map_commit_error)?;
         validated_record(next)
@@ -1183,9 +1065,7 @@ impl RootComponentProvisioningOps {
         let current = validated_record(current_record.clone())?;
         validate_activation_request(request, &current)?;
         if current.activated_component_count != current.component_count {
-            return Err(InternalError::conflict(
-                "root Component runtimes are not completely active",
-            ));
+            return Err(InternalError::conflict());
         }
         let RootComponentProvisioningStateRecordPhase::Activating {
             placement_count,
@@ -1245,9 +1125,7 @@ impl RootComponentProvisioningOps {
     pub(crate) fn require_ordinary_allocation_open() -> Result<(), InternalError> {
         let state = validated_aggregate_state()?;
         if state.active_operation_id.is_some() {
-            return Err(InternalError::conflict(
-                "root Component provisioning batch owns top-level allocation capacity",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(())
     }
@@ -1257,13 +1135,8 @@ impl RootComponentProvisioningOps {
         let state = validated_aggregate_state()?;
         match state.active_operation_id {
             None => Ok(()),
-            Some(active) if active != operation_id => Err(InternalError::conflict(
-                "root already has a different active Component provisioning operation",
-            )),
-            Some(_) => Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "active root Component provisioning operation has no replayable record",
-            )),
+            Some(active) if active != operation_id => Err(InternalError::conflict()),
+            Some(_) => Err(InternalError::invariant()),
         }
     }
 
@@ -1271,9 +1144,7 @@ impl RootComponentProvisioningOps {
     pub(crate) fn require_root_draining_open() -> Result<(), InternalError> {
         let state = validated_aggregate_state()?;
         if state.active_operation_id.is_some() || state.tracked_group_placements != 0 {
-            return Err(InternalError::conflict(
-                "root retains Component Group provisioning authority",
-            ));
+            return Err(InternalError::conflict());
         }
         Ok(())
     }
@@ -1304,28 +1175,17 @@ impl RootComponentProvisioningOps {
         let member_index = view.batch.placements[placement_index]
             .entries
             .binary_search_by(|candidate| candidate.member_path.cmp(member_path))
-            .map_err(|_| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "stored Component Group origin has no accepted member",
-                )
-            })?;
+            .map_err(|_| InternalError::invariant())?;
         let member = member_at_cursor(
             &view,
-            u32::try_from(placement_index).map_err(|_| {
-                InternalError::resource_exhausted("Component Group placement index exceeds u32")
-            })?,
-            u32::try_from(member_index).map_err(|_| {
-                InternalError::resource_exhausted("Component Group member index exceeds u32")
-            })?,
+            u32::try_from(placement_index).map_err(|_| InternalError::resource_exhausted())?,
+            u32::try_from(member_index).map_err(|_| InternalError::resource_exhausted())?,
         )?;
         let deployment = Self::member_deployment_context(&view, &member, allocation)?;
-        let result = view.result.as_ref().ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored Component Group origin has no provisioned result",
-            )
-        })?;
+        let result = view
+            .result
+            .as_ref()
+            .ok_or_else(|| InternalError::invariant())?;
         let component_group =
             derive_component_group_directory_from_view(&view, result, placement_index)?;
         Ok(RootComponentGroupRuntimeAuthorityView {
@@ -1346,10 +1206,7 @@ impl RootComponentProvisioningOps {
             member_path,
         } = origin
         else {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Ops,
-                "group provisioning validation received a non-group origin",
-            ));
+            return Err(InternalError::invariant());
         };
         let view = Self::status(RootComponentProvisioningStatusRequest {
             operation_id: *operation_id,
@@ -1357,21 +1214,13 @@ impl RootComponentProvisioningOps {
         })?;
         let (_placement, entry) = accepted_member(&view, group_placement, member_path)?;
         if &entry.component_spec != component_spec || entry.spec_hash != spec_hash {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "stored Component Group origin differs from its accepted member authority",
-            ));
+            return Err(InternalError::invariant());
         }
         let placement_index = view
             .batch
             .placements
             .binary_search_by(|candidate| candidate.group_placement.cmp(group_placement))
-            .map_err(|_| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "stored Component Group origin has no accepted placement",
-                )
-            })?;
+            .map_err(|_| InternalError::invariant())?;
         Ok((view, placement_index))
     }
 }
@@ -1379,17 +1228,13 @@ impl RootComponentProvisioningOps {
 fn required_publishing_record(
     request: &RootComponentPublicationRequest,
 ) -> Result<RootComponentProvisioningRecord, InternalError> {
-    let record =
-        RootComponentProvisioningStore::operation(request.operation_id).ok_or_else(|| {
-            InternalError::unavailable("root Component provisioning operation is not accepted")
-        })?;
+    let record = RootComponentProvisioningStore::operation(request.operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     if !matches!(
         record.state,
         RootComponentProvisioningStateRecordPhase::Publishing { .. }
     ) {
-        return Err(InternalError::conflict(
-            "root Component provisioning operation is not publishing Directories",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(record)
 }
@@ -1397,17 +1242,13 @@ fn required_publishing_record(
 fn required_activating_record(
     request: &RootComponentActivationRequest,
 ) -> Result<RootComponentProvisioningRecord, InternalError> {
-    let record =
-        RootComponentProvisioningStore::operation(request.operation_id).ok_or_else(|| {
-            InternalError::unavailable("root Component provisioning operation is not accepted")
-        })?;
+    let record = RootComponentProvisioningStore::operation(request.operation_id)
+        .ok_or_else(|| InternalError::unavailable())?;
     if !matches!(
         record.state,
         RootComponentProvisioningStateRecordPhase::Activating { .. }
     ) {
-        return Err(InternalError::conflict(
-            "root Component provisioning operation is not activating runtimes",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(record)
 }
@@ -1416,12 +1257,10 @@ fn member_at_index(
     view: &RootComponentProvisioningView,
     target_index: u32,
 ) -> Result<RootComponentPublicationMemberView, InternalError> {
-    let result = view.result.as_ref().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component operation lacks its provisioned result",
-        )
-    })?;
+    let result = view
+        .result
+        .as_ref()
+        .ok_or_else(|| InternalError::invariant())?;
     let mut flat_index = 0_u32;
     for (placement_index, (planned, provisioned)) in view
         .batch
@@ -1461,15 +1300,12 @@ fn member_at_index(
                     )?,
                 });
             }
-            flat_index = flat_index.checked_add(1).ok_or_else(|| {
-                InternalError::resource_exhausted("root Component aggregate cursor overflowed")
-            })?;
+            flat_index = flat_index
+                .checked_add(1)
+                .ok_or_else(|| InternalError::resource_exhausted())?;
         }
     }
-    Err(InternalError::invariant(
-        InternalErrorOrigin::Storage,
-        "root Component aggregate cursor is outside the provisioned result",
-    ))
+    Err(InternalError::invariant())
 }
 
 fn validate_publication_request(
@@ -1492,23 +1328,17 @@ fn validate_publication_request(
     .into_iter()
     .all(|matches| matches);
     if !request_is_exact {
-        return Err(InternalError::conflict(
-            "root Component publication request differs from durable authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if request.published_fleet_registry.revision == view.fleet_registry.revision
         && request.published_fleet_registry != view.fleet_registry
     {
-        return Err(InternalError::conflict(
-            "root Component publication reuses a Registry revision with different authority",
-        ));
+        return Err(InternalError::conflict());
     }
     if let Some(publication) = &view.publication
         && publication.fleet_registry != request.published_fleet_registry
     {
-        return Err(InternalError::conflict(
-            "root Component publication request names a different Registry",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1544,9 +1374,7 @@ fn validate_activation_request(
     .into_iter()
     .all(|matches| matches);
     if !request_is_exact {
-        return Err(InternalError::conflict(
-            "root Component activation request differs from durable authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1557,17 +1385,14 @@ fn validate_terminal_component_activation(
 ) -> Result<(), InternalError> {
     let RootComponentAllocationProgressView::Committed { commitment, .. } = &allocation.progress
     else {
-        return Err(InternalError::conflict(
-            "root Component activation member is not Registry committed",
-        ));
+        return Err(InternalError::conflict());
     };
-    let membership = commitment.membership.as_ref().ok_or_else(|| {
-        InternalError::conflict("root Component activation member has no Active membership")
-    })?;
+    let membership = commitment
+        .membership
+        .as_ref()
+        .ok_or_else(|| InternalError::conflict())?;
     if !commitment.runtime_activated || !membership.directory_synchronized {
-        return Err(InternalError::conflict(
-            "root Component activation member lacks terminal runtime or Directory evidence",
-        ));
+        return Err(InternalError::conflict());
     }
     let partition = ComponentRegistryOps::active_membership_partition(member.member_operation_id)?;
     let active_authority_is_exact = [
@@ -1578,9 +1403,7 @@ fn validate_terminal_component_activation(
     .into_iter()
     .all(|matches| matches);
     if !active_authority_is_exact {
-        return Err(InternalError::conflict(
-            "root Component activation member differs from its Active Registry authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1596,10 +1419,7 @@ fn validate_activation_member_authority(
         ..
     } = &member.deployment
     else {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "root Component activation derived a non-group deployment",
-        ));
+        return Err(InternalError::invariant());
     };
     let expected_origin = ComponentProvisioningOrigin::ComponentGroup {
         operation_id: view.operation_id,
@@ -1617,9 +1437,7 @@ fn validate_activation_member_authority(
     .into_iter()
     .all(|matches| matches);
     if !authority_is_exact {
-        return Err(InternalError::conflict(
-            "Component Group activation member differs from accepted authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -1631,37 +1449,26 @@ fn validate_acceptance_identity(
 ) -> Result<(), InternalError> {
     validate_operation_and_plan_hash(request.operation_id, request.plan_hash)?;
     if accepted_at_ns == 0 {
-        return Err(InternalError::invalid_input(
-            "root Component provisioning acceptance time must be positive",
-        ));
+        return Err(InternalError::invalid_input());
     }
-    let placement_count = u32::try_from(request.batch.placements.len()).map_err(|_| {
-        InternalError::resource_exhausted("root Component provisioning placement count exceeds u32")
-    })?;
+    let placement_count = u32::try_from(request.batch.placements.len())
+        .map_err(|_| InternalError::resource_exhausted())?;
     let component_count = request
         .batch
         .placements
         .iter()
         .try_fold(0_u32, |total, placement| {
             total
-                .checked_add(u32::try_from(placement.entries.len()).map_err(|_| {
-                    InternalError::resource_exhausted(
-                        "root Component provisioning member count exceeds u32",
-                    )
-                })?)
-                .ok_or_else(|| {
-                    InternalError::resource_exhausted(
-                        "root Component provisioning member count overflowed",
-                    )
-                })
+                .checked_add(
+                    u32::try_from(placement.entries.len())
+                        .map_err(|_| InternalError::resource_exhausted())?,
+                )
+                .ok_or_else(|| InternalError::resource_exhausted())
         })?;
     if placement_count != validation.placement_count
         || component_count != validation.component_count
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "root Component provisioning validation facts differ from the accepted batch",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -1671,14 +1478,10 @@ fn validate_operation_and_plan_hash(
     plan_hash: [u8; 32],
 ) -> Result<(), InternalError> {
     if operation_id == [0; 32] {
-        return Err(InternalError::invalid_input(
-            "root Component provisioning operation ID must be nonzero",
-        ));
+        return Err(InternalError::invalid_input());
     }
     if plan_hash == [0; 32] {
-        return Err(InternalError::invalid_input(
-            "root Component provisioning plan hash must be nonzero",
-        ));
+        return Err(InternalError::invalid_input());
     }
     Ok(())
 }
@@ -1691,10 +1494,7 @@ fn validated_aggregate_state() -> Result<
     if u64::from(state.tracked_group_placements)
         != RootComponentProvisioningStore::placement_count()
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning placement capacity is inconsistent",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(state)
 }
@@ -1811,10 +1611,7 @@ fn validate_aggregate_operation(
         RootComponentProvisioningPhase::RuntimesActive => !active_operation_is_exact,
     };
     if !aggregate_is_exact {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning aggregate state is inconsistent",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -1989,10 +1786,7 @@ fn validated_accepted_state(
     let expected_hash =
         acceptance_receipt_hash(&request, placement_count, component_count, accepted_at_ns)?;
     if receipt_content_hash != expected_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning acceptance receipt hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(ValidatedProvisioningState {
         phase: RootComponentProvisioningPhase::Accepted,
@@ -2038,20 +1832,14 @@ fn validated_provisioned_state(
     receipt_content_hash: [u8; 32],
 ) -> Result<ValidatedProvisioningState, InternalError> {
     if provisioned_at_ns == 0 || provisioned_at_ns < accepted_at_ns {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning completion time is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     let result = provisioning_result_from_record(&result_record);
     validate_provisioned_result(&record.batch, component_count, &result)?;
     let expected_hash =
         provisioned_receipt_hash(record, &result, accepted_at_ns, provisioned_at_ns)?;
     if receipt_content_hash != expected_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning terminal receipt hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     let cursors = terminal_cursor_records(record, placement_count, component_count)?;
     Ok(ValidatedProvisioningState {
@@ -2102,17 +1890,12 @@ fn validated_publishing_state(
         provisioned_at_ns,
         provisioned_receipt_content_hash,
     )?;
-    let result = provisioned.result.as_ref().ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "publishing Component operation lacks its provisioned result",
-        )
-    })?;
+    let result = provisioned
+        .result
+        .as_ref()
+        .ok_or_else(|| InternalError::invariant())?;
     if publication_started_at_ns < provisioned_at_ns {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication start time precedes provisioning",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_partial_publication(
         record,
@@ -2162,10 +1945,7 @@ fn validated_published_state(
     let result = provisioning_result_from_record(&result_record);
     validate_provisioned_result(&record.batch, component_count, &result)?;
     if published_at_ns < provisioned_at_ns {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication time precedes provisioning",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_partial_publication(
         record,
@@ -2189,10 +1969,7 @@ fn validated_published_state(
         },
     )?;
     if receipt_content_hash != expected {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication receipt hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(ValidatedProvisioningState {
         phase: RootComponentProvisioningPhase::Published,
@@ -2247,10 +2024,7 @@ fn validated_activating_state(
     if fields.activation_started_at_ns < fields.published_at_ns
         || fields.activated_component_count > fields.component_count
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component runtime-activation cursor or start time is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(ValidatedProvisioningState {
         phase: RootComponentProvisioningPhase::Published,
@@ -2321,10 +2095,7 @@ fn validated_runtimes_active_state(
     let activation_is_exact =
         activation_order_is_valid && activation_identity_is_valid && runtime_mode_is_valid;
     if !activation_is_exact {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component runtime-activation evidence is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     let expected = RootComponentProvisioningReceiptOps::runtimes_active_content_hash(
         RootComponentProvisioningRuntimesActiveReceiptAuthority {
@@ -2339,10 +2110,7 @@ fn validated_runtimes_active_state(
         },
     )?;
     if fields.receipt_content_hash != expected {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component runtime-activation receipt hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(ValidatedProvisioningState {
         phase: RootComponentProvisioningPhase::RuntimesActive,
@@ -2397,32 +2165,22 @@ fn validate_partial_publication(
         || publication.fleet_registry.content_hash == [0; 32]
         || publication.fleet_directory_content_hash == [0; 32]
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication Registry and Fleet Directory authority is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     if publication.fleet_registry.revision == record.fleet_registry.revision
         && publication.fleet_registry != record.fleet_registry
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication reuses a Registry revision with different authority",
-        ));
+        return Err(InternalError::invariant());
     }
-    let published_count = usize::try_from(published_component_count).map_err(|_| {
-        InternalError::resource_exhausted("published Component count exceeds usize")
-    })?;
+    let published_count = usize::try_from(published_component_count)
+        .map_err(|_| InternalError::resource_exhausted())?;
     let component_count = result
         .placements
         .iter()
         .map(|placement| placement.members.len())
         .sum::<usize>();
     if published_count > component_count {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "published Component count exceeds the provisioned result",
-        ));
+        return Err(InternalError::invariant());
     }
     let expected_members = result
         .placements
@@ -2430,26 +2188,17 @@ fn validate_partial_publication(
         .flat_map(|placement| &placement.members)
         .take(published_count);
     if publication.component_directories.len() != published_count {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component publication evidence count differs from its cursor",
-        ));
+        return Err(InternalError::invariant());
     }
     for (member, evidence) in expected_members.zip(&publication.component_directories) {
         if evidence.component != member.binding.component
             || evidence.content_hash != member.component_registry_content_hash
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component publication evidence differs from provisioned Registry authority",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     if publication.component_group_directories.len() != result.placements.len() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component Group Directory evidence does not cover every placement",
-        ));
+        return Err(InternalError::invariant());
     }
     for (index, (placement, evidence)) in result
         .placements
@@ -2465,10 +2214,7 @@ fn validate_partial_publication(
         if evidence.group_placement != placement.group_placement
             || evidence.content_hash != expected_hash
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component Group Directory evidence differs from its placement receipt",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     if let Some(intent) = in_flight {
@@ -2478,10 +2224,7 @@ fn validate_partial_publication(
             || intent.directory_authority_hash == [0; 32]
             || intent.started_at_ns < publication_started_at_ns
         {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component publication intent differs from its next canonical member",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -2541,45 +2284,22 @@ fn provisioned_member_evidence(
     if view.phase != RootComponentProvisioningPhase::Accepted
         || view.registry_cursor.registry_committed_component_count != view.component_count
     {
-        return Err(InternalError::conflict(
-            "root Component provisioning result requires every Registry partition to be committed",
-        ));
+        return Err(InternalError::conflict());
     }
-    let capacity = usize::try_from(view.component_count).map_err(|_| {
-        InternalError::resource_exhausted(
-            "root Component provisioning result count exceeds the platform collection range",
-        )
-    })?;
+    let capacity =
+        usize::try_from(view.component_count).map_err(|_| InternalError::resource_exhausted())?;
     let mut evidence = Vec::with_capacity(capacity);
     for (placement_index, placement) in view.batch.placements.iter().enumerate() {
         for member_index in 0..placement.entries.len() {
             let member = member_at_cursor(
                 view,
-                u32::try_from(placement_index).map_err(|_| {
-                    InternalError::resource_exhausted(
-                        "root Component provisioning result placement index exceeds u32",
-                    )
-                })?,
-                u32::try_from(member_index).map_err(|_| {
-                    InternalError::resource_exhausted(
-                        "root Component provisioning result member index exceeds u32",
-                    )
-                })?,
+                u32::try_from(placement_index).map_err(|_| InternalError::resource_exhausted())?,
+                u32::try_from(member_index).map_err(|_| InternalError::resource_exhausted())?,
             )?;
             let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-                .ok_or_else(|| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        "provisioned Component Group member has no allocation receipt",
-                    )
-                })?;
-            let partition =
-                ComponentRegistryOps::partition(allocation.component)?.ok_or_else(|| {
-                    InternalError::invariant(
-                        InternalErrorOrigin::Storage,
-                        "provisioned Component Group member has no Registry partition",
-                    )
-                })?;
+                .ok_or_else(|| InternalError::invariant())?;
+            let partition = ComponentRegistryOps::partition(allocation.component)?
+                .ok_or_else(|| InternalError::invariant())?;
             validate_registry_committed_member(view, &member, &allocation, &partition)?;
             evidence.push(ProvisionedMemberEvidence {
                 member,
@@ -2596,37 +2316,23 @@ fn provisioned_result_record(
     evidence: &[ProvisionedMemberEvidence],
 ) -> Result<RootComponentProvisioningResultRecord, InternalError> {
     if evidence.len()
-        != usize::try_from(view.component_count).map_err(|_| {
-            InternalError::resource_exhausted(
-                "root Component provisioning result count exceeds the platform collection range",
-            )
-        })?
+        != usize::try_from(view.component_count).map_err(|_| InternalError::resource_exhausted())?
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "root Component provisioning evidence does not cover the complete batch",
-        ));
+        return Err(InternalError::invariant());
     }
     let mut evidence = evidence.iter();
     let mut placements = Vec::with_capacity(view.batch.placements.len());
     for placement in &view.batch.placements {
         let mut members = Vec::with_capacity(placement.entries.len());
         for entry in &placement.entries {
-            let observed = evidence.next().ok_or_else(|| {
-                InternalError::invariant(
-                    InternalErrorOrigin::Ops,
-                    "root Component provisioning evidence ended before the accepted batch",
-                )
-            })?;
+            let observed = evidence.next().ok_or_else(|| InternalError::invariant())?;
             let expected_member = (&placement.group_placement, &entry.member_path);
             let observed_member = (
                 &observed.member.group_placement,
                 &observed.member.member_path,
             );
             if observed_member != expected_member {
-                return Err(InternalError::conflict(
-                    "root Component provisioning evidence is not in canonical member order",
-                ));
+                return Err(InternalError::conflict());
             }
             validate_registry_committed_member(
                 view,
@@ -2651,10 +2357,7 @@ fn provisioned_result_record(
         });
     }
     if evidence.next().is_some() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "root Component provisioning evidence exceeds the accepted batch",
-        ));
+        return Err(InternalError::invariant());
     }
     let result = RootComponentProvisioningResultRecord { placements };
     validate_provisioned_result(
@@ -2671,23 +2374,17 @@ fn commit_provisioned_result(
     result: RootComponentProvisioningResultRecord,
 ) -> Result<RootComponentProvisioningView, InternalError> {
     let current_record = RootComponentProvisioningStore::operation(request.operation_id)
-        .ok_or_else(|| {
-            InternalError::unavailable("root Component provisioning operation is not accepted")
-        })?;
+        .ok_or_else(|| InternalError::unavailable())?;
     let current = validated_record(current_record.clone())?;
     if RootComponentProvisioningOps::advance_disposition(request, &current)?
         != RootComponentProvisioningAdvanceDisposition::Advance
         || current.phase != RootComponentProvisioningPhase::Accepted
         || current.registry_cursor.registry_committed_component_count != current.component_count
     {
-        return Err(InternalError::conflict(
-            "root Component provisioning result is already committed or not ready",
-        ));
+        return Err(InternalError::conflict());
     }
     if provisioned_at_ns == 0 || provisioned_at_ns < current.accepted_at_ns {
-        return Err(InternalError::invalid_input(
-            "root Component provisioning completion time must follow acceptance",
-        ));
+        return Err(InternalError::invalid_input());
     }
     let result_view = provisioning_result_from_record(&result);
     validate_provisioned_result(&current.batch, current.component_count, &result_view)?;
@@ -2776,18 +2473,14 @@ fn derive_component_group_directory_from_parts(
     result: &RootComponentProvisioningResult,
     placement_index: usize,
 ) -> Result<ComponentGroupDirectory, InternalError> {
-    let planned = batch.placements.get(placement_index).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Group Directory placement is outside the accepted batch",
-        )
-    })?;
-    let provisioned = result.placements.get(placement_index).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Group Directory placement is outside the provisioned result",
-        )
-    })?;
+    let planned = batch
+        .placements
+        .get(placement_index)
+        .ok_or_else(|| InternalError::invariant())?;
+    let provisioned = result
+        .placements
+        .get(placement_index)
+        .ok_or_else(|| InternalError::invariant())?;
     let placement_matches = [
         planned.group_placement == provisioned.group_placement,
         planned.component_group == provisioned.component_group,
@@ -2796,10 +2489,7 @@ fn derive_component_group_directory_from_parts(
     .into_iter()
     .all(|matches| matches);
     if !placement_matches {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Group Directory plan and provisioned placement differ",
-        ));
+        return Err(InternalError::invariant());
     }
     let members = planned
         .entries
@@ -2810,10 +2500,7 @@ fn derive_component_group_directory_from_parts(
                 || entry.component_spec != member.component_spec
                 || entry.purpose != member.purpose
             {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "Component Group Directory member differs from its accepted plan",
-                ));
+                return Err(InternalError::invariant());
             }
             Ok(ComponentGroupDirectoryMember {
                 member_path: member.member_path.clone(),
@@ -2848,19 +2535,14 @@ fn result_member_at(
     result: &RootComponentProvisioningResult,
     component_index: u32,
 ) -> Result<&RootProvisionedGroupMember, InternalError> {
-    let index = usize::try_from(component_index)
-        .map_err(|_| InternalError::resource_exhausted("Component cursor exceeds usize"))?;
+    let index =
+        usize::try_from(component_index).map_err(|_| InternalError::resource_exhausted())?;
     result
         .placements
         .iter()
         .flat_map(|placement| &placement.members)
         .nth(index)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "Component publication cursor is outside its provisioned result",
-            )
-        })
+        .ok_or_else(|| InternalError::invariant())
 }
 
 fn validate_provisioned_result(
@@ -2869,10 +2551,7 @@ fn validate_provisioned_result(
     result: &RootComponentProvisioningResult,
 ) -> Result<(), InternalError> {
     if result.placements.len() != batch.placements.len() {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "provisioned result does not cover the exact placement batch",
-        ));
+        return Err(InternalError::invariant());
     }
     let mut components = BTreeSet::new();
     let mut principals = BTreeSet::new();
@@ -2889,31 +2568,22 @@ fn validate_provisioned_result(
             member_count: provisioned.members.len(),
         };
         if actual != expected {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "provisioned result placement differs from the accepted batch",
-            ));
+            return Err(InternalError::invariant());
         }
         for (entry, member) in planned.entries.iter().zip(&provisioned.members) {
             validate_provisioned_result_member(batch, entry, member)?;
             if !components.insert(member.binding.component)
                 || !principals.insert(member.binding.canister_id)
             {
-                return Err(InternalError::invariant(
-                    InternalErrorOrigin::Storage,
-                    "provisioned result reuses a Component identity or Canister principal",
-                ));
+                return Err(InternalError::invariant());
             }
-            observed_count = observed_count.checked_add(1).ok_or_else(|| {
-                InternalError::resource_exhausted("provisioned result Component count overflowed")
-            })?;
+            observed_count = observed_count
+                .checked_add(1)
+                .ok_or_else(|| InternalError::resource_exhausted())?;
         }
     }
     if observed_count != component_count {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "provisioned result Component count differs from the accepted batch",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -2948,10 +2618,7 @@ fn validate_provisioned_result_member(
     };
     let identity_is_qualified = provisioned_result_identity_is_qualified(member);
     if actual != expected || !identity_is_qualified {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "provisioned result member differs from accepted or committed authority",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -3041,10 +2708,7 @@ fn validate_record_placement_index(
     for placement in &batch.placements {
         let key = RootComponentProvisioningPlacementKey::from(&placement.group_placement);
         if RootComponentProvisioningStore::placement(&key) != Some(expected_placement) {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "accepted root Component provisioning placement index is inconsistent",
-            ));
+            return Err(InternalError::invariant());
         }
     }
     Ok(())
@@ -3076,10 +2740,7 @@ fn validate_reservation_cursor(
         cursor.reserved_component_count,
     )?;
     if cursor.content_hash != expected.content_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning reservation cursor hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_member_cursor(
         batch,
@@ -3107,16 +2768,10 @@ fn validate_claim_cursor(
         cursor.claimed_component_count,
     )?;
     if cursor.content_hash != expected.content_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning claim cursor hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     if cursor.claimed_component_count > 0 && reserved_component_count != component_count {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning claimed an asset before reserving every identity",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_member_cursor(
         batch,
@@ -3144,16 +2799,10 @@ fn validate_install_cursor(
         cursor.installed_component_count,
     )?;
     if cursor.content_hash != expected.content_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning install cursor hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     if cursor.installed_component_count > 0 && claimed_component_count != component_count {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning installed a member before claiming every Canister",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_member_cursor(
         batch,
@@ -3181,17 +2830,11 @@ fn validate_registry_cursor(
         cursor.registry_committed_component_count,
     )?;
     if cursor.content_hash != expected.content_hash {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning Registry cursor hash is invalid",
-        ));
+        return Err(InternalError::invariant());
     }
     if cursor.registry_committed_component_count > 0 && installed_component_count != component_count
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning committed a Registry partition before installing every member",
-        ));
+        return Err(InternalError::invariant());
     }
     validate_member_cursor(
         batch,
@@ -3209,53 +2852,28 @@ fn validate_member_cursor(
     placement_index: u32,
     member_index: u32,
     completed_count: u32,
-    cursor_kind: &str,
+    _cursor_kind: &str,
 ) -> Result<(), InternalError> {
     if completed_count > component_count {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            format!("root Component provisioning {cursor_kind} cursor count is invalid"),
-        ));
+        return Err(InternalError::invariant());
     }
-    let placement_count = u32::try_from(batch.placements.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning placement count exceeds u32",
-        )
-    })?;
+    let placement_count =
+        u32::try_from(batch.placements.len()).map_err(|_| InternalError::invariant())?;
     if completed_count == component_count {
         if placement_index != placement_count || member_index != 0 {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                format!(
-                    "terminal root Component provisioning {cursor_kind} cursor is not canonical"
-                ),
-            ));
+            return Err(InternalError::invariant());
         }
         return Ok(());
     }
     let placement = batch
         .placements
-        .get(usize::try_from(placement_index).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor exceeds usize",
-            )
-        })?)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor is out of bounds",
-            )
-        })?;
+        .get(usize::try_from(placement_index).map_err(|_| InternalError::invariant())?)
+        .ok_or_else(|| InternalError::invariant())?;
     if usize::try_from(member_index)
         .ok()
         .is_none_or(|index| index >= placement.entries.len())
     {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            format!("root Component provisioning {cursor_kind} member cursor is out of bounds"),
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -3341,36 +2959,20 @@ fn advance_member_cursor(
     let placement = view
         .batch
         .placements
-        .get(usize::try_from(placement_index).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor exceeds usize",
-            )
-        })?)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor is out of bounds",
-            )
-        })?;
-    let next_completed = completed_count.checked_add(1).ok_or_else(|| {
-        InternalError::resource_exhausted("root Component provisioning cursor count overflowed")
-    })?;
-    let next_member = member_index.checked_add(1).ok_or_else(|| {
-        InternalError::resource_exhausted("root Component provisioning member cursor overflowed")
-    })?;
-    let entry_count = u32::try_from(placement.entries.len()).map_err(|_| {
-        InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "root Component provisioning placement member count exceeds u32",
-        )
-    })?;
+        .get(usize::try_from(placement_index).map_err(|_| InternalError::invariant())?)
+        .ok_or_else(|| InternalError::invariant())?;
+    let next_completed = completed_count
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
+    let next_member = member_index
+        .checked_add(1)
+        .ok_or_else(|| InternalError::resource_exhausted())?;
+    let entry_count =
+        u32::try_from(placement.entries.len()).map_err(|_| InternalError::invariant())?;
     if next_member == entry_count {
-        let next_placement = placement_index.checked_add(1).ok_or_else(|| {
-            InternalError::resource_exhausted(
-                "root Component provisioning placement cursor overflowed",
-            )
-        })?;
+        let next_placement = placement_index
+            .checked_add(1)
+            .ok_or_else(|| InternalError::resource_exhausted())?;
         Ok((next_placement, 0, next_completed))
     } else {
         Ok((placement_index, next_member, next_completed))
@@ -3492,32 +3094,12 @@ fn member_at_cursor(
     let placement = view
         .batch
         .placements
-        .get(usize::try_from(placement_index).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor exceeds usize",
-            )
-        })?)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning placement cursor is out of bounds",
-            )
-        })?;
+        .get(usize::try_from(placement_index).map_err(|_| InternalError::invariant())?)
+        .ok_or_else(|| InternalError::invariant())?;
     let entry = placement
         .entries
-        .get(usize::try_from(member_index).map_err(|_| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning member cursor exceeds usize",
-            )
-        })?)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "root Component provisioning member cursor is out of bounds",
-            )
-        })?;
+        .get(usize::try_from(member_index).map_err(|_| InternalError::invariant())?)
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(RootComponentProvisioningMemberView {
         member_operation_id: member_operation_id(
             view.batch.root.fleet_subnet_root,
@@ -3547,22 +3129,12 @@ fn member_by_path(
         .placements
         .iter()
         .find(|placement| &placement.group_placement == group_placement)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component origin names an unknown placement",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     let entry = placement
         .entries
         .iter()
         .find(|entry| &entry.member_path == member_path)
-        .ok_or_else(|| {
-            InternalError::invariant(
-                InternalErrorOrigin::Storage,
-                "grouped Component origin names an unknown member path",
-            )
-        })?;
+        .ok_or_else(|| InternalError::invariant())?;
     Ok(RootComponentProvisioningMemberView {
         member_operation_id: member_operation_id(
             view.batch.root.fleet_subnet_root,
@@ -3592,9 +3164,7 @@ fn validate_reserved_member(
         allocation.progress,
         RootComponentAllocationProgressView::Reserved
     ) {
-        return Err(InternalError::conflict(
-            "Component Group member crossed its reservation boundary outside the aggregate workflow",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -3609,9 +3179,7 @@ fn validate_installed_member(
         allocation.progress,
         RootComponentAllocationProgressView::Verified { .. }
     ) {
-        return Err(InternalError::conflict(
-            "Component Group member did not stop at the verified install boundary",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -3629,9 +3197,7 @@ fn validate_registry_committed_member(
         ..
     } = &allocation.progress
     else {
-        return Err(InternalError::conflict(
-            "Component Group member did not reach its Registry commitment boundary",
-        ));
+        return Err(InternalError::conflict());
     };
     let expected = RegistryCommittedMemberAuthority {
         binding: &installation.binding,
@@ -3660,10 +3226,7 @@ fn validate_registry_committed_member(
         committed_descendants: partition.committed_descendants,
     };
     if actual != expected || actual.registry_encoded_bytes > member.limits.maximum_registry_bytes {
-        return Err(InternalError::invariant(
-            InternalErrorOrigin::Storage,
-            "Component Group member Registry partition differs from its accepted authority or durable receipt",
-        ));
+        return Err(InternalError::invariant());
     }
     Ok(())
 }
@@ -3694,9 +3257,7 @@ fn validate_member_authority(
         release_set: allocation.release_set,
     };
     if actual != expected {
-        return Err(InternalError::conflict(
-            "Component Group member reservation differs from accepted authority",
-        ));
+        return Err(InternalError::conflict());
     }
     Ok(())
 }
@@ -3711,12 +3272,8 @@ fn claimed_allocation_canister(
         | RootComponentAllocationProgressView::Verified { canister, .. }
         | RootComponentAllocationProgressView::Committed { canister, .. } => Ok(*canister),
         RootComponentAllocationProgressView::Reserved
-        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict(
-            "Component Group member has not completed its prepaid-Canister claim",
-        )),
-        RootComponentAllocationProgressView::Removed { .. } => Err(InternalError::conflict(
-            "Component Group member was removed before aggregate provisioning completed",
-        )),
+        | RootComponentAllocationProgressView::CreationIntent(_) => Err(InternalError::conflict()),
+        RootComponentAllocationProgressView::Removed { .. } => Err(InternalError::conflict()),
     }
 }
 
@@ -3724,17 +3281,8 @@ fn domain_separated_candid_hash<T: CandidType>(
     domain: &[u8],
     value: T,
 ) -> Result<[u8; 32], InternalError> {
-    let bytes = candid::encode_one(value).map_err(|error| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("could not encode root Component provisioning authority: {error}"),
-        )
-    })?;
-    let byte_count = u64::try_from(bytes.len()).map_err(|_| {
-        InternalError::resource_exhausted(
-            "root Component provisioning authority exceeds the canonical byte-count range",
-        )
-    })?;
+    let bytes = candid::encode_one(value).map_err(|_error| InternalError::invariant())?;
+    let byte_count = u64::try_from(bytes.len()).map_err(|_| InternalError::resource_exhausted())?;
     let mut hasher = Sha256::new();
     hasher.update(domain);
     hasher.update(byte_count.to_be_bytes());
@@ -3759,17 +3307,13 @@ fn accepted_member<'a>(
         .binary_search_by(|candidate| candidate.group_placement.cmp(group_placement))
         .ok()
         .map(|index| &view.batch.placements[index])
-        .ok_or_else(|| {
-            InternalError::conflict("Component Group placement is absent from accepted root batch")
-        })?;
+        .ok_or_else(|| InternalError::conflict())?;
     let entry = placement
         .entries
         .binary_search_by(|candidate| candidate.member_path.cmp(member_path))
         .ok()
         .map(|index| &placement.entries[index])
-        .ok_or_else(|| {
-            InternalError::conflict("Component Group member is absent from accepted root batch")
-        })?;
+        .ok_or_else(|| InternalError::conflict())?;
     Ok((placement, entry))
 }
 
@@ -3795,22 +3339,20 @@ fn acceptance_receipt_hash(
 
 fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
     match error {
-        RootComponentProvisioningCommitError::ActiveOperationConflict => InternalError::conflict(
-            "root already has a different active Component provisioning operation",
-        ),
-        RootComponentProvisioningCommitError::ConflictingOperation => InternalError::conflict(
-            "root Component provisioning operation changed before acceptance committed",
-        ),
-        RootComponentProvisioningCommitError::OperationChanged => InternalError::conflict(
-            "root Component provisioning operation changed before progress committed",
-        ),
+        RootComponentProvisioningCommitError::ActiveOperationConflict => {
+            InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)
+        }
+        RootComponentProvisioningCommitError::ConflictingOperation => {
+            InternalError::public(canic_core::diagnostics::codes::REQUEST_CONFLICT)
+        }
+        RootComponentProvisioningCommitError::OperationChanged => {
+            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_CONFLICT)
+        }
         RootComponentProvisioningCommitError::PlacementConflict => {
-            InternalError::conflict("root Component provisioning placement is already reserved")
+            InternalError::public(canic_core::diagnostics::codes::POSITION_CONFLICT)
         }
         RootComponentProvisioningCommitError::PlacementCountOverflow => {
-            InternalError::resource_exhausted(
-                "root Component Group placement accounting overflowed",
-            )
+            InternalError::public(canic_core::diagnostics::codes::CAPACITY_LIMIT)
         }
     }
 }

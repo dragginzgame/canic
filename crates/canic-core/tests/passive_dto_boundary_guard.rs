@@ -72,7 +72,6 @@ const FORBIDDEN_LAYER_FRAGMENTS: &[&str] = &[
     "crate::access",
     "crate::InternalError",
     "crate::{InternalError",
-    "InternalErrorOrigin",
 ];
 
 const FORBIDDEN_EFFECT_FRAGMENTS: &[&str] = &[

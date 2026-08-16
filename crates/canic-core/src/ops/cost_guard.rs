@@ -5,7 +5,7 @@
 //! Boundary: workflows submit cost guard requests before external-effect boundaries.
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::{BoundedStringError, Principal},
     ids::{IntentId, IntentResourceKey},
     model::replay::{CommandKind, ReplayCostGuardSettlement},
@@ -66,19 +66,6 @@ pub struct CostGuardRequest {
 }
 
 ///
-/// CostGuardReservePublicKind
-///
-/// Public-facing class for cost guard reservation failures.
-/// Owned by ops and mapped by workflow into boundary errors.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CostGuardReservePublicKind {
-    InvalidInput,
-    ResourceExhausted,
-}
-
-///
 /// CostGuardReserveError
 ///
 /// Typed cost guard reservation failure.
@@ -128,32 +115,30 @@ pub enum CostGuardReserveError {
     Store(#[from] InternalError),
 }
 
-impl CostGuardReserveError {
-    /// public_kind
-    ///
-    /// Return the boundary-safe class for reservation failures that callers may expose.
-    #[must_use]
-    pub const fn public_kind(&self) -> Option<CostGuardReservePublicKind> {
-        match self {
-            Self::UncostedClass | Self::InvalidQuotaWindow | Self::ResourceKeyInvalid(_) => {
-                Some(CostGuardReservePublicKind::InvalidInput)
-            }
-            Self::QuotaRejectsAll
-            | Self::CycleReservationOverflow
-            | Self::QuotaExceeded { .. }
-            | Self::CycleReserveRejected { .. } => {
-                Some(CostGuardReservePublicKind::ResourceExhausted)
-            }
-            Self::ReservationRollback { .. } | Self::Store(_) => None,
-        }
-    }
-}
-
 impl From<CostGuardReserveError> for InternalError {
     fn from(err: CostGuardReserveError) -> Self {
         match err {
             CostGuardReserveError::Store(err) => err,
-            other => Self::ops(InternalErrorOrigin::Ops, other.to_string()),
+            CostGuardReserveError::ReservationRollback { reservation, .. } => (*reservation).into(),
+            CostGuardReserveError::UncostedClass => {
+                Self::public(crate::diagnostics::codes::CONFIGURATION_INVALID)
+            }
+            CostGuardReserveError::InvalidQuotaWindow => {
+                Self::public(crate::diagnostics::codes::TIME_INVALID)
+            }
+            CostGuardReserveError::QuotaRejectsAll => {
+                Self::public(crate::diagnostics::codes::CONFIGURATION_INVALID_STATE)
+            }
+            CostGuardReserveError::CycleReservationOverflow
+            | CostGuardReserveError::QuotaExceeded { .. } => {
+                Self::public(crate::diagnostics::codes::CAPACITY_LIMIT)
+            }
+            CostGuardReserveError::CycleReserveRejected { .. } => {
+                Self::public(crate::diagnostics::codes::CAPACITY_INSUFFICIENT)
+            }
+            CostGuardReserveError::ResourceKeyInvalid(_) => {
+                Self::public(crate::diagnostics::codes::SECURITY_INVALID_STATE)
+            }
         }
     }
 }
@@ -438,9 +423,10 @@ mod tests {
         CostGuardOps::complete(&first, 10).expect("first completes");
 
         let err = CostGuardOps::reserve(request(20)).expect_err("same bucket exhausted");
+        let internal: InternalError = err.into();
         assert_eq!(
-            err.public_kind(),
-            Some(CostGuardReservePublicKind::ResourceExhausted)
+            internal.public_code(),
+            Some(crate::diagnostics::codes::CAPACITY_LIMIT)
         );
 
         CostGuardOps::reserve(request(70)).expect("next bucket allowed");
@@ -475,9 +461,10 @@ mod tests {
         low.current_cycle_balance = 6;
 
         let err = CostGuardOps::reserve(low).expect_err("low cycle reserve rejected");
+        let internal: InternalError = err.into();
         assert_eq!(
-            err.public_kind(),
-            Some(CostGuardReservePublicKind::ResourceExhausted)
+            internal.public_code(),
+            Some(crate::diagnostics::codes::CAPACITY_INSUFFICIENT)
         );
         assert_eq!(IntentStoreOps::pending_total().expect("meta"), 0);
     }
@@ -527,7 +514,7 @@ mod tests {
             *reservation,
             CostGuardReserveError::CycleReservationOverflow
         ));
-        assert_eq!(rollback.origin(), InternalErrorOrigin::Ops);
+        assert_eq!(rollback.code(), crate::diagnostics::codes::STATE_INVALID);
     }
 
     #[test]
@@ -564,14 +551,11 @@ mod tests {
 
         let permit = CostGuardOps::reserve(request(10)).expect("reservation");
         IntentStoreOps::abort(permit.quota_intent_id).expect("abort quota intent");
-        let original = InternalError::resource_exhausted("protected operation failed");
+        let original = InternalError::resource_exhausted();
 
-        let recovery_error = CostGuardOps::recover(&permit, 10)
+        let _recovery_error = CostGuardOps::recover(&permit, 10)
             .expect_err("aborted quota intent must reject recovery");
-        let error = original.with_diagnostic_context(format!(
-            "cost guard recovery failed for reservation {}: {recovery_error}",
-            permit.reservation_id
-        ));
+        let error = original;
 
         assert!(error.is_public_resource_exhausted());
         assert_eq!(IntentStoreOps::pending_total().expect("pending"), 1);
@@ -612,9 +596,10 @@ mod tests {
         second_req.current_cycle_balance = 8;
 
         let err = CostGuardOps::reserve(second_req).expect_err("outstanding reserve counts");
+        let internal: InternalError = err.into();
         assert_eq!(
-            err.public_kind(),
-            Some(CostGuardReservePublicKind::ResourceExhausted)
+            internal.public_code(),
+            Some(crate::diagnostics::codes::CAPACITY_INSUFFICIENT)
         );
     }
 }

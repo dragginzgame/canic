@@ -1,6 +1,5 @@
 use super::*;
 use crate::{
-    InternalErrorClass, InternalErrorOrigin,
     cdk::types::Principal,
     ids::CanisterRole,
     model::{
@@ -532,7 +531,7 @@ fn finite_expiry_overflow_rejects_without_partial_reservation() {
     )
     .expect_err("unrepresentable cleanup deadline must reject");
 
-    assert_eq!(error.log_fields().0, InternalErrorClass::Ops);
+    assert_eq!(error.code(), crate::diagnostics::codes::TIME_CAPACITY);
     assert!(IntentStore::get_record(intent_id).is_none());
     assert!(IntentStore::get_pending(intent_id).is_none());
     assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
@@ -780,8 +779,8 @@ fn application_replay_metadata_contradictions_fail_closed() {
     let missing = ReceiptBackedIntentOps::load(input.operation_id)
         .expect_err("application receipt without replay metadata must reject");
     assert_eq!(
-        missing.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        missing.code(),
+        crate::diagnostics::codes::EVIDENCE_UNAVAILABLE
     );
 
     reset();
@@ -799,8 +798,8 @@ fn application_replay_metadata_contradictions_fail_closed() {
     let orphan = ReceiptBackedIntentOps::load(orphan_id)
         .expect_err("orphan application replay metadata must reject");
     assert_eq!(
-        orphan.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        orphan.code(),
+        crate::diagnostics::codes::EVIDENCE_UNAVAILABLE
     );
 }
 
@@ -913,8 +912,8 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
 
     let begin_error = begin_receipt(&unsupported, 100).expect_err("unsupported binding schema");
     assert_eq!(
-        begin_error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        begin_error.code(),
+        crate::diagnostics::codes::VERSION_UNSUPPORTED
     );
     assert!(
         ReceiptBackedIntentOps::load(unsupported.operation_id)
@@ -942,8 +941,8 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
     )
     .expect_err("unsupported evidence schema");
     assert_eq!(
-        settle_error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        settle_error.code(),
+        crate::diagnostics::codes::VERSION_UNSUPPORTED
     );
     assert_eq!(
         ReceiptBackedIntentOps::load(input.operation_id)
@@ -1118,10 +1117,7 @@ fn placement_acknowledgement_index_corruption_fails_closed() {
 
     let error = ReceiptBackedIntentOps::list_placement_acknowledgement_page(None, 1)
         .expect_err("mismatched derived identity must reject");
-    assert_eq!(
-        error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
-    );
+    assert_eq!(error.code(), crate::diagnostics::codes::POSITION_CONFLICT);
 }
 
 #[test]
@@ -1255,10 +1251,7 @@ fn application_terminal_eligibility_is_exact_and_overflow_is_non_mutating() {
         u64::MAX,
     )
     .expect_err("overflowing terminal retention deadline must reject");
-    assert_eq!(
-        error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
-    );
+    assert_eq!(error.code(), crate::diagnostics::codes::TIME_CAPACITY);
     assert_eq!(totals(&overflow.resource_key), totals_before);
     assert!(matches!(
         ReceiptBackedIntentOps::load(overflow.operation_id)
@@ -1478,20 +1471,20 @@ fn resource_total_limit_rejects_preexisting_state_above_the_hard_cut() {
     let rebuild_error = IntentStoreOps::rebuild_expiry_index()
         .expect_err("lifecycle must reject resource totals above the hard cut");
     assert_eq!(
-        rebuild_error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        rebuild_error.code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT
     );
     let projection_error = ReceiptBackedIntentOps::receipt_capacity()
         .expect_err("capacity projection must reject the same over-limit state");
     assert_eq!(
-        projection_error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        projection_error.code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT
     );
     let receipt_error = begin_receipt(&receipt_input_u64(9_999), 100)
         .expect_err("receipt admission must preserve the over-limit invariant cause");
     assert_eq!(
-        receipt_error.log_fields(),
-        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+        receipt_error.code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT
     );
     assert_eq!(ReceiptBackedIntentStore::len(), 0);
 }

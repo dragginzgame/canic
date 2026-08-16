@@ -219,10 +219,9 @@ impl WasmStoreCanisterApi {
         }
 
         if current.mode != WasmStoreGcMode::InProgress {
-            return Err(Error::conflict(format!(
-                "wasm store gc transition {:?} -> Complete is not allowed",
-                current.mode
-            )));
+            return Err(Error::from_registered(
+                canic_core::diagnostics::codes::STATE_CONFLICT,
+            ));
         }
 
         WasmStoreGcOps::begin_clearing(clearing_started_at)?;

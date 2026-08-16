@@ -28,8 +28,8 @@ use crate::{
 #[cfg(feature = "root-control-plane")]
 use canic_core::control_plane_support::format::byte_size;
 use canic_core::{
-    control_plane_support::error::{InternalError, InternalErrorOrigin},
-    dto::error::{Error, ErrorCode},
+    control_plane_support::error::InternalError,
+    diagnostics::{RegisteredDiagnosticCode, codes},
 };
 #[cfg(feature = "root-control-plane")]
 use std::collections::{BTreeMap, BTreeSet};
@@ -95,41 +95,36 @@ pub enum TemplateManifestOpsError {
     },
 }
 
+impl TemplateManifestOpsError {
+    /// Return the approved exact producer identity for this typed Store failure.
+    #[must_use]
+    pub const fn registered_code(&self) -> RegisteredDiagnosticCode {
+        match self {
+            #[cfg(feature = "root-control-plane")]
+            Self::ApprovedManifestMissing(_) => codes::WASM_STORE_MANIFEST_MISSING,
+            #[cfg(feature = "root-control-plane")]
+            Self::ApprovedManifestConflict(_) => codes::ARTIFACT_CONFLICT,
+            Self::TemplateChunkSetMissing(_) => codes::WASM_STORE_CHUNK_MISSING,
+            Self::TemplateChunkMissing(_) => codes::WASM_STORE_CHUNK_MISSING,
+            Self::TemplateChunkSetEmpty(_) => codes::COLLECTION_INVALID,
+            Self::PayloadHashMismatch(_) | Self::TemplateChunkHashMismatch(_) => {
+                codes::DIGEST_CONFLICT
+            }
+            Self::PayloadSizeMismatch(_) => codes::CAPACITY_CONFLICT,
+            Self::ChunkIndexOverflow(_) => codes::POSITION_CAPACITY,
+            Self::TemplateChunkIndexOutOfRange(_, _) => codes::POSITION_CAPACITY,
+            Self::WasmStoreCapacityExceeded { .. } | Self::WasmStoreVersionLimitExceeded { .. } => {
+                codes::CAPACITY_LIMIT
+            }
+            Self::WasmStoreTemplateLimitExceeded { .. } => codes::CAPACITY_LIMIT,
+        }
+    }
+}
+
 impl From<TemplateManifestOpsError> for InternalError {
     fn from(err: TemplateManifestOpsError) -> Self {
-        let code = match &err {
-            #[cfg(feature = "root-control-plane")]
-            TemplateManifestOpsError::ApprovedManifestMissing(_) => {
-                Some(ErrorCode::WasmStoreManifestMissing)
-            }
-            TemplateManifestOpsError::TemplateChunkMissing(_)
-            | TemplateManifestOpsError::TemplateChunkSetEmpty(_)
-            | TemplateManifestOpsError::TemplateChunkSetMissing(_)
-            | TemplateManifestOpsError::TemplateChunkIndexOutOfRange(_, _) => {
-                Some(ErrorCode::WasmStoreChunkMissing)
-            }
-            TemplateManifestOpsError::PayloadHashMismatch(_)
-            | TemplateManifestOpsError::TemplateChunkHashMismatch(_) => {
-                Some(ErrorCode::WasmStoreHashMismatch)
-            }
-            TemplateManifestOpsError::WasmStoreCapacityExceeded { .. }
-            | TemplateManifestOpsError::WasmStoreTemplateLimitExceeded { .. }
-            | TemplateManifestOpsError::WasmStoreVersionLimitExceeded { .. } => {
-                Some(ErrorCode::WasmStoreCapacityExceeded)
-            }
-            #[cfg(feature = "root-control-plane")]
-            TemplateManifestOpsError::ApprovedManifestConflict(_)
-            | TemplateManifestOpsError::ChunkIndexOverflow(_)
-            | TemplateManifestOpsError::PayloadSizeMismatch(_) => None,
-            #[cfg(not(feature = "root-control-plane"))]
-            TemplateManifestOpsError::ChunkIndexOverflow(_)
-            | TemplateManifestOpsError::PayloadSizeMismatch(_) => None,
-        };
-        let message = err.to_string();
-        match code {
-            Some(code) => Self::public(Error::new(code, message)),
-            None => Self::ops(InternalErrorOrigin::Ops, message),
-        }
+        let code = err.registered_code();
+        Self::public(code)
     }
 }
 
@@ -489,6 +484,87 @@ mod tests {
         TemplateChunkStore::clear_for_test();
     }
 
+    #[test]
+    fn manifest_ops_errors_use_approved_registered_identities() {
+        let release =
+            TemplateReleaseKey::new(TemplateId::new("embedded:app"), TemplateVersion::new("1"));
+        let chunk = TemplateChunkKey::new(release.clone(), 2);
+        let cases = [
+            (
+                TemplateManifestOpsError::TemplateChunkSetMissing(release.clone()),
+                codes::WASM_STORE_CHUNK_MISSING,
+            ),
+            (
+                TemplateManifestOpsError::TemplateChunkMissing(chunk.clone()),
+                codes::WASM_STORE_CHUNK_MISSING,
+            ),
+            (
+                TemplateManifestOpsError::TemplateChunkSetEmpty(release.clone()),
+                codes::COLLECTION_INVALID,
+            ),
+            (
+                TemplateManifestOpsError::PayloadHashMismatch(release.clone()),
+                codes::DIGEST_CONFLICT,
+            ),
+            (
+                TemplateManifestOpsError::PayloadSizeMismatch(release.clone()),
+                codes::CAPACITY_CONFLICT,
+            ),
+            (
+                TemplateManifestOpsError::ChunkIndexOverflow(release.clone()),
+                codes::POSITION_CAPACITY,
+            ),
+            (
+                TemplateManifestOpsError::TemplateChunkIndexOutOfRange(release.clone(), 2),
+                codes::POSITION_CAPACITY,
+            ),
+            (
+                TemplateManifestOpsError::TemplateChunkHashMismatch(chunk),
+                codes::DIGEST_CONFLICT,
+            ),
+            (
+                TemplateManifestOpsError::WasmStoreCapacityExceeded {
+                    projected_bytes: 2,
+                    max_store_bytes: 1,
+                },
+                codes::CAPACITY_LIMIT,
+            ),
+            (
+                TemplateManifestOpsError::WasmStoreTemplateLimitExceeded {
+                    projected_templates: 2,
+                    max_templates: 1,
+                },
+                codes::CAPACITY_LIMIT,
+            ),
+            (
+                TemplateManifestOpsError::WasmStoreVersionLimitExceeded {
+                    template_id: TemplateId::new("embedded:app"),
+                    projected_versions: 2,
+                    max_template_versions_per_template: 1,
+                },
+                codes::CAPACITY_LIMIT,
+            ),
+        ];
+
+        for (error, expected) in cases {
+            assert_eq!(error.registered_code(), expected);
+        }
+
+        #[cfg(feature = "root-control-plane")]
+        {
+            assert_eq!(
+                TemplateManifestOpsError::ApprovedManifestMissing(CanisterRole::new("app"))
+                    .registered_code(),
+                codes::WASM_STORE_MANIFEST_MISSING
+            );
+            assert_eq!(
+                TemplateManifestOpsError::ApprovedManifestConflict(CanisterRole::new("app"))
+                    .registered_code(),
+                codes::ARTIFACT_CONFLICT
+            );
+        }
+    }
+
     #[cfg(feature = "wasm-store-canister")]
     fn approved_input_with_version(
         template_id: &'static str,
@@ -594,8 +670,8 @@ mod tests {
         .expect_err("mismatched chunk hash must fail");
 
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreHashMismatch)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::DIGEST_CONFLICT.raw_code()
         );
     }
 
@@ -611,8 +687,8 @@ mod tests {
         .expect_err("manifest should fail once projected store bytes exceed the limit");
 
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreCapacityExceeded)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 
@@ -642,8 +718,8 @@ mod tests {
         .expect_err("second logical template should exceed the store template limit");
 
         assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreCapacityExceeded)
+            err.public_error().code(),
+            canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
         );
     }
 

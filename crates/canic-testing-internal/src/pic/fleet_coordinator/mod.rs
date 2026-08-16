@@ -27,7 +27,7 @@ mod tests {
                 FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
                 FleetComponentProvisioningStatusRequest, FleetSubnetRootProvisioningBatch,
             },
-            error::{Error, ErrorCode},
+            error::Error,
             fleet_registry::{
                 FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
                 FleetRegistrySnapshotResponse, FleetSubnetRootDrainingPublicationRequest,
@@ -185,8 +185,8 @@ placement.minimum_distinct_roots = 2
         assert_eq!(
             unauthorized
                 .expect_err("non-controller join must fail")
-                .code,
-            ErrorCode::Unauthorized
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
 
         assert_authority_snapshot_restore_fence(&pic, coordinator);
@@ -309,8 +309,8 @@ placement.minimum_distinct_roots = 2
         assert_eq!(
             rejected_resume
                 .expect_err("restored authority must remain mutation-fenced")
-                .code,
-            ErrorCode::Unavailable
+                .code(),
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
         let ordinary_mutation: Result<Result<FleetRegistryActivationResponse, Error>, _> = pic
             .update_candid(
@@ -366,8 +366,8 @@ placement.minimum_distinct_roots = 2
         assert_eq!(
             unregistered_snapshot
                 .expect_err("unregistered root snapshot must fail")
-                .code,
-            ErrorCode::Forbidden
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
 
         let request = FleetSubnetRootSnapshotAcknowledgementRequest {
@@ -456,8 +456,8 @@ placement.minimum_distinct_roots = 2
         assert_eq!(
             unauthorized
                 .expect_err("non-controller activation must fail")
-                .code,
-            ErrorCode::Unauthorized
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let active: Result<FleetRegistry, Error> = pic
             .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
@@ -499,8 +499,8 @@ placement.minimum_distinct_roots = 2
         assert_eq!(
             rejected
                 .expect_err("Removed root must not remain a snapshot source")
-                .code,
-            ErrorCode::Forbidden
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
         let surviving: Result<FleetRegistrySnapshotResponse, Error> = pic
             .update_candid_as(

@@ -1,9 +1,7 @@
 use super::{cost_guard::*, execution::*, replay::*, *};
 use crate::{
-    InternalErrorClass,
     cdk::{candid::Nat, types::Principal},
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
-    dto::error::ErrorCode,
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
     ops::{
@@ -181,8 +179,10 @@ fn atomic_create_rejects_distinct_operation_while_failure_is_retryable() {
 fn missing_build_network_fails_closed() {
     let error = require_build_network(None).expect_err("build network must be explicit");
 
-    assert_eq!(error.class(), InternalErrorClass::Invariant);
-    assert_eq!(error.origin(), InternalErrorOrigin::Workflow);
+    assert_eq!(
+        error.public_code(),
+        Some(crate::diagnostics::codes::PLATFORM_UNAVAILABLE)
+    );
     assert_eq!(
         require_build_network(Some(BuildNetwork::Ic)).expect("explicit network"),
         BuildNetwork::Ic
@@ -236,9 +236,15 @@ fn refill_canister_overrides_follow_config_resolution_fields() {
 fn root_refill_requires_an_explicit_manual_policy() {
     let error = validate_icp_refill_configured(None)
         .expect_err("unconfigured root refill must fail before execution");
-    assert_eq!(error.class(), InternalErrorClass::Domain);
+    assert_eq!(
+        error.code(),
+        crate::diagnostics::codes::PLATFORM_INVALID_STATE
+    );
     let public: crate::dto::error::Error = error.into();
-    assert_eq!(public.code, ErrorCode::Unavailable);
+    assert_eq!(
+        public.code(),
+        crate::diagnostics::codes::PLATFORM_INVALID_STATE.raw_code()
+    );
 
     let policy = IcpRefillPolicy {
         max_refill_e8s_per_call: 100_000_000,
@@ -255,30 +261,30 @@ fn root_refill_policy_rejections_preserve_public_classification() {
     let cases = [
         (
             IcpRefillPolicyViolation::AmountZero,
-            ErrorCode::InvalidInput,
+            crate::diagnostics::codes::CAPACITY_INVALID.raw_code(),
         ),
         (
             IcpRefillPolicyViolation::MaxRefillPerCall {
                 requested_e8s: 2,
                 max_e8s: 1,
             },
-            ErrorCode::InvalidInput,
+            crate::diagnostics::codes::CAPACITY_LIMIT.raw_code(),
         ),
         (
             IcpRefillPolicyViolation::ConcurrentRefill,
-            ErrorCode::Conflict,
+            crate::diagnostics::codes::PLATFORM_INVALID_STATE.raw_code(),
         ),
         (
             IcpRefillPolicyViolation::RateUnavailable {
                 min_xdr_permyriad_per_icp: 40_000,
             },
-            ErrorCode::Unavailable,
+            crate::diagnostics::codes::CAPACITY_UNAVAILABLE.raw_code(),
         ),
     ];
 
     for (violation, expected) in cases {
         let public: crate::dto::error::Error = policy_denied(violation).into();
-        assert_eq!(public.code, expected);
+        assert_eq!(public.code(), expected);
     }
 }
 
@@ -761,8 +767,11 @@ fn refill_replay_payload_mismatch_maps_to_conflict() {
     changed.amount_e8s += 1;
     let err = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&changed, p(90), 1_001))
         .expect_err("payload mismatch must fail");
-    let public = err.public_error().expect("public replay error");
-    assert_eq!(public.code, ErrorCode::Conflict);
+    let public = err.public_error();
+    assert_eq!(
+        public.code(),
+        crate::diagnostics::codes::CODEC_CONFLICT.raw_code()
+    );
 }
 
 #[test]
@@ -808,8 +817,7 @@ fn refill_external_effect_boundary_requires_value_transfer_cost_permit() {
     };
 
     let missing = require_icp_refill_cost_permit(None).expect_err("missing permit rejects");
-    assert_eq!(missing.class(), InternalErrorClass::Invariant);
-    assert_eq!(missing.origin(), InternalErrorOrigin::Workflow);
+    assert_eq!(missing.code(), crate::diagnostics::codes::STATE_INVALID);
 
     let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
         &token,
@@ -847,8 +855,8 @@ fn refill_value_transfer_cost_guard_enforces_actor_quota() {
         .expect_err("same actor quota bucket exhausted");
     let err = crate::workflow::cost_guard::map_cost_guard_reserve_error(err);
     assert_eq!(
-        err.public_error().expect("quota rejection is public").code,
-        ErrorCode::ResourceExhausted
+        err.public_error().code(),
+        crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
     );
 }
 
@@ -952,16 +960,10 @@ fn refill_post_effect_storage_failure_requires_recovery_and_preserves_effect_rec
         &token,
         &operation,
         "ledger_transfer",
-        Err(InternalError::ops(
-            InternalErrorOrigin::Ops,
-            "record update failed",
-        )),
+        Err(InternalError::state_failure()),
     )
     .expect_err("post-effect storage failure must require recovery");
-    assert_eq!(
-        error.log_fields(),
-        (crate::InternalErrorClass::Ops, InternalErrorOrigin::Ops)
-    );
+    assert_eq!(error.code(), crate::diagnostics::codes::STATE_FAILED);
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")
