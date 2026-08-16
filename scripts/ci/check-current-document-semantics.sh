@@ -126,17 +126,18 @@ historical_backlog="$ROOT/docs/design/archive/post-46-backlog"
 }
 
 design_ideas="$ROOT/docs/design/ideas"
-[ "$(find "$design_ideas" -type f | wc -l)" -le 16 ] || {
+[ "$(find "$design_ideas" -type f ! -path "$design_ideas/saltz/*" | wc -l)" -le 16 ] || {
     echo "optional design-idea collection has grown without explicit approval" >&2
     exit 1
 }
-[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 9 ] || {
+[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d ! -name saltz | wc -l)" -le 9 ] || {
     echo "optional design-idea topics have grown without explicit approval" >&2
     exit 1
 }
 
 for idea_dir in "$design_ideas"/*; do
     [ -d "$idea_dir" ] || continue
+    [ "${idea_dir##*/}" != "saltz" ] || continue
 
     max_idea_files=1
     case "${idea_dir##*/}" in
@@ -144,9 +145,6 @@ for idea_dir in "$design_ideas"/*; do
             ;;
         framework-neutral-synchronous-lifecycle-composition|language-neutral-managed-guest-feasibility)
             max_idea_files=2
-            ;;
-        saltz)
-            max_idea_files=4
             ;;
         *)
             echo "unapproved optional design-idea topic: $(guard_path "$idea_dir")" >&2
@@ -166,24 +164,6 @@ for idea_dir in "$design_ideas"/*; do
     while IFS= read -r idea_file; do
         case "${idea_file##*/}" in
             design.md | exploration.md | status.md) ;;
-            saltz_24h_waveform_floor_60B_860.csv)
-                [ "${idea_dir##*/}" = "saltz" ] || {
-                    echo "waveform artifact exists outside the approved Saltz idea: $(guard_path "$idea_file")" >&2
-                    exit 1
-                }
-                ;;
-            saltz_reference_dezeen_860x573.jpg)
-                [ "${idea_dir##*/}" = "saltz" ] || {
-                    echo "reference image exists outside the approved Saltz idea: $(guard_path "$idea_file")" >&2
-                    exit 1
-                }
-                ;;
-            saltz_reference_overlay.svg)
-                [ "${idea_dir##*/}" = "saltz" ] || {
-                    echo "reference overlay exists outside the approved Saltz idea: $(guard_path "$idea_file")" >&2
-                    exit 1
-                }
-                ;;
             *)
                 echo "optional design-idea topic has an unsupported file: $(guard_path "$idea_file")" >&2
                 exit 1
@@ -192,36 +172,40 @@ for idea_dir in "$design_ideas"/*; do
     done < <(find "$idea_dir" -maxdepth 1 -type f | sort)
 done
 
-saltz_waveform="$design_ideas/saltz/saltz_24h_waveform_floor_60B_860.csv"
-saltz_waveform_sha256="e3bf1f80e3d0a2f30d121472d7f05d004bd3ff1e2f548a42d952f0d7c68f4fb6"
-saltz_source="$design_ideas/saltz/saltz_reference_dezeen_860x573.jpg"
-saltz_source_sha256="9cd20fa6de0ba665de8a956eb01dfe993af30c678e63fc03093ddd40b1acec06"
-saltz_overlay="$design_ideas/saltz/saltz_reference_overlay.svg"
-saltz_overlay_sha256="5d895e9cc15ef3da0a7c01aa7abfbbee3e7a2fcf60573f863c686775fd65f71c"
-saltz_points_sha256="c0b281f64e6f07e65ca6efd121919d8023f8640b6d429b54e0b739f3c84b6d50"
+saltz_idea="$design_ideas/saltz"
+saltz_waveform="$saltz_idea/saltz_24h_waveform_floor_100B_860.csv"
+saltz_waveform_sha256="11fd75eb8fd0fed4f075d324051cc880db50619837bfe6c889fe9d654647d911"
+[ "$(find "$saltz_idea" -type f | wc -l)" -eq 2 ] || {
+    echo "Saltz idea must retain exactly its design and numeric waveform: $(guard_path "$saltz_idea")" >&2
+    exit 1
+}
 require_files "$GUARD_LABEL" \
-    "$design_ideas/saltz/design.md" \
-    "$saltz_overlay" \
-    "$saltz_source" \
+    "$saltz_idea/design.md" \
     "$saltz_waveform"
-require_text "$design_ideas/saltz/design.md" \
-    "$saltz_overlay_sha256" \
-    "$saltz_points_sha256" \
-    "$saltz_source_sha256" \
+require_text "$saltz_idea/design.md" \
     "$saltz_waveform_sha256" \
     "$GUARD_LABEL"
 bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
     sha256 \
     "$saltz_waveform_sha256" \
     "$saltz_waveform"
-bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
-    sha256 \
-    "$saltz_source_sha256" \
-    "$saltz_source"
-bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
-    sha256 \
-    "$saltz_overlay_sha256" \
-    "$saltz_overlay"
+[ ! -d "$ROOT/apps/saltz/profile_compiler" ] || {
+    echo "removed Saltz image-authoring package has returned" >&2
+    exit 1
+}
+saltz_image_file="$(find "$saltz_idea" "$ROOT/apps/saltz" -type f \( \
+    -iname '*.avif' -o \
+    -iname '*.gif' -o \
+    -iname '*.jpeg' -o \
+    -iname '*.jpg' -o \
+    -iname '*.png' -o \
+    -iname '*.svg' -o \
+    -iname '*.webp' \
+    \) -print -quit)"
+[ -z "$saltz_image_file" ] || {
+    echo "Saltz source or raster image has returned: $(guard_path "$saltz_image_file")" >&2
+    exit 1
+}
 
 for evidence_root in \
     "$ROOT/docs/audits/working" \

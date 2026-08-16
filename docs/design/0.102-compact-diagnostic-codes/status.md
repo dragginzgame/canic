@@ -13,8 +13,8 @@ Date: 2026-08-16
 - Superseded work: the 991-row candidate encoded cause together with handling,
   exposure and context. It was never released, so its rows may be replaced
   directly and are neither current nor retired identities.
-- Repository scope: Canic only. Timer and Saltz work is unrelated and neither
-  supplies evidence for nor blocks this line.
+- Repository scope: Canic diagnostics only; unrelated work neither supplies
+  evidence for nor blocks this line.
 - Release boundary: 0.102 is reinstall-only. Every Canic-owned canister in an
   activated Fleet must use one admitted release set with matching callers.
 
@@ -128,7 +128,7 @@ For the simplified contract, targeted checks must cover only:
 - current encoding/lifecycle behavior for stable records actually changed; and
 - representative release-Wasm absence plus closeout measurement.
 
-The targeted [closeout Wasm evidence](../../audits/working/0.102-diagnostic-inventory/closeout-wasm.md)
+The targeted [closeout Wasm evidence](../../audits/working/0.102-diagnostic-inventory/inventory.md#targeted-0102-closeout)
 builds a representative Component, Fleet Subnet Root, Fleet Coordinator and
 Wasm Store through the canonical release builder. All four data sections are
 smaller than the retained baseline and bounded scans find no host catalogue or
@@ -141,6 +141,4 @@ diagnostic-savings claim.
 The diagnostic batch is ready for maintainer commit/push validation. Do not
 generate JSON, add handling metadata or create new observability
 infrastructure. The maintainer owns the full validation performed when
-pushing. The repository-wide current-document guard's unrelated Saltz asset
-finding is outside this diagnostic decision and must be resolved with the
-Saltz work rather than by changing 0.102.
+pushing.

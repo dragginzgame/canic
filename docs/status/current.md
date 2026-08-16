@@ -16,13 +16,12 @@ Historical handoffs are archived at:
 
 ## Current Release
 
-- Workspace package version: `0.102.1`; latest published release: `v0.102.1`
+- Workspace package version: `0.102.1`. Latest published release: `v0.102.1`
   at `86763c5f16478e2e548e2059e5efaa963bf9a966`.
 - The open `0.102.2` changelog draft contains accepted B1 evidence, the
   completed 161-reason register and typed mappings, and the compact public
-  diagnostic hard cut. Unrelated timer and Saltz work is outside this
-  diagnostic release decision; package/version mutation remains
-  maintainer-owned. Active design and checklist:
+  diagnostic hard cut. Package/version mutation remains maintainer-owned.
+  Active design and checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - The published checkpoint contains the completed operator-performance/CLI-
   diagnostics outcomes and evidence-only B1 snapshot. The `.2` draft changes
@@ -87,42 +86,7 @@ stay ideas.
 
 ## Current Decision
 
-Diagnostic registration is active on untagged 0.102.2. Timer and Saltz work is
-explicitly separate: neither supplies evidence for nor blocks diagnostic
-progress.
-
-Saltz now has an independent non-destructive `apps/saltz` foundation: inert
-Root/Burner roles plus a deterministic exact-image host compiler, checked-in
-CSV and extraction overlay. No burn, timer, stable run state or external effect
-exists; destructive B1 remains gated by its accepted prerequisites. A separate
-standalone `saltz_preview` package renders the exact compiled trace through one
-read-only HTTP query and has no Fleet, Canic runtime, update, timer, stable-state
-or intentional-burn path. Mainnet deployment remains a separately authorized
-external effect. The graph is now code-native and data-only: no restaurant
-image, embedded raster bytes or image route remains. The pinned source
-photograph stays offline as waveform-extraction evidence. A dated 865-point
-global sample measured a
-`31.671..=49.918 Bcycles/second` range, `6.192 Bcycles/second` maximum
-100-second change and approximately `6.148 Bcycles/second` p99 absolute
-residual from an 18-point trailing mean. The provisional mapping is therefore
-`100..=150 Bcycles/second`,
-with `50 Bcycles/second` relief and approximately `10_464.206204 Tcycles`
-zero-background exposure; B0 visibility and economic qualification remain
-open.
-
-The preview presentation now has a factual semantic contract: it reports only
-that the current raw response was served, never infers a network or certified
-"online" state, labels the yellow line as an unqualified proposed Dashboard
-total, uses the exact dated `31.671..=49.918 Bcycles/second` observation for the
-red band, and explicitly reports that no raster image is served. Its runtime
-panel and machine-readable status both state that no live metric fetch, armed
-run or burn capability exists while ordinary query execution still costs
-cycles. The footer links `Canic` to
-`https://github.com/dragginzgame/canic`.
-The served HTML, status JSON and CSV are otherwise deliberately anonymous: no
-`Saltz`, `neon` or publisher-name token and no source-article link remain. The
-long German title is the only public textual clue; internal package names and
-offline extraction evidence retain their truthful identities.
+Diagnostic registration is active on untagged 0.102.2.
 
 Codes identify semantic causes; typed callers retain handling decisions. Only
 public, retrievable operator, durable-evidence or machine-decision boundaries
@@ -181,15 +145,6 @@ development; automated agents run targeted checks only.
 
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
-
-The standalone Saltz preview passes its seven focused render/router/provenance
-tests, including exact source-to-display aspect-ratio preservation, and
-warning-clean package Clippy. Its release Wasm is 482,621 bytes;
-extracted Candid contains only `http_request`, and `ic-wasm info` reports no
-update method, timer/stable import or cycle-burn primitive. A local install at
-`t63gs-up777-77776-aaaba-cai` on the dedicated port-8002 Saltz network returned
-the exact checked-in CSV and illustrated-room asset digests through the raw
-gateway. This local smoke evidence authorizes no IC-mainnet effect.
 
 ## Next Action
 

@@ -32,7 +32,7 @@ Date: 2026-08-16
   host catalogue are implemented. The assignments remain unreleased and
   freely replaceable until the release; package version remains unchanged.
 - Measurement gate: the retained v3 baseline passes and the targeted four-role
-  closeout is recorded in [closeout-wasm.md](closeout-wasm.md). It is
+  closeout is recorded in [inventory.md](inventory.md#targeted-0102-closeout). It is
   role-scoped evidence, not a replacement retained audit.
 
 ## Implementation Phases
@@ -2409,7 +2409,7 @@ generates only runtime constants and host catalogue entries; the public wire is
 history. The broad census and its executable tooling must not be rerun.
 
 The representative release-Wasm closeout measurement is recorded in
-[closeout-wasm.md](closeout-wasm.md). Retain this document as archived
+[inventory.md](inventory.md#targeted-0102-closeout). Retain this document as archived
 conversion evidence. Clean changes remain limited to fields directly affected
 by removal of diagnostic strings; do not add a durable-state redesign, JSON
 registry, handling taxonomy or observability subsystem. The diagnostic batch

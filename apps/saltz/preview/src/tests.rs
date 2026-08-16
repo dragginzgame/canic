@@ -19,7 +19,7 @@ fn request(method: &str, url: &str) -> HttpRequest {
 }
 
 #[test]
-fn page_tells_the_inert_preview_story_without_rehosting_the_source_photo() {
+fn page_tells_the_inert_preview_story_without_an_image_surface() {
     let response = response_for(request("GET", "/"), "aaaaa-aa");
     let body = String::from_utf8(response.body).expect("Saltz page is UTF-8");
 
@@ -44,7 +44,6 @@ fn page_tells_the_inert_preview_story_without_rehosting_the_source_photo() {
     assert!(body.contains("10,464.206 Tcycles"));
     assert!(body.contains("Made with <span class=\"heart\">❤️</span> by <a href=\"https://github.com/dragginzgame/canic\" rel=\"noreferrer\">Canic</a>"));
     assert!(body.contains(">0B</text>"));
-    assert!(body.contains("<!-- stop being a paranoid dickhead -->"));
     assert!(body.contains("aaaaa-aa"));
     assert_eq!(render::WAVEFORM_SVG_POINTS.split_whitespace().count(), 860);
     assert!(!body.contains("SIMULATION // ONLINE"));
@@ -56,8 +55,16 @@ fn page_tells_the_inert_preview_story_without_rehosting_the_source_photo() {
     assert!(!anonymous_body.contains("dezeen"));
     assert_eq!(body.matches("href=\"https://").count(), 1);
     assert!(!body.contains("<image"));
+    assert!(!body.contains("<img"));
+    assert!(!body.contains("data:image"));
+    assert!(!body.contains(".jpg"));
+    assert!(!body.contains(".jpeg"));
+    assert!(!body.contains(".png"));
     assert!(!body.contains(".webp"));
     assert!(!body.contains("/assets/"));
+    assert!(!body.contains("restaurant image"));
+    assert!(!body.contains("source-image"));
+    assert!(!body.contains("source trace"));
     assert!(!body.contains("<script"));
 }
 
@@ -67,13 +74,13 @@ fn graph_is_code_native_and_contains_no_raster_image() {
     let body = String::from_utf8(response.body).expect("Saltz page is UTF-8");
 
     assert!(body.contains("<svg"));
-    assert!(body.contains("This data-only graph contains no restaurant image"));
     assert!(!body.contains("<image"));
+    assert!(!body.contains("<img"));
     assert!(!body.contains("data:image"));
 }
 
 #[test]
-fn displayed_trace_preserves_the_source_rise_to_width_ratio() {
+fn displayed_trace_preserves_the_selected_numeric_rise_to_width_ratio() {
     let mut minimum_y = f64::MAX;
     let mut maximum_y = f64::MIN;
     for point in render::WAVEFORM_SVG_POINTS.split_whitespace() {
@@ -84,8 +91,8 @@ fn displayed_trace_preserves_the_source_rise_to_width_ratio() {
     }
 
     let displayed_ratio = (maximum_y - minimum_y) / 1_120.0;
-    let source_ratio = 48.499 / 859.0;
-    assert!((displayed_ratio - source_ratio).abs() < 0.000_002);
+    let expected_trace_ratio = 0.056_459_837_019_790;
+    assert!((displayed_ratio - expected_trace_ratio).abs() < 0.000_002);
 }
 
 #[test]
@@ -126,8 +133,7 @@ fn provenance_json_identifies_the_inert_single_method_canister() {
         value["dated_global_observation"]["purpose"],
         "orientation_only"
     );
-    assert_eq!(value["presentation"]["raster_images_served"], false);
-    assert_eq!(value["presentation"]["image_pipeline_present"], false);
+    assert_eq!(value["presentation"], "code_native_svg");
     let anonymous_body = anonymous_body.to_ascii_lowercase();
     assert!(!anonymous_body.contains("saltz"));
     assert!(!anonymous_body.contains("neon"));
