@@ -341,7 +341,7 @@ fn assert_billing_endpoints_require_controller(pic: &PocketIc, probe_id: Princip
         sync_denied
             .expect_err("non-controller must not sync billing gateways")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let fund_denied: Result<BlobProjectCyclesTopUpReport, Error> = pic.update_candid_as_or_panic(
@@ -354,7 +354,7 @@ fn assert_billing_endpoints_require_controller(pic: &PocketIc, probe_id: Princip
         fund_denied
             .expect_err("non-controller must not fund blob-storage billing")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let status_denied: Result<BlobStorageStatusResponse, Error> = pic.update_candid_as_or_panic(
@@ -369,7 +369,7 @@ fn assert_billing_endpoints_require_controller(pic: &PocketIc, probe_id: Princip
         status_denied
             .expect_err("non-controller must not read guarded billing status")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 }
 
@@ -841,7 +841,7 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
         balance_denied
             .expect_err("non-controller must not configure mock balance failures")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let top_up_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -856,7 +856,7 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
         top_up_denied
             .expect_err("non-controller must not configure mock top-up failures")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let balance_total_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -869,7 +869,7 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
         balance_total_denied
             .expect_err("non-controller must not configure mock malformed balance responses")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let top_up_total_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -882,7 +882,7 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
         top_up_total_denied
             .expect_err("non-controller must not configure mock malformed top-up responses")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 
     let gateway_list_trap_denied: Result<(), Error> = pic.update_candid_as_or_panic(
@@ -895,7 +895,7 @@ fn assert_mock_failure_controls_require_controller(pic: &PocketIc, cashier_id: P
         gateway_list_trap_denied
             .expect_err("non-controller must not configure mock gateway-list traps")
             .code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
 }
 
@@ -1014,7 +1014,7 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         synced
             .expect_err("trapped Cashier gateway list should fail sync")
             .code(),
-        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+        canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE.raw_code()
     );
 
     assert_failed_gateway_sync_preserves_state(
@@ -1373,7 +1373,7 @@ fn assert_create_certificate_requires_controller(
     let err = result.expect_err("non-controller create certificate must be denied");
     assert_eq!(
         err.code(),
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
     );
     assert!(!blob_is_live(fixture, UNAUTHORIZED_ROOT_HASH_BYTES));
 }
