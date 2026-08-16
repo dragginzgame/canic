@@ -56,10 +56,10 @@ async fn test_chain_key_ecdsa_public_key(
             },
         })
         .await
-        .map_err(|err| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
     let response: TestEcdsaPublicKeyResult = response
         .candid()
-        .map_err(|err| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
 
     Ok(response.public_key)
 }
@@ -81,7 +81,7 @@ async fn test_set_canister_running(canister_id: Principal, running: bool) -> Res
     Call::unbounded_wait(Principal::management_canister(), method)
         .with_arg(TestCanisterIdArgs { canister_id })
         .await
-        .map_err(|err| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
 
     Ok(())
 }
