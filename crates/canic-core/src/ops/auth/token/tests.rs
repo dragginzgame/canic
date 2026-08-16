@@ -120,24 +120,24 @@ fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
 }
 
 #[test]
-fn active_delegation_proof_unavailable_maps_to_auth_material_stale() {
+fn active_delegation_proof_unavailable_maps_to_security_unavailable() {
     let err = active_delegation_proof_unavailable_error(ActiveDelegationProofStatus::Missing);
     let public = err.public_error();
 
     assert_eq!(
         public.code(),
-        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
+        crate::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code()
     );
 }
 
 #[test]
-fn token_prepare_outliving_active_proof_maps_to_auth_material_stale() {
+fn token_prepare_outliving_active_proof_maps_to_security_ordering() {
     let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::TokenOutlivesCert);
     let public = err.public_error();
 
     assert_eq!(
         public.code(),
-        crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
+        crate::diagnostics::codes::SECURITY_ORDERING.raw_code()
     );
 }
 
@@ -372,10 +372,10 @@ fn delegated_token_context_fails_closed_without_protected_fleet() {
     let Err(err) = result else {
         panic!("missing protected Fleet must reject");
     };
-    assert_eq!(err.code(), crate::diagnostics::codes::STATE_FAILED);
+    assert_eq!(err.code(), crate::diagnostics::codes::STATE_UNAVAILABLE);
     assert_eq!(
         err.public_error().code(),
-        crate::diagnostics::codes::STATE_FAILED.raw_code()
+        crate::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
     );
 }
 

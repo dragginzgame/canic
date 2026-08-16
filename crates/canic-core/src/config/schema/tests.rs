@@ -41,7 +41,7 @@ fn collect_canic_configs(root: &Path, configs: &mut Vec<PathBuf>) {
             continue;
         };
         if path.is_dir() {
-            if !matches!(name, ".git" | ".tmp" | "target") {
+            if !matches!(name, ".git" | ".tmp" | "saltz" | "target") {
                 collect_canic_configs(&path, configs);
             }
         } else if name == "canic.toml" {
