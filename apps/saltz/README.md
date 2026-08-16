@@ -1,7 +1,9 @@
 # Saltz Waveform Application
 
 Saltz is an experimental standalone canister for rendering the selected
-mountain trace in one exact ICP Subnet's public Cycle Burn Rate series. The
+mountain trace through public Cycle Burn Rate telemetry. Its first compiled
+executor targeted one exact ICP Subnet; that scope was rejected during live
+pre-roll because the intended canvas is the global Dashboard homepage. The
 burner is destructive only after a controller explicitly arms its immutable
 compiled plan; install and ordinary status calls cannot burn the waveform.
 
@@ -45,25 +47,28 @@ build fails if its digest, duration, per-pulse rate or total ceiling drifts.
 The removed image-authoring pipeline does not exist in the workspace, so the
 CSV does not independently establish source provenance.
 
-The executable mapping is deliberately Subnet-scoped: a visible target of
-`1..=2.5 Bcycles/second` against a fixed dated `0.625 Bcycles/second`
-background model. It is not intended to dominate the volatile global series.
+The executable mapping is deliberately Subnet-scoped. After an initial 1×
+trial proved too close to the public noise floor, the controller scales every
+controlled amount by exactly 10. The resulting visible target is a
+`4.375 Bcycles/second` floor plus `15 Bcycles/second` relief against the fixed
+dated `0.625 Bcycles/second` background model.
 The inferred rectangular `4,531`-second response model remains dated and
 provisional; a successful timer execution proves the burn plan, not artistic
 fidelity on the public Dashboard.
 
 The exact embedded envelope is:
 
-- authorization digest `491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9`;
-- pre-roll burn `5,766,930,000,000` cycles;
-- drawing burn `90,038,364,472,300` cycles;
-- total intentional burn `95,805,294,472,300` cycles;
+- authorization digest `e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d`;
+- controlled-signal scale `10`;
+- pre-roll burn `57,669,300,000,000` cycles;
+- drawing burn `900,383,644,723,000` cycles;
+- total intentional burn `958,052,944,723,000` cycles;
 - retained reserve `1,000,000,000,000` cycles; and
 - execution allowance `100,000,000,000` cycles.
 
 The authorized staged trial binds its first 42 pulses, covering 70 minutes and
-`5,382,468,000,000` intentional cycles. Arming therefore requires at least
-`6,482,468,000,000` cycles: that initial burn allocation, the retained reserve
+`53,824,680,000,000` intentional cycles. Arming therefore requires at least
+`54,924,680,000,000` cycles: that initial burn allocation, the retained reserve
 and the execution allowance. Funding is never autonomous. If an external
 top-up does not arrive before a later pulse needs it, the first balance
 shortfall stops permanently without retry or catch-up. Additional balance
@@ -78,14 +83,25 @@ There is no generic amount argument, start/stop toggle, forecast endpoint,
 funding endpoint, Fleet endpoint or application timer facade. `Abort` is the
 only stop command and never resumes.
 
-The staged-trial release Wasm with module hash
-`728edf4a7d652cc1ffa79e7dda5e96e4a91e42c67eaabb9cc7e2e240f325294b`
+The 10× staged-trial release Wasm with module hash
+`2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9`
 was installed on IC-mainnet canister `w47na-gaaaa-aaaad-qmclq-cai` on
 2026-08-16. Its authorization digest is
-`491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9`.
-The controller then funded only the 70-minute trial envelope and armed a first
-deadline at `2026-08-16T23:45:00+02:00`, with the one-hour decision point at
-`00:45` and the next-funding deadline before `00:55`.
+`e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d`.
+Two earlier 1× attempts were aborted: the first exposed a staged-balance guard
+defect after two exact pulses, and the corrected second produced five exact
+pulses but remained too close to the public noise floor. The 10× trial starts
+at `2026-08-17T00:15:00+02:00`. After 16 exact receipts, the owning Subnet's
+successive exact 600-second observations rose from `0.389` to `0.508`, `1.496`,
+`3.378` and `5.157 Bcycles/second`. That proportional public response passed
+the continuation gate. An exact `904,073,274,118,831-cycle` top-up then funded
+the immutable remainder; it did not change the schedule or maximum burn.
+Before the 864-step drawing began, direct operator observation established
+that the intended canvas was the global homepage graph rather than the
+qualified Subnet graph. The controller aborted terminally at 26 exact receipts
+and `33,320,040,000,000 cycles`; no waveform step executed. The remaining
+approximately `925.798 Tcycles` stays inert in the canister for a separately
+designed reinstall.
 
 Build and test the standalone burner without creating a mainnet canister:
 

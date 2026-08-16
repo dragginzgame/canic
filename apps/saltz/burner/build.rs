@@ -8,9 +8,10 @@ use std::{env, error::Error, fmt::Write as _, fs, path::PathBuf};
 
 use saltz_simulator::{
     BACKGROUND_CYCLES_PER_SECOND, CHART_STEP_SECONDS, CONTROL_STEP_SECONDS,
-    INITIAL_FUNDING_STEP_COUNT, KERNEL_WINDOW_SECONDS, MAX_BURN_RATE_CYCLES_PER_SECOND,
-    MAX_TOTAL_BURN_CYCLES, PRE_ROLL_STEP_COUNT, TARGET_AMPLITUDE_CYCLES_PER_SECOND,
-    TARGET_FLOOR_CYCLES_PER_SECOND, WAVEFORM_STEP_COUNT, compile_executable_plan, waveform,
+    EXECUTION_ALLOWANCE_CYCLES, INITIAL_FUNDING_STEP_COUNT, KERNEL_WINDOW_SECONDS,
+    MAX_BURN_RATE_CYCLES_PER_SECOND, MAX_TOTAL_BURN_CYCLES, MIN_RETAINED_CYCLES,
+    PRE_ROLL_STEP_COUNT, TARGET_AMPLITUDE_CYCLES_PER_SECOND, TARGET_FLOOR_CYCLES_PER_SECOND,
+    WAVEFORM_STEP_COUNT, compile_executable_plan, waveform,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -38,6 +39,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     writeln!(
         generated,
+        "pub const EXECUTION_ALLOWANCE_CYCLES: u128 = {EXECUTION_ALLOWANCE_CYCLES};"
+    )?;
+    writeln!(
+        generated,
         "pub const INITIAL_FUNDING_CYCLES: u128 = {};",
         plan.initial_funding_cycles
     )?;
@@ -56,6 +61,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     writeln!(
         generated,
         "pub const MAX_TOTAL_BURN_CYCLES: u128 = {MAX_TOTAL_BURN_CYCLES};"
+    )?;
+    writeln!(
+        generated,
+        "pub const MIN_RETAINED_CYCLES: u128 = {MIN_RETAINED_CYCLES};"
     )?;
     writeln!(
         generated,

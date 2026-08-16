@@ -14,7 +14,7 @@ use ic_testkit::{
 use pocket_ic::CreateCanisterParams;
 use saltz_burner::{
     BurnerCommand, BurnerError, BurnerStatusRequest, BurnerStatusResponse, ReceiptPage,
-    RejectionReason, RunPhase,
+    RejectionReason, RunPhase, TerminalReason,
 };
 
 const BILLION: u128 = 1_000_000_000;
@@ -28,6 +28,56 @@ fn immutable_waveform_burns_exact_steps_and_abort_stops_future_burns() {
 
     assert_arm_rejects_insufficient_funding(&pic, &wasm);
     assert_abort_stops_future_burns(&pic, &wasm);
+    assert_trial_window_cannot_burn_a_later_step(&pic, &wasm);
+}
+
+fn assert_trial_window_cannot_burn_a_later_step(pic: &PocketIc, wasm: &[u8]) {
+    let canister_id = install(pic, wasm, 2_000 * BILLION);
+    let prepared = summary(pic, canister_id);
+    let target_balance = prepared.required_cycles_to_arm + 100 * BILLION;
+    assert!(prepared.current_balance_cycles < target_balance);
+    pic.add_cycles(
+        canister_id,
+        target_balance - prepared.current_balance_cycles,
+    );
+    let chart_start_at_ns = aligned_chart_start(pic, &prepared);
+    let armed = command(
+        pic,
+        canister_id,
+        BurnerCommand::Arm {
+            authorization_digest: prepared.authorization_digest,
+            chart_start_at_ns,
+        },
+    )
+    .expect("exact trial funding should arm");
+    set_time_ns(
+        pic,
+        armed
+            .schedule_start_at_ns
+            .expect("armed run should expose schedule start"),
+    );
+
+    for step in 0..armed.initial_funding_step_count {
+        if step > 0 {
+            pic.advance_time(Duration::from_secs(armed.control_step_seconds));
+        }
+        pic.tick();
+    }
+    let funded = summary(pic, canister_id);
+    assert_eq!(funded.phase, RunPhase::Running);
+    assert_eq!(funded.receipt_count, armed.initial_funding_step_count);
+    assert_eq!(funded.total_burned_cycles, armed.initial_funding_cycles);
+
+    pic.advance_time(Duration::from_secs(armed.control_step_seconds));
+    pic.tick();
+    let stopped = summary(pic, canister_id);
+    assert_eq!(stopped.phase, RunPhase::Failed);
+    assert_eq!(
+        stopped.terminal_reason,
+        Some(TerminalReason::InsufficientBalance)
+    );
+    assert_eq!(stopped.receipt_count, armed.initial_funding_step_count);
+    assert_eq!(stopped.total_burned_cycles, armed.initial_funding_cycles);
 }
 
 fn assert_arm_rejects_insufficient_funding(pic: &PocketIc, wasm: &[u8]) {
@@ -77,7 +127,7 @@ fn assert_arm_rejects_insufficient_funding(pic: &PocketIc, wasm: &[u8]) {
 }
 
 fn assert_abort_stops_future_burns(pic: &PocketIc, wasm: &[u8]) {
-    let canister_id = install(pic, wasm, 7_000 * BILLION);
+    let canister_id = install(pic, wasm, 430_000 * BILLION);
     let prepared = summary(pic, canister_id);
     assert!(prepared.required_cycles_to_arm < prepared.total_burn_cycles);
     assert_eq!(prepared.initial_funding_step_count, 42);

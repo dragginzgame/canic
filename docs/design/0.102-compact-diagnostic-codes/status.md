@@ -1,15 +1,15 @@
 # Canic 0.102 Implementation Status
 
-Date: 2026-08-16
+Date: 2026-08-17
 
 ## Status
 
 - State: Register, Map and the atomic Cut are complete in the untagged
   `0.102.2` draft. The maintained model is: canisters send `u16`, runtime
   reasons are typed and the host owns prose.
-- Follow-up: the `0.102.3` draft stages one flat `.2` `code + name` release
-  baseline and removes the archived B1 census and initial row counts from
-  permanent test authority. The baseline may move freely until `.2` ships.
+- The same `.2` draft stages one flat `code + name` release baseline and
+  removes the archived B1 census and initial row counts from permanent test
+  authority. The baseline may move freely until `.2` ships.
 - Release: the public wire is now exactly `Error { code: u16 }`.
   `InternalError` owns an exact registered code and its explicit public
   projection; it stores no message, class, origin or optional public DTO.
@@ -88,7 +88,8 @@ projection and producer context do not manufacture additional identities.
   that identity independently qualifies; otherwise it remains local typed
   state and may map directly to a safe public registered reason.
 - `reasons.toml` contains code, name, origin, summary, optional guidance and
-  `retired`. It generates only runtime constants and the host catalogue.
+  `retired`; the focused guard rejects every other field. It generates only
+  runtime constants and the host catalogue.
 - Unreleased allocations may change freely. Once released, `code + name` is the
   immutable semantic identity; summary and guidance may change, origin may
   change after review and retirement may move only from false to true.
@@ -142,7 +143,7 @@ diagnostic-savings claim.
 
 ## Next Action
 
-The focused `.3` identity guard and migration-authority cleanup pass their
+The focused `.2` identity guard and migration-authority cleanup pass their
 targeted tests and warning-denied Clippy targets. Do not generate JSON, add
 handling metadata, restore B1 test authority or create new observability
 infrastructure. The maintainer owns full validation when publishing.

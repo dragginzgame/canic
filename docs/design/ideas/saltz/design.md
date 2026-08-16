@@ -4,22 +4,23 @@ Date: 2026-08-16
 
 ## Status
 
-- Status: unnumbered experiment with a separately authorized standalone
-  implementation and inert mainnet deployment.
+- Status: unnumbered experiment whose first Subnet-scoped executor was
+  terminally aborted before waveform execution after the intended canvas was
+  clarified as the global Dashboard homepage.
 - Repository: Canic.
 - Runtime owner: `apps/saltz/burner`.
-- Purpose: draw one complete mountain waveform in the public cycle-burn-rate
-  series for one exact IC Subnet by burning a fixed, bounded schedule of the
-  canister's own cycles.
+- Purpose: draw one complete mountain waveform in the global public
+  cycle-burn-rate series by burning a fixed, bounded schedule of one canister's
+  own cycles. The current compiled Subnet model does not satisfy that purpose.
 - Fleet relationship: none. The canister is not a Root, Coordinator, Store or
   managed Component and has no Canic runtime dependency.
 - Effect authority: install and status inspection are permitted. Deployment is
   inert. A cycles mint, canister top-up and `Arm` are separate external effects
   and require an exact recorded envelope before execution.
 - Qualification: direct mainnet burn visibility and repeated-input accumulation
-  passed on 2026-08-16. The complete decay kernel remains unqualified, so the
-  compiled control schedule is a dated bounded proposal rather than a promise
-  of Dashboard fidelity.
+  passed on 2026-08-16. The complete decay kernel and global-background model
+  remain unqualified. The Subnet-scoped schedule is rejected for artistic
+  execution and cannot be re-armed through its terminal installation.
 
 This document remains under `docs/design/ideas/` because the experiment is not
 a Canic product release line.
@@ -69,11 +70,12 @@ The public Subnet series moved from approximately `0.312` to
 `0.990 Bcycles/second`. This proved that repeated bounded input accumulates
 into a clean signal. It did not measure the complete decay kernel.
 
-The current controller therefore uses a provisional rectangular
-`4,531`-second response inferred from the B0b scale. That is an explicit model
-assumption, not a platform guarantee. The public API's caller-selected `step`
-still means returned sample spacing; it does not establish independent burn
-attribution.
+The rejected Subnet controller used a provisional rectangular `4,531`-second
+response inferred from the B0b scale. The B0d constant-input rise now fits an
+approximately `4,201`-second window with `R² = 0.999475`; the post-Abort tail
+must confirm that width before it becomes replacement executable authority.
+The public API's caller-selected `step` still means returned sample spacing;
+it does not establish independent burn attribution.
 
 ## Numeric Waveform Authority
 
@@ -95,35 +97,37 @@ midpoints using integer linear interpolation. It then applies the fixed target
 mapping and causal inverse below. Floating-point simulator output is analysis
 only and can never become a burn amount.
 
-## Frozen Executable Plan
+## Rejected Subnet Executable Plan
 
-The current immutable plan is Subnet-scoped:
+The terminal immutable plan was Subnet-scoped:
 
 | Field | Exact value |
 | --- | ---: |
 | Assumed unrelated Subnet background | `625,000,000 cycles/second` |
-| Visible target floor | `1,000,000,000 cycles/second` |
-| Visible target relief | `1,500,000,000 cycles/second` |
+| Controlled-signal scale | `10` |
+| Visible target floor | `4,375,000,000 cycles/second` |
+| Visible target relief | `15,000,000,000 cycles/second` |
 | Control cadence | `100 seconds` |
 | Chart cadence/alignment | `600 seconds` |
 | Provisional kernel width | `4,531 seconds` |
-| Per-step rate ceiling | `20,000,000,000 cycles/second` |
+| Per-step rate ceiling | `200,000,000,000 cycles/second` |
 | Pre-roll steps | `45` |
 | Waveform steps | `864` |
 | Total steps | `909` |
-| Pre-roll burn | `5,766,930,000,000 cycles` |
-| Waveform burn | `90,038,364,472,300 cycles` |
-| Total intentional burn | `95,805,294,472,300 cycles` |
-| Immutable total ceiling | `130,000,000,000,000 cycles` |
+| Pre-roll burn | `57,669,300,000,000 cycles` |
+| Waveform burn | `900,383,644,723,000 cycles` |
+| Total intentional burn | `958,052,944,723,000 cycles` |
+| Immutable total ceiling | `1,300,000,000,000,000 cycles` |
 | Initial funding steps/window | `42` / `70 minutes` |
-| Initial intentional allocation | `5,382,468,000,000 cycles` |
-| Plan digest | `491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9` |
+| Initial intentional allocation | `53,824,680,000,000 cycles` |
+| Plan digest | `e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d` |
 
 The integer compiler:
 
 1. verifies the CSV digest, row order and exact 24-hour duration;
-2. resamples to 864 midpoint targets without floating point;
-3. subtracts the fixed background with a zero floor;
+2. resamples to 864 base midpoint targets without floating point;
+3. subtracts the fixed background with a zero floor and scales every resulting
+   controlled amount by exactly 10;
 4. seeds 45 prior pre-roll rates for the 46-tap kernel including the current
    waveform pulse;
 5. solves each next non-negative rate against 45 full 100-second overlaps and
@@ -132,10 +136,11 @@ The integer compiler:
 7. rejects a per-step rate above the immutable ceiling;
 8. integrates each rate into one exact `u128` pulse amount;
 9. rejects a total above the immutable ceiling; and
-10. digests every input constant, the initial funding step count and all 909
-    amounts.
+10. digests every input constant, the initial funding step count, retained
+    reserve, execution allowance and all 909 amounts.
 
-The existing floating-point forward model predicts a 144-point correlation of
+The exact 10× scaling preserves normalized shape and timing. The existing
+floating-point forward model predicts a 144-point correlation of
 approximately `0.954`, mean absolute error of approximately
 `52.7 Mcycles/second` and maximum error of approximately
 `486.0 Mcycles/second` under the same provisional rectangular response. Those
@@ -147,11 +152,11 @@ The authorized staged trial funds 42 exact pulses, covering 70 minutes. Arming
 requires the canister balance to cover all of:
 
 ```text
- 5,382,468,000,000  first 42 exact pulses
+53,824,680,000,000  first 42 exact pulses
  1,000,000,000,000  minimum retained balance
    100,000,000,000  execution allowance
 -------------------
- 6,482,468,000,000  minimum balance at Arm
+54,924,680,000,000  minimum balance at Arm
 ```
 
 The canister cannot mint, request or move funding. A controller may deposit
@@ -159,6 +164,12 @@ cycles through a separate operator action while the run is active. Additional
 balance cannot increase the burn because all 909 amounts and the total are
 embedded. Without a later top-up, the first pulse whose amount would cross the
 retained reserve fails terminally; nothing catches up or resumes.
+
+Every intentional-burn precondition protects the sum of the retained reserve
+and execution allowance. Normal message execution may consume the allowance,
+but `cycles_burn` can consume neither balance. Targeted PocketIC evidence funds
+the staged window, commits exactly 42 receipts, and proves pulse 43 fails
+before burn with `InsufficientBalance`.
 
 The mainnet financial authorization must bind discrete ICP e8s and the maximum
 cycles they can mint. B0c showed why: an exact `3 Tcycle` request deposited
@@ -330,10 +341,10 @@ The selected existing mainnet asset is:
 | Subnet | `5kdm2-62fc6-fwnja-hutkz-ycsnm-4z33i-woh43-4cenu-ev7mi-gii6t-4ae` |
 | Network | IC mainnet |
 | Deployment environment | `waveform-burner-ic` |
-| Installed Wasm SHA-256/module hash | `728edf4a7d652cc1ffa79e7dda5e96e4a91e42c67eaabb9cc7e2e240f325294b` |
+| Installed Wasm SHA-256/module hash | `2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9` |
 | Phase after install | `Prepared` |
 | Receipts/intentional burn after install | `0` / `0 cycles` |
-| Controller status balance before trial top-up | `1,283,120,450,111 cycles` |
+| Controller status balance before 10× top-up | `5,980,046,999,847 cycles` |
 
 The staged-trial Wasm was reinstalled on that asset on 2026-08-16. The release
 artifact hash equals the controller-reported module hash. Controller-only
@@ -355,16 +366,87 @@ The identity held `225.53140595 ICP` before conversion. The operator requested
 exactly `4.8 Tcycles`; discrete conversion deposited
 `4,800,000,007,071 cycles` and left `222.59132922 ICP`, an exact spend of
 `2.94007673 ICP`. An exact `5.3 Tcycle` top-up produced a controller-observed
-canister balance of `6,583,111,657,251 cycles` before Arm. The accepted Arm
-bound digest
-`491cd73eb597ca4586fd33516d0390160df0b51111fb388d96843b21552a86c9`,
-scheduled the first pre-roll deadline at `2026-08-16T23:45:00+02:00`, the
-one-hour evidence decision at `00:45`, the continuation deadline before
-`00:55`, and chart start at `01:00`.
+canister balance of `6,583,111,657,251 cycles` before Arm.
+
+That first installation's callback executed at
+`1,786,916,700,387,529,216 ns`, only `387,529,216 ns` after its exact deadline.
+Its same-message receipt records requested and burned amounts both equal to
+`128,154,000,000 cycles`; controller status then reported `Running`, one
+receipt and no terminal reason. This proves live timer/burn/receipt execution,
+not yet the public observation response.
+
+Review then found that this first installation protected the retained reserve
+but did not make the separate execution allowance ineligible for intentional
+burn. The controller aborted after exactly two receipts and
+`256,308,000,000 cycles`, before relying on the staged-window claim. Corrected
+Wasm `280b3f8fa0ccb0d1c98fbb3ac37b7e3bc926e325ac9618ac51a8269e47565c77`
+binds both balances into its digest and burn precondition. A corrective exact
+`300 Bcycle` mint cost `0.18431215 ICP`, and an exact `300 Bcycle` top-up
+produced `6,623,823,016,957 cycles` before the second Arm. Digest
+`0c00db0e4dd0174d1bb8f2a2ae80129c17ed03d73ba1bda5913868dfc6f2435f`
+scheduled the restarted first deadline at `2026-08-16T23:55:00+02:00`, the
+one-hour evidence decision at `00:55`, continuation deadline before `01:05`,
+and chart start at `01:10`.
+
+The controller aborted that corrected 1× attempt after five exact receipts and
+`640,770,000,000 cycles`: the early public series moved in the expected
+direction, but remained too close to ordinary noise for a confident full-run
+decision. The maintainer then authorized an exact 10× controlled-signal test.
+Wasm `2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9`
+and digest
+`e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d`
+bind that scale, `53,824,680,000,000` initial intentional cycles, the reserve
+and allowance. Converting exactly `49.1 Tcycles` cost `30.15060661 ICP`; the
+exact top-up produced `55,080,036,485,836 cycles` before Arm. The first 10×
+deadline is `2026-08-17T00:15:00+02:00`, the one-hour evidence decision is
+`01:15`, and chart start is `01:30`.
+
+The staged continuation gate passed early after 16 exact timer receipts and
+`20,504,640,000,000 cycles` of intentional burn. Controller status reported
+`Running`, no terminal reason and `34,575,030,604,169 cycles`. At the public
+Dashboard's exact one-day `600`-second cadence, the owning Subnet reported:
+
+| Timestamp | Local time | Cycle burn rate |
+| ---: | --- | ---: |
+| `1786917600` | `00:00` | `0.389455606 Bcycles/second` |
+| `1786918200` | `00:10` | `0.507886778 Bcycles/second` |
+| `1786918800` | `00:20` | `1.496329056 Bcycles/second` |
+| `1786919400` | `00:30` | `3.377697751 Bcycles/second` |
+| `1786920000` | `00:40` | `5.157094502 Bcycles/second` |
+
+The three controlled intervals rose by approximately `0.988`, `1.881` and
+`1.779 Bcycles/second`. The last two agree with the predicted approximately
+`1.7..=1.9 Bcycles/second` rise for six 10× pulses per observation interval.
+This proves a receipt-synchronous, proportional public response across
+multiple Dashboard-cadence bins; it still does not prove the complete
+24-hour artistic fidelity or the provisional kernel.
+
+The identity held `5,192.25651045 ICP` at continuation. Minting the exact
+requested shortfall `904,073,274,118,831 cycles` deposited
+`904,073,274,124,352 cycles` after discrete conversion and cost exactly
+`556.42132824 ICP`. The canister received exactly
+`904,073,274,118,831 cycles`; no schedule, amount or ceiling changed. After
+receipt 17, controller status reported `937,366,738,334,627 cycles` against
+`936,266,764,723,000` remaining intentional cycles, leaving
+`1,099,973,611,627 cycles` for the immutable reserve and execution allowance.
+The identity retained `4,635.83518221 ICP`, and the cycles ledger retained
+`99,400,054,212 cycles`.
+
+At `2026-08-17T00:57+02:00`, operator observation clarified that the intended
+canvas was the global Dashboard homepage. Its displayed `0.0459 Tcycles/second`
+was approximately `45.9 Bcycles/second`, not the owning Subnet's approximately
+`8 Bcycles/second` controlled reading. The global series remained dominated by
+roughly `30..=60 Bcycles/second` unrelated traffic, so the Subnet-qualified
+controller no longer met the stated objective. Under the maintainer's standing
+stop-on-loss-of-confidence rule, `Abort` committed before chart start. Terminal
+status reported 26 exact receipts, `33,320,040,000,000 cycles` burned,
+`925,797,679,907,302 cycles` remaining and `ControllerAbort`. No waveform step
+executed. A future global controller requires separate evidence and a new inert
+reinstall; this terminal run cannot resume.
 
 The operator may call `Abort` at any point after arming. Abort prevents future
 pulses but cannot restore cycles already burned. Pre-roll alone costs
-`5,766,930,000,000` cycles, so even a quickly rejected visual attempt has a
+`57,669,300,000,000` cycles, so even a rejected visual attempt has a
 real non-refundable cost.
 
 ## Non-Goals

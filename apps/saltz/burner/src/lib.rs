@@ -1,6 +1,6 @@
 //! Crate: saltz_burner
 //!
-//! Responsibility: execute one immutable, controller-authorized Subnet waveform schedule.
+//! Responsibility: execute one immutable, controller-authorized global waveform schedule.
 //! Does not own: autonomous funding, Fleet roles, generic burn requests, retries, or upgrades.
 //! Boundary: one timer owns exact precompiled amounts; any abort or fault stops permanently.
 
@@ -22,12 +22,10 @@ mod plan {
     include!(concat!(env!("OUT_DIR"), "/executable_plan.rs"));
 }
 
-const EXECUTION_ALLOWANCE_CYCLES: u128 = 100_000_000_000;
 const MAX_ARM_LEAD_NS: u64 = 7 * 24 * 60 * 60 * 1_000_000_000;
 const MAX_LATENESS_NS: u64 = 60_000_000_000;
 const MAX_RECEIPT_PAGE_SIZE: u16 = 50;
 const MIN_ARM_LEAD_NS: u64 = 60_000_000_000;
-const MIN_RETAINED_CYCLES: u128 = 1_000_000_000_000;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const TIMER_NAME: &str = "waveform";
 const TIMER_OWNER: &str = "standalone-burner";
@@ -450,7 +448,7 @@ fn run_timer_step() -> TimerRunResult {
             fail_run(run, TerminalReason::RuntimeInvariant);
             return stopped_invariant_failure();
         }
-        let Some(required_balance) = burn_cycles.checked_add(MIN_RETAINED_CYCLES) else {
+        let Some(required_balance) = required_balance_before_burn(burn_cycles) else {
             fail_run(run, TerminalReason::RuntimeInvariant);
             return stopped_invariant_failure();
         };
@@ -536,7 +534,14 @@ fn pre_roll_duration_ns() -> u64 {
 }
 
 const fn required_cycles_to_arm() -> u128 {
-    plan::INITIAL_FUNDING_CYCLES + MIN_RETAINED_CYCLES + EXECUTION_ALLOWANCE_CYCLES
+    plan::INITIAL_FUNDING_CYCLES + plan::MIN_RETAINED_CYCLES + plan::EXECUTION_ALLOWANCE_CYCLES
+}
+
+const fn required_balance_before_burn(burn_cycles: u128) -> Option<u128> {
+    match burn_cycles.checked_add(plan::MIN_RETAINED_CYCLES) {
+        Some(balance) => balance.checked_add(plan::EXECUTION_ALLOWANCE_CYCLES),
+        None => None,
+    }
 }
 
 const fn total_step_count() -> u32 {
@@ -553,7 +558,7 @@ fn summary() -> BurnerSummary {
             chart_step_seconds: plan::CHART_STEP_SECONDS,
             control_step_seconds: plan::CONTROL_STEP_SECONDS,
             current_balance_cycles: canister_cycle_balance(),
-            execution_allowance_cycles: EXECUTION_ALLOWANCE_CYCLES,
+            execution_allowance_cycles: plan::EXECUTION_ALLOWANCE_CYCLES,
             initial_funding_cycles: plan::INITIAL_FUNDING_CYCLES,
             initial_funding_step_count: plan::INITIAL_FUNDING_STEP_COUNT,
             kernel_window_seconds: plan::KERNEL_WINDOW_SECONDS,
@@ -561,7 +566,7 @@ fn summary() -> BurnerSummary {
             max_lateness_ns: MAX_LATENESS_NS,
             max_total_burn_cycles: plan::MAX_TOTAL_BURN_CYCLES,
             minimum_arm_lead_ns: MIN_ARM_LEAD_NS,
-            minimum_retained_cycles: MIN_RETAINED_CYCLES,
+            minimum_retained_cycles: plan::MIN_RETAINED_CYCLES,
             next_step_index: run.map_or(0, |run| run.next_step_index),
             phase: run_phase(state),
             pre_roll_cycles: plan::PRE_ROLL_CYCLES,
@@ -664,6 +669,9 @@ mod tests {
             plan::BURN_CYCLES.iter().copied().sum::<u128>(),
             plan::TOTAL_BURN_CYCLES
         );
+        assert_eq!(plan::BACKGROUND_CYCLES_PER_SECOND, 30_000_000_000);
+        assert_eq!(plan::TARGET_FLOOR_CYCLES_PER_SECOND, 100_000_000_000);
+        assert_eq!(plan::TARGET_AMPLITUDE_CYCLES_PER_SECOND, 50_000_000_000);
         assert_eq!(
             plan::BURN_CYCLES[..plan::PRE_ROLL_STEP_COUNT as usize]
                 .iter()
@@ -680,7 +688,16 @@ mod tests {
         );
         assert_eq!(
             required_cycles_to_arm(),
-            plan::INITIAL_FUNDING_CYCLES + MIN_RETAINED_CYCLES + EXECUTION_ALLOWANCE_CYCLES
+            plan::INITIAL_FUNDING_CYCLES
+                + plan::MIN_RETAINED_CYCLES
+                + plan::EXECUTION_ALLOWANCE_CYCLES
+        );
+        assert_eq!(plan::INITIAL_FUNDING_CYCLES, plan::PRE_ROLL_CYCLES);
+        assert_eq!(
+            required_balance_before_burn(plan::BURN_CYCLES[0]),
+            plan::BURN_CYCLES[0]
+                .checked_add(plan::MIN_RETAINED_CYCLES)
+                .and_then(|balance| balance.checked_add(plan::EXECUTION_ALLOWANCE_CYCLES))
         );
         assert_eq!(
             plan::BURN_CYCLES[plan::PRE_ROLL_STEP_COUNT as usize..]

@@ -119,6 +119,143 @@ later than their observation time. The plateau proves accumulated signal and
 rough scale, not the complete kernel: post-stop decay and unrelated Subnet
 background remain to be observed read-only.
 
+## B0d 10× Staged-Executor Continuation Result
+
+Two later 1× executor attempts proved timer/receipt mechanics but were
+aborted before full funding because their public rise remained too close to
+ordinary Subnet noise. The maintainer then authorized an exact 10× controlled
+signal with a 42-pulse initial funding window. Release Wasm
+`2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9`
+and authorization digest
+`e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d`
+freeze `909` amounts, `958,052,944,723,000` maximum intentional cycles and
+the protected `1.1 Tcycle` reserve-plus-execution balance.
+
+At the continuation checkpoint, controller status reported exactly 16
+receipts, `20,504,640,000,000 cycles` burned, `Running`, no terminal reason and
+`34,575,030,604,169 cycles` remaining. The official owning-Subnet API at the
+Dashboard's exact one-day `600`-second cadence reported:
+
+```text
+timestamp    Bcycles/second
+1786917600   0.389455606
+1786918200   0.507886778
+1786918800   1.496329056
+1786919400   3.377697751
+1786920000   5.157094502
+```
+
+The three controlled interval increases were approximately `0.988`, `1.881`
+and `1.779 Bcycles/second`. The final two intervals each contain six exact 10×
+pulses and agree with the predicted approximately `1.7..=1.9 Bcycles/second`
+rise. This passes the staged proportional-response gate across multiple
+Dashboard-cadence bins. It proves causal visibility and scale, not the full
+24-hour trace or complete response kernel.
+
+The identity then held `5,192.25651045 ICP`. The exact requested continuation
+mint of `904,073,274,118,831 cycles` deposited `904,073,274,124,352 cycles`
+after discrete conversion and spent exactly `556.42132824 ICP`. The canister
+received exactly `904,073,274,118,831 cycles`. After receipt 17 it reported
+`937,366,738,334,627 cycles`, while remaining intentional burn was
+`936,266,764,723,000 cycles`; the resulting `1,099,973,611,627-cycle` margin
+preserves the frozen reserve and execution allowance. The controller identity
+retained `4,635.83518221 ICP`, and the cycles ledger retained
+`99,400,054,212 cycles`.
+
+At `2026-08-17T00:57+02:00`, the maintainer clarified that the target was the
+global Dashboard homepage rather than the qualified owning-Subnet graph. The
+homepage value of approximately `0.0459 Tcycles/second` represents
+approximately `45.9 Bcycles/second` of global traffic. That scope invalidated
+the Subnet-background controller as artistic execution authority. The standing
+stop-on-loss-of-confidence rule caused immediate terminal `ControllerAbort`
+before chart start. Final status recorded exactly 26 receipts,
+`33,320,040,000,000 cycles` intentionally burned and
+`925,797,679,907,302 cycles` remaining. No waveform step executed. This result
+passes Subnet causal visibility but rejects the current plan for the global
+homepage; any replacement requires a separately qualified global model,
+reinstall and authorization.
+
+## B0e Global-Homepage Qualification
+
+B0e is read-only until a new exact run plan receives separate authorization.
+It treats the Dashboard homepage's global Cycle Burn Rate graph as the canvas
+and uses the terminal B0d input as system-identification evidence. No B0e
+mint, top-up, install, Arm or intentional burn is authorized by this section.
+
+The frozen seven-day observation requested the official global endpoint with:
+
+```text
+start=1786313400 end=1786918200 step=600 format=json
+```
+
+Its 1,009 exact ten-minute samples ended before the 10× controlled run. Rates
+are expressed below in billions of cycles per second:
+
+| Statistic | Global | Owning Subnet |
+| --- | ---: | ---: |
+| Minimum | `29.684` | `0.172` |
+| 5th percentile | `33.102` | `0.260` |
+| Median | `37.576` | `0.307` |
+| Mean | `37.983` | `0.350` |
+| Standard deviation | `3.540` | `0.148` |
+| 95th percentile | `44.506` | `0.583` |
+| 99th percentile | `48.371` | `1.083` |
+| Maximum | `53.915` | `1.538` |
+| Median absolute adjacent change | `0.971` | `0.011` |
+| 95th-percentile absolute adjacent change | `4.255` | `0.117` |
+| Maximum absolute adjacent change | `12.017` | `1.013` |
+
+This rejects the Subnet-scale `4.375..=19.375 Bcycles/second` target for the
+global canvas. The original `100..=150 Bcycles/second` target has a
+`50 Bcycles/second` relief, approximately 11.8 times the global series' 95th-
+percentile adjacent noise. It is the active bounded analysis candidate.
+
+The 26 B0d pulses form a constant-input rise. Regressing the 27 official
+100-second owning-Subnet samples from timestamp `1786918500` through
+`1786921100` gives:
+
+| Fit field | Observed value |
+| --- | ---: |
+| Increase per pulse | `0.305067390 Bcycles/second` |
+| Linear fit | `R² = 0.999475` |
+| Implied rectangular window | `4,200.842 seconds` |
+| Individual increment range | `0.174537..=0.367527 Bcycles/second` |
+| Median individual increment | `0.297814 Bcycles/second` |
+
+The candidate window is therefore `4,201 seconds`, pending the complete
+post-Abort trailing edge. The input stopped before the first pulse could age
+out of that window; the expected decay begins around
+`2026-08-17T01:25+02:00` and completes around `02:07`. Until that tail is
+frozen, `4,201` is analysis rather than executable authority.
+
+Under a conservative fixed `30 Bcycles/second` unrelated-background credit,
+the provisional `4,201`-second controller reports:
+
+| Candidate field | Provisional value |
+| --- | ---: |
+| Visible target | `100..=150 Bcycles/second` |
+| Pre-roll | `420,915,781,440,966 cycles` |
+| Waveform | `7,898,579,676,201,503 cycles` |
+| Total intentional burn | `8,319,495,457,642,469 cycles` |
+| Peak control rate | `412,851,809,635 cycles/second` |
+| 144-point model correlation | `0.994841` |
+| Model mean absolute error | `0.285 Bcycles/second` |
+| Model maximum error | `6.827 Bcycles/second` |
+
+Replaying that candidate over each historical 24-hour global day produced
+target correlations of `0.923..=0.965`. Replaying all 144 possible ten-minute
+start phases across six complete historical windows gave a best worst-window
+correlation of `0.934` for a `02:10 UTC` (`04:10 CEST`) chart start; the
+`11:30 UTC` (`13:30 CEST`) phase was nearly equal at `0.933`. This short dated
+window does not make either time a permanent start rule, but it demonstrates
+that ordinary homepage noise does not erase the proposed geometry.
+
+At the last realized conversion of approximately `1.6248 Tcycles/ICP`, total
+candidate burn is approximately `5,120 ICP`. Reusing the canister's roughly
+`925.8 Tcycles` leaves approximately `7,394.8 Tcycles`, or `4,551 ICP`, still
+to fund after reserve and execution allowance. That estimate is not mint or
+top-up authority and remains sensitive to the later certified conversion.
+
 ## B0b Exact Authorization
 
 | Bound | Authorized value |
@@ -267,8 +404,8 @@ public Dashboard canister record remained stale at immediate verification and
 is not authority for this later installation.
 
 That inert installation was subsequently superseded by separately authorized
-staged-trial Wasm
-`728edf4a7d652cc1ffa79e7dda5e96e4a91e42c67eaabb9cc7e2e240f325294b`.
+10× staged-trial Wasm
+`2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9`.
 Its funding, authorization digest and timing evidence live in the active
 standalone design/status record; they do not retroactively change this bounded
 B0 calibration authority.

@@ -1,6 +1,6 @@
 //! Module: executable
 //!
-//! Responsibility: compile the one immutable Subnet-scale burn schedule with integer arithmetic.
+//! Responsibility: compile the one immutable global-homepage burn schedule with integer arithmetic.
 //! Does not own: timers, deployment, funding, caller authority, or execution.
 //! Boundary: the emitted cycle amounts and digest are the only executable waveform authority.
 
@@ -13,24 +13,26 @@ use sha2::{Digest, Sha256};
 
 use crate::Waveform;
 
-pub const BACKGROUND_CYCLES_PER_SECOND: u64 = 625_000_000;
+pub const BACKGROUND_CYCLES_PER_SECOND: u64 = 30_000_000_000;
 pub const CHART_STEP_SECONDS: u64 = 600;
 pub const CONTROL_STEP_SECONDS: u64 = 100;
+pub const EXECUTION_ALLOWANCE_CYCLES: u128 = 100_000_000_000;
 pub const INITIAL_FUNDING_STEP_COUNT: usize = 42;
-pub const KERNEL_WINDOW_SECONDS: u64 = 4_531;
-pub const MAX_BURN_RATE_CYCLES_PER_SECOND: u64 = 20_000_000_000;
-pub const MAX_TOTAL_BURN_CYCLES: u128 = 130_000_000_000_000;
-pub const PRE_ROLL_STEP_COUNT: usize = 45;
-pub const TARGET_AMPLITUDE_CYCLES_PER_SECOND: u64 = 1_500_000_000;
-pub const TARGET_FLOOR_CYCLES_PER_SECOND: u64 = 1_000_000_000;
+pub const KERNEL_WINDOW_SECONDS: u64 = 4_201;
+pub const MAX_BURN_RATE_CYCLES_PER_SECOND: u64 = 500_000_000_000;
+pub const MAX_TOTAL_BURN_CYCLES: u128 = 8_500_000_000_000_000;
+pub const MIN_RETAINED_CYCLES: u128 = 1_000_000_000_000;
+pub const PRE_ROLL_STEP_COUNT: usize = 42;
+pub const TARGET_AMPLITUDE_CYCLES_PER_SECOND: u64 = 50_000_000_000;
+pub const TARGET_FLOOR_CYCLES_PER_SECOND: u64 = 100_000_000_000;
 pub const WAVEFORM_STEP_COUNT: usize = 864;
 
-const _: () = assert!(INITIAL_FUNDING_STEP_COUNT < PRE_ROLL_STEP_COUNT);
+const _: () = assert!(INITIAL_FUNDING_STEP_COUNT <= PRE_ROLL_STEP_COUNT);
 
 const HEIGHT_SCALE: u128 = 1_000_000;
-const PLAN_DIGEST_DOMAIN: &[u8] = b"canic-saltz-executable-plan-v1";
+const PLAN_DIGEST_DOMAIN: &[u8] = b"canic-saltz-global-executable-plan-v1";
 const WEIGHT_FULL_SECONDS: u128 = 100;
-const WEIGHT_REMAINDER_SECONDS: u128 = 31;
+const WEIGHT_REMAINDER_SECONDS: u128 = 1;
 
 ///
 /// ExecutablePlan
@@ -75,7 +77,7 @@ impl Display for ExecutablePlanError {
 
 impl Error for ExecutablePlanError {}
 
-/// Compile the fixed Subnet-scale schedule without floating-point execution authority.
+/// Compile the fixed global-homepage schedule without floating-point execution authority.
 pub fn compile_executable_plan(waveform: &Waveform) -> Result<ExecutablePlan, ExecutablePlanError> {
     let expected_duration_ns = u64::try_from(WAVEFORM_STEP_COUNT)
         .ok()
@@ -218,10 +220,12 @@ fn plan_digest(burn_cycles: &[u128], total_cycles: u128) -> [u8; 32] {
         u128::from(BACKGROUND_CYCLES_PER_SECOND),
         u128::from(CHART_STEP_SECONDS),
         u128::from(CONTROL_STEP_SECONDS),
+        EXECUTION_ALLOWANCE_CYCLES,
         u128::try_from(INITIAL_FUNDING_STEP_COUNT).expect("bounded constant"),
         u128::from(KERNEL_WINDOW_SECONDS),
         u128::from(MAX_BURN_RATE_CYCLES_PER_SECOND),
         MAX_TOTAL_BURN_CYCLES,
+        MIN_RETAINED_CYCLES,
         u128::try_from(PRE_ROLL_STEP_COUNT).expect("bounded constant"),
         u128::from(TARGET_AMPLITUDE_CYCLES_PER_SECOND),
         u128::from(TARGET_FLOOR_CYCLES_PER_SECOND),

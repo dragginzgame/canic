@@ -92,6 +92,10 @@ fn run() -> Result<(), Box<dyn Error>> {
         report.nonnegative_constraint_steps
     );
     println!(
+        "peak_control_cycles_per_second={:.3}",
+        report.peak_control_cycles_per_second
+    );
+    println!(
         "rate_cap_constraint_steps={}",
         report.rate_cap_constraint_steps
     );
