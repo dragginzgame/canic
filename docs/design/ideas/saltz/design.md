@@ -146,6 +146,47 @@ approximately `0.954`, mean absolute error of approximately
 `486.0 Mcycles/second` under the same provisional rectangular response. Those
 figures are model evidence, not an observed public result.
 
+## Candidate Global Plan (Held)
+
+The replacement source hard-cuts the rejected scale layer into one direct
+global-homepage contract. It remains inert until the complete B0d trailing
+edge accepts or revises the candidate kernel:
+
+| Field | Exact local candidate |
+| --- | ---: |
+| Conservative unrelated global background credit | `30,000,000,000 cycles/second` |
+| Visible target floor | `100,000,000,000 cycles/second` |
+| Visible target relief | `50,000,000,000 cycles/second` |
+| Control cadence | `100 seconds` |
+| Homepage chart cadence | `600 seconds` |
+| Candidate kernel width | `4,201 seconds` |
+| Per-step rate ceiling | `500,000,000,000 cycles/second` |
+| Pre-roll steps | `42` |
+| Waveform steps | `864` |
+| Total steps | `906` |
+| Pre-roll burn | `420,915,600,000,000 cycles` |
+| Waveform burn | `7,898,578,155,865,700 cycles` |
+| Total intentional burn | `8,319,493,755,865,700 cycles` |
+| Immutable total ceiling | `8,500,000,000,000,000 cycles` |
+| Candidate digest | `87694d17f2b57f03b6345bce51db4be97e45eeb78b2dd5cedaf891b703579590` |
+
+There is no `control_signal_scale` field or intermediate base-rate family.
+The compiler works directly in global cycles-per-second units. The complete
+pre-roll is also the initial funding window, so a future Arm would require
+exactly:
+
+```text
+420,915,600,000,000  complete 42-pulse pre-roll
+  1,000,000,000,000  minimum retained balance
+    100,000,000,000  execution allowance
+-------------------
+422,015,600,000,000  minimum balance at Arm
+```
+
+The terminal canister already exceeds that balance, but only a reinstall can
+replace its terminal state and old plan. Reinstall, Arm and any additional
+funding remain separately authorized mainnet effects.
+
 ## Economic Boundary
 
 The authorized staged trial funds 42 exact pulses, covering 70 minutes. Arming

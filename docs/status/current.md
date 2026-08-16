@@ -176,6 +176,26 @@ an immediate controller Abort before chart start. Terminal status is
 `33,320,040,000,000 cycles` burned and `925,797,679,907,302 cycles` remaining.
 No waveform step executed and no later intentional burn is authorized.
 
+Read-only B0e global qualification is active. The exact seven-day pre-run
+global series contains 1,009 ten-minute samples with `37.576 Bcycles/second`
+median, `37.983` mean, `53.915` maximum and `4.255 Bcycles/second` 95th-
+percentile absolute adjacent change. Replaying a provisional
+`100..=150 Bcycles/second` trace over every historical day yields
+`0.923..=0.965` correlations. The 26-pulse controlled rise fits an effective
+`4,200.842`-second rectangular window with `R² = 0.999475`; the complete
+post-Abort tail remains the acceptance gate.
+
+The local candidate hard-cuts the obsolete 10× scale into a direct global
+contract: `30 Bcycles/second` conservative background credit,
+`100 Bcycles/second` floor, `50 Bcycles/second` relief, `4,201`-second candidate
+window and `500 Bcycles/second` hard rate ceiling. Its exact integer plan is 42
+pre-roll plus 864 waveform pulses totaling `8,319,493,755,865,700 cycles` with
+digest `87694d17f2b57f03b6345bce51db4be97e45eeb78b2dd5cedaf891b703579590`.
+Simulator/unit checks, warning-denied Clippy, Wasm-target compilation, strict
+Candid equivalence and targeted PocketIC funding, exhaustion, receipt and
+Abort evidence pass. This code remains inert local evidence; it is not
+reinstall, funding or Arm authority.
+
 ## Next Action
 
 The focused `.2` identity-guard cleanup is complete. Do not rerun the broad
@@ -183,10 +203,10 @@ census/full suite or add JSON, generic handling metadata, observability
 infrastructure, compatibility decoding, B1 test coupling or retired 991 rows.
 
 For the standalone waveform idea, retain the terminal canister and its
-remaining cycles without further effects. Before any reinstall, qualify the
-global homepage's background, aggregation and response scale, then compile a
-new inert global controller and require a new exact mainnet authorization.
-Subnet proportionality is useful evidence but cannot establish global
-Dashboard fidelity.
+remaining cycles without further effects. Observe the complete B0d trailing
+edge, accept or revise the candidate `4,201`-second kernel, then reconcile the
+integer plan, historical global replay and financial ceiling. Any reinstall,
+mint, top-up or Arm still requires a new exact mainnet authorization; passing
+local checks cannot supply it.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

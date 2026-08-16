@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- The standalone waveform experiment rejects its Subnet-scaled executor,
+  freezes seven-day global homepage noise and controlled rise evidence, and
+  compiles a still-inert 100–150 Bcycles/second candidate with the scale field
+  removed and an explicit peak-rate report; its observed decay gate remains
+  open and no replacement mainnet effect is authorized.
+
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 
 Detailed patch breakdown: [docs/changelog/0.102.md](docs/changelog/0.102.md)
