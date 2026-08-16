@@ -1,0 +1,16 @@
+type BurnProbeError = variant {
+  AccessDenied;
+  AlreadyUsed;
+  AmountOutOfRange : record { maximum_allowed_cycles : nat };
+};
+
+type BurnReceipt = record {
+  requested_cycles : nat;
+  burned_cycles : nat;
+  balance_before_cycles : nat;
+  balance_after_burn_cycles : nat;
+};
+
+service : {
+  burn_once : (nat) -> (variant { Ok : BurnReceipt; Err : BurnProbeError });
+};

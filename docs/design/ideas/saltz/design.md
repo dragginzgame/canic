@@ -365,6 +365,23 @@ before/after Component balance
 Dashboard observation
 ```
 
+Local primitive evidence from 2026-08-16 exercises only the first three rows.
+The isolated `cycle_burn_probe` requested and returned exactly
+`50,000,000,000` cycles. Its same-message balance moved from
+`1,458,382,819,807` to `1,408,382,819,807` cycles. Replica status around the
+update moved from `1,498,389,321,807` to `1,448,381,177,939` cycles, separating
+the exact intentional burn from `8,143,868` cycles of update execution cost;
+the different in-message balance reflects the replica's transient execution
+accounting. A second call rejected as `AlreadyUsed`. This proves the local CDK
+primitive and receipt path only. It does not satisfy Q1, B0b, mainnet
+visibility, aggregation, phase or economic qualification.
+
+The same local probe was then transferred from the anonymous local principal
+to a dedicated `cycle-burn-local` identity. A signed `1,000,000,000`-cycle
+request burned exactly that amount, while the anonymous caller rejected as
+`AccessDenied`. This is local authorization evidence only and grants no
+mainnet identity or effect authority.
+
 ### Q2. Dashboard bucket cadence
 
 Determine the native metric resolution, the effective interval returned for
