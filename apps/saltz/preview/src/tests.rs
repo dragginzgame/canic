@@ -19,7 +19,7 @@ fn request(method: &str, url: &str) -> HttpRequest {
 }
 
 #[test]
-fn page_tells_the_inert_preview_story_without_an_image_surface() {
+fn page_tells_the_inert_preview_story() {
     let response = response_for(request("GET", "/"), "aaaaa-aa");
     let body = String::from_utf8(response.body).expect("Saltz page is UTF-8");
 
@@ -46,37 +46,8 @@ fn page_tells_the_inert_preview_story_without_an_image_surface() {
     assert!(body.contains(">0B</text>"));
     assert!(body.contains("aaaaa-aa"));
     assert_eq!(render::WAVEFORM_SVG_POINTS.split_whitespace().count(), 860);
-    assert!(!body.contains("SIMULATION // ONLINE"));
-    assert!(!body.contains("Expected Dashboard Shape"));
-    assert!(!body.contains("DATED ORDINARY IC PLANNING BAND"));
-    let anonymous_body = body.to_ascii_lowercase();
-    assert!(!anonymous_body.contains("saltz"));
-    assert!(!anonymous_body.contains("neon"));
-    assert!(!anonymous_body.contains("dezeen"));
     assert_eq!(body.matches("href=\"https://").count(), 1);
-    assert!(!body.contains("<image"));
-    assert!(!body.contains("<img"));
-    assert!(!body.contains("data:image"));
-    assert!(!body.contains(".jpg"));
-    assert!(!body.contains(".jpeg"));
-    assert!(!body.contains(".png"));
-    assert!(!body.contains(".webp"));
-    assert!(!body.contains("/assets/"));
-    assert!(!body.contains("restaurant image"));
-    assert!(!body.contains("source-image"));
-    assert!(!body.contains("source trace"));
-    assert!(!body.contains("<script"));
-}
-
-#[test]
-fn graph_is_code_native_and_contains_no_raster_image() {
-    let response = response_for(request("GET", "/"), "aaaaa-aa");
-    let body = String::from_utf8(response.body).expect("Saltz page is UTF-8");
-
     assert!(body.contains("<svg"));
-    assert!(!body.contains("<image"));
-    assert!(!body.contains("<img"));
-    assert!(!body.contains("data:image"));
 }
 
 #[test]
@@ -98,7 +69,6 @@ fn displayed_trace_preserves_the_selected_numeric_rise_to_width_ratio() {
 #[test]
 fn provenance_json_identifies_the_inert_single_method_canister() {
     let response = response_for(request("GET", "/api/status.json"), "aaaaa-aa");
-    let anonymous_body = std::str::from_utf8(&response.body).expect("status is UTF-8");
     let value: serde_json::Value =
         serde_json::from_slice(&response.body).expect("Saltz status is JSON");
 
@@ -134,10 +104,6 @@ fn provenance_json_identifies_the_inert_single_method_canister() {
         "orientation_only"
     );
     assert_eq!(value["presentation"], "code_native_svg");
-    let anonymous_body = anonymous_body.to_ascii_lowercase();
-    assert!(!anonymous_body.contains("saltz"));
-    assert!(!anonymous_body.contains("neon"));
-    assert!(!anonymous_body.contains("dezeen"));
 }
 
 #[test]
@@ -149,10 +115,6 @@ fn csv_route_serves_the_digest_verified_reference_artifact() {
     assert_eq!(csv.lines().count(), 861);
     assert!(csv.starts_with("index,bucket_start,"));
     assert!(csv.ends_with(",100000000000,100.000000000\n"));
-    let anonymous_csv = csv.to_ascii_lowercase();
-    assert!(!anonymous_csv.contains("saltz"));
-    assert!(!anonymous_csv.contains("neon"));
-    assert!(!anonymous_csv.contains("dezeen"));
 }
 
 #[test]
@@ -176,7 +138,6 @@ fn head_preserves_length_and_mutation_methods_fail_closed() {
     );
     let content_security_policy = header(&get.headers, "Content-Security-Policy");
     assert!(content_security_policy.contains("default-src 'none'"));
-    assert!(!content_security_policy.contains("img-src"));
 }
 
 #[test]

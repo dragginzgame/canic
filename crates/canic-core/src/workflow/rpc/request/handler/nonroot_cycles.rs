@@ -402,7 +402,6 @@ pub(super) async fn execute_authorized_request_cycles(
         pending,
         &crate::dto::rpc::Response::Cycles(response.clone()),
     ) {
-        let err = err;
         let reason = match CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
             Ok(()) => RecoveryReason::ResponseCommitFailed,
             Err(_settlement_err) => RecoveryReason::CostSettlementFailed,

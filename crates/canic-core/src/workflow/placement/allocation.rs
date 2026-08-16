@@ -190,15 +190,11 @@ fn settle_allocation(
         {
             Ok(())
         }
-        SettleReceiptBackedIntentResult::Settled { state: _, .. }
-        | SettleReceiptBackedIntentResult::AlreadySettled { state: _, .. } => {
-            Err(InternalError::invariant())
-        }
-        SettleReceiptBackedIntentResult::NotFound => Err(InternalError::invariant()),
-        SettleReceiptBackedIntentResult::RevisionConflict { actual_revision: _ } => {
-            Err(InternalError::invariant())
-        }
-        SettleReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant()),
+        SettleReceiptBackedIntentResult::Settled { .. }
+        | SettleReceiptBackedIntentResult::AlreadySettled { .. }
+        | SettleReceiptBackedIntentResult::NotFound
+        | SettleReceiptBackedIntentResult::RevisionConflict { .. }
+        | SettleReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant()),
     }
 }
 
@@ -254,11 +250,11 @@ pub(super) fn remove_exact_terminal_intent(
     match result {
         RemoveTerminalReceiptBackedIntentResult::Removed
         | RemoveTerminalReceiptBackedIntentResult::NotFound => Ok(()),
-        RemoveTerminalReceiptBackedIntentResult::NotTerminal => Err(InternalError::invariant()),
-        RemoveTerminalReceiptBackedIntentResult::RevisionConflict { actual_revision: _ } => {
+        RemoveTerminalReceiptBackedIntentResult::NotTerminal
+        | RemoveTerminalReceiptBackedIntentResult::RevisionConflict { .. }
+        | RemoveTerminalReceiptBackedIntentResult::BindingConflict => {
             Err(InternalError::invariant())
         }
-        RemoveTerminalReceiptBackedIntentResult::BindingConflict => Err(InternalError::invariant()),
     }
 }
 
@@ -276,7 +272,10 @@ fn begin_allocation(
     let (revision, root_receipt_may_exist) = match begin_result {
         BeginReceiptBackedIntentResult::Created { revision } => (revision, false),
         BeginReceiptBackedIntentResult::ExistingPending { revision } => (revision, true),
-        BeginReceiptBackedIntentResult::ExistingCommitted { .. } => {
+        BeginReceiptBackedIntentResult::ExistingCommitted { .. }
+        | BeginReceiptBackedIntentResult::BindingConflict
+        | BeginReceiptBackedIntentResult::ReplayWindowClosed { .. }
+        | BeginReceiptBackedIntentResult::ReplayWindowTooLong { .. } => {
             return Err(InternalError::invariant());
         }
         BeginReceiptBackedIntentResult::ExistingRolledBack { .. } => {
@@ -284,24 +283,8 @@ fn begin_allocation(
                 crate::diagnostics::codes::STATE_CONFLICT,
             ));
         }
-        BeginReceiptBackedIntentResult::BindingConflict => {
-            return Err(InternalError::invariant());
-        }
-        BeginReceiptBackedIntentResult::ReplayWindowClosed { .. }
-        | BeginReceiptBackedIntentResult::ReplayWindowTooLong { .. } => {
-            return Err(InternalError::invariant());
-        }
-        BeginReceiptBackedIntentResult::CapacityExceeded {
-            current_quantity: _,
-            requested_quantity: _,
-            limit: _,
-        } => {
-            return Err(InternalError::resource_exhausted());
-        }
-        BeginReceiptBackedIntentResult::StoreCapacityReached {
-            current_records: _,
-            limit: _,
-        } => {
+        BeginReceiptBackedIntentResult::CapacityExceeded { .. }
+        | BeginReceiptBackedIntentResult::StoreCapacityReached { .. } => {
             return Err(InternalError::resource_exhausted());
         }
     };

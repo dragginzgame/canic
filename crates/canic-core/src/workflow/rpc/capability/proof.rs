@@ -82,7 +82,7 @@ fn require_no_scoped_authority(authority: &RootCapabilityAuthority) -> Result<()
     require_no_provision_parent_authority(authority)
 }
 
-fn require_no_target_authority(authority: &RootCapabilityAuthority) -> Result<(), Error> {
+const fn require_no_target_authority(authority: &RootCapabilityAuthority) -> Result<(), Error> {
     if authority.has_target() {
         return Err(Error::from_registered(
             crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
@@ -91,7 +91,9 @@ fn require_no_target_authority(authority: &RootCapabilityAuthority) -> Result<()
     Ok(())
 }
 
-fn require_no_provision_parent_authority(authority: &RootCapabilityAuthority) -> Result<(), Error> {
+const fn require_no_provision_parent_authority(
+    authority: &RootCapabilityAuthority,
+) -> Result<(), Error> {
     if authority.has_provision_parent() {
         return Err(Error::from_registered(
             crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,

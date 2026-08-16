@@ -123,7 +123,7 @@ impl ScalingWorkflow {
         let pool_cfg = scaling
             .as_ref()
             .and_then(|config| config.pools.get(pool))
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let available_capacity =
             available_worker_capacity(pool_cfg.policy.max_workers, worker_count);
         Self::create_worker_from_plan(entry_plan, available_capacity).await

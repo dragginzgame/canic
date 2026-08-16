@@ -79,17 +79,10 @@ uses a raw gateway URL. Locally, open the deployed principal as:
 http://<canister-id>.raw.localhost:8002/
 ```
 
-On IC mainnet the equivalent public form is:
-
-```text
-https://<canister-id>.raw.icp0.io/
-```
-
-An IC-mainnet deploy is a separate external effect. It requires an
-authenticated dedicated identity plus an explicitly approved environment,
-Subnet/controller set and cycle ceiling. The prepared environment contains
-only this standalone canister:
-
-```text
-saltz-preview-ic -> saltz_preview
-```
+The preview is excluded from every checked-in IC-mainnet environment,
+including the explicitly narrowed `ic` environment that replaces the CLI's
+all-canister implicit default. Adding it is a separate external-effect decision
+requiring an authenticated dedicated identity plus an explicitly approved
+environment, Subnet/controller set and cycle ceiling. Until that exact
+authorization exists, the checked-in workflow can build and deploy the preview
+locally only.

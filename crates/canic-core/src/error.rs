@@ -36,7 +36,7 @@ enum PublicProjection {
 }
 
 impl InternalError {
-    fn new(code: RegisteredDiagnosticCode, public_code: RegisteredDiagnosticCode) -> Self {
+    const fn new(code: RegisteredDiagnosticCode, public_code: RegisteredDiagnosticCode) -> Self {
         Self {
             code,
             projection: PublicProjection::Registered(public_code),
@@ -44,12 +44,12 @@ impl InternalError {
     }
 
     #[must_use]
-    pub fn public(code: RegisteredDiagnosticCode) -> Self {
+    pub const fn public(code: RegisteredDiagnosticCode) -> Self {
         Self::projected(code, code)
     }
 
     #[must_use]
-    pub fn projected(
+    pub const fn projected(
         code: RegisteredDiagnosticCode,
         public_code: RegisteredDiagnosticCode,
     ) -> Self {
@@ -62,72 +62,85 @@ impl InternalError {
     /// Preserve a decoded remote rejection while assigning its local transport
     /// failure a registered exact identity.
     #[must_use]
-    pub fn observed_public(err: PublicError) -> Self {
+    pub const fn observed_public(err: PublicError) -> Self {
         Self {
             code: codes::PLATFORM_FAILED,
             projection: PublicProjection::Forwarded(err),
         }
     }
 
-    pub fn forbidden() -> Self {
+    #[must_use]
+    pub const fn forbidden() -> Self {
         Self::public(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     }
 
-    pub fn invalid_input() -> Self {
+    #[must_use]
+    pub const fn invalid_input() -> Self {
         Self::public(crate::diagnostics::codes::REQUEST_INVALID)
     }
 
-    pub fn conflict() -> Self {
+    #[must_use]
+    pub const fn conflict() -> Self {
         Self::public(crate::diagnostics::codes::STATE_CONFLICT)
     }
 
-    pub fn unavailable() -> Self {
+    #[must_use]
+    pub const fn unavailable() -> Self {
         Self::public(crate::diagnostics::codes::STATE_UNAVAILABLE)
     }
 
-    pub fn resource_exhausted() -> Self {
+    #[must_use]
+    pub const fn resource_exhausted() -> Self {
         Self::public(crate::diagnostics::codes::CAPACITY_LIMIT)
     }
 
-    pub fn auth_material_stale() -> Self {
+    #[must_use]
+    pub const fn auth_material_stale() -> Self {
         Self::public(codes::SECURITY_CONFLICT)
     }
 
-    pub fn auth_proof_expired() -> Self {
+    #[must_use]
+    pub const fn auth_proof_expired() -> Self {
         Self::public(codes::AUTH_CERT_EXPIRED)
     }
 
-    pub fn auth_token_expired() -> Self {
+    #[must_use]
+    pub const fn auth_token_expired() -> Self {
         Self::public(crate::diagnostics::codes::AUTH_TOKEN_EXPIRED)
     }
 
-    pub fn auth_proof_pending() -> Self {
+    #[must_use]
+    pub const fn auth_proof_pending() -> Self {
         Self::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
     }
 
     #[must_use]
-    pub fn operation_id_required() -> Self {
+    pub const fn operation_id_required() -> Self {
         Self::public(crate::diagnostics::codes::AUTHORITY_UNAVAILABLE)
     }
 
     #[must_use]
-    pub fn root_data_certificate_unavailable() -> Self {
+    pub const fn root_data_certificate_unavailable() -> Self {
         Self::public(crate::diagnostics::codes::SECURITY_UNAVAILABLE)
     }
 
-    pub fn invariant() -> Self {
+    #[must_use]
+    pub const fn invariant() -> Self {
         Self::new(codes::STATE_INVALID, codes::STATE_INVALID)
     }
 
-    pub fn platform_failure() -> Self {
+    #[must_use]
+    pub const fn platform_failure() -> Self {
         Self::new(codes::PLATFORM_FAILED, codes::STATE_FAILED)
     }
 
-    pub fn state_failure() -> Self {
+    #[must_use]
+    pub const fn state_failure() -> Self {
         Self::new(codes::STATE_FAILED, codes::STATE_FAILED)
     }
 
-    pub fn lifecycle_failure() -> Self {
+    #[must_use]
+    pub const fn lifecycle_failure() -> Self {
         Self::new(codes::LIFECYCLE_FAILED, codes::STATE_FAILED)
     }
 
@@ -201,7 +214,8 @@ impl From<ComponentAllocationPolicyError> for InternalError {
             ComponentAllocationPolicyError::ComponentSpecNotAdmitted(_) => {
                 codes::AUTHORITY_INVALID_STATE
             }
-            ComponentAllocationPolicyError::ComponentSpecUnknown(_) => {
+            ComponentAllocationPolicyError::ComponentSpecUnknown(_)
+            | ComponentAllocationPolicyError::PeerProvisioningGrantMissing { .. } => {
                 codes::CONFIGURATION_UNAVAILABLE
             }
             ComponentAllocationPolicyError::ComponentCountOverflow
@@ -216,9 +230,6 @@ impl From<ComponentAllocationPolicyError> for InternalError {
             ComponentAllocationPolicyError::PeerRootRuntimeInactive
             | ComponentAllocationPolicyError::PeerRequesterRegistryMemberInactive => {
                 codes::AUTHORITY_INACTIVE
-            }
-            ComponentAllocationPolicyError::PeerProvisioningGrantMissing { .. } => {
-                codes::CONFIGURATION_UNAVAILABLE
             }
         };
         Self::public(code)
@@ -244,14 +255,12 @@ impl From<ComponentChildAllocationPolicyError> for InternalError {
             | ComponentChildAllocationPolicyError::ParentRegistryMemberNotActive => {
                 codes::AUTHORITY_INACTIVE
             }
-            ComponentChildAllocationPolicyError::ComponentSpecUnknown(_) => {
+            ComponentChildAllocationPolicyError::ComponentSpecUnknown(_)
+            | ComponentChildAllocationPolicyError::SpawnGrantMissing { .. } => {
                 codes::CONFIGURATION_UNAVAILABLE
             }
             ComponentChildAllocationPolicyError::ChildRoleNotAdmitted { .. } => {
                 codes::AUTHORITY_INVALID_STATE
-            }
-            ComponentChildAllocationPolicyError::SpawnGrantMissing { .. } => {
-                codes::CONFIGURATION_UNAVAILABLE
             }
             ComponentChildAllocationPolicyError::ParentRoleCountOverflow
             | ComponentChildAllocationPolicyError::ParentRoleCapacityExhausted { .. }

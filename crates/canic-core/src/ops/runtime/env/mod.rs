@@ -159,7 +159,7 @@ impl EnvOps {
 
     /// Return the immutable Registry-issued identity of this managed application Canister.
     pub fn managed_binding() -> Result<ManagedCanisterBinding, InternalError> {
-        Env::get_managed_binding().ok_or_else(|| InternalError::unavailable())
+        Env::get_managed_binding().ok_or_else(InternalError::unavailable)
     }
 
     pub fn canister_role() -> Result<CanisterRole, InternalError> {

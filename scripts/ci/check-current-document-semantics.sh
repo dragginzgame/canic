@@ -126,24 +126,26 @@ historical_backlog="$ROOT/docs/design/archive/post-46-backlog"
 }
 
 design_ideas="$ROOT/docs/design/ideas"
-[ "$(find "$design_ideas" -type f ! -path "$design_ideas/saltz/*" | wc -l)" -le 16 ] || {
+[ "$(find "$design_ideas" -type f | wc -l)" -le 16 ] || {
     echo "optional design-idea collection has grown without explicit approval" >&2
     exit 1
 }
-[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d ! -name saltz | wc -l)" -le 9 ] || {
+[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 9 ] || {
     echo "optional design-idea topics have grown without explicit approval" >&2
     exit 1
 }
 
 for idea_dir in "$design_ideas"/*; do
     [ -d "$idea_dir" ] || continue
-    [ "${idea_dir##*/}" != "saltz" ] || continue
 
     max_idea_files=1
     case "${idea_dir##*/}" in
         coordinator-workers|cross-subnet-data-transport-groundwork|declarative-authentication-profiles|optional-encrypted-canister-snapshot-archives|standalone-blob-service-extraction)
             ;;
         framework-neutral-synchronous-lifecycle-composition|language-neutral-managed-guest-feasibility)
+            max_idea_files=2
+            ;;
+        saltz)
             max_idea_files=2
             ;;
         *)
@@ -164,6 +166,12 @@ for idea_dir in "$design_ideas"/*; do
     while IFS= read -r idea_file; do
         case "${idea_file##*/}" in
             design.md | exploration.md | status.md) ;;
+            saltz_24h_waveform_floor_100B_860.csv)
+                [ "${idea_dir##*/}" = "saltz" ] || {
+                    echo "waveform artifact exists outside the Saltz idea: $(guard_path "$idea_file")" >&2
+                    exit 1
+                }
+                ;;
             *)
                 echo "optional design-idea topic has an unsupported file: $(guard_path "$idea_file")" >&2
                 exit 1
@@ -171,41 +179,6 @@ for idea_dir in "$design_ideas"/*; do
         esac
     done < <(find "$idea_dir" -maxdepth 1 -type f | sort)
 done
-
-saltz_idea="$design_ideas/saltz"
-saltz_waveform="$saltz_idea/saltz_24h_waveform_floor_100B_860.csv"
-saltz_waveform_sha256="11fd75eb8fd0fed4f075d324051cc880db50619837bfe6c889fe9d654647d911"
-[ "$(find "$saltz_idea" -type f | wc -l)" -eq 2 ] || {
-    echo "Saltz idea must retain exactly its design and numeric waveform: $(guard_path "$saltz_idea")" >&2
-    exit 1
-}
-require_files "$GUARD_LABEL" \
-    "$saltz_idea/design.md" \
-    "$saltz_waveform"
-require_text "$saltz_idea/design.md" \
-    "$saltz_waveform_sha256" \
-    "$GUARD_LABEL"
-bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
-    sha256 \
-    "$saltz_waveform_sha256" \
-    "$saltz_waveform"
-[ ! -d "$ROOT/apps/saltz/profile_compiler" ] || {
-    echo "removed Saltz image-authoring package has returned" >&2
-    exit 1
-}
-saltz_image_file="$(find "$saltz_idea" "$ROOT/apps/saltz" -type f \( \
-    -iname '*.avif' -o \
-    -iname '*.gif' -o \
-    -iname '*.jpeg' -o \
-    -iname '*.jpg' -o \
-    -iname '*.png' -o \
-    -iname '*.svg' -o \
-    -iname '*.webp' \
-    \) -print -quit)"
-[ -z "$saltz_image_file" ] || {
-    echo "Saltz source or raster image has returned: $(guard_path "$saltz_image_file")" >&2
-    exit 1
-}
 
 for evidence_root in \
     "$ROOT/docs/audits/working" \

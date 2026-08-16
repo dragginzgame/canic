@@ -113,7 +113,7 @@ impl LogRetentionWorkflow {
             return Ok(None);
         };
         let deadline_secs = policy::log::age_expiry_at(created_at, max_age_secs)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         seconds_to_nanos(deadline_secs).map(Some)
     }
 }
@@ -121,7 +121,7 @@ impl LogRetentionWorkflow {
 fn seconds_to_nanos(seconds: u64) -> Result<u64, InternalError> {
     seconds
         .checked_mul(NANOS_PER_SECOND)
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 #[cfg(test)]

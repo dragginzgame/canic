@@ -55,7 +55,7 @@ pub(super) fn reserve_icp_refill_cost_guard_if_needed(
 pub(super) fn require_icp_refill_cost_permit(
     cost_permit: Option<&CostGuardPermit>,
 ) -> Result<&CostGuardPermit, InternalError> {
-    cost_permit.ok_or_else(|| InternalError::invariant())
+    cost_permit.ok_or_else(InternalError::invariant)
 }
 
 pub(super) fn icp_refill_cost_guard_request(

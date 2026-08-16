@@ -1,6 +1,6 @@
 use crate::{InternalError, dto::error::Error};
 
-fn internal_error_to_public(err: &InternalError) -> Error {
+const fn internal_error_to_public(err: &InternalError) -> Error {
     err.public_error()
 }
 

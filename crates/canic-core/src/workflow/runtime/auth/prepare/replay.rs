@@ -184,15 +184,15 @@ pub(super) fn map_token_prepare_replay_decision(
         ReplayReceiptDecision::Expired => Err(InternalError::public(
             crate::diagnostics::codes::EVIDENCE_EXPIRED,
         )),
-        ReplayReceiptDecision::RecoveryRequired { reason: _, .. } => Err(InternalError::public(
+        ReplayReceiptDecision::RecoveryRequired { .. } => Err(InternalError::public(
             crate::diagnostics::codes::REQUEST_INVALID,
         )),
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending: _, .. } => Err(
-            InternalError::public(crate::diagnostics::codes::AUTHORITY_CAPACITY),
-        ),
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending: _, .. } => Err(
-            InternalError::public(crate::diagnostics::codes::REQUEST_CAPACITY),
-        ),
+        ReplayReceiptDecision::PendingActorQuotaExceeded { .. } => Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CAPACITY,
+        )),
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { .. } => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_CAPACITY,
+        )),
     }
 }
 
@@ -272,15 +272,15 @@ pub(super) fn map_role_attestation_replay_decision(
         ReplayReceiptDecision::Expired => Err(InternalError::public(
             crate::diagnostics::codes::EVIDENCE_EXPIRED,
         )),
-        ReplayReceiptDecision::RecoveryRequired { reason: _, .. } => Err(InternalError::public(
+        ReplayReceiptDecision::RecoveryRequired { .. } => Err(InternalError::public(
             crate::diagnostics::codes::REQUEST_INVALID,
         )),
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending: _, .. } => Err(
-            InternalError::public(crate::diagnostics::codes::AUTHORITY_CAPACITY),
-        ),
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending: _, .. } => Err(
-            InternalError::public(crate::diagnostics::codes::REQUEST_CAPACITY),
-        ),
+        ReplayReceiptDecision::PendingActorQuotaExceeded { .. } => Err(InternalError::public(
+            crate::diagnostics::codes::AUTHORITY_CAPACITY,
+        )),
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { .. } => Err(InternalError::public(
+            crate::diagnostics::codes::REQUEST_CAPACITY,
+        )),
     }
 }
 

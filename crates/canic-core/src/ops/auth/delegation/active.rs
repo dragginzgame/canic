@@ -74,7 +74,7 @@ fn require_current_epoch_floors(proof: &ActiveDelegationProof) -> Result<(), Int
     let verifier = AuthOps::auth_proof_verifier_config()?;
     let policy = verifier
         .chain_key_root
-        .ok_or_else(|| InternalError::auth_material_stale())?;
+        .ok_or_else(InternalError::auth_material_stale)?;
     validate_root_proof_epoch_floors(
         &proof.proof.root_proof,
         policy.policy.min_accepted_proof_epoch,

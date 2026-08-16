@@ -108,7 +108,7 @@ pub fn synchronize_directory(
     let current_authority = current
         .authority
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_directory_progression(current_authority, &request.authority)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(&request.authority)?;
     let direct_children_hash = validate_direct_children(&request.direct_children)?;
@@ -403,7 +403,7 @@ fn validate_fleet_services(
             if member.member_purpose == crate::config::FleetServiceMemberPurpose::Authority {
                 authority_count = authority_count
                     .checked_add(1)
-                    .ok_or_else(|| InternalError::resource_exhausted())?;
+                    .ok_or_else(InternalError::resource_exhausted)?;
             }
             if member.component == component.component {
                 let protected_membership_is_exact = [
@@ -552,7 +552,7 @@ fn validate_component_group_directory(
             Err(InternalError::invalid_input())
         };
     };
-    let directory = directory.ok_or_else(|| InternalError::invalid_input())?;
+    let directory = directory.ok_or_else(InternalError::invalid_input)?;
     let provenance = &directory.provenance;
     let provenance_is_exact = [
         provenance.authority == component.authority,

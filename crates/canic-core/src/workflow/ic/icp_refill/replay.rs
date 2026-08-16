@@ -112,19 +112,19 @@ pub(super) fn reserve_icp_refill_replay(
             reason:
                 reason @ (RecoveryReason::CostSettlementFailed | RecoveryReason::ResponseCommitFailed),
         } => recover_icp_refill_response(&token, reason).map(IcpRefillReplayReservation::Replay),
-        ReplayReceiptDecision::RecoveryRequired { reason: _, .. } => {
+        ReplayReceiptDecision::RecoveryRequired { .. } => {
             log_icp_refill_replay_conflict(operation_id, "recovery_required");
             Err(InternalError::public(
                 crate::diagnostics::codes::REQUEST_INVALID,
             ))
         }
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending: _, .. } => {
+        ReplayReceiptDecision::PendingActorQuotaExceeded { .. } => {
             log_icp_refill_replay_conflict(operation_id, "pending_actor_quota_exceeded");
             Err(InternalError::public(
                 crate::diagnostics::codes::AUTHORITY_CAPACITY,
             ))
         }
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending: _, .. } => {
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { .. } => {
             log_icp_refill_replay_conflict(operation_id, "pending_command_quota_exceeded");
             Err(InternalError::public(
                 crate::diagnostics::codes::REQUEST_CAPACITY,

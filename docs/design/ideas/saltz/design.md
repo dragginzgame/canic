@@ -7,10 +7,10 @@ Date: 2026-08-16
 * Status: unnumbered design idea.
 * Repository: Canic.
 * Purpose: experimental Canic-managed Component capable of deliberately burning a bounded, pre-authorized quantity of cycles according to a time-domain waveform.
-* Initial demonstration target: reproduce the neon Swiss-mountain profile from
-  the final permitted Saltz reference image as a modest jagged trace near the
-  IC's ordinary Cycle Burn Rate band over one complete ICP Dashboard `1D`
-  window.
+* Initial demonstration target: reproduce the provisionally selected numeric
+  Swiss-mountain profile as a modest jagged trace near the IC's ordinary Cycle
+  Burn Rate band over one complete ICP Dashboard `1D` window. Its authoring
+  provenance and permission remain promotion gates.
 * This is not yet a numbered release design and authorizes no IC-mainnet effect.
 * Burner implementation requires Canic's accepted role-owned Candid surface
   and shared `ic-timers` consumer hard cut. Its Canic-owned managed-role base

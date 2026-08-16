@@ -308,10 +308,10 @@ impl CycleWorkflow {
     fn deadline_after_secs(now_ns: u64, delay_secs: u64) -> Result<u64, InternalError> {
         let delay_ns = delay_secs
             .checked_mul(NANOS_PER_SECOND)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         now_ns
             .checked_add(delay_ns)
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 }
 

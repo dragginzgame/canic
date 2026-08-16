@@ -82,14 +82,10 @@ impl RuntimeAuthWorkflow {
             Ok(decision) => {
                 return map_token_prepare_replay_decision(decision);
             }
-            Err(ReplayReceiptRetentionError::ActorQuotaExceeded {
-                max_retained: _, ..
-            }) => {
-                return Err(InternalError::resource_exhausted());
-            }
-            Err(ReplayReceiptRetentionError::CommandQuotaExceeded {
-                max_retained: _, ..
-            }) => {
+            Err(
+                ReplayReceiptRetentionError::ActorQuotaExceeded { .. }
+                | ReplayReceiptRetentionError::CommandQuotaExceeded { .. },
+            ) => {
                 return Err(InternalError::resource_exhausted());
             }
             Err(ReplayReceiptRetentionError::Store(err)) => {
@@ -332,7 +328,7 @@ where
     }
 }
 
-fn delegated_token_prepare_error_allows_lazy_repair(err: &InternalError) -> bool {
+const fn delegated_token_prepare_error_allows_lazy_repair(err: &InternalError) -> bool {
     matches!(
         err.public_error().raw_code(),
         code if code == codes::SECURITY_CONFLICT.raw_code().raw()
