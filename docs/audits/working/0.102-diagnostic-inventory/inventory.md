@@ -550,6 +550,48 @@ V3 has no compatible predecessor by construction. All later 0.102 material
 slice and closeout comparisons must use this v3 method, exact roster and
 comparability rules.
 
+### Targeted 0.102 Closeout
+
+The role-scoped closeout built release artifacts for one representative
+Component plus Fleet Subnet Root, Fleet Coordinator and Wasm Store. It is not
+a retained `CANIC-WASM-001/v3` run or a replacement audit baseline. The
+comparison uses the retained `v0.101.53` baseline above and candidate working
+tree `b34d92ab115ecb7a9f884178ec10fae5bb563ace` plus the uncommitted diagnostic
+cut. Because intervening release-line work is also present, the deltas are
+snapshots rather than causal diagnostic attribution.
+
+Each role was built offline through the canonical host `build_artifact`
+authority with the release profile, `apps/test/canic.toml`, Rust/Cargo 1.97.1,
+`ic-wasm 0.11.1` and `twiggy-opt 0.8.0`. No replica, deployment, network access
+or direct Cargo Wasm build was used. Every builder gzip passed integrity and
+decompressed to the exact raw-Wasm digest; `ic-wasm info` and bounded `twiggy`
+structure checks passed.
+
+| Role | Release Wasm | Baseline delta | Release gzip | Baseline delta | Functions | Data bytes | Baseline data delta | Exports |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `app` | 3,121,640 | +115,240 (+3.83%) | 1,027,748 | +46,863 (+4.78%) | 5,782 | 213,728 | -22,788 | 27 |
+| `root` | 7,213,384 | -326,362 (-4.33%) | 2,326,922 | -103,705 (-4.27%) | 11,274 | 332,636 | -113,616 | 127 |
+| `fleet_coordinator` | 3,516,812 | +77,009 (+2.24%) | 1,109,030 | +33,432 (+3.11%) | 5,487 | 194,828 | -48,112 | 29 |
+| `wasm_store` | 2,695,059 | +97,808 (+3.77%) | 893,890 | +38,223 (+4.47%) | 5,337 | 190,956 | -25,268 | 32 |
+
+Every artifact has three data sections. The largest shallow item remains
+`data[0]`: 213,314 bytes for `app`, 331,614 for `root`, 194,402 for
+`fleet_coordinator` and 190,442 for `wasm_store`. The largest retained item
+remains `table[0]`: 1,394,984, 4,672,040, 1,615,433 and 1,226,759 bytes.
+
+All four data sections are smaller than the retained baseline. Only Root is
+smaller in total raw and gzip bytes; the other three roles grew across the
+non-isolated release line, so 0.102 makes no causal diagnostic-savings claim.
+A bounded strings scan found no selected host summaries or labels, reason
+ledger path, working-audit path or generated cause-family marker. Together
+with the one-field Candid and generated-drift tests, this proves the host
+catalogue and B1 register did not enter these artifacts.
+
+The compact contract and host/runtime ownership boundary remain justified
+independently of size. This evidence closes the 0.102 measurement requirement
+without authorizing another compaction programme; a future full
+`CANIC-WASM-001/v3` run remains maintainer-owned release validation.
+
 ## Reproducible Discovery Commands
 
 The source census is reproduced with bounded `rg` scans over `canic-core`,

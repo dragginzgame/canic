@@ -28,16 +28,15 @@ specifically to intentional waveform burn.
 
 The page makes no network-status claim merely because it responded. It labels
 itself as an inert served preview, distinguishes the static proposed Dashboard
-total from the exact dated global observation band, identifies the restaurant
-image as absent, and states both that burn capability is absent and that
-ordinary query execution still consumes cycles. The footer's `Canic` label
-links to the authoritative repository.
+total from the exact dated global observation band, and states both that burn
+capability is absent and that ordinary query execution still consumes cycles.
+The footer's `Canic` label links to the authoritative repository.
 
 The public HTTP surface is intentionally anonymous. Its HTML, status JSON and
 CSV contain no `Saltz`, `neon` or publisher-name token, and the source-article
 link is absent. The long German document title is the only textual clue to the
-artistic source. Internal package names and offline design evidence retain their
-truthful implementation identity.
+artistic source. Internal package and design names retain their truthful
+implementation identity.
 
 The checked-in CSV preserves the provisional numeric waveform and exact
 rational 24-hour time axis. The removed image-authoring pipeline no longer

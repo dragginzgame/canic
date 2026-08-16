@@ -22,11 +22,11 @@ Date: 2026-08-16
   still requires a separate exact authorization before any live calibration
   effect. B1 implementation remains held until the promotion gates close.
 * Implementation disposition: the non-destructive `apps/saltz` foundation and
-  exact-image host compiler may proceed independently. The checked-in Burner
-  shell is inert and contains no burn, timer, run-state or authorization path.
-  A separate standalone read-only preview may render the compiled reference
-  graph without Canic/Fleet behavior. It is presentation evidence only and
-  does not satisfy Dashboard qualification or authorize a burn.
+  numeric preview may proceed independently. The checked-in Burner shell is
+  inert and contains no burn, timer, run-state or authorization path. The
+  standalone read-only preview renders only a digested numeric trace without
+  Canic/Fleet behavior. It is presentation evidence only and does not satisfy
+  waveform-authoring provenance, Dashboard qualification or burn authority.
 
 The idea should remain under:
 
@@ -52,7 +52,8 @@ retried or caught up.
 
 The Component is an execution engine, not an image processor, Dashboard scraper, autonomous fleet allocator or general-purpose scheduler.
 
-The waveform is compiled by Canic host tooling before execution.
+Any executable waveform is compiled from approved numeric authority by Canic
+host tooling before execution.
 
 The Component:
 
@@ -103,34 +104,33 @@ general-purpose operator command. Canic supplies normal lifecycle, authority,
 protected diagnostics and shared-timer integration; Saltz owns the destructive
 waveform domain.
 
-The host compiler and run-authoring surface are Saltz-specific. Promotion must
-not introduce a generic `canic burn` command or make deliberate cycle
-destruction a standard managed-Component capability.
+The numeric run-authoring surface is Saltz-specific. Promotion must not
+introduce a generic `canic burn` command or make deliberate cycle destruction
+a standard managed-Component capability.
 
 The standalone graph preview is intentionally outside the future Component.
 It exposes one `http_request` query, embeds the digest-verified CSV and renders
 the waveform as a code-native SVG. It has no update, timer, stable state,
-authorization or `cycles_burn` path. It does not embed or re-host the selected
-photograph's bytes, and it serves no raster image or image route. The pinned
-photograph remains offline design evidence for waveform extraction only. The
-preview's displayed zero means zero intentional waveform burn; ordinary query
-execution still incurs normal canister costs.
+authorization or `cycles_burn` path. The repository and preview retain no
+source photograph, raster derivative, extraction overlay or image-authoring
+package. The preview's displayed zero means zero intentional waveform burn;
+ordinary query execution still incurs normal canister costs.
 
 Every preview label must describe an evidenced boundary rather than provide
 decorative operational language. A served response may say that it was served,
 but must not infer that the canister is mainnet, certified or generally
 "online." The yellow line is the proposed, unqualified global Dashboard total;
 the red band is the exact dated `31.671..=49.918 Bcycles/second` observation.
-The preview must state that it contains no restaurant image, no live metric is
-fetched, no run is armed, intentional burn capability is absent, and ordinary
-query execution still consumes cycles.
+The preview must state that no live metric is fetched, no run is armed,
+intentional burn capability is absent, and ordinary query execution still
+consumes cycles. Image absence is enforced structurally rather than advertised
+as another public clue.
 
 The public preview does not name this experiment, the source installation or
 its publisher. The HTML, machine-readable status and CSV contain no `Saltz`,
 `neon` or publisher-name token, and there is no source-article link. The exact
 long German page title is the only public textual clue. This presentation rule
-does not rename internal packages or remove the pinned offline evidence needed
-to reproduce and audit waveform extraction.
+does not rename internal packages or the internal design idea.
 
 ## Initial Saltz Waveform
 
@@ -140,43 +140,35 @@ provisional target deliberately clears the dated `30..=60 Bcycles/second`
 planning band, but remains subject to an economic no-go ceiling and B0
 visibility qualification rather than treating signal dominance as unlimited.
 
-### Selected Visual Reference
+### Numeric Waveform Authority
 
-![Saltz restaurant uninterrupted red neon Swiss-mountain installation](saltz_reference_dezeen_860x573.jpg)
-
-*Selected visual reference: the uninterrupted neon-wall photograph from
-[Dezeen's Saltz article](https://www.dezeen.com/2016/03/15/rolf-sachs-saltz-restaurant-interior-design-dolder-grand-hotel-zurich/).
-The repository-local `860x573` JPEG is the exact externally served derivative
-selected by the maintainer and observed on 2026-08-16. It has SHA-256
-`9cd20fa6de0ba665de8a956eb01dfe993af30c678e63fc03093ddd40b1acec06`.*
-
-The selected composition is final for this idea. The publisher-hosted
-`936x624` JPEG is the same composition but is not byte-identical to the
-selected `860x573` derivative, so it is not silently substituted as extraction
-authority. The local artifact freezes the selected bytes but does not by
-itself establish reuse permission. The host compiler now enforces these exact
-bytes and generates an extraction overlay. B2 must still record the source,
-permission and attribution and formally admit the pinned bytes, compiler and
-artifacts as run authority.
-
-The current generated reference artifacts are:
+The public repository intentionally retains no source photograph, raster
+derivative, extraction overlay or image-decoding/compiler package. Those
+artifacts are not required to render the inert preview and could otherwise be
+mistaken for approved reuse or executable waveform authority. The remaining
+checked-in artifact is the provisional numeric waveform:
 
 ```text
 saltz_24h_waveform_floor_100B_860.csv
 SHA-256: 11fd75eb8fd0fed4f075d324051cc880db50619837bfe6c889fe9d654647d911
 
-saltz_reference_overlay.svg
-SHA-256: 87a99d442d1f55bce2a4ca1900343b8a1b8e78b7decfe0c170ba77ed7094aef0
-
-extracted point encoding
+numeric point encoding
 SHA-256: c0b281f64e6f07e65ca6efd121919d8023f8640b6d429b54e0b739f3c84b6d50
 ```
+
+The CSV and point digest preserve the currently selected geometry, but they do
+not prove how that geometry was authored or establish source reuse permission.
+They are presentation evidence, not an executable `RunPlan`. If fidelity to an
+external work remains a promotion requirement, B2 must separately approve
+non-served authoring evidence, permission and a reproducible numeric derivation
+without adding source bytes or image tooling back to the preview, its Wasm or
+the public repository.
 
 It contains exactly 860 indexed buckets with contiguous offsets covering
 `86_400_000_000_000` nanoseconds. Its normalized heights span
 `0..=1_000_000` parts per million and its provisional visible target spans
 `100_000_000_000..=150_000_000_000` cycles per second. The
-`50 Bcycles/second` vertical relief preserves the exact jagged source geometry
+`50 Bcycles/second` vertical relief preserves the exact jagged numeric geometry
 while separating it from the measured background variation. Raising only the
 floor would not solve visibility: relief, rather than absolute height, is what
 makes the mountain distinguishable from baseline noise.
@@ -226,42 +218,11 @@ graph against arbitrary future IC activity.
 This CSV is digested reference input, not an executable `RunPlan`. Its
 approximately 100.465-second buckets and visible-rate mapping remain
 provisional until the exact Dashboard observation contract and economic
-feasibility gate are accepted. Promotion must additionally record reuse
-permission and formally accept the pinned source URL, exact bytes and
-extracted-point encoding; public availability alone is not evidence of reuse
-permission.
+feasibility gate are accepted. Promotion must additionally freeze truthful
+authoring provenance and permission without treating public availability or a
+numeric digest as proof of either.
 
-The exact `saltz-neon-centreline-v1` extraction contains:
-
-```text
-860 horizontal source samples
-source y = 93.000..=141.499 pixels
-48.499 pixels of vertical range
-```
-
-The generated SVG overlays all 860 centreline points on the selected image and
-renders the same normalized points in the provisional Dashboard target band.
-This closes the former wrong-image trace: the checked-in CSV and overlay now
-come from the exact local JPEG. B2 acceptance and rendered Dashboard fidelity
-remain open.
-
-The v1 extractor is intentionally narrow and reproducible:
-
-```text
-verify exact JPEG SHA-256 and 860x573 RGB shape
-decode with jpeg-decoder's platform-independent path
-inspect y = 80..<170 for every x = 0..<860
-score = max(0, 4 * green + blue - abs(red - green))
-select the maximum-score pixel
-take the contiguous vertical run around it with score >= 75% of maximum
-record that run's score-weighted vertical centre in millipixels
-normalize only after all 860 independent columns are extracted
-```
-
-No horizontal neighbor, smoothing pass or independent Y-axis reconstruction
-enters the master trace.
-
-The profile compiler stores the original trace as normalized points:
+The numeric master trace is represented as normalized points:
 
 ```text
 x: 0.0 .. 1.0
@@ -271,33 +232,36 @@ h: 0.0 .. 1.0
 where:
 
 ```text
-x = horizontal position through the photograph
+x = horizontal position through the trace
 
-h = (lowest_source_y - source_y)
-    / source_vertical_range
+h = normalized vertical position
 ```
 
-No independent Y-axis stretching, smoothing or artistic reconstruction is permitted by the canonical Saltz profile.
+No independent Y-axis stretching, smoothing or artistic reconstruction is
+permitted after the canonical numeric waveform is accepted.
 
-The source profile is identified by a digest:
+The waveform is identified by numeric and authoring-evidence digests:
 
 ```rust
 struct WaveformIdentity {
-    source_sha256: [u8; 32],
-    extracted_points_sha256: [u8; 32],
+    waveform_points_sha256: [u8; 32],
     reference_artifact_sha256: [u8; 32],
-    compiler_version: String,
+    authoring_evidence_sha256: [u8; 32],
+    authoring_method_revision: String,
 }
 ```
 
+`authoring_evidence_sha256` may bind separately controlled evidence; it never
+authorizes serving or embedding that evidence.
+
 The exact dashboard cadence remains a qualification input.
 
-The 860-point source waveform is therefore not necessarily executed as 860 burns.
+The 860-point numeric waveform is therefore not necessarily executed as 860 burns.
 
 Instead:
 
 ```text
-source waveform
+numeric waveform
       |
       v
 piecewise-linear master curve
@@ -1201,40 +1165,37 @@ The required durable authorities are only:
 
 No generic job engine, task queue or scheduler abstraction should be introduced.
 
-## Host Profile Compiler
+## Deferred Offline Waveform Authoring
 
-The host owns image-to-waveform preparation.
+No image decoder or source-to-waveform compiler exists in the workspace. The
+current preview consumes the pinned numeric CSV only. Any future authoring
+tool must be separately reviewed, remain host-only and emit only approved
+numeric waveform and plan artifacts. Source media, raster derivatives and
+graphical overlays must not enter the preview package, canister Wasm or public
+repository.
 
-For the Saltz demonstration:
+The eventual numeric plan compiler must:
 
 ```text
-selected image
-    |
-    v
-extract neon centreline
-    |
-    v
-860-point master trace
-    |
-    v
-preserve native aspect ratio
+approved numeric master trace
     |
     v
 resample to qualified Dashboard cadence
     |
     v
-map y to floor + amplitude
+map normalized height to floor + amplitude
     |
     v
 produce authenticated, digested RunPlan
 ```
 
-The compiler should also render a preview using the measured Dashboard plot geometry.
+It should also render a code-native preview using the measured Dashboard plot
+geometry.
 
 Before a real run, the operator sees:
 
 ```text
-SOURCE IMAGE
+NUMERIC WAVEFORM
 
 EXPECTED DASHBOARD LINE
 
@@ -1249,11 +1210,11 @@ signature; if offline signatures are later required, promotion must define
 the signer, domain separator, signed bytes and verification contract
 explicitly.
 
-## No Hidden Image Logic In The Canister
+## No Image Logic Or Bytes In The Canister
 
 The canister never knows what Saltz is.
 
-It does not store PNG or JPEG data.
+It does not store or serve image data.
 
 It stores only:
 
@@ -1380,7 +1341,7 @@ No large artistic run begins before a very small calibration pulse has establish
 
 ## Fidelity Metric
 
-The final experiment should define image accuracy numerically.
+The final experiment should define numeric waveform fidelity explicitly.
 
 For every rendered Dashboard point:
 
@@ -1404,10 +1365,10 @@ The Saltz run should only be described as successful if it passes a predeclared 
 
 ## Suggested Implementation Sequence
 
-The non-destructive application shell and compiler may be developed and
-reviewed before B1 so source geometry is no longer speculative. That work does
-not satisfy B2 or authorize an executable payload: formal B2 acceptance still
-consumes the qualified observation contract and the accepted Burner boundary.
+The non-destructive application shell and numeric preview may be developed and
+reviewed before B1. That work does not satisfy B2 or authorize an executable
+payload: formal B2 acceptance still consumes approved authoring evidence, the
+qualified observation contract and the accepted Burner boundary.
 
 ### B0a — Observation Contract And Economic Feasibility
 
@@ -1440,12 +1401,13 @@ consumes the qualified observation contract and the accepted Burner boundary.
 * prohibit module replacement while armed or running;
 * add PocketIC tests.
 
-### B2 — Saltz Compiler
+### B2 — Offline Waveform Authority
 
-* freeze selected image;
-* freeze 860-point extracted master;
+* freeze the source-permission and authoring-evidence disposition;
+* freeze the approved 860-point numeric master without checking source media
+  into the repository;
 * resample to current Dashboard cadence;
-* produce expected plot preview;
+* produce a code-native expected plot preview;
 * produce cycle-budget calculation.
 
 ### B3 — Optional Forecast-Based Adjustment
@@ -1461,7 +1423,7 @@ consumes the qualified observation contract and the accepted Burner boundary.
 * pre-fund exact maximum plus reserve;
 * execute one 24-hour run;
 * reconcile every bucket;
-* compare actual Dashboard result to expected Saltz trace.
+* compare the actual Dashboard result to the approved numeric trace.
 
 No B4 authorization is inherited from B0b, Component approval or available
 balance. It follows Canic's accepted external-effect authorization contract
@@ -1494,8 +1456,10 @@ This idea is ready to become a numbered implementation design only when:
 2. the `1D` graph's aggregation epoch, width, attribution and execution phase
    are measured;
 3. publication lag and autoscaling are understood;
-4. the selected Saltz source image and extracted waveform have immutable digests;
-5. a preview generated from the executable plan matches the source geometry;
+4. separately controlled authoring evidence, permission and the numeric
+   waveform have immutable digests;
+5. a preview generated from the executable plan matches the approved numeric
+   geometry;
 6. rational scheduling covers the exact run duration without drift;
 7. all module replacement is prohibited while armed or running;
 8. all burn arithmetic is checked and bounded;
@@ -1521,7 +1485,9 @@ Promotion additionally requires:
 23. forecast replacement and receipt provenance are unambiguous;
 24. the active-run upgrade prohibition is proved for same and different Wasm;
 25. no cross-release upgrade support is implied; and
-26. the source image, permission and canonical waveform artifact are frozen.
+26. source permission, non-served authoring evidence and the canonical numeric
+    waveform artifact are frozen without source media entering the repository
+    or canister.
 
 ## Design Principle
 

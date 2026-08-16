@@ -32,13 +32,13 @@ const PAGE: &str = r##"<!doctype html>
       <div>
         <p class="kicker">INERT CANISTER PREVIEW // STATIC MODEL</p>
         <h1>Das <span>Domrestaurantwandkunstzyklusbrenngraphnachbildung</span></h1>
-        <p class="subtitle">This canister maps one selected 860-point source trace into a hypothetical 24-hour global Cycle Burn Rate profile. It does not read live IC metrics, schedule a run or burn cycles.</p>
+        <p class="subtitle">This canister maps one immutable 860-point numeric trace into a hypothetical 24-hour global Cycle Burn Rate profile. It does not read live IC metrics, schedule a run or burn cycles.</p>
       </div>
       <div class="signal"><b>PREVIEW RESPONSE // SERVED</b>BURN CAPABILITY: NOT COMPILED<br>HTTP: RAW / UNCERTIFIED</div>
     </header>
 
     <section class="stats" aria-label="Waveform summary">
-      <article class="stat"><span class="label">Source trace</span><strong>__POINT_COUNT__ points</strong><small>one source-image column per point; no horizontal smoothing</small></article>
+      <article class="stat"><span class="label">Numeric trace</span><strong>__POINT_COUNT__ points</strong><small>one indexed point per horizontal position; no smoothing</small></article>
       <article class="stat"><span class="label">Proposed duration</span><strong>24 hours</strong><small>hypothetical elapsed time; no start time or armed run exists</small></article>
       <article class="stat"><span class="label">Proposed Dashboard total</span><strong>100–150B/s</strong><small>global background plus controlled burn; not yet qualified</small></article>
       <article class="stat"><span class="label">Burn execution</span><strong>Disabled</strong><small>no cycles_burn path; ordinary query execution still consumes cycles</small></article>
@@ -49,7 +49,7 @@ const PAGE: &str = r##"<!doctype html>
       <div class="graph">
         <svg viewBox="0 0 1280 340" role="img" aria-labelledby="graph-title graph-description">
           <title id="graph-title">Proposed global cycle-burn-rate profile over 24 hypothetical hours</title>
-          <desc id="graph-description">The yellow line is a static proposal for a global Dashboard total ranging from 100 to 150 billion cycles per second. The red band is a dated global observation from 2026-08-15 through 2026-08-16. This data-only graph contains no restaurant image. This canister does not perform an intentional cycle burn.</desc>
+          <desc id="graph-description">The yellow line is a static proposal for a global Dashboard total ranging from 100 to 150 billion cycles per second. The red band is a dated global observation from 2026-08-15 through 2026-08-16. This canister does not perform an intentional cycle burn.</desc>
           <rect class="band" x="80" y="186.574" width="1120" height="23.077"/>
           <text class="band-label" x="94" y="202">DATED GLOBAL SAMPLE // 31.7–49.9B/s // 2026-08-15/16</text>
           <line class="gridline" x1="80" y1="60" x2="1200" y2="60"/><line class="gridline" x1="80" y1="97.941" x2="1200" y2="97.941"/><line class="gridline" x1="80" y1="135.882" x2="1200" y2="135.882"/><line class="gridline" x1="80" y1="173.823" x2="1200" y2="173.823"/><line class="gridline" x1="80" y1="211.764" x2="1200" y2="211.764"/><line class="gridline" x1="80" y1="249.705" x2="1200" y2="249.705"/>
@@ -63,19 +63,18 @@ const PAGE: &str = r##"<!doctype html>
           <polyline class="wave-glow" points="__WAVEFORM_POINTS__"/><polyline class="wave" points="__WAVEFORM_POINTS__"/>
         </svg>
       </div>
-      <div class="caption"><span><strong>Yellow line</strong>Exact source-trace geometry mapped to a proposed 100–150B/s global total.</span><span><strong>Red band</strong>Frozen 2026-08-15/16 global sample, not a current baseline guarantee.</span></div>
+      <div class="caption"><span><strong>Yellow line</strong>Exact numeric-trace geometry mapped to a proposed 100–150B/s global total.</span><span><strong>Red band</strong>Frozen 2026-08-15/16 global sample, not a current baseline guarantee.</span></div>
     </section>
 
     <div class="actions"><a class="button" href="/waveform.csv">Download proposed waveform CSV</a><a class="button" href="/api/status.json">Inspect machine-readable status</a></div>
 
     <div class="evidence">
-      <section class="panel"><header><h2>Artifact Provenance</h2><span>BUILD-VERIFIED</span></header><div class="body"><div class="fact"><span class="label">Proposed waveform CSV SHA-256</span><strong>__CSV_SHA256__</strong><small>860 contiguous rational buckets covering exactly 24 hypothetical hours</small></div><div class="fact"><span class="label">Numeric trace SHA-256</span><strong>__TRACE_SHA256__</strong><small>Exact anonymous geometry used by the yellow line; no source image is retained</small></div></div></section>
+      <section class="panel"><header><h2>Artifact Provenance</h2><span>BUILD-VERIFIED</span></header><div class="body"><div class="fact"><span class="label">Proposed waveform CSV SHA-256</span><strong>__CSV_SHA256__</strong><small>860 contiguous rational buckets covering exactly 24 hypothetical hours</small></div><div class="fact"><span class="label">Numeric trace SHA-256</span><strong>__TRACE_SHA256__</strong><small>Exact immutable geometry used by the yellow line</small></div></div></section>
       <section class="panel"><header><h2>Runtime Truth</h2><span>INERT BY CONSTRUCTION</span></header><div class="body"><div class="fact"><span class="label">Actual canister behavior</span><strong>Static raw HTTP preview</strong><small>One query method; no update, timer, stable state, operator command or live metric fetch</small></div><div class="fact"><span class="label">Intentional cycle burn</span><strong>Impossible in this Wasm</strong><small>No cycles_burn call or active run exists; serving queries still incurs ordinary execution cost</small></div><div class="fact"><span class="label">Qualification state</span><strong>Still open</strong><small>This preview does not qualify Dashboard aggregation, execution timing, funding or authorization</small></div><div class="fact"><span class="label">Zero-background scale</span><strong>10,464.206 Tcycles</strong><small>Hypothetical 24-hour integral of the proposed total; not a funding amount or approved spend</small></div></div></section>
     </div>
 
     <footer><span>RESPONDING CANISTER // __CANISTER_ID__</span><span class="made">Made with <span class="heart">❤️</span> by <a href="https://github.com/dragginzgame/canic" rel="noreferrer">Canic</a></span><span>INERT PREVIEW // RAW HTTP // SCHEMA 1</span></footer>
   </main>
-  <!-- stop being a paranoid dickhead -->
 </body>
 </html>"##;
 
@@ -131,10 +130,7 @@ pub fn status_json(canister_id: &str) -> String {
             "    \"minimum_cycles_per_second\": 31671060640.008118,\n",
             "    \"maximum_cycles_per_second\": 49918117789.45853\n",
             "  }},\n",
-            "  \"presentation\": {{\n",
-            "    \"raster_images_served\": false,\n",
-            "    \"image_pipeline_present\": false\n",
-            "  }}\n",
+            "  \"presentation\": \"code_native_svg\"\n",
             "}}\n"
         ),
         escape_json(canister_id),
