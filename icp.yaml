@@ -105,8 +105,9 @@ environments:
     network: local
     canisters: [root, app, user_hub, user_shard]
 
-  # Override the implicit all-canister mainnet environment so the inert
-  # waveform preview cannot be deployed there without a deliberate config edit.
+  # Override the implicit all-canister mainnet environment so the local-only
+  # waveform preview and cycle-burn probe cannot be deployed there without a
+  # deliberate config edit.
   - name: ic
     network: ic
     canisters:

@@ -87,19 +87,29 @@ returns the requested burn, actual burn and same-message balances. Deploy it
 with explicit local funding, then invoke the bounded calibration:
 
 ```sh
-icp deploy cycle_burn_probe -e cycle-burn-local --cycles 2t
+icp identity new cycle-burn-local
+icp deploy cycle_burn_probe -e cycle-burn-local --cycles 2t \
+  --identity cycle-burn-local
 icp canister call cycle_burn_probe burn_once '(50_000_000_000 : nat)' \
-  -e cycle-burn-local
+  -e cycle-burn-local \
+  --identity cycle-burn-local \
+  --candid canisters/test/cycle_burn_probe/cycle_burn_probe.did
 ```
+
+Keep the CLI default identity separate and pass `--identity cycle-burn-local`
+explicitly. The test identity must remain local and must not hold real value.
+On a fresh deployment the creating identity becomes the probe controller.
+Existing deployments require a deliberate controller transfer before use.
 
 The returned receipt proves the local burn primitive and accounting path. It
 does not populate or reproduce the public ICP Dashboard, whose cycle-burn-rate
 series observes mainnet Subnets only.
 
-The preview is excluded from every checked-in IC-mainnet environment,
+The preview and local calibration probe are excluded from every checked-in
+IC-mainnet environment,
 including the explicitly narrowed `ic` environment that replaces the CLI's
-all-canister implicit default. Adding it is a separate external-effect decision
-requiring an authenticated dedicated identity plus an explicitly approved
-environment, Subnet/controller set and cycle ceiling. Until that exact
-authorization exists, the checked-in workflow can build and deploy the preview
-locally only.
+all-canister implicit default. Adding either is a separate external-effect
+decision requiring an authenticated dedicated identity plus an explicitly
+approved environment, Subnet/controller set and cycle ceiling. Until that
+exact authorization exists, the checked-in workflow can deploy both only to
+their explicit local environments.
