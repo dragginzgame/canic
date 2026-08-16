@@ -6,6 +6,7 @@
 
 use std::{
     collections::BTreeSet,
+    fmt::Write as _,
     fs,
     path::{Path, PathBuf},
 };
@@ -100,7 +101,8 @@ fn reviewed_names(qualification: &str) -> BTreeSet<String> {
 fn render_runtime_declarations(reasons: &[Reason]) -> String {
     let mut rendered = String::from("declare_diagnostic_codes! {\n");
     for reason in reasons.iter().filter(|reason| !reason.retired) {
-        rendered.push_str(&format!("    {} = {};\n", reason.name, reason.code));
+        writeln!(rendered, "    {} = {};", reason.name, reason.code)
+            .expect("writing to a String cannot fail");
     }
     rendered.push('}');
     rendered
@@ -115,10 +117,12 @@ fn render_host_catalogue(reasons: &[Reason]) -> String {
             .guidance
             .as_ref()
             .map_or_else(|| "None".to_string(), |value| format!("Some({value:?})"));
-        rendered.push_str(&format!(
-            "    DiagnosticEntry::new({}, {:?}, {:?}, {:?}, {}),\n",
+        writeln!(
+            rendered,
+            "    DiagnosticEntry::new({}, {:?}, {:?}, {:?}, {}),",
             reason.code, reason.name, reason.origin, reason.summary, guidance,
-        ));
+        )
+        .expect("writing to a String cannot fail");
     }
     rendered.push_str("];\n\n");
     let retired = reasons
@@ -133,10 +137,12 @@ fn render_host_catalogue(reasons: &[Reason]) -> String {
         rendered
             .push_str("pub(super) const RETIRED_REASONS: &[super::RetiredDiagnosticEntry] = &[\n");
         for reason in retired {
-            rendered.push_str(&format!(
-                "    super::RetiredDiagnosticEntry::new({}, {:?}),\n",
+            writeln!(
+                rendered,
+                "    super::RetiredDiagnosticEntry::new({}, {:?}),",
                 reason.code, reason.name,
-            ));
+            )
+            .expect("writing to a String cannot fail");
         }
         rendered.push_str("];\n");
     }
@@ -156,10 +162,7 @@ fn generated_runtime_block(source: &str) -> &str {
 #[test]
 fn reviewed_register_is_unique_nonzero_and_exact() {
     let reasons = reasons();
-    let current = reasons
-        .iter()
-        .filter(|reason| !reason.retired)
-        .collect::<Vec<_>>();
+    let current_count = reasons.iter().filter(|reason| !reason.retired).count();
     let codes = reasons
         .iter()
         .map(|reason| reason.code)
@@ -170,7 +173,7 @@ fn reviewed_register_is_unique_nonzero_and_exact() {
         .collect::<BTreeSet<_>>();
 
     assert_eq!(reasons.len(), 161);
-    assert_eq!(current.len(), 161);
+    assert_eq!(current_count, 161);
     assert_eq!(codes.len(), reasons.len());
     assert_eq!(names.len(), reasons.len());
     assert!(reasons.iter().all(|reason| reason.code != 0));
