@@ -106,7 +106,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `50829e082d978c3af0e486c1ae5679b4d7c0e9cbe1855023ebe883b6d637bb2e` | `scripts/ci/check-audit-method-catalog.sh` |
 | `8c7130df66e2b14838e5b927a501512abac8d1a5808306e56c85bc84c6000d02` | `scripts/ci/check-release-integrity-contract.sh` |
 | `2c3fa449fd04d317e5aa871ce9256922b956cc130c5c89a1a831a748349a28b1` | `scripts/ci/instruction-audit-report.sh` |
-| `6986f3624cae4a48374fe110dd0a1c0f8fb91445e27d7f0f22f6eadad31fbc29` | `scripts/ci/run-layering-guards.sh` |
+| `f42462d5b69b05ecbcb90ed9ff39f24fe296870a1341c79ffe6af5628f5a5bca` | `scripts/ci/run-layering-guards.sh` |
 | `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
 | `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |
 | `b77a7d4dc1de68943356efe16a6b430bde16702eac2dac7c840fe28d6decdfae` | `scripts/ci/wasm-audit-report.sh` |
