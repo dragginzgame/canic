@@ -106,6 +106,16 @@ The returned receipt proves the local burn primitive and accounting path. It
 does not populate or reproduce the public ICP Dashboard, whose cycle-burn-rate
 series observes mainnet Subnets only.
 
+The separately authorized B0b mainnet calibration is now complete. One exact
+`4 Tcycle` pulse was clearly visible in the owning Subnet's public series, but
+the attributable peak was only approximately `0.883 Bcycles/second` and
+remained spread across the observed tail. A naive independent 100-second
+bucket would have been `40 Bcycles/second`. The API `step` parameter therefore
+does not provide the independent approximately 100-second drawing buckets the
+current 860-point plan assumed. The probe has no timer or second-burn path; no
+additional effect is authorized. See the
+[bounded calibration report](../../docs/audits/working/saltz-b0b-calibration/mainnet-calibration.md).
+
 The preview remains excluded from every checked-in IC-mainnet environment. The
 calibration probe remains excluded from the broad `ic` environment and is
 admitted only through `cycle-burn-calibration-ic`. That dedicated environment
