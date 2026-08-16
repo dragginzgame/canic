@@ -131,6 +131,13 @@ separate exact envelope in the calibration report; neither calibration
 authorizes B1 or a complete waveform. See the
 [bounded calibration report](../../docs/audits/working/saltz-b0b-calibration/mainnet-calibration.md).
 
+That B0c plateau is also complete: eighteen exact host-driven `200 Bcycle`
+steps raised the owning Subnet series from approximately `0.312` to
+`1.303 Bcycles/second` while retaining more than `1 Tcycle`. The result proves
+that bounded repeated input produces a clean accumulated signal. It does not
+yet qualify the complete decay kernel or authorize another mint, top-up, burn
+or waveform run.
+
 The preview remains excluded from every checked-in IC-mainnet environment. The
 calibration probe remains excluded from the broad `ic` environment and is
 admitted only through `cycle-burn-calibration-ic`. That dedicated environment

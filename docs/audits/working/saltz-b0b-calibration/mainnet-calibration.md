@@ -1,12 +1,13 @@
-# B0b Mainnet Cycle-Burn Calibration
+# B0b Pulse And B0c Plateau Mainnet Cycle-Burn Calibration
 
 Date: 2026-08-16
 
 ## Disposition
 
-The bounded calibration proved that an exact direct cycle burn becomes visible
-in the public Cycle Burn Rate metric for the owning Subnet. It also rejected
-the waveform design's original assumption that a caller-selected
+The bounded calibrations proved both that an exact direct cycle burn becomes
+visible in the public Cycle Burn Rate metric for the owning Subnet and that
+repeated bounded burns accumulate into a clean, controllable signal. They also
+rejected the waveform design's original assumption that a caller-selected
 `step=100` response represents independent approximately 100-second burn
 buckets.
 
@@ -20,11 +21,12 @@ Consequently:
 
 - direct-burn visibility passes;
 - `SinglePulsePerBucket` at the provisional 860-point cadence is rejected;
+- the host-driven `2 Bcycles/second` plateau input passes and produced an
+  approximately `0.990 Bcycles/second` observed rise during the run;
 - the metric's complete smoothing/decay kernel remains unqualified;
 - the existing 24-hour cost and executor model is not executable authority;
 - B1 Burner implementation and B4 artistic execution remain held; and
-- no additional burn, mint, funding or retry is authorized by this evidence
-  except the separately bounded follow-on plateau below.
+- no additional burn, mint, funding or retry is authorized by this evidence.
 
 ## Follow-On Plateau Authorization
 
@@ -52,7 +54,72 @@ Subnet plateau. It does not execute any waveform point, authorize the
 24-hour run or promote the Burner. Reinstallation of the disposable probe is
 permitted because the completed pulse receipt is frozen in this report.
 
-## Exact Authorization
+## Follow-On Plateau Result
+
+The B0c run completed on 2026-08-16. The canister accepted exactly eighteen
+sequential host calls, each requested and returned exactly `200 Bcycles`, for
+an exact intentional total of `3.6 Tcycles`. It then entered terminal
+`Completed` state with `next_step_index=18`; it has no timer, retry, catch-up
+or further step authority.
+
+| Field | Observed value |
+| --- | --- |
+| Planned start | `2026-08-16T19:53:06Z` |
+| First execution | `2026-08-16T19:53:13.371637470Z` |
+| Final execution | `2026-08-16T20:21:26.772760420Z` |
+| Step schedule | `18 × 200 Bcycles`, every `100 seconds` |
+| Intentional burn | Exactly `3_600_000_000_000 cycles` |
+| First-step lateness | `7.371637470 seconds` |
+| Later-step lateness | `0.414918186..=1.525997040 seconds` |
+| Final same-message balance | `1_256_760_945_794 cycles` |
+| Final replica balance | `1_296_755_485_373 cycles` |
+| Terminal phase | `Completed` |
+| Installed Wasm hash | `7075d86b4f9093cfe03d02d29f6bd8ef3389332729e7af7b4e56ba1be233f69b` |
+
+The first attempted host wrapper failed before submitting step zero because it
+could not open the local CLI lock file. It caused no canister call and no burn.
+Step zero was then submitted directly within its 60-second lateness bound;
+steps 1 through 17 were submitted by the corrected bounded host process. No
+call was retried and every committed receipt has an exact
+`balance_before_cycles - balance_after_burn_cycles = 200_000_000_000` burn.
+
+The cycles-ledger command requested exactly `3 Tcycles`, but ICP-e8s
+conversion deposited `3_000_000_008_750 cycles`, exceeding the written mint
+cap by `8_750 cycles`. This is a procedural authorization variance even though
+it is economically negligible and did not enlarge the exact top-up or burn
+caps. Future plans must bind the discrete ICP-e8s input and its resulting
+maximum deposit rather than expressing only a requested cycle amount.
+
+The exact financial observations were:
+
+| Field | Observed value |
+| --- | ---: |
+| ICP before mint | `83.54720719 ICP` |
+| ICP after mint | `81.73435794 ICP` |
+| Exact ICP spent | `1.81284925 ICP` |
+| Cycles deposited by mint | `3_000_000_008_750` |
+| Existing-canister top-up | `3_400_000_000_000` |
+| Cycles-ledger balance after top-up and fee | `599_800_013_670` |
+
+The current-time-bounded Subnet series moved from
+`0.312413 Bcycles/second` at timestamp `1786909944`, 42 seconds before the
+planned start, to `1.302812 Bcycles/second` at timestamp `1786911744`, about
+57 seconds after the final execution. That is an observed rise of
+approximately `0.990399 Bcycles/second`. The intermediate complete samples
+formed a predominantly monotonic ramp rather than an isolated spike:
+
+```text
+0.312, 0.387, 0.405, 0.475, 0.572, 0.594, 0.675, 0.742, 0.782, 0.827,
+0.893, 0.940, 0.983, 1.113, 1.109, 1.176, 1.219, 1.251, 1.303 Bcycles/s
+```
+
+One API poll requested an end timestamp later than wall-clock time and was
+excluded completely. All result samples above came from polls whose end was no
+later than their observation time. The plateau proves accumulated signal and
+rough scale, not the complete kernel: post-stop decay and unrelated Subnet
+background remain to be observed read-only.
+
+## B0b Exact Authorization
 
 | Bound | Authorized value |
 | --- | --- |
@@ -110,9 +177,9 @@ The difference between replica status and same-message balances is transient
 execution accounting, not another intentional burn. A final read-only replica
 status at `2026-08-16T18:50Z` reported `1_498_874_636_171` cycles, a running
 canister, zero compute and memory allocation, and an estimated idle cost of
-`899_671_630 cycles/day`. The current installation has no timer or retry path;
-its committed receipt makes another `burn_once` reject. A controller reinstall
-would be a new destructive act and is not authorized by this report.
+`899_671_630 cycles/day`. That one-shot installation had no timer or retry
+path; its committed receipt made another `burn_once` reject. The separately
+authorized B0c reinstall and its replacement hash are frozen above.
 
 ## Public Metric Observation
 
@@ -168,13 +235,15 @@ establish independent burn-attribution buckets. A sequence of independently
 calculated 100-second pulses would overlap through the platform's smoothed
 rate signal and would not reproduce the 860-point preview.
 
-Any later proposal must first recover the complete dated smoothing/decay
-kernel through read-only observation, then either:
+The B0c plateau establishes that bounded repeated inputs overlap into a clean,
+controllable rising signal. It does not recover the complete dated
+smoothing/decay kernel. Before any full waveform proposal, later work must
+observe the post-stop tail read-only and then either:
 
 1. derive and qualify a bounded convolution-aware controller/deconvolution
    model; or
 2. abandon this public Dashboard metric as the drawing surface.
 
-Neither alternative is authorized by this report. Increasing the burn before
-that choice would spend more ICP without answering the failed cadence
-assumption.
+Neither alternative nor any additional external effect is authorized by this
+report. The exact financial envelope must also bind discrete ICP e8s and their
+maximum minted-cycle result.
