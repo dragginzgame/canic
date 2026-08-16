@@ -160,14 +160,10 @@ mutation.
 
 ## Validation
 
-The retained clean `v0.101.53` baseline at
-`23c0328f78b215580d734ef01b52b35fa3e38ade` passes
-`CANIC-WASM-001/v3` at risk `5/10` over six
-Components plus Fleet Subnet Root, Fleet Coordinator and Wasm Store in both
-release and debug profiles. It uses immutable tag `v0.101.53`, a clean detached
-worktree, isolated local/offline build state and the checksum-pinned toolchain.
-Valid v2 evidence remains superseded and non-comparable. Previously recorded
-0.101 test and release claims remain historical evidence only.
+The clean `v0.101.53` baseline at `23c0328f78b215580d734ef01b52b35fa3e38ade`
+passes `CANIC-WASM-001/v3` at risk `5/10` across all nine release/debug roles
+with isolated offline state and pinned tools. V2 is non-comparable; earlier
+0.101 validation remains historical evidence only.
 
 The simplified candidate passes targeted reason-ledger/generation, compact
 Candid wire, host lookup, typed projection and mapping checks. Core and
