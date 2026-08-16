@@ -780,7 +780,7 @@ mod tests {
             denied
                 .expect_err("anonymous Store prepare must fail")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
         assert_prepared(&pic, fixture.root_id);
     }
@@ -1117,7 +1117,7 @@ mod tests {
             rejected
                 .expect_err("another Fleet's co-located root must not write this Store")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
         let accepted: Result<TemplateChunkSetInfoResponse, Error> = pic
             .update_candid_as(
@@ -1745,7 +1745,7 @@ mod tests {
             wrong_parent
                 .expect_err("Project Hub has no direct Ledger spawn grant")
                 .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic_core::diagnostics::codes::CONFIGURATION_UNAVAILABLE.raw_code()
         );
     }
 
