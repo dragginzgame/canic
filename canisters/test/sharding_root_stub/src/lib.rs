@@ -90,10 +90,10 @@ async fn create_canister() -> Result<Principal, Error> {
         .with_arg(args)
         .with_cycles(CREATE_CANISTER_CYCLES)
         .await
-        .map_err(|err| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
     let res: StubCreateCanisterResult = response
         .candid()
-        .map_err(|err| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
 
     Ok(res.canister_id)
 }
