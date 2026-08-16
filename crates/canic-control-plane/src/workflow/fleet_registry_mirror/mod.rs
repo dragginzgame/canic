@@ -86,7 +86,7 @@ pub async fn status(
     root_store::status(request.store_bootstrap).await?;
     let candidate = FleetRegistryMirrorOps::current()
         .candidate
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     validate_snapshot(
         &authority,
         &candidate.snapshot,
@@ -97,7 +97,7 @@ pub async fn status(
     }
     let acknowledgement = candidate
         .acknowledgement
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     response(root, &candidate.snapshot, acknowledgement)
 }
 
@@ -135,9 +135,7 @@ pub async fn activate(
             }
         };
     }
-    let candidate = mirror
-        .candidate
-        .ok_or_else(|| InternalError::unavailable())?;
+    let candidate = mirror.candidate.ok_or_else(InternalError::unavailable)?;
     validate_snapshot(
         &authority,
         &candidate.snapshot,
@@ -148,7 +146,7 @@ pub async fn activate(
     }
     let acknowledgement = candidate
         .acknowledgement
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if acknowledgement.fleet_subnet_root != root
         || acknowledgement.version != request.previous_registry
     {
@@ -338,7 +336,7 @@ fn validated_snapshot_root(
         .iter()
         .find(|entry| entry.fleet_subnet_root == authority.binding.fleet_subnet_root)
         .cloned()
-        .ok_or_else(|| InternalError::invalid_input())?;
+        .ok_or_else(InternalError::invalid_input)?;
     let expected = FleetSubnetRootEntry {
         placement_subnet: authority.binding.placement_subnet,
         fleet_subnet_root: authority.binding.fleet_subnet_root,

@@ -429,7 +429,7 @@ impl RootComponentFinalInventoryAuthority<'_> {
         Ok(())
     }
 
-    fn invalid() -> InternalError {
+    const fn invalid() -> InternalError {
         InternalError::invariant()
     }
 }
@@ -558,7 +558,7 @@ impl RootComponentDeletionAuthority<'_> {
         Ok(())
     }
 
-    fn invalid() -> InternalError {
+    const fn invalid() -> InternalError {
         InternalError::invariant()
     }
 }
@@ -1199,14 +1199,14 @@ impl ComponentRegistryOps {
             .iter()
             .map(|component| {
                 let partition = RootComponentRegistryStore::partition(*component)
-                    .ok_or_else(|| InternalError::unavailable())?;
+                    .ok_or_else(InternalError::unavailable)?;
                 validate_partition_record(&partition)?;
                 if partition.status != ComponentLifecycleStatus::Active {
                     return Err(InternalError::conflict());
                 }
                 let allocation = allocations
                     .remove(component)
-                    .ok_or_else(|| InternalError::invariant())?;
+                    .ok_or_else(InternalError::invariant)?;
                 if ComponentAllocationPartitionAuthority::from_committed_allocation(&allocation)
                     != Some(ComponentAllocationPartitionAuthority::from_partition(
                         &partition,
@@ -1245,7 +1245,7 @@ impl ComponentRegistryOps {
         directory_synchronized_at_ns: u64,
     ) -> Result<RootComponentDirectoryRefreshPlanView, InternalError> {
         let partition = RootComponentRegistryStore::partition(target.component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let current_head = component_partition_head(&partition);
         let baseline_is_covered = current_head.component == target.source_registry.component
@@ -1262,7 +1262,7 @@ impl ComponentRegistryOps {
         let revision = partition
             .revision
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
             &partition.provisioning_origin,
@@ -1308,9 +1308,9 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<ComponentRegistryPartitionView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(plan.registry.component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         if component_partition_head(&partition) == plan.registry {
             return Ok(partition_record_to_view(partition));
@@ -1321,7 +1321,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let allocation = RootComponentRegistryStore::allocation(plan.allocation_operation_id)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if allocation.component != plan.registry.component {
             return Err(InternalError::conflict());
         }
@@ -1364,7 +1364,7 @@ impl ComponentRegistryOps {
         component_group: Option<ComponentGroupDirectory>,
     ) -> Result<RootComponentDirectoryRefreshPlanView, InternalError> {
         let partition = RootComponentRegistryStore::partition(intent.component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let current = component_partition_head(&partition);
         if current == intent.previous_registry {
@@ -1431,7 +1431,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         if let Some(existing) = current.root_draining.as_ref() {
             validate_root_draining_record(&current, existing)?;
             return if existing.operation_id == operation_id
@@ -1485,14 +1485,14 @@ impl ComponentRegistryOps {
     pub(crate) fn root_draining(
         operation_id: [u8; 32],
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
-        Self::root_draining_if_present(operation_id)?.ok_or_else(|| InternalError::unavailable())
+        Self::root_draining_if_present(operation_id)?.ok_or_else(InternalError::unavailable)
     }
 
     pub(crate) fn root_draining_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetDrainingView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let Some(record) = current.root_draining.as_ref() else {
             return Ok(None);
         };
@@ -1507,11 +1507,11 @@ impl ComponentRegistryOps {
         current_registry: &FleetRegistryVersion,
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_root_draining_record(&current, record)?;
         let publication_is_later = record.active_registry.authority == current_registry.authority
             && record.active_registry.revision < current_registry.revision;
@@ -1536,11 +1536,11 @@ impl ComponentRegistryOps {
         expected_registry: &FleetRegistryVersion,
     ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         let plan =
             terminal_root_inventory_plan(&current, draining, operation_id, expected_registry)?;
@@ -1554,11 +1554,11 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<Option<FleetRegistryVersion>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1582,7 +1582,7 @@ impl ComponentRegistryOps {
         }
         let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1615,19 +1615,18 @@ impl ComponentRegistryOps {
     pub(crate) fn root_final_inventory(
         operation_id: [u8; 32],
     ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
-        Self::root_final_inventory_if_present(operation_id)?
-            .ok_or_else(|| InternalError::unavailable())
+        Self::root_final_inventory_if_present(operation_id)?.ok_or_else(InternalError::unavailable)
     }
 
     pub(crate) fn root_final_inventory_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetFinalInventoryView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1645,11 +1644,11 @@ impl ComponentRegistryOps {
         store_status: &WasmStoreStatusResponse,
     ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1657,7 +1656,7 @@ impl ComponentRegistryOps {
         let inventory = draining
             .final_inventory
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_final_inventory_record(&current, draining, inventory)?;
         let evidence = root_store_final_inventory_evidence(&current, store, store_status)?;
         let store_is_exact = [
@@ -1681,11 +1680,11 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetRemovalPublicationView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1716,7 +1715,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1724,7 +1723,7 @@ impl ComponentRegistryOps {
         let inventory = draining
             .final_inventory
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !root_final_inventory_record_matches_response(inventory, &response.final_inventory) {
             return Err(InternalError::invalid_input());
         }
@@ -1739,18 +1738,18 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         Self::root_removal_publication_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn root_store_reclamation_intent_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreReclamationIntentView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1778,7 +1777,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1786,7 +1785,7 @@ impl ComponentRegistryOps {
         let inventory = draining
             .final_inventory
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if draining.removal_publication.is_none() {
             return Err(InternalError::unavailable());
         }
@@ -1803,18 +1802,18 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         Self::root_store_reclamation_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn root_store_reclamation_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreReclamationView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1836,7 +1835,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1846,7 +1845,7 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         let committed = Self::root_store_reclamation_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if committed != root_store_reclamation_record_to_view(record) {
             return Err(InternalError::invariant());
         }
@@ -1857,11 +1856,11 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationIntentView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1906,7 +1905,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1914,7 +1913,7 @@ impl ComponentRegistryOps {
         let reclamation = draining
             .store_reclamation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if reclamation.reclamation_hash != expected_reclamation_hash {
             return Err(InternalError::conflict());
         }
@@ -1932,18 +1931,18 @@ impl ComponentRegistryOps {
                 InternalError::conflict()
             })?;
         Self::root_store_binding_finalization_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn root_store_binding_finalization_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreBindingFinalizationView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -1966,7 +1965,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -1978,7 +1977,7 @@ impl ComponentRegistryOps {
         )
         .map_err(|RootComponentRegistryCommitError::ConflictingState| InternalError::conflict())?;
         let committed = Self::root_store_binding_finalization_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if committed != root_store_binding_finalization_record_to_view(record) {
             return Err(InternalError::invariant());
         }
@@ -1989,11 +1988,11 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreDeletionIntentView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -2041,7 +2040,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2049,7 +2048,7 @@ impl ComponentRegistryOps {
         let finalization = draining
             .store_binding_finalization
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if finalization.finalization_hash != expected_binding_finalization_hash {
             return Err(InternalError::conflict());
         }
@@ -2079,7 +2078,7 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         Self::root_store_deletion_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn record_root_store_cycle_reclamation(
@@ -2087,7 +2086,7 @@ impl ComponentRegistryOps {
         evidence: RootFleetSubnetStoreCycleReclamationEvidence,
     ) -> Result<RootFleetSubnetStoreDeletionIntentView, InternalError> {
         let existing = Self::root_store_deletion_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if existing.observed_cycles_after_reclamation.is_some() {
             let retry_is_exact = [
                 existing.observed_cycles_after_reclamation
@@ -2113,7 +2112,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2128,18 +2127,18 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         Self::root_store_deletion_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn root_store_deletion_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetStoreDeletionView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -2162,7 +2161,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2172,7 +2171,7 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         let committed = Self::root_store_deletion_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if committed != root_store_deletion_record_to_view(record) {
             return Err(InternalError::invariant());
         }
@@ -2183,11 +2182,11 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetDeletionPreparationIntentView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -2248,7 +2247,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2256,11 +2255,11 @@ impl ComponentRegistryOps {
         let inventory = draining
             .final_inventory
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let deletion = draining
             .store_deletion
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if deletion.deletion_hash != expected_store_deletion_hash {
             return Err(InternalError::conflict());
         }
@@ -2286,7 +2285,7 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         Self::root_deletion_preparation_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn record_root_deletion_cycle_reclamation(
@@ -2296,7 +2295,7 @@ impl ComponentRegistryOps {
         cycles_reclaimed_at_ns: u64,
     ) -> Result<RootFleetSubnetDeletionPreparationIntentView, InternalError> {
         let existing = Self::root_deletion_preparation_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if existing.coordinator_intent_hash.is_some() {
             let retry_is_exact = [
                 existing.coordinator_intent_hash == Some(coordinator_intent_hash),
@@ -2323,7 +2322,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2340,18 +2339,18 @@ impl ComponentRegistryOps {
                 InternalError::conflict()
             })?;
         Self::root_deletion_preparation_intent_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn root_deletion_preparation_if_present(
         operation_id: [u8; 32],
     ) -> Result<Option<RootFleetSubnetDeletionPreparationView>, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_root_draining_record(&current, draining)?;
         if draining.operation_id != operation_id {
             return Err(InternalError::conflict());
@@ -2377,7 +2376,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2385,7 +2384,7 @@ impl ComponentRegistryOps {
         let intent = draining
             .root_deletion_preparation_intent
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootFleetSubnetDeletionPreparationRecord {
             operation_id,
             fleet_subnet_root: draining.fleet_subnet_root,
@@ -2399,13 +2398,13 @@ impl ComponentRegistryOps {
             observed_freezing_threshold_seconds: intent.observed_freezing_threshold_seconds,
             observed_cycles_after_reclamation: intent
                 .observed_cycles_after_reclamation
-                .ok_or_else(|| InternalError::unavailable())?,
+                .ok_or_else(InternalError::unavailable)?,
             cycles_reclaimed_at_ns: intent
                 .cycles_reclaimed_at_ns
-                .ok_or_else(|| InternalError::unavailable())?,
+                .ok_or_else(InternalError::unavailable)?,
             coordinator_intent_hash: intent
                 .coordinator_intent_hash
-                .ok_or_else(|| InternalError::unavailable())?,
+                .ok_or_else(InternalError::unavailable)?,
             coordinator_readiness_hash,
             prepared_at_ns: intent.prepared_at_ns,
             completed_at_ns,
@@ -2414,7 +2413,7 @@ impl ComponentRegistryOps {
             |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
         )?;
         Self::root_deletion_preparation_if_present(operation_id)?
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn finalize_root_inventory(
@@ -2434,13 +2433,13 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let intent_registry = Self::root_final_inventory_intent_registry(operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if &intent_registry != expected_registry {
             return Err(InternalError::conflict());
         }
         let plan = Self::prepare_root_final_inventory(operation_id, expected_registry)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = current
             .root_draining
             .as_ref()
@@ -2506,7 +2505,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let inventory = complete_initial_inventory(&current)?;
         if let Some(existing) = current.initial_inventory {
             validate_initial_inventory_receipt(
@@ -2543,10 +2542,10 @@ impl ComponentRegistryOps {
         fleet_activation_operation_id: [u8; 32],
     ) -> Result<RootComponentInitialInventoryPlan, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let receipt = current
             .initial_inventory
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let inventory = complete_initial_inventory(&current)?;
         validate_initial_inventory_receipt(
             &receipt,
@@ -2564,10 +2563,10 @@ impl ComponentRegistryOps {
         fleet_activation_operation_id: [u8; 32],
     ) -> Result<RootComponentInitialInventoryView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let receipt = current
             .initial_inventory
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if receipt.fleet_activation_operation_id != fleet_activation_operation_id {
             return Err(InternalError::conflict());
         }
@@ -2637,7 +2636,7 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<ComponentRegistryPartitionView, InternalError> {
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
         else {
             return Err(InternalError::conflict());
@@ -2645,7 +2644,7 @@ impl ComponentRegistryOps {
         let membership = commitment
             .membership
             .as_ref()
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         let active = exact_active_partition(&record, commitment, membership)?;
         Ok(partition_record_to_view(active))
     }
@@ -2674,7 +2673,7 @@ impl ComponentRegistryOps {
 
     pub(crate) fn require_top_level_allocation_open() -> Result<(), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         ensure_root_accepts_top_level_allocation(&current)
     }
 
@@ -2685,7 +2684,7 @@ impl ComponentRegistryOps {
         root_runtime_active: bool,
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentAllocationRecord {
             operation_id,
             allocation_sequence: decision.allocation_sequence,
@@ -2725,7 +2724,7 @@ impl ComponentRegistryOps {
         let encoded_bytes = current
             .encoded_bytes
             .checked_add(entry_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if encoded_bytes > current.root.limits.maximum_registry_bytes {
             return Err(InternalError::resource_exhausted());
         }
@@ -2733,11 +2732,11 @@ impl ComponentRegistryOps {
         next.next_allocation_sequence = next
             .next_allocation_sequence
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         next.reserved_component_instances = next
             .reserved_component_instances
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         next.encoded_bytes = encoded_bytes;
 
         RootComponentRegistryStore::reserve_allocation(&current, next, record.clone())
@@ -2750,9 +2749,9 @@ impl ComponentRegistryOps {
         plan: &RootComponentCreationPlan,
     ) -> Result<(), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !matches!(
             record.progress,
             RootComponentAllocationProgressRecord::Reserved
@@ -2770,9 +2769,9 @@ impl ComponentRegistryOps {
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !matches!(
             record.progress,
             RootComponentAllocationProgressRecord::Reserved
@@ -2814,9 +2813,9 @@ impl ComponentRegistryOps {
         canister: Principal,
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let effect = match &record.progress {
             RootComponentAllocationProgressRecord::CreationIntent(effect) => effect.clone(),
             RootComponentAllocationProgressRecord::Created {
@@ -2842,10 +2841,8 @@ impl ComponentRegistryOps {
             | RootComponentAllocationProgressRecord::Installed { .. }
             | RootComponentAllocationProgressRecord::Verified { .. }
             | RootComponentAllocationProgressRecord::Committed { .. }
-            | RootComponentAllocationProgressRecord::Removed { .. } => {
-                return Err(InternalError::conflict());
-            }
-            RootComponentAllocationProgressRecord::Reserved => {
+            | RootComponentAllocationProgressRecord::Removed { .. }
+            | RootComponentAllocationProgressRecord::Reserved => {
                 return Err(InternalError::conflict());
             }
         };
@@ -2857,12 +2854,12 @@ impl ComponentRegistryOps {
         next_meta.known_created_component_canisters = next_meta
             .known_created_component_canisters
             .checked_add(1)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let allocated_component_canisters = current
             .reserved_component_instances
             .checked_add(current.committed_component_instances)
             .and_then(|count| count.checked_add(current.managed_descendants))
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if next_meta.known_created_component_canisters > allocated_component_canisters {
             return Err(InternalError::invariant());
         }
@@ -2881,9 +2878,9 @@ impl ComponentRegistryOps {
         plan: &RootComponentInstallPlan,
     ) -> Result<(), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !matches!(
             record.progress,
             RootComponentAllocationProgressRecord::Created { .. }
@@ -2901,9 +2898,9 @@ impl ComponentRegistryOps {
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let (creation, canister) = match &record.progress {
             RootComponentAllocationProgressRecord::Created { effect, canister } => {
                 (effect.clone(), *canister)
@@ -2946,9 +2943,9 @@ impl ComponentRegistryOps {
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let (creation, canister, existing) = match &record.progress {
             RootComponentAllocationProgressRecord::InstallIntent {
                 creation,
@@ -3032,7 +3029,7 @@ impl ComponentRegistryOps {
         }
 
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let start_after = selection.start_after.as_ref().map(|cursor| {
             (
@@ -3058,7 +3055,7 @@ impl ComponentRegistryOps {
         for traversal in traversals {
             validate_child_traversal_record(component, &traversal)?;
             let child = RootComponentRegistryStore::child(component, traversal.canister_id)
-                .ok_or_else(|| InternalError::invariant())?;
+                .ok_or_else(InternalError::invariant)?;
             validate_child_record(&partition, &child)?;
             if ComponentTreeNodeIdentity::from_traversal(&traversal)
                 != ComponentTreeNodeIdentity::from_child(&child)
@@ -3090,7 +3087,7 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<ComponentRegistryPartitionView, InternalError> {
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } = &record.progress
         else {
             return Err(InternalError::conflict());
@@ -3111,7 +3108,7 @@ impl ComponentRegistryOps {
         InternalError,
     > {
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &record.progress
         else {
@@ -3144,7 +3141,7 @@ impl ComponentRegistryOps {
             return Ok(None);
         }
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_partition_record(&partition)?;
         if partition.binding.canister_id == canister {
             return Ok(Some((
@@ -3153,7 +3150,7 @@ impl ComponentRegistryOps {
             )));
         }
         let child = RootComponentRegistryStore::child(component, canister)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_child_record(&partition, &child)?;
         let traversal = ComponentRegistryChildTraversalRecord {
             component,
@@ -3206,11 +3203,10 @@ impl ComponentRegistryOps {
             return Ok(None);
         };
         validate_subtree_removal_record(&record)?;
-        let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::invariant())?;
+        let current = RootComponentRegistryStore::current().ok_or_else(InternalError::invariant)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
         Ok(Some(subtree_removal_record_to_view(record)))
@@ -3247,9 +3243,9 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<RootComponentDrainingView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         require_ordinary_component_lifecycle(&partition)?;
         if let Some(existing) = RootComponentRegistryStore::component_draining(component) {
@@ -3296,7 +3292,7 @@ impl ComponentRegistryOps {
         let revision = partition
             .revision
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
             &partition.provisioning_origin,
@@ -3363,11 +3359,11 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &record)?;
         if operation_id != record.operation_id || expected_registry != record.registry {
@@ -3440,9 +3436,9 @@ impl ComponentRegistryOps {
         quiesced_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &record)?;
         if operation_id != record.operation_id {
@@ -3504,12 +3500,12 @@ impl ComponentRegistryOps {
         operation_id: [u8; 32],
     ) -> Result<RootComponentDrainingAdvanceView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let draining = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_component_draining_record(&partition, &draining)?;
         if operation_id != draining.operation_id
             || partition.status != ComponentLifecycleStatus::Draining
@@ -3521,7 +3517,7 @@ impl ComponentRegistryOps {
         if let Some(subtree_operation_id) = draining.subtree_operation_id {
             let existing =
                 RootComponentRegistryStore::subtree_removal(component, subtree_operation_id)
-                    .ok_or_else(|| InternalError::invariant())?;
+                    .ok_or_else(InternalError::invariant)?;
             validate_subtree_removal_record(&existing)?;
             validate_subtree_removal_root(&existing, &current.root)?;
             validate_subtree_removal_progress(&partition, &existing)?;
@@ -3579,10 +3575,10 @@ impl ComponentRegistryOps {
         finalized_at_ns: u64,
     ) -> Result<RootComponentFinalInventoryView, InternalError> {
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let draining = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_component_draining_record(&partition, &draining)?;
         if operation_id != draining.operation_id {
             return Err(InternalError::conflict());
@@ -3597,8 +3593,8 @@ impl ComponentRegistryOps {
 
         let current_registry = component_partition_head(&partition);
         ensure_component_final_inventory_candidate(&partition, &expected_registry)?;
-        let quiesced_at_ns = terminal_component_quiesced_at_ns(&draining)
-            .ok_or_else(|| InternalError::conflict())?;
+        let quiesced_at_ns =
+            terminal_component_quiesced_at_ns(&draining).ok_or_else(InternalError::conflict)?;
         ensure_component_final_inventory_time(&partition, quiesced_at_ns, finalized_at_ns)?;
         ensure_component_final_inventory_indexes_are_empty(&partition)?;
         ensure_component_lifecycle_history_is_terminal(&partition)?;
@@ -3638,9 +3634,9 @@ impl ComponentRegistryOps {
         prepared_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let draining = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &draining)?;
         ensure_component_deletion_operation(&draining, operation_id)?;
@@ -3652,13 +3648,13 @@ impl ComponentRegistryOps {
         let final_inventory = draining
             .final_inventory
             .clone()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if final_inventory.inventory_hash != expected_inventory_hash {
             return Err(InternalError::conflict());
         }
         let quiescence = terminal_component_quiescence(&draining)
             .cloned()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if prepared_at_ns < final_inventory.finalized_at_ns {
             return Err(InternalError::invalid_input());
         }
@@ -3684,9 +3680,9 @@ impl ComponentRegistryOps {
         deleted_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let draining = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &draining)?;
         ensure_component_deletion_operation(&draining, operation_id)?;
@@ -3725,14 +3721,14 @@ impl ComponentRegistryOps {
         removed_at_ns: u64,
     ) -> Result<RootComponentDrainingView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let draining = RootComponentRegistryStore::component_draining(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         ensure_component_deletion_operation(&draining, operation_id)?;
         let progress = draining
             .deletion
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         ensure_component_deletion_inventory(progress, expected_inventory_hash)?;
         if matches!(
             progress,
@@ -3749,7 +3745,7 @@ impl ComponentRegistryOps {
         }
 
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_component_draining_record(&partition, &draining)?;
         let allocation = committed_component_allocation(&partition)?;
@@ -3830,9 +3826,9 @@ impl ComponentRegistryOps {
         origin: SubtreeRemovalOrigin,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let lifecycle_matches_origin = match origin {
             SubtreeRemovalOrigin::Ordinary => partition.status == ComponentLifecycleStatus::Active,
@@ -3881,7 +3877,7 @@ impl ComponentRegistryOps {
         }
 
         let target = RootComponentRegistryStore::child(component, target_canister_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_registered_child_record(&partition, &target)?;
         if target.status != ComponentLifecycleStatus::Active {
             return Err(InternalError::conflict());
@@ -3889,7 +3885,7 @@ impl ComponentRegistryOps {
         let traversal_limit = partition
             .committed_descendants
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         for allocation in RootComponentRegistryStore::child_allocations(component) {
             validate_child_allocation_record(&allocation)?;
             if !child_allocation_is_terminal(&allocation)
@@ -3923,7 +3919,7 @@ impl ComponentRegistryOps {
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_meta.encoded_bytes > next_meta.root.limits.maximum_registry_bytes {
             return Err(InternalError::resource_exhausted());
         }
@@ -3932,7 +3928,7 @@ impl ComponentRegistryOps {
             SubtreeRemovalOrigin::Ordinary => None,
             SubtreeRemovalOrigin::DrainingDriver => {
                 let current_draining = RootComponentRegistryStore::component_draining(component)
-                    .ok_or_else(|| InternalError::invariant())?;
+                    .ok_or_else(InternalError::invariant)?;
                 validate_component_draining_record(&partition, &current_draining)?;
                 let mut next_draining = current_draining.clone();
                 next_draining.subtree_operation_id = Some(operation_id);
@@ -3961,13 +3957,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
         if expected_traversal_steps < record.traversal_steps {
@@ -4013,7 +4009,7 @@ impl ComponentRegistryOps {
             next_record.traversal_steps = next_record
                 .traversal_steps
                 .checked_add(1)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
         }
         validate_subtree_removal_record(&next_record)?;
         validate_subtree_removal_root(&next_record, &current.root)?;
@@ -4046,13 +4042,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4074,8 +4070,8 @@ impl ComponentRegistryOps {
                 return Err(InternalError::unavailable());
             }
             progress => {
-                let durable_stop = retained_subtree_stop_effect(progress)
-                    .ok_or_else(|| InternalError::invariant())?;
+                let durable_stop =
+                    retained_subtree_stop_effect(progress).ok_or_else(InternalError::invariant)?;
                 if SubtreeLeafStopAuthority::from_record(record.traversal_steps, durable_stop)
                     == expected_stop
                 {
@@ -4130,13 +4126,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4168,7 +4164,7 @@ impl ComponentRegistryOps {
             }
             progress => {
                 let durable_stopped = retained_subtree_stopped_effect(progress)
-                    .ok_or_else(|| InternalError::invariant())?;
+                    .ok_or_else(InternalError::invariant)?;
                 if SubtreeLeafStoppedAuthority::from_record(record.traversal_steps, durable_stopped)
                     == expected_stopped
                 {
@@ -4223,13 +4219,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4337,13 +4333,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4422,13 +4418,13 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4500,7 +4496,7 @@ impl ComponentRegistryOps {
             leaf.parent_canister_id,
             &leaf.role,
         )
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
         if parent_role_count.instances == 0 {
             return Err(InternalError::invariant());
         }
@@ -4520,11 +4516,11 @@ impl ComponentRegistryOps {
         let revision = partition
             .revision
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let committed_descendants = partition
             .committed_descendants
             .checked_sub(1)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let descendant_content_hash = removed_component_descendant_content_hash(
             component,
             partition.descendant_content_hash,
@@ -4554,11 +4550,11 @@ impl ComponentRegistryOps {
         next_meta.managed_descendants = next_meta
             .managed_descendants
             .checked_sub(1)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         next_meta.known_created_component_canisters = next_meta
             .known_created_component_canisters
             .checked_sub(1)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let registry = ComponentRegistryHead {
             component,
             revision,
@@ -4643,13 +4639,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4768,13 +4764,13 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
         let record = RootComponentRegistryStore::subtree_removal(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_record(&record)?;
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         validate_subtree_removal_root(&record, &current.root)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         validate_subtree_removal_progress(&partition, &record)?;
 
@@ -4807,7 +4803,7 @@ impl ComponentRegistryOps {
         let completed_leaves = record
             .completed_leaves
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if completed_leaves > record.maximum_completed_leaves {
             return Err(InternalError::resource_exhausted());
         }
@@ -4845,7 +4841,7 @@ impl ComponentRegistryOps {
             completed_leaf,
         )
         .map_err(map_allocation_commit_error)?;
-        Self::subtree_removal(component, operation_id)?.ok_or_else(|| InternalError::invariant())
+        Self::subtree_removal(component, operation_id)?.ok_or_else(InternalError::invariant)
     }
 
     pub(crate) fn parent_role_instances(
@@ -4881,9 +4877,9 @@ impl ComponentRegistryOps {
         reserved_against_registry: ComponentRegistryHead,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(decision.component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentChildAllocationRecord {
             operation_id,
@@ -4927,7 +4923,7 @@ impl ComponentRegistryOps {
         let traversal_limit = partition
             .committed_descendants
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         for removal in RootComponentRegistryStore::subtree_removals(record.component) {
             validate_subtree_removal_record(&removal)?;
             validate_subtree_removal_root(&removal, &current.root)?;
@@ -4960,7 +4956,7 @@ impl ComponentRegistryOps {
                 .as_ref()
                 .map_or(0, |count| count.instances)
                 .checked_add(1)
-                .ok_or_else(|| InternalError::resource_exhausted())?,
+                .ok_or_else(InternalError::resource_exhausted)?,
         };
         if next_count.instances > decision.maximum_instances_per_parent {
             return Err(InternalError::resource_exhausted());
@@ -4970,7 +4966,7 @@ impl ComponentRegistryOps {
         let component_descendants = next_partition
             .reserved_descendants
             .checked_add(next_partition.committed_descendants)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if component_descendants > decision.maximum_descendants {
             return Err(InternalError::resource_exhausted());
         }
@@ -4981,11 +4977,11 @@ impl ComponentRegistryOps {
         next_meta.managed_descendants = next_meta
             .managed_descendants
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_meta.encoded_bytes > next_meta.root.limits.maximum_registry_bytes {
             return Err(InternalError::resource_exhausted());
         }
@@ -5009,11 +5005,11 @@ impl ComponentRegistryOps {
         plan: &RootComponentCreationPlan,
     ) -> Result<(), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_child_creation_authority(&current, &partition, &record, plan)?;
         if !matches!(
             record.progress,
@@ -5032,11 +5028,11 @@ impl ComponentRegistryOps {
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_child_creation_authority(&current, &partition, &record, &plan)?;
         if !matches!(
             record.progress,
@@ -5065,7 +5061,7 @@ impl ComponentRegistryOps {
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
 
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -5085,11 +5081,11 @@ impl ComponentRegistryOps {
         canister: Principal,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let effect = match &record.progress {
             RootComponentChildAllocationProgressRecord::CreationIntent(effect) => effect.clone(),
             RootComponentChildAllocationProgressRecord::Created {
@@ -5112,10 +5108,8 @@ impl ComponentRegistryOps {
             | RootComponentChildAllocationProgressRecord::InstallIntent { .. }
             | RootComponentChildAllocationProgressRecord::Installed { .. }
             | RootComponentChildAllocationProgressRecord::Verified { .. }
-            | RootComponentChildAllocationProgressRecord::Committed { .. } => {
-                return Err(InternalError::conflict());
-            }
-            RootComponentChildAllocationProgressRecord::Reserved => {
+            | RootComponentChildAllocationProgressRecord::Committed { .. }
+            | RootComponentChildAllocationProgressRecord::Reserved => {
                 return Err(InternalError::conflict());
             }
         };
@@ -5141,12 +5135,12 @@ impl ComponentRegistryOps {
         next_meta.known_created_component_canisters = next_meta
             .known_created_component_canisters
             .checked_add(1)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let allocated_component_canisters = current
             .reserved_component_instances
             .checked_add(current.committed_component_instances)
             .and_then(|count| count.checked_add(current.managed_descendants))
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if next_meta.known_created_component_canisters > allocated_component_canisters {
             return Err(InternalError::invariant());
         }
@@ -5169,11 +5163,11 @@ impl ComponentRegistryOps {
         plan: &RootComponentChildInstallPlan,
     ) -> Result<(), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_child_install_authority(&current, &partition, &record, plan)?;
         if !matches!(
             record.progress,
@@ -5192,11 +5186,11 @@ impl ComponentRegistryOps {
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_child_install_authority(&current, &partition, &record, &plan)?;
         let (creation, canister) = match &record.progress {
             RootComponentChildAllocationProgressRecord::Created { effect, canister } => {
@@ -5226,7 +5220,7 @@ impl ComponentRegistryOps {
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
 
         RootComponentRegistryStore::replace_child_allocation(
             &current,
@@ -5247,11 +5241,11 @@ impl ComponentRegistryOps {
         cost_guard_settlement: ReplayCostGuardSettlement,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_child_install_authority(&current, &partition, &record, plan)?;
         let (creation, canister, existing) = match &record.progress {
             RootComponentChildAllocationProgressRecord::InstallIntent {
@@ -5304,10 +5298,6 @@ impl ComponentRegistryOps {
         advance_child_install_phase(component, operation_id, true)
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one synchronous operation validates and atomically commits every child index"
-    )]
     pub(crate) fn commit_verified_child(
         component: ComponentInstanceId,
         operation_id: [u8; 32],
@@ -5322,12 +5312,12 @@ impl ComponentRegistryOps {
         InternalError,
     > {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &record.progress
         {
@@ -5381,7 +5371,7 @@ impl ComponentRegistryOps {
                         component,
                     ))
                 })
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
         if actual_terminal_bytes > installation.charged_entry_bytes {
             return Err(InternalError::invariant());
         }
@@ -5391,12 +5381,12 @@ impl ComponentRegistryOps {
         let registry_reduction = partition
             .encoded_bytes
             .checked_sub(next_partition.encoded_bytes)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let mut next_meta = current.clone();
         next_meta.encoded_bytes = next_meta
             .encoded_bytes
             .checked_sub(registry_reduction)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
 
         RootComponentRegistryStore::commit_child(
             &current,
@@ -5421,12 +5411,12 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentChildAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -5477,12 +5467,12 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentChildAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -5543,12 +5533,12 @@ impl ComponentRegistryOps {
         InternalError,
     > {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentChildAllocationProgressRecord::Committed {
             canister,
             commitment,
@@ -5578,7 +5568,7 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let child = RootComponentRegistryStore::child(component, *canister)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_child_record(&partition, &child)?;
         if child.status != ComponentLifecycleStatus::Prepared {
             return Err(InternalError::conflict());
@@ -5601,12 +5591,12 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentChildAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentChildAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -5619,7 +5609,7 @@ impl ComponentRegistryOps {
         let membership = commitment
             .membership
             .as_ref()
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         let _active = exact_active_child_partition(&record, commitment, membership)?;
         if membership.directory_authority_hash != expected_authority_hash {
             return Err(InternalError::conflict());
@@ -5664,9 +5654,9 @@ impl ComponentRegistryOps {
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &record.progress
         {
@@ -5707,7 +5697,7 @@ impl ComponentRegistryOps {
             .encoded_bytes
             .checked_sub(installation.charged_entry_bytes)
             .and_then(|value| value.checked_add(partition.encoded_bytes))
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if encoded_bytes > current.root.limits.maximum_registry_bytes {
             return Err(InternalError::invariant());
         }
@@ -5716,11 +5706,11 @@ impl ComponentRegistryOps {
         next_meta.reserved_component_instances = next_meta
             .reserved_component_instances
             .checked_sub(1)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         next_meta.committed_component_instances = next_meta
             .committed_component_instances
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         next_meta.encoded_bytes = encoded_bytes;
 
         RootComponentRegistryStore::commit_component(
@@ -5742,9 +5732,9 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -5800,9 +5790,9 @@ impl ComponentRegistryOps {
             return Err(InternalError::invalid_input());
         }
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !matches!(
             &record.provisioning_origin,
             ComponentProvisioningOrigin::ComponentGroup { .. }
@@ -5877,9 +5867,9 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -5967,9 +5957,9 @@ impl ComponentRegistryOps {
         component_group: Option<&ComponentGroupDirectory>,
     ) -> Result<(RootComponentAllocationView, ComponentRegistryPartitionView), InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentAllocationProgressRecord::Committed {
             installation,
             commitment,
@@ -6023,7 +6013,7 @@ impl ComponentRegistryOps {
             .encoded_bytes
             .checked_sub(prepared.encoded_bytes)
             .and_then(|value| value.checked_add(active.encoded_bytes))
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if encoded_bytes > current.root.limits.maximum_registry_bytes {
             return Err(InternalError::resource_exhausted());
         }
@@ -6049,9 +6039,9 @@ impl ComponentRegistryOps {
         expected_authority_hash: [u8; 32],
     ) -> Result<RootComponentAllocationView, InternalError> {
         let current =
-            RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentRegistryStore::allocation(operation_id)
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let RootComponentAllocationProgressRecord::Committed {
             creation,
             canister,
@@ -6064,7 +6054,7 @@ impl ComponentRegistryOps {
         let membership = commitment
             .membership
             .as_ref()
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         let _active = exact_active_partition(&record, commitment, membership)?;
         if membership.directory_authority_hash != expected_authority_hash {
             return Err(InternalError::conflict());
@@ -6125,7 +6115,7 @@ fn complete_initial_inventory(
     }
     let maximum_known_created = component_count
         .checked_add(current.managed_descendants)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if current.known_created_component_canisters < component_count
         || current.known_created_component_canisters > maximum_known_created
     {
@@ -6144,7 +6134,7 @@ fn complete_initial_inventory(
         let (entry, partition_bytes) = initial_inventory_hash_entry(record, index)?;
         encoded_bytes = encoded_bytes
             .checked_add(partition_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         operation_ids.push(record.operation_id);
         entries.push(entry);
     }
@@ -6174,7 +6164,7 @@ fn initial_inventory_hash_entry(
     let membership = commitment
         .membership
         .as_ref()
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if !commitment.directory_prepared
         || !commitment.runtime_activated
         || !membership.directory_synchronized
@@ -6248,11 +6238,10 @@ fn update_initial_inventory_receipt(
     directories_converged: bool,
     root_runtime_activated: bool,
 ) -> Result<RootComponentInitialInventoryView, InternalError> {
-    let current =
-        RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+    let current = RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
     let mut receipt = current
         .initial_inventory
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     if receipt.fleet_activation_operation_id != fleet_activation_operation_id
         || receipt.inventory_hash != expected_inventory_hash
     {
@@ -6340,7 +6329,7 @@ fn terminal_root_inventory_plan(
     let history = terminal_root_component_history()?;
     let expected_next_sequence = u64::from(history.removed_component_instances)
         .checked_add(1)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if current.next_allocation_sequence != expected_next_sequence {
         return Err(InternalError::invariant());
     }
@@ -6392,12 +6381,12 @@ fn terminal_root_component_history() -> Result<TerminalRootComponentHistory, Int
         ensure_terminal_allocation_sequence(index, allocation)?;
         let draining = drainings
             .remove(&allocation.component)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_removed_component_authority(&draining)?;
         let receipt = removed_component_membership_receipt(&draining)?;
         registry_bytes = registry_bytes
             .checked_add(terminal_component_registry_bytes(allocation, &draining)?)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         components.insert(allocation.component);
         hash_entries.push(RootTerminalComponentHistoryHashEntry {
             allocation_sequence: allocation.allocation_sequence,
@@ -6422,7 +6411,7 @@ fn ensure_terminal_allocation_sequence(
     let sequence = u64::try_from(index)
         .ok()
         .and_then(|index| index.checked_add(1))
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let allocation_is_terminal = [
         allocation.allocation_sequence == sequence,
         matches!(
@@ -6521,7 +6510,7 @@ fn terminal_component_registry_bytes(
     entries.try_fold(0_u64, |total, bytes| {
         total
             .checked_add(bytes)
-            .ok_or_else(|| InternalError::invariant())
+            .ok_or_else(InternalError::invariant)
     })
 }
 
@@ -6543,7 +6532,7 @@ fn charged_child_allocation_entry_bytes(record: &RootComponentChildAllocationRec
     }
 }
 
-fn removed_component_membership_receipt(
+const fn removed_component_membership_receipt(
     draining: &RootComponentDrainingRecord,
 ) -> Result<&RootComponentMembershipRemovedRecord, InternalError> {
     match draining.deletion.as_ref() {
@@ -6581,10 +6570,7 @@ fn root_store_final_inventory_evidence(
         u32::try_from(store.catalog.len()).map_err(|_| InternalError::invariant())?;
     let template_entries =
         u32::try_from(status.templates.len()).map_err(|_| InternalError::invariant())?;
-    let gc_prepared_at_secs = status
-        .gc
-        .prepared_at
-        .ok_or_else(|| InternalError::conflict())?;
+    let gc_prepared_at_secs = status.gc.prepared_at.ok_or_else(InternalError::conflict)?;
     let source_is_exact = [
         store.fleet_subnet_root == current.root.fleet_subnet_root,
         store.release_set == current.release_set,
@@ -6727,7 +6713,7 @@ fn root_store_reclamation_record(
     let intent = draining
         .store_reclamation_intent
         .as_ref()
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let terminal_store_is_exact = [
         evidence.wasm_store == intent.wasm_store,
         evidence.occupied_store_bytes == 0,
@@ -6795,11 +6781,11 @@ fn root_store_binding_finalization_record(
     let intent = draining
         .store_binding_finalization_intent
         .as_ref()
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let expected_finalized_generation = intent
         .source_generation
         .checked_add(3)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let terminal_binding_is_exact = [
         evidence.wasm_store == intent.wasm_store,
         evidence.binding.as_str() == intent.binding,
@@ -6860,13 +6846,13 @@ fn root_store_deletion_record(
     let intent = draining
         .store_deletion_intent
         .as_ref()
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let observed_cycles_after_reclamation = intent
         .observed_cycles_after_reclamation
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let cycles_reclaimed_at_ns = intent
         .cycles_reclaimed_at_ns
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let terminal_absence_is_exact = [
         evidence.wasm_store == intent.wasm_store,
         evidence.binding.as_str() == intent.binding,
@@ -6962,7 +6948,7 @@ fn validate_root_store_deletion_authority(
     Ok(())
 }
 
-fn ensure_root_accepts_top_level_allocation(
+const fn ensure_root_accepts_top_level_allocation(
     current: &RootComponentRegistryMetaRecord,
 ) -> Result<(), InternalError> {
     if current.root_draining.is_some() {
@@ -7839,7 +7825,7 @@ fn replace_encoded_bytes(
     current
         .checked_sub(previous_entry)
         .and_then(|remaining| remaining.checked_add(next_entry))
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 fn child_reservation_partition(
@@ -7865,24 +7851,24 @@ fn child_reservation_partition(
     next.reserved_descendants = next
         .reserved_descendants
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
 
     for _ in 0..8 {
         let next_partition_bytes = RootComponentRegistryStore::partition_entry_bytes(&next);
         let next_total = next_partition_bytes
             .checked_add(allocation_bytes)
             .and_then(|value| value.checked_add(next_count_bytes))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let current_total = current_partition_bytes
             .checked_add(current_count_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let delta = next_total
             .checked_sub(current_total)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let encoded_bytes = current
             .encoded_bytes
             .checked_add(delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next.encoded_bytes == encoded_bytes {
             return Ok((next, delta));
         }
@@ -7902,14 +7888,14 @@ fn subtree_fence_partition(
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
             .checked_add(removal_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let registry_delta = next_total
             .checked_sub(current_partition_bytes)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let encoded_bytes = current
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next.encoded_bytes == encoded_bytes {
             return Ok((next, registry_delta));
         }
@@ -7935,32 +7921,32 @@ fn subtree_removal_progress_state(
         .checked_add(RootComponentRegistryStore::subtree_removal_entry_bytes(
             current_record,
         ))
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let component_without_current = partition
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let root_without_current = current
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_record_bytes = RootComponentRegistryStore::subtree_removal_entry_bytes(next_record);
     let mut next_partition = partition.clone();
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(next_record_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_component_bytes = component_without_current
             .checked_add(next_total)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
             let next_root_bytes = root_without_current
                 .checked_add(next_total)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
@@ -7990,27 +7976,27 @@ fn component_draining_state(
     let component_without_partition = partition
         .encoded_bytes
         .checked_sub(current_partition_bytes)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let root_without_partition = current
         .encoded_bytes
         .checked_sub(current_partition_bytes)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let draining_bytes = RootComponentRegistryStore::component_draining_entry_bytes(record);
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(draining_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_component_bytes = component_without_partition
             .checked_add(next_total)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
             let next_root_bytes = root_without_partition
                 .checked_add(next_total)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
@@ -8116,28 +8102,28 @@ fn component_quiescence_intent_state(
         .encoded_bytes
         .checked_sub(current_partition_bytes)
         .and_then(|bytes| bytes.checked_sub(current_draining_bytes))
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let root_without_mutated_entries = current
         .encoded_bytes
         .checked_sub(current_partition_bytes)
         .and_then(|bytes| bytes.checked_sub(current_draining_bytes))
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_draining_bytes = charged_component_draining_entry_bytes(next_draining);
     let mut next_partition = partition.clone();
     for _ in 0..8 {
         let next_mutated_bytes = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(next_draining_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_component_bytes = component_without_mutated_entries
             .checked_add(next_mutated_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
             let next_root_bytes = root_without_mutated_entries
                 .checked_add(next_mutated_bytes)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
@@ -8168,15 +8154,15 @@ fn subtree_removal_leaf_finalization_state(
         .checked_add(RootComponentRegistryStore::subtree_removal_entry_bytes(
             current_record,
         ))
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let component_without_current = partition
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let root_without_current = current
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_record_bytes = RootComponentRegistryStore::subtree_removal_entry_bytes(next_record);
     let history_bytes =
         RootComponentRegistryStore::subtree_removal_completed_leaf_entry_bytes(completed_leaf);
@@ -8186,17 +8172,17 @@ fn subtree_removal_leaf_finalization_state(
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(next_record_bytes)
             .and_then(|bytes| bytes.checked_add(history_bytes))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_component_bytes = component_without_current
             .checked_add(next_total)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next_partition.encoded_bytes == next_component_bytes {
             if next_component_bytes > maximum_component_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
             let next_root_bytes = root_without_current
                 .checked_add(next_total)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
             if next_root_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
@@ -8247,15 +8233,15 @@ fn converge_subtree_membership_removal_bytes(
                 parent_role_count,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let component_without_current = partition
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let root_without_current = current
         .encoded_bytes
         .checked_sub(current_total)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_count_bytes =
         next_parent_role_count.map_or(0, RootComponentRegistryStore::parent_role_count_entry_bytes);
 
@@ -8265,13 +8251,13 @@ fn converge_subtree_membership_removal_bytes(
                 next_record,
             ))
             .and_then(|bytes| bytes.checked_add(next_count_bytes))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_component_bytes = component_without_current
             .checked_add(next_total)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_root_bytes = root_without_current
             .checked_add(next_total)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let RootComponentSubtreeRemovalProgressRecord::MembershipRemoved(receipt) =
             &mut next_record.progress
         else {
@@ -8328,20 +8314,20 @@ fn child_creation_capacity(
     }
     let current_total = current_partition_bytes
         .checked_add(current_record_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let mut next = partition.clone();
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
             .checked_add(charged_entry_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let registry_delta = next_total
             .checked_sub(current_total)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next.encoded_bytes == encoded_bytes {
             if encoded_bytes > record.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
@@ -8349,7 +8335,7 @@ fn child_creation_capacity(
             let root_encoded_bytes = current
                 .encoded_bytes
                 .checked_add(registry_delta)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
             if root_encoded_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
@@ -8524,7 +8510,7 @@ fn child_install_charged_entry_bytes(
                 record.component,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted())
+        .ok_or_else(InternalError::resource_exhausted)
 }
 
 fn child_install_capacity(
@@ -8543,20 +8529,20 @@ fn child_install_capacity(
     };
     let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
         .checked_add(current_reserved_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let mut next = partition.clone();
 
     for _ in 0..8 {
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next)
             .checked_add(charged_entry_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let registry_delta = next_total
             .checked_sub(current_total)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_add(registry_delta)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if next.encoded_bytes == encoded_bytes {
             if encoded_bytes > record.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
@@ -8564,7 +8550,7 @@ fn child_install_capacity(
             let root_encoded_bytes = current
                 .encoded_bytes
                 .checked_add(registry_delta)
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
             if root_encoded_bytes > current.root.limits.maximum_registry_bytes {
                 return Err(InternalError::resource_exhausted());
             }
@@ -8593,12 +8579,11 @@ fn advance_child_install_phase(
     operation_id: [u8; 32],
     verified: bool,
 ) -> Result<RootComponentChildAllocationView, InternalError> {
-    let current =
-        RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
-    let partition = RootComponentRegistryStore::partition(component)
-        .ok_or_else(|| InternalError::unavailable())?;
+    let current = RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+    let partition =
+        RootComponentRegistryStore::partition(component).ok_or_else(InternalError::unavailable)?;
     let record = RootComponentRegistryStore::child_allocation(component, operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let next_progress = match (&record.progress, verified) {
         (
             RootComponentChildAllocationProgressRecord::InstallIntent {
@@ -8757,7 +8742,7 @@ fn install_charged_entry_bytes(
                 record.component,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if charged > plan.maximum_registry_bytes {
         return Err(InternalError::resource_exhausted());
     }
@@ -8801,15 +8786,15 @@ fn committed_child_records(
     let revision = partition
         .revision
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let reserved_descendants = partition
         .reserved_descendants
         .checked_sub(1)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let committed_descendants = partition
         .committed_descendants
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let descendant_content_hash = committed_component_descendant_content_hash(
         partition.descendant_content_hash,
         partition.committed_descendants,
@@ -8878,7 +8863,7 @@ fn committed_child_records(
     };
     let current_total = RootComponentRegistryStore::partition_entry_bytes(partition)
         .checked_add(installation.charged_entry_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let child_bytes = RootComponentRegistryStore::child_entry_bytes(&child);
     let traversal_bytes = RootComponentRegistryStore::child_traversal_entry_bytes(&traversal);
     let index_bytes =
@@ -8889,17 +8874,17 @@ fn committed_child_records(
             .checked_add(child_bytes)
             .and_then(|value| value.checked_add(traversal_bytes))
             .and_then(|value| value.checked_add(index_bytes))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let next_total = RootComponentRegistryStore::partition_entry_bytes(&next_partition)
             .checked_add(terminal_bytes)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let released_precharge = current_total
             .checked_sub(next_total)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_sub(released_precharge)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
@@ -8967,7 +8952,7 @@ fn persist_child_membership_activation(
                 record.component,
             ))
         })
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if terminal_bytes > installation.charged_entry_bytes {
         return Err(InternalError::invariant());
     }
@@ -8978,7 +8963,7 @@ fn persist_child_membership_activation(
         .encoded_bytes
         .checked_sub(partition.encoded_bytes)
         .and_then(|value| value.checked_add(active_partition.encoded_bytes))
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if encoded_bytes > current.root.limits.maximum_registry_bytes {
         return Err(InternalError::resource_exhausted());
     }
@@ -9033,7 +9018,7 @@ fn active_child_membership_records(
     let revision = partition
         .revision
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let mut active_child = child.clone();
     active_child.status = ComponentLifecycleStatus::Active;
     let descendant_content_hash = activated_component_descendant_content_hash(
@@ -9110,7 +9095,7 @@ fn active_child_membership_records(
             record,
         ))
         .and_then(|value| value.checked_add(RootComponentRegistryStore::child_entry_bytes(child)))
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
 
     for _ in 0..8 {
         let next_variable_bytes =
@@ -9121,12 +9106,12 @@ fn active_child_membership_records(
                 .and_then(|value| {
                     value.checked_add(RootComponentRegistryStore::child_entry_bytes(&active_child))
                 })
-                .ok_or_else(|| InternalError::resource_exhausted())?;
+                .ok_or_else(InternalError::resource_exhausted)?;
         let encoded_bytes = partition
             .encoded_bytes
             .checked_sub(previous_variable_bytes)
             .and_then(|value| value.checked_add(next_variable_bytes))
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         let RootComponentChildAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
@@ -9135,7 +9120,7 @@ fn active_child_membership_records(
         let membership = commitment
             .membership
             .as_mut()
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if active_partition.encoded_bytes == encoded_bytes
             && membership.registry_encoded_bytes == encoded_bytes
         {
@@ -9231,7 +9216,7 @@ fn committed_records(
                 &partition,
             ))
             .and_then(|value| value.checked_add(index_bytes))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
@@ -9248,10 +9233,6 @@ fn committed_records(
     Err(InternalError::invariant())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one constructor freezes the complete top-level membership authority"
-)]
 fn active_membership_records(
     record: &RootComponentAllocationRecord,
     commitment: &RootComponentCommitmentRecord,
@@ -9278,7 +9259,7 @@ fn active_membership_records(
         .registry
         .revision
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let content_hash = component_partition_content_hash(
         &installation.binding,
         &record.provisioning_origin,
@@ -9338,7 +9319,7 @@ fn active_membership_records(
         let encoded_bytes = RootComponentRegistryStore::allocation_entry_bytes(&next_record)
             .checked_add(RootComponentRegistryStore::partition_entry_bytes(&active))
             .and_then(|value| value.checked_add(index_bytes))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         let RootComponentAllocationProgressRecord::Committed { commitment, .. } =
             &mut next_record.progress
         else {
@@ -9347,7 +9328,7 @@ fn active_membership_records(
         let membership = commitment
             .membership
             .as_mut()
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         if active.encoded_bytes == encoded_bytes
             && membership.registry_encoded_bytes == encoded_bytes
         {
@@ -9416,10 +9397,10 @@ fn exact_committed_child_partition(
         return Err(InternalError::invariant());
     };
     let current = RootComponentRegistryStore::partition(record.component)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_partition_record(&current)?;
     let child = RootComponentRegistryStore::child(record.component, *canister)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_child_record(&current, &child)?;
     let traversal = ComponentRegistryChildTraversalRecord {
         component: record.component,
@@ -9483,7 +9464,7 @@ fn exact_active_child_partition(
     membership: &RootComponentChildMembershipRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
     let current = RootComponentRegistryStore::partition(record.component)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_active_child_partition(record, commitment, membership, &current)
 }
 
@@ -9502,7 +9483,7 @@ fn validate_active_child_partition(
         return Err(InternalError::invariant());
     };
     let child = RootComponentRegistryStore::child(record.component, *canister)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_child_record(current, &child)?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
@@ -9557,7 +9538,7 @@ fn exact_committed_partition(
         return Err(InternalError::invariant());
     };
     let current = RootComponentRegistryStore::partition(record.component)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let prepared = ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
         provisioning_origin: record.provisioning_origin.clone(),
@@ -9597,7 +9578,7 @@ fn exact_active_partition(
     membership: &RootComponentMembershipRecord,
 ) -> Result<ComponentRegistryPartitionRecord, InternalError> {
     let current = RootComponentRegistryStore::partition(record.component)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_active_partition(record, commitment, membership, &current)
 }
 
@@ -9611,7 +9592,7 @@ fn validate_active_partition(
         .registry
         .revision
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
         provisioning_origin: current.provisioning_origin.clone(),
@@ -9782,7 +9763,7 @@ const fn component_partition_retains_active_membership(status: ComponentLifecycl
     )
 }
 
-fn require_ordinary_component_lifecycle(
+const fn require_ordinary_component_lifecycle(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
     if component_uses_grouped_lifecycle(partition) {
@@ -9791,7 +9772,7 @@ fn require_ordinary_component_lifecycle(
     Ok(())
 }
 
-fn validate_ordinary_component_lifecycle(
+const fn validate_ordinary_component_lifecycle(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<(), InternalError> {
     if component_uses_grouped_lifecycle(partition) {
@@ -10007,7 +9988,7 @@ fn ensure_component_final_inventory_candidate(
     Ok(())
 }
 
-fn ensure_component_final_inventory_time(
+const fn ensure_component_final_inventory_time(
     partition: &ComponentRegistryPartitionRecord,
     quiesced_at_ns: u64,
     finalized_at_ns: u64,
@@ -10076,9 +10057,7 @@ fn committed_component_allocation(
     let mut allocations = RootComponentRegistryStore::allocations()
         .into_iter()
         .filter(|allocation| allocation.component == partition.binding.component);
-    let allocation = allocations
-        .next()
-        .ok_or_else(|| InternalError::invariant())?;
+    let allocation = allocations.next().ok_or_else(InternalError::invariant)?;
     if allocations.next().is_some() {
         return Err(InternalError::invariant());
     }
@@ -10144,16 +10123,16 @@ fn component_membership_removal_records(
     let remaining_spec_committed_instances = committed
         .checked_sub(1)
         .and_then(|count| u32::try_from(count).ok())
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let mut next_meta = current.clone();
     next_meta.committed_component_instances = next_meta
         .committed_component_instances
         .checked_sub(1)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     next_meta.known_created_component_canisters = next_meta
         .known_created_component_canisters
         .checked_sub(1)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     next_meta.encoded_bytes =
         removed_component_root_registry_bytes(current, partition, allocation, &next_allocation)?;
 
@@ -10191,9 +10170,7 @@ fn removed_component_allocation_for_receipt(
     let mut allocations = RootComponentRegistryStore::allocations()
         .into_iter()
         .filter(|allocation| allocation.component == component);
-    let allocation = allocations
-        .next()
-        .ok_or_else(|| InternalError::invariant())?;
+    let allocation = allocations.next().ok_or_else(InternalError::invariant)?;
     if allocations.next().is_some() || allocation.operation_id != receipt.allocation_operation_id {
         return Err(InternalError::invariant());
     }
@@ -10225,7 +10202,7 @@ fn removed_component_root_registry_bytes(
                 removed_allocation,
             ))
         })
-        .ok_or_else(|| InternalError::invariant())
+        .ok_or_else(InternalError::invariant)
 }
 
 fn validate_removed_component_authority(
@@ -10348,7 +10325,7 @@ fn component_has_terminal_quiescence(
     partition: &ComponentRegistryPartitionRecord,
 ) -> Result<bool, InternalError> {
     let draining = RootComponentRegistryStore::component_draining(partition.binding.component)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_component_draining_record(partition, &draining)?;
     Ok(matches!(
         draining.quiescence,
@@ -10528,11 +10505,11 @@ fn subtree_directory_parent_convergence_record(
         };
     }
     let (binding, status) = ComponentRegistryOps::registered_parent(component, parent_canister_id)?
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if status != ComponentLifecycleStatus::Active {
         return Err(InternalError::conflict());
     }
-    let evidence = evidence.ok_or_else(|| InternalError::unavailable())?;
+    let evidence = evidence.ok_or_else(InternalError::unavailable)?;
     let (coverage, record) = subtree_directory_convergence_record(partition, &binding, evidence)?;
     if &coverage != expected_coverage {
         return Err(InternalError::conflict());
@@ -10727,7 +10704,7 @@ fn validate_subtree_removal_progress(
     }
     let current_target =
         RootComponentRegistryStore::child(record.component, record.target.canister_id)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
     validate_registered_child_record(partition, &current_target)?;
     if current_target != record.target {
         return Err(InternalError::invariant());
@@ -10761,7 +10738,7 @@ fn validate_subtree_removal_progress(
         return Ok(());
     };
     let current_node = RootComponentRegistryStore::child(record.component, node.canister_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_registered_child_record(partition, &current_node)?;
     if &current_node != node {
         return Err(InternalError::invariant());
@@ -10769,7 +10746,7 @@ fn validate_subtree_removal_progress(
     let traversal_limit = partition
         .committed_descendants
         .checked_add(1)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if !canister_is_in_subtree(
         partition,
         node.canister_id,
@@ -10784,10 +10761,6 @@ fn validate_subtree_removal_progress(
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one validator reconstructs the complete historical and current membership-removal authority"
-)]
 fn validate_subtree_membership_removed(
     partition: &ComponentRegistryPartitionRecord,
     record: &RootComponentSubtreeRemovalRecord,
@@ -10859,7 +10832,7 @@ fn validate_subtree_membership_removed(
             == receipt
                 .previous_committed_descendants
                 .checked_sub(1)
-                .ok_or_else(|| InternalError::invariant())?
+                .ok_or_else(InternalError::invariant)?
         && current_parent_role_instances >= receipt.parent_role_instances;
     if !receipt_is_canonical
         || (!exact_head_is_current && !head_was_advanced)
@@ -10871,7 +10844,7 @@ fn validate_subtree_membership_removed(
     if record.target.canister_id != leaf.canister_id {
         let current_target =
             RootComponentRegistryStore::child(record.component, record.target.canister_id)
-                .ok_or_else(|| InternalError::invariant())?;
+                .ok_or_else(InternalError::invariant)?;
         validate_registered_child_record(partition, &current_target)?;
         if current_target != record.target {
             return Err(InternalError::invariant());
@@ -10938,7 +10911,7 @@ fn validate_completed_subtree_removal(
         record.operation_id,
         record.traversal_steps,
     )
-    .ok_or_else(|| InternalError::invariant())?;
+    .ok_or_else(InternalError::invariant)?;
     validate_subtree_removal_completed_leaf(record, partition, &history)?;
     let terminal_authority_matches = history.leaf_canister_id == record.target.canister_id
         && completed.registry == history.registry
@@ -11016,7 +10989,7 @@ fn finalized_subtree_removal_progress(
     }
 
     let parent = RootComponentRegistryStore::child(component, leaf.parent_canister_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_registered_child_record(partition, &parent)?;
     if parent.status != ComponentLifecycleStatus::Active {
         return Err(InternalError::conflict());
@@ -11089,7 +11062,7 @@ fn first_registered_child(
     validate_child_traversal_record(partition.binding.component, &traversal)?;
     let child =
         RootComponentRegistryStore::child(partition.binding.component, traversal.canister_id)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
     validate_registered_child_record(partition, &child)?;
     let expected_identity = ComponentTreeNodeIdentity::new(
         partition.binding.component,
@@ -11154,7 +11127,7 @@ fn canister_is_in_subtree(
             return Ok(false);
         }
         let child = RootComponentRegistryStore::child(partition.binding.component, current)
-            .ok_or_else(|| InternalError::invariant())?;
+            .ok_or_else(InternalError::invariant)?;
         validate_registered_child_record(partition, &child)?;
         current = child.parent_canister_id;
     }
@@ -11410,10 +11383,10 @@ fn validate_install_capacity(
     let without_current = current
         .encoded_bytes
         .checked_sub(current_reserved_bytes)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_encoded_bytes = without_current
         .checked_add(charged_entry_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if next_encoded_bytes > current.root.limits.maximum_registry_bytes {
         return Err(InternalError::resource_exhausted());
     }
@@ -11437,10 +11410,9 @@ fn advance_install_phase(
     operation_id: [u8; 32],
     verified: bool,
 ) -> Result<RootComponentAllocationView, InternalError> {
-    let current =
-        RootComponentRegistryStore::current().ok_or_else(|| InternalError::unavailable())?;
+    let current = RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
     let record = RootComponentRegistryStore::allocation(operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let next_progress = match (&record.progress, verified) {
         (
             RootComponentAllocationProgressRecord::InstallIntent {
@@ -11510,10 +11482,10 @@ fn validate_creation_capacity(
     let without_current = current
         .encoded_bytes
         .checked_sub(current_entry_bytes)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let next_encoded_bytes = without_current
         .checked_add(charged_entry_bytes)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if next_encoded_bytes > current.root.limits.maximum_registry_bytes {
         return Err(InternalError::resource_exhausted());
     }
@@ -11531,7 +11503,7 @@ fn validate_charged_record_size(
     Ok(())
 }
 
-fn map_allocation_commit_error(error: RootComponentAllocationCommitError) -> InternalError {
+const fn map_allocation_commit_error(error: RootComponentAllocationCommitError) -> InternalError {
     match error {
         RootComponentAllocationCommitError::ComponentIdentityConflict
         | RootComponentAllocationCommitError::ComponentPrincipalConflict

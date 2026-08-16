@@ -181,7 +181,7 @@ pub async fn publish(
         operation_id: request.operation_id,
         plan_hash: request.plan_hash,
     })?;
-    let registry = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let registry = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     let runtime_mode = validate_component_registry_authority(
         &registry,
         &authority.binding,
@@ -253,7 +253,7 @@ async fn activate_component_step(
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let provisioning_origin = activation_member_origin(request, &member)?;
     let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let runtime_active = match &allocation.progress {
         crate::view::component_registry::RootComponentAllocationProgressView::Committed {
             commitment,
@@ -336,9 +336,7 @@ async fn activate_fresh_root_runtime(
             observed
         };
     let active = if prepared.phase == FleetActivationPhase::Prepared {
-        let credential = prepared
-            .credential
-            .ok_or_else(|| InternalError::unavailable())?;
+        let credential = prepared.credential.ok_or_else(InternalError::unavailable)?;
         root_fleet_activation::resume_root(FleetActivationResumeRequest {
             operation_id: prepared.identity.operation_id,
             credential,
@@ -350,7 +348,7 @@ async fn activate_fresh_root_runtime(
     };
     let activated_at_ns = active
         .activated_at_ns
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let inventory = ComponentRegistryOps::initial_inventory(active.identity.operation_id)?;
     let activation_is_terminal = active.phase == FleetActivationPhase::Active
         && inventory.directories_converged
@@ -379,7 +377,7 @@ fn activate_active_root_batch(
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let activated_at_ns = active
         .activated_at_ns
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let inventory = ComponentRegistryOps::initial_inventory(active.identity.operation_id)?;
     let initial_runtime_is_exact = active.phase == FleetActivationPhase::Active
         && activated_at_ns > 0
@@ -409,10 +407,10 @@ async fn publish_component_directory(
     fleet_directory: canic_core::dto::fleet_registry::FleetDirectorySnapshot,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
     let partition = ComponentRegistryOps::partition(member.binding.component)?
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     validate_publication_partition(&member, &partition)?;
     let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
     if retained.deployment != member.deployment
         || retained.component_group != member.component_group
@@ -445,7 +443,7 @@ async fn publish_component_directory(
     let intent = current
         .publication_in_flight
         .as_ref()
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if intent.component_index != member.component_index
         || intent.canister_id != member.binding.canister_id
         || intent.directory_authority_hash != directory_authority_hash
@@ -531,7 +529,7 @@ async fn advance_member_claim(
     validate_claim_registry_progress(&registry, current.component_count)?;
     let member = RootComponentProvisioningOps::next_member_claim(current)?;
     let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let topology = ConfigOps::component_topology()?;
     super::component_registry::validate_allocation_record(
         &authority.binding,
@@ -557,7 +555,7 @@ async fn advance_member_claim(
     }
 
     let allocation = ComponentRegistryOps::allocation(member.member_operation_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     super::component_registry::validate_allocation_record(
         &authority.binding,
         authority.initial_release_set,
@@ -748,7 +746,7 @@ fn required_member_allocation(
     operation_id: [u8; 32],
     _phase: &str,
 ) -> Result<RootComponentAllocationView, InternalError> {
-    ComponentRegistryOps::allocation(operation_id).ok_or_else(|| InternalError::invariant())
+    ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::invariant)
 }
 
 fn require_coordinator(caller: Principal, coordinator: Principal) -> Result<(), InternalError> {
@@ -777,7 +775,7 @@ fn current_registry_for_acceptance(
     {
         return Err(InternalError::conflict());
     }
-    let current = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let current = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     let runtime_mode = validate_component_registry_authority(
         &current,
         &authority.binding,
@@ -820,7 +818,7 @@ fn current_registry_for_progress(
         &authority.binding,
         &provisioning.batch,
     )?;
-    let current = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let current = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     let runtime_mode = validate_component_registry_authority(
         &current,
         &authority.binding,
@@ -854,14 +852,14 @@ fn validate_reservation_registry_progress(
 ) -> Result<(), InternalError> {
     let expected = aggregate_reserved_components
         .checked_add(u32::from(current_member_exists))
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if registry_reserved_components != expected {
         return Err(InternalError::invariant());
     }
     Ok(())
 }
 
-fn validate_claim_registry_progress(
+const fn validate_claim_registry_progress(
     registry: &RootComponentRegistryView,
     component_count: u32,
 ) -> Result<(), InternalError> {
@@ -879,10 +877,10 @@ fn validate_registry_commit_progress(
 ) -> Result<(), InternalError> {
     let reconciled_committed = aggregate_registry_committed_components
         .checked_add(u32::from(current_member_is_committed))
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     let expected_reserved = component_count
         .checked_sub(reconciled_committed)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if registry_reserved_components != expected_reserved {
         return Err(InternalError::invariant());
     }
@@ -1005,11 +1003,11 @@ fn validate_activation_runtime_authority(
     provisioning: &RootComponentProvisioningView,
 ) -> Result<(), InternalError> {
     let runtime = FleetActivationWorkflow::status()?;
-    let registry = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let registry = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     let published_registry = &provisioning
         .publication
         .as_ref()
-        .ok_or_else(|| InternalError::conflict())?
+        .ok_or_else(InternalError::conflict)?
         .fleet_registry;
     let actual = validate_component_registry_authority(
         &registry,
@@ -1040,7 +1038,7 @@ fn validate_component_capacity(
         .reserved_component_instances
         .checked_add(current.committed_component_instances)
         .and_then(|count| count.checked_add(validation.component_count))
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if occupied > current.root.limits.maximum_component_instances {
         return Err(InternalError::resource_exhausted());
     }
@@ -1051,13 +1049,13 @@ fn validate_component_capacity(
             .binary_search_by(|candidate| candidate.component_spec.cmp(component_spec))
             .ok()
             .map(|index| &current.root.component_admissions[index])
-            .ok_or_else(|| InternalError::conflict())?;
+            .ok_or_else(InternalError::conflict)?;
         let counts = ComponentRegistryOps::component_spec_counts(component_spec)?;
         let occupied = counts
             .reserved
             .checked_add(counts.committed)
             .and_then(|count| count.checked_add(*requested))
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         if occupied > admission.maximum_root_instances {
             return Err(InternalError::resource_exhausted());
         }
@@ -1072,7 +1070,7 @@ fn validate_group_placement_capacity(
 ) -> Result<(), InternalError> {
     let required = tracked
         .checked_add(requested)
-        .ok_or_else(|| InternalError::resource_exhausted())?;
+        .ok_or_else(InternalError::resource_exhausted)?;
     if required > maximum {
         return Err(InternalError::resource_exhausted());
     }

@@ -456,7 +456,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_mut()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if creation.operation_id != operation_id {
             return Err(InternalError::conflict());
         }
@@ -485,7 +485,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_mut()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         require_creation_attempt(creation, operation_id, settlement)?;
         creation.cost_guard_settlement = None;
         creation.progress = CanisterPoolCreationProgressRecord::Intent { uncertain_result };
@@ -502,7 +502,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_mut()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if creation.operation_id != operation_id {
             return Err(InternalError::conflict());
         }
@@ -533,7 +533,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_mut()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         require_creation_operation(creation, operation_id)?;
         if creation.cost_guard_settlement != Some(settlement) {
             return Err(InternalError::conflict());
@@ -552,7 +552,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_mut()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         require_creation_operation(creation, operation_id)?;
         if creation.cost_guard_settlement.is_some() {
             return Err(InternalError::conflict());
@@ -580,7 +580,7 @@ impl CanisterPoolOps {
         now_ns: u64,
     ) -> Result<(), InternalError> {
         let state = CanisterPoolStore::state();
-        let creation = state.creation.ok_or_else(|| InternalError::unavailable())?;
+        let creation = state.creation.ok_or_else(InternalError::unavailable)?;
         require_creation_operation(&creation, operation_id)?;
         let created_principal_is_exact = matches!(
             creation.progress,
@@ -617,7 +617,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let CanisterPoolCreationProgressRecord::Created { canister_id, .. } = creation.progress
         else {
             return Err(InternalError::conflict());
@@ -628,7 +628,7 @@ impl CanisterPoolOps {
         state.next_creation_sequence = state
             .next_creation_sequence
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(())
@@ -639,7 +639,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         let CanisterPoolCreationProgressRecord::Blocked { failure } = creation.progress else {
             return Err(InternalError::conflict());
         };
@@ -650,7 +650,7 @@ impl CanisterPoolOps {
         state.next_creation_sequence = state
             .next_creation_sequence
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(operation_id)
@@ -661,7 +661,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !creation_is_known_unapplied(creation) {
             return Err(InternalError::conflict());
         }
@@ -670,7 +670,7 @@ impl CanisterPoolOps {
         state.next_creation_sequence = state
             .next_creation_sequence
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(operation_id)
@@ -681,7 +681,7 @@ impl CanisterPoolOps {
         let creation = state
             .creation
             .as_ref()
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
         if !creation_is_known_unapplied_intent(creation) {
             return Err(InternalError::conflict());
         }
@@ -690,7 +690,7 @@ impl CanisterPoolOps {
         state.next_creation_sequence = state
             .next_creation_sequence
             .checked_add(1)
-            .ok_or_else(|| InternalError::resource_exhausted())?;
+            .ok_or_else(InternalError::resource_exhausted)?;
         state.creation = None;
         CanisterPoolStore::set_state(state);
         Ok(operation_id)
@@ -706,7 +706,7 @@ impl CanisterPoolOps {
             .last_creation_timestamp_ns
             .checked_add(1)
             .map(|minimum| now_ns.max(minimum))
-            .ok_or_else(|| InternalError::resource_exhausted())
+            .ok_or_else(InternalError::resource_exhausted)
     }
 
     #[must_use]
@@ -801,7 +801,7 @@ impl CanisterPoolOps {
         completed_at_ns: u64,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
-        let handoff = state.handoff.ok_or_else(|| InternalError::unavailable())?;
+        let handoff = state.handoff.ok_or_else(InternalError::unavailable)?;
         if handoff.canister_id != canister_id || handoff.recipient != recipient {
             return Err(InternalError::conflict());
         }
@@ -1059,7 +1059,7 @@ impl CanisterPoolOps {
     }
 }
 
-fn validate_config(config: &FleetSubnetCanisterPoolConfig) -> Result<(), InternalError> {
+const fn validate_config(config: &FleetSubnetCanisterPoolConfig) -> Result<(), InternalError> {
     if config.minimum_size == 0 {
         return Err(InternalError::invalid_input());
     }
@@ -1111,7 +1111,7 @@ fn require_creation_operation(
     Ok(())
 }
 
-fn require_creation_cost_settled(
+const fn require_creation_cost_settled(
     creation: &CanisterPoolCreationRecord,
 ) -> Result<(), InternalError> {
     if creation.cost_guard_settlement.is_some() {
@@ -1172,7 +1172,7 @@ fn validate_new_asset_capacity(
 }
 
 fn required_asset(canister_id: Principal) -> Result<CanisterPoolAssetRecord, InternalError> {
-    CanisterPoolStore::get(&canister_id).ok_or_else(|| InternalError::unavailable())
+    CanisterPoolStore::get(&canister_id).ok_or_else(InternalError::unavailable)
 }
 
 fn recycling_completion(

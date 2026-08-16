@@ -515,7 +515,7 @@ mod tests {
                 codes::POSITION_CAPACITY,
             ),
             (
-                TemplateManifestOpsError::TemplateChunkIndexOutOfRange(release.clone(), 2),
+                TemplateManifestOpsError::TemplateChunkIndexOutOfRange(release, 2),
                 codes::POSITION_CAPACITY,
             ),
             (

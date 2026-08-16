@@ -49,7 +49,7 @@ pub async fn synchronize(
     if FleetActivationWorkflow::status()?.phase != FleetActivationPhase::Active {
         return Err(InternalError::conflict());
     }
-    let registry = ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+    let registry = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     RootComponentDirectorySynchronizationOps::validate_command(&request)?;
 
     let prepared = RootComponentDirectorySynchronizationOps::is_prepared(request.operation_id)
@@ -138,7 +138,7 @@ fn next_intent(
         return Ok(None);
     };
     let allocation = ComponentRegistryOps::allocation(target.allocation_operation_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
     let plan = ComponentRegistryOps::prepare_directory_refresh(
         target,
@@ -165,7 +165,7 @@ async fn synchronize_target(
     intent: &RootComponentDirectorySynchronizationIntentView,
 ) -> Result<RootComponentDirectorySynchronizationResponse, InternalError> {
     let allocation = ComponentRegistryOps::allocation(intent.allocation_operation_id)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     let retained = RootComponentProvisioningOps::component_group_runtime_authority(&allocation)?;
     let (binding, maximum_registry_bytes) = group_member_runtime_limits(&retained.deployment)?;
     let plan = ComponentRegistryOps::directory_refresh_plan_for_intent(
@@ -208,11 +208,11 @@ fn validate_synchronized_target_coverage(
     status: &canic_core::dto::component_registry::ComponentRuntimeStatusResponse,
 ) -> Result<(), InternalError> {
     let current = ComponentRegistryOps::partition(intent.component)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let authority = status
         .authority
         .as_ref()
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     let authority_hash = ComponentRuntimeOps::directory_authority_hash(authority)?;
     let direct_children =
         component_registry::active_component_direct_children(&current, intent.canister_id)?;

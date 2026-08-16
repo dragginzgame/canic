@@ -159,7 +159,7 @@ pub fn wasm_store_adoption_status(
 ) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
     let authority = protected_sibling_wasm_store_authority(&request)?;
     RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(request.operation_id, authority)?
-        .ok_or_else(|| InternalError::unavailable())
+        .ok_or_else(InternalError::unavailable)
 }
 
 fn protected_sibling_wasm_store_authority(
@@ -452,7 +452,7 @@ pub fn removal_status(
     let _state = validated_root_state()?;
     let publication =
         ComponentRegistryOps::root_removal_publication_if_present(request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
     removal_publication_response(publication, inventory)
 }
@@ -508,7 +508,7 @@ pub fn store_reclamation_status(
 ) -> Result<FleetSubnetRootStoreReclamationResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())
+        .ok_or_else(InternalError::unavailable)
         .map(store_reclamation_response)
 }
 
@@ -520,7 +520,7 @@ pub async fn finalize_store_binding(
     let inventory = removed_root_inventory(request.operation_id)?;
     let reclamation =
         ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     if request.expected_reclamation_hash != reclamation.reclamation_hash {
         return Err(InternalError::conflict());
     }
@@ -574,7 +574,7 @@ pub fn store_binding_finalization_status(
 ) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())
+        .ok_or_else(InternalError::unavailable)
         .map(store_binding_finalization_response)
 }
 
@@ -586,7 +586,7 @@ pub async fn delete_store(
     let inventory = removed_root_inventory(request.operation_id)?;
     let finalization =
         ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     if request.expected_binding_finalization_hash != finalization.finalization_hash {
         return Err(InternalError::conflict());
     }
@@ -659,7 +659,7 @@ pub fn store_deletion_status(
 ) -> Result<FleetSubnetRootStoreDeletionResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())
+        .ok_or_else(InternalError::unavailable)
         .map(store_deletion_response)
 }
 
@@ -675,7 +675,7 @@ pub async fn prepare_deletion(
     }
     let store_deletion =
         ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
-            .ok_or_else(|| InternalError::unavailable())?;
+            .ok_or_else(InternalError::unavailable)?;
     if request.expected_store_deletion_hash != store_deletion.deletion_hash {
         return Err(InternalError::conflict());
     }
@@ -748,7 +748,7 @@ pub fn deletion_preparation_status(
 ) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
     let _state = validated_root_state()?;
     ComponentRegistryOps::root_deletion_preparation_if_present(request.operation_id)?
-        .ok_or_else(|| InternalError::unavailable())
+        .ok_or_else(InternalError::unavailable)
         .map(deletion_preparation_response)
 }
 
@@ -785,7 +785,7 @@ fn validated_root_state() -> Result<ValidatedFleetSubnetRootState, InternalError
     let fleet_registry = mirror.active.snapshot.version;
     let root_entry = mirror.root_entry;
     let component_registry =
-        ComponentRegistryOps::current().ok_or_else(|| InternalError::unavailable())?;
+        ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
     validate_component_registry(&authority, &fleet_registry, &component_registry)?;
     validate_draining_evidence(&root_entry, &fleet_registry)?;
 
@@ -832,7 +832,7 @@ fn validate_component_registry(
         .reserved_component_instances
         .checked_add(registry.committed_component_instances)
         .and_then(|count| count.checked_add(registry.managed_descendants))
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if registry.known_created_component_canisters > allocated_canisters {
         return Err(InternalError::invariant());
     }
@@ -863,7 +863,7 @@ fn removed_root_inventory(
     operation_id: [u8; 32],
 ) -> Result<RootFleetSubnetFinalInventoryView, InternalError> {
     let publication = ComponentRegistryOps::root_removal_publication_if_present(operation_id)?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
     let inventory = ComponentRegistryOps::root_final_inventory(operation_id)?;
     if publication.final_inventory_hash != inventory.inventory_hash {
         return Err(InternalError::invariant());
@@ -902,14 +902,14 @@ fn summary(
 ) -> Result<FleetSubnetRootCanisterSummary, InternalError> {
     let infrastructure_canisters = 1_u32
         .checked_add(store_canisters)
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
     if workload_canisters != registry.known_created_component_canisters {
         return Err(InternalError::invariant());
     }
     let total_canisters = infrastructure_canisters
         .checked_add(workload_canisters)
         .and_then(|count| count.checked_add(pooled_canisters))
-        .ok_or_else(|| InternalError::invariant())?;
+        .ok_or_else(InternalError::invariant)?;
 
     Ok(FleetSubnetRootCanisterSummary {
         fleet_registry,
@@ -1162,13 +1162,13 @@ fn root_deletion_readiness_request(
         fleet_subnet_root: IcOps::canister_self(),
         expected_intent_hash: intent
             .coordinator_intent_hash
-            .ok_or_else(|| InternalError::unavailable())?,
+            .ok_or_else(InternalError::unavailable)?,
         observed_cycles_after_reclamation: intent
             .observed_cycles_after_reclamation
-            .ok_or_else(|| InternalError::unavailable())?,
+            .ok_or_else(InternalError::unavailable)?,
         cycles_reclaimed_at_ns: intent
             .cycles_reclaimed_at_ns
-            .ok_or_else(|| InternalError::unavailable())?,
+            .ok_or_else(InternalError::unavailable)?,
     })
 }
 
@@ -1262,7 +1262,7 @@ async fn reclaim_root_deletion_cycles(
     let target_cycles_to_retain = retained_cycles_target
         .checked_sub(FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES)
         .and_then(|remaining| remaining.checked_sub(deposit_call_cost))
-        .ok_or_else(|| InternalError::conflict())?;
+        .ok_or_else(InternalError::conflict)?;
     let maximum_transfer = transferable_root_deletion_cycles(
         current_cycles,
         target_cycles_to_retain,

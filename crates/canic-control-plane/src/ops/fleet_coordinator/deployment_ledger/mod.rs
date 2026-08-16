@@ -45,7 +45,7 @@ pub(super) fn scale_out_plan_hash(
         .iter()
         .find(|candidate| &candidate.deployment == deployment)
         .map(|candidate| candidate.next_placement_ordinal)
-        .ok_or_else(|| InternalError::invalid_input())?;
+        .ok_or_else(InternalError::invalid_input)?;
     hash_with_next_ordinal(
         configuration,
         registry,
@@ -114,7 +114,7 @@ fn fresh_install_root_authority(
     Ok(roots)
 }
 
-fn scale_out_deployment(
+const fn scale_out_deployment(
     plan: &FleetComponentProvisioningPlan,
 ) -> Result<&ComponentGroupDeploymentId, InternalError> {
     let FleetComponentProvisioningOperation::ScaleOut { deployment, .. } = &plan.operation else {

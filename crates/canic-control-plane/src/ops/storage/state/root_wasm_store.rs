@@ -271,9 +271,7 @@ fn adoption_response(
     if record.phase != SiblingWasmStoreAdoptionPhaseRecord::Verified {
         return Err(InternalError::unavailable());
     }
-    let adopted_at_ns = record
-        .adopted_at_ns
-        .ok_or_else(|| InternalError::invariant())?;
+    let adopted_at_ns = record.adopted_at_ns.ok_or_else(InternalError::invariant)?;
     Ok(FleetSubnetWasmStoreAdoptionResponse {
         operation_id: record.operation_id,
         authority,

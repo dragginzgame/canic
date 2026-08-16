@@ -233,7 +233,7 @@ fn validate_manifest_projection(
         if unique_payloads.insert(payload) {
             total_bytes = total_bytes
                 .checked_add(payload.1)
-                .ok_or_else(|| InternalError::invalid_input())?;
+                .ok_or_else(InternalError::invalid_input)?;
         }
     }
     if total_bytes > authority.binding.limits.maximum_wasm_store_bytes {
@@ -370,7 +370,7 @@ fn verify_live_catalog(
             let raw_module_hash = module_hashes
                 .get(&entry.role)
                 .copied()
-                .ok_or_else(|| InternalError::invalid_input())?;
+                .ok_or_else(InternalError::invalid_input)?;
             Ok(RootStoreCatalogEntry {
                 role: entry.role,
                 raw_module_hash,

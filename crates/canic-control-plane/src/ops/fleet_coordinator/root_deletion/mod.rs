@@ -121,7 +121,7 @@ impl FleetCoordinatorOps {
             request.operation_id,
             request.fleet_subnet_root,
         )?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
         let request_is_valid = [
             request.expected_intent_hash == intent.intent_hash,
             request.observed_cycles_after_reclamation
@@ -185,7 +185,7 @@ impl FleetCoordinatorOps {
             request.operation_id,
             request.fleet_subnet_root,
         )?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
         validate_root_deletion_execution_request(executor, &request, readiness, prepared_at_ns)?;
         let mut response = FleetSubnetRootDeletionExecutionResponse {
             request,
@@ -214,7 +214,7 @@ impl FleetCoordinatorOps {
         let current = Self::current()?;
         find_root_deletion_execution(&current, request.operation_id, request.fleet_subnet_root)?
             .cloned()
-            .ok_or_else(|| InternalError::unavailable())
+            .ok_or_else(InternalError::unavailable)
     }
 
     pub(crate) fn complete_root_deletion(
@@ -245,7 +245,7 @@ impl FleetCoordinatorOps {
             request.operation_id,
             request.fleet_subnet_root,
         )?
-        .ok_or_else(|| InternalError::unavailable())?;
+        .ok_or_else(InternalError::unavailable)?;
         let completion_is_exact = [
             execution.executor == executor,
             execution.execution_hash == request.expected_execution_hash,
@@ -289,7 +289,7 @@ impl FleetCoordinatorOps {
         let current = Self::current()?;
         find_root_deletion(&current, request.operation_id, request.fleet_subnet_root)?
             .cloned()
-            .ok_or_else(|| InternalError::unavailable())
+            .ok_or_else(InternalError::unavailable)
     }
 }
 
@@ -351,7 +351,7 @@ fn require_removed_root_publication(
             receipt.request.final_inventory.operation_id == operation_id
                 && receipt.request.final_inventory.fleet_subnet_root == fleet_subnet_root
         })
-        .ok_or_else(|| InternalError::unavailable())
+        .ok_or_else(InternalError::unavailable)
 }
 
 fn find_root_deletion_record<'a, T>(
@@ -464,11 +464,11 @@ fn root_deletion_retained_cycles_target(
 ) -> Result<u128, InternalError> {
     let freezing_reserve = idle_cycles_burned_per_day
         .checked_mul(freezing_threshold_seconds)
-        .ok_or_else(|| InternalError::invalid_input())?
+        .ok_or_else(InternalError::invalid_input)?
         .div_ceil(SECONDS_PER_DAY);
     freezing_reserve
         .checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
-        .ok_or_else(|| InternalError::invalid_input())
+        .ok_or_else(InternalError::invalid_input)
 }
 
 fn validate_root_deletion_execution_request(
