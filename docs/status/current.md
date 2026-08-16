@@ -8,11 +8,9 @@ This is the compact handoff for new agent sessions. Read it first, then inspect
 only the active design, source, validation or changelog material needed for the
 current task.
 
-Historical handoffs are archived at:
-
-- [status through 2026-06-30](archive/2026-06-30-precompact.md);
-- [status through the 0.90.2 release](archive/2026-07-13-precompact.md); and
-- [status through the 0.101.52 Q4 qualification](archive/2026-08-12-precompact.md).
+Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
+[through 0.90.2](archive/2026-07-13-precompact.md) and
+[through 0.101.52 Q4](archive/2026-08-12-precompact.md).
 
 ## Current Release
 
@@ -40,22 +38,14 @@ codes, producer-only registered codes, `Error { code: u16 }`, code-first
 released `code + name`; it neither reads B1 evidence nor freezes row counts,
 and the ledger rejects fields beyond its six maintained fields.
 
-The scheduled 0.103 line owns the role-owned Candid and autonomous-operation
-hard cut. Root, Coordinator, Store and managed applications own methods;
-capabilities add variants, each command/status variant owns its authority and
-workflows own phases. Only async/durable commands get operation identities;
-atomic commands return typed responses. B1 classifies the 118-Root/20-Burner
-working signal through six dispositions with `private/delete` as the default.
-Root/Coordinator emit two methods and managed roles at most two. Store starts
-with two; each later method needs independent evidence and six is an emergency
-ceiling. B2/B3 stay unreleased until exact pruning. B1 repository evidence is
-approved; no product implementation batch or mutation is promoted.
+Scheduled 0.103 owns role methods and autonomous operations. Root/Coordinator
+emit two methods, managed roles at most two and Store begins with two; only
+durable async work receives operation identity. B1 evidence is approved, but
+no product mutation is promoted and B2/B3 remain held pending exact pruning.
 
-The scheduled 0.104 line owns the `ic-timers` consumer and domain async-job
-recovery hard cut after 0.103 establishes the final autonomous-operation
-consumers. Repository-only 0.105 B1 evidence may continue, but its final
-Candid, timer and state inventory must reconcile against accepted 0.103 and
-0.104 before B2.
+Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
+hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its
+final Candid/timer/state inventory must reconcile before B2.
 
 The scheduled 0.105 B1 is approved to freeze current pool/platform provenance,
 measurement/reset protocol, horizon-qualified standby semantics and production
@@ -87,25 +77,12 @@ candidate was replaced rather than retired, and B1 evidence has no allocation
 authority. Activation requires one admitted release set; do not add compatibility
 decoding, message fallback, diagnostic version or observability machinery.
 
-The 0.103 design is scheduled, but B1 inventory awaits explicit promotion and
-no endpoint mutation is authorized. 0.104 then consumes its completed
-autonomous-operation surface; 0.104 B1 source mutation also awaits explicit
-promotion. The 0.105 B1 may freeze experiment semantics, inventory current
-repository state/reachability and build local harnesses. No external effect is
-authorized. B2 needs accepted B1, accepted 0.103/0.104 reconciliation and an
-exact approved run plan; absent mainnet approval, 0.105 is blocked rather than
-failed.
-
-The 0.106 B1 PocketIC proof follows completed 0.103 and 0.104 and accepted
-0.105 B1 root ownership/current-cost evidence. Its mutation waits for those
-outputs and its own passing proof, not 0.105 B2.
-
-The 0.107 estate B1 waits for completed 0.103 and 0.104, accepted 0.105,
-completed 0.106 and explicit promotion. 0.108 implementation waits for
-accepted 0.107 closeout and its own B1 promotion. Scheduled 0.109 then waits
-for accepted 0.108 closeout and a separate maintainer implementation decision.
-Deferred ideas do not gate the six-line reserve-Fleet path or authorize 0.109
-mutation.
+0.103 and 0.104 source mutation await explicit promotion. 0.105 remains
+evidence-only until accepted B1, 0.103/0.104 reconciliation and an approved run
+plan. 0.106 then requires their outputs and its own proof; 0.107 requires
+completed 0.106; 0.108 requires accepted 0.107 closeout; and 0.109 requires
+accepted 0.108 closeout plus a separate implementation decision. Deferred
+ideas authorize none of these mutations.
 
 ## Validation
 
