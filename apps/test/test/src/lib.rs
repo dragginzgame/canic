@@ -15,7 +15,7 @@ async fn canic_upgrade() {}
 async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
 
-    if let Err(err) = canic::access::env::build_network_local() {
+    if canic::access::env::build_network_local().is_err() {
         return Err(Error::from_registered(
             canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
         ));
