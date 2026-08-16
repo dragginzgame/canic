@@ -210,7 +210,7 @@ impl ShardingWorkflow {
         }
     }
 
-    fn no_active_shards_exhausted(_pool: &str, _partition_key: &str) -> InternalError {
+    const fn no_active_shards_exhausted(_pool: &str, _partition_key: &str) -> InternalError {
         InternalError::public(crate::diagnostics::codes::CAPACITY_INSUFFICIENT)
     }
 }

@@ -30,6 +30,7 @@ members = [
     "canisters/sandbox/blank",
     "canisters/test/blob_storage_cashier_mock",
     "canisters/test/blob_storage_probe",
+    "canisters/test/cycle_burn_probe",
     "canisters/test/cycles_ledger_stub",
     "canisters/test/database_a_stub",
     "canisters/test/database_b_stub",

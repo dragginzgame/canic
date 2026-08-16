@@ -11,7 +11,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - The standalone waveform preview now retains and serves only its digested
   numeric trace: the source photograph, derived overlay and host image compiler
   are removed, and the preview is excluded from every checked-in IC-mainnet
-  environment while its local target remains available.
+  environment while its local target remains available. A separate local-only,
+  controller-authorized one-shot probe now demonstrates a bounded cycle burn
+  and returns exact same-message accounting without enabling the preview or
+  future waveform Burner.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

@@ -1,0 +1,17 @@
+[package]
+name = "cycle_burn_probe"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+description = "Local-only one-shot cycle burn calibration probe"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+
+[lints]
+workspace = true

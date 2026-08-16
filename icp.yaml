@@ -77,6 +77,14 @@ canisters:
             - CARGO_INCREMENTAL=0 cargo build --locked --package saltz_preview --target wasm32-unknown-unknown --release
             - cp target/wasm32-unknown-unknown/release/saltz_preview.wasm "$ICP_WASM_OUTPUT_PATH"
 
+  - name: cycle_burn_probe
+    build:
+      steps:
+        - type: script
+          commands:
+            - CARGO_INCREMENTAL=0 cargo build --locked --package cycle_burn_probe --target wasm32-unknown-unknown --release
+            - cp target/wasm32-unknown-unknown/release/cycle_burn_probe.wasm "$ICP_WASM_OUTPUT_PATH"
+
 networks:
   - name: local
     mode: managed
@@ -124,6 +132,10 @@ environments:
   - name: saltz-preview-local
     network: saltz-local
     canisters: [saltz_preview]
+
+  - name: cycle-burn-local
+    network: saltz-local
+    canisters: [cycle_burn_probe]
 
   - name: test
     network: local

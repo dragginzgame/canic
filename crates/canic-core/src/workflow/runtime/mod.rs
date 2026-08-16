@@ -93,7 +93,7 @@ pub(super) fn require_no_resumable_refill_for_upgrade() -> Result<(), InternalEr
     validate_refill_upgrade_admission(IcpRefillStoreOps::resumable_operation_count())
 }
 
-fn validate_refill_upgrade_admission(count: usize) -> Result<(), InternalError> {
+const fn validate_refill_upgrade_admission(count: usize) -> Result<(), InternalError> {
     if count == 0 {
         return Ok(());
     }

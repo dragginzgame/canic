@@ -6,7 +6,7 @@
 
 use super::*;
 
-pub(super) fn active_delegation_proof_unavailable_error(
+pub(super) const fn active_delegation_proof_unavailable_error(
     status: ActiveDelegationProofStatus,
 ) -> InternalError {
     match status {

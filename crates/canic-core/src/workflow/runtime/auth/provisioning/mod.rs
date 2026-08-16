@@ -202,7 +202,7 @@ pub(super) struct ChainKeyDelegationProofBatchInstallOutcome {
 }
 
 impl ChainKeyDelegationProofBatchInstallResult {
-    fn into_explicit_result(self, issuer_pid: Principal) -> Result<(), InternalError> {
+    const fn into_explicit_result(self, issuer_pid: Principal) -> Result<(), InternalError> {
         if self.installed_count > 0 {
             return Ok(());
         }
@@ -243,7 +243,7 @@ impl IssuerProofInstallError {
         }
     }
 
-    fn into_internal_error(self, _issuer_pid: Principal) -> InternalError {
+    const fn into_internal_error(self, _issuer_pid: Principal) -> InternalError {
         match self {
             Self::RequestEncoding | Self::InvalidResponse => {
                 InternalError::projected(codes::CODEC_FAILED, codes::CONTROL_PLANE_STATE_INVALID)
@@ -255,7 +255,7 @@ impl IssuerProofInstallError {
         }
     }
 
-    fn into_renewal_error(self) -> InternalError {
+    const fn into_renewal_error(self) -> InternalError {
         match self {
             Self::RequestEncoding | Self::InvalidResponse => {
                 InternalError::projected(codes::CODEC_FAILED, codes::CONTROL_PLANE_STATE_INVALID)

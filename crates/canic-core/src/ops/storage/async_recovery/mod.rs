@@ -342,7 +342,7 @@ const fn owner_record_mut(
     }
 }
 
-fn generation_exhausted(_kind: &str) -> InternalError {
+const fn generation_exhausted(_kind: &str) -> InternalError {
     InternalError::invariant()
 }
 
