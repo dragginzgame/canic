@@ -862,18 +862,18 @@ mod tests {
 
         assert_eq!(status.status, RuntimeStatus::Failing);
         assert!(status.receipt_capacity.is_none());
+        let expected_code = crate::diagnostics::codes::CAPACITY_LIMIT.to_string();
         let failure = status
             .recent_failures
             .iter()
-            .find(|failure| failure.code == "receipt_capacity_unavailable")
+            .find(|failure| failure.code == expected_code)
             .expect("current capacity failure diagnostic");
         assert_eq!(failure.subsystem, "intent_capacity");
-        assert_eq!(failure.code, "receipt_capacity_unavailable");
+        assert_eq!(failure.code, expected_code);
         assert_eq!(failure.severity, FailureSeverity::Error);
-        assert!(
-            failure
-                .summary
-                .contains("resource-total record limit exceeded")
+        assert_eq!(
+            failure.summary,
+            format!("diagnostic={}", crate::diagnostics::codes::CAPACITY_LIMIT)
         );
         assert!(RecentFailureOps::snapshot().is_empty());
 
