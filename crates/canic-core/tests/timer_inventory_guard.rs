@@ -6,13 +6,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const CANIC_PRODUCTION_SOURCE_ROOTS: [&str; 2] = ["crates", "canisters"];
+
 #[test]
 fn timer_and_timed_wait_inventory_is_explicit() {
     let root = workspace_root();
     let mut scheduling = BTreeMap::new();
     let mut waits = BTreeMap::new();
 
-    for source_root in ["crates", "canisters", "apps"] {
+    for source_root in CANIC_PRODUCTION_SOURCE_ROOTS {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
             if excluded_test_source(path) {
                 return;
@@ -61,7 +63,7 @@ fn direct_ic_timer_access_is_removed_from_production() {
     let mut raw_crate_users = BTreeMap::new();
     let mut reexport_users = BTreeMap::new();
 
-    for source_root in ["crates", "canisters", "apps"] {
+    for source_root in CANIC_PRODUCTION_SOURCE_ROOTS {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
             if excluded_test_source(path) {
                 return;

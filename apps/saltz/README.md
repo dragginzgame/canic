@@ -42,37 +42,42 @@ implementation identity.
 
 The checked-in CSV preserves the numeric geometry and exact rational 24-hour
 time axis. The burner resamples that geometry into one immutable integer plan:
-45 pre-roll pulses followed by 864 drawing pulses, one every 100 seconds. The
+42 pre-roll pulses followed by 864 drawing pulses, one every 100 seconds. The
 build fails if its digest, duration, per-pulse rate or total ceiling drifts.
 The removed image-authoring pipeline does not exist in the workspace, so the
 CSV does not independently establish source provenance.
 
-The executable mapping is deliberately Subnet-scoped. After an initial 1×
-trial proved too close to the public noise floor, the controller scales every
-controlled amount by exactly 10. The resulting visible target is a
-`4.375 Bcycles/second` floor plus `15 Bcycles/second` relief against the fixed
-dated `0.625 Bcycles/second` background model.
-The inferred rectangular `4,531`-second response model remains dated and
-provisional; a successful timer execution proves the burn plan, not artistic
-fidelity on the public Dashboard.
+The current local candidate is deliberately global-homepage-scoped. Seven
+pre-run days put the global mean at `37.983 Bcycles/second`, its maximum at
+`53.915 Bcycles/second`, and its 95th-percentile absolute adjacent ten-minute
+change at `4.255 Bcycles/second`. The controller conservatively credits only
+`30 Bcycles/second` of unrelated background and targets a visible
+`100 Bcycles/second` floor plus `50 Bcycles/second` relief.
 
-The exact embedded envelope is:
+The terminal 26-pulse mainnet rise fits a rectangular `4,201`-second response
+with `R² = 0.999475`. That window remains a candidate until the complete
+post-Abort trailing edge is frozen; the code is not mainnet installation or
+execution authority merely because local evidence passes.
 
-- authorization digest `e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d`;
-- controlled-signal scale `10`;
-- pre-roll burn `57,669,300,000,000` cycles;
-- drawing burn `900,383,644,723,000` cycles;
-- total intentional burn `958,052,944,723,000` cycles;
+The exact local candidate envelope is:
+
+- authorization digest `87694d17f2b57f03b6345bce51db4be97e45eeb78b2dd5cedaf891b703579590`;
+- pre-roll burn `420,915,600,000,000` cycles;
+- drawing burn `7,898,578,155,865,700` cycles;
+- total intentional burn `8,319,493,755,865,700` cycles;
+- maximum per-step rate `500,000,000,000 cycles/second`;
+- immutable total ceiling `8,500,000,000,000,000 cycles`;
 - retained reserve `1,000,000,000,000` cycles; and
 - execution allowance `100,000,000,000` cycles.
 
-The authorized staged trial binds its first 42 pulses, covering 70 minutes and
-`53,824,680,000,000` intentional cycles. Arming therefore requires at least
-`54,924,680,000,000` cycles: that initial burn allocation, the retained reserve
-and the execution allowance. Funding is never autonomous. If an external
-top-up does not arrive before a later pulse needs it, the first balance
-shortfall stops permanently without retry or catch-up. Additional balance
-cannot increase the immutable schedule or total ceiling.
+The candidate's first 42 pulses are its complete 70-minute pre-roll and burn
+exactly `420,915,600,000,000 cycles`. Arming would therefore require at least
+`422,015,600,000,000 cycles`: that pre-roll, retained reserve and execution
+allowance. The existing terminal canister has more than that balance, but this
+fact is not reinstall or Arm authority. Funding is never autonomous. If an
+external top-up does not arrive before a later pulse needs it, the first
+balance shortfall stops permanently without retry or catch-up. Additional
+balance cannot increase the immutable schedule or total ceiling.
 
 The application-owned Candid surface is exactly two methods:
 
