@@ -1,24 +1,26 @@
-use super::{TemplateManifestOps, TemplateManifestOpsError};
+#[cfg(any(test, feature = "wasm-store-canister"))]
+use super::TemplateManifestOps;
+use super::TemplateManifestOpsError;
 #[cfg(feature = "wasm-store-canister")]
 use super::{WasmStoreGcExecutionStats, WasmStoreLimits, input_to_record};
 #[cfg(feature = "wasm-store-canister")]
 use crate::dto::template::TemplateManifestInput;
+#[cfg(any(test, feature = "wasm-store-canister"))]
 use crate::{
-    dto::template::{
-        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput,
-    },
+    dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
+    storage::stable::template::TemplateChunkRecord,
+};
+use crate::{
+    dto::template::{TemplateChunkResponse, TemplateChunkSetInfoResponse},
     ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion},
     storage::stable::template::{
-        TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
+        TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
     },
 };
-#[cfg(feature = "root-control-plane")]
+#[cfg(test)]
 use crate::{
-    dto::template::{
-        TemplateManifestResponse, TemplateStagingStatusResponse, WasmStoreBootstrapDebugResponse,
-    },
-    ids::{CanisterRole, TemplateChunkingMode},
+    dto::template::{TemplateManifestResponse, TemplateStagingStatusResponse},
+    ids::TemplateChunkingMode,
 };
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
@@ -33,13 +35,16 @@ use crate::{ids::TemplateManifestState, storage::stable::template::TemplateManif
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::cdk::structures::storable::Storable;
 use canic_core::cdk::utils::hash::wasm_hash;
+use canic_core::control_plane_support::error::InternalError;
+#[cfg(any(test, feature = "wasm-store-canister"))]
+use canic_core::control_plane_support::format::byte_size;
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::control_plane_support::ops::ic::mgmt::MgmtOps;
-use canic_core::control_plane_support::{error::InternalError, format::byte_size};
 #[cfg(feature = "wasm-store-canister")]
 use ic_cdk::api::canister_self;
-#[cfg(feature = "root-control-plane")]
+#[cfg(test)]
 use sha2::{Digest, Sha256};
+#[cfg(any(test, feature = "wasm-store-canister"))]
 use std::collections::BTreeMap;
 #[cfg(feature = "wasm-store-canister")]
 use std::collections::BTreeSet;
@@ -51,39 +56,6 @@ use std::collections::BTreeSet;
 pub struct TemplateChunkedOps;
 
 impl TemplateChunkedOps {
-    // Return staged-release status for every approved manifest in deterministic role order.
-    #[cfg(feature = "root-control-plane")]
-    #[must_use]
-    fn approved_staging_status_responses() -> Vec<TemplateStagingStatusResponse> {
-        let chunk_counts = TemplateChunkStore::count_by_release();
-        let mut staged = TemplateManifestOps::approved_manifests_response()
-            .into_iter()
-            .map(|manifest| Self::staging_status_response(&manifest, &chunk_counts))
-            .collect::<Vec<_>>();
-
-        staged.sort_by(|left, right| left.role.cmp(&right.role));
-        staged
-    }
-
-    // Return a root-owned bootstrap debug snapshot for the staged bootstrap role and release set.
-    #[cfg(feature = "root-control-plane")]
-    pub fn bootstrap_debug_response(
-        bootstrap_role: &CanisterRole,
-    ) -> Result<WasmStoreBootstrapDebugResponse, InternalError> {
-        let staged = Self::approved_staging_status_responses();
-        let bootstrap = staged
-            .iter()
-            .find(|entry| entry.role == *bootstrap_role)
-            .cloned();
-        let ready_for_bootstrap = Self::has_publishable_chunked_approved_for_role(bootstrap_role)?;
-
-        Ok(WasmStoreBootstrapDebugResponse {
-            ready_for_bootstrap,
-            bootstrap,
-            staged,
-        })
-    }
-
     // Return current occupied-byte and template-retention state for this local store.
     #[cfg(feature = "wasm-store-canister")]
     #[must_use]
@@ -144,26 +116,8 @@ impl TemplateChunkedOps {
         }
     }
 
-    // Return whether one approved chunked manifest is fully staged and ready for publication.
-    #[cfg(feature = "root-control-plane")]
-    pub fn has_publishable_chunked_approved_for_role(
-        role: &CanisterRole,
-    ) -> Result<bool, InternalError> {
-        if !TemplateManifestOps::has_approved_for_role(role)? {
-            return Ok(false);
-        }
-
-        let manifest = TemplateManifestOps::approved_for_role_response(role)?;
-
-        if manifest.chunking_mode != TemplateChunkingMode::Chunked {
-            return Ok(false);
-        }
-
-        Ok(Self::validate_staged_release(&manifest).is_ok())
-    }
-
     // Return deterministic staged-chunk progress for one approved manifest.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     #[must_use]
     pub fn staging_status_response(
         manifest: &TemplateManifestResponse,
@@ -214,7 +168,7 @@ impl TemplateChunkedOps {
     }
 
     // Prepare one chunk-set metadata record before chunk-by-chunk publication begins.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     pub fn prepare_chunk_set_from_input(
         input: TemplateChunkSetPrepareInput,
         created_at: u64,
@@ -250,7 +204,7 @@ impl TemplateChunkedOps {
     }
 
     // Publish one chunk into an already prepared local template release.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     pub fn publish_chunk_from_input(input: TemplateChunkInput) -> Result<(), InternalError> {
         let (chunk_key, record) = validated_chunk_record_from_input(input)?;
         canic_core::perf!("publish_stage_validate_chunk");
@@ -342,7 +296,7 @@ impl TemplateChunkedOps {
     }
 
     // Reconstruct one exact chunk-staged payload and verify its complete byte authority.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     pub fn staged_payload_bytes(
         template_id: &TemplateId,
         version: &TemplateVersion,
@@ -381,7 +335,7 @@ impl TemplateChunkedOps {
     }
 
     // Verify that one approved chunked manifest has a complete staged payload with matching hashes.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     pub fn validate_staged_release(
         manifest: &TemplateManifestResponse,
     ) -> Result<(), InternalError> {
@@ -460,6 +414,7 @@ impl TemplateChunkedOps {
     }
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 fn chunk_set_record_from_input(
     input: TemplateChunkSetPrepareInput,
     created_at: u64,
@@ -481,6 +436,7 @@ fn chunk_set_record_from_input(
     Ok((release, record))
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 fn validated_chunk_record_from_input(
     input: TemplateChunkInput,
 ) -> Result<(TemplateChunkKey, TemplateChunkRecord), InternalError> {

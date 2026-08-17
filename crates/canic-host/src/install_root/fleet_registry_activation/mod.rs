@@ -18,7 +18,7 @@ use super::{
         expected_registry_join_entry, plan_fleet_subnet_root_install,
     },
     icp_context::InstallIcpContext,
-    operations::{LiveRegistryEvidence, call_with_arg, query_live_registry, query_no_arg},
+    operations::{LiveRegistryEvidence, call_with_arg, query_live_registry, query_with_arg},
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
@@ -28,6 +28,10 @@ use crate::{
 use std::path::Path;
 
 use candid::Principal;
+use canic_control_plane::dto::fleet_coordinator::{
+    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorStatusRequest,
+    CoordinatorStatusResponse,
+};
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::fleet_registry::{
@@ -203,12 +207,18 @@ fn drive_activation(
                 begin_registry_activation(&current)?
             }
             FleetRegistryActivationPhase::ActivationInFlight => {
-                let response = call_with_arg(
+                let response: CoordinatorCommandResponse = call_with_arg(
                     icp,
                     coordinator,
-                    protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-                    &current.journal.request,
+                    protocol::CANIC_COMMAND,
+                    &CoordinatorCommand::ActivateRegistry(current.journal.request.clone()),
                 )?;
+                let CoordinatorCommandResponse::ActivateRegistry(response) = response else {
+                    return Err(FleetRegistryActivationError::LiveRegistryMismatch(
+                        "activation response correlation",
+                    )
+                    .into());
+                };
                 record_registry_activated(&current, response)?
             }
             FleetRegistryActivationPhase::Activated => {
@@ -233,11 +243,15 @@ fn require_exact_acknowledgements(
     expected_roots: &mut [Principal],
     version: &FleetRegistryVersion,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let live: Vec<FleetSubnetRootSnapshotAcknowledgement> = query_no_arg(
+    let live = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
         coordinator,
-        protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::RootAcknowledgements,
     )?;
+    let CoordinatorStatusResponse::RootAcknowledgements(live) = live else {
+        return Err("Coordinator returned an unrelated root-acknowledgement response".into());
+    };
     expected_roots.sort_by(|left, right| left.as_slice().cmp(right.as_slice()));
     let cardinality_matches = live.len() == expected_roots.len();
     let entries_match = live

@@ -835,6 +835,24 @@ impl CanisterPoolOps {
             })
     }
 
+    /// Select the exact pending or next transferable non-Store asset during root draining.
+    pub(crate) fn handoff_candidate() -> Option<Principal> {
+        if let Some(pending) = Self::pending_handoff() {
+            return Some(pending.canister_id);
+        }
+        CanisterPoolStore::export()
+            .entries
+            .into_iter()
+            .find_map(|entry| {
+                matches!(
+                    entry.asset.status,
+                    CanisterPoolAssetStatusRecord::Ready
+                        | CanisterPoolAssetStatusRecord::Failed { .. }
+                )
+                .then_some(entry.canister_id)
+            })
+    }
+
     #[must_use]
     pub fn completed_handoff_recipient(canister_id: Principal) -> Option<Principal> {
         CanisterPoolStore::handoff_receipt(&canister_id).map(|receipt| receipt.recipient)

@@ -438,6 +438,53 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
 }
 
 #[test]
+fn coordinator_operation_status_resolves_the_durable_domain_from_one_id() {
+    let (_config, plan_hash) = prepare_two_root_acceptance_plan();
+
+    let status = FleetCoordinatorWorkflow::operation_status([101; 32])
+        .expect("resolve active Component provisioning operation");
+    let crate::dto::fleet_coordinator::CoordinatorOperationStatusResponse::ComponentProvisioning(
+        status,
+    ) = status
+    else {
+        panic!("expected Component provisioning status");
+    };
+    assert_eq!(status.operation_id, [101; 32]);
+    assert_eq!(status.plan_hash, plan_hash);
+
+    let Err(invalid) = FleetCoordinatorWorkflow::operation_status([0; 32]) else {
+        panic!("zero operation ID must be rejected");
+    };
+    assert_eq!(
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
+}
+
+#[test]
+fn coordinator_root_removal_status_exists_from_the_accepted_reservation() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let (root, _peer, version) = activate_two_roots(principal(102));
+    let request = root_draining_reservation_request(&root, &version, [103; 32]);
+    let reservation = FleetCoordinatorWorkflow::prepare_root_draining_reservation(request)
+        .expect("accept root-removal reservation");
+
+    let status = FleetCoordinatorWorkflow::operation_status([103; 32])
+        .expect("resolve accepted root-removal operation");
+    let crate::dto::fleet_coordinator::CoordinatorOperationStatusResponse::RootRemoval(status) =
+        status
+    else {
+        panic!("expected Root removal status");
+    };
+    assert_eq!(status.operation_id, [103; 32]);
+    assert_eq!(status.reservation, reservation);
+    assert_eq!(status.readiness_intent, None);
+    assert_eq!(status.readiness, None);
+    assert_eq!(status.execution, None);
+    assert_eq!(status.completion, None);
+}
+
+#[test]
 fn root_join_compare_and_commit_retains_exact_response_receipts() {
     FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
     let coordinator = principal(13);
@@ -4131,12 +4178,16 @@ fn assert_snapshot_acknowledgements(
     second_entry: &FleetSubnetRootEntry,
     version: &FleetRegistryVersion,
 ) -> FleetRegistryVersion {
-    let snapshot = FleetCoordinatorWorkflow::snapshot_for_root(first_entry.fleet_subnet_root)
-        .expect("registered root snapshot");
-    assert_eq!(&snapshot.registry, registry);
-    assert_eq!(&snapshot.version, version);
-    let unauthorized_snapshot = FleetCoordinatorWorkflow::snapshot_for_root(principal(99))
-        .expect_err("unregistered caller cannot fetch snapshot");
+    let snapshot =
+        FleetCoordinatorWorkflow::registry_for_caller(first_entry.fleet_subnet_root, false)
+            .expect("registered root Registry");
+    assert_eq!(&snapshot, registry);
+    assert_eq!(
+        &FleetCoordinatorWorkflow::version().expect("Registry version"),
+        version
+    );
+    let unauthorized_snapshot = FleetCoordinatorWorkflow::registry_for_caller(principal(99), false)
+        .expect_err("unregistered caller cannot fetch Registry");
     assert_eq!(
         unauthorized_snapshot.public_error().code(),
         canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
@@ -4325,8 +4376,8 @@ fn assert_root_removal_publication(
             wasm_store_catalog_hash: [25; 32],
             wasm_store_catalog_entries: 2,
             wasm_store_occupied_bytes: 2_048,
-            wasm_store_template_count: 2,
-            wasm_store_release_count: 2,
+            wasm_store_template_count: 3,
+            wasm_store_release_count: 3,
             wasm_store_gc_prepared_at_secs: 26,
             finalized_at_ns: 27,
             inventory_hash: [28; 32],
@@ -4381,17 +4432,20 @@ fn assert_root_removal_publication(
         FleetSubnetRootStatus::Active
     );
     let removed_snapshot =
-        FleetCoordinatorWorkflow::snapshot_for_root(first_entry.fleet_subnet_root)
-            .expect_err("Removed root cannot fetch a later Registry snapshot");
+        FleetCoordinatorWorkflow::registry_for_caller(first_entry.fleet_subnet_root, false)
+            .expect_err("Removed root cannot fetch a later Registry");
     assert_eq!(
         removed_snapshot.public_error().code(),
         canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
     );
     let surviving_snapshot =
-        FleetCoordinatorWorkflow::snapshot_for_root(second_entry.fleet_subnet_root)
+        FleetCoordinatorWorkflow::registry_for_caller(second_entry.fleet_subnet_root, false)
             .expect("surviving root can fetch Registry containing Removed peer");
-    assert_eq!(surviving_snapshot.registry, registry);
-    assert_eq!(surviving_snapshot.version, removed.version);
+    assert_eq!(surviving_snapshot, registry);
+    assert_eq!(
+        FleetCoordinatorWorkflow::version().expect("Removed Registry version"),
+        removed.version
+    );
     assert_root_deletion_lifecycle(first_entry, &removed);
     assert_later_root_can_drain_after_removal(second_entry, &removed.version);
 }

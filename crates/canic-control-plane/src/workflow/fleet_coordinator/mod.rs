@@ -8,7 +8,10 @@
 mod tests;
 
 use crate::{
-    dto::fleet_coordinator::FleetCoordinatorInitArgs,
+    dto::{
+        fleet_coordinator::{CoordinatorOperationStatusResponse, FleetCoordinatorInitArgs},
+        root::RootRemovalOperationStatus,
+    },
     ops::fleet_coordinator::FleetCoordinatorOps,
     view::fleet_coordinator::{
         FleetComponentDirectoryConfirmationCallView,
@@ -20,8 +23,9 @@ use crate::{
         FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
     },
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
 use canic_core::{
+    api::timer::TimerApi,
     control_plane_support::{
         error::InternalError,
         ops::ic::{IcOps, call::CallOps},
@@ -31,29 +35,57 @@ use canic_core::{
             FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningOperation,
             FleetComponentProvisioningPhase, FleetComponentProvisioningPrepareRequest,
             FleetComponentProvisioningRootProgress, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse,
-            RootComponentDirectorySynchronizationResponse, RootComponentProvisioningStatusResponse,
+            FleetComponentProvisioningStatusResponse, RootComponentDirectorySynchronizationRequest,
+            RootComponentDirectorySynchronizationResponse,
+            RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningStatusResponse,
         },
         error::Error,
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
-            FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionReadinessIntentRequest,
-            FleetSubnetRootDeletionReadinessIntentResponse,
-            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
+            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
             FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingReservationRequest,
+            FleetSubnetRootDrainingReservationResponse,
             FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
             FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
-            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
-            FleetSubnetRootSnapshotAcknowledgementRequest,
+            FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
+        role::{OperationReceipt, OperationStatusRequest, RootRemovalRequest},
     },
     protocol,
 };
+use serde::Deserialize;
+use std::time::Duration;
+
+#[derive(CandidType)]
+enum RemoteRootCommand {
+    ProvisionComponents(RootComponentProvisioningAcceptanceRequest),
+    RemoveRoot(RootRemovalRequest),
+    SynchronizeComponentDirectories(RootComponentDirectorySynchronizationRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RemoteRootCommandResponse {
+    OperationAccepted(Box<OperationReceipt>),
+    SynchronizeComponentDirectories(Box<RootComponentDirectorySynchronizationResponse>),
+}
+
+#[derive(CandidType)]
+enum RemoteRootStatusRequest {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RemoteRootStatusResponse {
+    Operation(RemoteRootOperationStatusResponse),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RemoteRootOperationStatusResponse {
+    ProvisionComponents(Box<RootComponentProvisioningStatusResponse>),
+    RemoveRoot(Box<RootRemovalOperationStatus>),
+}
 
 ///
 /// FleetCoordinatorWorkflow
@@ -64,6 +96,26 @@ use canic_core::{
 pub struct FleetCoordinatorWorkflow;
 
 impl FleetCoordinatorWorkflow {
+    #[cfg(test)]
+    pub(crate) fn operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
+        FleetCoordinatorOps::operation_status(operation_id)
+    }
+
+    pub(crate) fn operation_status_for_caller(
+        operation_id: [u8; 32],
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
+        FleetCoordinatorOps::authorize_operation_caller(
+            operation_id,
+            caller,
+            caller_is_controller,
+        )?;
+        FleetCoordinatorOps::operation_status(operation_id)
+    }
+
     pub(crate) fn initialize(
         args: FleetCoordinatorInitArgs,
         _caller: Principal,
@@ -92,10 +144,11 @@ impl FleetCoordinatorWorkflow {
         FleetCoordinatorOps::manifest()
     }
 
-    pub(crate) fn snapshot_for_root(
+    pub(crate) fn registry_for_caller(
         caller: Principal,
-    ) -> Result<FleetRegistrySnapshotResponse, InternalError> {
-        FleetCoordinatorOps::snapshot_for_root(caller)
+        caller_is_controller: bool,
+    ) -> Result<FleetRegistry, InternalError> {
+        FleetCoordinatorOps::registry_for_caller(caller, caller_is_controller)
     }
 
     pub(crate) fn acknowledge_root_snapshot(
@@ -120,6 +173,17 @@ impl FleetCoordinatorWorkflow {
         request: FleetComponentProvisioningPrepareRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
         FleetCoordinatorOps::prepare_component_provisioning(request, IcOps::now_nanos())
+    }
+
+    /// Accept one high-level provisioning intent and privately advance its durable state machine.
+    pub(crate) fn accept_component_provisioning(
+        request: FleetComponentProvisioningPrepareRequest,
+    ) -> Result<OperationReceipt, InternalError> {
+        let status = Self::prepare_component_provisioning(request)?;
+        schedule_component_provisioning(status.operation_id, status.plan_hash, Duration::ZERO);
+        Ok(OperationReceipt {
+            operation_id: status.operation_id,
+        })
     }
 
     pub(crate) fn component_provisioning_status(
@@ -220,9 +284,13 @@ impl FleetCoordinatorWorkflow {
         advance_component_root_provisioning(request).await
     }
 
+    #[cfg(test)]
     pub(crate) fn publish_root_draining(
         request: FleetSubnetRootDrainingPublicationRequest,
-    ) -> Result<FleetSubnetRootDrainingPublicationResponse, InternalError> {
+    ) -> Result<
+        canic_core::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse,
+        InternalError,
+    > {
         FleetCoordinatorOps::publish_root_draining(request)
     }
 
@@ -230,6 +298,36 @@ impl FleetCoordinatorWorkflow {
         request: FleetSubnetRootDrainingReservationRequest,
     ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
         FleetCoordinatorOps::prepare_root_draining_reservation(request, IcOps::now_nanos())
+    }
+
+    /// Accept one Coordinator-owned root removal and submit the exact Root intent once.
+    pub(crate) async fn accept_root_removal(
+        request: FleetSubnetRootDrainingReservationRequest,
+    ) -> Result<OperationReceipt, InternalError> {
+        let reservation = Self::prepare_root_draining_reservation(request)?;
+        let expected = OperationReceipt {
+            operation_id: reservation.request.operation_id,
+        };
+        let call = CallOps::unbounded_wait(
+            reservation.request.expected_root.fleet_subnet_root,
+            protocol::CANIC_COMMAND,
+        )
+        .with_arg(RemoteRootCommand::RemoveRoot(RootRemovalRequest {
+            reservation,
+        }))?
+        .execute()
+        .await?;
+        let result: Result<RemoteRootCommandResponse, Error> = call.candid()?;
+        match result.map_err(InternalError::observed_public)? {
+            RemoteRootCommandResponse::OperationAccepted(receipt) if *receipt == expected => {
+                schedule_coordinator_root_removal(receipt.operation_id, Duration::ZERO);
+                Ok(*receipt)
+            }
+            RemoteRootCommandResponse::OperationAccepted(_)
+            | RemoteRootCommandResponse::SynchronizeComponentDirectories(_) => {
+                Err(InternalError::conflict())
+            }
+        }
     }
 
     pub(crate) fn root_draining_reservation_status(
@@ -243,37 +341,15 @@ impl FleetCoordinatorWorkflow {
         FleetCoordinatorOps::root_draining_reservation_status(request)
     }
 
+    #[cfg(test)]
     pub(crate) fn publish_root_removed(
         caller: Principal,
         request: FleetSubnetRootRemovalPublicationRequest,
-    ) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
+    ) -> Result<
+        canic_core::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse,
+        InternalError,
+    > {
         FleetCoordinatorOps::publish_root_removed(caller, request)
-    }
-
-    pub(crate) fn prepare_root_deletion_readiness(
-        caller: Principal,
-        coordinator: Principal,
-        request: FleetSubnetRootDeletionReadinessIntentRequest,
-    ) -> Result<FleetSubnetRootDeletionReadinessIntentResponse, InternalError> {
-        FleetCoordinatorOps::prepare_root_deletion_readiness(
-            caller,
-            coordinator,
-            request,
-            IcOps::now_nanos(),
-        )
-    }
-
-    pub(crate) fn record_root_deletion_readiness(
-        caller: Principal,
-        coordinator: Principal,
-        request: FleetSubnetRootDeletionReadinessRequest,
-    ) -> Result<FleetSubnetRootDeletionReadinessResponse, InternalError> {
-        FleetCoordinatorOps::record_root_deletion_readiness(
-            caller,
-            coordinator,
-            request,
-            IcOps::now_nanos(),
-        )
     }
 
     pub(crate) fn begin_root_deletion_execution(
@@ -316,6 +392,150 @@ impl FleetCoordinatorWorkflow {
 
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {
         FleetCoordinatorOps::version()
+    }
+}
+
+fn schedule_coordinator_root_removal(operation_id: [u8; 32], delay: Duration) {
+    let _ =
+        TimerApi::defer_lifecycle_required(delay, "Fleet Coordinator root removal", async move {
+            match advance_coordinator_root_removal_once(operation_id).await {
+                Ok(true) => {}
+                Ok(false) => schedule_coordinator_root_removal(operation_id, Duration::ZERO),
+                Err(_) => {
+                    schedule_coordinator_root_removal(operation_id, Duration::from_secs(1));
+                }
+            }
+        });
+}
+
+async fn advance_coordinator_root_removal_once(
+    operation_id: [u8; 32],
+) -> Result<bool, InternalError> {
+    let current = match FleetCoordinatorOps::operation_status(operation_id)? {
+        CoordinatorOperationStatusResponse::RootRemoval(current) => current,
+        CoordinatorOperationStatusResponse::ComponentProvisioning(_) => {
+            return Err(InternalError::conflict());
+        }
+    };
+    if current.readiness.is_some() {
+        return Ok(true);
+    }
+
+    let root = current.reservation.request.expected_root.fleet_subnet_root;
+    let observed = query_root_removal(root, operation_id).await?;
+    if observed.operation_id != operation_id || observed.draining.fleet_subnet_root != root {
+        return Err(InternalError::conflict());
+    }
+
+    if current.draining.is_none() {
+        FleetCoordinatorOps::publish_root_draining(FleetSubnetRootDrainingPublicationRequest {
+            expected_registry: current.reservation.request.expected_registry,
+            root_draining: observed.draining,
+        })?;
+        return Ok(false);
+    }
+    if current.removal.is_none() {
+        let final_inventory = observed
+            .final_inventory
+            .ok_or_else(InternalError::unavailable)?;
+        FleetCoordinatorOps::publish_root_removed(
+            root,
+            FleetSubnetRootRemovalPublicationRequest {
+                expected_registry: final_inventory.registry.clone(),
+                final_inventory,
+            },
+        )?;
+        return Ok(false);
+    }
+    if current.readiness_intent.is_none() {
+        let request = observed
+            .deletion_readiness_intent
+            .ok_or_else(InternalError::unavailable)?;
+        FleetCoordinatorOps::prepare_root_deletion_readiness(
+            root,
+            IcOps::canister_self(),
+            request,
+            IcOps::now_nanos(),
+        )?;
+        return Ok(false);
+    }
+
+    let request = observed
+        .deletion_readiness
+        .ok_or_else(InternalError::unavailable)?;
+    FleetCoordinatorOps::record_root_deletion_readiness(
+        root,
+        IcOps::canister_self(),
+        request,
+        IcOps::now_nanos(),
+    )?;
+    Ok(true)
+}
+
+async fn query_root_removal(
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<RootRemovalOperationStatus, InternalError> {
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_STATUS)
+        .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
+            operation_id,
+        }))?
+        .execute()
+        .await?;
+    let response: Result<RemoteRootStatusResponse, Error> = result.candid()?;
+    match response.map_err(InternalError::observed_public)? {
+        RemoteRootStatusResponse::Operation(RemoteRootOperationStatusResponse::RemoveRoot(
+            status,
+        )) if status.operation_id == operation_id => Ok(*status),
+        RemoteRootStatusResponse::Operation(_) => Err(InternalError::conflict()),
+    }
+}
+
+fn schedule_component_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Coordinator Component provisioning",
+        async move {
+            advance_scheduled_component_provisioning(operation_id, plan_hash).await;
+        },
+    );
+}
+
+async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32]) {
+    let Ok(status) = FleetCoordinatorWorkflow::component_provisioning_status(
+        FleetComponentProvisioningStatusRequest {
+            operation_id,
+            plan_hash,
+        },
+    ) else {
+        return;
+    };
+    if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
+        return;
+    }
+    let request = component_provisioning_advance_request(&status);
+    match FleetCoordinatorWorkflow::advance_component_provisioning(&request).await {
+        Ok(status) if status.phase == FleetComponentProvisioningPhase::RuntimesActivated => {}
+        Ok(_) => schedule_component_provisioning(operation_id, plan_hash, Duration::ZERO),
+        Err(_) => schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1)),
+    }
+}
+
+const fn component_provisioning_advance_request(
+    status: &FleetComponentProvisioningStatusResponse,
+) -> FleetComponentProvisioningAdvanceRequest {
+    FleetComponentProvisioningAdvanceRequest {
+        operation_id: status.operation_id,
+        plan_hash: status.plan_hash,
+        expected_phase: status.phase,
+        expected_accepted_root_count: status.accepted_root_count,
+        expected_provisioned_root_count: status.provisioned_root_count,
+        expected_current_root: status.current_root,
+        expected_directory_confirmed_root_count: status.directory_confirmed_root_count,
+        expected_current_synchronization: status.current_synchronization,
+        expected_current_publication: status.current_publication,
+        expected_runtime_activated_root_count: status.runtime_activated_root_count,
+        expected_current_activation: status.current_activation,
     }
 }
 
@@ -500,29 +720,55 @@ const fn component_provisioning_phase_rank(phase: FleetComponentProvisioningPhas
 async fn accept_root_component_provisioning(
     call: FleetComponentProvisioningRootAcceptanceCallView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(
-        call.fleet_subnet_root,
-        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
-    )
-    .with_arg(call.request)?
-    .execute()
-    .await?;
-    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::observed_public)
+    let operation_id = call.request.operation_id;
+    let plan_hash = call.request.plan_hash;
+    let root = call.fleet_subnet_root;
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_COMMAND)
+        .with_arg(RemoteRootCommand::ProvisionComponents(call.request))?
+        .execute()
+        .await?;
+    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+    match response.map_err(InternalError::observed_public)? {
+        RemoteRootCommandResponse::OperationAccepted(receipt)
+            if receipt.operation_id == operation_id =>
+        {
+            query_root_component_provisioning(root, operation_id, plan_hash).await
+        }
+        _ => Err(InternalError::conflict()),
+    }
 }
 
 async fn advance_root_component_provisioning(
     call: FleetComponentProvisioningRootProvisionCallView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(
+    query_root_component_provisioning(
         call.fleet_subnet_root,
-        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
+        call.request.operation_id,
+        call.request.plan_hash,
     )
-    .with_arg(call.request)?
-    .execute()
-    .await?;
-    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::observed_public)
+    .await
+}
+
+async fn query_root_component_provisioning(
+    root: Principal,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let result = CallOps::unbounded_wait(root, protocol::CANIC_STATUS)
+        .with_arg(RemoteRootStatusRequest::Operation(OperationStatusRequest {
+            operation_id,
+        }))?
+        .execute()
+        .await?;
+    let response: Result<RemoteRootStatusResponse, Error> = result.candid()?;
+    match response.map_err(InternalError::observed_public)? {
+        RemoteRootStatusResponse::Operation(
+            RemoteRootOperationStatusResponse::ProvisionComponents(response),
+        ) if response.operation_id == operation_id && response.plan_hash == plan_hash => {
+            Ok(*response)
+        }
+        RemoteRootStatusResponse::Operation(_) => Err(InternalError::conflict()),
+    }
 }
 
 enum RootComponentDirectoryAdvanceResponse {
@@ -538,53 +784,38 @@ async fn advance_root_component_directories(
         FleetComponentDirectoryConfirmationCallView::FreshPublication {
             fleet_subnet_root,
             request,
-        } => {
-            let result = CallOps::unbounded_wait(
-                fleet_subnet_root,
-                protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-            )
-            .with_arg(request)?
-            .execute()
-            .await?;
-            let response: Result<RootComponentProvisioningStatusResponse, Error> =
-                result.candid()?;
-            response
-                .map(RootComponentDirectoryAdvanceResponse::FreshPublication)
-                .map_err(InternalError::observed_public)
-        }
+        } => query_root_component_provisioning(
+            fleet_subnet_root,
+            request.operation_id,
+            request.plan_hash,
+        )
+        .await
+        .map(RootComponentDirectoryAdvanceResponse::FreshPublication),
         FleetComponentDirectoryConfirmationCallView::ScaleOutPublication {
             fleet_subnet_root,
             request,
-        } => {
-            let result = CallOps::unbounded_wait(
-                fleet_subnet_root,
-                protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-            )
-            .with_arg(request)?
-            .execute()
-            .await?;
-            let response: Result<RootComponentProvisioningStatusResponse, Error> =
-                result.candid()?;
-            response
-                .map(RootComponentDirectoryAdvanceResponse::ScaleOutPublication)
-                .map_err(InternalError::observed_public)
-        }
+        } => query_root_component_provisioning(
+            fleet_subnet_root,
+            request.operation_id,
+            request.plan_hash,
+        )
+        .await
+        .map(RootComponentDirectoryAdvanceResponse::ScaleOutPublication),
         FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
             fleet_subnet_root,
             request,
         } => {
-            let result = CallOps::unbounded_wait(
-                fleet_subnet_root,
-                protocol::CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE,
-            )
-            .with_arg(request)?
-            .execute()
-            .await?;
-            let response: Result<RootComponentDirectorySynchronizationResponse, Error> =
-                result.candid()?;
-            response
-                .map(RootComponentDirectoryAdvanceResponse::Synchronization)
-                .map_err(InternalError::observed_public)
+            let result = CallOps::unbounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+                .with_arg(RemoteRootCommand::SynchronizeComponentDirectories(request))?
+                .execute()
+                .await?;
+            let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+            match response.map_err(InternalError::observed_public)? {
+                RemoteRootCommandResponse::SynchronizeComponentDirectories(response) => Ok(
+                    RootComponentDirectoryAdvanceResponse::Synchronization(*response),
+                ),
+                RemoteRootCommandResponse::OperationAccepted(_) => Err(InternalError::conflict()),
+            }
         }
     }
 }
@@ -592,13 +823,10 @@ async fn advance_root_component_directories(
 async fn activate_root_component_runtimes(
     call: FleetComponentRuntimeActivationCallView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
-    let result = CallOps::unbounded_wait(
+    query_root_component_provisioning(
         call.fleet_subnet_root,
-        protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
+        call.request.operation_id,
+        call.request.plan_hash,
     )
-    .with_arg(call.request)?
-    .execute()
-    .await?;
-    let response: Result<RootComponentProvisioningStatusResponse, Error> = result.candid()?;
-    response.map_err(InternalError::observed_public)
+    .await
 }

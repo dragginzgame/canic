@@ -56,7 +56,7 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
     };
     let manifest = Path::new("/workspace/coordinator/Cargo.toml");
 
-    let local = coordinator_cargo_build_command(&context, manifest)
+    let local = coordinator_cargo_build_command(&context, manifest, true)
         .get_args()
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
@@ -70,7 +70,7 @@ fn local_coordinator_build_exports_candid_in_the_selected_leaf_pass() {
     assert!(local.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
 
     context.build_network = BuildNetwork::Ic;
-    let ic = coordinator_cargo_build_command(&context, manifest)
+    let ic = coordinator_cargo_build_command(&context, manifest, false)
         .get_args()
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect::<Vec<_>>();

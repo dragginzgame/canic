@@ -23,6 +23,7 @@ pub mod memory;
 pub mod metadata;
 pub mod placement;
 pub mod ready;
+pub mod role;
 pub mod rpc;
 pub mod runtime;
 pub mod state;

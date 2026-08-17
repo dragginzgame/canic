@@ -13,6 +13,7 @@ use std::{collections::BTreeSet, io::Read};
 use canic_core::{
     cdk::utils::hash::{decode_hex, sha256_hex},
     ids::ReleaseBuildId,
+    role_contract::ProtocolProfileDigest,
 };
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
@@ -77,6 +78,8 @@ pub struct CanicInfrastructureArtifactInput<'a> {
     pub wasm: &'a [u8],
     pub wasm_gz_relative_path: &'a str,
     pub wasm_gz: &'a [u8],
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -174,6 +177,8 @@ pub struct CanicInfrastructureArtifactEntry {
     pub wasm_gz_relative_path: String,
     pub wasm_gz_size_bytes: u64,
     pub wasm_gz_sha256_hex: String,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -331,6 +336,8 @@ fn compile_entry(
         wasm_gz_relative_path: input.wasm_gz_relative_path.to_string(),
         wasm_gz_size_bytes,
         wasm_gz_sha256_hex: sha256_hex(input.wasm_gz),
+        candid_sha256: input.candid_sha256,
+        protocol_profile_digest: input.protocol_profile_digest,
     };
     validate_entry(release_build_id, &entry)?;
     Ok(entry)

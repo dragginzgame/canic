@@ -7,13 +7,19 @@
 #[cfg(test)]
 mod tests;
 
-use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_response};
+use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response};
+use candid::{CandidType, Deserialize};
 use std::path::Path;
 
-use canic_core::{dto::metadata::CanicMetadataResponse, protocol};
+use canic_core::{dto::role::RoleOverviewResponse, protocol};
 use thiserror::Error as ThisError;
 
 const ICP_JSON_OUTPUT: &str = "json";
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    Overview(RoleOverviewResponse),
+}
 
 ///
 /// CanicMetadataQueryError
@@ -28,15 +34,16 @@ pub enum CanicMetadataQueryError {
     Response(#[from] IcpJsonResponseError),
 }
 
-/// Query `canic_metadata` and return the reported Canic framework version.
+/// Query the role-owned Overview and return the reported Canic framework version.
 pub fn query_canic_metadata_version(
     icp: &IcpCli,
     canister_id: &str,
     candid_path: Option<&Path>,
 ) -> Result<String, CanicMetadataQueryError> {
-    let output = icp.canister_query_output_with_candid(
+    let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        protocol::CANIC_METADATA,
+        protocol::CANIC_STATUS,
+        "(variant { Overview })",
         Some(ICP_JSON_OUTPUT),
         candid_path,
     )?;
@@ -44,6 +51,7 @@ pub fn query_canic_metadata_version(
 }
 
 fn parse_canic_metadata_version_response(output: &str) -> Result<String, IcpJsonResponseError> {
-    let metadata = decode_json_response::<CanicMetadataResponse>(output)?;
-    Ok(metadata.canic_version)
+    let response = decode_json_result_response::<RoleStatusResponse>(output)?;
+    let RoleStatusResponse::Overview(overview) = response;
+    Ok(overview.metadata.canic_version)
 }

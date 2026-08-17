@@ -28,7 +28,7 @@ use crate::{
     },
     protocol,
 };
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
 
 ///
@@ -71,6 +71,26 @@ pub trait Rpc {
 }
 
 const DEFAULT_CAPABILITY_METADATA_TTL_NS: u64 = 300_000_000_000;
+
+#[derive(CandidType)]
+enum RootCommandFragment {
+    RespondCapability(RootCapabilityEnvelopeV1),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponseFragment {
+    RespondCapability(RootCapabilityResponseV1),
+}
+
+#[derive(CandidType)]
+enum CanisterCommandFragment {
+    RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterCommandResponseFragment {
+    RespondCapability(NonrootCyclesCapabilityResponseV1),
+}
 
 ///
 /// RpcOps
@@ -142,9 +162,13 @@ impl RpcOps {
                 metadata,
             };
 
-            let response: RootCapabilityResponseV1 =
-                Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
-                    .await?;
+            let response: RootCommandResponseFragment = Self::call_rpc_result(
+                target_pid,
+                protocol::CANIC_COMMAND,
+                RootCommandFragment::RespondCapability(envelope),
+            )
+            .await?;
+            let RootCommandResponseFragment::RespondCapability(response) = response;
 
             return Ok(response.response);
         }
@@ -161,9 +185,13 @@ impl RpcOps {
             metadata,
         };
 
-        let response: NonrootCyclesCapabilityResponseV1 =
-            Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
-                .await?;
+        let response: CanisterCommandResponseFragment = Self::call_rpc_result(
+            target_pid,
+            protocol::CANIC_COMMAND,
+            CanisterCommandFragment::RespondCapability(envelope),
+        )
+        .await?;
+        let CanisterCommandResponseFragment::RespondCapability(response) = response;
 
         Ok(Response::Cycles(response.response))
     }

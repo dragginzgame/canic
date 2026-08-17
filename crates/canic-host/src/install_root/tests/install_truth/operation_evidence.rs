@@ -49,6 +49,8 @@ fn build_target(role: &str) -> InstallBuildTarget {
             role: role.to_string(),
             package_name: format!("canister_{role}"),
             package_version: "0.101.51".to_string(),
+            canic_version: "0.101.51".to_string(),
+            capabilities: std::collections::BTreeSet::new(),
             package_manifest_path: PathBuf::from("/workspace/apps")
                 .join(role)
                 .join("Cargo.toml"),

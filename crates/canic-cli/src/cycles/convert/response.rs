@@ -5,15 +5,27 @@
 //! Boundary: accepts raw Candid hex from `icp` and returns one verified refill outcome.
 
 use crate::cycles::CyclesCommandError;
-use candid::decode_one;
+use candid::{CandidType, Deserialize, decode_one};
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
-    dto::{
-        error::Error,
-        icp_refill::{IcpRefillEndpointResponse, IcpRefillResponse},
-    },
+    dto::{error::Error, icp_refill::IcpRefillResponse, role::OperationReceipt},
     shared_support::icp_refill::icp_refill_outcome_is_resumable,
 };
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponse {
+    OperationAccepted(OperationReceipt),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootOperationStatusResponse {
+    RefillCycles(IcpRefillResponse),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponse {
+    Operation(RootOperationStatusResponse),
+}
 
 /// One decoded, operation-bound live refill response.
 #[derive(Debug)]
@@ -57,17 +69,37 @@ impl DecodedIcpRefillResponse {
     }
 }
 
-pub(super) fn decode_icp_refill_response(
+pub(super) fn decode_icp_refill_command_response(
+    output: &str,
+    expected_operation_id: [u8; 32],
+) -> Result<(), CyclesCommandError> {
+    let bytes = decode_hex(output.trim()).map_err(CyclesCommandError::IcpRefillResponseHex)?;
+    let response = decode_one::<Result<RootCommandResponse, Error>>(&bytes)
+        .map_err(CyclesCommandError::IcpRefillResponseCandid)?;
+    let response = match response {
+        Ok(RootCommandResponse::OperationAccepted(response)) => response,
+        Err(error) => {
+            let code = error.code();
+            return Err(CyclesCommandError::IcpRefillRejected {
+                code,
+                diagnostic: canic_host::diagnostics::render_diagnostic(code),
+            });
+        }
+    };
+    verify_operation_id(expected_operation_id, response.operation_id)?;
+    Ok(())
+}
+
+pub(super) fn decode_icp_refill_status_response(
     output: &str,
     expected_operation_id: [u8; 32],
 ) -> Result<DecodedIcpRefillResponse, CyclesCommandError> {
     let bytes = decode_hex(output.trim()).map_err(CyclesCommandError::IcpRefillResponseHex)?;
-    let response = decode_one::<Result<IcpRefillEndpointResponse, Error>>(&bytes)
+    let response = decode_one::<Result<RootStatusResponse, Error>>(&bytes)
         .map_err(CyclesCommandError::IcpRefillResponseCandid)?;
     let response = match response {
-        Ok(IcpRefillEndpointResponse::Refill(response)) => response,
-        Ok(IcpRefillEndpointResponse::DryRun(_)) => {
-            return Err(CyclesCommandError::IcpRefillUnexpectedResponse);
+        Ok(RootStatusResponse::Operation(RootOperationStatusResponse::RefillCycles(response))) => {
+            response
         }
         Err(error) => {
             let code = error.code();
@@ -77,13 +109,21 @@ pub(super) fn decode_icp_refill_response(
             });
         }
     };
-    if response.operation_id != expected_operation_id {
+    verify_operation_id(expected_operation_id, response.operation_id)?;
+    Ok(DecodedIcpRefillResponse { response })
+}
+
+fn verify_operation_id(
+    expected_operation_id: [u8; 32],
+    actual_operation_id: [u8; 32],
+) -> Result<(), CyclesCommandError> {
+    if actual_operation_id != expected_operation_id {
         return Err(CyclesCommandError::IcpRefillOperationIdMismatch {
             expected: hex_bytes(expected_operation_id),
-            actual: hex_bytes(response.operation_id),
+            actual: hex_bytes(actual_operation_id),
         });
     }
-    Ok(DecodedIcpRefillResponse { response })
+    Ok(())
 }
 
 fn optional_display<T: ToString>(value: Option<&T>) -> String {
@@ -105,13 +145,16 @@ mod tests {
 
     #[test]
     fn terminal_refill_response_is_typed_and_operation_bound() {
-        let output = encoded_response(Ok(IcpRefillEndpointResponse::Refill(sample_response(
-            [7; 32],
-            IcpRefillStatus::Completed,
-            Some(42),
-            None,
-        ))));
-        let response = decode_icp_refill_response(&output, [7; 32]).expect("decode response");
+        let output = encoded_status_response(Ok(RootStatusResponse::Operation(
+            RootOperationStatusResponse::RefillCycles(sample_response(
+                [7; 32],
+                IcpRefillStatus::Completed,
+                Some(42),
+                None,
+            )),
+        )));
+        let response =
+            decode_icp_refill_status_response(&output, [7; 32]).expect("decode response");
 
         assert!(!response.is_resumable());
         assert!(response.render(false).contains("status=Completed"));
@@ -131,23 +174,27 @@ mod tests {
 
     #[test]
     fn transferred_refill_response_remains_resumable() {
-        let output = encoded_response(Ok(IcpRefillEndpointResponse::Refill(sample_response(
-            [8; 32],
-            IcpRefillStatus::Transferred,
-            Some(42),
-            None,
-        ))));
-        let response = decode_icp_refill_response(&output, [8; 32]).expect("decode response");
+        let output = encoded_status_response(Ok(RootStatusResponse::Operation(
+            RootOperationStatusResponse::RefillCycles(sample_response(
+                [8; 32],
+                IcpRefillStatus::Transferred,
+                Some(42),
+                None,
+            )),
+        )));
+        let response =
+            decode_icp_refill_status_response(&output, [8; 32]).expect("decode response");
 
         assert!(response.is_resumable());
     }
 
     #[test]
     fn endpoint_error_preserves_typed_code() {
-        let output = encoded_response(Err(Error::from_registered(
+        let output = encoded_command_response(Err(Error::from_registered(
             canic_core::diagnostics::codes::STATE_CONFLICT,
         )));
-        let error = decode_icp_refill_response(&output, [7; 32]).expect_err("reject response");
+        let error =
+            decode_icp_refill_command_response(&output, [7; 32]).expect_err("reject response");
 
         std::assert_matches!(
             error,
@@ -160,14 +207,28 @@ mod tests {
     }
 
     #[test]
-    fn mismatched_operation_id_is_rejected() {
-        let output = encoded_response(Ok(IcpRefillEndpointResponse::Refill(sample_response(
-            [8; 32],
-            IcpRefillStatus::Completed,
-            Some(42),
-            None,
-        ))));
-        let error = decode_icp_refill_response(&output, [7; 32]).expect_err("reject mismatch");
+    fn accepted_receipt_is_operation_bound() {
+        let output = encoded_command_response(Ok(RootCommandResponse::OperationAccepted(
+            OperationReceipt {
+                operation_id: [7; 32],
+            },
+        )));
+
+        decode_icp_refill_command_response(&output, [7; 32]).expect("decode receipt");
+    }
+
+    #[test]
+    fn mismatched_status_operation_id_is_rejected() {
+        let output = encoded_status_response(Ok(RootStatusResponse::Operation(
+            RootOperationStatusResponse::RefillCycles(sample_response(
+                [8; 32],
+                IcpRefillStatus::Completed,
+                Some(42),
+                None,
+            )),
+        )));
+        let error =
+            decode_icp_refill_status_response(&output, [7; 32]).expect_err("reject mismatch");
 
         assert!(matches!(
             error,
@@ -175,7 +236,11 @@ mod tests {
         ));
     }
 
-    fn encoded_response(response: Result<IcpRefillEndpointResponse, Error>) -> String {
+    fn encoded_command_response(response: Result<RootCommandResponse, Error>) -> String {
+        hex_bytes(encode_one(response).expect("encode response"))
+    }
+
+    fn encoded_status_response(response: Result<RootStatusResponse, Error>) -> String {
         hex_bytes(encode_one(response).expect("encode response"))
     }
 

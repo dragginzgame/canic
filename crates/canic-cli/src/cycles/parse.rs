@@ -8,16 +8,28 @@ use crate::cycles::model::{
     CycleTopupEventPage, CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage,
     CycleTrackerSample,
 };
+use candid::{CandidType, Deserialize};
 use canic_core::dto::{
     cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
     page::Page,
 };
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
 
+#[derive(CandidType, Deserialize)]
+pub(super) enum CycleHistoryStatusResponse {
+    CycleHistory(Page<CycleTrackerEntry>),
+}
+
+#[derive(CandidType, Deserialize)]
+pub(super) enum CycleTopupsStatusResponse {
+    CycleTopups(Page<CycleTopupEvent>),
+}
+
 pub(super) fn parse_cycle_tracker_page(
     output: &str,
 ) -> Result<CycleTrackerPage, IcpJsonResponseError> {
-    let page = decode_json_result_response::<Page<CycleTrackerEntry>>(output)?;
+    let response = decode_json_result_response::<CycleHistoryStatusResponse>(output)?;
+    let CycleHistoryStatusResponse::CycleHistory(page) = response;
     Ok(CycleTrackerPage {
         entries: page
             .entries
@@ -34,7 +46,8 @@ pub(super) fn parse_cycle_tracker_page(
 pub(super) fn parse_topup_event_page(
     output: &str,
 ) -> Result<CycleTopupEventPage, IcpJsonResponseError> {
-    let page = decode_json_result_response::<Page<CycleTopupEvent>>(output)?;
+    let response = decode_json_result_response::<CycleTopupsStatusResponse>(output)?;
+    let CycleTopupsStatusResponse::CycleTopups(page) = response;
     Ok(CycleTopupEventPage {
         entries: page
             .entries

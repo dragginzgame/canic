@@ -14,6 +14,7 @@ canic = { workspace = true, features = ["blob-storage-billing", "metrics"] }
 canic-testing-internal = { workspace = true }
 ic-testkit = { workspace = true }
 ic-timers = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
 canic-control-plane = { workspace = true, features = [
@@ -21,7 +22,6 @@ canic-control-plane = { workspace = true, features = [
     "wasm-store-canister",
 ] }
 canic-core = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

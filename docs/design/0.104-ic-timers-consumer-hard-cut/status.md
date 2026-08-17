@@ -26,7 +26,7 @@ Date: 2026-08-16
 | B1 | Frozen timer/recovery ownership | Complete call-site, type, claim and stable-field dispositions; exact provider graph; domain-demand map | Source/dependency guards and reviewable inventory | Pending promotion |
 | B2 | Native provider surface hard cut | Public timer API removal, native results/directives, typed registration custody and compile fallout | Core/facade tests, compile-fail guard and targeted Clippy | Blocked on accepted B1 |
 | B3 | Domain-owned async-job recovery | Minimal stable state, exact retry, leases, takeover and deletion of shadow scheduling fields | State/property and interruption tests | Blocked on B2 |
-| B4 | Core fixed-owner reconstruction | Auth, cycles and placement native schedules plus owner-specific retry/stop behavior | Targeted unit and PocketIC recovery journeys | Blocked on B3 |
+| B4 | Core fixed-owner reconstruction | Auth, capability-pruned automatic top-up and placement native schedules plus owner-specific retry/stop behavior | Targeted unit and PocketIC recovery journeys | Blocked on B3 |
 | B5 | Pool/lifecycle/snapshot propagation | Native pool custody, one watchdog, zero-delay lifecycle work, suspension/resume and fixtures | Control-plane, lifecycle, snapshot and runtime-probe checks | Blocked on B4 |
 | B6 | Semantic ownership proof and closeout | One-provider graph, shared inventory, ownership guards and complete docs/changelog cleanup | Targeted repository guards and PocketIC timer suite | Blocked on B5 |
 

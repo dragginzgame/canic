@@ -18,6 +18,7 @@ use canic_core::api::lifecycle::metrics::{
 };
 use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::cdk::types::Principal;
+use canic_core::cdk::utils::hash::wasm_hash;
 use canic_core::control_plane_support::{
     error::InternalError,
     ops::ic::{IcOps, mgmt::MgmtOps},
@@ -26,6 +27,38 @@ use canic_core::diagnostics::codes;
 use std::collections::BTreeSet;
 
 pub const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
+
+/// Read and verify one complete chunked payload from an exact Store.
+pub(in crate::workflow) async fn exact_store_payload_bytes(
+    store_pid: Principal,
+    template_id: &TemplateId,
+    version: &TemplateVersion,
+    expected_payload_hash: &[u8],
+    expected_payload_size_bytes: u64,
+) -> Result<Vec<u8>, InternalError> {
+    let client = WasmStoreInternalClient::new(store_pid);
+    let info = client.info(template_id, version).await?;
+    if info.chunk_hashes.is_empty() {
+        return Err(InternalError::invalid_input());
+    }
+    let capacity =
+        usize::try_from(expected_payload_size_bytes).map_err(|_| InternalError::invalid_input())?;
+    let mut payload = Vec::with_capacity(capacity);
+    for (index, expected_chunk_hash) in info.chunk_hashes.iter().enumerate() {
+        let chunk_index = u32::try_from(index).map_err(|_| InternalError::invalid_input())?;
+        let chunk = client.chunk(template_id, version, chunk_index).await?;
+        if &wasm_hash(&chunk) != expected_chunk_hash {
+            return Err(InternalError::conflict());
+        }
+        payload.extend_from_slice(&chunk);
+    }
+    if payload.len() as u64 != expected_payload_size_bytes
+        || wasm_hash(&payload) != expected_payload_hash
+    {
+        return Err(InternalError::conflict());
+    }
+    Ok(payload)
+}
 
 // Build one stable release label for logs and install-source reporting.
 fn release_source_label(template_id: &TemplateId, version: &TemplateVersion) -> String {

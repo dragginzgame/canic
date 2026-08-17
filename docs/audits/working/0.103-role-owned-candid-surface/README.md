@@ -24,6 +24,15 @@ number of application-owned test methods. `baseline-methods.tsv` classifies thos
 separately. It likewise classifies the emitted ICRC-10 discovery method as an
 external standard rather than a Canic-owned control method.
 
+The post-B5 current method and variant totals are recorded in the
+[B6 representative surface report](b6-surface-report.md). The baseline DIDs
+and B3 totals remain immutable pre-cut and transitional evidence rather than
+current endpoint authority.
+
+The [B7 hard-cut closeout](b7-closeout.md) records the final method reduction,
+legacy-emitter deletion and representative current Wasm identities without
+making an unsupported causal size claim.
+
 ## Frozen Counts
 
 `manifest.tsv` is generated from the complete service blocks, not source-text
@@ -56,7 +65,8 @@ and application methods do not consume the proposed Canic-owned role ceiling.
 - `capture-baseline.sh` rebuilds and recaptures the evidence from a clean
   `v0.102.2` checkout.
 - `capability-manifest.md` freezes the existing closed config derivation,
-  invalid-combination boundary, compiled discovery owner and reserved names.
+  invalid-combination boundary, external profile-binding bootstrap, exact
+  request/response correlation and reserved names.
 
 Run the capture script from this directory while its first argument names a
 clean checkout at the released tag:
@@ -89,19 +99,23 @@ and `canic_icp_refill`) and one Root method with no reference outside its owner,
 protocol and replay declarations (`canic_wasm_store_bootstrap_debug`). These
 were review inputs; the register records the resulting explicit decisions.
 
-The six-way disposition pass is complete for all 188 Canic-owned appearances:
+The six-way disposition pass is complete for all 188 Canic-owned appearances,
+including the bounded B4 correction accepted on 2026-08-17:
 
-- 45 become role-command variants;
-- 80 become role-status variants;
+- 49 become role-command variants;
+- 78 become role-status variants;
 - two remain admitted Store byte lanes; and
-- 61 become private/delete.
+- 59 become private/delete.
 
 The query pass maps bounded observations to role status except the unreferenced
 Root bootstrap debug query. Update review applies the high-level-intent rule:
 allocation, provisioning, draining, subtree, registry synchronization, Store
 removal and publication phase methods do not survive merely because they cross
-an `await` or another canister. The Root template byte trio is private/delete
-because large artifact bytes belong only to the admitted Store data plane.
+an `await` or another canister. Scale-out synchronization is retained as its
+own Root outcome because an affected existing Root is not provisioning a new
+batch and must return exact convergence evidence. The Root template byte trio
+is private/delete because large artifact bytes belong only to the admitted
+Store data plane.
 
 Every retained row now has an exact role-specific target name. The one current
 update-only management-canister observation becomes the atomic
@@ -112,12 +126,63 @@ The Root's emitted managed-Canister binding query is also deleted: its DTO can
 represent only Component or ComponentChild identity, never Root identity.
 
 The status map is deliberately flat: distinct cycle, runtime, auth, directory
-and Registry observations are variants, not second-level family enums. The 80
-status appearances yield 23 Root, six Coordinator, 14 managed and eight Store
-targets; Coordinator additionally requires the capability-discovery
-`Overview` target that has no old-method row. The two existing nested Root
-admin inputs are also flattened into their actual Fleet and pool intents.
-Private phase rows have no shadow variant.
+and Registry observations are variants, not second-level family enums. The 78
+retained status appearances yield 22 Root, six Coordinator, 13 managed and
+seven Store targets; Coordinator additionally requires `Overview`, which has
+no old-method row. The three unconditional `canic_cycle_topups` appearances in
+the captured Root, managed-auth and Store profiles are deleted. Only an exact
+managed profile with the new config-derived `AutomaticTopup` capability may
+compile `CanisterStatusRequest::CycleTopups`. The two existing nested Root
+admin inputs are flattened into their actual Fleet and pool intents. Private
+phase rows have no shadow variant.
+
+## Accepted Target Accounting
+
+The target manifest counts variants as well as methods so consolidation cannot
+hide the old phase tree inside two method names:
+
+| Role/profile | Canic methods | Command requests | Command responses | Status requests/responses | Durable operation kinds | Atomic command kinds | Old methods eliminated |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Fleet Subnet Root auth fixture | 2 | 32 | 19 | 22 | 12 | 18 | 48 |
+| managed auth fixture | 2 | 4 | 4 | 13 | 1 | 3 | 3 |
+| Fleet Coordinator | 2 | 9 | 8 | 7 | 2 | 7 | 10 |
+| Wasm Store | 4 | 10 | 8 | 7 | 2 | 7 | 3 |
+
+The Store count is command, status and the two independently admitted byte
+lanes; its external-standard method remains counted separately. A command
+response count includes one shared `OperationAccepted` response when the role
+has durable operations. Root has 14 asynchronous command variants sharing 12
+operation kinds; Coordinator has two, managed has one and Store has three.
+
+The corrected Coordinator count retains one Root-authenticated Registry
+acknowledgement plus the two controller-authenticated external-deletion
+evidence outcomes. Root snapshot reads reuse `CoordinatorStatusRequest::Registry`
+under exact participating-Root authorization; the Root derives and validates
+the manifest/version locally. Root-removal draining, removal publication and
+readiness phases remain private and are reconciled from Root operation status.
+
+Every request selector has maximum variant nesting depth one. Response selector
+depth is at most two, solely for the role-local `Operation` status response and
+its domain operation detail; no `Admin`, `Peer`, `Internal`, `Workflow`,
+`Legacy` or former-family subtree is admitted. Exact old-method merges remain
+visible in `method-register.tsv`; the largest are the 21 Root operation-status
+queries merged into one local `Operation` selector and the flattened Fleet,
+ICP-refill and pool command enums. Final generated reports must add exact
+Candid service bytes, referenced type counts, protocol constants and
+representative Wasm sizes for each profile.
+
+The exact request/response contract is the normalized join of the register's
+target and released Rust signature, the manifest's operation-owner table and
+its correlation rule. This records the requested mapping without adding a
+second 207-row authority that can drift.
+
+The executable-caller column is also the binding-bootstrap inventory. Host and
+CLI callers select the exact full binding by the protected artifact/release/
+Directory protocol-profile digest before their first call. Static
+inter-canister callers use only their generated request/response fragment after
+the same protected metadata proves the exact target profile admits that
+variant. Fixtures follow the same route. No executable caller is assigned to
+trial decoding, a fallback binding or runtime schema negotiation.
 
 Executable callers, synthesized DTOs, the exact capability-to-variant pruning
 matrix, operation ownership and the 0.104 handoff are frozen. The four role
@@ -125,5 +190,9 @@ operation response enums contain only the accepted high-level detail variants;
 six new detail views project existing domain state without creating a universal
 operation store or exposing deleted phases.
 
-This eight-file bundle is B1 review-ready. It authorizes no runtime mutation;
-B2 still requires explicit acceptance of the complete register and manifest.
+This eight-file bundle was accepted as B1 evidence on 2026-08-17. The bounded
+profile-bootstrap, cycle-capability, caller-cut and variant-accounting
+clarifications are incorporated into that authority. B2/B3 implementation
+evidence is separate in [`b3-profile-pruning.md`](b3-profile-pruning.md); it
+does not mutate this released baseline or grant the old methods continuing
+authority.

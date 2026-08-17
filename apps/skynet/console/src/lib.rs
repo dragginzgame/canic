@@ -64,58 +64,22 @@ pub fn endpoint_highlights(
     surface: StandardEndpointSurface,
     additions: impl IntoIterator<Item = Endpoint>,
 ) -> Vec<Endpoint> {
+    let command_purpose = match surface {
+        StandardEndpointSurface::Component => "managed lifecycle and capability variants",
+        StandardEndpointSurface::Root => "Root lifecycle and Fleet control variants",
+    };
     let mut endpoints = vec![
         endpoint(
-            "canic_bootstrap_status",
-            "query",
-            "public",
-            "bootstrap state",
+            "canic_command",
+            "update",
+            "variant-specific",
+            command_purpose,
         ),
         endpoint(
-            "canic_canister_children",
+            "canic_status",
             "query",
-            "public",
-            "direct-child topology",
-        ),
-        endpoint("canic_cycle_balance", "query", "public", "cycle reserve"),
-        endpoint(
-            "canic_cycle_topups",
-            "query",
-            "public",
-            "cycle top-up history",
-        ),
-        endpoint(
-            "canic_cycle_tracker",
-            "query",
-            "public",
-            "cycle tracking observations",
-        ),
-        endpoint(
-            "canic_fleet_activation_status",
-            "query",
-            "controller",
-            "Fleet activation state",
-        ),
-        endpoint("canic_health", "query", "controller", "runtime health"),
-        endpoint(
-            "canic_metadata",
-            "query",
-            "public",
-            "package and Canic versions",
-        ),
-        endpoint("canic_metrics", "query", "public", "paginated metric tiers"),
-        endpoint("canic_ready", "query", "public", "readiness barrier"),
-        endpoint(
-            "canic_readiness",
-            "query",
-            "controller",
-            "readiness diagnostics",
-        ),
-        endpoint(
-            "canic_runtime_status",
-            "query",
-            "controller",
-            "complete runtime status",
+            "variant-specific",
+            "bounded role, runtime and operation observations",
         ),
         endpoint(
             "http_request",
@@ -130,28 +94,6 @@ pub fn endpoint_highlights(
             "supported standards",
         ),
     ];
-    if surface == StandardEndpointSurface::Component {
-        endpoints.extend([
-            endpoint(
-                "canic_component_runtime_status",
-                "query",
-                "Fleet root",
-                "protected Component activation and Directory",
-            ),
-            endpoint(
-                "canic_managed_canister_binding",
-                "query",
-                "controller",
-                "protected parent and Component binding",
-            ),
-            endpoint(
-                "canic_memory_ledger",
-                "query",
-                "controller",
-                "stable-memory ABI ledger",
-            ),
-        ]);
-    }
     endpoints.extend(additions);
     endpoints.sort_by(|left, right| left.name.cmp(&right.name));
     endpoints

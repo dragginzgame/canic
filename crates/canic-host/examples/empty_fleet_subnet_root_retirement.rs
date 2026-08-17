@@ -1,417 +1,156 @@
 use candid::{CandidType, Principal};
+use canic_control_plane::dto::fleet_coordinator::{
+    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorStatusRequest,
+    CoordinatorStatusResponse,
+};
 use canic_core::{
+    cdk::utils::hash::{decode_hex, hex_bytes},
     dto::{
-        fleet_registry::{
-            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry, FleetRegistryVersion,
-            FleetSubnetRootDirectoryEntry, FleetSubnetRootDrainingPublicationRequest,
-            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationRequest,
-            FleetSubnetRootDrainingReservationResponse,
-            FleetSubnetRootDrainingReservationStatusRequest,
-            FleetSubnetRootRegistryMirrorActivationRequest,
-            FleetSubnetRootRegistryMirrorActivationResponse,
-        },
-        fleet_subnet_root::{
-            FleetSubnetRootDrainingRequest, FleetSubnetRootDrainingResponse,
-            FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
-            FleetSubnetRootRemovalRequest, FleetSubnetRootStoreBindingFinalizationRequest,
-            FleetSubnetRootStoreBindingFinalizationResponse,
-            FleetSubnetRootStoreBindingFinalizationStatusRequest,
-            FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
-            FleetSubnetRootStoreReclamationRequest, FleetSubnetRootStoreReclamationResponse,
-        },
-        pool::{
-            CanisterPoolAssetStatus, CanisterPoolResponse, CanisterPoolStatusRequest,
-            PoolAdminCommand, PoolAdminResponse,
-        },
-        root_store::RootStoreBootstrapRequest,
+        fleet_registry::{FleetRegistry, FleetSubnetRootDrainingReservationRequest},
+        role::OperationReceipt,
     },
     protocol,
 };
-use canic_host::icp::{IcpCli, decode_json_result_response};
-use serde::{Serialize, de::DeserializeOwned};
+use canic_host::{
+    fleet_subnet_root_deletion::{
+        FleetSubnetRootDeletionHostRequest, execute_fleet_subnet_root_deletion,
+        prepare_fleet_subnet_root_deletion_execution,
+    },
+    icp::{IcpCli, decode_json_result_response},
+};
+use serde::de::DeserializeOwned;
 use std::{env, fs, path::PathBuf};
 
 const USAGE: &str = "usage: cargo run -p canic-host --example empty_fleet_subnet_root_retirement -- \
-    <--confirm-disposable-empty-root|--confirm-resume-store-deletion> \
-    <icp-executable> <icp-root> <environment> \
-    <coordinator-principal> <fleet-subnet-root-principal> \
-    <store-bootstrap-manifest-bytes> <operation-id-hex>";
-const CANIC_POOL_LIST: &str = "canic_pool_list";
-const CANIC_POOL_ADMIN: &str = "canic_pool_admin";
-
-#[derive(Serialize)]
-struct RetirementReceipt {
-    operation_id_hex: String,
-    coordinator: Principal,
-    fleet_subnet_root: Principal,
-    handed_off_pool_assets: Vec<Principal>,
-    draining_registry: FleetRegistryVersion,
-    final_inventory: FleetSubnetRootFinalInventoryResponse,
-    store_reclamation: FleetSubnetRootStoreReclamationResponse,
-    store_binding_finalization: FleetSubnetRootStoreBindingFinalizationResponse,
-    store_deletion: FleetSubnetRootStoreDeletionResponse,
-}
-
-#[derive(Serialize)]
-struct StoreDeletionResumeReceipt {
-    operation_id_hex: String,
-    fleet_subnet_root: Principal,
-    store_binding_finalization: FleetSubnetRootStoreBindingFinalizationResponse,
-    store_deletion: FleetSubnetRootStoreDeletionResponse,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum RetirementCommand {
-    Retire,
-    ResumeStoreDeletion,
-}
+    --confirm-disposable-empty-root <icp-executable> <icp-root> <environment> \
+    <coordinator-principal> <fleet-subnet-root-principal> <operation-id-hex>";
 
 struct RetirementContext {
-    command: RetirementCommand,
-    icp: IcpCli,
+    icp_executable: String,
+    icp_root: PathBuf,
+    environment: String,
     coordinator: Principal,
     fleet_subnet_root: Principal,
-    store_bootstrap_manifest_bytes: u64,
     operation_id: [u8; 32],
-    operation_id_hex: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = parse_context()?;
-    if context.command == RetirementCommand::ResumeStoreDeletion {
-        return resume_store_deletion(&context);
-    }
-    let icp = &context.icp;
-    let coordinator = context.coordinator;
-    let fleet_subnet_root = context.fleet_subnet_root;
-    let operation_id = context.operation_id;
-    let published = publish_draining(&context)?;
-
-    let handed_off_pool_assets = handoff_pool_assets(icp, fleet_subnet_root, coordinator)?;
-    eprintln!("retirement stage complete: prepaid pool handoff");
-    let final_inventory: FleetSubnetRootFinalInventoryResponse = call(
-        icp,
-        fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
-        &FleetSubnetRootFinalInventoryRequest {
-            operation_id,
-            expected_registry: published.version.clone(),
-        },
-    )?;
-    eprintln!("retirement stage complete: final root inventory");
-    let _: canic_core::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse = call(
-        icp,
-        fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-        &FleetSubnetRootRemovalRequest {
-            operation_id,
-            expected_registry: final_inventory.registry.clone(),
-        },
-    )?;
-    eprintln!("retirement stage complete: logical root removal");
-    let store_reclamation: FleetSubnetRootStoreReclamationResponse = call(
-        icp,
-        fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
-        &FleetSubnetRootStoreReclamationRequest {
-            operation_id,
-            expected_final_inventory_hash: final_inventory.inventory_hash,
-        },
-    )?;
-    eprintln!("retirement stage complete: Store reclamation");
-    let store_binding_finalization: FleetSubnetRootStoreBindingFinalizationResponse = call(
-        icp,
-        fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
-        &FleetSubnetRootStoreBindingFinalizationRequest {
-            operation_id,
-            expected_reclamation_hash: store_reclamation.reclamation_hash,
-        },
-    )?;
-    eprintln!("retirement stage complete: Store binding finalization");
-    let store_deletion: FleetSubnetRootStoreDeletionResponse = call(
-        icp,
-        fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
-        &FleetSubnetRootStoreDeletionRequest {
-            operation_id,
-            expected_binding_finalization_hash: store_binding_finalization.finalization_hash,
-        },
-    )?;
-    eprintln!("retirement stage complete: physical Store deletion");
-
-    let receipt = RetirementReceipt {
-        operation_id_hex: context.operation_id_hex,
-        coordinator,
-        fleet_subnet_root,
-        handed_off_pool_assets,
-        draining_registry: published.version,
-        final_inventory,
-        store_reclamation,
-        store_binding_finalization,
-        store_deletion,
-    };
-    println!("{}", serde_json::to_string_pretty(&receipt)?);
-    Ok(())
-}
-
-fn parse_context() -> Result<RetirementContext, Box<dyn std::error::Error>> {
-    let mut args = env::args().skip(1);
-    let (Some(confirmation), Some(icp_executable), Some(icp_root), Some(environment)) =
-        (args.next(), args.next(), args.next(), args.next())
-    else {
-        return Err(USAGE.into());
-    };
-    let command = match confirmation.as_str() {
-        "--confirm-disposable-empty-root" => RetirementCommand::Retire,
-        "--confirm-resume-store-deletion" => RetirementCommand::ResumeStoreDeletion,
-        _ => return Err(USAGE.into()),
-    };
-    let (
-        Some(coordinator),
-        Some(fleet_subnet_root),
-        Some(store_bootstrap_manifest_bytes),
-        Some(operation_id_hex),
-    ) = (args.next(), args.next(), args.next(), args.next())
-    else {
-        return Err(USAGE.into());
-    };
-    if args.next().is_some() {
-        return Err(USAGE.into());
-    }
-
-    let coordinator = Principal::from_text(coordinator)?;
-    let fleet_subnet_root = Principal::from_text(fleet_subnet_root)?;
-    let store_bootstrap_manifest_bytes = store_bootstrap_manifest_bytes.parse::<u64>()?;
-    let operation_id = parse_operation_id(&operation_id_hex)?;
-    let icp_root = PathBuf::from(icp_root).canonicalize()?;
-    let icp = IcpCli::new(icp_executable, Some(environment)).with_cwd(icp_root);
-    Ok(RetirementContext {
-        command,
-        icp,
-        coordinator,
-        fleet_subnet_root,
-        store_bootstrap_manifest_bytes,
-        operation_id,
-        operation_id_hex,
-    })
-}
-
-fn resume_store_deletion(context: &RetirementContext) -> Result<(), Box<dyn std::error::Error>> {
-    let store_binding_finalization: FleetSubnetRootStoreBindingFinalizationResponse = query(
-        &context.icp,
-        context.fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
-        &FleetSubnetRootStoreBindingFinalizationStatusRequest {
-            operation_id: context.operation_id,
-        },
-    )?;
-    let store_deletion: FleetSubnetRootStoreDeletionResponse = call(
-        &context.icp,
-        context.fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
-        &FleetSubnetRootStoreDeletionRequest {
-            operation_id: context.operation_id,
-            expected_binding_finalization_hash: store_binding_finalization.finalization_hash,
-        },
-    )?;
-    let receipt = StoreDeletionResumeReceipt {
-        operation_id_hex: context.operation_id_hex.clone(),
-        fleet_subnet_root: context.fleet_subnet_root,
-        store_binding_finalization,
-        store_deletion,
-    };
-    println!("{}", serde_json::to_string_pretty(&receipt)?);
-    Ok(())
-}
-
-fn publish_draining(
-    context: &RetirementContext,
-) -> Result<FleetSubnetRootDrainingPublicationResponse, Box<dyn std::error::Error>> {
-    let reservation = retained_or_new_draining_reservation(context)?;
-    eprintln!("retirement stage complete: Coordinator draining reservation");
-    let root_draining: FleetSubnetRootDrainingResponse = call(
-        &context.icp,
-        context.fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
-        &FleetSubnetRootDrainingRequest {
-            operation_id: context.operation_id,
-            expected_registry: reservation.request.expected_registry.clone(),
-        },
-    )?;
-    if root_draining.reservation_hash != reservation.reservation_hash {
-        return Err("root draining receipt differs from the Coordinator reservation".into());
-    }
-    require_empty_root(&root_draining)?;
-    eprintln!("retirement stage complete: root draining fence");
-
-    let publication_registry: FleetRegistryVersion = query(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY_VERSION,
-        &(),
-    )?;
-    let published: FleetSubnetRootDrainingPublicationResponse = call(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-        &FleetSubnetRootDrainingPublicationRequest {
-            expected_registry: publication_registry,
-            root_draining,
-        },
-    )?;
-    eprintln!("retirement stage complete: Coordinator draining publication");
-    activate_draining_mirror(context, published.previous_version.clone(), &published)?;
-    Ok(published)
-}
-
-fn retained_or_new_draining_reservation(
-    context: &RetirementContext,
-) -> Result<FleetSubnetRootDrainingReservationResponse, Box<dyn std::error::Error>> {
-    let retained = call(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
-        &FleetSubnetRootDrainingReservationStatusRequest {
-            operation_id: context.operation_id,
-            fleet_subnet_root: context.fleet_subnet_root,
-        },
-    );
-    if let Ok(reservation) = retained {
-        return Ok(reservation);
-    }
-    let active_registry: FleetRegistryVersion = query(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY_VERSION,
-        &(),
-    )?;
-    let registry: FleetRegistry = query(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY,
-        &(),
-    )?;
+    let icp = IcpCli::new(
+        context.icp_executable.clone(),
+        Some(context.environment.clone()),
+    )
+    .with_cwd(&context.icp_root);
+    let registry = coordinator_registry(&icp, context.coordinator)?;
     let expected_root = registry
         .fleet_subnet_roots
         .iter()
         .find(|entry| entry.fleet_subnet_root == context.fleet_subnet_root)
         .cloned()
         .ok_or("Fleet Subnet Root is absent from the Coordinator Registry")?;
-    call(
-        &context.icp,
+    let expected_registry = match query(
+        &icp,
         context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
-        &FleetSubnetRootDrainingReservationRequest {
-            operation_id: context.operation_id,
-            expected_registry: active_registry,
-            expected_root,
-        },
-    )
-}
-
-fn activate_draining_mirror(
-    context: &RetirementContext,
-    previous_registry: FleetRegistryVersion,
-    published: &FleetSubnetRootDrainingPublicationResponse,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let registry: FleetRegistry = query(
-        &context.icp,
-        context.coordinator,
-        protocol::CANIC_FLEET_REGISTRY,
-        &(),
-    )?;
-    let directory = FleetDirectorySnapshot {
-        provenance: FleetDirectoryProvenance {
-            registry: published.version.clone(),
-            source_fleet_subnet_root: context.fleet_subnet_root,
-        },
-        fleet_subnet_roots: registry
-            .fleet_subnet_roots
-            .iter()
-            .map(|entry| FleetSubnetRootDirectoryEntry {
-                placement_subnet: entry.placement_subnet,
-                fleet_subnet_root: entry.fleet_subnet_root,
-                status: entry.status,
-            })
-            .collect(),
-        services: vec![],
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::RegistryVersion,
+    )? {
+        CoordinatorStatusResponse::RegistryVersion(version) => version,
+        _ => return Err("Coordinator returned a differently correlated status response".into()),
     };
-    let _: FleetSubnetRootRegistryMirrorActivationResponse = call(
-        &context.icp,
-        context.fleet_subnet_root,
-        protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-        &FleetSubnetRootRegistryMirrorActivationRequest {
-            previous_registry,
-            expected_registry: published.version.clone(),
-            expected_directory: directory,
-            store_bootstrap: RootStoreBootstrapRequest {
-                manifest_payload_size_bytes: context.store_bootstrap_manifest_bytes,
-            },
-        },
+    let response: CoordinatorCommandResponse = call(
+        &icp,
+        context.coordinator,
+        protocol::CANIC_COMMAND,
+        &CoordinatorCommand::RemoveRoot(FleetSubnetRootDrainingReservationRequest {
+            operation_id: context.operation_id,
+            expected_registry,
+            expected_root,
+        }),
     )?;
-    eprintln!("retirement stage complete: root draining mirror activation");
-    Ok(())
-}
-
-fn require_empty_root(
-    draining: &FleetSubnetRootDrainingResponse,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let is_empty = draining.reserved_component_instances == 0
-        && draining.committed_component_instances == 0
-        && draining.managed_descendants == 0
-        && draining.known_created_component_canisters == 0;
-    if !is_empty {
-        return Err("Fleet Subnet Root is not empty".into());
+    let expected_receipt = OperationReceipt {
+        operation_id: context.operation_id,
+    };
+    match response {
+        CoordinatorCommandResponse::OperationAccepted(receipt) if receipt == expected_receipt => {}
+        _ => return Err("Coordinator returned a differently correlated removal response".into()),
     }
+
+    let host_request = || FleetSubnetRootDeletionHostRequest {
+        icp_executable: &context.icp_executable,
+        icp_root: &context.icp_root,
+        environment: &context.environment,
+        local_replica: None,
+        coordinator: context.coordinator,
+        fleet_subnet_root: context.fleet_subnet_root,
+        operation_id: context.operation_id,
+    };
+    let execution = prepare_fleet_subnet_root_deletion_execution(host_request())?;
+    let terminal = execute_fleet_subnet_root_deletion(host_request())?;
+    println!(
+        "removed Fleet Subnet Root {} with operation 0x{}; execution 0x{} completed at {}",
+        terminal.fleet_subnet_root,
+        hex_bytes(&terminal.operation_id),
+        hex_bytes(&execution.execution_hash),
+        terminal.completed_at_ns,
+    );
     Ok(())
 }
 
-fn handoff_pool_assets(
+fn parse_context() -> Result<RetirementContext, Box<dyn std::error::Error>> {
+    let mut args = env::args().skip(1);
+    let (
+        Some(confirmation),
+        Some(icp_executable),
+        Some(icp_root),
+        Some(environment),
+        Some(coordinator),
+        Some(fleet_subnet_root),
+        Some(operation_id_hex),
+    ) = (
+        args.next(),
+        args.next(),
+        args.next(),
+        args.next(),
+        args.next(),
+        args.next(),
+        args.next(),
+    )
+    else {
+        return Err(USAGE.into());
+    };
+    if confirmation != "--confirm-disposable-empty-root" || args.next().is_some() {
+        return Err(USAGE.into());
+    }
+    let operation_id = decode_hex(
+        operation_id_hex
+            .strip_prefix("0x")
+            .unwrap_or(&operation_id_hex),
+    )?
+    .try_into()
+    .map_err(|_| "operation-id-hex must contain exactly 32 bytes")?;
+    Ok(RetirementContext {
+        icp_executable,
+        icp_root: PathBuf::from(icp_root).canonicalize()?,
+        environment,
+        coordinator: Principal::from_text(coordinator)?,
+        fleet_subnet_root: Principal::from_text(fleet_subnet_root)?,
+        operation_id,
+    })
+}
+
+fn coordinator_registry(
     icp: &IcpCli,
-    fleet_subnet_root: Principal,
     coordinator: Principal,
-) -> Result<Vec<Principal>, Box<dyn std::error::Error>> {
-    let pool: CanisterPoolResponse = query(
+) -> Result<FleetRegistry, Box<dyn std::error::Error>> {
+    match query(
         icp,
-        fleet_subnet_root,
-        CANIC_POOL_LIST,
-        &CanisterPoolStatusRequest {
-            start_after: None,
-            limit: 256,
-        },
-    )?;
-    if pool.next_start_after.is_some() || pool.pending_handoff.is_some() {
-        return Err("Canister pool is not in one complete settled page".into());
+        coordinator,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::Registry,
+    )? {
+        CoordinatorStatusResponse::Registry(registry) => Ok(registry),
+        _ => Err("Coordinator returned a differently correlated status response".into()),
     }
-    let mut handed_off = Vec::with_capacity(pool.entries.len());
-    for asset in pool.entries {
-        if !matches!(
-            asset.status,
-            CanisterPoolAssetStatus::Ready | CanisterPoolAssetStatus::Failed { .. }
-        ) {
-            return Err("Canister pool contains a non-handoff-ready asset".into());
-        }
-        let response: PoolAdminResponse = call(
-            icp,
-            fleet_subnet_root,
-            CANIC_POOL_ADMIN,
-            &PoolAdminCommand::Handoff {
-                canister_id: asset.canister_id,
-                recipient: coordinator,
-            },
-        )?;
-        if response
-            != (PoolAdminResponse::HandedOff {
-                canister_id: asset.canister_id,
-                recipient: coordinator,
-            })
-        {
-            return Err("Canister pool returned a nonterminal handoff response".into());
-        }
-        handed_off.push(asset.canister_id);
-    }
-    Ok(handed_off)
 }
 
 fn query<I, O>(
@@ -479,12 +218,4 @@ where
     let response = response?;
     cleanup?;
     Ok(decode_json_result_response(&response)?)
-}
-
-fn parse_operation_id(value: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
-    let bytes =
-        canic_core::cdk::utils::hash::decode_hex(value.strip_prefix("0x").unwrap_or(value))?;
-    bytes
-        .try_into()
-        .map_err(|_| "operation-id-hex must contain exactly 32 bytes".into())
 }

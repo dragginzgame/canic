@@ -27,7 +27,7 @@ use super::{
     cache::{
         canister_build_target_root, configure_canister_cargo_command, lock_canister_build_target,
     },
-    candid::{extract_candid, remove_stale_icp_candid_sidecars},
+    candid::{extract_candid, extract_candid_bytes, remove_stale_icp_candid_sidecars},
     model::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterArtifactBuildSpec, CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput,
@@ -114,11 +114,30 @@ fn build_workspace_canister_artifact_from_spec(
 
     prepare_canister_artifact_output(spec)?;
 
-    let release_wasm_path =
-        run_canister_build(context, &spec.package_manifest_path, &spec.package_name)?;
+    let release_wasm_path = run_canister_profile_candid_build(
+        context,
+        &spec.package_manifest_path,
+        &spec.package_name,
+    )?;
+    let candid = extract_candid_bytes(&release_wasm_path)?;
+    let profile = canic_core::role_contract::derive_protocol_profile_hashes(
+        &spec.canic_version,
+        &canic_core::ids::CanisterRole::owned(spec.role.clone()),
+        &spec.capabilities,
+        &candid,
+    );
+    let release_wasm_path = run_canister_build(
+        context,
+        &spec.package_manifest_path,
+        &spec.package_name,
+        Some(profile.protocol_profile_digest),
+    )?;
+    if should_export_candid_artifacts(context.build_network) {
+        require_unchanged_profile_candid(&spec.role, &candid, &release_wasm_path)?;
+    }
     let candid_wasm_path = should_export_candid_artifacts(context.build_network)
         .then_some(release_wasm_path.as_path());
-    finish_canister_artifact_output(context, spec, &release_wasm_path, candid_wasm_path)
+    finish_canister_artifact_output(context, spec, &release_wasm_path, candid_wasm_path, profile)
 }
 
 /// Build all admitted configured roles in one Cargo invocation per workspace and profile.
@@ -130,20 +149,51 @@ pub fn build_workspace_canister_artifacts_from_specs(
         return Ok(Vec::new());
     }
     let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
+    let export_candid = should_export_candid_artifacts(context.build_network);
 
     for spec in specs {
         prepare_canister_artifact_output(spec)?;
     }
     let workspace_groups = group_build_specs_by_workspace(specs);
 
-    for (cargo_workspace_root, group) in &workspace_groups {
-        run_canister_build_batch(context, cargo_workspace_root, group, context.profile)?;
+    if export_candid {
+        for (cargo_workspace_root, group) in &workspace_groups {
+            run_canister_build_batch(context, cargo_workspace_root, group, context.profile)?;
+        }
+    } else {
+        for spec in specs {
+            run_canister_profile_candid_build(
+                context,
+                &spec.package_manifest_path,
+                &spec.package_name,
+            )?;
+        }
     }
-    let export_candid = should_export_candid_artifacts(context.build_network);
-
+    let mut profiles = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let release_wasm_path =
+            built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
+        let candid = extract_candid_bytes(&release_wasm_path)?;
+        let profile = canic_core::role_contract::derive_protocol_profile_hashes(
+            &spec.canic_version,
+            &canic_core::ids::CanisterRole::owned(spec.role.clone()),
+            &spec.capabilities,
+            &candid,
+        );
+        let final_wasm_path = run_canister_build(
+            context,
+            &spec.package_manifest_path,
+            &spec.package_name,
+            Some(profile.protocol_profile_digest),
+        )?;
+        if export_candid {
+            require_unchanged_profile_candid(&spec.role, &candid, &final_wasm_path)?;
+        }
+        profiles.push(profile);
+    }
     std::thread::scope(|scope| {
         let mut handles = Vec::with_capacity(specs.len());
-        for spec in specs {
+        for (spec, profile) in specs.iter().zip(profiles) {
             handles.push(scope.spawn(move || {
                 let release_wasm_path =
                     built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
@@ -152,6 +202,7 @@ pub fn build_workspace_canister_artifacts_from_specs(
                     spec,
                     &release_wasm_path,
                     export_candid.then_some(release_wasm_path.as_path()),
+                    profile,
                 )
                 .map_err(|error| error.to_string())
             }));
@@ -195,6 +246,7 @@ fn finish_canister_artifact_output(
     spec: &CanisterArtifactBuildSpec,
     release_wasm_path: &Path,
     candid_wasm_path: Option<&Path>,
+    profile: canic_core::role_contract::ProtocolProfileHashes,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let mut transforms = Vec::new();
     write_wasm_artifact(release_wasm_path, &spec.wasm_path)?;
@@ -224,6 +276,8 @@ fn finish_canister_artifact_output(
         wasm_path: spec.wasm_path.clone(),
         wasm_gz_path: spec.wasm_gz_path.clone(),
         did_path: spec.did_path.clone(),
+        candid_sha256: profile.candid_sha256,
+        protocol_profile_digest: profile.protocol_profile_digest,
         transforms,
     })
 }
@@ -284,13 +338,15 @@ fn resolve_canister_artifact_build_spec_from_validation(
             return Err(format!("{}: {}", finding.code(), finding_detail(&finding)).into());
         }
     };
-    require_declared_role_contract(config, &evidence)?;
+    let contract = require_declared_role_contract(config, &evidence)?;
 
     let artifact_root = context.artifact_root().join(canister_name);
     Ok(CanisterArtifactBuildSpec {
         role: canister_name.to_string(),
         package_name: evidence.role_package_name,
         package_version: evidence.role_package_version,
+        canic_version: evidence.canic_version,
+        capabilities: contract.capabilities,
         package_manifest_path: evidence.role_manifest_path,
         cargo_workspace_root: evidence.cargo_workspace_root,
         wasm_path: artifact_root.join(format!("{canister_name}.wasm")),
@@ -303,9 +359,9 @@ fn resolve_canister_artifact_build_spec_from_validation(
 fn require_declared_role_contract(
     config: &canic_core::bootstrap::compiled::ConfigModel,
     evidence: &RoleCargoGraphEvidence,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<canic_core::role_contract::ResolvedRoleContract, Box<dyn std::error::Error>> {
     match resolve_declared_role_package_contract(config, evidence) {
-        canic_core::role_contract::RoleContractResolution::Resolved { .. } => Ok(()),
+        canic_core::role_contract::RoleContractResolution::Resolved { contract } => Ok(contract),
         canic_core::role_contract::RoleContractResolution::Rejected { errors } => Err(errors
             .iter()
             .map(|finding| format!("{}: {}", finding.code(), finding_detail(finding)))
@@ -341,8 +397,16 @@ fn run_canister_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
     package_name: &str,
+    protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut command = canister_cargo_build_command(context, manifest_path, context.profile);
+    command.env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV);
+    if let Some(digest) = protocol_profile_digest {
+        command.env(
+            canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
+            digest.to_string(),
+        );
+    }
 
     let output = command.output()?;
     if !output.status.success() {
@@ -359,6 +423,59 @@ fn run_canister_build(
         context.profile,
         package_name,
     ))
+}
+
+fn run_canister_profile_candid_build(
+    context: &WorkspaceBuildContext,
+    manifest_path: &Path,
+    package_name: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut command = canister_profile_candid_command(context, manifest_path, context.profile);
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "profile Candid build failed for {}: {}",
+            manifest_path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(built_canister_wasm_path(
+        context,
+        context.profile,
+        package_name,
+    ))
+}
+
+fn canister_profile_candid_command(
+    context: &WorkspaceBuildContext,
+    manifest_path: &Path,
+    profile: CanisterBuildProfile,
+) -> Command {
+    let mut command = canister_cargo_command(context, manifest_path, profile, "rustc");
+    command.args([
+        "--lib",
+        "--",
+        "--cfg",
+        "canic_export_candid",
+        "--check-cfg=cfg(canic_export_candid)",
+    ]);
+    command
+}
+
+fn require_unchanged_profile_candid(
+    role: &str,
+    expected: &[u8],
+    final_wasm_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let actual = extract_candid_bytes(final_wasm_path)?;
+    if actual != expected {
+        return Err(format!(
+            "generated Candid changed after binding protocol-profile digest for role {role}"
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn run_canister_build_batch(
@@ -404,17 +521,27 @@ pub(super) fn canister_cargo_build_command(
     manifest_path: &Path,
     profile: CanisterBuildProfile,
 ) -> Command {
+    canister_cargo_command(context, manifest_path, profile, "build")
+}
+
+fn canister_cargo_command(
+    context: &WorkspaceBuildContext,
+    manifest_path: &Path,
+    profile: CanisterBuildProfile,
+    cargo_subcommand: &str,
+) -> Command {
     let build_context = context.with_profile(profile);
     let mut command = cargo_command();
     build_context.apply_to_command(&mut command);
     command
+        .env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV)
         .current_dir(&build_context.workspace_root)
         .env(
             canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
             canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
         )
         .args([
-            "build",
+            cargo_subcommand,
             "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),
@@ -495,6 +622,27 @@ mod tests {
     }
 
     #[test]
+    fn profile_candid_pass_is_explicit_for_nonlocal_binding_derivation() {
+        let context = build_context();
+        let command = canister_profile_candid_command(
+            &context,
+            Path::new("/workspace/app/Cargo.toml"),
+            CanisterBuildProfile::Fast,
+        );
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(args.first().map(String::as_str), Some("rustc"));
+        assert!(
+            args.windows(2)
+                .any(|args| args == ["--cfg", "canic_export_candid"])
+        );
+        assert!(args.contains(&"--check-cfg=cfg(canic_export_candid)".to_string()));
+    }
+
+    #[test]
     fn repository_configured_specs_share_workspace_build_authority() {
         let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let config_path = workspace_root.join("apps/demo/canic.toml");
@@ -528,6 +676,23 @@ mod tests {
                 .expect("canonical Cargo workspace")
                 == workspace_root.canonicalize().expect("canonical repository")
         }));
+        let app = specs
+            .iter()
+            .find(|spec| spec.role == "app")
+            .expect("app spec");
+        let user_hub = specs
+            .iter()
+            .find(|spec| spec.role == "user_hub")
+            .expect("user_hub spec");
+        assert!(
+            !app.capabilities
+                .contains(&canic_core::role_contract::RoleCapabilityKey::AutomaticTopup)
+        );
+        assert!(
+            user_hub
+                .capabilities
+                .contains(&canic_core::role_contract::RoleCapabilityKey::AutomaticTopup)
+        );
     }
 
     fn build_context() -> WorkspaceBuildContext {
@@ -555,6 +720,8 @@ mod tests {
             role: role.to_string(),
             package_name: package_name.to_string(),
             package_version: "0.101.51".to_string(),
+            canic_version: "0.101.51".to_string(),
+            capabilities: std::collections::BTreeSet::new(),
             package_manifest_path: PathBuf::from(cargo_workspace_root)
                 .join(role)
                 .join("Cargo.toml"),

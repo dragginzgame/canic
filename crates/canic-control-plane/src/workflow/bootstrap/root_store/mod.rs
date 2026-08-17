@@ -10,17 +10,17 @@ mod tests;
 
 use crate::{
     dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
-    ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
+    ids::{
+        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
+        WasmStoreBinding,
+    },
     ops::{
         component_registry::ComponentRegistryOps,
-        storage::{
-            state::root_wasm_store::RootWasmStoreStateOps,
-            template::{TemplateChunkedOps, TemplateManifestOps},
-        },
+        storage::state::root_wasm_store::RootWasmStoreStateOps,
     },
     workflow::{
         root_authority::validated_root_authority,
-        runtime::template::{WASM_STORE_BOOTSTRAP_BINDING, WasmStorePublicationWorkflow},
+        runtime::template::{WasmStorePublicationWorkflow, exact_store_payload_bytes},
     },
 };
 use canic_core::{
@@ -35,6 +35,7 @@ use canic_core::{
         RootStoreReleaseSetEntryKind, RootStoreReleaseSetManifest,
     },
     ids::{ComponentSpecId, ReleaseBuildId},
+    role_contract::ProtocolProfileDigest,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -62,29 +63,11 @@ impl<'a> RootReleaseSetEntryAuthority<'a> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-struct StagedArtifactAuthority<'a> {
-    template_id: &'a TemplateId,
-    role: &'a CanisterRole,
-    version: &'a TemplateVersion,
-    payload_hash: &'a [u8],
-    payload_size_bytes: u64,
-    chunking_mode: TemplateChunkingMode,
-    manifest_state: TemplateManifestState,
-}
-
-impl<'a> StagedArtifactAuthority<'a> {
-    const fn from_manifest(manifest: &'a TemplateManifestResponse) -> Self {
-        Self {
-            template_id: &manifest.template_id,
-            role: &manifest.role,
-            version: &manifest.version,
-            payload_hash: manifest.payload_hash.as_slice(),
-            payload_size_bytes: manifest.payload_size_bytes,
-            chunking_mode: manifest.chunking_mode,
-            manifest_state: manifest.manifest_state,
-        }
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RootArtifactIdentity {
+    raw_module_hash: [u8; 32],
+    candid_sha256: [u8; 32],
+    protocol_profile_digest: ProtocolProfileDigest,
 }
 
 /// Bootstrap and verify the exact local Store for one still-Prepared root.
@@ -95,21 +78,30 @@ pub async fn bootstrap(
     ComponentRegistryOps::require_root_store_admin_open()?;
     let (authority, root) = validated_root_authority()?;
 
-    let manifest = load_and_validate_manifest(&authority, request)?;
-    let module_hashes = artifact_module_hashes(&manifest)?;
-    let staged = exact_staged_manifests(&manifest)?;
+    if let Some(receipt) = RootWasmStoreStateOps::root_store_bootstrap_receipt(&request)? {
+        return Ok(receipt);
+    }
 
     super::root::ensure_required_wasm_store_canister()?;
-    let (wasm_store, live_catalog) =
-        WasmStorePublicationWorkflow::bootstrap_exact_staged_release_set(staged.clone()).await?;
-    let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;
+    let store = exact_adopted_store(authority.wasm_store_authority.wasm_store)?;
+    let manifest = load_and_validate_manifest(&authority, request.clone()).await?;
+    let artifact_identities = artifact_identities(&manifest)?;
+    let staged = expected_artifact_manifests(&manifest, store.binding.clone())?;
 
-    Ok(RootStoreBootstrapResponse {
-        fleet_subnet_root: root,
-        wasm_store,
-        release_set: authority.initial_release_set,
-        catalog,
-    })
+    let (wasm_store, live_catalog) =
+        WasmStorePublicationWorkflow::bootstrap_exact_pre_staged_release_set(staged.clone())
+            .await?;
+    let catalog = verify_live_catalog(&staged, live_catalog, &artifact_identities)?;
+
+    RootWasmStoreStateOps::commit_root_store_bootstrap(
+        &request,
+        RootStoreBootstrapResponse {
+            fleet_subnet_root: root,
+            wasm_store,
+            release_set: authority.initial_release_set,
+            catalog,
+        },
+    )
 }
 
 /// Verify the exact live Store catalog without changing root or Store state.
@@ -117,14 +109,15 @@ pub async fn status(
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreBootstrapResponse, InternalError> {
     let (authority, root) = validated_root_authority()?;
-    let manifest = load_and_validate_manifest(&authority, request)?;
-    let module_hashes = artifact_module_hashes(&manifest)?;
+    let store = exact_adopted_store(authority.wasm_store_authority.wasm_store)?;
+    let manifest = load_and_validate_manifest(&authority, request).await?;
+    let artifact_identities = artifact_identities(&manifest)?;
     // Bootstrap already verified every staged chunk before publishing the release set. Status is
     // a bounded verification of the protected manifest metadata against the live Store catalog;
     // re-reading and hashing every staged payload here makes its query cost scale with Wasm bytes.
-    let staged = exact_staged_manifest_metadata(&manifest)?;
+    let staged = expected_artifact_manifests(&manifest, store.binding)?;
     let (wasm_store, live_catalog) = WasmStorePublicationWorkflow::single_store_catalog().await?;
-    let catalog = verify_live_catalog(&staged, live_catalog, &module_hashes)?;
+    let catalog = verify_live_catalog(&staged, live_catalog, &artifact_identities)?;
 
     Ok(RootStoreBootstrapResponse {
         fleet_subnet_root: root,
@@ -134,7 +127,7 @@ pub async fn status(
     })
 }
 
-fn load_and_validate_manifest(
+async fn load_and_validate_manifest(
     authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
     request: RootStoreBootstrapRequest,
 ) -> Result<RootStoreReleaseSetManifest, InternalError> {
@@ -147,12 +140,14 @@ fn load_and_validate_manifest(
     let release_set = authority.initial_release_set;
     let template_id = release_set_template_id(release_set.manifest_digest);
     let version = TemplateVersion::owned(release_set.release_build_id.to_string());
-    let bytes = TemplateChunkedOps::staged_payload_bytes(
+    let bytes = exact_store_payload_bytes(
+        authority.wasm_store_authority.wasm_store,
         &template_id,
         &version,
         release_set.manifest_digest.as_bytes(),
         request.manifest_payload_size_bytes,
-    )?;
+    )
+    .await?;
     let manifest = serde_json::from_slice::<RootStoreReleaseSetManifest>(&bytes)
         .map_err(|_error| InternalError::invalid_input())?;
     let canonical =
@@ -254,7 +249,9 @@ fn validate_artifact_shape(
     .into_iter()
     .all(|value| !value.is_empty());
     let sizes_are_positive = artifact.wasm_size_bytes > 0 && artifact.wasm_gz_size_bytes > 0;
-    if !paths_are_complete || !sizes_are_positive {
+    let profile_is_complete = artifact.candid_sha256 != [0; 32]
+        && artifact.protocol_profile_digest.as_bytes() != &[0; 32];
+    if !paths_are_complete || !sizes_are_positive || !profile_is_complete {
         return Err(InternalError::invalid_input());
     }
     let _ = decode_sha256(&artifact.wasm_sha256_hex)?;
@@ -262,18 +259,9 @@ fn validate_artifact_shape(
     Ok(())
 }
 
-fn exact_staged_manifests(
+fn expected_artifact_manifests(
     manifest: &RootStoreReleaseSetManifest,
-) -> Result<Vec<TemplateManifestResponse>, InternalError> {
-    let staged = exact_staged_manifest_metadata(manifest)?;
-    for observed in &staged {
-        TemplateChunkedOps::validate_staged_release(observed)?;
-    }
-    Ok(staged)
-}
-
-fn exact_staged_manifest_metadata(
-    manifest: &RootStoreReleaseSetManifest,
+    store_binding: WasmStoreBinding,
 ) -> Result<Vec<TemplateManifestResponse>, InternalError> {
     let mut artifacts = BTreeMap::new();
     for entry in &manifest.entries {
@@ -290,51 +278,58 @@ fn exact_staged_manifest_metadata(
     artifacts
         .into_iter()
         .map(|(role, (payload_hash, payload_size_bytes))| {
-            let observed = TemplateManifestOps::approved_for_role_response(&role)?;
-            let expected_template_id = artifact_template_id(&role);
-            let expected = StagedArtifactAuthority {
-                template_id: &expected_template_id,
-                role: &role,
-                version: &version,
-                payload_hash: payload_hash.as_slice(),
+            Ok(TemplateManifestResponse {
+                template_id: artifact_template_id(&role),
+                role,
+                version: version.clone(),
+                payload_hash: payload_hash.to_vec(),
                 payload_size_bytes,
+                store_binding: store_binding.clone(),
                 chunking_mode: TemplateChunkingMode::Chunked,
                 manifest_state: TemplateManifestState::Approved,
-            };
-            if StagedArtifactAuthority::from_manifest(&observed) != expected
-                || !is_exact_bootstrap_source(&observed.store_binding)
-            {
-                return Err(InternalError::invalid_input());
-            }
-            Ok(observed)
+                approved_at: Some(0),
+                created_at: 0,
+            })
         })
         .collect()
 }
 
-fn is_exact_bootstrap_source(binding: &crate::ids::WasmStoreBinding) -> bool {
-    binding == &WASM_STORE_BOOTSTRAP_BINDING
-        || RootWasmStoreStateOps::wasm_store_pid(binding).is_some()
+fn exact_adopted_store(
+    expected_pid: candid::Principal,
+) -> Result<crate::view::state::WasmStoreView, InternalError> {
+    let stores = RootWasmStoreStateOps::wasm_stores();
+    let [store] = stores.as_slice() else {
+        return Err(InternalError::invariant());
+    };
+    if store.pid != expected_pid {
+        return Err(InternalError::conflict());
+    }
+    Ok(store.clone())
 }
 
-fn artifact_module_hashes(
+fn artifact_identities(
     manifest: &RootStoreReleaseSetManifest,
-) -> Result<BTreeMap<CanisterRole, [u8; 32]>, InternalError> {
-    let mut module_hashes = BTreeMap::new();
+) -> Result<BTreeMap<CanisterRole, RootArtifactIdentity>, InternalError> {
+    let mut identities = BTreeMap::new();
     for entry in &manifest.entries {
-        let module_hash = decode_sha256(&entry.artifact.wasm_sha256_hex)?;
-        if let Some(existing) = module_hashes.insert(entry.artifact.role.clone(), module_hash)
-            && existing != module_hash
+        let identity = RootArtifactIdentity {
+            raw_module_hash: decode_sha256(&entry.artifact.wasm_sha256_hex)?,
+            candid_sha256: entry.artifact.candid_sha256,
+            protocol_profile_digest: entry.artifact.protocol_profile_digest,
+        };
+        if let Some(existing) = identities.insert(entry.artifact.role.clone(), identity)
+            && existing != identity
         {
             return Err(InternalError::invalid_input());
         }
     }
-    Ok(module_hashes)
+    Ok(identities)
 }
 
 fn verify_live_catalog(
     expected: &[TemplateManifestResponse],
     observed: Vec<WasmStoreCatalogEntryResponse>,
-    module_hashes: &BTreeMap<CanisterRole, [u8; 32]>,
+    artifact_identities: &BTreeMap<CanisterRole, RootArtifactIdentity>,
 ) -> Result<Vec<RootStoreCatalogEntry>, InternalError> {
     let expected = expected
         .iter()
@@ -367,13 +362,15 @@ fn verify_live_catalog(
     observed
         .into_iter()
         .map(|entry| {
-            let raw_module_hash = module_hashes
+            let identity = artifact_identities
                 .get(&entry.role)
                 .copied()
                 .ok_or_else(InternalError::invalid_input)?;
             Ok(RootStoreCatalogEntry {
                 role: entry.role,
-                raw_module_hash,
+                raw_module_hash: identity.raw_module_hash,
+                candid_sha256: identity.candid_sha256,
+                protocol_profile_digest: identity.protocol_profile_digest,
                 payload_hash: entry
                     .payload_hash
                     .try_into()

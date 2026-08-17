@@ -30,14 +30,18 @@ use crate::{
 use std::path::Path;
 
 use candid::Principal;
+use canic_control_plane::dto::fleet_coordinator::{
+    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
+    CoordinatorStatusRequest, CoordinatorStatusResponse,
+};
 use canic_core::{
     diagnostics::codes,
     dto::{
         component_provisioning::{
-            FleetComponentProvisioningPhase, FleetComponentProvisioningStatusRequest,
-            FleetComponentProvisioningStatusResponse,
+            FleetComponentProvisioningPhase, FleetComponentProvisioningStatusResponse,
         },
         fleet_registry::FleetRegistry,
+        role::{OperationReceipt, OperationStatusRequest},
     },
     ids::FleetName,
     protocol,
@@ -70,11 +74,11 @@ enum FleetComponentProvisioningInstallError {
     #[error("Fleet catalog publication has no exact durable row intent")]
     MissingCatalogIntent,
 
-    #[error("durable Fleet Component provisioning advance intent has no exact request")]
-    MissingAdvanceRequest,
-
     #[error("Fleet Component provisioning status query failed after preparation: {0}")]
     StatusQuery(#[source] CanisterProtocolError),
+
+    #[error("Fleet Component provisioning returned an unrelated command or status variant")]
+    ResponseCorrelation,
 }
 
 /// Provision every explicitly placed initial Component, activate all roots, and publish discovery.
@@ -146,21 +150,26 @@ fn query_or_prepare(
     coordinator: Principal,
     current: &ResolvedFleetComponentProvisioningInstall,
 ) -> Result<FleetComponentProvisioningStatusResponse, Box<dyn std::error::Error>> {
-    let status_request = status_request(current);
-    match query_with_arg(
-        icp,
-        coordinator,
-        protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-        &status_request,
-    ) {
-        Ok(status) => Ok(status),
-        Err(error) if error.is_rejected_with(codes::STATE_UNAVAILABLE) => call_with_arg(
-            icp,
-            coordinator,
-            protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
-            &current.journal.prepare_request,
-        )
-        .map_err(Into::into),
+    match query_status_response(icp, coordinator, current) {
+        Ok(response) => correlate_status(response, current).map_err(Into::into),
+        Err(error) if error.is_rejected_with(codes::STATE_UNAVAILABLE) => {
+            let response: CoordinatorCommandResponse = call_with_arg(
+                icp,
+                coordinator,
+                protocol::CANIC_COMMAND,
+                &CoordinatorCommand::ProvisionComponents(current.journal.prepare_request.clone()),
+            )?;
+            let CoordinatorCommandResponse::OperationAccepted(OperationReceipt { operation_id }) =
+                response
+            else {
+                return Err(FleetComponentProvisioningInstallError::ResponseCorrelation.into());
+            };
+            if operation_id != current.journal.prepare_request.operation_id {
+                return Err(FleetComponentProvisioningInstallError::ResponseCorrelation.into());
+            }
+            correlate_status(query_status_response(icp, coordinator, current)?, current)
+                .map_err(Into::into)
+        }
         Err(error) => Err(FleetComponentProvisioningInstallError::StatusQuery(error).into()),
     }
 }
@@ -170,36 +179,38 @@ fn reconcile_or_advance(
     coordinator: Principal,
     current: &ResolvedFleetComponentProvisioningInstall,
 ) -> Result<FleetComponentProvisioningStatusResponse, Box<dyn std::error::Error>> {
-    let observed: FleetComponentProvisioningStatusResponse = query_with_arg(
-        icp,
-        coordinator,
-        protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-        &status_request(current),
-    )?;
-    if current.journal.last_status.as_ref() != Some(&observed) {
-        return Ok(observed);
-    }
-    let advance = current
-        .journal
-        .advance_request
-        .as_ref()
-        .ok_or(FleetComponentProvisioningInstallError::MissingAdvanceRequest)?;
-    call_with_arg(
-        icp,
-        coordinator,
-        protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
-        advance,
-    )
-    .map_err(Into::into)
+    correlate_status(query_status_response(icp, coordinator, current)?, current).map_err(Into::into)
 }
 
-const fn status_request(
+fn query_status_response(
+    icp: &IcpCli,
+    coordinator: Principal,
     current: &ResolvedFleetComponentProvisioningInstall,
-) -> FleetComponentProvisioningStatusRequest {
-    FleetComponentProvisioningStatusRequest {
-        operation_id: current.journal.prepare_request.operation_id,
-        plan_hash: current.journal.plan_hash,
+) -> Result<CoordinatorStatusResponse, CanisterProtocolError> {
+    query_with_arg(
+        icp,
+        coordinator,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::Operation(OperationStatusRequest {
+            operation_id: current.journal.prepare_request.operation_id,
+        }),
+    )
+}
+
+fn correlate_status(
+    response: CoordinatorStatusResponse,
+    current: &ResolvedFleetComponentProvisioningInstall,
+) -> Result<FleetComponentProvisioningStatusResponse, FleetComponentProvisioningInstallError> {
+    let CoordinatorStatusResponse::Operation(
+        CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+    ) = response
+    else {
+        return Err(FleetComponentProvisioningInstallError::ResponseCorrelation);
+    };
+    if status.plan_hash != current.journal.plan_hash {
+        return Err(FleetComponentProvisioningInstallError::ResponseCorrelation);
     }
+    Ok(status)
 }
 
 fn publish_catalog(

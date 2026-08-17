@@ -62,6 +62,11 @@ fn qualified_complete_build_persists_one_exact_canonical_manifest() {
             CanicInfrastructureRole::WasmStore,
         ]
     );
+    assert!(persisted.manifest.entries.iter().all(|entry| {
+        entry.candid_sha256 == [3; 32]
+            && entry.protocol_profile_digest
+                == canic_core::role_contract::ProtocolProfileDigest::from_bytes([4; 32])
+    }));
 
     let release_set = root.join("release-set.json");
     fs::write(&release_set, b"exact release set").expect("write release set");
@@ -339,6 +344,10 @@ fn build_output(
         release_build_id,
         wasm_path,
         wasm_gz_path,
+        candid_sha256: [3; 32],
+        protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+            [4; 32],
+        ),
     }
 }
 

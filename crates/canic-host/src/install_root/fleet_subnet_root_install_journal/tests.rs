@@ -57,6 +57,7 @@ use canic_core::{
         FleetBinding, FleetId, FleetKey, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
         ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
+    role_contract::ProtocolProfileDigest,
 };
 
 #[test]
@@ -141,10 +142,10 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
     let planned = plan(&fixture).expect("plan root");
     let root_canister = Principal::from_slice(&[44]);
     let verified = install_infrastructure(&planned, root_canister);
-    let adopted = adopt_store(&verified);
-    let staging = begin_store_staging(&adopted).expect("begin Store staging");
+    let staging = begin_store_staging(&verified).expect("begin Store staging");
     let staged = record_store_staged(&staging).expect("record Store staging");
-    let bootstrapping = begin_store_bootstrap(&staged).expect("begin Store bootstrap");
+    let adopted = adopt_store(&staged);
+    let bootstrapping = begin_store_bootstrap(&adopted).expect("begin Store bootstrap");
     let evidence = RootStoreBootstrapResponse {
         fleet_subnet_root: root_canister,
         wasm_store: Principal::from_slice(&[55]),
@@ -152,6 +153,8 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
         catalog: vec![RootStoreCatalogEntry {
             role: CanisterRole::from("project_hub"),
             raw_module_hash: [8; 32],
+            candid_sha256: [10; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([11; 32]),
             payload_hash: [9; 32],
             payload_size_bytes: 1_024,
         }],
@@ -176,6 +179,8 @@ fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions(
     inadmissible.catalog.push(RootStoreCatalogEntry {
         role: CanisterRole::from("unplanned"),
         raw_module_hash: [11; 32],
+        candid_sha256: [12; 32],
+        protocol_profile_digest: ProtocolProfileDigest::from_bytes([13; 32]),
         payload_hash: [10; 32],
         payload_size_bytes: 1_024,
     });
@@ -192,10 +197,10 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
     let planned = plan(&fixture).expect("plan root");
     let root_canister = Principal::from_slice(&[44]);
     let verified = install_infrastructure(&planned, root_canister);
-    let adopted = adopt_store(&verified);
-    let staging = begin_store_staging(&adopted).expect("begin Store staging");
+    let staging = begin_store_staging(&verified).expect("begin Store staging");
     let staged = record_store_staged(&staging).expect("record Store staging");
-    let bootstrapping = begin_store_bootstrap(&staged).expect("begin Store bootstrap");
+    let adopted = adopt_store(&staged);
+    let bootstrapping = begin_store_bootstrap(&adopted).expect("begin Store bootstrap");
     let store = RootStoreBootstrapResponse {
         fleet_subnet_root: root_canister,
         wasm_store: Principal::from_slice(&[55]),
@@ -203,6 +208,8 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
         catalog: vec![RootStoreCatalogEntry {
             role: CanisterRole::from("project_hub"),
             raw_module_hash: [8; 32],
+            candid_sha256: [10; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([11; 32]),
             payload_hash: [9; 32],
             payload_size_bytes: 1_024,
         }],
@@ -272,8 +279,10 @@ fn assert_registry_sync_journal(
     version: canic_core::dto::fleet_registry::FleetRegistryVersion,
 ) {
     let sync_request = FleetSubnetRootRegistrySyncRequest {
+        operation_id: [8; 32],
         expected_registry: version.clone(),
         store_bootstrap: RootStoreBootstrapRequest {
+            operation_id: [9; 32],
             manifest_payload_size_bytes: 1_024,
         },
     };
@@ -456,7 +465,9 @@ fn adopt_store(
     ];
     temporary_controllers.sort();
     let evidence = FleetSubnetWasmStoreAdoptionResponse {
-        operation_id: adopting.journal.install_operation_id,
+        operation_id: super::super::root_store_adoption_operation_id(
+            adopting.journal.install_operation_id,
+        ),
         authority: authority.clone(),
         temporary_controllers,
         final_controllers: vec![authority.fleet_subnet_root],
@@ -609,6 +620,10 @@ fn fixture(root: &Path) -> Fixture {
         wasm_gz_relative_path: "root.wasm.gz".to_string(),
         wasm_gz_size_bytes: 8,
         wasm_gz_sha256_hex: "08".repeat(32),
+        candid_sha256: [3; 32],
+        protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+            [4; 32],
+        ),
     };
     let wasm_store_artifact = CanicInfrastructureArtifactEntry {
         role: CanicInfrastructureRole::WasmStore,
@@ -620,6 +635,10 @@ fn fixture(root: &Path) -> Fixture {
         wasm_gz_relative_path: "wasm_store.wasm.gz".to_string(),
         wasm_gz_size_bytes: 8,
         wasm_gz_sha256_hex: "0a".repeat(32),
+        candid_sha256: [5; 32],
+        protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+            [6; 32],
+        ),
     };
     let manifest = PersistedCanicInfrastructureArtifactManifest {
         manifest: CanicInfrastructureArtifactManifest {

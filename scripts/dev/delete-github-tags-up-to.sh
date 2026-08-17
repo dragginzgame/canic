@@ -18,7 +18,8 @@ Options:
 Examples:
   scripts/dev/delete-github-tags-up-to.sh
   scripts/dev/delete-github-tags-up-to.sh --delete-local --yes
-  scripts/dev/delete-github-tags-up-to.sh --delete-local --delete-remote --yes
+  scripts/dev/delete-github-tags-up-to.sh --cutoff v0.98.24 \
+    --delete-local --delete-remote --yes
 USAGE
 }
 
@@ -83,6 +84,39 @@ print_tags() {
     if ((${#tags[@]} > 0)); then
         printf "%s\n" "${tags[@]}"
     fi
+}
+
+captured_tags=()
+
+capture_tags() {
+    local producer="$1"
+    local output
+
+    if ! output="$("$producer")"; then
+        echo "error: unable to inventory tags with ${producer}" >&2
+        return 1
+    fi
+
+    captured_tags=()
+    if [[ -n "$output" ]]; then
+        readarray -t captured_tags <<<"$output"
+    fi
+}
+
+verify_tags_deleted() {
+    local label="$1"
+    local producer="$2"
+    local -a remaining=()
+
+    capture_tags "$producer"
+    remaining=("${captured_tags[@]}")
+    if ((${#remaining[@]} > 0)); then
+        echo "error: ${label} deletion did not remove every selected tag" >&2
+        printf '  %s\n' "${remaining[@]}" >&2
+        return 1
+    fi
+
+    printf '%s deletion verified through %s\n' "$label" "$cutoff"
 }
 
 delete_local_tags() {
@@ -177,11 +211,15 @@ if [[ "${delete_remote}" == true ]]; then
     git remote get-url "${remote}" >/dev/null
 fi
 
-readarray -t selected_local_tags < <(local_tags)
+selected_local_tags=()
+capture_tags local_tags
+selected_local_tags=("${captured_tags[@]}")
 print_tags "local" "${selected_local_tags[@]}"
 
 if [[ "${delete_remote}" == true ]]; then
-    readarray -t selected_remote_tags < <(remote_tags)
+    selected_remote_tags=()
+    capture_tags remote_tags
+    selected_remote_tags=("${captured_tags[@]}")
     print_tags "remote ${remote}" "${selected_remote_tags[@]}"
 fi
 
@@ -195,10 +233,28 @@ if [[ "${confirmed}" != true ]]; then
     exit 2
 fi
 
+if [[ "${delete_remote}" == true && ${#selected_remote_tags[@]} -gt 0 ]]; then
+    delete_remote_tags "${selected_remote_tags[@]}"
+fi
+if [[ "${delete_remote}" == true ]]; then
+    verify_tags_deleted "remote ${remote}" remote_tags
+fi
+
 if [[ "${delete_local}" == true && ${#selected_local_tags[@]} -gt 0 ]]; then
     delete_local_tags "${selected_local_tags[@]}"
 fi
+if [[ "${delete_local}" == true ]]; then
+    verify_tags_deleted "local" local_tags
+fi
 
-if [[ "${delete_remote}" == true && ${#selected_remote_tags[@]} -gt 0 ]]; then
-    delete_remote_tags "${selected_remote_tags[@]}"
+if [[ "${delete_local}" == true && "${delete_remote}" == true ]]; then
+    cat <<'NOTICE'
+Tag deletion is complete. Any clone that still has the deleted annotated tags
+can publish them again with `git push --tags` or `git push --follow-tags`.
+Use the repository release flow, which pushes only the current exact tag.
+NOTICE
+elif [[ "${delete_local}" == true ]]; then
+    echo "warning: remote tags were not deleted and a later fetch can restore them" >&2
+elif [[ "${delete_remote}" == true ]]; then
+    echo "warning: retained local tags can be republished by a broad tag push" >&2
 fi

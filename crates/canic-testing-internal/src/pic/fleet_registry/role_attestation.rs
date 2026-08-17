@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     dto::{
         auth::{
@@ -16,12 +16,35 @@ use canic::{
         error::Error,
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
+        role::MetricsStatusRequest,
         rpc::RootRequestMetadata,
     },
     ids::{CanisterRole, ComponentBinding},
-    protocol::{CANIC_GET_ROLE_ATTESTATION, CANIC_METRICS, CANIC_PREPARE_ROLE_ATTESTATION},
+    protocol::{CANIC_COMMAND, CANIC_STATUS},
 };
 use ic_testkit::pic::{CandidCallExt, PocketIc};
+
+#[derive(CandidType)]
+enum RootCommand {
+    PrepareRoleAttestation(RoleAttestationRequest),
+}
+
+#[derive(CandidType, Debug, Deserialize)]
+enum RootCommandResponse {
+    PrepareRoleAttestation(RoleAttestationPrepareResponse),
+}
+
+#[derive(CandidType)]
+enum RootStatusRequest {
+    Metrics(MetricsStatusRequest),
+    RoleAttestation(RoleAttestationGetRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponse {
+    Metrics(Page<MetricEntry>),
+    RoleAttestation(SignedRoleAttestation),
+}
 
 /// Exercise issuance, verification, and guard metrics through an active issuer Component.
 pub(super) fn assert_registry_bound_role_attestation(
@@ -202,8 +225,13 @@ fn assert_role_prepare_forbidden(
     request: RoleAttestationRequest,
     expected_code: canic_core::diagnostics::DiagnosticCode,
 ) {
-    let response: Result<RoleAttestationPrepareResponse, Error> = pic
-        .update_candid_as(root, caller, CANIC_PREPARE_ROLE_ATTESTATION, (request,))
+    let response: Result<RootCommandResponse, Error> = pic
+        .update_candid_as(
+            root,
+            caller,
+            CANIC_COMMAND,
+            (RootCommand::PrepareRoleAttestation(request),),
+        )
         .expect("role attestation rejection transport");
     assert_eq!(
         response
@@ -235,26 +263,35 @@ fn issue_requested_role_attestation(
     issuer: &ComponentBinding,
     request: RoleAttestationRequest,
 ) -> SignedRoleAttestation {
-    let prepared: Result<RoleAttestationPrepareResponse, Error> = pic
+    let prepared: Result<RootCommandResponse, Error> = pic
         .update_candid_as(
             root,
             issuer.canister_id,
-            CANIC_PREPARE_ROLE_ATTESTATION,
-            (request,),
+            CANIC_COMMAND,
+            (RootCommand::PrepareRoleAttestation(request),),
         )
         .expect("role attestation prepare transport");
-    let prepared = prepared.expect("role attestation prepare");
-    let signed: Result<SignedRoleAttestation, Error> = pic
+    let prepared = match prepared.expect("role attestation prepare") {
+        RootCommandResponse::PrepareRoleAttestation(prepared) => prepared,
+    };
+    let signed: Result<RootStatusResponse, Error> = pic
         .query_candid_as(
             root,
             issuer.canister_id,
-            CANIC_GET_ROLE_ATTESTATION,
-            (RoleAttestationGetRequest {
-                payload_hash: prepared.payload_hash,
-            },),
+            CANIC_STATUS,
+            (RootStatusRequest::RoleAttestation(
+                RoleAttestationGetRequest {
+                    payload_hash: prepared.payload_hash,
+                },
+            ),),
         )
         .expect("role attestation retrieval transport");
-    signed.expect("role attestation retrieval")
+    match signed.expect("role attestation retrieval") {
+        RootStatusResponse::RoleAttestation(attestation) => attestation,
+        RootStatusResponse::Metrics(_) => {
+            panic!("Root returned a differently correlated status response")
+        }
+    }
 }
 
 fn require_attested_local_subnet(
@@ -344,20 +381,23 @@ fn query_metric_entries(
     canister: Principal,
     kind: MetricsKind,
 ) -> Vec<MetricEntry> {
-    let response: Result<Page<MetricEntry>, Error> = pic
+    let response: Result<RootStatusResponse, Error> = pic
         .query_candid(
             canister,
-            CANIC_METRICS,
-            (
+            CANIC_STATUS,
+            (RootStatusRequest::Metrics(MetricsStatusRequest {
                 kind,
-                PageRequest {
+                page: PageRequest {
                     limit: 10_000,
                     offset: 0,
                 },
-            ),
+            }),),
         )
         .expect("metrics query transport");
-    response.expect("metrics query").entries
+    let RootStatusResponse::Metrics(page) = response.expect("metrics query") else {
+        panic!("canic_status returned a non-Metrics response")
+    };
+    page.entries
 }
 
 fn labels_match(entry: &MetricEntry, labels: &[&str]) -> bool {

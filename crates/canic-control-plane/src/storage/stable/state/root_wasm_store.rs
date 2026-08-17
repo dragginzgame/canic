@@ -11,7 +11,9 @@ use canic_core::{
     eager_static,
     role_contract::allocation::memory::control_plane::ROOT_WASM_STORE_STATE_ID,
 };
-use canic_core::{cdk::types::Principal, impl_storable_bounded};
+use canic_core::{
+    cdk::types::Principal, dto::root_store::RootStoreBootstrapResponse, impl_storable_bounded,
+};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
 use std::cell::RefCell;
@@ -82,6 +84,14 @@ pub struct SiblingWasmStoreAdoptionRecord {
     pub adopted_at_ns: Option<u64>,
 }
 
+/// Endpoint-specific terminal receipt for one completed Root Store bootstrap.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootStoreBootstrapRecord {
+    pub operation_id: [u8; 32],
+    pub manifest_payload_size_bytes: u64,
+    pub response: RootStoreBootstrapResponse,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg(feature = "root-control-plane")]
 pub enum SiblingWasmStoreAdoptionError {
@@ -89,6 +99,13 @@ pub enum SiblingWasmStoreAdoptionError {
     InventoryAlreadyPopulated,
     InvalidAuthority,
     MissingIntent,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(feature = "root-control-plane")]
+pub enum RootStoreBootstrapCommitError {
+    ConflictingAuthority,
+    InvalidReceipt,
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -123,6 +140,7 @@ pub struct RootWasmStoreStateRecord {
     pub publication_store: PublicationStoreStateRecord,
     pub wasm_stores: Vec<WasmStoreRecord>,
     pub sibling_wasm_store_adoption: Option<SiblingWasmStoreAdoptionRecord>,
+    pub root_store_bootstrap: Option<RootStoreBootstrapRecord>,
 }
 
 impl RootWasmStoreStateRecord {
@@ -306,6 +324,39 @@ impl RootWasmStoreState {
 
     pub(crate) fn sibling_wasm_store_adoption() -> Option<SiblingWasmStoreAdoptionRecord> {
         Self::export().record.sibling_wasm_store_adoption
+    }
+
+    pub(crate) fn root_store_bootstrap() -> Option<RootStoreBootstrapRecord> {
+        Self::export().record.root_store_bootstrap
+    }
+
+    pub(crate) fn commit_root_store_bootstrap(
+        record: RootStoreBootstrapRecord,
+    ) -> Result<RootStoreBootstrapRecord, RootStoreBootstrapCommitError> {
+        let receipt_is_valid = [
+            record.operation_id != [0; 32],
+            record.manifest_payload_size_bytes != 0,
+            record.response.fleet_subnet_root != Principal::anonymous(),
+            record.response.wasm_store != Principal::anonymous(),
+        ]
+        .into_iter()
+        .all(|valid| valid);
+        if !receipt_is_valid {
+            return Err(RootStoreBootstrapCommitError::InvalidReceipt);
+        }
+        ROOT_WASM_STORE_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            if let Some(existing) = &data.root_store_bootstrap {
+                return if existing == &record {
+                    Ok(existing.clone())
+                } else {
+                    Err(RootStoreBootstrapCommitError::ConflictingAuthority)
+                };
+            }
+            data.root_store_bootstrap = Some(record.clone());
+            cell.set(data);
+            Ok(record)
+        })
     }
 
     pub(crate) fn begin_sibling_wasm_store_adoption(
@@ -658,6 +709,7 @@ mod tests {
                     gc: WasmStoreGcRecord::default(),
                 }],
                 sibling_wasm_store_adoption: None,
+                root_store_bootstrap: None,
             },
         });
 
@@ -826,6 +878,7 @@ mod tests {
                 },
                 wasm_stores: Vec::new(),
                 sibling_wasm_store_adoption: None,
+                root_store_bootstrap: None,
             },
         });
     }
@@ -847,6 +900,7 @@ mod tests {
                 },
                 wasm_stores: Vec::new(),
                 sibling_wasm_store_adoption: None,
+                root_store_bootstrap: None,
             },
         });
     }

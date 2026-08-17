@@ -1,3 +1,4 @@
+#[cfg(feature = "wasm-store-canister")]
 use crate::dto::template::{
     TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
     TemplateManifestInput,
@@ -6,33 +7,65 @@ use crate::dto::template::{
 use crate::{
     config,
     ids::WasmStoreGcStatus,
-    ops::storage::template::{TemplateChunkedOps, TemplateManifestOps, WasmStoreLimits},
+    ops::storage::template::{TemplateManifestOps, WasmStoreLimits},
 };
 #[cfg(feature = "wasm-store-canister")]
 use crate::{
     dto::template::{
-        TemplateChunkResponse, WasmStoreCatalogEntryResponse,
+        StoreOperationStatusResponse, TemplateChunkResponse, WasmStoreCatalogEntryResponse,
         WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
-        WasmStoreStatusResponse,
+        WasmStoreGcOperationStatus, WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion, WasmStoreGcMode},
-    ops::storage::template::{WasmStoreGcExecutionStats, WasmStoreGcOps},
+    ops::storage::template::{TemplateChunkedOps, WasmStoreGcExecutionStats, WasmStoreGcOps},
 };
 #[cfg(feature = "root-control-plane")]
 use crate::{
     dto::template::{
-        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
-        WasmStoreOverviewResponse, WasmStorePublicationSlotResponse,
+        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreOverviewResponse,
+        WasmStorePublicationSlotResponse,
     },
-    ids::CanisterRole,
     ops::storage::state::root_wasm_store::RootWasmStoreStateOps,
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
+use async_trait::async_trait;
+#[cfg(feature = "wasm-store-canister")]
 use canic_core::control_plane_support::ops::ic::IcOps;
+use canic_core::dto::error::Error;
 #[cfg(feature = "root-control-plane")]
 use canic_core::dto::root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse};
-use canic_core::{dto::error::Error, log, log::Topic};
+#[cfg(feature = "wasm-store-canister")]
+use canic_core::{log, log::Topic};
+
+/// Admit Store mutations from the exact Root, or from the exact installation controller while
+/// that controller still controls the fresh Store before Root adoption.
+#[cfg(feature = "wasm-store-canister")]
+pub struct WasmStoreMutationCallerPredicate;
+
+#[cfg(feature = "wasm-store-canister")]
+#[async_trait]
+impl canic_core::access::expr::AsyncAccessPredicate for WasmStoreMutationCallerPredicate {
+    async fn eval(
+        &self,
+        ctx: &canic_core::access::expr::AccessContext,
+    ) -> Result<(), canic_core::access::AccessError> {
+        let authority = canic_core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::wasm_store_authority()
+            .map_err(canic_core::access::AccessError::Internal)?;
+        let caller = ctx.transport_caller();
+        if caller == authority.fleet_subnet_root {
+            return Ok(());
+        }
+        if caller != authority.installation_controller {
+            return Err(canic_core::access::AccessError::RootRequired);
+        }
+        canic_core::access::auth::is_controller(caller).await
+    }
+
+    fn name(&self) -> &'static str {
+        "caller_is_root_or_pre_adoption_installation_controller"
+    }
+}
 
 ///
 /// WasmStoreBootstrapApi
@@ -43,79 +76,6 @@ pub struct WasmStoreBootstrapApi;
 
 #[cfg(feature = "root-control-plane")]
 impl WasmStoreBootstrapApi {
-    // Stage one approved manifest in the current canister's local bootstrap source.
-    pub fn stage_manifest(input: TemplateManifestInput) {
-        log!(
-            Topic::Wasm,
-            Info,
-            "stage manifest template={} role={} version={} bytes={} binding={}",
-            input.template_id,
-            input.role,
-            input.version,
-            input.payload_size_bytes,
-            input.store_binding,
-        );
-        stage_bootstrap_manifest(input);
-    }
-
-    // Prepare one local chunk set for chunk-by-chunk staging in the current canister.
-    pub fn prepare_chunk_set(
-        request: TemplateChunkSetPrepareInput,
-    ) -> Result<TemplateChunkSetInfoResponse, Error> {
-        let template_id = request.template_id.clone();
-        let version = request.version.clone();
-        log!(
-            Topic::Wasm,
-            Info,
-            "prepare chunk upload template={} version={} chunks={} bytes={}",
-            request.template_id,
-            request.version,
-            request.chunk_hashes.len(),
-            request.payload_size_bytes,
-        );
-        let response = prepare_bootstrap_chunk_set(request)?;
-        log!(
-            Topic::Wasm,
-            Ok,
-            "prepared chunk upload template={} version={} with {} chunk hashes",
-            template_id,
-            version,
-            response.chunk_hashes.len(),
-        );
-        Ok(response)
-    }
-
-    // Stage one chunk into the current canister's local bootstrap source.
-    pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
-        log!(
-            Topic::Wasm,
-            Info,
-            "publish chunk template={} version={} chunk_index={} bytes={}",
-            request.template_id,
-            request.version,
-            request.chunk_index,
-            request.bytes.len(),
-        );
-        let template_id = request.template_id.clone();
-        let version = request.version.clone();
-        let chunk_index = request.chunk_index;
-        publish_bootstrap_chunk(request)?;
-        log!(
-            Topic::Wasm,
-            Ok,
-            "published chunk template={} version={} chunk_index={}",
-            template_id,
-            version,
-            chunk_index,
-        );
-        Ok(())
-    }
-
-    // Return root-owned staged bootstrap visibility for the bootstrap role and current release buffer.
-    pub fn debug_bootstrap() -> Result<WasmStoreBootstrapDebugResponse, Error> {
-        bootstrap_debug(&CanisterRole::WASM_STORE)
-    }
-
     /// Bootstrap the exact topology-admitted initial release set into this root's local Store.
     pub async fn bootstrap_root_store(
         request: RootStoreBootstrapRequest,
@@ -164,6 +124,38 @@ pub struct WasmStoreCanisterApi;
 
 #[cfg(feature = "wasm-store-canister")]
 impl WasmStoreCanisterApi {
+    /// Resolve the current Store-local operation identity without mutation.
+    pub fn operation_status(operation_id: [u8; 32]) -> Result<StoreOperationStatusResponse, Error> {
+        if operation_id == [0; 32] {
+            return Err(Error::from_registered(
+                canic_core::diagnostics::codes::REQUEST_INVALID,
+            ));
+        }
+        let gc = WasmStoreGcOps::status();
+        if gc.operation_id == Some(operation_id) {
+            return Ok(StoreOperationStatusResponse::GarbageCollection(
+                WasmStoreGcOperationStatus {
+                    operation_id,
+                    gc: crate::dto::template::WasmStoreGcStatusResponse {
+                        mode: gc.mode,
+                        changed_at: gc.changed_at,
+                        prepared_at: gc.prepared_at,
+                        started_at: gc.started_at,
+                        completed_at: gc.completed_at,
+                        runs_completed: gc.runs_completed,
+                    },
+                },
+            ));
+        }
+        let activation = canic_core::api::fleet_activation::FleetActivationApi::status()?;
+        if activation.identity.operation_id == operation_id {
+            return Ok(StoreOperationStatusResponse::FleetActivation(activation));
+        }
+        Err(Error::from_registered(
+            canic_core::diagnostics::codes::STATE_UNAVAILABLE,
+        ))
+    }
+
     // Return the current approved release catalog stored in this local wasm store.
     pub fn catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {
         Ok(local_template_catalog())
@@ -200,8 +192,8 @@ impl WasmStoreCanisterApi {
     }
 
     // Mark this local wasm store as prepared for store-local GC execution.
-    pub fn prepare_gc() -> Result<(), Error> {
-        WasmStoreGcOps::prepare(now_secs())
+    pub fn prepare_gc(operation_id: [u8; 32]) -> Result<(), Error> {
+        WasmStoreGcOps::prepare(operation_id, now_secs())
     }
 
     // Mark this local wasm store as actively executing store-local GC.
@@ -248,6 +240,29 @@ impl WasmStoreCanisterApi {
         Ok(())
     }
 
+    /// Resume the exact Store-local GC operation through every private phase.
+    pub async fn run_gc(operation_id: [u8; 32]) -> Result<(), Error> {
+        let current = WasmStoreGcOps::status();
+        if current.operation_id != Some(operation_id) {
+            return Err(Error::from_registered(
+                canic_core::diagnostics::codes::STATE_CONFLICT,
+            ));
+        }
+        match current.mode {
+            WasmStoreGcMode::Normal => {
+                Self::prepare_gc(operation_id)?;
+                Self::begin_gc()?;
+                Self::complete_gc().await
+            }
+            WasmStoreGcMode::Prepared => {
+                Self::begin_gc()?;
+                Self::complete_gc().await
+            }
+            WasmStoreGcMode::InProgress | WasmStoreGcMode::Clearing => Self::complete_gc().await,
+            WasmStoreGcMode::Complete => Ok(()),
+        }
+    }
+
     // Return transferable cycles to the authenticated root before physical Store deletion.
     pub async fn reclaim_deletion_cycles(
         request: WasmStoreDeletionCycleReclamationRequest,
@@ -267,33 +282,9 @@ impl WasmStoreCanisterApi {
     }
 }
 
-#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
 fn now_secs() -> u64 {
     IcOps::now_secs()
-}
-
-#[cfg(feature = "root-control-plane")]
-fn stage_bootstrap_manifest(input: TemplateManifestInput) {
-    TemplateManifestOps::replace_approved_from_input(input);
-}
-
-#[cfg(feature = "root-control-plane")]
-fn prepare_bootstrap_chunk_set(
-    request: TemplateChunkSetPrepareInput,
-) -> Result<TemplateChunkSetInfoResponse, Error> {
-    TemplateChunkedOps::prepare_chunk_set_from_input(request, now_secs()).map_err(Error::from)
-}
-
-#[cfg(feature = "root-control-plane")]
-fn publish_bootstrap_chunk(request: TemplateChunkInput) -> Result<(), Error> {
-    TemplateChunkedOps::publish_chunk_from_input(request).map_err(Error::from)
-}
-
-#[cfg(feature = "root-control-plane")]
-fn bootstrap_debug(
-    bootstrap_role: &CanisterRole,
-) -> Result<WasmStoreBootstrapDebugResponse, Error> {
-    TemplateChunkedOps::bootstrap_debug_response(bootstrap_role).map_err(Error::from)
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -412,4 +403,22 @@ fn local_template_chunk(
     chunk_index: u32,
 ) -> Result<TemplateChunkResponse, Error> {
     TemplateChunkedOps::chunk_response(&template_id, &version, chunk_index).map_err(Error::from)
+}
+
+#[cfg(all(test, feature = "wasm-store-canister"))]
+mod tests {
+    use super::WasmStoreCanisterApi;
+
+    #[test]
+    fn store_operation_status_rejects_the_zero_identity_before_state_access() {
+        let error = match WasmStoreCanisterApi::operation_status([0; 32]) {
+            Ok(_) => panic!("the zero operation identity must be rejected"),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error.code(),
+            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
+    }
 }

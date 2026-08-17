@@ -14,8 +14,16 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Release
 
-- Workspace package-version authority is the root `Cargo.toml`. Latest published
-  release: `v0.102.2` at `8cf4723cecd7579cbe3304b980c63b1bc3969d68`.
+- Workspace package-version authority is the root `Cargo.toml`. It remains
+  `0.102.2`, the latest published release, at
+  `8cf4723cecd7579cbe3304b980c63b1bc3969d68`. The single current changelog
+  target is `0.103.0`; it is not published or package-versioned yet.
+- Release-truth warning: Git tag `v0.103.0` resolves to
+  `721783675c2e7dc0981d7fa7639f654b84593df7`, but that commit's authoritative
+  root package version is still `0.102.2`. Treat the tag/package boundary as
+  an unpushed lightweight development tag rather than a release. Do not publish
+  `0.103.0` until the maintainer removes that stray local ref and completes the
+  human-owned minor-version/release flow.
 - The published release owns the completed 161-reason register, typed mappings,
   compact public wire and flat `code + name` release baseline. B1 census/count
   coupling is absent from permanent tests. The open closeout-correction batch
@@ -23,7 +31,7 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Scheduled reserve-Fleet path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 `ic-timers` consumer hard cut](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 platform qualification](../design/0.105-fleet-estate-platform-qualification/status.md), [0.106 Coordinator-backed root funding](../design/0.106-coordinator-backed-root-funding/status.md), [0.107 reusable Fleet Subnet Canister estates](../design/0.107-fleet-subnet-canister-estates/status.md) and [0.108 Skynet T2 Fleet observatory](../design/0.108-skynet-fleet-observatory/status.md). The scheduled post-path line is [0.109 framework-neutral local application authorization](../design/0.109-framework-neutral-local-application-authorization/status.md); implementation remains held pending accepted 0.108 closeout and explicit promotion. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+- Scheduled reserve-Fleet path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 `ic-timers` consumer hard cut](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 platform qualification](../design/0.105-fleet-estate-platform-qualification/status.md), [0.106 Coordinator-backed root funding](../design/0.106-coordinator-backed-root-funding/status.md), [0.107 reusable Fleet Subnet Canister estates](../design/0.107-fleet-subnet-canister-estates/status.md) and [0.108 Skynet T2 Fleet observatory](../design/0.108-skynet-fleet-observatory/status.md). The scheduled post-path line is [0.109 framework-neutral local application authorization](../design/0.109-framework-neutral-local-application-authorization/status.md); implementation remains sequenced after accepted 0.108 closeout and ordinary maintainer continuation. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
   pre-0.102. Every Canic-owned canister in a Fleet must come from one admitted
   release set before activation. Same-release interruption recovery, exact
@@ -52,22 +60,41 @@ released `code + name`; it neither reads B1 evidence nor freezes row counts,
 and the ledger rejects fields beyond its six maintained fields.
 
 Scheduled 0.103 owns role methods and autonomous operations. Its B1 evidence
-is review-ready: the immutable `v0.102.2` baseline freezes 207 methods across
+was accepted on 2026-08-17: the immutable `v0.102.2` baseline freezes 207 methods across
 representative Root/managed profiles and canonical Coordinator/Store
 interfaces, separated into 188 Canic-owned, three external-standard and 16
-fixture-owned methods. No product mutation is promoted and B2/B3 remain held
-pending explicit B1 acceptance. Endpoint
+fixture-owned methods. B2-B7 are complete in the unreleased worktree: the closed
+capability boundary, immutable Overview and bounded shared-request DTOs now
+drive the exact managed, Root, Coordinator and Store status dispatchers. Exact
+Candid/profile identity survives release metadata, verified Root Store
+catalogues, install/Registry replay validation and Component Directory
+projection. Root, Coordinator, managed and Store operations resolve their exact
+durable IDs through their owning commands rather than a universal operation
+store. Representative Runtime-only,
+Sharding/AutomaticTopup, Root signer/non-signer and Store builds prove the
+corrected B1 protocol is actually pruned:
+external artifact metadata selects the exact profile-specific binding before
+the first call, `Overview` only verifies it, and
+config-derived `AutomaticTopup` rather than mandatory `Runtime` owns top-up
+history and public handler reachability. Private automatic-top-up timer and
+callback pruning remains the explicit 0.104 owner. Endpoint
 source, authorization/payload attributes, immediate delegates and replay
 policy are frozen; existing typed config derivation remains the capability
-authority, with bounded `Overview` status selected for exact compiled
-discovery. The six-way review disposes all 188 Canic-owned appearances: 45
-role-command variants, 80 role-status variants, two Store byte lanes and 61
+authority. The corrected six-way review disposes all 188 Canic-owned appearances: 49
+role-command variants, 78 role-status variants, two Store byte lanes and 59
 private deletions. Every retained row names its exact role-specific variant,
-released Rust signature and reviewed executable-caller subset. Distinct status
+released Rust signature and reviewed executable-caller subset. The normalized
+manifest also freezes request/response correlation, sync/async and variant
+counts, selector nesting and the atomic B4/B5 caller cuts. Distinct status
 concepts stay flat rather than becoming nested family enums; remote composite
 phase observations collapse into local operation status and update-only
 canister inspection becomes an atomic Root command. DTOs, the exact pruning
 matrix, operation ownership and the no-new-timer 0.104 handoff are frozen.
+Host/CLI fixtures, Skynet presentation and active application documentation
+use the role surface. Legacy shared/non-root/cycle/topology emitters are
+deleted, `start_local!` emits one local status method, and the representative
+Canic count falls from 188 method appearances to ten. Current fast-profile
+Wasm identities are recorded without claiming causal size savings.
 
 Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
 hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its
@@ -103,7 +130,23 @@ candidate was replaced rather than retired, and B1 evidence has no allocation
 authority. Activation requires one admitted release set; do not add compatibility
 decoding, message fallback, diagnostic version or observability machinery.
 
-0.103 and 0.104 source mutation await explicit promotion. 0.105 remains
+0.103 B2-B7 source mutation is complete. The maintainer explicitly authorized
+B4 mutation on 2026-08-17 and then accepted the bounded 32-Root/nine-Coordinator
+variant correction exposed by implementation. Component provisioning now accepts one intent,
+self-advances privately and is observed through operation status; Root and
+Coordinator command ingress also enforces the selected variant's exact payload
+limit. The correction retains scale-out synchronization, Registry
+acknowledgement and the two external Root-deletion evidence outcomes, while
+Root snapshot reads reuse Registry status, Coordinator removal polls Root
+operation status and pre-adoption bytes move to the B5 Store lanes. The atomic
+Root/Coordinator and managed/Store caller/fixture cuts, generated role Candid
+and exact operation authority now pass focused evidence. Managed profiles
+expose only their cfg-selected command/status variants; Store exposes
+command/status plus its two admitted byte lanes. Cross-cutting presentation,
+legacy-emitter deletion, current-surface residue guards and the count/Wasm
+closeout are complete. The maintainer-owned release/version flow is the
+remaining 0.103 boundary. 0.104 remains sequenced behind the published 0.103
+boundary. 0.105 remains
 evidence-only until accepted B1, 0.103/0.104 reconciliation and an approved run
 plan. 0.106 then requires their outputs and its own proof; 0.107 requires
 completed 0.106; 0.108 requires accepted 0.107 closeout; and 0.109 requires
@@ -128,12 +171,44 @@ evidence and is not rerun during focused development.
 The open CI-reliability batch removes the contradictory tag-only green signal,
 uses Cargo as the sole live package-version authority, adds a post-bump release
 candidate guard, gates expensive jobs behind preflight/security and reports
-ordinary versus serial PocketIC timing separately. Targeted actionlint,
-ShellCheck, release/current-document guards, release-flow tests and plan-only
-test-lane checks pass; the complete suite has not been rerun.
+ordinary versus serial PocketIC timing separately. Exact release publication
+also disables implicit followed-tag pushes; the historical-tag deletion helper
+now verifies the remote boundary before removing local refs. A disposable Git
+fixture covers remote rejection, exact local/remote deletion and non-
+resurrection from the cleaned clone; workflow permissions, fixed runners and
+CI ownership are guarded. Targeted actionlint, ShellCheck, release/current-
+document guards, release-flow tests and plan-only test-lane checks pass; the
+complete suite has not been rerun.
 
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
+
+Focused 0.103 B3 validation builds Runtime-only, Sharding/AutomaticTopup,
+Root signer/non-signer and Store profiles through the canonical artifact
+builder. Exact positive/negative Candid selectors and referenced types pass,
+as do the native reserved-`canic_status` collision, incompatible-feature
+rejection, cfg ownership and thin-`start!` guards. The complete suite was not
+rerun.
+
+Authorized 0.103 B4 work emits only `canic_command` and `canic_status` for Root
+and Coordinator, retains exact domain-owned operation identities, enforces
+variant-specific payload bounds and advances Component provisioning through a
+private reconciler. The Component advance/publication/activation phase variants
+and their replay rows are removed. The corrected register admits 32 Root and
+nine Coordinator command variants. The three temporary Root Store-staging
+variants and five Coordinator snapshot/removal phase variants are deleted with
+their callers; pre-adoption Store staging, participant-specific operation
+status and the autonomous Component-provisioning and Root-removal PocketIC
+journeys pass focused checks.
+
+Focused 0.103 B5-B7 validation covers exact managed/Store caller and Candid
+cuts, Store bootstrap/reverification, host/CLI decoding fixtures, Skynet
+presentation, local-only status emission, the current endpoint allowlist and
+all role replay manifests. Seven representative generated services expose two
+Canic methods per ordinary role and four for Store. The four-profile Canic
+total is ten instead of 188; representative fast-profile Wasm hashes and sizes
+are retained only as current artifact identity because no isolated same-source
+pre-cut pair exists. The complete suite was not rerun.
 
 The standalone cycle-burn waveform idea completed its bounded B0b pulse and
 B0c plateau mainnet calibrations on 2026-08-16. Canister
@@ -226,22 +301,40 @@ proves an absent or minimally underfunded continuation rejects, a partially
 funded continuation stops before its first unaffordable pulse, Abort prevents
 later pulses and a fully funded continuation completes all 899 receipts.
 
+The separately authorized global attempt used that exact
+`dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9`
+plan. It began pre-roll at `2026-08-17T02:30:00+02:00`, began the chart at
+`03:30`, reached receipt 535 and burned exactly
+`5,859,496,546,135,400 cycles`. At `16:36:50`, an unrelated burn on Subnet
+`brlsh-zidhj-3yy3e-6vqbz-7xnih-xeq2l-as5oc-g32c4-i5pdn-2wwof-oae`
+added approximately `180 Bcycles/second` to the global canvas while the owning
+Subnet remained on the expected trace. The maintainer classified the 24-hour
+image as spoiled and explicitly ordered Abort. Independent controller status
+confirmed terminal `Aborted` / `ControllerAbort`, 535 receipts and no later
+intentional burn authority.
+
+**Preserved mainnet asset:** canister `w47na-gaaaa-aaaad-qmclq-cai` retained
+`2,589,936,553,122,558 cycles` at final verification, approximately
+`2.590 Pcycles`. The controller identity retained only `0.00010000 ICP`.
+Those cycles cannot be converted back into ICP, but they remain useful funding
+for later authorized canister work. Do not reinstall, delete or otherwise
+dispose of this canister without an explicit plan for that balance.
+
 ## Next Action
 
-Publish the bounded 0.102 closeout correction. Then reconcile the 0.103 B1
-register against that corrected baseline. Do not
-mutate any other 0.103 runtime or protocol surface until the maintainer
-explicitly accepts the reconciled B1 register and promotes B2.
-Do not mutate runtime/protocol surfaces or promote B2 before that register is
-accepted. Do not rerun the broad census/full suite or reopen 0.102 with JSON,
+Run the maintainer-owned release/version flow after reconciling the existing
+`v0.103.0` tag with the root package-version authority. The open `0.103.0`
+changelog records the completed B2-B7 hard cut, but no agent-owned version,
+tag or push is authorized. Begin 0.104 only after that release boundary is
+published. Do not rerun the broad census/full suite or reopen 0.102 with JSON,
 generic handling metadata, observability infrastructure, compatibility
 decoding, B1 test coupling or retired 991 rows.
 
 For the standalone waveform idea, retain the terminal canister and its
-remaining cycles without further effects until all 26 pulse expirations are
-current. Accept or revise the separated gain/support/lag contract, then freeze
-the canonical Wasm, exact chart start and staged financial envelope. Any
-reinstall, mint, top-up or Arm still requires a new exact mainnet authorization;
-passing local checks cannot supply it.
+approximately `2.590 Pcycles` without further effects. The completed attempt
+proved the controlled trace was visible but also proved the global public
+canvas can be spoiled by unrelated Subnet burn. Any transfer, reinstall,
+deletion, mint, top-up or new Arm requires an explicit disposition or run plan
+and separate mainnet authorization; passing local checks cannot supply it.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

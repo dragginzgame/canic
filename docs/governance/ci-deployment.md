@@ -164,13 +164,20 @@ staged, unstaged and untracked changes neither block the push nor join it; they
 remain local. The release version is read from `HEAD`'s committed `Cargo.toml`,
 so a later local manifest edit cannot redirect tag selection. Test scratch has
 already been removed by the test invocation that owned it. Release push
-explicitly sends both the current branch ref and the exact workspace-version
-tag ref in one atomic push, so the tag is still sent
+explicitly disables implicit followed-tag publication and sends both the
+current branch ref and the exact workspace-version tag ref in one atomic push,
+so the tag is still sent
 when the branch commit is already present remotely. No fallible local cleanup
 step runs after a successful push, and atomic push prevents a branch-only or
 tag-only remote update. A transport interruption can still make the remote
 outcome uncertain and must be resolved by inspecting the remote refs before
 retrying.
+
+The historical-tag deletion helper removes remote refs before local refs and
+verifies both requested boundaries. Deleted annotated tags remain present in
+other clones until those clones remove them. A later `git push --tags` or
+`git push --follow-tags` from such a clone republishes them and must not be
+used; the exact release push is the maintained tag-publication path.
 GitHub Actions intentionally does not run a separate tag-only workflow. The
 new `main` release commit owns one CI result containing preflight, security,
 MSRV, Rust checks, ordinary tests, serial PocketIC tests and the conditional

@@ -70,40 +70,13 @@ impl FleetSubnetRootDeletionAdapter for ScriptedAdapter {
     fn preparation_status(
         &mut self,
         observed_root: Principal,
-        request: FleetSubnetRootDeletionPreparationStatusRequest,
+        operation_id: [u8; 32],
     ) -> Result<Option<FleetSubnetRootDeletionPreparationResponse>, FleetSubnetRootDeletionError>
     {
         assert_eq!(observed_root, root());
-        assert_eq!(request.operation_id, OPERATION_ID);
+        assert_eq!(operation_id, OPERATION_ID);
         self.events.push("preparation_status");
         Ok(self.preparation.clone())
-    }
-
-    fn store_deletion_status(
-        &mut self,
-        observed_root: Principal,
-        request: FleetSubnetRootStoreDeletionStatusRequest,
-    ) -> Result<FleetSubnetRootStoreDeletionResponse, FleetSubnetRootDeletionError> {
-        assert_eq!(observed_root, root());
-        assert_eq!(request.operation_id, OPERATION_ID);
-        self.events.push("store_deletion_status");
-        Ok(store_deletion())
-    }
-
-    fn prepare_root_deletion(
-        &mut self,
-        observed_root: Principal,
-        request: FleetSubnetRootDeletionPreparationRequest,
-    ) -> Result<FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDeletionError> {
-        assert_eq!(observed_root, root());
-        assert_eq!(request.operation_id, OPERATION_ID);
-        assert_eq!(request.expected_store_deletion_hash, [6; 32]);
-        assert_eq!(request.retained_cycles_target, RETAINED_CYCLES);
-        assert_eq!(request.observed_reserved_cycles, 0);
-        self.events.push("prepare");
-        let response = preparation();
-        self.preparation = Some(response.clone());
-        Ok(response)
     }
 
     fn begin_execution(
@@ -196,11 +169,10 @@ fn prepared_execution_stops_deletes_and_attests_exact_absence() {
 }
 
 #[test]
-fn preparation_only_retains_execution_intent_without_management_effects() {
-    let mut adapter = ScriptedAdapter::with_observations([
-        present(CanisterLifecycle::Running, 500_000_000_000),
-        present(CanisterLifecycle::Running, 100_000_000_000),
-    ]);
+fn autonomous_root_preparation_retains_execution_intent_without_management_effects() {
+    let mut adapter =
+        ScriptedAdapter::with_observations([present(CanisterLifecycle::Running, 100_000_000_000)]);
+    adapter.preparation = Some(preparation());
 
     let prepared = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
         .expect("prepare root deletion execution intent");
@@ -212,9 +184,6 @@ fn preparation_only_retains_execution_intent_without_management_effects() {
             "executor_identity",
             "execution_status",
             "preparation_status",
-            "observe",
-            "store_deletion_status",
-            "prepare",
             "observe",
             "begin_execution",
         ]
@@ -283,6 +252,7 @@ fn lost_stop_or_delete_response_is_adopted_only_from_later_exact_status() {
 #[test]
 fn absent_root_without_durable_execution_intent_fails_closed() {
     let mut adapter = ScriptedAdapter::with_observations([RootStatusObservation::Absent]);
+    adapter.preparation = Some(preparation());
 
     let error = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
         .expect_err("absence cannot create execution authority");
@@ -316,6 +286,7 @@ fn preparation_rejects_reserved_cycles_before_store_receipt_or_transfer() {
     evidence.reserved_cycles = 1;
     let mut adapter =
         ScriptedAdapter::with_observations([RootStatusObservation::Present(evidence)]);
+    adapter.preparation = Some(preparation());
 
     let error = resolve_execution_intent(&mut adapter, coordinator(), root(), OPERATION_ID)
         .expect_err("reserved cycles must fail preflight");
@@ -323,12 +294,10 @@ fn preparation_rejects_reserved_cycles_before_store_receipt_or_transfer() {
     assert!(matches!(
         error,
         FleetSubnetRootDeletionError::InvalidStatus {
-            field: "reserved_cycles",
+            field: "cycle authority",
             ..
         }
     ));
-    assert!(!adapter.events.contains(&"store_deletion_status"));
-    assert!(!adapter.events.contains(&"prepare"));
 }
 
 #[test]
@@ -468,25 +437,6 @@ fn preparation() -> FleetSubnetRootDeletionPreparationResponse {
         coordinator_readiness_hash: [11; 32],
         prepared_at_ns: 10,
         completed_at_ns: 30,
-    }
-}
-
-fn store_deletion() -> FleetSubnetRootStoreDeletionResponse {
-    FleetSubnetRootStoreDeletionResponse {
-        operation_id: OPERATION_ID,
-        fleet_subnet_root: root(),
-        wasm_store: Principal::from_slice(&[4; 29]),
-        binding_finalization_hash: [4; 32],
-        observed_module_hash: [5; 32],
-        observed_controllers: vec![root()],
-        observed_cycles_before_reclamation: 10,
-        retained_cycles_target: 9,
-        observed_cycles_after_reclamation: 8,
-        cycles_reclaimed_at_ns: 4,
-        prepared_at_ns: 5,
-        observed_absent_at_ns: 6,
-        completed_at_ns: 7,
-        deletion_hash: [6; 32],
     }
 }
 

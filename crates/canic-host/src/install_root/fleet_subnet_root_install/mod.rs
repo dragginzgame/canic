@@ -20,7 +20,7 @@ use super::{
     operations::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
         active_installation_controller, execute_or_observe_creation, execute_or_observe_install,
-        query_no_arg, require_expected_controllers, require_expected_module_hash,
+        query_with_arg, require_expected_controllers, require_expected_module_hash,
         resolve_install_artifact,
     },
 };
@@ -34,7 +34,11 @@ use crate::{
 };
 use std::path::{Path, PathBuf};
 
-use candid::Principal;
+use candid::{CandidType, Principal};
+use canic_control_plane::dto::{
+    root::RootOperationStatusResponse,
+    template::{StoreOperationStatusResponse, StoreStatusRequest, StoreStatusResponse},
+};
 use canic_core::{
     dto::{
         fleet_activation::{
@@ -43,15 +47,29 @@ use canic_core::{
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreInitArgs,
         },
+        role::OperationStatusRequest,
     },
     ids::FleetSubnetWasmStoreAuthority,
     protocol,
 };
+use serde::Deserialize;
 use thiserror::Error as ThisError;
 
 const MAX_ROOT_TRANSITIONS: usize = 12;
 const ROOT_INSTALL_ARGS_FILE: &str = "root-install-args.bin";
 const WASM_STORE_INSTALL_ARGS_FILE: &str = "wasm-store-install-args.bin";
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    FleetAuthority,
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponseFragment {
+    FleetAuthority(Box<FleetSubnetRootAuthority>),
+    Operation(Box<RootOperationStatusResponse>),
+}
 
 #[derive(Debug, ThisError)]
 #[error(
@@ -368,16 +386,27 @@ fn verify_live_infrastructure(
     )?;
 
     let expected = expected_root_authority(journal)?;
-    let observed = query_no_arg::<FleetSubnetRootAuthority>(
+    let observed = query_with_arg::<_, RootStatusResponseFragment>(
         icp,
         fleet_subnet_root,
-        protocol::CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
+        protocol::CANIC_STATUS,
+        &RootStatusRequestFragment::FleetAuthority,
     )?;
+    let RootStatusResponseFragment::FleetAuthority(observed) = observed else {
+        return Err(RootInstallStateError::AuthorityMismatch.into());
+    };
+    let observed = *observed;
     if observed != expected {
         return Err(RootInstallStateError::AuthorityMismatch.into());
     }
     if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
-        require_initial_prepared_runtime(icp, fleet_subnet_root, journal, "Fleet Subnet Root")?;
+        require_initial_prepared_runtime(
+            icp,
+            fleet_subnet_root,
+            journal,
+            "Fleet Subnet Root",
+            true,
+        )?;
     }
     let direct_store_verification_required = matches!(
         journal.phase,
@@ -403,16 +432,20 @@ fn verify_live_infrastructure(
         &temporary_store_controllers(journal),
         "Wasm Store",
     )?;
-    let observed_store = query_no_arg::<FleetSubnetWasmStoreAuthority>(
+    let observed_store = query_with_arg::<_, StoreStatusResponse>(
         icp,
         wasm_store,
-        protocol::CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY,
+        protocol::CANIC_STATUS,
+        &StoreStatusRequest::Authority,
     )?;
+    let StoreStatusResponse::Authority(observed_store) = observed_store else {
+        return Err(RootInstallStateError::WasmStoreAuthorityMismatch.into());
+    };
     if observed_store != expected_store {
         return Err(RootInstallStateError::WasmStoreAuthorityMismatch.into());
     }
     if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
-        require_initial_prepared_runtime(icp, wasm_store, journal, "Wasm Store")?;
+        require_initial_prepared_runtime(icp, wasm_store, journal, "Wasm Store", false)?;
     }
     Ok((expected, expected_store))
 }
@@ -422,12 +455,46 @@ fn require_initial_prepared_runtime(
     canister: Principal,
     journal: &FleetSubnetRootInstallJournal,
     subject: &'static str,
+    root: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let observed = query_no_arg::<FleetActivationStatusResponse>(
-        icp,
-        canister,
-        protocol::CANIC_FLEET_ACTIVATION_STATUS,
-    )?;
+    let observed = if root {
+        let response = query_with_arg::<_, RootStatusResponseFragment>(
+            icp,
+            canister,
+            protocol::CANIC_STATUS,
+            &RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: journal.install_operation_id,
+            }),
+        )?;
+        match response {
+            RootStatusResponseFragment::Operation(response) => match *response {
+                RootOperationStatusResponse::FleetActivation(response) => response,
+                _ => {
+                    return Err(RootInstallStateError::ActivationStatusMismatch { subject }.into());
+                }
+            },
+            RootStatusResponseFragment::FleetAuthority(_) => {
+                return Err(RootInstallStateError::ActivationStatusMismatch { subject }.into());
+            }
+        }
+    } else {
+        let response = query_with_arg::<_, StoreStatusResponse>(
+            icp,
+            canister,
+            protocol::CANIC_STATUS,
+            &StoreStatusRequest::Operation(OperationStatusRequest {
+                operation_id: journal.install_operation_id,
+            }),
+        )?;
+        match response {
+            StoreStatusResponse::Operation(StoreOperationStatusResponse::FleetActivation(
+                response,
+            )) => response,
+            _ => {
+                return Err(RootInstallStateError::ActivationStatusMismatch { subject }.into());
+            }
+        }
+    };
     let expected = FleetActivationStatusResponse {
         phase: FleetActivationPhase::Prepared,
         identity: FleetActivationIdentity {

@@ -13,14 +13,18 @@ use crate::{
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::RootWasmStoreStateMapper,
     storage::stable::state::root_wasm_store::{
-        RootWasmStoreState, SiblingWasmStoreAdoptionPhaseRecord, SiblingWasmStoreAdoptionRecord,
-        WasmStoreGcRecord,
+        RootStoreBootstrapRecord, RootWasmStoreState, SiblingWasmStoreAdoptionPhaseRecord,
+        SiblingWasmStoreAdoptionRecord, WasmStoreGcRecord,
     },
     view::state::{PublicationStoreStateView, WasmStoreView},
 };
 use canic_core::{
-    cdk::types::Principal, control_plane_support::error::InternalError,
-    dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
+    cdk::types::Principal,
+    control_plane_support::error::InternalError,
+    dto::{
+        fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse,
+        root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse},
+    },
     ids::FleetSubnetWasmStoreAuthority,
 };
 
@@ -136,6 +140,59 @@ impl RootWasmStoreStateOps {
         adoption_response(record, authority).map(Some)
     }
 
+    /// Resolve the adoption domain only when it owns the supplied operation identity.
+    pub fn sibling_wasm_store_adoption_receipt_by_operation(
+        operation_id: [u8; 32],
+        authority: FleetSubnetWasmStoreAuthority,
+    ) -> Result<Option<FleetSubnetWasmStoreAdoptionResponse>, InternalError> {
+        let Some(record) = RootWasmStoreState::sibling_wasm_store_adoption() else {
+            return Ok(None);
+        };
+        if record.operation_id != operation_id {
+            return Ok(None);
+        }
+        validate_adoption_authority(&record, operation_id, &authority)?;
+        if record.phase == SiblingWasmStoreAdoptionPhaseRecord::MutationInFlight {
+            return Ok(None);
+        }
+        adoption_response(record, authority).map(Some)
+    }
+
+    pub fn commit_root_store_bootstrap(
+        request: &RootStoreBootstrapRequest,
+        response: RootStoreBootstrapResponse,
+    ) -> Result<RootStoreBootstrapResponse, InternalError> {
+        RootWasmStoreState::commit_root_store_bootstrap(RootStoreBootstrapRecord {
+            operation_id: request.operation_id,
+            manifest_payload_size_bytes: request.manifest_payload_size_bytes,
+            response,
+        })
+        .map(|record| record.response)
+        .map_err(|_error| InternalError::invariant())
+    }
+
+    pub fn root_store_bootstrap_receipt(
+        request: &RootStoreBootstrapRequest,
+    ) -> Result<Option<RootStoreBootstrapResponse>, InternalError> {
+        let Some(record) = RootWasmStoreState::root_store_bootstrap() else {
+            return Ok(None);
+        };
+        if record.operation_id != request.operation_id
+            || record.manifest_payload_size_bytes != request.manifest_payload_size_bytes
+        {
+            return Err(InternalError::conflict());
+        }
+        Ok(Some(record.response))
+    }
+
+    pub fn root_store_bootstrap_receipt_by_operation(
+        operation_id: [u8; 32],
+    ) -> Option<RootStoreBootstrapResponse> {
+        RootWasmStoreState::root_store_bootstrap()
+            .filter(|record| record.operation_id == operation_id)
+            .map(|record| record.response)
+    }
+
     /// Resolve one runtime-managed wasm store principal by logical binding.
     #[must_use]
     pub fn wasm_store_pid(binding: &WasmStoreBinding) -> Option<Principal> {
@@ -249,6 +306,7 @@ impl RootWasmStoreStateOps {
                     })
                     .collect(),
                 sibling_wasm_store_adoption: None,
+                root_store_bootstrap: None,
             },
         });
     }

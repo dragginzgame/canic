@@ -4,731 +4,858 @@
 //! Does not own: root state, pool policy, auth proof issuance, or wasm-store workflows.
 //! Boundary: exposes facade macros that delegate immediately to core/control-plane APIs.
 
-/// Emit root-only control-plane, registry, and operator admin endpoints.
+/// Emit the Fleet Subnet Root's role-owned command update.
 #[macro_export]
-macro_rules! canic_emit_root_admin_endpoints {
+macro_rules! canic_emit_root_command_endpoint {
     () => {
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_authority(
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootAuthority, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_authority()
+        #[derive(
+            ::canic::__internal::candid::CandidType,
+            ::canic::__internal::serde::Deserialize,
+        )]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootCommand {
+            AdoptStore(::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest),
+            BootstrapStore(::canic::dto::root_store::RootStoreBootstrapRequest),
+            GetOrCreateDelegationProof,
+            HandoffPoolCanister(::canic::dto::pool::PoolHandoffRequest),
+            ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
+            InspectCanister(::canic::dto::canister::CanisterInspectionRequest),
+            MaintainPool,
+            PrepareAuthoritySnapshot(::canic::dto::authority_restore::AuthoritySnapshotRequest),
+            PrepareComponentRegistry(
+                ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
+            ),
+            PrepareFleetActivation,
+            #[cfg(canic_capability_role_attestation_signer)]
+            PrepareRoleAttestation(::canic::dto::auth::RoleAttestationRequest),
+            PreviewCycleRefill(::canic::dto::icp_refill::CycleRefillInput),
+            ProvisionChild(::canic::dto::component_registry::RootComponentChildAllocationRequest),
+            ProvisionComponent(::canic::dto::component_registry::RootComponentAllocationRequest),
+            ProvisionComponents(
+                ::canic::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest,
+            ),
+            ProvisionPeer(::canic::dto::component_registry::RootPeerComponentAllocationRequest),
+            PublishReleaseSet(::canic::dto::template::WasmStoreAdminCommand),
+            RefillCycles(::canic::dto::icp_refill::CycleRefillInput),
+            RemoveComponent(::canic::dto::component_registry::RootComponentDrainingRequest),
+            RemoveRoot(::canic::dto::role::RootRemovalRequest),
+            RemoveSubtree(::canic::dto::component_registry::RootComponentSubtreeRemovalRequest),
+            RespondCapability(::canic::dto::capability::RootCapabilityEnvelopeV1),
+            ResumeAuthoritySnapshot(::canic::dto::authority_restore::AuthoritySnapshotRequest),
+            ResumeFleetActivation(::canic::dto::fleet_activation::FleetActivationResumeRequest),
+            RetryPoolRefill,
+            RetryPoolReset(::canic::dto::pool::PoolCanisterRequest),
+            SetCyclesFunding(::canic::dto::state::SetCyclesFundingRequest),
+            SetFleetStatus(::canic::dto::state::SetFleetStatusRequest),
+            SynchronizeComponentDirectories(
+                ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
+            ),
+            SynchronizeRegistry(::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest),
+            UpsertIssuerPolicy(::canic::dto::auth::RootIssuerPolicyUpsertRequest),
+            UpsertIssuerRenewalTemplate(
+                ::canic::dto::auth::RootIssuerRenewalTemplateUpsertRequest,
+            ),
         }
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_canister_summary(
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_canister_summary()
+        #[derive(
+            ::canic::__internal::candid::CandidType,
+            ::canic::__internal::serde::Deserialize,
+        )]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootCommandResponse {
+            GetOrCreateDelegationProof(::canic::dto::auth::RootDelegationProofBatchProof),
+            HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
+            ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
+            InspectCanister(::canic::dto::canister::CanisterStatusResponse),
+            MaintainPool(::canic::dto::pool::PoolMaintenanceResponse),
+            OperationAccepted(::canic::dto::role::OperationReceipt),
+            PrepareAuthoritySnapshot(
+                ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+            ),
+            PrepareComponentRegistry(
+                ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
+            ),
+            #[cfg(canic_capability_role_attestation_signer)]
+            PrepareRoleAttestation(::canic::dto::auth::RoleAttestationPrepareResponse),
+            PreviewCycleRefill(::canic::dto::icp_refill::IcpRefillDryRun),
+            PublishReleaseSet(::canic::dto::template::WasmStoreAdminResponse),
+            RespondCapability(::canic::dto::capability::RootCapabilityResponseV1),
+            ResumeAuthoritySnapshot(
+                ::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+            ),
+            RetryPoolRefill(::canic::dto::pool::PoolRefillRetryResponse),
+            RetryPoolReset(::canic::dto::pool::PoolResetRetryResponse),
+            SetCyclesFunding(::canic::dto::state::SetStateResponse<bool>),
+            SetFleetStatus(
+                ::canic::dto::state::SetStateResponse<::canic::dto::state::FleetStatus>,
+            ),
+            SynchronizeComponentDirectories(
+                ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationResponse,
+            ),
+            UpsertIssuerPolicy(::canic::dto::auth::RootIssuerPolicyResponse),
+            UpsertIssuerRenewalTemplate(
+                ::canic::dto::auth::RootIssuerRenewalTemplateResponse,
+            ),
         }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_wasm_store_adopt(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::adopt_fleet_subnet_wasm_store(request).await
+        impl RootCommand {
+            #[doc(hidden)]
+            const fn __canic_payload_max_bytes(&self) -> usize {
+                match self {
+                    RootCommand::ProvisionComponents(_) => {
+                        ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES
+                    }
+                    _ => {
+                        ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES
+                    }
+                }
+            }
         }
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_wasm_store_adoption_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_wasm_store_adoption_status(request)
-        }
+        #[doc(hidden)]
+        fn __canic_inspect_root_update_message() {
+            if $crate::__internal::core::ingress::payload::current_method_name()
+                != $crate::__internal::core::protocol::CANIC_COMMAND
+            {
+                $crate::__internal::core::ingress::payload::inspect_update_message();
+                return;
+            }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_draining_begin(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_fleet_subnet_root_draining(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_draining_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingStatusRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootDrainingResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_draining_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_draining_inventory_finalize(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::finalize_fleet_subnet_root_inventory(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_draining_inventory_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryStatusRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootFinalInventoryResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_final_inventory_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_removal_publish(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootRemovalRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::publish_fleet_subnet_root_removal(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_removal_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootRemovalStatusRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_removal_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_store_reclaim(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreReclamationRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreReclamationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reclaim_fleet_subnet_root_store(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_store_reclamation_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreReclamationStatusRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreReclamationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_store_reclamation_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_store_binding_finalize(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::finalize_fleet_subnet_root_store_binding(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_store_binding_finalization_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationStatusRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreBindingFinalizationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_store_binding_finalization_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_store_delete(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreDeletionRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::delete_fleet_subnet_root_store(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_store_deletion_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootStoreDeletionStatusRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootStoreDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_store_deletion_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_deletion_prepare(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootDeletionPreparationRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootDeletionPreparationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_fleet_subnet_root_deletion(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_subnet_root_deletion_preparation_status(
-            request: ::canic::dto::fleet_subnet_root::FleetSubnetRootDeletionPreparationStatusRequest,
-        ) -> Result<::canic::dto::fleet_subnet_root::FleetSubnetRootDeletionPreparationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_deletion_preparation_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_synchronize(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::synchronize_fleet_registry(request).await
-        }
-
-        #[$crate::canic_query(composite, requires(caller::is_controller()))]
-        async fn canic_fleet_registry_sync_status(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_registry_sync_status(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_activate_mirror(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_fleet_registry_mirror(request).await
-        }
-
-        #[$crate::canic_query(composite, requires(caller::is_controller()))]
-        async fn canic_fleet_registry_mirror_status(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRegistryMirrorActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_registry_mirror_status(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_registry_prepare(
-            request: ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentRegistryStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_registry(request).await
-        }
-
-        #[$crate::canic_query(composite, requires(caller::is_controller()))]
-        async fn canic_root_component_registry_status(
-            request: ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentRegistryStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_status(request).await
+            let bytes = $crate::__internal::core::ingress::payload::current_payload_bytes();
+            if bytes.len()
+                > ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES
+            {
+                return;
+            }
+            let Ok(command) = ::canic::__internal::candid::decode_one::<RootCommand>(&bytes) else {
+                return;
+            };
+            if $crate::__internal::core::ingress::payload::payload_within_limit(
+                bytes.len(),
+                command.__canic_payload_max_bytes(),
+            ) {
+                $crate::__internal::core::ingress::payload::accept_current_message();
+            }
         }
 
         #[$crate::canic_update(
-            internal,
             public,
             payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES)
         )]
-        async fn canic_root_component_provisioning_accept(
-            request: ::canic::dto::component_provisioning::RootComponentProvisioningAcceptanceRequest,
-        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::accept(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_provisioning_advance(
-            request: ::canic::dto::component_provisioning::RootComponentProvisioningAdvanceRequest,
-        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::advance(request).await
-        }
-
-        #[$crate::canic_update(
-            internal,
-            public,
-            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES)
-        )]
-        async fn canic_root_component_provisioning_publish(
-            request: ::canic::dto::component_provisioning::RootComponentPublicationRequest,
-        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::publish(request).await
-        }
-
-        #[$crate::canic_update(
-            internal,
-            public,
-            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES)
-        )]
-        async fn canic_root_component_directories_synchronize(
-            request: ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationRequest,
-        ) -> Result<::canic::dto::component_provisioning::RootComponentDirectorySynchronizationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::synchronize_directories(request).await
-        }
-
-        #[$crate::canic_update(
-            internal,
-            public,
-            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_COMPONENT_ACTIVATION_PAYLOAD_BYTES)
-        )]
-        async fn canic_root_component_provisioning_activate(
-            request: ::canic::dto::component_provisioning::RootComponentActivationRequest,
-        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::activate(request).await
-        }
-
-        #[$crate::canic_query(internal, public)]
-        async fn canic_root_component_provisioning_status(
-            request: ::canic::dto::component_provisioning::RootComponentProvisioningStatusRequest,
-        ) -> Result<::canic::dto::component_provisioning::RootComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_allocate(
-            request: ::canic::dto::component_registry::RootComponentAllocationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_allocate(
-            request: ::canic::dto::component_registry::RootPeerComponentAllocationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_peer_component_allocation(request).await
-        }
-
-        #[$crate::canic_query(internal, public)]
-        async fn canic_root_peer_component_allocation_status(
-            request: ::canic::dto::component_registry::RootComponentAllocationStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::peer_component_allocation_status(request)
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_allocation_status(
-            request: ::canic::dto::component_registry::RootComponentAllocationStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_allocation_status(request)
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_allocate(
-            request: ::canic::dto::component_registry::RootComponentChildAllocationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_child(request).await
-        }
-
-        #[$crate::canic_query(internal, public)]
-        async fn canic_root_component_child_allocation_status(
-            request: ::canic::dto::component_registry::RootComponentChildAllocationStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_child_allocation_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_draining_begin(
-            request: ::canic::dto::component_registry::RootComponentDrainingRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDrainingResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_draining(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_draining_status(
-            request: ::canic::dto::component_registry::RootComponentDrainingStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDrainingResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_draining_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_quiesce(
-            request: ::canic::dto::component_registry::RootComponentQuiescenceRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentQuiescenceResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::quiesce_component(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_quiescence_status(
-            request: ::canic::dto::component_registry::RootComponentQuiescenceStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentQuiescenceResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_quiescence_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_draining_advance(
-            request: ::canic::dto::component_registry::RootComponentDrainingAdvanceRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDrainingAdvanceResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::advance_component_draining(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_draining_inventory_finalize(
-            request: ::canic::dto::component_registry::RootComponentFinalInventoryRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentFinalInventoryResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::finalize_component_inventory(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_delete(
-            request: ::canic::dto::component_registry::RootComponentDeletionRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::delete_component(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_membership_remove(
-            request: ::canic::dto::component_registry::RootComponentDeletionRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::remove_component_membership(request)
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_deletion_status(
-            request: ::canic::dto::component_registry::RootComponentDeletionStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_deletion_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_begin(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_subtree_removal(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_advance(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalAdvanceRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::advance_component_subtree_removal(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_stop_prepare(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalStopPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_subtree_leaf_stop(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_stop(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalStopRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::stop_component_subtree_leaf(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_delete_prepare(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalDeletePreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_subtree_leaf_delete(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_delete(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalDeleteRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::delete_component_subtree_leaf(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_membership_remove(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalMembershipRemovalRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::remove_component_subtree_leaf_membership(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_directory_synchronize(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalDirectorySynchronizationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::synchronize_component_subtree_leaf_directory(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_leaf_finalize(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalLeafFinalizationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::finalize_component_subtree_leaf(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_subtree_removal_status(
-            request: ::canic::dto::component_registry::RootComponentSubtreeRemovalStatusRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentSubtreeRemovalResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_subtree_removal_status(request)
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_create(
-            request: ::canic::dto::component_registry::RootComponentChildCreationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::create_component_child(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_install(
-            request: ::canic::dto::component_registry::RootComponentChildInstallRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::install_component_child(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_commit(
-            request: ::canic::dto::component_registry::RootComponentChildCommitRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildCommitResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_component_child(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_directory_prepare(
-            request: ::canic::dto::component_registry::RootComponentChildDirectoryPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildDirectoryPreparationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_child_directories(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_runtime_activate(
-            request: ::canic::dto::component_registry::RootComponentChildRuntimeActivationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildRuntimeActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_child_runtime(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_component_child_membership_activate(
-            request: ::canic::dto::component_registry::RootComponentChildMembershipActivationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentChildMembershipActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_child_membership(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_create(
-            request: ::canic::dto::component_registry::RootComponentCreationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::create_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_create(
-            request: ::canic::dto::component_registry::RootComponentCreationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::create_peer_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_install(
-            request: ::canic::dto::component_registry::RootComponentInstallRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::install_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_install(
-            request: ::canic::dto::component_registry::RootComponentInstallRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentAllocationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::install_peer_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_commit(
-            request: ::canic::dto::component_registry::RootComponentCommitRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentCommitResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_commit(
-            request: ::canic::dto::component_registry::RootComponentCommitRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentCommitResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::commit_peer_component_allocation(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_directory_prepare(
-            request: ::canic::dto::component_registry::RootComponentDirectoryPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDirectoryPreparationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_directories(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_directory_prepare(
-            request: ::canic::dto::component_registry::RootComponentDirectoryPreparationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentDirectoryPreparationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_peer_component_directories(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_runtime_activate(
-            request: ::canic::dto::component_registry::RootComponentRuntimeActivationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentRuntimeActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_runtime(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_runtime_activate(
-            request: ::canic::dto::component_registry::RootComponentRuntimeActivationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentRuntimeActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_peer_component_runtime(request).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_component_membership_activate(
-            request: ::canic::dto::component_registry::RootComponentMembershipActivationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentMembershipActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_component_membership(request).await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_root_peer_component_membership_activate(
-            request: ::canic::dto::component_registry::RootComponentMembershipActivationRequest,
-        ) -> Result<::canic::dto::component_registry::RootComponentMembershipActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_peer_component_membership(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_registry_partition(
-            request: ::canic::dto::component_registry::ComponentRegistryPartitionRequest,
-        ) -> Result<::canic::dto::component_registry::ComponentRegistryPartitionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_partition(request)
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_component_directory_head(
-            request: ::canic::dto::component_registry::ComponentDirectoryHeadRequest,
-        ) -> Result<::canic::dto::component_registry::ComponentDirectoryHead, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_head(request)
-        }
-
-        #[$crate::canic_query(internal, public)]
-        async fn canic_root_component_directory_page(
-            request: ::canic::dto::component_registry::ComponentDirectoryPageRequest,
-        ) -> Result<::canic::dto::component_registry::ComponentDirectoryPageResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_prepare_fleet_activation(
-        ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
-            __canic_run_prepared_root_init_block().await;
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_fleet_activation()
-                .await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_resume_fleet_activation(
-            request: ::canic::dto::fleet_activation::FleetActivationResumeRequest,
-        ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
-            let transition = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_fleet_activation(
-                request,
-            )
-            .await?;
-            __canic_schedule_prepared_activation_init();
-            Ok(transition.status)
-        }
-
-        #[$crate::canic_update(internal, requires(caller::is_controller()))]
-        async fn canic_fleet_admin(
-            cmd: ::canic::dto::state::FleetCommand,
-        ) -> Result<::canic::dto::state::FleetCommandResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::state::FleetStateApi::execute_command(cmd).await
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_canister_status(
-            pid: ::canic::__internal::cdk::Principal,
-        ) -> Result<::canic::dto::canister::CanisterStatusResponse, ::canic::Error> {
-            $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_status(pid).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_config() -> Result<String, ::canic::Error> {
-            $crate::__internal::core::api::config::ConfigApi::export_toml()
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_icp_refill(
-            request: ::canic::dto::icp_refill::IcpRefillRequest,
-        ) -> Result<::canic::dto::icp_refill::IcpRefillEndpointResponse, ::canic::Error> {
-            $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(request).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_pool_list(
-            request: ::canic::dto::pool::CanisterPoolStatusRequest,
-        )
-        -> Result<::canic::dto::pool::CanisterPoolResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_pool_admin(
-            command: ::canic::dto::pool::PoolAdminCommand,
-        ) -> Result<::canic::dto::pool::PoolAdminResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(command)
-                .await
-        }
-
-    };
-}
-
-/// Emit root-only auth, delegation, and attestation authority endpoints.
-#[macro_export]
-macro_rules! canic_emit_root_auth_attestation_endpoints {
-    () => {
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_upsert_root_issuer_policy(
-            request: ::canic::dto::auth::RootIssuerPolicyUpsertRequest,
-        ) -> Result<::canic::dto::auth::RootIssuerPolicyResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_policy_root(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_upsert_root_issuer_renewal_template(
-            request: ::canic::dto::auth::RootIssuerRenewalTemplateUpsertRequest,
-        ) -> Result<::canic::dto::auth::RootIssuerRenewalTemplateResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_renewal_template_root(
-                request,
-            )
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_root_issuer_renewal_status(
-            request: ::canic::dto::auth::RootIssuerRenewalStatusRequest,
-        ) -> Result<::canic::dto::auth::RootIssuerRenewalStatusResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::root_issuer_renewal_status_root(request)
-        }
-
-        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate)))]
-        async fn canic_get_or_create_chain_key_delegation_proof(
-        ) -> Result<::canic::dto::auth::RootDelegationProofBatchProof, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()
-                .await
-        }
-
-        #[$crate::canic_update(internal, public)]
-        async fn canic_prepare_role_attestation(
-            request: ::canic::dto::auth::RoleAttestationRequest,
-        ) -> Result<::canic::dto::auth::RoleAttestationPrepareResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::prepare_role_attestation(request)
-        }
-
-        #[$crate::canic_query(internal, public)]
-        async fn canic_get_role_attestation(
-            request: ::canic::dto::auth::RoleAttestationGetRequest,
-        ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
-            $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::get_role_attestation(request)
+        async fn canic_command(
+            command: RootCommand,
+        ) -> Result<RootCommandResponse, ::canic::Error> {
+            if !$crate::__internal::core::ingress::payload::payload_within_limit(
+                $crate::__internal::cdk::raw::msg_arg_data_size(),
+                command.__canic_payload_max_bytes(),
+            ) {
+                return Err(::canic::Error::from_registered(
+                    $crate::__internal::core::diagnostics::codes::REQUEST_CAPACITY,
+                ));
+            }
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            let recovery_command = matches!(
+                &command,
+                RootCommand::PrepareAuthoritySnapshot(_) | RootCommand::ResumeAuthoritySnapshot(_)
+            );
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
+                recovery_command,
+            )?;
+            let prepared_command = matches!(
+                &command,
+                RootCommand::AdoptStore(_)
+                    | RootCommand::BootstrapStore(_)
+                    | RootCommand::HandoffPoolCanister(_)
+                    | RootCommand::ImportPoolCanister(_)
+                    | RootCommand::MaintainPool
+                    | RootCommand::PrepareComponentRegistry(_)
+                    | RootCommand::PrepareFleetActivation
+                    | RootCommand::ProvisionComponent(_)
+                    | RootCommand::ProvisionComponents(_)
+                    | RootCommand::PublishReleaseSet(_)
+                    | RootCommand::ResumeFleetActivation(_)
+                    | RootCommand::RetryPoolRefill
+                    | RootCommand::RetryPoolReset(_)
+                    | RootCommand::SynchronizeComponentDirectories(_)
+                    | RootCommand::SynchronizeRegistry(_)
+            );
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_command_variant_allowed(
+                prepared_command,
+            )?;
+            let controller_command = matches!(
+                &command,
+                RootCommand::AdoptStore(_)
+                    | RootCommand::BootstrapStore(_)
+                    | RootCommand::HandoffPoolCanister(_)
+                    | RootCommand::ImportPoolCanister(_)
+                    | RootCommand::InspectCanister(_)
+                    | RootCommand::MaintainPool
+                    | RootCommand::PrepareAuthoritySnapshot(_)
+                    | RootCommand::PrepareComponentRegistry(_)
+                    | RootCommand::PrepareFleetActivation
+                    | RootCommand::PreviewCycleRefill(_)
+                    | RootCommand::ProvisionComponent(_)
+                    | RootCommand::PublishReleaseSet(_)
+                    | RootCommand::RefillCycles(_)
+                    | RootCommand::RemoveComponent(_)
+                    | RootCommand::RemoveSubtree(_)
+                    | RootCommand::ResumeAuthoritySnapshot(_)
+                    | RootCommand::ResumeFleetActivation(_)
+                    | RootCommand::RetryPoolRefill
+                    | RootCommand::RetryPoolReset(_)
+                    | RootCommand::SetCyclesFunding(_)
+                    | RootCommand::SetFleetStatus(_)
+                    | RootCommand::SynchronizeRegistry(_)
+                    | RootCommand::UpsertIssuerPolicy(_)
+                    | RootCommand::UpsertIssuerRenewalTemplate(_)
+            );
+            if controller_command {
+                $crate::__internal::core::access::auth::is_controller(caller)
+                    .await
+                    .map_err(::canic::Error::from)?;
+            }
+
+            if matches!(&command, RootCommand::RemoveRoot(_)) {
+                $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_fleet_subnet_root_removal_caller(
+                    caller,
+                    $crate::__internal::cdk::api::is_controller(&caller),
+                )?;
+            }
+
+            if matches!(&command, RootCommand::GetOrCreateDelegationProof) {
+                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
+                let context = $crate::__internal::core::access::expr::AccessContext {
+                    caller: identity.transport_caller,
+                    authenticated_caller: identity.authenticated_subject,
+                    identity_source: identity.identity_source,
+                    call: $crate::__internal::core::ids::EndpointCall {
+                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                    },
+                };
+                $crate::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate
+                    .eval(&context)
+                    .await
+                    .map_err(::canic::Error::from)?;
+            }
+
+            if matches!(&command, RootCommand::RespondCapability(_)) {
+                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
+                let context = $crate::__internal::core::access::expr::AccessContext {
+                    caller: identity.transport_caller,
+                    authenticated_caller: identity.authenticated_subject,
+                    identity_source: identity.identity_source,
+                    call: $crate::__internal::core::ids::EndpointCall {
+                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                    },
+                };
+                $crate::__internal::control_plane::api::component_rpc::RootCapabilityCallerPredicate
+                    .eval(&context)
+                    .await
+                    .map_err(::canic::Error::from)?;
+            }
+
+            match command {
+                RootCommand::AdoptStore(request) => {
+                    let operation_id = request.operation_id;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::adopt_fleet_subnet_wasm_store(request).await?;
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::BootstrapStore(request) => {
+                    let operation_id = request.operation_id;
+                    ::canic::api::canister::template::WasmStoreBootstrapApi::bootstrap_root_store(request).await?;
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::GetOrCreateDelegationProof => {
+                    $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()
+                        .await
+                        .map(RootCommandResponse::GetOrCreateDelegationProof)
+                }
+                RootCommand::HandoffPoolCanister(request) => {
+                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+                        ::canic::dto::pool::PoolAdminCommand::Handoff {
+                            canister_id: request.canister_id,
+                            recipient: request.recipient,
+                        },
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::pool::PoolAdminResponse::HandedOff {
+                            canister_id,
+                            recipient,
+                        } => Ok(RootCommandResponse::HandoffPoolCanister(
+                            ::canic::dto::pool::PoolHandoffResponse {
+                                canister_id,
+                                recipient,
+                            },
+                        )),
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
+                }
+                RootCommand::ImportPoolCanister(request) => {
+                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+                        ::canic::dto::pool::PoolAdminCommand::Import {
+                            canister_id: request.canister_id,
+                        },
+                    )
+                    .await?;
+                    let response = match response {
+                        ::canic::dto::pool::PoolAdminResponse::Imported { canister_id } => {
+                            ::canic::dto::pool::PoolImportResponse::Imported { canister_id }
+                        }
+                        ::canic::dto::pool::PoolAdminResponse::ResetFailed {
+                            canister_id,
+                            reason,
+                        } => ::canic::dto::pool::PoolImportResponse::ResetFailed {
+                            canister_id,
+                            reason,
+                        },
+                        _ => return Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    };
+                    Ok(RootCommandResponse::ImportPoolCanister(response))
+                }
+                RootCommand::InspectCanister(request) => {
+                    $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_status(
+                        request.canister_id,
+                    )
+                    .await
+                    .map(RootCommandResponse::InspectCanister)
+                }
+                RootCommand::MaintainPool => {
+                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+                        ::canic::dto::pool::PoolAdminCommand::Maintain,
+                    )
+                    .await?;
+                    let response = match response {
+                        ::canic::dto::pool::PoolAdminResponse::Maintained => {
+                            ::canic::dto::pool::PoolMaintenanceResponse::Maintained
+                        }
+                        ::canic::dto::pool::PoolAdminResponse::MaintenancePaused { reason } => {
+                            ::canic::dto::pool::PoolMaintenanceResponse::MaintenancePaused { reason }
+                        }
+                        ::canic::dto::pool::PoolAdminResponse::Created { canister_id } => {
+                            ::canic::dto::pool::PoolMaintenanceResponse::Created { canister_id }
+                        }
+                        ::canic::dto::pool::PoolAdminResponse::RefillWaitingForCycles {
+                            available,
+                            creation_amount,
+                        } => ::canic::dto::pool::PoolMaintenanceResponse::RefillWaitingForCycles {
+                            available,
+                            creation_amount,
+                        },
+                        ::canic::dto::pool::PoolAdminResponse::RefillPending {
+                            operation_id,
+                            uncertain_result,
+                        } => ::canic::dto::pool::PoolMaintenanceResponse::RefillPending {
+                            operation_id,
+                            uncertain_result,
+                        },
+                        ::canic::dto::pool::PoolAdminResponse::RefillBlocked {
+                            operation_id,
+                            failure,
+                        } => ::canic::dto::pool::PoolMaintenanceResponse::RefillBlocked {
+                            operation_id,
+                            failure,
+                        },
+                        ::canic::dto::pool::PoolAdminResponse::ResetReady { canister_id } => {
+                            ::canic::dto::pool::PoolMaintenanceResponse::ResetReady { canister_id }
+                        }
+                        ::canic::dto::pool::PoolAdminResponse::ResetFailed {
+                            canister_id,
+                            reason,
+                        } => ::canic::dto::pool::PoolMaintenanceResponse::ResetFailed {
+                            canister_id,
+                            reason,
+                        },
+                        _ => return Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    };
+                    Ok(RootCommandResponse::MaintainPool(response))
+                }
+                RootCommand::PrepareAuthoritySnapshot(request) => {
+                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::prepare_snapshot(request)
+                        .await
+                        .map(RootCommandResponse::PrepareAuthoritySnapshot)
+                }
+                RootCommand::PrepareComponentRegistry(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_registry(request)
+                        .await
+                        .map(RootCommandResponse::PrepareComponentRegistry)
+                }
+                RootCommand::PrepareFleetActivation => {
+                    __canic_run_prepared_root_init_block().await;
+                    let response = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_fleet_activation().await?;
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt {
+                            operation_id: response.identity.operation_id,
+                        },
+                    ))
+                }
+                #[cfg(canic_capability_role_attestation_signer)]
+                RootCommand::PrepareRoleAttestation(request) => {
+                    $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::prepare_role_attestation(request)
+                        .map(RootCommandResponse::PrepareRoleAttestation)
+                }
+                RootCommand::PreviewCycleRefill(request) => {
+                    let response = $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(
+                        ::canic::dto::icp_refill::IcpRefillRequest {
+                            operation_id: request.operation_id,
+                            source_subaccount: request.source_subaccount,
+                            amount_e8s: request.amount_e8s,
+                            dry_run: true,
+                        },
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::icp_refill::IcpRefillEndpointResponse::DryRun(response) => {
+                            Ok(RootCommandResponse::PreviewCycleRefill(response))
+                        }
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
+                }
+                RootCommand::ProvisionChild(request) => {
+                    let operation_id = request.operation_id;
+                    let component = request.component;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_child(request).await?;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_child_allocation(component, operation_id);
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::ProvisionComponent(request) => {
+                    let operation_id = request.operation_id;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await?;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::ProvisionComponents(request) => {
+                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::accept(request)
+                        .await
+                        .map(RootCommandResponse::OperationAccepted)
+                }
+                RootCommand::ProvisionPeer(request) => {
+                    let operation_id = request.operation_id;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_peer_component_allocation(request).await?;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::PublishReleaseSet(command) => {
+                    ::canic::api::canister::template::WasmStorePublicationApi::admin(command)
+                        .await
+                        .map(RootCommandResponse::PublishReleaseSet)
+                }
+                RootCommand::RefillCycles(request) => {
+                    let operation_id = request.operation_id;
+                    let response = $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(
+                        ::canic::dto::icp_refill::IcpRefillRequest {
+                            operation_id,
+                            source_subaccount: request.source_subaccount,
+                            amount_e8s: request.amount_e8s,
+                            dry_run: false,
+                        },
+                    )
+                    .await?;
+                    if !matches!(
+                        response,
+                        ::canic::dto::icp_refill::IcpRefillEndpointResponse::Refill(_)
+                    ) {
+                        return Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into());
+                    }
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::RemoveComponent(request) => {
+                    let operation_id = request.operation_id;
+                    let component = request.component;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_draining(request).await?;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_removal(component, operation_id);
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::RemoveRoot(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_fleet_subnet_root_removal(request)
+                        .map(RootCommandResponse::OperationAccepted)
+                }
+                RootCommand::RemoveSubtree(request) => {
+                    let operation_id = request.operation_id;
+                    let component = request.component;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_subtree_removal(request).await?;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_subtree_removal(component, operation_id);
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::RespondCapability(envelope) => {
+                    $crate::__internal::control_plane::api::component_rpc::ComponentRpcApi::response_capability_v1_root(envelope)
+                        .await
+                        .map(RootCommandResponse::RespondCapability)
+                }
+                RootCommand::ResumeAuthoritySnapshot(request) => {
+                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::resume_snapshot(request)
+                        .await
+                        .map(RootCommandResponse::ResumeAuthoritySnapshot)
+                }
+                RootCommand::ResumeFleetActivation(request) => {
+                    let operation_id = request.operation_id;
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_fleet_activation(request).await?;
+                    __canic_schedule_prepared_activation_init();
+                    Ok(RootCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
+                RootCommand::RetryPoolRefill => {
+                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+                        ::canic::dto::pool::PoolAdminCommand::RetryRefill,
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::pool::PoolAdminResponse::RefillRetryScheduled {
+                            previous_operation_id,
+                        } => Ok(RootCommandResponse::RetryPoolRefill(
+                            ::canic::dto::pool::PoolRefillRetryResponse {
+                                previous_operation_id,
+                            },
+                        )),
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
+                }
+                RootCommand::RetryPoolReset(request) => {
+                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+                        ::canic::dto::pool::PoolAdminCommand::RetryReset {
+                            canister_id: request.canister_id,
+                        },
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::pool::PoolAdminResponse::ResetQueued { canister_id } => {
+                            Ok(RootCommandResponse::RetryPoolReset(
+                                ::canic::dto::pool::PoolResetRetryResponse { canister_id },
+                            ))
+                        }
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
+                }
+                RootCommand::SetCyclesFunding(request) => {
+                    let response = $crate::__internal::control_plane::api::state::FleetStateApi::execute_command(
+                        ::canic::dto::state::FleetCommand::SetCyclesFundingEnabled(request.enabled),
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::state::FleetCommandResponse::CyclesFundingEnabled(response) => {
+                            Ok(RootCommandResponse::SetCyclesFunding(response))
+                        }
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
+                }
+                RootCommand::SetFleetStatus(request) => {
+                    let response = $crate::__internal::control_plane::api::state::FleetStateApi::execute_command(
+                        ::canic::dto::state::FleetCommand::SetStatus(request.status),
+                    )
+                    .await?;
+                    match response {
+                        ::canic::dto::state::FleetCommandResponse::Status(response) => {
+                            Ok(RootCommandResponse::SetFleetStatus(response))
+                        }
+                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+                    }
+                }
+                RootCommand::SynchronizeComponentDirectories(request) => {
+                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::synchronize_directories(request)
+                        .await
+                        .map(RootCommandResponse::SynchronizeComponentDirectories)
+                }
+                RootCommand::SynchronizeRegistry(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_fleet_registry_synchronization(request)
+                        .await
+                        .map(RootCommandResponse::OperationAccepted)
+                }
+                RootCommand::UpsertIssuerPolicy(request) => {
+                    $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_policy_root(request)
+                        .map(RootCommandResponse::UpsertIssuerPolicy)
+                }
+                RootCommand::UpsertIssuerRenewalTemplate(request) => {
+                    $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_renewal_template_root(request)
+                        .map(RootCommandResponse::UpsertIssuerRenewalTemplate)
+                }
+            }
         }
     };
 }
 
-/// Emit root-only wasm-store bootstrap and publication control endpoints.
+/// Emit the Fleet Subnet Root's role-owned status query.
 #[macro_export]
-macro_rules! canic_emit_root_wasm_store_endpoints {
+macro_rules! canic_emit_root_status_endpoint {
     () => {
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_wasm_store_bootstrap_debug(
-        ) -> Result<::canic::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::debug_bootstrap()
+        #[derive(
+            ::canic::__internal::candid::CandidType,
+            ::canic::__internal::serde::Deserialize,
+        )]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootStatusRequest {
+            AuthorityRestore,
+            Children(::canic::dto::page::PageRequest),
+            ComponentDirectoryHead(
+                ::canic::dto::component_registry::ComponentDirectoryHeadRequest,
+            ),
+            ComponentDirectoryPage(
+                ::canic::dto::component_registry::ComponentDirectoryPageRequest,
+            ),
+            ComponentRegistryPartition(
+                ::canic::dto::component_registry::ComponentRegistryPartitionRequest,
+            ),
+            Config,
+            CycleBalance,
+            CycleHistory(::canic::dto::page::PageRequest),
+            FleetAuthority,
+            FleetState,
+            Health,
+            Inventory,
+            IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
+            Logs(::canic::dto::role::LogStatusRequest),
+            Metrics(::canic::dto::role::MetricsStatusRequest),
+            Operation(::canic::dto::role::OperationStatusRequest),
+            Overview,
+            Pool(::canic::dto::pool::CanisterPoolStatusRequest),
+            Readiness,
+            #[cfg(canic_capability_role_attestation_signer)]
+            RoleAttestation(::canic::dto::auth::RoleAttestationGetRequest),
+            Runtime,
+            StoreOverview,
         }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_root_store_bootstrap(
-            request: ::canic::dto::root_store::RootStoreBootstrapRequest,
-        ) -> Result<::canic::dto::root_store::RootStoreBootstrapResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::bootstrap_root_store(request)
-                .await
+        #[derive(
+            ::canic::__internal::candid::CandidType,
+            ::canic::__internal::serde::Deserialize,
+        )]
+        #[serde(crate = "::canic::__internal::serde")]
+        pub enum RootStatusResponse {
+            AuthorityRestore(::canic::dto::authority_restore::AuthorityRestoreFenceStatusResponse),
+            Children(
+                ::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>,
+            ),
+            ComponentDirectoryHead(
+                ::canic::dto::component_registry::ComponentDirectoryHead,
+            ),
+            ComponentDirectoryPage(
+                ::canic::dto::component_registry::ComponentDirectoryPageResponse,
+            ),
+            ComponentRegistryPartition(
+                ::canic::dto::component_registry::ComponentRegistryPartitionResponse,
+            ),
+            Config(::canic::dto::role::ConfigStatusResponse),
+            CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
+            CycleHistory(
+                ::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>,
+            ),
+            FleetAuthority(::canic::dto::fleet_subnet_root::FleetSubnetRootAuthority),
+            FleetState(::canic::dto::state::FleetStateResponse),
+            Health(::canic::dto::runtime::CanicHealthStatus),
+            Inventory(::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary),
+            IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusResponse),
+            Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
+            Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
+            Operation(::canic::dto::root::RootOperationStatusResponse),
+            Overview(::canic::dto::role::RoleOverviewResponse),
+            Pool(::canic::dto::pool::CanisterPoolResponse),
+            Readiness(::canic::dto::runtime::CanicReadinessStatus),
+            #[cfg(canic_capability_role_attestation_signer)]
+            RoleAttestation(::canic::dto::auth::SignedRoleAttestation),
+            Runtime(::canic::dto::runtime::CanicRuntimeStatus),
+            StoreOverview(::canic::dto::template::WasmStoreOverviewResponse),
         }
 
-        #[$crate::canic_query(composite, requires(caller::is_controller()))]
-        async fn canic_root_store_bootstrap_status(
-            request: ::canic::dto::root_store::RootStoreBootstrapRequest,
-        ) -> Result<::canic::dto::root_store::RootStoreBootstrapResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::root_store_status(request)
-                .await
-        }
+        #[$crate::canic_query(public)]
+        async fn canic_status(
+            request: RootStatusRequest,
+        ) -> Result<RootStatusResponse, ::canic::Error> {
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            let prepared_status = matches!(
+                &request,
+                RootStatusRequest::ComponentDirectoryHead(_)
+                    | RootStatusRequest::ComponentDirectoryPage(_)
+                    | RootStatusRequest::ComponentRegistryPartition(_)
+                    | RootStatusRequest::FleetAuthority
+                    | RootStatusRequest::Operation(_)
+                    | RootStatusRequest::Overview
+                    | RootStatusRequest::Pool(_)
+                    | RootStatusRequest::StoreOverview
+            );
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(
+                prepared_status,
+            )?;
+            match &request {
+                RootStatusRequest::Children(_)
+                | RootStatusRequest::ComponentDirectoryPage(_)
+                | RootStatusRequest::CycleBalance
+                | RootStatusRequest::CycleHistory(_)
+                | RootStatusRequest::Metrics(_)
+                | RootStatusRequest::Overview => {}
+                #[cfg(canic_capability_role_attestation_signer)]
+                RootStatusRequest::RoleAttestation(_) => {}
+                RootStatusRequest::Operation(_) => {
+                    // The durable operation owner supplies the exact public, peer, or
+                    // controller authority used by the dispatch arm below.
+                }
+                RootStatusRequest::AuthorityRestore
+                | RootStatusRequest::ComponentDirectoryHead(_)
+                | RootStatusRequest::ComponentRegistryPartition(_)
+                | RootStatusRequest::Config
+                | RootStatusRequest::FleetAuthority
+                | RootStatusRequest::FleetState
+                | RootStatusRequest::Health
+                | RootStatusRequest::Inventory
+                | RootStatusRequest::IssuerRenewal(_)
+                | RootStatusRequest::Logs(_)
+                | RootStatusRequest::Pool(_)
+                | RootStatusRequest::Readiness
+                | RootStatusRequest::Runtime
+                | RootStatusRequest::StoreOverview => {
+                    $crate::__internal::core::access::auth::is_controller(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
+            }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_template_stage_manifest_admin(
-            request: ::canic::dto::template::TemplateManifestInput,
-        ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::stage_manifest(request);
-            Ok(())
+            match request {
+                RootStatusRequest::AuthorityRestore => {
+                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
+                        .map(RootStatusResponse::AuthorityRestore)
+                }
+                RootStatusRequest::Children(page) => Ok(RootStatusResponse::Children(
+                    $crate::__internal::core::api::topology::children::CanisterChildrenApi::page(
+                        page,
+                    ),
+                )),
+                RootStatusRequest::ComponentDirectoryHead(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_head(request)
+                        .map(RootStatusResponse::ComponentDirectoryHead)
+                }
+                RootStatusRequest::ComponentDirectoryPage(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_directory_page(request)
+                        .map(RootStatusResponse::ComponentDirectoryPage)
+                }
+                RootStatusRequest::ComponentRegistryPartition(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::component_registry_partition(request)
+                        .map(RootStatusResponse::ComponentRegistryPartition)
+                }
+                RootStatusRequest::Config => {
+                    $crate::__internal::core::api::config::ConfigApi::export_toml().map(|toml| {
+                        RootStatusResponse::Config(::canic::dto::role::ConfigStatusResponse { toml })
+                    })
+                }
+                RootStatusRequest::CycleBalance => Ok(RootStatusResponse::CycleBalance(
+                    ::canic::dto::role::CycleBalanceStatusResponse {
+                        cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
+                    },
+                )),
+                RootStatusRequest::CycleHistory(page) => {
+                    Ok(RootStatusResponse::CycleHistory(
+                        $crate::__internal::core::api::cycles::CycleTrackerQuery::page(page),
+                    ))
+                }
+                RootStatusRequest::FleetAuthority => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_authority()
+                        .map(RootStatusResponse::FleetAuthority)
+                }
+                RootStatusRequest::FleetState => Ok(RootStatusResponse::FleetState(
+                    $crate::__internal::core::api::state::FleetStateQuery::snapshot(),
+                )),
+                RootStatusRequest::Health => Ok(RootStatusResponse::Health(
+                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
+                        $crate::__internal::cdk::api::time(),
+                    )),
+                )),
+                RootStatusRequest::Inventory => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_canister_summary()
+                        .map(RootStatusResponse::Inventory)
+                }
+                RootStatusRequest::IssuerRenewal(request) => {
+                    $crate::__internal::core::api::auth::AuthApi::root_issuer_renewal_status_root(
+                        request,
+                    )
+                    .map(RootStatusResponse::IssuerRenewal)
+                }
+                RootStatusRequest::Logs(request) => Ok(RootStatusResponse::Logs(
+                    $crate::__internal::core::api::log::LogQuery::page(
+                        request.crate_name,
+                        request.topic,
+                        request.min_level,
+                        request.page,
+                    ),
+                )),
+                RootStatusRequest::Metrics(request) => {
+                    $crate::__canic_role_metrics_status!(request).map(RootStatusResponse::Metrics)
+                }
+                RootStatusRequest::Operation(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_operation_status(
+                        request.operation_id,
+                        caller,
+                        $crate::__internal::cdk::api::is_controller(&caller),
+                    )
+                    .map(RootStatusResponse::Operation)
+                }
+                RootStatusRequest::Overview => {
+                    let capabilities = $crate::__canic_compiled_role_capabilities!();
+                    Ok(RootStatusResponse::Overview(
+                        $crate::__internal::core::api::role::RoleOverviewApi::overview(
+                            $crate::__internal::core::ids::CanisterRole::from(env!(
+                                "CANIC_CANISTER_ROLE"
+                            )),
+                            &capabilities,
+                            $crate::__canic_protocol_profile_digest!(),
+                            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
+                                env!("CARGO_PKG_NAME"),
+                                env!("CARGO_PKG_VERSION"),
+                                env!("CARGO_PKG_DESCRIPTION"),
+                                $crate::VERSION,
+                                $crate::__internal::cdk::api::canister_version(),
+                            ),
+                            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
+                        ),
+                    ))
+                }
+                RootStatusRequest::Pool(request) => {
+                    $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(
+                        request,
+                    )
+                    .map(RootStatusResponse::Pool)
+                }
+                RootStatusRequest::Readiness => Ok(RootStatusResponse::Readiness(
+                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
+                        $crate::__internal::cdk::api::time(),
+                    ),
+                )),
+                #[cfg(canic_capability_role_attestation_signer)]
+                RootStatusRequest::RoleAttestation(request) => {
+                    $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::get_role_attestation(request)
+                        .map(RootStatusResponse::RoleAttestation)
+                }
+                RootStatusRequest::Runtime => Ok(RootStatusResponse::Runtime(
+                    $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
+                        $crate::__internal::cdk::api::time(),
+                        env!("CARGO_PKG_NAME"),
+                        env!("CARGO_PKG_VERSION"),
+                        $crate::VERSION,
+                        $crate::__internal::cdk::api::canister_version(),
+                    ),
+                )),
+                RootStatusRequest::StoreOverview => {
+                    ::canic::api::canister::template::WasmStorePublicationApi::overview()
+                        .map(RootStatusResponse::StoreOverview)
+                }
+            }
         }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_template_prepare_admin(
-            request: ::canic::dto::template::TemplateChunkSetPrepareInput,
-        ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::prepare_chunk_set(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
-        async fn canic_template_publish_chunk_admin(
-            request: ::canic::dto::template::TemplateChunkInput,
-        ) -> Result<(), ::canic::Error> {
-            ::canic::api::canister::template::WasmStoreBootstrapApi::publish_chunk(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_wasm_store_admin(
-            cmd: ::canic::dto::template::WasmStoreAdminCommand,
-        ) -> Result<::canic::dto::template::WasmStoreAdminResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStorePublicationApi::admin(cmd).await
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_wasm_store_overview(
-        ) -> Result<::canic::dto::template::WasmStoreOverviewResponse, ::canic::Error> {
-            ::canic::api::canister::template::WasmStorePublicationApi::overview()
-        }
-
     };
 }

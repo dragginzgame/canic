@@ -132,7 +132,7 @@ mod tests {
                 IcpDiagnostic::LocalNetworkNotRunning,
             ),
             (
-                "Canister has no query method 'canic_metrics'",
+                "Canister has no query method 'canic_status'",
                 IcpDiagnostic::MethodMissing,
             ),
             (

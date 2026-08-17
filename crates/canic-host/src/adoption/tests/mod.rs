@@ -143,6 +143,7 @@ fn external_api_role_artifact() -> RoleArtifactV1 {
         installed_module_hash: Some("api-installed-module".to_string()),
         candid_path: None,
         candid_sha256: None,
+        protocol_profile_digest: None,
         raw_config_sha256: None,
         canonical_embedded_config_sha256: None,
         embedded_topology_sha256: None,

@@ -7,42 +7,10 @@
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
     protocol::{
-        CANIC_ACTIVATE_FLEET, CANIC_COMPONENT_RUNTIME_ACTIVATE,
-        CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE, CANIC_COMPONENT_RUNTIME_STATUS,
-        CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-        CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_SYNC_STATUS,
-        CANIC_FLEET_REGISTRY_SYNCHRONIZE, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-        CANIC_FLEET_SUBNET_WASM_STORE_ADOPT, CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
-        CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY, CANIC_MANAGED_CANISTER_BINDING, CANIC_POOL_ADMIN,
-        CANIC_POOL_LIST, CANIC_PREPARE_FLEET_ACTIVATION, CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-        CANIC_RESUME_FLEET_ACTIVATION, CANIC_ROOT_COMPONENT_ALLOCATE,
-        CANIC_ROOT_COMPONENT_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_COMMIT,
-        CANIC_ROOT_COMPONENT_CREATE, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-        CANIC_ROOT_COMPONENT_DIRECTORY_PAGE, CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-        CANIC_ROOT_COMPONENT_INSTALL, CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-        CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT, CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
-        CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE, CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-        CANIC_ROOT_COMPONENT_PROVISIONING_STATUS, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-        CANIC_ROOT_COMPONENT_REGISTRY_PREPARE, CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-        CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE, CANIC_ROOT_STORE_BOOTSTRAP,
-        CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_SYNC_STATE, CANIC_SYNC_TOPOLOGY,
-        CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_INFO,
-        CANIC_WASM_STORE_PREPARE, CANIC_WASM_STORE_PUBLISH_CHUNK, CANIC_WASM_STORE_STAGE_MANIFEST,
-        CANIC_WASM_STORE_STATUS,
+        CANIC_COMMAND, CANIC_STATUS, CANIC_WASM_STORE_CHUNK, CANIC_WASM_STORE_PUBLISH_CHUNK,
     },
 };
 use thiserror::Error as ThisError;
-
-#[cfg(test)]
-use crate::protocol::{
-    CANIC_AUTHORITY_RESTORE_FENCE_STATUS, CANIC_AUTHORITY_SNAPSHOT_PREPARE,
-    CANIC_AUTHORITY_SNAPSHOT_RESUME, CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
-    CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS, CANIC_ROOT_COMPONENT_CHILD_COMMIT,
-    CANIC_ROOT_COMPONENT_CHILD_CREATE, CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
-    CANIC_ROOT_COMPONENT_CHILD_INSTALL, CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
-    CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE, CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
-};
 
 ///
 /// FleetActivationEndpointPolicyError
@@ -61,25 +29,13 @@ pub enum FleetActivationEndpointPolicyError {
 pub fn require_prepared_nonroot_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_status_query(call)
-        || is_query(call, CANIC_MANAGED_CANISTER_BINDING)
-        || is_query(call, CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY)
-        || is_query(call, CANIC_COMPONENT_RUNTIME_STATUS)
-        || is_query(call, CANIC_WASM_STORE_CATALOG)
-        || is_query(call, CANIC_WASM_STORE_STATUS)
+    if is_query(call, CANIC_STATUS)
         || is_update(
             call,
             &[
-                CANIC_SYNC_STATE,
-                CANIC_SYNC_TOPOLOGY,
-                CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
-                CANIC_COMPONENT_RUNTIME_ACTIVATE,
-                CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-                CANIC_ACTIVATE_FLEET,
-                CANIC_WASM_STORE_INFO,
-                CANIC_WASM_STORE_PREPARE,
+                CANIC_COMMAND,
+                CANIC_WASM_STORE_CHUNK,
                 CANIC_WASM_STORE_PUBLISH_CHUNK,
-                CANIC_WASM_STORE_STAGE_MANIFEST,
             ],
         )
     {
@@ -92,62 +48,14 @@ pub fn require_prepared_nonroot_endpoint(
 pub fn require_prepared_root_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_status_query(call)
-        || is_query(call, CANIC_FLEET_SUBNET_ROOT_AUTHORITY)
-        || is_query(call, CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS)
-        || is_query(call, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS)
-        || is_query(call, CANIC_ROOT_COMPONENT_PROVISIONING_STATUS)
-        || is_query(call, CANIC_ROOT_COMPONENT_REGISTRY_PARTITION)
-        || is_query(call, CANIC_ROOT_COMPONENT_DIRECTORY_HEAD)
-        || is_query(call, CANIC_ROOT_COMPONENT_DIRECTORY_PAGE)
-        || is_query(call, CANIC_POOL_LIST)
-        || is_composite_query(call, CANIC_ROOT_STORE_BOOTSTRAP_STATUS)
-        || is_composite_query(call, CANIC_FLEET_REGISTRY_SYNC_STATUS)
-        || is_composite_query(call, CANIC_FLEET_REGISTRY_MIRROR_STATUS)
-        || is_composite_query(call, CANIC_ROOT_COMPONENT_REGISTRY_STATUS)
-        || is_update(
-            call,
-            &[
-                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-                CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
-                CANIC_POOL_ADMIN,
-                CANIC_PREPARE_FLEET_ACTIVATION,
-                CANIC_RESUME_FLEET_ACTIVATION,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                CANIC_ROOT_COMPONENT_COMMIT,
-                CANIC_ROOT_COMPONENT_CREATE,
-                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-                CANIC_ROOT_COMPONENT_INSTALL,
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-                CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
-                CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
-                CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
-                CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-                CANIC_ROOT_STORE_BOOTSTRAP,
-                CANIC_TEMPLATE_PREPARE_ADMIN,
-                CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-                CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            ],
-        )
-    {
+    if is_query(call, CANIC_STATUS) || is_update(call, &[CANIC_COMMAND]) {
         return Ok(());
     }
     fenced(call)
 }
 
-fn is_status_query(call: EndpointCall) -> bool {
-    is_query(call, CANIC_FLEET_ACTIVATION_STATUS)
-}
-
 fn is_query(call: EndpointCall, endpoint: &str) -> bool {
     call.kind == EndpointCallKind::Query && call.endpoint.name == endpoint
-}
-
-fn is_composite_query(call: EndpointCall, endpoint: &str) -> bool {
-    call.kind == EndpointCallKind::QueryComposite && call.endpoint.name == endpoint
 }
 
 fn is_update(call: EndpointCall, endpoints: &[&str]) -> bool {
@@ -174,100 +82,10 @@ mod tests {
     }
 
     #[test]
-    fn prepared_root_admits_exact_staging_and_activation_updates() {
+    fn prepared_root_admits_only_the_role_owned_entrypoints() {
         for (endpoint, kind) in [
-            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
-            (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Query),
-            (
-                CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
-                EndpointCallKind::Query,
-            ),
-            (
-                CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
-                EndpointCallKind::Update,
-            ),
-            (CANIC_FLEET_REGISTRY_SYNCHRONIZE, EndpointCallKind::Update),
-            (
-                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_FLEET_REGISTRY_SYNC_STATUS,
-                EndpointCallKind::QueryComposite,
-            ),
-            (
-                CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                EndpointCallKind::QueryComposite,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                EndpointCallKind::QueryComposite,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
-                EndpointCallKind::Query,
-            ),
-            (CANIC_ROOT_COMPONENT_ALLOCATE, EndpointCallKind::Update),
-            (CANIC_ROOT_COMPONENT_CREATE, EndpointCallKind::Update),
-            (CANIC_ROOT_COMPONENT_INSTALL, EndpointCallKind::Update),
-            (CANIC_ROOT_COMPONENT_COMMIT, EndpointCallKind::Update),
-            (
-                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-                EndpointCallKind::Query,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                EndpointCallKind::Query,
-            ),
-            (CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, EndpointCallKind::Query),
-            (CANIC_ROOT_COMPONENT_DIRECTORY_PAGE, EndpointCallKind::Query),
-            (CANIC_POOL_LIST, EndpointCallKind::Query),
-            (CANIC_POOL_ADMIN, EndpointCallKind::Update),
-            (CANIC_PREPARE_FLEET_ACTIVATION, EndpointCallKind::Update),
-            (CANIC_RESUME_FLEET_ACTIVATION, EndpointCallKind::Update),
-            (CANIC_ROOT_STORE_BOOTSTRAP, EndpointCallKind::Update),
-            (
-                CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-                EndpointCallKind::QueryComposite,
-            ),
-            (CANIC_TEMPLATE_PREPARE_ADMIN, EndpointCallKind::Update),
-            (CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, EndpointCallKind::Update),
-            (
-                CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-                EndpointCallKind::Update,
-            ),
+            (CANIC_COMMAND, EndpointCallKind::Update),
+            (CANIC_STATUS, EndpointCallKind::Query),
         ] {
             assert_eq!(require_prepared_root_endpoint(call(endpoint, kind)), Ok(()));
         }
@@ -277,50 +95,9 @@ mod tests {
     fn prepared_root_rejects_ordinary_and_wrong_kind_calls() {
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
-            (
-                CANIC_AUTHORITY_RESTORE_FENCE_STATUS,
-                EndpointCallKind::Query,
-            ),
-            (CANIC_AUTHORITY_SNAPSHOT_PREPARE, EndpointCallKind::Update),
-            (CANIC_AUTHORITY_SNAPSHOT_RESUME, EndpointCallKind::Update),
-            (CANIC_SYNC_STATE, EndpointCallKind::Update),
-            (CANIC_POOL_ADMIN, EndpointCallKind::Query),
-            (CANIC_POOL_LIST, EndpointCallKind::Update),
-            ("canic_upsert_root_issuer_policy", EndpointCallKind::Update),
-            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
-            (CANIC_ROOT_PEER_COMPONENT_ALLOCATE, EndpointCallKind::Update),
-            (
-                CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
-                EndpointCallKind::Query,
-            ),
-            (CANIC_ROOT_COMPONENT_CHILD_CREATE, EndpointCallKind::Update),
-            (CANIC_ROOT_COMPONENT_CHILD_INSTALL, EndpointCallKind::Update),
-            (CANIC_ROOT_COMPONENT_CHILD_COMMIT, EndpointCallKind::Update),
-            (
-                CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
-                EndpointCallKind::Update,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
-                EndpointCallKind::Update,
-            ),
-            (CANIC_FLEET_SUBNET_ROOT_AUTHORITY, EndpointCallKind::Update),
-            (
-                CANIC_FLEET_ACTIVATION_STATUS,
-                EndpointCallKind::QueryComposite,
-            ),
-            (
-                CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
-                EndpointCallKind::Update,
-            ),
+            (CANIC_COMMAND, EndpointCallKind::Query),
+            (CANIC_STATUS, EndpointCallKind::Update),
+            (CANIC_STATUS, EndpointCallKind::QueryComposite),
         ] {
             assert_eq!(
                 require_prepared_root_endpoint(call(endpoint, kind)),
@@ -332,31 +109,10 @@ mod tests {
     #[test]
     fn prepared_nonroot_uses_its_own_exact_recovery_allowlist() {
         for (endpoint, kind) in [
-            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Query),
-            (CANIC_MANAGED_CANISTER_BINDING, EndpointCallKind::Query),
-            (
-                CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY,
-                EndpointCallKind::Query,
-            ),
-            (CANIC_COMPONENT_RUNTIME_STATUS, EndpointCallKind::Query),
-            (CANIC_WASM_STORE_CATALOG, EndpointCallKind::Query),
-            (CANIC_WASM_STORE_STATUS, EndpointCallKind::Query),
-            (CANIC_SYNC_STATE, EndpointCallKind::Update),
-            (CANIC_SYNC_TOPOLOGY, EndpointCallKind::Update),
-            (
-                CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
-                EndpointCallKind::Update,
-            ),
-            (CANIC_COMPONENT_RUNTIME_ACTIVATE, EndpointCallKind::Update),
-            (
-                CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-                EndpointCallKind::Update,
-            ),
-            (CANIC_ACTIVATE_FLEET, EndpointCallKind::Update),
-            (CANIC_WASM_STORE_INFO, EndpointCallKind::Update),
-            (CANIC_WASM_STORE_PREPARE, EndpointCallKind::Update),
+            (CANIC_STATUS, EndpointCallKind::Query),
+            (CANIC_COMMAND, EndpointCallKind::Update),
+            (CANIC_WASM_STORE_CHUNK, EndpointCallKind::Update),
             (CANIC_WASM_STORE_PUBLISH_CHUNK, EndpointCallKind::Update),
-            (CANIC_WASM_STORE_STAGE_MANIFEST, EndpointCallKind::Update),
         ] {
             assert_eq!(
                 require_prepared_nonroot_endpoint(call(endpoint, kind)),
@@ -366,11 +122,9 @@ mod tests {
 
         for (endpoint, kind) in [
             ("application_update", EndpointCallKind::Update),
-            (
-                "canic_active_delegation_proof_status",
-                EndpointCallKind::Query,
-            ),
-            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
+            ("application_query", EndpointCallKind::Query),
+            (CANIC_STATUS, EndpointCallKind::Update),
+            (CANIC_COMMAND, EndpointCallKind::Query),
         ] {
             assert_eq!(
                 require_prepared_nonroot_endpoint(call(endpoint, kind)),

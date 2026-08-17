@@ -15,48 +15,33 @@ const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
 mod tests {
     use super::*;
+    use candid::{CandidType, Deserialize, decode_one, encode_one};
     #[cfg(test)]
-    use candid::CandidType;
-    use candid::{decode_one, encode_one};
+    use canic::dto::authority_restore::{
+        AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
+    };
     #[cfg(test)]
+    use canic::dto::pool::{CanisterPoolAssetOrigin, CanisterPoolAssetStatus};
     use canic::dto::pool::{
-        CanisterPoolAssetOrigin, CanisterPoolAssetStatus, CanisterPoolRecycleReset,
+        CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
     };
-    use canic::dto::pool::{
-        CanisterPoolResponse, CanisterPoolStatusRequest, PoolAdminCommand, PoolAdminResponse,
-    };
-    use canic::protocol::{CANIC_POOL_ADMIN, CANIC_POOL_LIST};
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
             component_registry::{
-                ComponentDirectoryHead, ComponentDirectoryHeadRequest, ComponentLifecycleStatus,
-                ComponentProvisioningOrigin, ComponentRegistryPartitionRequest,
-                ComponentRegistryPartitionResponse, ComponentRuntimePhase,
-                ComponentRuntimeStatusResponse, RootComponentAllocationPhase,
+                ComponentRuntimePhase, RootComponentAllocationPhase,
                 RootComponentAllocationRequest, RootComponentAllocationResponse,
-                RootComponentAllocationStatusRequest, RootComponentCommitRequest,
-                RootComponentCommitResponse, RootComponentCreationRequest,
-                RootComponentDirectoryPreparationRequest,
-                RootComponentDirectoryPreparationResponse, RootComponentInitialInventoryStatus,
-                RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-                RootComponentMembershipActivationResponse, RootComponentRegistryPreparationRequest,
-                RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
-                RootComponentRuntimeActivationResponse,
+                RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
             },
             fleet_registry::{
-                FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistry,
-                FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-                FleetSubnetRootDirectoryEntry, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
-                FleetSubnetRootJoinResponse, FleetSubnetRootRegistryMirrorActivationRequest,
-                FleetSubnetRootRegistryMirrorActivationResponse,
-                FleetSubnetRootRegistrySyncRequest, FleetSubnetRootRegistrySyncResponse,
-                FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootStatus,
+                FleetRegistryActivationRequest, FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
+                FleetSubnetRootRegistrySyncRequest, FleetSubnetRootStatus,
             },
             fleet_subnet_root::{
                 FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
                 FleetSubnetWasmStoreInitArgs,
             },
+            role::{ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest},
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
                 RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
@@ -64,53 +49,23 @@ mod tests {
                 RootStoreReleaseSetManifest,
             },
         },
-        ids::{
-            CanisterRole, ComponentBinding, ComponentInstanceId, FleetId, ManagedCanisterBinding,
-            ReleaseSetDigest, SubnetId,
-        },
+        ids::{CanisterRole, ComponentBinding, FleetId, ReleaseSetDigest, SubnetId},
     };
     use canic::{
         Error,
-        dto::fleet_activation::{
-            FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
-        },
-        protocol::{
-            CANIC_COMPONENT_RUNTIME_STATUS, CANIC_FLEET_ACTIVATION_STATUS, CANIC_FLEET_REGISTRY,
-            CANIC_FLEET_REGISTRY_ACTIVATE, CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-            CANIC_FLEET_REGISTRY_MIRROR_STATUS, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-            CANIC_FLEET_REGISTRY_SYNC_STATUS, CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-            CANIC_FLEET_REGISTRY_VERSION, CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-            CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, CANIC_FLEET_SUBNET_ROOT_JOIN,
-            CANIC_PREPARE_FLEET_ACTIVATION, CANIC_RESUME_FLEET_ACTIVATION,
-            CANIC_ROOT_COMPONENT_ALLOCATE, CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            CANIC_ROOT_COMPONENT_COMMIT, CANIC_ROOT_COMPONENT_CREATE,
-            CANIC_ROOT_COMPONENT_DIRECTORY_HEAD, CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-            CANIC_ROOT_COMPONENT_INSTALL, CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-            CANIC_ROOT_COMPONENT_REGISTRY_PARTITION, CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-            CANIC_ROOT_COMPONENT_REGISTRY_STATUS, CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-            CANIC_ROOT_STORE_BOOTSTRAP, CANIC_TEMPLATE_PREPARE_ADMIN,
-            CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN, CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-        },
-    };
-    #[cfg(test)]
-    use canic::{
-        dto::{
-            authority_restore::{
-                AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
-                AuthoritySnapshotRequest,
-            },
-            fleet_registry::FleetRegistryVersion,
-        },
-        protocol::{
-            CANIC_AUTHORITY_RESTORE_FENCE_STATUS, CANIC_AUTHORITY_SNAPSHOT_PREPARE,
-            CANIC_AUTHORITY_SNAPSHOT_RESUME,
-        },
+        dto::fleet_activation::{FleetActivationPhase, FleetActivationResumeRequest},
     };
     use canic_control_plane::{
-        dto::fleet_coordinator::FleetCoordinatorInitArgs,
         dto::template::{
-            TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-            TemplateManifestInput,
+            StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetInfoResponse,
+            TemplateChunkSetPrepareInput, TemplateManifestInput,
+        },
+        dto::{
+            fleet_coordinator::{
+                CoordinatorCommand, CoordinatorCommandResponse, CoordinatorStatusRequest,
+                CoordinatorStatusResponse, FleetCoordinatorInitArgs,
+            },
+            root::RootOperationStatusResponse,
         },
         ids::{
             TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion,
@@ -122,7 +77,7 @@ mod tests {
     use flate2::{Compression, write::GzEncoder};
     use std::{
         collections::BTreeMap, error::Error as StdError, fmt, io::Write, num::NonZeroUsize,
-        sync::OnceLock,
+        sync::OnceLock, time::Duration,
     };
 
     use crate::pic::{
@@ -141,81 +96,179 @@ mod tests {
         BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
         CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
-        FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-        ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
-        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
-        is_dead_pocket_ic_transport_error,
+        FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PocketIcDiagnosticsExt,
+        PreparedBaseline, ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt,
+        ResetRequirement, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
+        ValidationReceipt, is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
     use ic_testkit::pic::{PocketIcCapturedSnapshotExt, PocketIcSnapshotExt};
 
     use crate::pic::CanicPicExt;
     #[cfg(test)]
-    use canic::protocol::{
-        CANIC_ROOT_STORE_BOOTSTRAP_STATUS, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_PREPARE,
-        CANIC_WASM_STORE_STATUS,
-    };
+    use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
-    use canic::{
-        dto::component_registry::{
-            RootComponentDeletionPhase, RootComponentDeletionRequest,
-            RootComponentDeletionResponse, RootComponentDeletionStatusRequest,
-            RootComponentDrainingAdvancePhase, RootComponentDrainingAdvanceRequest,
-            RootComponentDrainingAdvanceResponse, RootComponentDrainingRequest,
-            RootComponentDrainingResponse, RootComponentFinalInventoryRequest,
-            RootComponentFinalInventoryResponse, RootComponentQuiescencePhase,
-            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
-        },
-        dto::fleet_registry::{
-            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionStatusRequest, FleetSubnetRootDrainingPublicationRequest,
-            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationRequest,
-            FleetSubnetRootDrainingReservationResponse, FleetSubnetRootRemovalPublicationResponse,
-        },
-        dto::fleet_subnet_root::{
-            FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-            FleetSubnetRootDeletionPreparationRequest, FleetSubnetRootDeletionPreparationResponse,
-            FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
-            FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
-            FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
-            FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootRemovalRequest,
-            FleetSubnetRootRemovalStatusRequest, FleetSubnetRootStoreBindingFinalizationRequest,
-            FleetSubnetRootStoreBindingFinalizationResponse,
-            FleetSubnetRootStoreBindingFinalizationStatusRequest,
-            FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
-            FleetSubnetRootStoreDeletionStatusRequest, FleetSubnetRootStoreReclamationRequest,
-            FleetSubnetRootStoreReclamationResponse, FleetSubnetRootStoreReclamationStatusRequest,
-        },
-        protocol::{
-            CANIC_CYCLE_BALANCE, CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-            CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
-            CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
-            CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
-            CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE, CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS, CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-            CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
-            CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE, CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
-            CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS, CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
-            CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS, CANIC_ROOT_COMPONENT_DELETE,
-            CANIC_ROOT_COMPONENT_DELETION_STATUS, CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
-            CANIC_ROOT_COMPONENT_DRAINING_BEGIN, CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
-            CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE, CANIC_ROOT_COMPONENT_QUIESCE,
-        },
-    };
-    #[cfg(test)]
-    use canic_control_plane::{
-        dto::template::{
-            WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse, WasmStoreStatusResponse,
-        },
-        ids::WasmStoreGcMode,
-    };
+    use canic_control_plane::dto::fleet_coordinator::CoordinatorOperationStatusResponse;
 
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
+
+    #[derive(CandidType)]
+    enum RootCommandFragment {
+        BootstrapStore(RootStoreBootstrapRequest),
+        MaintainPool,
+        #[cfg(test)]
+        PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
+        PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
+        PrepareFleetActivation,
+        ProvisionComponent(RootComponentAllocationRequest),
+        #[cfg(test)]
+        ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
+        ResumeFleetActivation(FleetActivationResumeRequest),
+        SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
+    }
+
+    #[derive(CandidType, Debug, Deserialize)]
+    #[expect(
+        clippy::large_enum_variant,
+        reason = "the PocketIC decoder mirrors the direct Root command wire"
+    )]
+    enum RootCommandResponseFragment {
+        MaintainPool(PoolMaintenanceResponse),
+        OperationAccepted(OperationReceipt),
+        #[cfg(test)]
+        PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
+        PrepareComponentRegistry(RootComponentRegistryStatusResponse),
+        #[cfg(test)]
+        ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
+    }
+
+    #[derive(CandidType)]
+    enum RootStatusRequestFragment {
+        #[cfg(test)]
+        AuthorityRestore,
+        FleetAuthority,
+        Inventory,
+        Operation(OperationStatusRequest),
+        Pool(CanisterPoolStatusRequest),
+    }
+
+    #[derive(CandidType, Deserialize)]
+    #[expect(
+        clippy::large_enum_variant,
+        reason = "the PocketIC decoder mirrors the direct Root status wire"
+    )]
+    enum RootStatusResponseFragment {
+        #[cfg(test)]
+        AuthorityRestore(AuthorityRestoreFenceStatusResponse),
+        FleetAuthority(FleetSubnetRootAuthority),
+        Inventory(FleetSubnetRootCanisterSummary),
+        Operation(RootOperationStatusResponse),
+        Pool(CanisterPoolResponse),
+    }
+
+    #[derive(CandidType)]
+    enum ManagedStatusRequestFragment {
+        Operation(OperationStatusRequest),
+    }
+
+    #[derive(CandidType, Deserialize)]
+    enum ManagedStatusResponseFragment {
+        Operation(ManagedOperationStatusResponseFragment),
+    }
+
+    #[derive(CandidType, Deserialize)]
+    enum ManagedOperationStatusResponseFragment {
+        ConfigureRuntime(ComponentRuntimeOperationStatus),
+    }
+
+    fn root_command(
+        pic: &PocketIc,
+        root: Principal,
+        command: RootCommandFragment,
+    ) -> Result<RootCommandResponseFragment, Error> {
+        pic.update_candid(root, canic::protocol::CANIC_COMMAND, (command,))
+            .expect("Root command transport")
+    }
+
+    fn root_status(
+        pic: &PocketIc,
+        root: Principal,
+        request: RootStatusRequestFragment,
+    ) -> Result<RootStatusResponseFragment, Error> {
+        pic.query_candid(root, canic::protocol::CANIC_STATUS, (request,))
+            .expect("Root status transport")
+    }
+
+    fn root_pool_status(pic: &PocketIc, root: Principal) -> CanisterPoolResponse {
+        let RootStatusResponseFragment::Pool(status) = root_status(
+            pic,
+            root,
+            RootStatusRequestFragment::Pool(CanisterPoolStatusRequest {
+                start_after: None,
+                limit: 256,
+            }),
+        )
+        .expect("query Canister pool") else {
+            panic!("Root returned a differently correlated pool status");
+        };
+        status
+    }
+
+    fn coordinator_command(
+        pic: &PocketIc,
+        coordinator: Principal,
+        command: CoordinatorCommand,
+    ) -> Result<CoordinatorCommandResponse, Error> {
+        pic.update_candid(coordinator, canic::protocol::CANIC_COMMAND, (command,))
+            .expect("Coordinator command transport")
+    }
+
+    fn coordinator_status(
+        pic: &PocketIc,
+        coordinator: Principal,
+        request: CoordinatorStatusRequest,
+    ) -> Result<CoordinatorStatusResponse, Error> {
+        pic.query_candid(coordinator, canic::protocol::CANIC_STATUS, (request,))
+            .expect("Coordinator status transport")
+    }
+
+    fn store_command_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        command: StoreCommand,
+    ) -> Result<StoreCommandResponse, Error> {
+        pic.update_candid_as(store, caller, canic::protocol::CANIC_COMMAND, (command,))
+            .expect("Store command transport")
+    }
+
+    fn store_prepare_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        request: TemplateChunkSetPrepareInput,
+    ) -> Result<TemplateChunkSetInfoResponse, Error> {
+        let response =
+            store_command_as(pic, store, caller, StoreCommand::PrepareChunkSet(request))?;
+        let StoreCommandResponse::PrepareChunkSet(prepared) = response else {
+            panic!("Store returned a differently correlated prepare response");
+        };
+        Ok(prepared)
+    }
+
+    fn store_stage_manifest_as(
+        pic: &PocketIc,
+        store: Principal,
+        caller: Principal,
+        request: TemplateManifestInput,
+    ) -> Result<(), Error> {
+        let response = store_command_as(pic, store, caller, StoreCommand::StageManifest(request))?;
+        let StoreCommandResponse::StageManifest = response else {
+            panic!("Store returned a differently correlated manifest response");
+        };
+        Ok(())
+    }
 
     ///
     /// ActiveComponentRegistryFixture
@@ -229,6 +282,8 @@ mod tests {
         pub root: Principal,
         pub issuer: ComponentBinding,
         pub verifier: ComponentBinding,
+        issuer_runtime_operation_id: [u8; 32],
+        verifier_runtime_operation_id: [u8; 32],
         store_bootstrap: RootStoreBootstrapRequest,
         wasm_store: Principal,
         pool_assets: Vec<Principal>,
@@ -256,6 +311,8 @@ mod tests {
         root: Principal,
         issuer: ComponentBinding,
         verifier: ComponentBinding,
+        issuer_runtime_operation_id: [u8; 32],
+        verifier_runtime_operation_id: [u8; 32],
         store_bootstrap: RootStoreBootstrapRequest,
         wasm_store: Principal,
         pool_assets: Vec<Principal>,
@@ -308,6 +365,8 @@ mod tests {
                 root,
                 issuer,
                 verifier,
+                issuer_runtime_operation_id,
+                verifier_runtime_operation_id,
                 store_bootstrap,
                 wasm_store,
                 pool_assets,
@@ -320,6 +379,8 @@ mod tests {
                 root,
                 issuer,
                 verifier,
+                issuer_runtime_operation_id,
+                verifier_runtime_operation_id,
                 store_bootstrap,
                 wasm_store,
                 pool_assets,
@@ -446,11 +507,23 @@ mod tests {
     struct ActiveComponentBindings {
         issuer: ComponentBinding,
         verifier: ComponentBinding,
+        issuer_runtime_operation_id: [u8; 32],
+        verifier_runtime_operation_id: [u8; 32],
     }
 
     impl ActiveComponentBindings {
-        const fn new(issuer: ComponentBinding, verifier: ComponentBinding) -> Self {
-            Self { issuer, verifier }
+        const fn new(
+            issuer: ComponentBinding,
+            verifier: ComponentBinding,
+            issuer_runtime_operation_id: [u8; 32],
+            verifier_runtime_operation_id: [u8; 32],
+        ) -> Self {
+            Self {
+                issuer,
+                verifier,
+                issuer_runtime_operation_id,
+                verifier_runtime_operation_id,
+            }
         }
     }
 
@@ -518,14 +591,12 @@ mod tests {
             if status.ready == 1 {
                 break;
             }
-            let response: Result<PoolAdminResponse, Error> = pic
-                .update_candid(
-                    fixture.root_id,
-                    CANIC_POOL_ADMIN,
-                    (PoolAdminCommand::Maintain,),
-                )
-                .expect("automatic pool maintenance transport");
-            response.expect("automatic pool maintenance");
+            let RootCommandResponseFragment::MaintainPool(_) =
+                root_command(&pic, fixture.root_id, RootCommandFragment::MaintainPool)
+                    .expect("automatic pool maintenance")
+            else {
+                panic!("Root returned a differently correlated pool response");
+            };
         }
 
         let status = root_pool_status(&pic, fixture.root_id);
@@ -576,28 +647,30 @@ mod tests {
             "root Store catalog must contain the exact canonical application role closure"
         );
 
-        let retried: Result<RootStoreBootstrapResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_STORE_BOOTSTRAP,
-                (fixture.request.clone(),),
-            )
-            .expect("root Store bootstrap retry transport");
+        let RootCommandResponseFragment::OperationAccepted(retried) = root_command(
+            &pic,
+            fixture.root_id,
+            RootCommandFragment::BootstrapStore(fixture.request.clone()),
+        )
+        .expect("root Store bootstrap retry") else {
+            panic!("Root returned a differently correlated bootstrap response");
+        };
+        assert_eq!(retried.operation_id, fixture.request.operation_id);
+        let RootStatusResponseFragment::Operation(RootOperationStatusResponse::BootstrapStore(
+            observed,
+        )) = root_status(
+            &pic,
+            fixture.root_id,
+            RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: fixture.request.operation_id,
+            }),
+        )
+        .expect("root Store status")
+        else {
+            panic!("Root returned a differently correlated bootstrap status");
+        };
         assert_eq!(
-            retried.expect("root Store bootstrap retry"),
-            fixture.response,
-            "exact update retry must return the same Store evidence"
-        );
-        let observed: Result<RootStoreBootstrapResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-                (fixture.request,),
-            )
-            .expect("root Store status transport");
-        assert_eq!(
-            observed.expect("root Store status"),
-            fixture.response,
+            observed, fixture.response,
             "composite status must independently reverify the exact live catalog"
         );
 
@@ -613,30 +686,44 @@ mod tests {
             payload_size_bytes: payload.len() as u64,
             chunk_hashes: vec![payload_hash],
         };
-        let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
-            .update_candid_as(
-                fixture.response.wasm_store,
-                fixture.root_id,
-                CANIC_WASM_STORE_PREPARE,
-                (prepare.clone(),),
-            )
-            .expect("direct root Store prepare transport");
+        let prepared = store_prepare_as(
+            &pic,
+            fixture.response.wasm_store,
+            fixture.root_id,
+            prepare.clone(),
+        );
         assert_eq!(
             prepared.expect("direct root Store prepare").chunk_hashes,
             prepare.chunk_hashes
         );
 
-        let denied: Result<TemplateChunkSetInfoResponse, Error> = pic
-            .update_candid_as(
-                fixture.response.wasm_store,
-                Principal::anonymous(),
-                CANIC_WASM_STORE_PREPARE,
-                (prepare,),
-            )
-            .expect("anonymous Store prepare transport");
+        let denied = store_prepare_as(
+            &pic,
+            fixture.response.wasm_store,
+            Principal::anonymous(),
+            prepare.clone(),
+        );
         assert_eq!(
             denied
                 .expect_err("anonymous Store prepare must fail")
+                .code(),
+            canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+        );
+
+        let former_installation_controller = fixture
+            .init_args
+            .authority
+            .wasm_store_authority
+            .installation_controller;
+        let denied = store_prepare_as(
+            &pic,
+            fixture.response.wasm_store,
+            former_installation_controller,
+            prepare,
+        );
+        assert_eq!(
+            denied
+                .expect_err("former installation controller must lose Store mutation authority")
                 .code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
@@ -685,16 +772,15 @@ mod tests {
 
         let (first_joined, _) = join_and_synchronize_root(&pic, first_coordinator, &first);
         let foreign_sync = FleetSubnetRootRegistrySyncRequest {
+            operation_id: [21; 32],
             expected_registry: first_joined,
             store_bootstrap: second.request.clone(),
         };
-        let rejected: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
-            .update_candid(
-                second.root_id,
-                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-                (foreign_sync,),
-            )
-            .expect("foreign-Fleet Registry synchronization transport");
+        let rejected = root_command(
+            &pic,
+            second.root_id,
+            RootCommandFragment::SynchronizeRegistry(foreign_sync),
+        );
         assert_eq!(
             rejected
                 .expect_err("another Fleet's Registry must not enter the co-located root")
@@ -767,28 +853,19 @@ mod tests {
             payload_size_bytes: payload.len() as u64,
             chunk_hashes: vec![payload_hash],
         };
-        let rejected: Result<TemplateChunkSetInfoResponse, Error> = pic
-            .update_candid_as(
-                owner.response.wasm_store,
-                foreign.root_id,
-                CANIC_WASM_STORE_PREPARE,
-                (request.clone(),),
-            )
-            .expect("foreign root Store update transport");
+        let rejected = store_prepare_as(
+            pic,
+            owner.response.wasm_store,
+            foreign.root_id,
+            request.clone(),
+        );
         assert_eq!(
             rejected
                 .expect_err("another Fleet's co-located root must not write this Store")
                 .code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
-        let accepted: Result<TemplateChunkSetInfoResponse, Error> = pic
-            .update_candid_as(
-                owner.response.wasm_store,
-                owner.root_id,
-                CANIC_WASM_STORE_PREPARE,
-                (request,),
-            )
-            .expect("owning root Store update transport");
+        let accepted = store_prepare_as(pic, owner.response.wasm_store, owner.root_id, request);
         accepted.expect("owning root retains Store update authority");
     }
 
@@ -799,10 +876,12 @@ mod tests {
         owned: &[BootstrappedRootFixture],
         foreign: &BootstrappedRootFixture,
     ) {
-        let registry: Result<FleetRegistry, Error> = pic
-            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
-            .expect("query isolated Coordinator Registry transport");
-        let registry = registry.expect("query isolated Coordinator Registry");
+        let CoordinatorStatusResponse::Registry(registry) =
+            coordinator_status(pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query isolated Coordinator Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
         assert_eq!(
             registry.authority.binding.fleet,
             owned[0].init_args.authority.binding.authority.binding.fleet
@@ -843,79 +922,64 @@ mod tests {
         clippy::significant_drop_tightening,
         reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
     )]
-    fn restored_root_preserves_its_allocation_head_but_cannot_allocate() {
+    fn restored_root_preserves_its_inventory_but_cannot_allocate() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = acquire_active_component_registry();
-        let active_registry: Result<FleetRegistryVersion, Error> = fixture
-            .pic()
-            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
-            .expect("query active Fleet Registry version transport");
-        let registry_request = RootComponentRegistryPreparationRequest {
-            store_bootstrap: fixture.store_bootstrap.clone(),
-            expected_fleet_registry: active_registry.expect("active Fleet Registry version"),
+        let RootStatusResponseFragment::Inventory(before) = root_status(
+            fixture.pic(),
+            fixture.root,
+            RootStatusRequestFragment::Inventory,
+        )
+        .expect("query root inventory before snapshot") else {
+            panic!("Root returned a differently correlated inventory status");
         };
-        let before: Result<RootComponentRegistryStatusResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (registry_request.clone(),),
-            )
-            .expect("query root Component Registry before snapshot transport");
-        let before = before.expect("root Component Registry before snapshot");
 
         let snapshot_request = AuthoritySnapshotRequest {
             operation_id: [0xb4; 32],
         };
         seal_capture_live_resume_and_restore(&fixture, snapshot_request);
 
-        let restored_fence: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
-            .pic()
-            .query_candid(fixture.root, CANIC_AUTHORITY_RESTORE_FENCE_STATUS, ())
-            .expect("restored root authority fence status transport");
+        let RootStatusResponseFragment::AuthorityRestore(restored_fence) = root_status(
+            fixture.pic(),
+            fixture.root,
+            RootStatusRequestFragment::AuthorityRestore,
+        )
+        .expect("restored root authority fence status") else {
+            panic!("Root returned a differently correlated authority status");
+        };
+        assert_eq!(restored_fence.phase, AuthorityRestoreFencePhase::Sealed);
+        let RootStatusResponseFragment::Inventory(after) = root_status(
+            fixture.pic(),
+            fixture.root,
+            RootStatusRequestFragment::Inventory,
+        )
+        .expect("query restored root inventory") else {
+            panic!("Root returned a differently correlated inventory status");
+        };
         assert_eq!(
-            restored_fence
-                .expect("restored root authority fence status")
-                .phase,
-            AuthorityRestoreFencePhase::Sealed
-        );
-        let after: Result<RootComponentRegistryStatusResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (registry_request,),
-            )
-            .expect("query restored root Component Registry transport");
-        assert_eq!(
-            after.expect("restored root Component Registry"),
-            before,
-            "snapshot restore must preserve the exact allocation head"
+            after, before,
+            "snapshot restore must preserve the exact physical inventory"
         );
 
-        let rejected_resume: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_AUTHORITY_SNAPSHOT_RESUME,
-                (snapshot_request,),
-            )
-            .expect("restored root authority snapshot resume transport");
+        let rejected_resume = root_command(
+            fixture.pic(),
+            fixture.root,
+            RootCommandFragment::ResumeAuthoritySnapshot(snapshot_request),
+        );
         assert_eq!(
             rejected_resume
                 .expect_err("restored root authority must remain mutation-fenced")
                 .code(),
             canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
-        let fresh_allocation: Result<Result<RootComponentAllocationResponse, Error>, _> =
-            fixture.pic().update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (RootComponentAllocationRequest {
-                    operation_id: [0xb5; 32],
-                    component_spec: fixture.verifier.component_spec.clone(),
-                },),
-            );
+        let fresh_allocation = root_command(
+            fixture.pic(),
+            fixture.root,
+            RootCommandFragment::ProvisionComponent(RootComponentAllocationRequest {
+                operation_id: [0xb5; 32],
+                component_spec: fixture.verifier.component_spec.clone(),
+            }),
+        );
         assert!(
             fresh_allocation.is_err(),
             "restored root must reject allocation before handler dispatch"
@@ -927,26 +991,28 @@ mod tests {
         fixture: &ActiveComponentRegistryFixture,
         request: AuthoritySnapshotRequest,
     ) {
-        let sealed: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
-            .pic()
-            .update_candid(fixture.root, CANIC_AUTHORITY_SNAPSHOT_PREPARE, (request,))
-            .expect("root authority snapshot prepare transport");
-        assert_eq!(
-            sealed.expect("root authority snapshot prepare").phase,
-            AuthorityRestoreFencePhase::Sealed
-        );
+        let RootCommandResponseFragment::PrepareAuthoritySnapshot(sealed) = root_command(
+            fixture.pic(),
+            fixture.root,
+            RootCommandFragment::PrepareAuthoritySnapshot(request),
+        )
+        .expect("root authority snapshot prepare") else {
+            panic!("Root returned a differently correlated authority response");
+        };
+        assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
         let snapshots = fixture
             .pic()
             .capture_controller_snapshots(fixture.root, [fixture.root])
             .expect("root authority snapshot capture");
-        let resumed: Result<AuthorityRestoreFenceStatusResponse, Error> = fixture
-            .pic()
-            .update_candid(fixture.root, CANIC_AUTHORITY_SNAPSHOT_RESUME, (request,))
-            .expect("live root authority snapshot resume transport");
-        assert_eq!(
-            resumed.expect("live root authority snapshot resume").phase,
-            AuthorityRestoreFencePhase::Open
-        );
+        let RootCommandResponseFragment::ResumeAuthoritySnapshot(resumed) = root_command(
+            fixture.pic(),
+            fixture.root,
+            RootCommandFragment::ResumeAuthoritySnapshot(request),
+        )
+        .expect("live root authority snapshot resume") else {
+            panic!("Root returned a differently correlated authority response");
+        };
+        assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
 
         fixture
             .pic()
@@ -959,1000 +1025,178 @@ mod tests {
             .expect("root authority snapshot restore");
     }
 
-    #[cfg(test)]
-    fn assert_reset_recycling_asset(
-        fixture: &ActiveComponentRegistryFixture,
-        canister_id: Principal,
-        component: ComponentInstanceId,
-    ) {
-        let live = fixture
-            .pic()
-            .canister_status(canister_id, Some(fixture.root))
-            .expect("reset recycling Canister remains present");
-        assert_eq!(live.settings.controllers, vec![fixture.root]);
-        assert_eq!(live.module_hash, None);
-
-        let status = pool_status(fixture);
-        let asset = status
-            .entries
-            .iter()
-            .find(|asset| asset.canister_id == canister_id)
-            .expect("reset Canister remains in exclusive physical inventory");
-        assert_eq!(asset.origin, CanisterPoolAssetOrigin::Recycled);
-        assert!(matches!(
-            &asset.status,
-            CanisterPoolAssetStatus::Recycling { claim, reset }
-                if claim.component == component && *reset == CanisterPoolRecycleReset::Ready
-        ));
-    }
-
-    #[cfg(test)]
-    fn pool_status(fixture: &ActiveComponentRegistryFixture) -> CanisterPoolResponse {
-        root_pool_status(fixture.pic(), fixture.root)
-    }
-
-    #[cfg(test)]
-    fn root_pool_status(pic: &PocketIc, root: Principal) -> CanisterPoolResponse {
-        let status: Result<CanisterPoolResponse, Error> = pic
-            .query_candid(
-                root,
-                CANIC_POOL_LIST,
-                (CanisterPoolStatusRequest {
-                    start_after: None,
-                    limit: 256,
-                },),
-            )
-            .expect("query Canister pool transport");
-        status.expect("query Canister pool")
-    }
-
-    #[cfg(test)]
-    fn handoff_all_pool_assets(fixture: &ActiveComponentRegistryFixture) {
-        let before = pool_status(fixture);
-        assert_eq!(before.store, 1, "the adopted Store remains root-owned");
-        let assets = before
-            .entries
-            .into_iter()
-            .filter(|asset| {
-                matches!(
-                    asset.status,
-                    CanisterPoolAssetStatus::Ready | CanisterPoolAssetStatus::Failed { .. }
-                )
-            })
-            .collect::<Vec<_>>();
-        assert!(!assets.is_empty(), "root draining must retain paid assets");
-        let expected_handoffs = u64::try_from(assets.len()).expect("bounded pool length");
-        for asset in assets {
-            assert!(matches!(
-                asset.status,
-                CanisterPoolAssetStatus::Ready | CanisterPoolAssetStatus::Failed { .. }
-            ));
-            let handed_off: Result<PoolAdminResponse, Error> = fixture
-                .pic()
-                .update_candid(
-                    fixture.root,
-                    CANIC_POOL_ADMIN,
-                    (PoolAdminCommand::Handoff {
-                        canister_id: asset.canister_id,
-                        recipient: fixture.coordinator,
-                    },),
-                )
-                .expect("handoff pool asset transport");
-            let handed_off = handed_off.expect("handoff pool asset");
-            assert_eq!(
-                handed_off,
-                PoolAdminResponse::HandedOff {
-                    canister_id: asset.canister_id,
-                    recipient: fixture.coordinator,
-                }
-            );
-            let live = fixture
-                .pic()
-                .canister_status(asset.canister_id, Some(fixture.root))
-                .expect("handed-off asset remains present");
-            assert_eq!(live.settings.controllers.len(), 2);
-            assert!(live.settings.controllers.contains(&fixture.root));
-            assert!(live.settings.controllers.contains(&fixture.coordinator));
-
-            let replay: Result<PoolAdminResponse, Error> = fixture
-                .pic()
-                .update_candid(
-                    fixture.root,
-                    CANIC_POOL_ADMIN,
-                    (PoolAdminCommand::Handoff {
-                        canister_id: asset.canister_id,
-                        recipient: fixture.coordinator,
-                    },),
-                )
-                .expect("replay pool asset handoff transport");
-            assert_eq!(replay.expect("replay pool asset handoff"), handed_off);
-        }
-        let status = pool_status(fixture);
-        assert_eq!(status.tracked, 1);
-        assert_eq!(status.store, 1);
-        assert_eq!(status.pooled, 0);
-        assert!(matches!(
-            status.entries.as_slice(),
-            [asset] if matches!(asset.status, CanisterPoolAssetStatus::Store)
-        ));
-        assert_eq!(status.completed_handoffs, expected_handoffs);
-    }
-
     #[test]
     #[expect(
         clippy::significant_drop_tightening,
         reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
     )]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one PocketIC journey proves qualified top-level stop, deletion and membership removal"
-    )]
-    fn published_draining_root_removes_one_exact_empty_component() {
+    fn published_draining_root_autonomously_reaches_external_deletion_readiness() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = acquire_active_component_registry();
-        let root_draining = assert_root_draining_fence(&fixture);
-        let published = assert_coordinator_root_draining_publication(&fixture, &root_draining);
-        assert_root_draining_mirror_activation(&fixture, &root_draining, &published);
-        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                (ComponentRegistryPartitionRequest {
-                    component: fixture.verifier.component,
-                },),
-            )
-            .expect("query top-level Component partition transport");
-        let partition = partition.expect("query top-level Component partition");
-        assert_eq!(partition.committed_descendants, 0);
-
-        let operation_id = [0xd2; 32];
-        let drained: Result<RootComponentDrainingResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
-                (RootComponentDrainingRequest {
-                    operation_id,
-                    component: fixture.verifier.component,
-                    expected_registry: partition.head,
-                },),
-            )
-            .expect("begin top-level Component draining transport");
-        let drained = drained.expect("begin top-level Component draining");
-
-        let quiescent: Result<RootComponentQuiescenceResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_QUIESCE,
-                (RootComponentQuiescenceRequest {
-                    operation_id,
-                    component: fixture.verifier.component,
-                    expected_registry: drained.registry,
-                },),
-            )
-            .expect("quiesce top-level Component transport");
-        let quiescent = quiescent.expect("quiesce top-level Component");
-        let RootComponentQuiescencePhase::Quiescent(quiescence) = &quiescent.phase else {
-            panic!("top-level Component must retain an independently observed stopped receipt");
+        let CoordinatorStatusResponse::Registry(registry) = coordinator_status(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorStatusRequest::Registry,
+        )
+        .expect("query active Registry before root removal") else {
+            panic!("Coordinator returned a differently correlated Registry status");
         };
-        assert_eq!(quiescence.stop.canister_id, fixture.verifier.canister_id);
-        assert_eq!(quiescence.stop.controller, fixture.root);
-        assert_ne!(quiescence.observed_module_hash, [0; 32]);
-
-        let empty: Result<RootComponentDrainingAdvanceResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
-                (RootComponentDrainingAdvanceRequest {
-                    operation_id,
-                    component: fixture.verifier.component,
-                },),
-            )
-            .expect("observe empty top-level Component inventory transport");
-        let empty = empty.expect("observe empty top-level Component inventory");
-        let RootComponentDrainingAdvancePhase::DescendantsEmpty(empty) = empty.phase else {
-            panic!("top-level Component must have exact empty descendant inventory");
+        let CoordinatorStatusResponse::RegistryVersion(version) = coordinator_status(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorStatusRequest::RegistryVersion,
+        )
+        .expect("query active Registry version before root removal") else {
+            panic!("Coordinator returned a differently correlated Registry status");
         };
-
-        let final_inventory: Result<RootComponentFinalInventoryResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
-                (RootComponentFinalInventoryRequest {
-                    operation_id,
-                    component: fixture.verifier.component,
-                    expected_registry: empty.registry,
-                },),
-            )
-            .expect("finalize top-level Component inventory transport");
-        let final_inventory = final_inventory.expect("finalize top-level Component inventory");
-        let delete_request = RootComponentDeletionRequest {
+        let expected_root = registry
+            .fleet_subnet_roots
+            .iter()
+            .find(|entry| entry.fleet_subnet_root == fixture.root)
+            .cloned()
+            .expect("target root in Coordinator Registry");
+        let operation_id = [0xd1; 32];
+        let request = FleetSubnetRootDrainingReservationRequest {
             operation_id,
-            component: fixture.verifier.component,
-            expected_inventory_hash: final_inventory.inventory.inventory_hash,
+            expected_registry: version,
+            expected_root,
         };
-        let deleted: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (delete_request,))
-            .expect("delete top-level Component transport");
-        let deleted = deleted.expect("delete top-level Component");
-        let RootComponentDeletionPhase::Deleted(receipt) = &deleted.phase else {
-            panic!("top-level Component must retain independently observed workload deletion");
+        let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorCommand::RemoveRoot(request.clone()),
+        )
+        .expect("submit autonomous root removal") else {
+            panic!("Coordinator returned a differently correlated removal response");
         };
-        assert_eq!(receipt.deletion.final_inventory, final_inventory.inventory);
-        assert_eq!(
-            receipt.deletion.quiescence.stop.canister_id,
-            fixture.verifier.canister_id
-        );
-        assert_eq!(receipt.deletion.quiescence.stop.controller, fixture.root);
-        assert_reset_recycling_asset(
-            &fixture,
-            fixture.verifier.canister_id,
-            fixture.verifier.component,
-        );
+        assert_eq!(receipt.operation_id, operation_id);
 
-        let retry: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (delete_request,))
-            .expect("retry top-level Component deletion transport");
-        assert_eq!(retry.expect("retry top-level Component deletion"), deleted);
-        let durable: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DELETION_STATUS,
-                (RootComponentDeletionStatusRequest {
-                    operation_id,
-                    component: fixture.verifier.component,
-                },),
-            )
-            .expect("query top-level Component deletion receipt transport");
-        assert_eq!(
-            durable.expect("query top-level Component deletion receipt"),
-            deleted
-        );
-
-        let retained: Result<ComponentRegistryPartitionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                (ComponentRegistryPartitionRequest {
-                    component: fixture.verifier.component,
-                },),
-            )
-            .expect("query retained Component membership transport");
-        assert_eq!(
-            retained.expect("retained Component membership").status,
-            ComponentLifecycleStatus::Draining
-        );
-
-        let removed: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
-                (delete_request,),
-            )
-            .expect("remove top-level Component membership transport");
-        let removed = removed.expect("remove top-level Component membership");
-        let RootComponentDeletionPhase::MembershipRemoved(removal) = &removed.phase else {
-            panic!("top-level Component must retain terminal membership-removal authority");
+        let CoordinatorCommandResponse::OperationAccepted(retried) = coordinator_command(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorCommand::RemoveRoot(request),
+        )
+        .expect("retry autonomous root removal") else {
+            panic!("Coordinator returned a differently correlated removal response");
         };
-        assert_eq!(&removal.deleted, receipt);
-        assert_eq!(removal.root_committed_component_instances, 1);
-        assert_eq!(removal.root_known_created_component_canisters, 1);
-        assert_ne!(removal.allocation_operation_id, [0; 32]);
-        assert_ne!(removal.removal_hash, [0; 32]);
+        assert_eq!(retried, receipt);
 
-        let removal_retry: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(
+        let mut terminal = None;
+        let mut last_status = None;
+        for _ in 0..256 {
+            if let Ok(RootStatusResponseFragment::Operation(
+                RootOperationStatusResponse::RemoveRoot(status),
+            )) = root_status(
+                fixture.pic(),
                 fixture.root,
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
-                (delete_request,),
+                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            ) {
+                let complete = status.deletion_preparation.is_some();
+                last_status = Some(status.clone());
+                if complete {
+                    terminal = Some(status);
+                    break;
+                }
+            }
+            fixture.pic().advance_time(Duration::from_secs(1));
+            fixture.pic().tick();
+        }
+        let terminal = terminal.unwrap_or_else(|| {
+            let coordinator = coordinator_status(
+                fixture.pic(),
+                fixture.coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
             )
-            .expect("retry top-level Component membership removal transport");
-        assert_eq!(
-            removal_retry.expect("retry top-level Component membership removal"),
-            removed
-        );
-        let deletion_retry: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (delete_request,))
-            .expect("retry top-level Component deletion after membership removal transport");
-        assert_eq!(
-            deletion_retry.expect("retry top-level Component deletion after membership removal"),
-            removed
-        );
-        let durable_removed: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DELETION_STATUS,
-                (RootComponentDeletionStatusRequest {
-                    operation_id,
-                    component: fixture.verifier.component,
-                },),
+            .ok()
+            .and_then(|response| match response {
+                CoordinatorStatusResponse::Operation(
+                    CoordinatorOperationStatusResponse::RootRemoval(status),
+                ) => Some(status),
+                _ => None,
+            });
+            let root_progress = last_status.as_ref().map(|status| {
+                (
+                    status.final_inventory.is_some(),
+                    status.removal.is_some(),
+                    status.store_reclamation.is_some(),
+                    status.store_binding_finalization.is_some(),
+                    status.store_deletion.is_some(),
+                    status.deletion_readiness_intent.is_some(),
+                    status.deletion_readiness.is_some(),
+                    status.deletion_preparation.is_some(),
+                )
+            });
+            let coordinator_progress = coordinator.as_ref().map(|status| {
+                (
+                    status.draining.is_some(),
+                    status.removal.is_some(),
+                    status.readiness_intent.is_some(),
+                    status.readiness.is_some(),
+                    status.execution.is_some(),
+                    status.completion.is_some(),
+                )
+            });
+            let pool = root_pool_status(fixture.pic(), fixture.root);
+            panic!(
+                "Root must autonomously reach external deletion readiness; \
+                 root(final_inventory, removal, reclamation, binding, store_deletion, \
+                 readiness_intent, readiness, preparation)={root_progress:?}; \
+                 pool(tracked, store, store_deletion_pending, workload, handing_off)=({}, {}, {}, {}, {}); \
+                 coordinator(draining, removal, readiness_intent, readiness, execution, completion)={coordinator_progress:?}",
+                pool.tracked,
+                pool.store,
+                pool.store_deletion_pending,
+                pool.workload,
+                pool.handing_off,
             )
-            .expect("query terminal top-level Component removal transport");
-        assert_eq!(
-            durable_removed.expect("query terminal top-level Component removal"),
-            removed
-        );
+        });
+        assert!(terminal.final_inventory.is_some());
+        assert!(terminal.removal.is_some());
+        assert!(terminal.store_reclamation.is_some());
+        assert!(terminal.store_binding_finalization.is_some());
+        assert!(terminal.store_deletion.is_some());
+        assert!(terminal.deletion_preparation.is_some());
 
-        let absent_membership: Result<ComponentRegistryPartitionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                (ComponentRegistryPartitionRequest {
-                    component: fixture.verifier.component,
-                },),
-            )
-            .expect("query removed Component membership transport");
-        assert_eq!(
-            absent_membership
-                .expect_err("removed Component membership must be absent")
-                .code(),
-            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
-        );
-        let durable_fence: Result<FleetSubnetRootDrainingResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
-                (FleetSubnetRootDrainingStatusRequest {
-                    operation_id: root_draining.operation_id,
-                },),
-            )
-            .expect("query root draining fence after Component removal transport");
-        assert_eq!(
-            durable_fence.expect("root draining fence after Component removal"),
-            root_draining
-        );
-
-        let issuer_removed = remove_empty_component(&fixture, &fixture.issuer, [0xd3; 32]);
-        let RootComponentDeletionPhase::MembershipRemoved(issuer_removal) = issuer_removed.phase
-        else {
-            panic!("issuer Component must retain terminal membership-removal authority");
-        };
-        assert_eq!(issuer_removal.root_committed_component_instances, 0);
-        assert_eq!(issuer_removal.root_known_created_component_canisters, 0);
-
-        handoff_all_pool_assets(&fixture);
-
-        let inventory_request = FleetSubnetRootFinalInventoryRequest {
-            operation_id: root_draining.operation_id,
-            expected_registry: published.version,
-        };
-        let final_inventory: Result<FleetSubnetRootFinalInventoryResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
-                (inventory_request.clone(),),
-            )
-            .expect("finalize Fleet Subnet Root inventory transport");
-        let final_inventory = final_inventory.expect("finalize Fleet Subnet Root inventory");
-        assert_eq!(final_inventory.operation_id, root_draining.operation_id);
-        assert_eq!(
-            final_inventory.registry,
-            inventory_request.expected_registry
-        );
-        assert_eq!(final_inventory.removed_component_instances, 2);
-        assert_eq!(
-            final_inventory.root_registry_encoded_bytes,
-            issuer_removal.root_registry_encoded_bytes
-        );
-        assert_ne!(final_inventory.terminal_component_history_hash, [0; 32]);
-        assert_ne!(final_inventory.wasm_store_catalog_hash, [0; 32]);
-        assert!(final_inventory.wasm_store_catalog_entries > 0);
-        assert!(final_inventory.wasm_store_occupied_bytes > 0);
-        assert!(final_inventory.wasm_store_gc_prepared_at_secs > 0);
-        assert_ne!(final_inventory.inventory_hash, [0; 32]);
-
-        let retry: Result<FleetSubnetRootFinalInventoryResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
-                (inventory_request,),
-            )
-            .expect("retry Fleet Subnet Root inventory transport");
-        assert_eq!(
-            retry.expect("retry Fleet Subnet Root inventory"),
-            final_inventory
-        );
-        let durable: Result<FleetSubnetRootFinalInventoryResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
-                (FleetSubnetRootFinalInventoryStatusRequest {
-                    operation_id: root_draining.operation_id,
-                },),
-            )
-            .expect("query Fleet Subnet Root inventory transport");
-        assert_eq!(
-            durable.expect("query Fleet Subnet Root inventory"),
-            final_inventory
-        );
-
-        let removal_request = FleetSubnetRootRemovalRequest {
-            operation_id: root_draining.operation_id,
-            expected_registry: final_inventory.registry.clone(),
-        };
-        let removed: Result<FleetSubnetRootRemovalPublicationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-                (removal_request.clone(),),
-            )
-            .expect("publish Fleet Subnet Root removal transport");
-        let removed = removed.expect("publish Fleet Subnet Root removal");
-        assert_eq!(removed.final_inventory, final_inventory);
-        assert_eq!(removed.previous_version, removal_request.expected_registry);
-        assert_eq!(
-            removed.version.revision,
-            removed.previous_version.revision + 1
-        );
-
-        let retry: Result<FleetSubnetRootRemovalPublicationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-                (removal_request,),
-            )
-            .expect("retry Fleet Subnet Root removal transport");
-        assert_eq!(retry.expect("retry Fleet Subnet Root removal"), removed);
-        let durable: Result<FleetSubnetRootRemovalPublicationResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
-                (FleetSubnetRootRemovalStatusRequest {
-                    operation_id: root_draining.operation_id,
-                },),
-            )
-            .expect("query Fleet Subnet Root removal transport");
-        assert_eq!(durable.expect("query Fleet Subnet Root removal"), removed);
-
-        let registry: Result<FleetRegistry, Error> = fixture
-            .pic()
-            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
-            .expect("query Removed Fleet Registry transport");
-        let registry = registry.expect("query Removed Fleet Registry");
-        assert_eq!(registry.revision, removed.version.revision);
-        assert_eq!(
-            registry.fleet_subnet_roots[0].status,
-            FleetSubnetRootStatus::Removed
-        );
-
-        let reclamation_request = FleetSubnetRootStoreReclamationRequest {
-            operation_id: root_draining.operation_id,
-            expected_final_inventory_hash: final_inventory.inventory_hash,
-        };
-        let reclamation: Result<FleetSubnetRootStoreReclamationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
-                (reclamation_request,),
-            )
-            .expect("reclaim Fleet Subnet Root Store transport");
-        let reclamation = reclamation.expect("reclaim Fleet Subnet Root Store");
-        assert_eq!(reclamation.wasm_store, final_inventory.wasm_store);
-        assert_eq!(
-            reclamation.final_inventory_hash,
-            final_inventory.inventory_hash
-        );
-        assert_eq!(
-            reclamation.reclaimed_store_bytes,
-            final_inventory.wasm_store_occupied_bytes
-        );
-        assert_eq!(
-            reclamation.reclaimed_catalog_entries,
-            final_inventory.wasm_store_catalog_entries
-        );
-        assert_eq!(
-            reclamation.reclaimed_template_count,
-            final_inventory.wasm_store_template_count
-        );
-        assert_eq!(
-            reclamation.reclaimed_release_count,
-            final_inventory.wasm_store_release_count
-        );
-        assert_eq!(
-            reclamation.gc_prepared_at_secs,
-            final_inventory.wasm_store_gc_prepared_at_secs
-        );
-        assert!(reclamation.gc_started_at_secs >= reclamation.gc_prepared_at_secs);
-        assert!(reclamation.gc_completed_at_secs >= reclamation.gc_started_at_secs);
-        assert_eq!(reclamation.gc_runs_completed, 1);
-        assert_ne!(reclamation.reclamation_hash, [0; 32]);
-
-        let retry: Result<FleetSubnetRootStoreReclamationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
-                (reclamation_request,),
-            )
-            .expect("retry Fleet Subnet Root Store reclamation transport");
-        assert_eq!(
-            retry.expect("retry Fleet Subnet Root Store reclamation"),
-            reclamation
-        );
-        let durable: Result<FleetSubnetRootStoreReclamationResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS,
-                (FleetSubnetRootStoreReclamationStatusRequest {
-                    operation_id: root_draining.operation_id,
-                },),
-            )
-            .expect("query Fleet Subnet Root Store reclamation transport");
-        assert_eq!(
-            durable.expect("query Fleet Subnet Root Store reclamation"),
-            reclamation
-        );
-
-        let store_status: Result<WasmStoreStatusResponse, Error> = fixture
-            .pic()
-            .query_candid_as(
-                final_inventory.wasm_store,
-                fixture.root,
-                CANIC_WASM_STORE_STATUS,
-                (),
-            )
-            .expect("query reclaimed Store status transport");
-        let store_status = store_status.expect("query reclaimed Store status");
-        assert_eq!(store_status.gc.mode, WasmStoreGcMode::Complete);
-        assert_eq!(store_status.gc.runs_completed, 1);
-        assert_eq!(store_status.occupied_store_bytes, 0);
-        assert_eq!(store_status.template_count, 0);
-        assert_eq!(store_status.release_count, 0);
-        assert!(store_status.templates.is_empty());
-        let store_catalog: Result<Vec<WasmStoreCatalogEntryResponse>, Error> = fixture
-            .pic()
-            .query_candid_as(
-                final_inventory.wasm_store,
-                fixture.root,
-                CANIC_WASM_STORE_CATALOG,
-                (),
-            )
-            .expect("query reclaimed Store catalog transport");
-        assert!(
-            store_catalog
-                .expect("query reclaimed Store catalog")
-                .is_empty()
-        );
-
-        let binding_request = FleetSubnetRootStoreBindingFinalizationRequest {
-            operation_id: root_draining.operation_id,
-            expected_reclamation_hash: reclamation.reclamation_hash,
-        };
-        let finalization: Result<FleetSubnetRootStoreBindingFinalizationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
-                (binding_request,),
-            )
-            .expect("finalize Fleet Subnet Root Store binding transport");
-        let finalization = finalization.expect("finalize Fleet Subnet Root Store binding");
-        assert_eq!(finalization.wasm_store, final_inventory.wasm_store);
-        assert_eq!(
-            finalization.final_inventory_hash,
-            final_inventory.inventory_hash
-        );
-        assert_eq!(finalization.reclamation_hash, reclamation.reclamation_hash);
-        assert_eq!(
-            finalization.finalized_generation,
-            finalization.source_generation + 3
-        );
-        assert!(finalization.finalized_at_secs > 0);
-        assert_ne!(finalization.finalization_hash, [0; 32]);
-
-        let retry: Result<FleetSubnetRootStoreBindingFinalizationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
-                (binding_request,),
-            )
-            .expect("retry Fleet Subnet Root Store binding finalization transport");
-        assert_eq!(
-            retry.expect("retry Fleet Subnet Root Store binding finalization"),
-            finalization
-        );
-        let durable: Result<FleetSubnetRootStoreBindingFinalizationResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
-                (FleetSubnetRootStoreBindingFinalizationStatusRequest {
-                    operation_id: root_draining.operation_id,
-                },),
-            )
-            .expect("query Fleet Subnet Root Store binding finalization transport");
-        assert_eq!(
-            durable.expect("query Fleet Subnet Root Store binding finalization"),
-            finalization
-        );
-
-        let overview: Result<WasmStoreOverviewResponse, Error> = fixture
-            .pic()
-            .query_candid(fixture.root, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
-            .expect("query finalized Store binding overview transport");
-        let overview = overview.expect("query finalized Store binding overview");
-        assert_eq!(overview.publication.active_binding, None);
-        assert_eq!(overview.publication.detached_binding, None);
-        assert_eq!(overview.publication.retired_binding, None);
-        assert_eq!(
-            overview.publication.generation,
-            finalization.finalized_generation
-        );
-        assert_eq!(overview.stores.len(), 1);
-        assert_eq!(overview.stores[0].pid, final_inventory.wasm_store);
-        assert_eq!(overview.stores[0].publication_slot, None);
-        assert_eq!(overview.stores[0].gc.mode, WasmStoreGcMode::Complete);
-
-        let root_cycles_before_deletion = canister_cycle_balance(fixture.pic(), fixture.root);
-        let store_cycles_before_deletion =
-            canister_cycle_balance(fixture.pic(), final_inventory.wasm_store);
-        let deletion_request = FleetSubnetRootStoreDeletionRequest {
-            operation_id: root_draining.operation_id,
-            expected_binding_finalization_hash: finalization.finalization_hash,
-        };
-        let deletion: Result<FleetSubnetRootStoreDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
-                (deletion_request,),
-            )
-            .expect("delete Fleet Subnet Root Store transport");
-        let deletion = deletion.expect("delete Fleet Subnet Root Store");
-        assert_eq!(deletion.wasm_store, final_inventory.wasm_store);
-        assert_eq!(
-            deletion.binding_finalization_hash,
-            finalization.finalization_hash
-        );
-        assert_ne!(deletion.observed_module_hash, [0; 32]);
-        assert!(deletion.observed_controllers.contains(&fixture.root));
-        assert!(deletion.observed_cycles_before_reclamation <= store_cycles_before_deletion);
-        assert!(deletion.observed_cycles_before_reclamation > deletion.retained_cycles_target);
-        assert!(deletion.observed_cycles_after_reclamation <= deletion.retained_cycles_target);
-        assert!(deletion.cycles_reclaimed_at_ns >= deletion.prepared_at_ns);
-        assert!(deletion.observed_absent_at_ns >= deletion.prepared_at_ns);
-        assert!(deletion.completed_at_ns >= deletion.observed_absent_at_ns);
-        assert_ne!(deletion.deletion_hash, [0; 32]);
+        let pool = root_pool_status(fixture.pic(), fixture.root);
+        assert_eq!(pool.tracked, 0);
+        assert_eq!(pool.completed_handoffs, PREPAID_POOL_ASSET_COUNT as u64);
+        for component in [&fixture.issuer, &fixture.verifier] {
+            let handed_off = fixture
+                .pic()
+                .canister_status(component.canister_id, Some(fixture.coordinator))
+                .expect("Coordinator must control each handed-off Component canister");
+            assert_eq!(handed_off.module_hash, None);
+            let mut controllers = handed_off.settings.controllers;
+            controllers.sort();
+            let mut expected_controllers = vec![fixture.root, fixture.coordinator];
+            expected_controllers.sort();
+            assert_eq!(controllers, expected_controllers);
+        }
         assert!(
             fixture
                 .pic()
-                .canister_status(final_inventory.wasm_store, Some(fixture.root))
+                .canister_status(fixture.wasm_store, Some(fixture.root))
                 .is_err(),
-            "Store deletion receipt requires typed physical absence"
-        );
-        assert!(
-            canister_cycle_balance(fixture.pic(), fixture.root) > root_cycles_before_deletion,
-            "Store deletion must return excess cycles to the surviving root"
+            "autonomous removal must delete the retained Store"
         );
 
-        let retry: Result<FleetSubnetRootStoreDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
-                (deletion_request,),
-            )
-            .expect("retry Fleet Subnet Root Store deletion transport");
-        assert_eq!(
-            retry.expect("retry Fleet Subnet Root Store deletion"),
-            deletion
-        );
-        let durable: Result<FleetSubnetRootStoreDeletionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS,
-                (FleetSubnetRootStoreDeletionStatusRequest {
-                    operation_id: root_draining.operation_id,
-                },),
-            )
-            .expect("query Fleet Subnet Root Store deletion transport");
-        assert_eq!(
-            durable.expect("query Fleet Subnet Root Store deletion"),
-            deletion
-        );
-
-        let overview: Result<WasmStoreOverviewResponse, Error> = fixture
-            .pic()
-            .query_candid(fixture.root, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
-            .expect("query deleted Store overview transport");
-        let overview = overview.expect("query deleted Store overview");
-        assert_eq!(
-            overview.publication.generation,
-            finalization.finalized_generation
-        );
-        assert_eq!(overview.publication.active_binding, None);
-        assert_eq!(overview.publication.detached_binding, None);
-        assert_eq!(overview.publication.retired_binding, None);
-        assert!(overview.stores.is_empty());
-
-        assert_root_deletion_is_prepared_for_external_executor(
-            &fixture,
-            root_draining.operation_id,
-            final_inventory.inventory_hash,
-            deletion.deletion_hash,
-        );
-    }
-
-    #[cfg(test)]
-    fn assert_root_deletion_is_prepared_for_external_executor(
-        fixture: &ActiveComponentRegistryFixture,
-        operation_id: [u8; 32],
-        final_inventory_hash: [u8; 32],
-        store_deletion_hash: [u8; 32],
-    ) {
-        let status = fixture
-            .pic()
-            .canister_status(fixture.root, Some(Principal::anonymous()))
-            .expect("observe root before external deletion");
-        let idle_cycles_burned_per_day = nat_u128(&status.idle_cycles_burned_per_day);
-        let freezing_threshold_seconds = nat_u128(&status.settings.freezing_threshold);
-        let freezing_reserve = idle_cycles_burned_per_day
-            .checked_mul(freezing_threshold_seconds)
-            .expect("root freezing reserve")
-            .div_ceil(86_400);
-        let retained_cycles_target = freezing_reserve
-            .checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
-            .expect("root deletion reserve");
-        let coordinator_cycles_before =
-            management_cycle_balance(fixture.pic(), fixture.coordinator);
-        let preparation_request = FleetSubnetRootDeletionPreparationRequest {
-            operation_id,
-            expected_store_deletion_hash: store_deletion_hash,
-            retained_cycles_target,
-            observed_reserved_cycles: nat_u128(&status.reserved_cycles),
-            observed_idle_cycles_burned_per_day: idle_cycles_burned_per_day,
-            observed_freezing_threshold_seconds: freezing_threshold_seconds,
-        };
-        let preparation: Result<FleetSubnetRootDeletionPreparationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
-                (preparation_request,),
-            )
-            .expect("prepare Fleet Subnet Root deletion transport");
-        let preparation = preparation.expect("prepare Fleet Subnet Root deletion");
-        assert_eq!(preparation.fleet_subnet_root, fixture.root);
-        assert_eq!(preparation.coordinator, fixture.coordinator);
-        assert_eq!(preparation.final_inventory_hash, final_inventory_hash);
-        assert_eq!(preparation.store_deletion_hash, store_deletion_hash);
-        assert!(
-            preparation.observed_cycles_before_reclamation > preparation.retained_cycles_target
-        );
-        assert!(
-            preparation.observed_cycles_after_reclamation <= preparation.retained_cycles_target
-        );
-        assert_ne!(preparation.coordinator_intent_hash, [0; 32]);
-        assert_ne!(preparation.coordinator_readiness_hash, [0; 32]);
-        assert!(
-            management_cycle_balance(fixture.pic(), fixture.coordinator)
-                > coordinator_cycles_before,
-            "root deletion must return excess cycles to the surviving Coordinator"
-        );
-        let durable: Result<FleetSubnetRootDeletionPreparationResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
-                (FleetSubnetRootDeletionPreparationStatusRequest { operation_id },),
-            )
-            .expect("query root deletion preparation transport");
-        assert_eq!(
-            durable.expect("query root deletion preparation"),
-            preparation
-        );
-
-        assert_root_deletion_executor_intent(
-            fixture,
-            operation_id,
-            &preparation,
-            idle_cycles_burned_per_day,
-            freezing_threshold_seconds,
-        );
-    }
-
-    #[cfg(test)]
-    fn assert_root_deletion_executor_intent(
-        fixture: &ActiveComponentRegistryFixture,
-        operation_id: [u8; 32],
-        preparation: &FleetSubnetRootDeletionPreparationResponse,
-        idle_cycles_burned_per_day: u128,
-        freezing_threshold_seconds: u128,
-    ) {
-        let status = fixture
-            .pic()
-            .canister_status(fixture.root, Some(Principal::anonymous()))
-            .expect("independently observe deletion-ready root");
-        let mut controllers = status.settings.controllers.clone();
-        controllers.sort();
-        controllers.dedup();
-        let observed_module_hash: [u8; 32] = status
-            .module_hash
-            .as_deref()
-            .expect("installed root module")
-            .try_into()
-            .expect("root module hash");
-        let execution_request = FleetSubnetRootDeletionExecutionRequest {
-            operation_id,
-            fleet_subnet_root: fixture.root,
-            expected_readiness_hash: preparation.coordinator_readiness_hash,
-            observed_module_hash,
-            observed_controllers: controllers,
-            observed_cycles_after_reclamation: nat_u128(&status.cycles),
-            observed_reserved_cycles: nat_u128(&status.reserved_cycles),
-            observed_idle_cycles_burned_per_day: idle_cycles_burned_per_day,
-            observed_freezing_threshold_seconds: freezing_threshold_seconds,
-        };
-        let execution: Result<FleetSubnetRootDeletionExecutionResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.coordinator,
-                CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
-                (execution_request,),
-            )
-            .expect("begin external root deletion transport");
-        let execution = execution.expect("begin external root deletion");
-        assert_eq!(execution.executor, Principal::anonymous());
-        assert_ne!(execution.execution_hash, [0; 32]);
-        let execution_status: Result<FleetSubnetRootDeletionExecutionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.coordinator,
-                CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
-                (FleetSubnetRootDeletionStatusRequest {
-                    operation_id,
-                    fleet_subnet_root: fixture.root,
-                },),
-            )
-            .expect("query external root deletion intent transport");
-        assert_eq!(
-            execution_status.expect("query external root deletion intent"),
-            execution
-        );
-    }
-
-    #[cfg(test)]
-    fn nat_u128(value: &candid::Nat) -> u128 {
-        u128::try_from(value.0.clone()).expect("management cycle value fits u128")
-    }
-
-    #[cfg(test)]
-    fn management_cycle_balance(pic: &PocketIc, canister_id: Principal) -> u128 {
-        let status = pic
-            .canister_status(canister_id, Some(Principal::anonymous()))
-            .expect("observe Canister cycle balance through management status");
-        nat_u128(&status.cycles)
-    }
-
-    #[cfg(test)]
-    fn canister_cycle_balance(pic: &PocketIc, canister_id: Principal) -> u128 {
-        let response: Result<u128, Error> = pic
-            .query_candid(canister_id, CANIC_CYCLE_BALANCE, ())
-            .expect("query Canister cycle balance transport");
-        response.expect("query Canister cycle balance")
-    }
-
-    #[cfg(test)]
-    fn remove_empty_component(
-        fixture: &ActiveComponentRegistryFixture,
-        binding: &ComponentBinding,
-        operation_id: [u8; 32],
-    ) -> RootComponentDeletionResponse {
-        let partition: Result<ComponentRegistryPartitionResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                (ComponentRegistryPartitionRequest {
-                    component: binding.component,
-                },),
-            )
-            .expect("query empty Component partition transport");
-        let partition = partition.expect("query empty Component partition");
-        assert_eq!(partition.committed_descendants, 0);
-        let draining: Result<RootComponentDrainingResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
-                (RootComponentDrainingRequest {
-                    operation_id,
-                    component: binding.component,
-                    expected_registry: partition.head,
-                },),
-            )
-            .expect("begin empty Component draining transport");
-        let draining = draining.expect("begin empty Component draining");
-        let quiescent: Result<RootComponentQuiescenceResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_QUIESCE,
-                (RootComponentQuiescenceRequest {
-                    operation_id,
-                    component: binding.component,
-                    expected_registry: draining.registry,
-                },),
-            )
-            .expect("quiesce empty Component transport");
-        quiescent.expect("quiesce empty Component");
-        let empty: Result<RootComponentDrainingAdvanceResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
-                (RootComponentDrainingAdvanceRequest {
-                    operation_id,
-                    component: binding.component,
-                },),
-            )
-            .expect("observe empty Component inventory transport");
-        let RootComponentDrainingAdvancePhase::DescendantsEmpty(empty) =
-            empty.expect("observe empty Component inventory").phase
+        let CoordinatorStatusResponse::Operation(CoordinatorOperationStatusResponse::RootRemoval(
+            coordinator,
+        )) = coordinator_status(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+        )
+        .expect("query Coordinator root-removal status")
         else {
-            panic!("Component must have exact empty descendant inventory");
+            panic!("Coordinator returned a differently correlated operation status");
         };
-        let inventory: Result<RootComponentFinalInventoryResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
-                (RootComponentFinalInventoryRequest {
-                    operation_id,
-                    component: binding.component,
-                    expected_registry: empty.registry,
-                },),
-            )
-            .expect("finalize empty Component inventory transport");
-        let request = RootComponentDeletionRequest {
-            operation_id,
-            component: binding.component,
-            expected_inventory_hash: inventory
-                .expect("finalize empty Component inventory")
-                .inventory
-                .inventory_hash,
-        };
-        let deleted: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(fixture.root, CANIC_ROOT_COMPONENT_DELETE, (request,))
-            .expect("delete empty Component transport");
-        assert!(matches!(
-            deleted.expect("delete empty Component").phase,
-            RootComponentDeletionPhase::Deleted(_)
-        ));
-        let removed: Result<RootComponentDeletionResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
-                (request,),
-            )
-            .expect("remove empty Component membership transport");
-        removed.expect("remove empty Component membership")
+        assert!(coordinator.draining.is_some());
+        assert!(coordinator.removal.is_some());
+        assert!(coordinator.readiness_intent.is_some());
+        assert!(coordinator.readiness.is_some());
+        assert!(coordinator.execution.is_none());
+        assert!(coordinator.completion.is_none());
     }
 
     /// Acquire one current Coordinator/root/Store fixture with active Registry-issued Components.
@@ -2009,6 +1253,8 @@ mod tests {
             root: metadata.root,
             issuer: metadata.issuer,
             verifier: metadata.verifier,
+            issuer_runtime_operation_id: metadata.issuer_runtime_operation_id,
+            verifier_runtime_operation_id: metadata.verifier_runtime_operation_id,
             store_bootstrap: metadata.store_bootstrap,
             wasm_store: metadata.wasm_store,
             pool_assets: metadata.pool_assets,
@@ -2053,6 +1299,8 @@ mod tests {
             root: fixture.root_id,
             issuer: components.issuer,
             verifier: components.verifier,
+            issuer_runtime_operation_id: components.issuer_runtime_operation_id,
+            verifier_runtime_operation_id: components.verifier_runtime_operation_id,
             store_bootstrap: fixture.request,
             wasm_store: fixture.response.wasm_store,
             pool_assets: fixture.init_args.canister_pool_imports,
@@ -2069,12 +1317,15 @@ mod tests {
         canic::dto::fleet_registry::FleetRegistryVersion,
         FleetSubnetRootRegistrySyncRequest,
     ) {
-        let genesis: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> = pic
-            .query_candid(coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
-            .expect("query Registry genesis");
+        let CoordinatorStatusResponse::RegistryVersion(genesis) =
+            coordinator_status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
+                .expect("query Registry genesis")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
         let binding = &fixture.init_args.authority.binding;
         let join_request = FleetSubnetRootJoinRequest {
-            expected_registry: genesis.expect("Registry genesis"),
+            expected_registry: genesis,
             entry: FleetSubnetRootEntry {
                 placement_subnet: binding.placement_subnet,
                 fleet_subnet_root: fixture.root_id,
@@ -2085,54 +1336,61 @@ mod tests {
                 status: FleetSubnetRootStatus::Joining,
             },
         };
-        let joined: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid(coordinator, CANIC_FLEET_SUBNET_ROOT_JOIN, (join_request,))
-            .expect("join root transport");
-        let joined = joined.expect("join root");
+        let CoordinatorCommandResponse::JoinRoot(joined) =
+            coordinator_command(pic, coordinator, CoordinatorCommand::JoinRoot(join_request))
+                .expect("join root")
+        else {
+            panic!("Coordinator returned a differently correlated join response");
+        };
         let sync_request = FleetSubnetRootRegistrySyncRequest {
+            operation_id: [20; 32],
             expected_registry: joined.version.clone(),
             store_bootstrap: fixture.request.clone(),
         };
-        let synchronized: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-                (sync_request.clone(),),
-            )
-            .expect("root Registry synchronization transport");
-        let synchronized = synchronized.expect("root Registry synchronization");
+        let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
+            pic,
+            fixture.root_id,
+            RootCommandFragment::SynchronizeRegistry(sync_request.clone()),
+        )
+        .expect("root Registry synchronization") else {
+            panic!("Root returned a differently correlated synchronization response");
+        };
+        assert_eq!(receipt.operation_id, sync_request.operation_id);
+        let RootStatusResponseFragment::Operation(
+            RootOperationStatusResponse::SynchronizeRegistry(synchronization),
+        ) = root_status(
+            pic,
+            fixture.root_id,
+            RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: sync_request.operation_id,
+            }),
+        )
+        .expect("root Registry synchronization status")
+        else {
+            panic!("Root returned a differently correlated synchronization status");
+        };
+        let synchronized = synchronization.synchronization;
         assert_eq!(synchronized.fleet_subnet_root, fixture.root_id);
         assert_eq!(synchronized.version, joined.version);
 
-        let retried: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-                (sync_request.clone(),),
-            )
-            .expect("root Registry synchronization retry transport");
-        assert_eq!(
-            retried.expect("root Registry synchronization retry"),
-            synchronized
-        );
-        let observed: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_SYNC_STATUS,
-                (sync_request.clone(),),
-            )
-            .expect("root Registry synchronization status transport");
-        assert_eq!(
-            observed.expect("root Registry synchronization status"),
-            synchronized
-        );
-        let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
-            .query_candid(coordinator, CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS, ())
-            .expect("query root acknowledgements");
-        assert_eq!(
-            acknowledgements.expect("root acknowledgements"),
-            vec![synchronized.acknowledgement]
-        );
+        let RootCommandResponseFragment::OperationAccepted(retried) = root_command(
+            pic,
+            fixture.root_id,
+            RootCommandFragment::SynchronizeRegistry(sync_request.clone()),
+        )
+        .expect("root Registry synchronization retry") else {
+            panic!("Root returned a differently correlated synchronization response");
+        };
+        assert_eq!(retried, receipt);
+        let CoordinatorStatusResponse::RootAcknowledgements(acknowledgements) = coordinator_status(
+            pic,
+            coordinator,
+            CoordinatorStatusRequest::RootAcknowledgements,
+        )
+        .expect("query root acknowledgements") else {
+            panic!("Coordinator returned a differently correlated acknowledgement status");
+        };
+        assert_eq!(acknowledgements, vec![synchronized.acknowledgement]);
         (joined.version, sync_request)
     }
 
@@ -2194,9 +1452,19 @@ mod tests {
     ) -> Result<(), ActiveComponentRegistryBaselineError> {
         let pic = baseline.pocket_ic();
         let metadata = baseline.metadata();
-        let registry: Result<FleetRegistry, Error> =
-            pic.query_candid(metadata.coordinator, CANIC_FLEET_REGISTRY, ())?;
-        let registry = baseline_application_result(registry, "query active Fleet Registry")?;
+        let CoordinatorStatusResponse::Registry(registry) = baseline_application_result(
+            coordinator_status(
+                pic,
+                metadata.coordinator,
+                CoordinatorStatusRequest::Registry,
+            ),
+            "query active Fleet Registry",
+        )?
+        else {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Coordinator returned a differently correlated Registry status".to_string(),
+            ));
+        };
         if registry.fleet_subnet_roots.len() != 1
             || registry.fleet_subnet_roots[0].fleet_subnet_root != metadata.root
             || registry.fleet_subnet_roots[0].status != FleetSubnetRootStatus::Active
@@ -2206,25 +1474,37 @@ mod tests {
             ));
         }
 
-        let activation: Result<FleetActivationStatusResponse, Error> =
-            pic.query_candid(metadata.root, CANIC_FLEET_ACTIVATION_STATUS, ())?;
-        if baseline_application_result(activation, "query root activation")?.phase
-            != FleetActivationPhase::Active
-        {
+        let RootStatusResponseFragment::Inventory(inventory) = baseline_application_result(
+            root_status(pic, metadata.root, RootStatusRequestFragment::Inventory),
+            "query root inventory",
+        )?
+        else {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root returned a differently correlated inventory status".to_string(),
+            ));
+        };
+        if inventory.status != FleetSubnetRootStatus::Active {
             return Err(ActiveComponentRegistryBaselineError::Invariant(
                 "Fleet Subnet Root is not active".to_string(),
             ));
         }
 
-        for binding in [&metadata.issuer, &metadata.verifier] {
-            let runtime: Result<ComponentRuntimeStatusResponse, Error> = pic.query_candid_as(
+        for (binding, operation_id) in [
+            (&metadata.issuer, metadata.issuer_runtime_operation_id),
+            (&metadata.verifier, metadata.verifier_runtime_operation_id),
+        ] {
+            let runtime: Result<ManagedStatusResponseFragment, Error> = pic.query_candid_as(
                 binding.canister_id,
                 metadata.root,
-                CANIC_COMPONENT_RUNTIME_STATUS,
-                (),
+                canic::protocol::CANIC_STATUS,
+                (ManagedStatusRequestFragment::Operation(
+                    OperationStatusRequest { operation_id },
+                ),),
             )?;
-            let runtime = baseline_application_result(runtime, "query Component runtime")?;
-            if runtime.phase != ComponentRuntimePhase::Active {
+            let ManagedStatusResponseFragment::Operation(
+                ManagedOperationStatusResponseFragment::ConfigureRuntime(runtime),
+            ) = baseline_application_result(runtime, "query Component runtime")?;
+            if runtime.runtime.phase != ComponentRuntimePhase::Active {
                 return Err(ActiveComponentRegistryBaselineError::Invariant(format!(
                     "Component {} is not active",
                     binding.canister_id
@@ -2232,15 +1512,22 @@ mod tests {
             }
         }
 
-        let pool: Result<CanisterPoolResponse, Error> = pic.query_candid(
-            metadata.root,
-            CANIC_POOL_LIST,
-            (CanisterPoolStatusRequest {
-                start_after: None,
-                limit: 256,
-            },),
-        )?;
-        let pool = baseline_application_result(pool, "query root Canister pool")?;
+        let RootStatusResponseFragment::Pool(pool) = baseline_application_result(
+            root_status(
+                pic,
+                metadata.root,
+                RootStatusRequestFragment::Pool(CanisterPoolStatusRequest {
+                    start_after: None,
+                    limit: 256,
+                }),
+            ),
+            "query root Canister pool",
+        )?
+        else {
+            return Err(ActiveComponentRegistryBaselineError::Invariant(
+                "Root returned a differently correlated pool status".to_string(),
+            ));
+        };
         let expected_ready = u32::try_from(metadata.pool_assets.len().saturating_sub(2))
             .expect("bounded test asset count");
         if pool.ready != expected_ready || pool.workload != 2 || pool.pending_reset != 0 {
@@ -2262,21 +1549,24 @@ mod tests {
     }
 
     fn assert_root_canister_summary(fixture: &ActiveComponentRegistryFixture) {
-        let summary: Result<FleetSubnetRootCanisterSummary, Error> = fixture
-            .pic()
-            .query_candid(fixture.root, CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, ())
-            .expect("query Fleet Subnet Root Canister summary");
-        let summary = summary.expect("Fleet Subnet Root Canister summary");
-        let coordinator_version: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> =
-            fixture
-                .pic()
-                .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
-                .expect("query Coordinator Registry version");
+        let RootStatusResponseFragment::Inventory(summary) = root_status(
+            fixture.pic(),
+            fixture.root,
+            RootStatusRequestFragment::Inventory,
+        )
+        .expect("query Fleet Subnet Root Canister summary") else {
+            panic!("Root returned a differently correlated inventory status");
+        };
+        let CoordinatorStatusResponse::RegistryVersion(coordinator_version) = coordinator_status(
+            fixture.pic(),
+            fixture.coordinator,
+            CoordinatorStatusRequest::RegistryVersion,
+        )
+        .expect("query Coordinator Registry version") else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
 
-        assert_eq!(
-            summary.fleet_registry,
-            coordinator_version.expect("Coordinator Registry version")
-        );
+        assert_eq!(summary.fleet_registry, coordinator_version);
         assert_eq!(summary.fleet_subnet_root, fixture.root);
         assert_eq!(summary.placement_subnet, fixture.issuer.placement_subnet);
         assert_eq!(summary.status, FleetSubnetRootStatus::Active);
@@ -2291,297 +1581,6 @@ mod tests {
             summary.infrastructure_canisters
                 + summary.component_canisters
                 + summary.pooled_canisters
-        );
-    }
-
-    #[cfg(test)]
-    fn assert_root_draining_fence(
-        fixture: &ActiveComponentRegistryFixture,
-    ) -> FleetSubnetRootDrainingResponse {
-        let version: Result<canic::dto::fleet_registry::FleetRegistryVersion, Error> = fixture
-            .pic()
-            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY_VERSION, ())
-            .expect("query Coordinator Registry version before root draining");
-        let request = FleetSubnetRootDrainingRequest {
-            operation_id: [0xd1; 32],
-            expected_registry: version.expect("Coordinator Registry version before root draining"),
-        };
-        let reservation = prepare_root_draining_reservation(fixture, &request);
-        let begun: Result<FleetSubnetRootDrainingResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
-                (request.clone(),),
-            )
-            .expect("begin Fleet Subnet Root draining transport");
-        let begun = begun.expect("begin Fleet Subnet Root draining");
-        assert_eq!(begun.operation_id, request.operation_id);
-        assert_eq!(begun.active_registry, request.expected_registry);
-        assert_eq!(begun.reservation_hash, reservation.reservation_hash);
-        assert_eq!(begun.fleet_subnet_root, fixture.root);
-        assert_eq!(begun.placement_subnet, fixture.verifier.placement_subnet);
-        assert_eq!(begun.next_allocation_sequence, 3);
-        assert_eq!(begun.reserved_component_instances, 0);
-        assert_eq!(begun.committed_component_instances, 2);
-        assert_eq!(begun.managed_descendants, 0);
-        assert_eq!(begun.known_created_component_canisters, 2);
-        assert!(begun.root_registry_encoded_bytes > 0);
-        assert!(begun.started_at_ns > 0);
-
-        let repeated: Result<FleetSubnetRootDrainingResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
-                (request,),
-            )
-            .expect("retry Fleet Subnet Root draining transport");
-        assert_eq!(repeated.expect("retry Fleet Subnet Root draining"), begun);
-        let status: Result<FleetSubnetRootDrainingResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
-                (FleetSubnetRootDrainingStatusRequest {
-                    operation_id: begun.operation_id,
-                },),
-            )
-            .expect("query Fleet Subnet Root draining status transport");
-        assert_eq!(status.expect("Fleet Subnet Root draining status"), begun);
-        assert_root_allocation_is_fenced(fixture);
-        begun
-    }
-
-    #[cfg(test)]
-    fn prepare_root_draining_reservation(
-        fixture: &ActiveComponentRegistryFixture,
-        request: &FleetSubnetRootDrainingRequest,
-    ) -> FleetSubnetRootDrainingReservationResponse {
-        let registry: Result<FleetRegistry, Error> = fixture
-            .pic()
-            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
-            .expect("query Coordinator Registry before root draining reservation");
-        let expected_root = registry
-            .expect("Coordinator Registry before root draining reservation")
-            .fleet_subnet_roots
-            .into_iter()
-            .find(|entry| entry.fleet_subnet_root == fixture.root)
-            .expect("target root in Coordinator Registry");
-        let reservation: Result<FleetSubnetRootDrainingReservationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.coordinator,
-                CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
-                (FleetSubnetRootDrainingReservationRequest {
-                    operation_id: request.operation_id,
-                    expected_registry: request.expected_registry.clone(),
-                    expected_root,
-                },),
-            )
-            .expect("prepare Fleet Subnet Root draining reservation transport");
-        reservation.expect("prepare Fleet Subnet Root draining reservation")
-    }
-
-    #[cfg(test)]
-    fn assert_root_allocation_is_fenced(fixture: &ActiveComponentRegistryFixture) {
-        let existing: Result<RootComponentAllocationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (RootComponentAllocationRequest {
-                    operation_id: [0xa2; 32],
-                    component_spec: fixture.verifier.component_spec.clone(),
-                },),
-            )
-            .expect("retry existing Component allocation after root draining transport");
-        assert_eq!(
-            existing
-                .expect("retry existing Component allocation after root draining")
-                .phase,
-            RootComponentAllocationPhase::Committed
-        );
-
-        let rejected: Result<RootComponentAllocationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (RootComponentAllocationRequest {
-                    operation_id: [0xa4; 32],
-                    component_spec: fixture.verifier.component_spec.clone(),
-                },),
-            )
-            .expect("attempt new Component allocation after root draining transport");
-        assert_eq!(
-            rejected
-                .expect_err("root draining must reject a new top-level Component allocation")
-                .code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
-        );
-    }
-
-    #[cfg(test)]
-    fn assert_coordinator_root_draining_publication(
-        fixture: &ActiveComponentRegistryFixture,
-        root_draining: &FleetSubnetRootDrainingResponse,
-    ) -> FleetSubnetRootDrainingPublicationResponse {
-        let request = FleetSubnetRootDrainingPublicationRequest {
-            expected_registry: root_draining.active_registry.clone(),
-            root_draining: root_draining.clone(),
-        };
-        let published: Result<FleetSubnetRootDrainingPublicationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.coordinator,
-                CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-                (request.clone(),),
-            )
-            .expect("publish Fleet Subnet Root draining transport");
-        let published = published.expect("publish Fleet Subnet Root draining");
-        assert_eq!(&published.root_draining, root_draining);
-        assert_eq!(published.previous_version, request.expected_registry);
-        assert_eq!(
-            published.version.revision,
-            published.previous_version.revision + 1
-        );
-
-        let repeated: Result<FleetSubnetRootDrainingPublicationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.coordinator,
-                CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-                (request,),
-            )
-            .expect("retry Fleet Subnet Root draining publication transport");
-        assert_eq!(
-            repeated.expect("retry Fleet Subnet Root draining publication"),
-            published
-        );
-        let registry: Result<FleetRegistry, Error> = fixture
-            .pic()
-            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
-            .expect("query published Draining Registry transport");
-        let registry = registry.expect("query published Draining Registry");
-        assert_eq!(registry.revision, published.version.revision);
-        assert_eq!(registry.fleet_subnet_roots.len(), 1);
-        assert_eq!(
-            registry.fleet_subnet_roots[0].status,
-            FleetSubnetRootStatus::Draining
-        );
-        published
-    }
-
-    #[cfg(test)]
-    fn assert_root_draining_mirror_activation(
-        fixture: &ActiveComponentRegistryFixture,
-        root_draining: &FleetSubnetRootDrainingResponse,
-        published: &FleetSubnetRootDrainingPublicationResponse,
-    ) {
-        let registry: Result<FleetRegistry, Error> = fixture
-            .pic()
-            .query_candid(fixture.coordinator, CANIC_FLEET_REGISTRY, ())
-            .expect("query Draining Registry for mirror activation transport");
-        let registry = registry.expect("Draining Registry for mirror activation");
-        let directory = FleetDirectorySnapshot {
-            provenance: FleetDirectoryProvenance {
-                registry: published.version.clone(),
-                source_fleet_subnet_root: fixture.root,
-            },
-            fleet_subnet_roots: registry
-                .fleet_subnet_roots
-                .iter()
-                .map(|entry| FleetSubnetRootDirectoryEntry {
-                    placement_subnet: entry.placement_subnet,
-                    fleet_subnet_root: entry.fleet_subnet_root,
-                    status: entry.status,
-                })
-                .collect(),
-            services: vec![],
-        };
-        let request = FleetSubnetRootRegistryMirrorActivationRequest {
-            previous_registry: root_draining.active_registry.clone(),
-            expected_registry: published.version.clone(),
-            expected_directory: directory,
-            store_bootstrap: fixture.store_bootstrap.clone(),
-        };
-        let activated: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                (request.clone(),),
-            )
-            .expect("activate Draining root Registry mirror transport");
-        let activated = activated.expect("activate Draining root Registry mirror");
-        assert_eq!(activated.previous_registry, request.previous_registry);
-        assert_eq!(activated.version, request.expected_registry);
-        assert_eq!(activated.directory, request.expected_directory);
-
-        let repeated: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                (request.clone(),),
-            )
-            .expect("retry Draining root Registry mirror activation transport");
-        assert_eq!(
-            repeated.expect("retry Draining root Registry mirror activation"),
-            activated
-        );
-        let status: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = fixture
-            .pic()
-            .query_candid(fixture.root, CANIC_FLEET_REGISTRY_MIRROR_STATUS, (request,))
-            .expect("query Draining root Registry mirror status transport");
-        assert_eq!(
-            status.expect("query Draining root Registry mirror status"),
-            activated
-        );
-
-        let summary: Result<FleetSubnetRootCanisterSummary, Error> = fixture
-            .pic()
-            .query_candid(fixture.root, CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY, ())
-            .expect("query Draining root summary transport");
-        let summary = summary.expect("query Draining root summary");
-        assert_eq!(summary.fleet_registry, published.version);
-        assert_eq!(summary.status, FleetSubnetRootStatus::Draining);
-
-        let prepared: Result<RootComponentRegistryStatusResponse, Error> = fixture
-            .pic()
-            .query_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (RootComponentRegistryPreparationRequest {
-                    store_bootstrap: fixture.store_bootstrap.clone(),
-                    expected_fleet_registry: root_draining.active_registry.clone(),
-                },),
-            )
-            .expect("query Component Registry after mirror advancement transport");
-        assert_eq!(
-            prepared
-                .expect("query Component Registry after mirror advancement")
-                .prepared_against_registry,
-            root_draining.active_registry
-        );
-
-        let rejected: Result<RootComponentAllocationResponse, Error> = fixture
-            .pic()
-            .update_candid(
-                fixture.root,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (RootComponentAllocationRequest {
-                    operation_id: [0xa5; 32],
-                    component_spec: fixture.verifier.component_spec.clone(),
-                },),
-            )
-            .expect("attempt Component allocation after Draining mirror activation transport");
-        assert_eq!(
-            rejected
-                .expect_err("Draining mirror activation must not reopen root allocation")
-                .code(),
-            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
         );
     }
 
@@ -2643,236 +1642,192 @@ mod tests {
         coordinator: Principal,
         fixture: &BootstrappedRootFixture,
         joining_version: canic::dto::fleet_registry::FleetRegistryVersion,
-        sync_request: FleetSubnetRootRegistrySyncRequest,
+        joining_sync_request: FleetSubnetRootRegistrySyncRequest,
     ) -> RootComponentRegistryPreparationRequest {
-        let activated: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                CANIC_FLEET_REGISTRY_ACTIVATE,
-                (FleetRegistryActivationRequest {
-                    expected_registry: joining_version,
-                },),
-            )
-            .expect("activate Registry transport");
-        let activated = activated.expect("activate Registry");
-        assert_eq!(activated.version.revision, 3);
-        let active: Result<FleetRegistry, Error> = pic
-            .query_candid(coordinator, CANIC_FLEET_REGISTRY, ())
-            .expect("query active Registry");
-        let active = active.expect("active Registry");
+        let CoordinatorCommandResponse::ActivateRegistry(activated) = coordinator_command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+                expected_registry: joining_version,
+            }),
+        )
+        .expect("activate Registry") else {
+            panic!("Coordinator returned a differently correlated activation response");
+        };
+        let CoordinatorStatusResponse::Registry(active) =
+            coordinator_status(pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query active Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
         assert_eq!(
             active.fleet_subnet_roots.first().expect("one root").status,
             FleetSubnetRootStatus::Active
         );
-        let directory = FleetDirectorySnapshot {
-            provenance: FleetDirectoryProvenance {
-                registry: activated.version.clone(),
-                source_fleet_subnet_root: fixture.root_id,
+
+        let mut synchronized = None;
+        for _ in 0..32 {
+            let RootStatusResponseFragment::Operation(
+                RootOperationStatusResponse::SynchronizeRegistry(status),
+            ) = root_status(
+                pic,
+                fixture.root_id,
+                RootStatusRequestFragment::Operation(OperationStatusRequest {
+                    operation_id: joining_sync_request.operation_id,
+                }),
+            )
+            .expect("query active Registry synchronization")
+            else {
+                panic!("Root returned a differently correlated synchronization status");
+            };
+            if status.activation.is_some() {
+                synchronized = Some(status);
+                break;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        let synchronized =
+            synchronized.expect("Root must autonomously activate its Registry mirror");
+        let activation = synchronized
+            .activation
+            .expect("Root Registry operation must retain its autonomous activation receipt");
+        assert_eq!(
+            activation.previous_registry,
+            synchronized.synchronization.version
+        );
+        assert_eq!(activation.version, activated.version);
+
+        prepare_component_registry(
+            pic,
+            fixture,
+            RootComponentRegistryPreparationRequest {
+                store_bootstrap: fixture.request.clone(),
+                expected_fleet_registry: activated.version,
             },
-            fleet_subnet_roots: active
-                .fleet_subnet_roots
-                .iter()
-                .map(|entry| FleetSubnetRootDirectoryEntry {
-                    placement_subnet: entry.placement_subnet,
-                    fleet_subnet_root: entry.fleet_subnet_root,
-                    status: entry.status,
-                })
-                .collect(),
-            services: vec![],
-        };
-        let activation_request = FleetSubnetRootRegistryMirrorActivationRequest {
-            previous_registry: activated.previous_version,
-            expected_registry: activated.version,
-            expected_directory: directory,
-            store_bootstrap: fixture.request.clone(),
-        };
-        let mirror: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                (activation_request.clone(),),
-            )
-            .expect("activate root Registry mirror transport");
-        let mirror = mirror.expect("activate root Registry mirror");
-        let mirror_retry: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                (activation_request.clone(),),
-            )
-            .expect("retry root Registry mirror activation transport");
-        assert_eq!(
-            mirror_retry.expect("retry root Registry mirror activation"),
-            mirror
-        );
-        let mirror_status: Result<FleetSubnetRootRegistryMirrorActivationResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                (activation_request.clone(),),
-            )
-            .expect("query root Registry mirror status transport");
-        assert_eq!(mirror_status.expect("root Registry mirror status"), mirror);
-
-        let component_registry_request =
-            prepare_component_registry(pic, fixture, activation_request);
-
-        let old_candidate: Result<FleetSubnetRootRegistrySyncResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_FLEET_REGISTRY_SYNC_STATUS,
-                (sync_request,),
-            )
-            .expect("query private Joining candidate after Registry activation");
-        assert_eq!(
-            old_candidate
-                .expect_err("Joining candidate must be replaced")
-                .code(),
-            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
-        );
-        component_registry_request
+        )
     }
 
     fn prepare_component_registry(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
-        activation_request: FleetSubnetRootRegistryMirrorActivationRequest,
+        request: RootComponentRegistryPreparationRequest,
     ) -> RootComponentRegistryPreparationRequest {
-        let component_registry_request = RootComponentRegistryPreparationRequest {
-            store_bootstrap: activation_request.store_bootstrap,
-            expected_fleet_registry: activation_request.expected_registry,
+        let RootCommandResponseFragment::PrepareComponentRegistry(prepared) = root_command(
+            pic,
+            fixture.root_id,
+            RootCommandFragment::PrepareComponentRegistry(request.clone()),
+        )
+        .expect("prepare root Component Registry") else {
+            panic!("Root returned a differently correlated Component Registry response");
         };
-        let component_registry: Result<RootComponentRegistryStatusResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-                (component_registry_request.clone(),),
-            )
-            .expect("prepare root Component Registry transport");
-        let component_registry = component_registry.expect("prepare root Component Registry");
-        assert_eq!(component_registry.fleet_subnet_root, fixture.root_id);
+        assert_eq!(prepared.fleet_subnet_root, fixture.root_id);
         assert_eq!(
-            component_registry.release_set,
+            prepared.release_set,
             fixture.init_args.authority.initial_release_set
         );
         assert_eq!(
-            component_registry.component_topology_digest,
+            prepared.component_topology_digest,
             fixture
                 .init_args
                 .authority
                 .binding
                 .component_topology_digest
         );
-        assert_eq!(component_registry.next_allocation_sequence, 1);
-        assert_eq!(component_registry.reserved_component_instances, 0);
-        assert_eq!(component_registry.committed_component_instances, 0);
-        assert_eq!(component_registry.managed_descendants, 0);
-        assert_eq!(component_registry.known_created_component_canisters, 0);
-        assert_eq!(component_registry.encoded_bytes, 0);
+        assert_eq!(prepared.next_allocation_sequence, 1);
+        assert_eq!(prepared.reserved_component_instances, 0);
+        assert_eq!(prepared.committed_component_instances, 0);
 
-        let component_registry_retry: Result<RootComponentRegistryStatusResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-                (component_registry_request.clone(),),
-            )
-            .expect("retry root Component Registry preparation transport");
-        assert_eq!(
-            component_registry_retry.expect("retry root Component Registry preparation"),
-            component_registry
-        );
-        let component_registry_status: Result<RootComponentRegistryStatusResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (component_registry_request.clone(),),
-            )
-            .expect("query root Component Registry status transport");
-        assert_eq!(
-            component_registry_status.expect("root Component Registry status"),
-            component_registry
-        );
-
-        component_registry_request
+        let RootCommandResponseFragment::PrepareComponentRegistry(retried) = root_command(
+            pic,
+            fixture.root_id,
+            RootCommandFragment::PrepareComponentRegistry(request.clone()),
+        )
+        .expect("retry root Component Registry preparation") else {
+            panic!("Root returned a differently correlated Component Registry response");
+        };
+        assert_eq!(retried, prepared);
+        request
     }
 
     fn assert_component_allocation(
         pic: &PocketIc,
         fixture: &BootstrappedRootFixture,
-        component_registry_request: RootComponentRegistryPreparationRequest,
+        _component_registry_request: RootComponentRegistryPreparationRequest,
     ) -> ActiveComponentBindings {
-        let (_, issuer) = assert_issuer_component_allocation(pic, fixture);
-        let issuer_binding = installed_component_binding(&issuer);
-        let verifier_request = RootComponentAllocationRequest {
-            operation_id: [0xa2; 32],
+        let issuer = provision_component(pic, fixture, [0xa1; 32]);
+        let verifier = provision_component(pic, fixture, [0xa2; 32]);
+        assert_ne!(issuer.component, verifier.component);
+        assert_eq!(issuer.allocation_sequence, 1);
+        assert_eq!(verifier.allocation_sequence, 2);
+        assert_eq!(issuer.phase, RootComponentAllocationPhase::Committed);
+        assert_eq!(verifier.phase, RootComponentAllocationPhase::Committed);
+
+        activate_root(pic, fixture.root_id);
+        ActiveComponentBindings::new(
+            installed_component_binding(&issuer),
+            installed_component_binding(&verifier),
+            [0xa1; 32],
+            [0xa2; 32],
+        )
+    }
+
+    fn provision_component(
+        pic: &PocketIc,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+    ) -> RootComponentAllocationResponse {
+        let request = RootComponentAllocationRequest {
+            operation_id,
             component_spec: "issuer".parse().expect("issuer Component Spec"),
         };
-        let verifier: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (verifier_request.clone(),),
-            )
-            .expect("reserve verifier Component transport");
-        let verifier = verifier.expect("reserve verifier Component");
-        assert_eq!(verifier.allocation_sequence, 2);
-        assert_ne!(verifier.component, issuer.component);
-        assert_eq!(verifier.role, CanisterRole::new("issuer"));
-        assert_eq!(verifier.phase, RootComponentAllocationPhase::Reserved);
-        let verifier_component = verifier.component;
-
-        let component_registry: Result<RootComponentRegistryStatusResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (component_registry_request.clone(),),
-            )
-            .expect("query allocated root Component Registry status transport");
-        let component_registry =
-            component_registry.expect("allocated root Component Registry status");
-        assert_eq!(component_registry.next_allocation_sequence, 3);
-        assert_eq!(component_registry.reserved_component_instances, 1);
-        assert_eq!(component_registry.committed_component_instances, 1);
-        assert_eq!(component_registry.managed_descendants, 0);
-        assert_eq!(component_registry.known_created_component_canisters, 1);
-        assert!(component_registry.encoded_bytes > 0);
-        assert_prepared(pic, fixture.root_id);
-        let incomplete_activation: Result<FleetActivationStatusResponse, Error> = pic
-            .update_candid(fixture.root_id, CANIC_PREPARE_FLEET_ACTIVATION, ())
-            .expect("prepare incomplete root Fleet activation transport");
-        assert_eq!(
-            incomplete_activation
-                .expect_err("reserved Component must prevent root activation preparation")
-                .code(),
-            canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
-        );
-        assert_eq!(
-            component_registry_status(pic, fixture, component_registry_request.clone())
-                .initial_inventory,
-            None
-        );
-
-        let active_verifier = create_component(pic, fixture, verifier_request.operation_id);
-        assert_eq!(active_verifier.component, verifier_component);
-        assert_eq!(
-            active_verifier.component_spec,
-            verifier_request.component_spec
-        );
-        assert_eq!(active_verifier.role, CanisterRole::new("issuer"));
-        assert_eq!(
-            active_verifier.phase,
-            RootComponentAllocationPhase::Committed
-        );
-        let complete = component_registry_status(pic, fixture, component_registry_request.clone());
-        assert_eq!(complete.reserved_component_instances, 0);
-        assert_eq!(complete.committed_component_instances, 2);
-        assert_eq!(complete.known_created_component_canisters, 2);
-        assert_eq!(complete.initial_inventory, None);
-        assert_root_runtime_activation(pic, fixture, component_registry_request);
-        ActiveComponentBindings::new(
-            issuer_binding,
-            installed_component_binding(&active_verifier),
+        let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
+            pic,
+            fixture.root_id,
+            RootCommandFragment::ProvisionComponent(request.clone()),
         )
+        .expect("submit Component provisioning") else {
+            panic!("Root returned a differently correlated provisioning response");
+        };
+        assert_eq!(receipt.operation_id, operation_id);
+
+        let mut last_allocation = None;
+        for _ in 0..80 {
+            let RootStatusResponseFragment::Operation(
+                RootOperationStatusResponse::ProvisionComponent(status),
+            ) = root_status(
+                pic,
+                fixture.root_id,
+                RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query Component provisioning")
+            else {
+                panic!("Root returned a differently correlated provisioning status");
+            };
+            if status.complete
+                && status.allocation.phase == RootComponentAllocationPhase::Committed
+                && status.allocation.installation.is_some()
+            {
+                let RootCommandResponseFragment::OperationAccepted(retried) = root_command(
+                    pic,
+                    fixture.root_id,
+                    RootCommandFragment::ProvisionComponent(request),
+                )
+                .expect("retry Component provisioning") else {
+                    panic!("Root returned a differently correlated provisioning response");
+                };
+                assert_eq!(retried, receipt);
+                return status.allocation;
+            }
+            last_allocation = Some(status.allocation);
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+
+        pic.dump_canister_debug(fixture.root_id, "autonomous Component provisioning");
+        panic!(
+            "Root did not autonomously complete Component provisioning; last allocation: {last_allocation:?}"
+        );
     }
 
     fn installed_component_binding(
@@ -2886,772 +1841,67 @@ mod tests {
             .clone()
     }
 
-    fn assert_root_runtime_activation(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        component_registry_request: RootComponentRegistryPreparationRequest,
-    ) {
-        let prepared: Result<FleetActivationStatusResponse, Error> = pic
-            .update_candid(fixture.root_id, CANIC_PREPARE_FLEET_ACTIVATION, ())
-            .expect("prepare root Fleet activation transport");
-        let prepared = prepared.expect("prepare root Fleet activation");
+    fn activate_root(pic: &PocketIc, root: Principal) {
+        let RootCommandResponseFragment::OperationAccepted(preparation) =
+            root_command(pic, root, RootCommandFragment::PrepareFleetActivation)
+                .expect("prepare root Fleet activation")
+        else {
+            panic!("Root returned a differently correlated activation response");
+        };
+        let RootStatusResponseFragment::Operation(RootOperationStatusResponse::FleetActivation(
+            prepared,
+        )) = root_status(
+            pic,
+            root,
+            RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: preparation.operation_id,
+            }),
+        )
+        .expect("query prepared root Fleet activation")
+        else {
+            panic!("Root returned a differently correlated activation status");
+        };
         assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
-        let manifest = prepared
-            .cascade_manifest
-            .as_ref()
-            .expect("prepared root infrastructure cascade manifest");
-        assert_eq!(manifest.len(), 1);
-        assert_eq!(manifest[0].principal, fixture.response.wasm_store);
         let credential = prepared
             .credential
             .expect("prepared root credential generation");
 
-        let sealed = component_registry_status(pic, fixture, component_registry_request.clone())
-            .initial_inventory
-            .expect("sealed initial Component inventory");
-        assert_initial_inventory(&sealed, prepared.identity.operation_id, 2, false, false);
-
-        let request = FleetActivationResumeRequest {
-            operation_id: prepared.identity.operation_id,
-            credential,
-        };
-        let activated: Result<FleetActivationStatusResponse, Error> = pic
-            .update_candid(fixture.root_id, CANIC_RESUME_FLEET_ACTIVATION, (request,))
-            .expect("resume root Fleet activation transport");
-        let activated = activated.expect("resume root Fleet activation");
-        assert_eq!(activated.phase, FleetActivationPhase::Active);
-        assert!(activated.activated_at_ns.is_some_and(|time| time > 0));
-
-        let terminal = component_registry_status(pic, fixture, component_registry_request)
-            .initial_inventory
-            .expect("terminal initial Component inventory");
-        assert_initial_inventory(&terminal, request.operation_id, 2, true, true);
-        assert_eq!(terminal.inventory_hash, sealed.inventory_hash);
-
-        let retried: Result<FleetActivationStatusResponse, Error> = pic
-            .update_candid(fixture.root_id, CANIC_RESUME_FLEET_ACTIVATION, (request,))
-            .expect("retry root Fleet activation transport");
-        assert_eq!(
-            retried.expect("retry root Fleet activation"),
-            activated,
-            "root activation retry must preserve its original receipt"
-        );
-    }
-
-    fn component_registry_status(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        request: RootComponentRegistryPreparationRequest,
-    ) -> RootComponentRegistryStatusResponse {
-        let status: Result<RootComponentRegistryStatusResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                (request,),
-            )
-            .expect("query root Component Registry activation status transport");
-        status.expect("root Component Registry activation status")
-    }
-
-    fn assert_initial_inventory(
-        inventory: &RootComponentInitialInventoryStatus,
-        operation_id: [u8; 32],
-        component_count: u32,
-        directories_converged: bool,
-        root_runtime_activated: bool,
-    ) {
-        assert_eq!(inventory.fleet_activation_operation_id, operation_id);
-        assert_eq!(inventory.component_count, component_count);
-        assert_ne!(inventory.inventory_hash, [0; 32]);
-        assert!(inventory.sealed_at_ns > 0);
-        assert_eq!(inventory.directories_converged, directories_converged);
-        assert_eq!(inventory.root_runtime_activated, root_runtime_activated);
-    }
-
-    fn assert_issuer_component_allocation(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-    ) -> (
-        RootComponentAllocationRequest,
-        RootComponentAllocationResponse,
-    ) {
-        let issuer_request = RootComponentAllocationRequest {
-            operation_id: [0xa1; 32],
-            component_spec: "issuer".parse().expect("issuer Component Spec"),
-        };
-        let issuer: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (issuer_request.clone(),),
-            )
-            .expect("reserve issuer Component transport");
-        let issuer = issuer.expect("reserve issuer Component");
-        assert_eq!(issuer.operation_id, issuer_request.operation_id);
-        assert_eq!(issuer.allocation_sequence, 1);
-        assert_eq!(issuer.component_spec, issuer_request.component_spec);
-        assert_eq!(issuer.role, CanisterRole::new("issuer"));
-        assert_eq!(
-            issuer.component,
-            ComponentInstanceId::from_root_allocation(
-                fixture
-                    .init_args
-                    .authority
-                    .binding
-                    .authority
-                    .binding
-                    .fleet
-                    .fleet,
-                fixture.init_args.authority.binding.authority.epoch,
-                fixture.root_id,
-                1,
-            )
-        );
-        assert_eq!(
-            issuer.provisioning_origin,
-            ComponentProvisioningOrigin::FleetAdministrator {
-                caller: Principal::anonymous(),
-            }
-        );
-        assert_eq!(
-            issuer.release_set,
-            fixture.init_args.authority.initial_release_set
-        );
-        assert_eq!(issuer.phase, RootComponentAllocationPhase::Reserved);
-
-        let issuer_retry: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATE,
-                (issuer_request.clone(),),
-            )
-            .expect("retry issuer Component reservation transport");
-        assert_eq!(
-            issuer_retry.expect("retry issuer Component reservation"),
-            issuer
-        );
-        let issuer_status: Result<RootComponentAllocationResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-                (RootComponentAllocationStatusRequest {
-                    operation_id: issuer_request.operation_id,
-                },),
-            )
-            .expect("query issuer Component reservation transport");
-        assert_eq!(
-            issuer_status.expect("issuer Component reservation status"),
-            issuer
-        );
-
-        let created = create_component(pic, fixture, issuer_request.operation_id);
-        (issuer_request, created)
-    }
-
-    fn create_component(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        operation_id: [u8; 32],
-    ) -> RootComponentAllocationResponse {
-        let created: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_CREATE,
-                (RootComponentCreationRequest { operation_id },),
-            )
-            .expect("create Component transport");
-        let created = created.expect("create Component");
-        assert_eq!(created.phase, RootComponentAllocationPhase::Created);
-        let creation = created.creation.as_ref().expect("creation evidence");
-        let canister = creation.canister.expect("created Canister");
-        assert_eq!(creation.wasm_store, fixture.response.wasm_store);
-        assert_eq!(creation.controller, fixture.root_id);
-        assert!(creation.initial_cycles.to_u128() > 0);
-        let artifact = fixture
-            .response
-            .catalog
-            .iter()
-            .find(|entry| entry.role == created.role)
-            .expect("Component Store artifact");
-        assert_eq!(creation.payload_hash, artifact.payload_hash);
-        assert_eq!(creation.payload_size_bytes, artifact.payload_size_bytes);
-
-        let canister_status = pic
-            .canister_status(canister, Some(fixture.root_id))
-            .expect("created Component Canister status");
-        assert_eq!(canister_status.settings.controllers, vec![fixture.root_id]);
-        assert_eq!(canister_status.module_hash, None);
-        assert!(
-            canister_status.cycles >= creation.initial_cycles.to_u128(),
-            "the claimed prepaid asset must meet the Component's frozen minimum balance"
-        );
-
-        let retry: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_CREATE,
-                (RootComponentCreationRequest { operation_id },),
-            )
-            .expect("retry Component creation transport");
-        assert_eq!(retry.expect("retry Component creation"), created);
-        let created_status: Result<RootComponentAllocationResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-                (RootComponentAllocationStatusRequest { operation_id },),
-            )
-            .expect("query created Component transport");
-        assert_eq!(created_status.expect("created Component status"), created);
-
-        install_component(pic, fixture, operation_id, created)
-    }
-
-    fn install_component(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        operation_id: [u8; 32],
-        created: RootComponentAllocationResponse,
-    ) -> RootComponentAllocationResponse {
-        let creation = created.creation.as_ref().expect("creation evidence");
-        let artifact = fixture
-            .response
-            .catalog
-            .iter()
-            .find(|entry| entry.role == created.role)
-            .expect("Component Store artifact");
-        let installed: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_INSTALL,
-                (RootComponentInstallRequest { operation_id },),
-            )
-            .expect("install Component transport");
-        let installed = installed.expect("install Component");
-        assert_eq!(installed.phase, RootComponentAllocationPhase::Verified);
-        let installation = installed.installation.as_ref().expect("install evidence");
-        assert_eq!(installation.raw_module_hash, artifact.raw_module_hash);
-        assert_eq!(
-            installation.binding.canister_id,
-            creation.canister.expect("created Canister")
-        );
-        assert_eq!(
-            installation.binding.component, installed.component,
-            "target binding must retain the reserved Component identity"
-        );
-        let observed_binding: Result<ManagedCanisterBinding, Error> = pic
-            .query_candid_as(
-                creation.canister.expect("created Canister"),
-                fixture.root_id,
-                canic::protocol::CANIC_MANAGED_CANISTER_BINDING,
-                (),
-            )
-            .expect("query installed Component binding transport");
-        assert_eq!(
-            observed_binding.expect("installed Component binding"),
-            ManagedCanisterBinding::Component(installation.binding.clone())
-        );
-        let installed_status = pic
-            .canister_status(
-                creation.canister.expect("created Canister"),
-                Some(fixture.root_id),
-            )
-            .expect("installed Component Canister status");
-        assert_eq!(
-            installed_status.module_hash,
-            Some(creation.payload_hash.to_vec())
-        );
-
-        let install_retry: Result<RootComponentAllocationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_INSTALL,
-                (RootComponentInstallRequest { operation_id },),
-            )
-            .expect("retry Component install transport");
-        assert_eq!(install_retry.expect("retry Component install"), installed);
-        commit_component(pic, fixture, operation_id, installed)
-    }
-
-    fn commit_component(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        operation_id: [u8; 32],
-        installed: RootComponentAllocationResponse,
-    ) -> RootComponentAllocationResponse {
-        let committed: Result<RootComponentCommitResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_COMMIT,
-                (RootComponentCommitRequest { operation_id },),
-            )
-            .expect("commit Component transport");
-        let committed = committed.expect("commit Component");
-        assert_eq!(
-            committed.allocation.phase,
-            RootComponentAllocationPhase::Committed
-        );
-        assert_eq!(committed.allocation.component, installed.component);
-        assert_eq!(
-            committed.allocation.installation, installed.installation,
-            "Registry commitment must retain the verified install evidence"
-        );
-        assert_eq!(committed.registry.head.component, installed.component);
-        assert_eq!(committed.registry.head.revision, 1);
-        assert_ne!(committed.registry.head.content_hash, [0; 32]);
-        assert_eq!(
-            committed.registry.binding,
-            installed
-                .installation
-                .as_ref()
-                .expect("verified installation")
-                .binding
-        );
-        assert_eq!(
-            committed.registry.provisioning_origin,
-            installed.provisioning_origin
-        );
-        assert_eq!(committed.registry.release_set, installed.release_set);
-        assert_eq!(
-            committed.registry.status,
-            ComponentLifecycleStatus::Prepared
-        );
-        assert!(committed.registry.encoded_bytes > 0);
-        assert_eq!(
-            committed.directory.provenance.component,
-            committed.registry.binding
-        );
-        assert_eq!(
-            committed.directory.provenance.source_fleet_subnet_root,
-            fixture.root_id
-        );
-        assert_eq!(
-            committed.directory.provenance.component_registry_revision,
-            committed.registry.head.revision
-        );
-        assert_eq!(
-            committed
-                .directory
-                .provenance
-                .component_registry_content_hash,
-            committed.registry.head.content_hash
-        );
-        assert!(
-            committed.directory.provenance.synchronized_at_ns > 0,
-            "the first Directory must retain its derivation time"
-        );
-        assert_eq!(committed.directory.descendant_count, 0);
-
-        let retry: Result<RootComponentCommitResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_COMMIT,
-                (RootComponentCommitRequest { operation_id },),
-            )
-            .expect("retry Component commitment transport");
-        assert_eq!(retry.expect("retry Component commitment"), committed);
-        assert_committed_component_queries(pic, fixture, operation_id, &committed);
-        prepare_component_directories(pic, fixture, operation_id, committed)
-    }
-
-    fn prepare_component_directories(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        operation_id: [u8; 32],
-        committed: RootComponentCommitResponse,
-    ) -> RootComponentAllocationResponse {
-        let target = committed.registry.binding.canister_id;
-        let awaiting: Result<ComponentRuntimeStatusResponse, Error> = pic
-            .query_candid_as(target, fixture.root_id, CANIC_COMPONENT_RUNTIME_STATUS, ())
-            .expect("query awaiting Component runtime Directory transport");
-        let awaiting = awaiting.expect("awaiting Component runtime Directory");
-        assert_eq!(awaiting.operation_id, operation_id);
-        assert_eq!(
-            awaiting.binding,
-            ManagedCanisterBinding::Component(committed.registry.binding.clone())
-        );
-        assert_eq!(awaiting.phase, ComponentRuntimePhase::AwaitingDirectory);
-        assert_eq!(awaiting.authority, None);
-        assert_eq!(awaiting.authority_hash, None);
-        assert_eq!(awaiting.activation, None);
-
-        let request = RootComponentDirectoryPreparationRequest { operation_id };
-        let prepared: Result<RootComponentDirectoryPreparationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-                (request,),
-            )
-            .expect("prepare Component Directories transport");
-        let prepared = prepared.expect("prepare Component Directories");
-        assert_eq!(prepared.committed, committed);
-        assert_eq!(
-            prepared.target.phase,
-            ComponentRuntimePhase::DirectoryPrepared
-        );
-        assert_eq!(prepared.target.operation_id, operation_id);
-        assert_eq!(
-            prepared.target.binding,
-            ManagedCanisterBinding::Component(prepared.committed.registry.binding.clone())
-        );
-        let authority = prepared
-            .target
-            .authority
-            .as_ref()
-            .expect("retained Component runtime Directory authority");
-        assert_eq!(authority.component, prepared.committed.directory);
-        assert_eq!(
-            authority.fleet.provenance.source_fleet_subnet_root,
-            fixture.root_id
-        );
-        assert!(
-            authority
-                .fleet
-                .fleet_subnet_roots
-                .iter()
-                .all(|entry| entry.status == FleetSubnetRootStatus::Active)
-        );
-        assert_ne!(
-            prepared
-                .target
-                .authority_hash
-                .expect("Directory authority hash"),
-            [0; 32]
-        );
-        assert_eq!(prepared.target.activation, None);
-
-        let retry: Result<RootComponentDirectoryPreparationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-                (request,),
-            )
-            .expect("retry Component Directory preparation transport");
-        assert_eq!(
-            retry.expect("retry Component Directory preparation"),
-            prepared
-        );
-        let observed: Result<ComponentRuntimeStatusResponse, Error> = pic
-            .query_candid_as(target, fixture.root_id, CANIC_COMPONENT_RUNTIME_STATUS, ())
-            .expect("query prepared Component runtime Directory transport");
-        assert_eq!(
-            observed.expect("prepared Component runtime Directory"),
-            prepared.target
-        );
-        assert_prepared(pic, fixture.root_id);
-        let target_activation: Result<FleetActivationStatusResponse, Error> = pic
-            .query_candid_as(target, fixture.root_id, CANIC_FLEET_ACTIVATION_STATUS, ())
-            .expect("query prepared Component activation transport");
-        assert_eq!(
-            target_activation
-                .expect("prepared Component activation")
-                .phase,
-            FleetActivationPhase::Prepared
-        );
-        activate_component_runtime(pic, fixture, request, prepared)
-    }
-
-    fn activate_component_runtime(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        directory_request: RootComponentDirectoryPreparationRequest,
-        prepared: RootComponentDirectoryPreparationResponse,
-    ) -> RootComponentAllocationResponse {
-        let target = prepared.committed.registry.binding.canister_id;
-        let request = RootComponentRuntimeActivationRequest {
-            operation_id: directory_request.operation_id,
-        };
-        let activated: Result<RootComponentRuntimeActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-                (request,),
-            )
-            .expect("activate Component runtime transport");
-        let activated = activated.expect("activate Component runtime");
-        assert_eq!(activated.committed, prepared.committed);
-        assert_eq!(activated.target.operation_id, request.operation_id);
-        assert_eq!(activated.target.binding, prepared.target.binding);
-        assert_eq!(activated.target.phase, ComponentRuntimePhase::Active);
-        assert_eq!(activated.target.authority, prepared.target.authority);
-        assert_eq!(
-            activated.target.authority_hash,
-            prepared.target.authority_hash
-        );
-        let activation = activated
-            .target
-            .activation
-            .as_ref()
-            .expect("Component runtime activation evidence");
-        assert_eq!(
-            Some(activation.directory_authority_hash),
-            activated.target.authority_hash
-        );
-        assert!(activation.activated_at_ns > 0);
-
-        let retry: Result<RootComponentRuntimeActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-                (request,),
-            )
-            .expect("retry Component runtime activation transport");
-        assert_eq!(
-            retry.expect("retry Component runtime activation"),
-            activated
-        );
-        let observed: Result<ComponentRuntimeStatusResponse, Error> = pic
-            .query_candid_as(target, fixture.root_id, CANIC_COMPONENT_RUNTIME_STATUS, ())
-            .expect("query active Component runtime transport");
-        assert_eq!(
-            observed.expect("active Component runtime"),
-            activated.target
-        );
-        let target_activation: Result<FleetActivationStatusResponse, Error> = pic
-            .query_candid_as(target, fixture.root_id, CANIC_FLEET_ACTIVATION_STATUS, ())
-            .expect("query active Component Fleet status transport");
-        let target_activation = target_activation.expect("active Component Fleet status");
-        assert_eq!(target_activation.phase, FleetActivationPhase::Active);
-        assert_eq!(target_activation.cascade, None);
-        assert_eq!(target_activation.credential, None);
-        assert_eq!(
-            target_activation.activated_at_ns,
-            Some(activation.activated_at_ns)
-        );
-
-        let prepared_retry: Result<RootComponentDirectoryPreparationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-                (directory_request,),
-            )
-            .expect("retry Directory preparation after runtime activation transport");
-        assert_eq!(
-            prepared_retry.expect("retry Directory preparation after runtime activation"),
-            prepared
-        );
-        assert_committed_component_queries(
+        let RootCommandResponseFragment::OperationAccepted(resumed) = root_command(
             pic,
-            fixture,
-            request.operation_id,
-            &activated.committed,
-        );
-        assert_prepared(pic, fixture.root_id);
-        activate_component_membership(pic, fixture, directory_request, prepared, activated)
-    }
-
-    fn activate_component_membership(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        directory_request: RootComponentDirectoryPreparationRequest,
-        prepared: RootComponentDirectoryPreparationResponse,
-        activated: RootComponentRuntimeActivationResponse,
-    ) -> RootComponentAllocationResponse {
-        let request = RootComponentMembershipActivationRequest {
-            operation_id: directory_request.operation_id,
+            root,
+            RootCommandFragment::ResumeFleetActivation(FleetActivationResumeRequest {
+                operation_id: preparation.operation_id,
+                credential,
+            }),
+        )
+        .expect("resume root Fleet activation") else {
+            panic!("Root returned a differently correlated activation response");
         };
-        let membership: Result<RootComponentMembershipActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-                (request,),
-            )
-            .expect("activate Component membership transport");
-        let membership = membership.expect("activate Component membership");
-        assert_eq!(membership.allocation, activated.committed.allocation);
-        assert_eq!(membership.registry.status, ComponentLifecycleStatus::Active);
-        assert_eq!(membership.registry.head.revision, 2);
-        assert_ne!(
-            membership.registry.head.content_hash,
-            activated.committed.registry.head.content_hash
-        );
-        assert_eq!(
-            membership.directory.provenance.component_registry_revision,
-            membership.registry.head.revision
-        );
-        assert_eq!(
-            membership
-                .directory
-                .provenance
-                .component_registry_content_hash,
-            membership.registry.head.content_hash
-        );
-        assert!(
-            membership.directory.provenance.synchronized_at_ns
-                > activated.committed.directory.provenance.synchronized_at_ns
-        );
-        assert_eq!(membership.target.phase, ComponentRuntimePhase::Active);
-        assert_eq!(
-            membership
-                .target
-                .authority
-                .as_ref()
-                .expect("current active Directory")
-                .component,
-            membership.directory
-        );
-        assert_eq!(
-            membership
-                .target
-                .activation
-                .expect("immutable activation receipt")
-                .directory_authority_hash,
-            activated
-                .target
-                .authority_hash
-                .expect("prepared activation authority hash")
-        );
+        assert_eq!(resumed.operation_id, preparation.operation_id);
 
-        assert_active_membership_queries(pic, fixture, &membership);
-        let retry: Result<RootComponentMembershipActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-                (request,),
+        for _ in 0..32 {
+            let RootStatusResponseFragment::Operation(
+                RootOperationStatusResponse::FleetActivation(status),
+            ) = root_status(
+                pic,
+                root,
+                RootStatusRequestFragment::Operation(OperationStatusRequest {
+                    operation_id: preparation.operation_id,
+                }),
             )
-            .expect("retry Component membership transport");
-        assert_eq!(retry.expect("retry Component membership"), membership);
+            .expect("query active root Fleet activation")
+            else {
+                panic!("Root returned a differently correlated activation status");
+            };
+            if status.phase == FleetActivationPhase::Active {
+                return;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
 
-        assert_pre_membership_retries(pic, fixture, directory_request, prepared, activated);
-        assert_prepared(pic, fixture.root_id);
-        membership.allocation
-    }
-
-    fn assert_active_membership_queries(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        membership: &RootComponentMembershipActivationResponse,
-    ) {
-        let registry: Result<ComponentRegistryPartitionResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                (ComponentRegistryPartitionRequest {
-                    component: membership.allocation.component,
-                },),
-            )
-            .expect("query active Component Registry partition transport");
-        assert_eq!(
-            registry.expect("active Component Registry partition"),
-            membership.registry
-        );
-        let directory: Result<ComponentDirectoryHead, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-                (ComponentDirectoryHeadRequest {
-                    component: membership.allocation.component,
-                },),
-            )
-            .expect("query active Component Directory transport");
-        assert_eq!(
-            directory.expect("active Component Directory"),
-            membership.directory
-        );
-        let target: Result<ComponentRuntimeStatusResponse, Error> = pic
-            .query_candid_as(
-                membership.registry.binding.canister_id,
-                fixture.root_id,
-                CANIC_COMPONENT_RUNTIME_STATUS,
-                (),
-            )
-            .expect("query membership-active Component runtime transport");
-        assert_eq!(
-            target.expect("membership-active Component runtime"),
-            membership.target
-        );
-    }
-
-    fn assert_pre_membership_retries(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        directory_request: RootComponentDirectoryPreparationRequest,
-        prepared: RootComponentDirectoryPreparationResponse,
-        activated: RootComponentRuntimeActivationResponse,
-    ) {
-        let commit: Result<RootComponentCommitResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_COMMIT,
-                (RootComponentCommitRequest {
-                    operation_id: directory_request.operation_id,
-                },),
-            )
-            .expect("retry Component commitment after membership activation transport");
-        assert_eq!(
-            commit.expect("retry Component commitment after membership activation"),
-            activated.committed
-        );
-        let prepared_retry: Result<RootComponentDirectoryPreparationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-                (directory_request,),
-            )
-            .expect("retry Directory preparation after membership activation transport");
-        assert_eq!(
-            prepared_retry.expect("retry Directory preparation after membership activation"),
-            prepared
-        );
-        let activated_retry: Result<RootComponentRuntimeActivationResponse, Error> = pic
-            .update_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-                (RootComponentRuntimeActivationRequest {
-                    operation_id: directory_request.operation_id,
-                },),
-            )
-            .expect("retry runtime activation after membership activation transport");
-        assert_eq!(
-            activated_retry.expect("retry runtime activation after membership activation"),
-            activated
-        );
-    }
-
-    fn assert_committed_component_queries(
-        pic: &PocketIc,
-        fixture: &BootstrappedRootFixture,
-        operation_id: [u8; 32],
-        committed: &RootComponentCommitResponse,
-    ) {
-        let allocation_status: Result<RootComponentAllocationResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-                (RootComponentAllocationStatusRequest { operation_id },),
-            )
-            .expect("query committed Component transport");
-        assert_eq!(
-            allocation_status.expect("committed Component status"),
-            committed.allocation
-        );
-
-        let registry: Result<ComponentRegistryPartitionResponse, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-                (ComponentRegistryPartitionRequest {
-                    component: committed.allocation.component,
-                },),
-            )
-            .expect("query Component Registry partition transport");
-        assert_eq!(
-            registry.expect("Component Registry partition"),
-            committed.registry
-        );
-
-        let directory: Result<ComponentDirectoryHead, Error> = pic
-            .query_candid(
-                fixture.root_id,
-                CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-                (ComponentDirectoryHeadRequest {
-                    component: committed.allocation.component,
-                },),
-            )
-            .expect("query Component Directory head transport");
-        assert_eq!(
-            directory.expect("Component Directory head"),
-            committed.directory
-        );
+        pic.dump_canister_debug(root, "autonomous root Fleet activation");
+        panic!("Root did not autonomously complete Fleet activation");
     }
 
     fn install_bootstrapped_root(
@@ -3827,11 +2077,12 @@ mod tests {
         );
         let init_bytes = encode_one(&init_args).expect("encode live PocketIC root authority");
         pic.install_canister(root_id, root_wasm, init_bytes, None);
-        adopt_sibling_wasm_store(pic, root_id, &init_args);
-        assert_prepared(pic, root_id);
         let (request, response) = bootstrap_root_store_release_set(
             pic,
             root_id,
+            wasm_store,
+            installation_controller,
+            &init_args,
             &manifest,
             artifacts,
             &manifest_bytes,
@@ -3870,9 +2121,16 @@ mod tests {
             .fleet_id = fleet_id;
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the PocketIC fixture stages one explicit Store release-set boundary"
+    )]
     fn bootstrap_root_store_release_set(
         pic: &PocketIc,
         root_id: Principal,
+        store: Principal,
+        installation_controller: Principal,
+        init_args: &FleetSubnetRootInitArgs,
         manifest: &RootStoreReleaseSetManifest,
         artifacts: BTreeMap<CanisterRole, Vec<u8>>,
         manifest_bytes: &[u8],
@@ -3881,7 +2139,8 @@ mod tests {
         let version = TemplateVersion::owned(manifest.release_build_id.to_string());
         stage_chunked_payload(
             pic,
-            root_id,
+            store,
+            installation_controller,
             TemplateId::owned(format!("{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{digest}")),
             version.clone(),
             manifest_bytes,
@@ -3889,35 +2148,64 @@ mod tests {
         for (role, bytes) in artifacts {
             let template_id =
                 TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
-            let staged: Result<(), Error> = pic
-                .update_candid(
-                    root_id,
-                    CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-                    (TemplateManifestInput {
-                        template_id: template_id.clone(),
-                        role,
-                        version: version.clone(),
-                        payload_hash: wasm_hash(&bytes),
-                        payload_size_bytes: bytes.len() as u64,
-                        store_binding: WasmStoreBinding::new("bootstrap"),
-                        chunking_mode: TemplateChunkingMode::Chunked,
-                        manifest_state: TemplateManifestState::Approved,
-                        approved_at: Some(0),
-                        created_at: 0,
-                    },),
-                )
-                .expect("stage artifact manifest transport");
+            let staged = store_stage_manifest_as(
+                pic,
+                store,
+                installation_controller,
+                TemplateManifestInput {
+                    template_id: template_id.clone(),
+                    role,
+                    version: version.clone(),
+                    payload_hash: wasm_hash(&bytes),
+                    payload_size_bytes: bytes.len() as u64,
+                    store_binding: WasmStoreBinding::new("bootstrap"),
+                    chunking_mode: TemplateChunkingMode::Chunked,
+                    manifest_state: TemplateManifestState::Approved,
+                    approved_at: Some(0),
+                    created_at: 0,
+                },
+            );
             staged.expect("stage artifact manifest");
-            stage_chunked_payload(pic, root_id, template_id, version.clone(), &bytes);
+            stage_chunked_payload(
+                pic,
+                store,
+                installation_controller,
+                template_id,
+                version.clone(),
+                &bytes,
+            );
         }
 
+        adopt_sibling_wasm_store(pic, root_id, init_args);
+        assert_prepared(pic, root_id);
+
         let request = RootStoreBootstrapRequest {
+            operation_id: [37; 32],
             manifest_payload_size_bytes: manifest_bytes.len() as u64,
         };
-        let response: Result<RootStoreBootstrapResponse, Error> = pic
-            .update_candid(root_id, CANIC_ROOT_STORE_BOOTSTRAP, (request.clone(),))
-            .expect("root Store bootstrap transport");
-        (request, response.expect("root Store bootstrap"))
+        let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
+            pic,
+            root_id,
+            RootCommandFragment::BootstrapStore(request.clone()),
+        )
+        .expect("root Store bootstrap") else {
+            panic!("Root returned a differently correlated bootstrap response");
+        };
+        assert_eq!(receipt.operation_id, request.operation_id);
+        let RootStatusResponseFragment::Operation(RootOperationStatusResponse::BootstrapStore(
+            response,
+        )) = root_status(
+            pic,
+            root_id,
+            RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: request.operation_id,
+            }),
+        )
+        .expect("root Store bootstrap status")
+        else {
+            panic!("Root returned a differently correlated bootstrap status");
+        };
+        (request, response)
     }
 
     fn create_prepaid_pool_assets(pic: &PocketIc, root: Principal) -> Vec<Principal> {
@@ -3935,25 +2223,18 @@ mod tests {
 
     fn reset_prepaid_pool_assets(pic: &PocketIc, root: Principal) {
         for _ in 0..PREPAID_POOL_ASSET_COUNT {
-            let response: Result<PoolAdminResponse, Error> = pic
-                .update_candid(root, CANIC_POOL_ADMIN, (PoolAdminCommand::Maintain,))
-                .expect("reset prepaid Canister transport");
+            let RootCommandResponseFragment::MaintainPool(response) =
+                root_command(pic, root, RootCommandFragment::MaintainPool)
+                    .expect("reset prepaid Canister")
+            else {
+                panic!("Root returned a differently correlated pool response");
+            };
             assert!(matches!(
-                response.expect("reset prepaid Canister"),
-                PoolAdminResponse::ResetReady { .. } | PoolAdminResponse::Maintained
+                response,
+                PoolMaintenanceResponse::ResetReady { .. } | PoolMaintenanceResponse::Maintained
             ));
         }
-        let status: Result<CanisterPoolResponse, Error> = pic
-            .query_candid(
-                root,
-                CANIC_POOL_LIST,
-                (CanisterPoolStatusRequest {
-                    start_after: None,
-                    limit: 256,
-                },),
-            )
-            .expect("query prepared prepaid inventory transport");
-        let status = status.expect("query prepared prepaid inventory");
+        let status = root_pool_status(pic, root);
         assert_eq!(
             status.ready,
             u32::try_from(PREPAID_POOL_ASSET_COUNT).expect("bounded fixture pool size")
@@ -4086,6 +2367,9 @@ mod tests {
                 wasm_gz_relative_path: format!("{role}.wasm.gz"),
                 wasm_gz_size_bytes: compressed.len() as u64,
                 wasm_gz_sha256_hex: hex_bytes(wasm_hash(&compressed)),
+                candid_sha256: [3; 32],
+                protocol_profile_digest:
+                    canic_core::role_contract::ProtocolProfileDigest::from_bytes([4; 32]),
             },
         }
     }
@@ -4146,7 +2430,8 @@ mod tests {
 
     fn stage_chunked_payload(
         pic: &PocketIc,
-        root_id: Principal,
+        store: Principal,
+        installation_controller: Principal,
         template_id: TemplateId,
         version: TemplateVersion,
         payload: &[u8],
@@ -4155,25 +2440,25 @@ mod tests {
             .chunks(CANIC_WASM_CHUNK_BYTES)
             .map(<[u8]>::to_vec)
             .collect::<Vec<_>>();
-        let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
-            .update_candid(
-                root_id,
-                CANIC_TEMPLATE_PREPARE_ADMIN,
-                (TemplateChunkSetPrepareInput {
-                    template_id: template_id.clone(),
-                    version: version.clone(),
-                    payload_hash: wasm_hash(payload),
-                    payload_size_bytes: payload.len() as u64,
-                    chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
-                },),
-            )
-            .expect("prepare staged payload transport");
+        let prepared = store_prepare_as(
+            pic,
+            store,
+            installation_controller,
+            TemplateChunkSetPrepareInput {
+                template_id: template_id.clone(),
+                version: version.clone(),
+                payload_hash: wasm_hash(payload),
+                payload_size_bytes: payload.len() as u64,
+                chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
+            },
+        );
         prepared.expect("prepare staged payload");
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
             let published: Result<(), Error> = pic
-                .update_candid(
-                    root_id,
-                    CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+                .update_candid_as(
+                    store,
+                    installation_controller,
+                    canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
                     (TemplateChunkInput {
                         template_id: template_id.clone(),
                         version: version.clone(),
@@ -4187,20 +2472,13 @@ mod tests {
     }
 
     fn assert_prepared(pic: &PocketIc, root_id: Principal) {
-        let status: Result<FleetActivationStatusResponse, Error> = pic
-            .query_candid(root_id, CANIC_FLEET_ACTIVATION_STATUS, ())
-            .expect("query root activation status");
-        assert_eq!(
-            status.expect("root activation status").phase,
-            FleetActivationPhase::Prepared
-        );
-        let authority: Result<FleetSubnetRootAuthority, Error> = pic
-            .query_candid(root_id, CANIC_FLEET_SUBNET_ROOT_AUTHORITY, ())
-            .expect("query root authority");
-        assert_eq!(
-            authority.expect("root authority").binding.fleet_subnet_root,
-            root_id
-        );
+        let RootStatusResponseFragment::FleetAuthority(authority) =
+            root_status(pic, root_id, RootStatusRequestFragment::FleetAuthority)
+                .expect("query root authority")
+        else {
+            panic!("Root returned a differently correlated authority status");
+        };
+        assert_eq!(authority.binding.fleet_subnet_root, root_id);
     }
 }
 

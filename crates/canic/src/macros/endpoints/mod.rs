@@ -7,10 +7,8 @@
 mod blob_storage;
 mod blob_storage_billing;
 mod bundles;
-mod cycles;
 mod fleet_coordinator;
-mod nonroot;
+mod role;
 mod root;
-mod shared;
-mod topology;
+mod standards;
 mod wasm_store;

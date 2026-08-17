@@ -224,8 +224,9 @@ Use `--subtree <name-or-principal>` to print one application subtree with that
 node as the rendered root.
 `canic info env <name>` prints sourceable `CANIC_<ROLE>` canister ID exports
 for scripts and local shell helpers.
-Live list sources call `canic_ready` for each listed canister and include a
-`READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance column.
+Live list sources query `canic_status(Readiness)` for each listed canister and
+include a `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance
+column.
 
 `canic info subnets <fleet> [--json]` resolves the terminal
 Coordinator-anchored Fleet catalog, validates current Registry/root evidence,

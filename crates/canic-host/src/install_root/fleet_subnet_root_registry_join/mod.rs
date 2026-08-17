@@ -17,9 +17,10 @@ use crate::{
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::Principal;
+use canic_control_plane::dto::fleet_coordinator::{CoordinatorCommand, CoordinatorCommandResponse};
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
-    dto::fleet_registry::{FleetRegistry, FleetRegistryVersion, FleetSubnetRootJoinResponse},
+    dto::fleet_registry::{FleetRegistry, FleetRegistryVersion},
     ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
 };
@@ -151,12 +152,15 @@ fn drive_registry_join(
                     .registry_join_request
                     .clone()
                     .ok_or(RootRegistryJoinError::MissingJoinRequest)?;
-                let response: FleetSubnetRootJoinResponse = call_with_arg(
+                let response: CoordinatorCommandResponse = call_with_arg(
                     icp,
                     coordinator,
-                    protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                    &request,
+                    protocol::CANIC_COMMAND,
+                    &CoordinatorCommand::JoinRoot(request.clone()),
                 )?;
+                let CoordinatorCommandResponse::JoinRoot(response) = response else {
+                    return Err(RootRegistryJoinError::JoinResponseMismatch.into());
+                };
                 if response.entry != request.entry || response.version != expected_after_version {
                     return Err(RootRegistryJoinError::JoinResponseMismatch.into());
                 }

@@ -3,6 +3,22 @@ use crate::ids::{
     WasmStoreBinding, WasmStoreGcMode,
 };
 use candid::{CandidType, Principal};
+use canic_core::{
+    dto::{
+        capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
+        cascade::{StateSnapshotInput, TopologySnapshotInput},
+        cycles::CycleTrackerEntry,
+        fleet_activation::{
+            FleetActivationRequest, FleetActivationStatusResponse, FleetCredentialGenerationRequest,
+        },
+        page::{Page, PageRequest},
+        role::{
+            CycleBalanceStatusResponse, OperationReceipt, OperationStatusRequest,
+            RoleOverviewResponse,
+        },
+    },
+    ids::FleetSubnetWasmStoreAuthority,
+};
 use serde::Deserialize;
 
 //
@@ -84,6 +100,21 @@ pub struct TemplateChunkResponse {
     pub bytes: Vec<u8>,
 }
 
+/// Exact template release key used by Store command inspection.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateLookupRequest {
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+}
+
+/// Exact template chunk key used by the Store's bounded read lane.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TemplateChunkRequest {
+    pub template_id: TemplateId,
+    pub version: TemplateVersion,
+    pub chunk_index: u32,
+}
+
 //
 // WasmStoreCatalogEntryResponse
 //
@@ -142,6 +173,80 @@ pub struct WasmStoreStatusResponse {
     pub release_count: u32,
     pub max_template_versions_per_template: Option<u16>,
     pub templates: Vec<WasmStoreTemplateStatusResponse>,
+}
+
+/// Store garbage-collection detail projected through the operation lane.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct WasmStoreGcOperationStatus {
+    pub operation_id: [u8; 32],
+    pub gc: WasmStoreGcStatusResponse,
+}
+
+/// Closed Store control-plane command union.
+#[derive(CandidType, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the Store command carries each accepted existing control DTO directly"
+)]
+pub enum StoreCommand {
+    ActivateFleet(FleetActivationRequest),
+    InspectTemplate(TemplateLookupRequest),
+    PrepareChunkSet(TemplateChunkSetPrepareInput),
+    PrepareFleetCredential(FleetCredentialGenerationRequest),
+    ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationRequest),
+    RespondCapability(NonrootCyclesCapabilityEnvelopeV1),
+    RunGc(OperationStatusRequest),
+    StageManifest(TemplateManifestInput),
+    SynchronizeState(StateSnapshotInput),
+    SynchronizeTopology(TopologySnapshotInput),
+}
+
+/// Closed response union correlated to one accepted Store command.
+#[derive(CandidType, Deserialize)]
+pub enum StoreCommandResponse {
+    InspectTemplate(TemplateChunkSetInfoResponse),
+    OperationAccepted(OperationReceipt),
+    PrepareChunkSet(TemplateChunkSetInfoResponse),
+    ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationResponse),
+    RespondCapability(NonrootCyclesCapabilityResponseV1),
+    StageManifest,
+    SynchronizeState,
+    SynchronizeTopology,
+}
+
+/// Closed Store observation selector carried by its single status query.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum StoreStatusRequest {
+    Authority,
+    Catalog,
+    CycleBalance,
+    CycleHistory(PageRequest),
+    Operation(OperationStatusRequest),
+    Overview,
+    Storage,
+}
+
+/// Store-owned durable operation detail selected by one operation ID.
+#[derive(CandidType, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the accepted Candid union carries each existing status DTO directly"
+)]
+pub enum StoreOperationStatusResponse {
+    FleetActivation(FleetActivationStatusResponse),
+    GarbageCollection(WasmStoreGcOperationStatus),
+}
+
+/// Closed response union for the Store's single status query.
+#[derive(CandidType, Deserialize)]
+pub enum StoreStatusResponse {
+    Authority(FleetSubnetWasmStoreAuthority),
+    Catalog(Vec<WasmStoreCatalogEntryResponse>),
+    CycleBalance(CycleBalanceStatusResponse),
+    CycleHistory(Page<CycleTrackerEntry>),
+    Operation(StoreOperationStatusResponse),
+    Overview(RoleOverviewResponse),
+    Storage(WasmStoreStatusResponse),
 }
 
 /// Minimum operational headroom retained above the live freezing reserve while
@@ -226,6 +331,7 @@ pub struct WasmStoreOverviewResponse {
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+#[cfg(test)]
 pub struct TemplateStagingStatusResponse {
     pub role: CanisterRole,
     pub template_id: TemplateId,
@@ -238,17 +344,6 @@ pub struct TemplateStagingStatusResponse {
     pub expected_chunk_count: u32,
     pub stored_chunk_count: u32,
     pub publishable: bool,
-}
-
-//
-// WasmStoreBootstrapDebugResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct WasmStoreBootstrapDebugResponse {
-    pub ready_for_bootstrap: bool,
-    pub bootstrap: Option<TemplateStagingStatusResponse>,
-    pub staged: Vec<TemplateStagingStatusResponse>,
 }
 
 //
@@ -281,4 +376,37 @@ pub enum WasmStoreAdminCommand {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum WasmStoreAdminResponse {
     PublishedActiveReleaseSet,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{Decode, Encode};
+
+    #[test]
+    fn store_status_request_keeps_the_manifest_exact_flat_variants() {
+        let page = PageRequest {
+            limit: 10,
+            offset: 0,
+        };
+        let requests = [
+            StoreStatusRequest::Authority,
+            StoreStatusRequest::Catalog,
+            StoreStatusRequest::CycleBalance,
+            StoreStatusRequest::CycleHistory(page),
+            StoreStatusRequest::Operation(OperationStatusRequest {
+                operation_id: [5; 32],
+            }),
+            StoreStatusRequest::Overview,
+            StoreStatusRequest::Storage,
+        ];
+
+        for request in requests {
+            let bytes = Encode!(&request).expect("encode Store status request");
+            assert_eq!(
+                Decode!(&bytes, StoreStatusRequest).expect("decode Store status request"),
+                request
+            );
+        }
+    }
 }

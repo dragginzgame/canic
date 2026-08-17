@@ -5,6 +5,7 @@
 //! Boundary: every mutation follows exact Store and active Registry Mirror/Directory verification.
 
 use crate::{
+    dto::root::RootComponentOperationStatus,
     ops::{
         canister_pool::{CanisterPoolClaimKey, CanisterPoolOps},
         component_provisioning::RootComponentProvisioningOps,
@@ -40,7 +41,7 @@ use crate::{
     },
 };
 use candid::CandidType;
-use canic_core::api::runtime::install::ApprovedModuleSource;
+use canic_core::api::{runtime::install::ApprovedModuleSource, timer::TimerApi};
 use canic_core::{
     control_plane_support::{
         config::schema::ComponentChildKind,
@@ -134,6 +135,7 @@ use canic_core::{
         error::Error,
         fleet_activation::FleetActivationPhase,
         fleet_registry::{FleetDirectorySnapshot, FleetRegistryVersion, FleetSubnetRootStatus},
+        role::{ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest},
         root_store::{RootStoreBootstrapRequest, RootStoreBootstrapResponse},
     },
     ids::{
@@ -143,9 +145,37 @@ use canic_core::{
     protocol,
 };
 use serde::Deserialize;
+use std::time::Duration;
 
 const MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES: u16 = 100;
 const MAX_COMPONENT_DIRECTORY_CURSOR_BYTES: usize = 2_048;
+
+#[derive(CandidType)]
+enum CanisterCommandFragment {
+    ConfigureRuntime(ComponentRuntimeDirectoryPreparationRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterCommandResponseFragment {
+    OperationAccepted(OperationReceipt),
+}
+
+#[derive(CandidType)]
+enum CanisterStatusRequestFragment {
+    Binding,
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterStatusResponseFragment {
+    Binding(ManagedCanisterBinding),
+    Operation(CanisterOperationStatusFragment),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterOperationStatusFragment {
+    ConfigureRuntime(ComponentRuntimeOperationStatus),
+}
 
 #[derive(Debug, Eq, PartialEq)]
 struct ComponentRegistryPreparationAuthority<'a> {
@@ -382,6 +412,13 @@ struct GroupComponentRuntimeAuthority<'a> {
     provisioning_origin: &'a ComponentProvisioningOrigin,
     deployment: &'a ProtectedComponentDeployment,
     component_group: &'a ComponentGroupDirectory,
+}
+
+#[derive(Clone, Copy)]
+enum ComponentRuntimePlanAuthority<'a> {
+    Caller,
+    Reconciler,
+    Group(GroupComponentRuntimeAuthority<'a>),
 }
 
 struct PreparedChildRuntimePlan {
@@ -696,6 +733,262 @@ pub async fn reserve_peer_allocation(
     allocation_response(reserved)
 }
 
+/// Privately advance one accepted ordinary or peer top-level allocation.
+pub fn schedule_component_allocation(operation_id: [u8; 32]) {
+    schedule_component_allocation_after(operation_id, Duration::ZERO);
+}
+
+fn schedule_component_allocation_after(operation_id: [u8; 32], delay: Duration) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Subnet Root Component allocation",
+        async move {
+            match Box::pin(advance_component_allocation_once(operation_id)).await {
+                Ok(true) => {}
+                Ok(false) => schedule_component_allocation_after(operation_id, Duration::ZERO),
+                Err(_) => {
+                    schedule_component_allocation_after(operation_id, Duration::from_secs(1));
+                }
+            }
+        },
+    );
+}
+
+async fn advance_component_allocation_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
+    let (authority, root) = root_authority()?;
+    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
+    let preparation_request = RootComponentRegistryPreparationRequest {
+        store_bootstrap: prepared.store_bootstrap.clone(),
+        expected_fleet_registry: prepared.prepared_against_registry.clone(),
+    };
+    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
+    let fleet_directory =
+        validate_current_mirror_authority(&authority, root, &preparation_request)?;
+    let topology = ConfigOps::component_topology()?;
+    let allocation =
+        ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::unavailable)?;
+    if matches!(
+        &allocation.provisioning_origin,
+        ComponentProvisioningOrigin::ComponentGroup { .. }
+    ) {
+        return Err(InternalError::invariant());
+    }
+    validate_allocation_record(
+        &authority.binding,
+        authority.initial_release_set,
+        &topology,
+        &allocation,
+        operation_id,
+    )?;
+
+    match &allocation.progress {
+        RootComponentAllocationProgressView::Reserved
+        | RootComponentAllocationProgressView::CreationIntent(_) => {
+            let plan = creation_plan(root, &store, &allocation)?;
+            advance_creation(operation_id, allocation, plan)?;
+            Ok(false)
+        }
+        RootComponentAllocationProgressView::Created { .. }
+        | RootComponentAllocationProgressView::InstallIntent { .. }
+        | RootComponentAllocationProgressView::Installed { .. } => {
+            let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
+            advance_install(operation_id, allocation, plan).await?;
+            Ok(false)
+        }
+        RootComponentAllocationProgressView::Verified { .. } => {
+            let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
+            let installation = committed_or_verified_installation(&allocation)?;
+            validate_install_effect(installation, &plan.durable)?;
+            verify_committed_or_verified_install(&allocation, &plan).await?;
+            let (committed, partition) = ComponentRegistryOps::commit_verified(
+                operation_id,
+                IcOps::now_nanos(),
+                plan.durable.maximum_registry_bytes,
+                fleet_directory,
+            )?;
+            validate_partition(
+                &authority.binding,
+                authority.initial_release_set,
+                &topology,
+                &partition,
+            )?;
+            commit_response(committed, partition)?;
+            Ok(false)
+        }
+        RootComponentAllocationProgressView::Committed { commitment, .. } => {
+            let plan = prepared_component_runtime_plan_for_reconciliation(operation_id).await?;
+            if !commitment.directory_prepared {
+                prepare_component_directories_with_plan(
+                    RootComponentDirectoryPreparationRequest { operation_id },
+                    plan,
+                )
+                .await?;
+                return Ok(false);
+            }
+            if !commitment.runtime_activated {
+                activate_component_runtime_with_plan(
+                    RootComponentRuntimeActivationRequest { operation_id },
+                    plan,
+                )
+                .await?;
+                return Ok(false);
+            }
+            if commitment
+                .membership
+                .as_ref()
+                .is_none_or(|membership| !membership.directory_synchronized)
+            {
+                Box::pin(activate_component_membership_with_plan(
+                    RootComponentMembershipActivationRequest { operation_id },
+                    plan,
+                ))
+                .await?;
+                return Ok(false);
+            }
+            Ok(component_allocation_reconciliation_complete(&allocation))
+        }
+        RootComponentAllocationProgressView::Removed { .. } => Ok(true),
+    }
+}
+
+fn component_allocation_reconciliation_complete(allocation: &RootComponentAllocationView) -> bool {
+    match &allocation.progress {
+        RootComponentAllocationProgressView::Committed { commitment, .. } => {
+            commitment.directory_prepared
+                && commitment.runtime_activated
+                && commitment
+                    .membership
+                    .as_ref()
+                    .is_some_and(|membership| membership.directory_synchronized)
+        }
+        RootComponentAllocationProgressView::Removed { .. } => true,
+        _ => false,
+    }
+}
+
+/// Privately advance one accepted direct-child allocation for its retained parent authority.
+pub fn schedule_component_child_allocation(component: ComponentInstanceId, operation_id: [u8; 32]) {
+    schedule_component_child_allocation_after(component, operation_id, Duration::ZERO);
+}
+
+fn schedule_component_child_allocation_after(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    delay: Duration,
+) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Subnet Root Component child allocation",
+        async move {
+            match Box::pin(advance_component_child_allocation_once(
+                component,
+                operation_id,
+            ))
+            .await
+            {
+                Ok(true) => {}
+                Ok(false) => schedule_component_child_allocation_after(
+                    component,
+                    operation_id,
+                    Duration::ZERO,
+                ),
+                Err(_) => schedule_component_child_allocation_after(
+                    component,
+                    operation_id,
+                    Duration::from_secs(1),
+                ),
+            }
+        },
+    );
+}
+
+async fn advance_component_child_allocation_once(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+) -> Result<bool, InternalError> {
+    let allocation = ComponentRegistryOps::child_allocation(component, operation_id)?
+        .ok_or_else(InternalError::unavailable)?;
+    let parent_canister_id = allocation.parent_canister_id;
+    match &allocation.progress {
+        RootComponentChildAllocationProgressView::Reserved
+        | RootComponentChildAllocationProgressView::CreationIntent(_) => {
+            create_child_allocation_for_parent(
+                RootComponentChildCreationRequest {
+                    operation_id,
+                    component,
+                },
+                parent_canister_id,
+            )
+            .await?;
+            Ok(false)
+        }
+        RootComponentChildAllocationProgressView::Created { .. }
+        | RootComponentChildAllocationProgressView::InstallIntent { .. }
+        | RootComponentChildAllocationProgressView::Installed { .. } => {
+            Box::pin(install_child_allocation_for_parent(
+                RootComponentChildInstallRequest {
+                    operation_id,
+                    component,
+                },
+                parent_canister_id,
+            ))
+            .await?;
+            Ok(false)
+        }
+        RootComponentChildAllocationProgressView::Verified { .. } => {
+            commit_child_allocation_for_parent(
+                RootComponentChildCommitRequest {
+                    operation_id,
+                    component,
+                },
+                parent_canister_id,
+            )
+            .await?;
+            Ok(false)
+        }
+        RootComponentChildAllocationProgressView::Committed { commitment, .. } => {
+            if !commitment.directory_prepared {
+                Box::pin(prepare_child_directories_for_parent(
+                    RootComponentChildDirectoryPreparationRequest {
+                        operation_id,
+                        component,
+                    },
+                    parent_canister_id,
+                ))
+                .await?;
+                return Ok(false);
+            }
+            if !commitment.runtime_activated {
+                activate_child_runtime_for_parent(
+                    RootComponentChildRuntimeActivationRequest {
+                        operation_id,
+                        component,
+                    },
+                    parent_canister_id,
+                )
+                .await?;
+                return Ok(false);
+            }
+            if commitment
+                .membership
+                .as_ref()
+                .is_none_or(|membership| !membership.directory_synchronized)
+            {
+                Box::pin(activate_child_membership_for_parent(
+                    RootComponentChildMembershipActivationRequest {
+                        operation_id,
+                        component,
+                    },
+                    parent_canister_id,
+                ))
+                .await?;
+                return Ok(false);
+            }
+            Ok(true)
+        }
+    }
+}
+
 enum PeerRequesterAuthority {
     SameRoot {
         partition: ComponentRegistryPartitionView,
@@ -900,6 +1193,45 @@ pub fn allocation_status(
     allocation_response(allocation)
 }
 
+/// Resolve one top-level Component allocation for the role-owned operation status lane.
+pub fn allocation_operation_status(
+    operation_id: [u8; 32],
+    caller: candid::Principal,
+    caller_is_controller: bool,
+) -> Result<Option<RootComponentOperationStatus>, InternalError> {
+    let Some(allocation) = ComponentRegistryOps::allocation(operation_id) else {
+        return Ok(None);
+    };
+
+    match &allocation.provisioning_origin {
+        ComponentProvisioningOrigin::FleetAdministrator { .. } => {
+            if !caller_is_controller {
+                return Err(InternalError::forbidden());
+            }
+        }
+        ComponentProvisioningOrigin::Component { .. }
+        | ComponentProvisioningOrigin::FleetServiceComponent { .. } => {
+            let (authority, _) = root_authority()?;
+            require_active_root_runtime(
+                "peer Component lifecycle requires an Active Fleet Subnet Root runtime",
+            )?;
+            revalidate_retained_peer_origin(
+                &authority,
+                &ConfigOps::component_topology()?,
+                &allocation.provisioning_origin,
+                caller,
+            )?;
+        }
+        ComponentProvisioningOrigin::ComponentGroup { .. } => return Ok(None),
+    }
+
+    let complete = component_allocation_reconciliation_complete(&allocation);
+    Ok(Some(RootComponentOperationStatus {
+        allocation: allocation_response(allocation)?,
+        complete,
+    }))
+}
+
 /// Read one peer allocation for its exact active requester caller.
 pub fn peer_allocation_status(
     request: RootComponentAllocationStatusRequest,
@@ -1025,6 +1357,26 @@ pub fn child_allocation_status(
         None,
     )?;
     Ok(child_allocation_response(allocation))
+}
+
+/// Resolve one direct-child allocation for its controller or exact registered parent.
+pub fn child_allocation_operation_status(
+    operation_id: [u8; 32],
+    caller: candid::Principal,
+    caller_is_controller: bool,
+) -> Result<Option<RootComponentChildAllocationResponse>, InternalError> {
+    let Some(allocation) = ComponentRegistryOps::child_allocation_by_operation(operation_id)?
+    else {
+        return Ok(None);
+    };
+    if !caller_is_controller {
+        ComponentRegistryOps::registered_parent(allocation.component, caller)?
+            .ok_or_else(InternalError::forbidden)?;
+        if caller != allocation.parent_canister_id {
+            return Err(InternalError::forbidden());
+        }
+    }
+    Ok(Some(child_allocation_response(allocation)))
 }
 
 /// Durably advance one exact active Component into Draining.
@@ -1367,6 +1719,118 @@ pub fn component_deletion_status(
         return Err(InternalError::invariant());
     }
     component_deletion_response(draining)
+}
+
+/// Resolve one top-level Component removal from its first durable draining fence onward.
+pub fn component_removal_operation_status(
+    operation_id: [u8; 32],
+) -> Result<
+    Option<(
+        RootComponentDrainingResponse,
+        Option<RootComponentDeletionResponse>,
+    )>,
+    InternalError,
+> {
+    let Some(draining) = ComponentRegistryOps::component_draining_by_operation(operation_id)?
+    else {
+        return Ok(None);
+    };
+    let deletion = if draining.deletion.is_some() {
+        Some(component_deletion_response(draining.clone())?)
+    } else {
+        None
+    };
+    Ok(Some((component_draining_response(draining), deletion)))
+}
+
+/// Privately advance one accepted top-level Component removal.
+pub fn schedule_component_removal(component: ComponentInstanceId, operation_id: [u8; 32]) {
+    schedule_component_removal_after(component, operation_id, Duration::ZERO);
+}
+
+fn schedule_component_removal_after(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    delay: Duration,
+) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Subnet Root Component removal",
+        async move {
+            match Box::pin(advance_component_removal_once(component, operation_id)).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    schedule_component_removal_after(component, operation_id, Duration::ZERO);
+                }
+                Err(_) => schedule_component_removal_after(
+                    component,
+                    operation_id,
+                    Duration::from_secs(1),
+                ),
+            }
+        },
+    );
+}
+
+pub(super) async fn advance_component_removal_once(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+) -> Result<bool, InternalError> {
+    let draining = ComponentRegistryOps::component_draining(component)?
+        .ok_or_else(InternalError::unavailable)?;
+    if draining.operation_id != operation_id {
+        return Err(InternalError::conflict());
+    }
+    if !matches!(
+        &draining.quiescence,
+        Some(RootComponentQuiescenceProgressView::Quiescent(_))
+    ) {
+        Box::pin(quiesce_component(RootComponentQuiescenceRequest {
+            operation_id,
+            component,
+            expected_registry: draining.registry,
+        }))
+        .await?;
+        return Ok(false);
+    }
+    if draining.final_inventory.is_none() {
+        if draining.descendant_count == 0 {
+            finalize_component_inventory(RootComponentFinalInventoryRequest {
+                operation_id,
+                component,
+                expected_registry: draining.registry,
+            })
+            .await?;
+        } else {
+            advance_component_draining(RootComponentDrainingAdvanceRequest {
+                operation_id,
+                component,
+            })
+            .await?;
+        }
+        return Ok(false);
+    }
+    let inventory_hash = draining
+        .final_inventory
+        .as_ref()
+        .ok_or_else(InternalError::invariant)?
+        .inventory_hash;
+    let request = RootComponentDeletionRequest {
+        operation_id,
+        component,
+        expected_inventory_hash: inventory_hash,
+    };
+    match draining.deletion {
+        None | Some(RootComponentDeletionProgressView::DeleteIntent(_)) => {
+            delete_component(request).await?;
+            Ok(false)
+        }
+        Some(RootComponentDeletionProgressView::Deleted(_)) => {
+            remove_component_membership(request)?;
+            Ok(false)
+        }
+        Some(RootComponentDeletionProgressView::MembershipRemoved(_)) => Ok(true),
+    }
 }
 
 async fn advance_component_draining_boundary(
@@ -2178,6 +2642,47 @@ pub fn subtree_removal_status(
     existing_subtree_removal(request)?.ok_or_else(InternalError::unavailable)
 }
 
+/// Resolve one subtree removal through its domain-owned operation identity.
+pub fn subtree_removal_operation_status(
+    operation_id: [u8; 32],
+) -> Result<Option<RootComponentSubtreeRemovalResponse>, InternalError> {
+    ComponentRegistryOps::subtree_removal_by_operation(operation_id)
+        .map(|removal| removal.map(subtree_removal_response))
+}
+
+/// Privately advance one accepted subtree removal through its durable phase journal.
+pub fn schedule_subtree_removal(component: ComponentInstanceId, operation_id: [u8; 32]) {
+    schedule_subtree_removal_after(component, operation_id, Duration::ZERO);
+}
+
+fn schedule_subtree_removal_after(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+    delay: Duration,
+) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Subnet Root Component subtree removal",
+        async move {
+            let request = RootComponentSubtreeRemovalStatusRequest {
+                operation_id,
+                component,
+            };
+            match advance_existing_subtree_removal(request).await {
+                Ok(response)
+                    if matches!(
+                        response.phase,
+                        RootComponentSubtreeRemovalPhase::Completed(_)
+                    ) => {}
+                Ok(_) => schedule_subtree_removal_after(component, operation_id, Duration::ZERO),
+                Err(_) => {
+                    schedule_subtree_removal_after(component, operation_id, Duration::from_secs(1));
+                }
+            }
+        },
+    );
+}
+
 /// Read one durable removal when present, preserving absence for nested lifecycle admission.
 pub(super) fn existing_subtree_removal(
     request: RootComponentSubtreeRemovalStatusRequest,
@@ -2213,6 +2718,13 @@ pub(super) async fn advance_existing_subtree_removal(
 pub async fn create_child_allocation(
     request: RootComponentChildCreationRequest,
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    create_child_allocation_for_parent(request, IcOps::msg_caller()).await
+}
+
+async fn create_child_allocation_for_parent(
+    request: RootComponentChildCreationRequest,
+    parent_canister_id: candid::Principal,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let preparation_request = RootComponentRegistryPreparationRequest {
@@ -2225,9 +2737,8 @@ pub async fn create_child_allocation(
         "Component Child creation requires an Active Fleet Subnet Root runtime",
     )?;
 
-    let caller = IcOps::msg_caller();
-    let parent =
-        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+    let parent = ComponentRegistryOps::registered_parent(request.component, parent_canister_id)?
+        .ok_or_else(|| {
             InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
@@ -2385,6 +2896,17 @@ pub async fn install_peer_allocation(
 pub async fn install_child_allocation(
     request: RootComponentChildInstallRequest,
 ) -> Result<RootComponentChildAllocationResponse, InternalError> {
+    Box::pin(install_child_allocation_for_parent(
+        request,
+        IcOps::msg_caller(),
+    ))
+    .await
+}
+
+async fn install_child_allocation_for_parent(
+    request: RootComponentChildInstallRequest,
+    parent_canister_id: candid::Principal,
+) -> Result<RootComponentChildAllocationResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let preparation_request = RootComponentRegistryPreparationRequest {
@@ -2397,9 +2919,8 @@ pub async fn install_child_allocation(
         "Component Child installation requires an Active Fleet Subnet Root runtime",
     )?;
 
-    let caller = IcOps::msg_caller();
-    let parent =
-        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+    let parent = ComponentRegistryOps::registered_parent(request.component, parent_canister_id)?
+        .ok_or_else(|| {
             InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
@@ -2422,6 +2943,13 @@ pub async fn install_child_allocation(
 pub async fn commit_child_allocation(
     request: RootComponentChildCommitRequest,
 ) -> Result<RootComponentChildCommitResponse, InternalError> {
+    commit_child_allocation_for_parent(request, IcOps::msg_caller()).await
+}
+
+async fn commit_child_allocation_for_parent(
+    request: RootComponentChildCommitRequest,
+    parent_canister_id: candid::Principal,
+) -> Result<RootComponentChildCommitResponse, InternalError> {
     let (authority, root) = root_authority()?;
     let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
     let preparation_request = RootComponentRegistryPreparationRequest {
@@ -2435,9 +2963,8 @@ pub async fn commit_child_allocation(
         "Component Child commitment requires an Active Fleet Subnet Root runtime",
     )?;
 
-    let caller = IcOps::msg_caller();
-    let parent =
-        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+    let parent = ComponentRegistryOps::registered_parent(request.component, parent_canister_id)?
+        .ok_or_else(|| {
             InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
     let allocation =
@@ -2478,8 +3005,23 @@ pub async fn commit_child_allocation(
 pub async fn prepare_child_directories(
     request: RootComponentChildDirectoryPreparationRequest,
 ) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
-    let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
-    let observed = query_component_runtime_status(plan.child_canister).await?;
+    Box::pin(prepare_child_directories_for_parent(
+        request,
+        IcOps::msg_caller(),
+    ))
+    .await
+}
+
+async fn prepare_child_directories_for_parent(
+    request: RootComponentChildDirectoryPreparationRequest,
+    parent_canister_id: candid::Principal,
+) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
+    let plan =
+        prepared_child_runtime_plan(request.component, request.operation_id, parent_canister_id)
+            .await?;
+    let observed =
+        query_component_runtime_status(plan.child_canister, plan.directory_request.operation_id)
+            .await?;
     let prepared_child = match validate_target_directory_status_for_deployment(
         &observed,
         &plan.child_binding,
@@ -2504,7 +3046,9 @@ pub async fn prepare_child_directories(
         plan.directory_authority_hash,
     )?;
 
-    let independently_observed = query_component_runtime_status(plan.child_canister).await?;
+    let independently_observed =
+        query_component_runtime_status(plan.child_canister, plan.directory_request.operation_id)
+            .await?;
     let child = prepared_target_directory_status_for_deployment(
         &independently_observed,
         &plan.child_binding,
@@ -2529,7 +3073,11 @@ pub async fn prepare_child_directories(
         ),
         None => None,
     };
-    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    validate_requesting_parent_still_active(
+        request.component,
+        parent_canister_id,
+        &plan.requesting_parent_binding,
+    )?;
     let allocation = ComponentRegistryOps::mark_child_directory_prepared(
         request.component,
         request.operation_id,
@@ -2551,7 +3099,16 @@ pub async fn prepare_child_directories(
 pub async fn activate_child_runtime(
     request: RootComponentChildRuntimeActivationRequest,
 ) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
-    let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
+    activate_child_runtime_for_parent(request, IcOps::msg_caller()).await
+}
+
+async fn activate_child_runtime_for_parent(
+    request: RootComponentChildRuntimeActivationRequest,
+    parent_canister_id: candid::Principal,
+) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
+    let plan =
+        prepared_child_runtime_plan(request.component, request.operation_id, parent_canister_id)
+            .await?;
     if !committed_child_directory_receipt(&plan.allocation)?.directory_prepared {
         return Err(InternalError::unavailable());
     }
@@ -2564,7 +3121,11 @@ pub async fn activate_child_runtime(
         plan.directory_authority_hash,
     )
     .await?;
-    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    validate_requesting_parent_still_active(
+        request.component,
+        parent_canister_id,
+        &plan.requesting_parent_binding,
+    )?;
     let allocation = ComponentRegistryOps::mark_child_runtime_activated(
         request.component,
         request.operation_id,
@@ -2584,11 +3145,25 @@ pub async fn activate_child_runtime(
 pub async fn activate_child_membership(
     request: RootComponentChildMembershipActivationRequest,
 ) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
-    let plan = prepared_child_runtime_plan(request.component, request.operation_id).await?;
+    Box::pin(activate_child_membership_for_parent(
+        request,
+        IcOps::msg_caller(),
+    ))
+    .await
+}
+
+async fn activate_child_membership_for_parent(
+    request: RootComponentChildMembershipActivationRequest,
+    parent_canister_id: candid::Principal,
+) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
+    let plan =
+        prepared_child_runtime_plan(request.component, request.operation_id, parent_canister_id)
+            .await?;
     if !committed_child_directory_receipt(&plan.allocation)?.runtime_activated {
         return Err(InternalError::unavailable());
     }
-    let observed = query_component_runtime_status(plan.child_canister).await?;
+    let observed =
+        query_component_runtime_status(plan.child_canister, request.operation_id).await?;
     validate_active_target_runtime_status_for_deployment(
         &observed,
         &plan.child_binding,
@@ -2615,7 +3190,11 @@ pub async fn activate_child_membership(
         active.authority_hash,
     )
     .await?;
-    validate_requesting_parent_still_active(request.component, &plan.requesting_parent_binding)?;
+    validate_requesting_parent_still_active(
+        request.component,
+        parent_canister_id,
+        &plan.requesting_parent_binding,
+    )?;
     let allocation = ComponentRegistryOps::mark_child_membership_synchronized(
         request.component,
         request.operation_id,
@@ -2763,7 +3342,16 @@ pub async fn prepare_component_directories(
     request: RootComponentDirectoryPreparationRequest,
 ) -> Result<RootComponentDirectoryPreparationResponse, InternalError> {
     let plan = prepared_component_runtime_plan(request.operation_id).await?;
-    let observed = query_component_runtime_status(plan.target_canister).await?;
+    prepare_component_directories_with_plan(request, plan).await
+}
+
+async fn prepare_component_directories_with_plan(
+    request: RootComponentDirectoryPreparationRequest,
+    plan: PreparedComponentRuntimePlan,
+) -> Result<RootComponentDirectoryPreparationResponse, InternalError> {
+    let observed =
+        query_component_runtime_status(plan.target_canister, plan.directory_request.operation_id)
+            .await?;
     let prepared_target = match validate_target_directory_status(
         &observed,
         &plan.target_binding,
@@ -2786,7 +3374,9 @@ pub async fn prepare_component_directories(
         plan.directory_authority_hash,
     )?;
 
-    let independently_observed = query_component_runtime_status(plan.target_canister).await?;
+    let independently_observed =
+        query_component_runtime_status(plan.target_canister, plan.directory_request.operation_id)
+            .await?;
     let response_target = prepared_target_directory_status(
         &independently_observed,
         &plan.target_binding,
@@ -2807,7 +3397,7 @@ pub async fn prepare_component_directories(
     })
 }
 
-/// Deliver and independently verify grouped publication Directories without activating runtime.
+/// Deliver and independently verify one grouped runtime configuration intent.
 pub(super) async fn prepare_grouped_component_directories(
     canister: candid::Principal,
     binding: &ManagedCanisterBinding,
@@ -2815,7 +3405,7 @@ pub(super) async fn prepare_grouped_component_directories(
     request: &ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let observed = query_component_runtime_status(canister).await?;
+    let observed = query_component_runtime_status(canister, request.operation_id).await?;
     let prepared = match validate_target_directory_status_for_deployment(
         &observed,
         binding,
@@ -2826,10 +3416,7 @@ pub(super) async fn prepare_grouped_component_directories(
         ComponentRuntimePhase::AwaitingDirectory => {
             prepare_target_component_directories(canister, request.clone()).await?
         }
-        ComponentRuntimePhase::DirectoryPrepared => observed,
-        ComponentRuntimePhase::Active => {
-            return Err(InternalError::conflict());
-        }
+        ComponentRuntimePhase::DirectoryPrepared | ComponentRuntimePhase::Active => observed,
     };
     let _ = prepared_target_directory_status_for_deployment(
         &prepared,
@@ -2838,7 +3425,8 @@ pub(super) async fn prepare_grouped_component_directories(
         request,
         directory_authority_hash,
     )?;
-    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_observed =
+        query_component_runtime_status(canister, request.operation_id).await?;
     let independently_prepared = prepared_target_directory_status_for_deployment(
         &independently_observed,
         binding,
@@ -2846,9 +3434,6 @@ pub(super) async fn prepare_grouped_component_directories(
         request,
         directory_authority_hash,
     )?;
-    if independently_prepared.phase == ComponentRuntimePhase::Active {
-        return Err(InternalError::conflict());
-    }
     Ok(independently_prepared)
 }
 
@@ -2860,7 +3445,7 @@ pub(super) async fn synchronize_grouped_component_directory(
     request: &ComponentRuntimeDirectorySynchronizationRequest,
     directory_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let observed = query_component_runtime_status(canister).await?;
+    let observed = query_component_runtime_status(canister, request.operation_id).await?;
     let activation = validate_active_directory_refresh_identity(
         &observed,
         binding,
@@ -2874,7 +3459,8 @@ pub(super) async fn synchronize_grouped_component_directory(
             match synchronize_target_component_directory(canister, request.clone()).await {
                 Ok(status) => status,
                 Err(call_error) => {
-                    let reconciled = query_component_runtime_status(canister).await?;
+                    let reconciled =
+                        query_component_runtime_status(canister, request.operation_id).await?;
                     if active_directory_refresh_covers(
                         &reconciled,
                         request,
@@ -2898,7 +3484,8 @@ pub(super) async fn synchronize_grouped_component_directory(
     {
         return Err(InternalError::conflict());
     }
-    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_observed =
+        query_component_runtime_status(canister, request.operation_id).await?;
     let independently_observed_activation = validate_active_directory_refresh_identity(
         &independently_observed,
         binding,
@@ -3024,7 +3611,9 @@ async fn activate_component_membership_with_plan(
     if !committed_directory_receipt(&plan.allocation)?.runtime_activated {
         return Err(InternalError::unavailable());
     }
-    let observed = query_component_runtime_status(plan.target_canister).await?;
+    let observed =
+        query_component_runtime_status(plan.target_canister, plan.directory_request.operation_id)
+            .await?;
     validate_active_target_runtime_status_for_deployment(
         &observed,
         &plan.target_binding,
@@ -3317,7 +3906,7 @@ async fn verify_initial_component_convergence(operation_id: [u8; 32]) -> Result<
     if membership.directory_authority_hash != active_authority_hash {
         return Err(InternalError::invariant());
     }
-    let observed = query_component_runtime_status(plan.target_canister).await?;
+    let observed = query_component_runtime_status(plan.target_canister, operation_id).await?;
     if !validate_target_membership_status_for_deployment(
         &observed,
         &plan.target_binding,
@@ -3463,6 +4052,7 @@ pub fn directory_page(
                 binding: entry.binding,
                 kind: entry.kind,
                 installed_artifact_hash: entry.installed_artifact_hash,
+                protocol_profile_digest: entry.protocol_profile_digest,
                 status: entry.status,
             })
             .collect(),
@@ -3848,6 +4438,7 @@ async fn component_install_plan_with_deployment(
     };
     let durable = RootComponentInstallPlan {
         raw_module_hash: artifact.raw_module_hash,
+        protocol_profile_digest: artifact.protocol_profile_digest,
         chunk_hashes,
         binding: binding.clone(),
         maximum_registry_bytes,
@@ -3924,6 +4515,7 @@ async fn child_component_install_plan(
     ConfigOps::validate_protected_component_deployment(&deployment, &binding.component)?;
     let durable = RootComponentChildInstallPlan {
         raw_module_hash: artifact.raw_module_hash,
+        protocol_profile_digest: artifact.protocol_profile_digest,
         chunk_hashes,
         binding: binding.clone(),
         maximum_registry_bytes: allocation.maximum_registry_bytes,
@@ -4350,7 +4942,7 @@ async fn installed_component_status(
     if observed != expected {
         return Err(InternalError::conflict());
     }
-    query_component_runtime_status(plan.canister).await
+    query_component_runtime_status(plan.canister, plan.payload.install_id).await
 }
 
 async fn verify_installed_component(plan: &ComponentInstallPlan) -> Result<(), InternalError> {
@@ -4414,34 +5006,56 @@ fn validate_installed_component_status(
 async fn query_managed_binding(
     canister: candid::Principal,
 ) -> Result<ManagedCanisterBinding, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_MANAGED_CANISTER_BINDING)
+    let call = CallOps::bounded_wait(canister, protocol::CANIC_STATUS)
+        .with_arg(CanisterStatusRequestFragment::Binding)?
         .execute()
         .await
         .map_err(|_error| {
             InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
         })?;
-    let result: Result<ManagedCanisterBinding, Error> = call
+    let result: Result<CanisterStatusResponseFragment, Error> = call
         .candid()
         .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
-    result.map_err(InternalError::observed_public)
+    match result.map_err(InternalError::observed_public)? {
+        CanisterStatusResponseFragment::Binding(binding) => Ok(binding),
+        CanisterStatusResponseFragment::Operation(_) => Err(InternalError::conflict()),
+    }
 }
 
 async fn prepared_component_runtime_plan(
     operation_id: [u8; 32],
 ) -> Result<PreparedComponentRuntimePlan, InternalError> {
-    prepared_component_runtime_plan_with_group_authority(operation_id, None).await
+    prepared_component_runtime_plan_with_authority(
+        operation_id,
+        ComponentRuntimePlanAuthority::Caller,
+    )
+    .await
+}
+
+async fn prepared_component_runtime_plan_for_reconciliation(
+    operation_id: [u8; 32],
+) -> Result<PreparedComponentRuntimePlan, InternalError> {
+    prepared_component_runtime_plan_with_authority(
+        operation_id,
+        ComponentRuntimePlanAuthority::Reconciler,
+    )
+    .await
 }
 
 async fn prepared_group_component_runtime_plan(
     operation_id: [u8; 32],
     authority: GroupComponentRuntimeAuthority<'_>,
 ) -> Result<PreparedComponentRuntimePlan, InternalError> {
-    prepared_component_runtime_plan_with_group_authority(operation_id, Some(authority)).await
+    prepared_component_runtime_plan_with_authority(
+        operation_id,
+        ComponentRuntimePlanAuthority::Group(authority),
+    )
+    .await
 }
 
-async fn prepared_component_runtime_plan_with_group_authority(
+async fn prepared_component_runtime_plan_with_authority(
     operation_id: [u8; 32],
-    group_authority: Option<GroupComponentRuntimeAuthority<'_>>,
+    plan_authority: ComponentRuntimePlanAuthority<'_>,
 ) -> Result<PreparedComponentRuntimePlan, InternalError> {
     let (root_authority, root) = root_authority()?;
     let prepared = prepared_registry(&root_authority.binding, root_authority.initial_release_set)?;
@@ -4455,8 +5069,24 @@ async fn prepared_component_runtime_plan_with_group_authority(
     let topology = ConfigOps::component_topology()?;
     let allocation =
         ComponentRegistryOps::allocation(operation_id).ok_or_else(InternalError::unavailable)?;
-    let retained_group_authority =
-        validated_group_component_runtime_authority(&allocation, group_authority)?;
+    let retained_group_authority = match plan_authority {
+        ComponentRuntimePlanAuthority::Caller => {
+            validate_allocation_caller(&allocation)?;
+            None
+        }
+        ComponentRuntimePlanAuthority::Reconciler => {
+            if matches!(
+                allocation.provisioning_origin,
+                ComponentProvisioningOrigin::ComponentGroup { .. }
+            ) {
+                return Err(InternalError::invariant());
+            }
+            None
+        }
+        ComponentRuntimePlanAuthority::Group(group_authority) => Some(
+            validated_group_component_runtime_authority(&allocation, group_authority)?,
+        ),
+    };
     validate_allocation_record(
         &root_authority.binding,
         root_authority.initial_release_set,
@@ -4516,15 +5146,11 @@ async fn prepared_component_runtime_plan_with_group_authority(
 
 fn validated_group_component_runtime_authority(
     allocation: &RootComponentAllocationView,
-    group_authority: Option<GroupComponentRuntimeAuthority<'_>>,
+    group_authority: GroupComponentRuntimeAuthority<'_>,
 ) -> Result<
-    Option<crate::view::component_provisioning::RootComponentGroupRuntimeAuthorityView>,
+    crate::view::component_provisioning::RootComponentGroupRuntimeAuthorityView,
     InternalError,
 > {
-    let Some(group_authority) = group_authority else {
-        validate_allocation_caller(allocation)?;
-        return Ok(None);
-    };
     if &allocation.provisioning_origin != group_authority.provisioning_origin {
         return Err(InternalError::conflict());
     }
@@ -4534,12 +5160,13 @@ fn validated_group_component_runtime_authority(
     if !authority_is_exact {
         return Err(InternalError::conflict());
     }
-    Ok(Some(retained))
+    Ok(retained)
 }
 
 async fn prepared_child_runtime_plan(
     component: canic_core::ids::ComponentInstanceId,
     operation_id: [u8; 32],
+    parent_canister_id: candid::Principal,
 ) -> Result<PreparedChildRuntimePlan, InternalError> {
     let (root_authority, root) = root_authority()?;
     let prepared = prepared_registry(&root_authority.binding, root_authority.initial_release_set)?;
@@ -4554,11 +5181,10 @@ async fn prepared_child_runtime_plan(
         "Component Child lifecycle requires an Active Fleet Subnet Root runtime",
     )?;
 
-    let caller = IcOps::msg_caller();
     let (parent_binding, parent_status) =
-        ComponentRegistryOps::registered_parent(component, caller)?.ok_or_else(|| {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
-        })?;
+        ComponentRegistryOps::registered_parent(component, parent_canister_id)?.ok_or_else(
+            || InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED),
+        )?;
     if parent_status != ComponentLifecycleStatus::Active {
         return Err(InternalError::unavailable());
     }
@@ -4635,10 +5261,10 @@ async fn prepared_child_runtime_plan(
 
 fn validate_requesting_parent_still_active(
     component: canic_core::ids::ComponentInstanceId,
+    parent_canister_id: candid::Principal,
     expected: &ManagedCanisterBinding,
 ) -> Result<(), InternalError> {
-    let caller = IcOps::msg_caller();
-    let (current, status) = ComponentRegistryOps::registered_parent(component, caller)?
+    let (current, status) = ComponentRegistryOps::registered_parent(component, parent_canister_id)?
         .ok_or_else(|| {
             InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
         })?;
@@ -4730,6 +5356,7 @@ pub(super) fn active_component_direct_children(
         .map(|entry| ComponentRuntimeDirectChild {
             canister_id: entry.binding.canister_id,
             role: entry.binding.role,
+            protocol_profile_digest: entry.protocol_profile_digest,
         })
         .collect::<Vec<_>>();
     direct_children.sort();
@@ -4744,34 +5371,38 @@ pub(super) fn active_component_direct_children(
 
 async fn query_component_runtime_status(
     canister: candid::Principal,
+    operation_id: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_COMPONENT_RUNTIME_STATUS)
+    let call = CallOps::bounded_wait(canister, protocol::CANIC_STATUS)
+        .with_arg(CanisterStatusRequestFragment::Operation(
+            OperationStatusRequest { operation_id },
+        ))?
         .execute()
         .await
         .map_err(|_error| {
             InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
         })?;
-    let result: Result<ComponentRuntimeStatusResponse, Error> = call
+    let result: Result<CanisterStatusResponseFragment, Error> = call
         .candid()
         .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
-    result.map_err(InternalError::observed_public)
+    match result.map_err(InternalError::observed_public)? {
+        CanisterStatusResponseFragment::Operation(
+            CanisterOperationStatusFragment::ConfigureRuntime(status),
+        ) if status.operation_id == operation_id => Ok(status.runtime),
+        CanisterStatusResponseFragment::Operation(_)
+        | CanisterStatusResponseFragment::Binding(_) => Err(InternalError::conflict()),
+    }
 }
 
 async fn activate_target_component_runtime(
     canister: candid::Principal,
     request: ComponentRuntimeActivationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let call = CallOps::bounded_wait(canister, protocol::CANIC_COMPONENT_RUNTIME_ACTIVATE)
-        .with_arg(request)?
-        .execute()
-        .await
-        .map_err(|_error| {
-            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
-        })?;
-    let result: Result<ComponentRuntimeStatusResponse, Error> = call
-        .candid()
-        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
-    result.map_err(InternalError::observed_public)
+    let status = query_component_runtime_status(canister, request.operation_id).await?;
+    if status.authority_hash != Some(request.directory_authority_hash) {
+        return Err(InternalError::conflict());
+    }
+    Ok(status)
 }
 
 async fn activate_directory_prepared_runtime_for_deployment(
@@ -4781,7 +5412,7 @@ async fn activate_directory_prepared_runtime_for_deployment(
     directory_request: &ComponentRuntimeDirectoryPreparationRequest,
     directory_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let observed = query_component_runtime_status(canister).await?;
+    let observed = query_component_runtime_status(canister, directory_request.operation_id).await?;
     let activated = match validate_target_directory_status_for_deployment(
         &observed,
         binding,
@@ -4800,7 +5431,9 @@ async fn activate_directory_prepared_runtime_for_deployment(
             match activate_target_component_runtime(canister, request).await {
                 Ok(status) => status,
                 Err(call_error) => {
-                    let reconciled = query_component_runtime_status(canister).await?;
+                    let reconciled =
+                        query_component_runtime_status(canister, directory_request.operation_id)
+                            .await?;
                     if validate_active_target_runtime_status_for_deployment(
                         &reconciled,
                         binding,
@@ -4827,7 +5460,8 @@ async fn activate_directory_prepared_runtime_for_deployment(
         directory_authority_hash,
     )?;
 
-    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_observed =
+        query_component_runtime_status(canister, directory_request.operation_id).await?;
     active_target_runtime_status_for_deployment(
         &independently_observed,
         binding,
@@ -4846,7 +5480,7 @@ async fn converge_active_membership_directory_for_deployment(
     active_request: &ComponentRuntimeDirectorySynchronizationRequest,
     active_authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let observed = query_component_runtime_status(canister).await?;
+    let observed = query_component_runtime_status(canister, prepared_request.operation_id).await?;
     let synchronized = if validate_target_membership_status_for_deployment(
         &observed,
         binding,
@@ -4861,7 +5495,8 @@ async fn converge_active_membership_directory_for_deployment(
         match synchronize_target_component_directory(canister, active_request.clone()).await {
             Ok(status) => status,
             Err(call_error) => {
-                let reconciled = query_component_runtime_status(canister).await?;
+                let reconciled =
+                    query_component_runtime_status(canister, prepared_request.operation_id).await?;
                 if matches!(
                     validate_target_membership_status_for_deployment(
                         &reconciled,
@@ -4893,7 +5528,8 @@ async fn converge_active_membership_directory_for_deployment(
         return Err(InternalError::unavailable());
     }
 
-    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_observed =
+        query_component_runtime_status(canister, prepared_request.operation_id).await?;
     active_membership_target_status_for_deployment(
         &independently_observed,
         binding,
@@ -4909,36 +5545,45 @@ async fn synchronize_target_component_directory(
     canister: candid::Principal,
     request: ComponentRuntimeDirectorySynchronizationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let call = CallOps::bounded_wait(
+    configure_target_component_runtime(
         canister,
-        protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_SYNCHRONIZE,
+        ComponentRuntimeDirectoryPreparationRequest {
+            operation_id: request.operation_id,
+            authority: request.authority,
+            direct_children: request.direct_children,
+        },
     )
-    .with_arg(request)?
-    .execute()
     .await
-    .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE))?;
-    let result: Result<ComponentRuntimeStatusResponse, Error> = call
-        .candid()
-        .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
-    result.map_err(InternalError::observed_public)
 }
 
 async fn prepare_target_component_directories(
     canister: candid::Principal,
     request: ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<ComponentRuntimeStatusResponse, InternalError> {
-    let call = CallOps::bounded_wait(
-        canister,
-        protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
-    )
-    .with_arg(request)?
-    .execute()
-    .await
-    .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE))?;
-    let result: Result<ComponentRuntimeStatusResponse, Error> = call
+    configure_target_component_runtime(canister, request).await
+}
+
+async fn configure_target_component_runtime(
+    canister: candid::Principal,
+    request: ComponentRuntimeDirectoryPreparationRequest,
+) -> Result<ComponentRuntimeStatusResponse, InternalError> {
+    let operation_id = request.operation_id;
+    let call = CallOps::bounded_wait(canister, protocol::CANIC_COMMAND)
+        .with_arg(CanisterCommandFragment::ConfigureRuntime(request))?
+        .execute()
+        .await
+        .map_err(|_error| {
+            InternalError::public(canic_core::diagnostics::codes::STATE_UNAVAILABLE)
+        })?;
+    let result: Result<CanisterCommandResponseFragment, Error> = call
         .candid()
         .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
-    result.map_err(InternalError::observed_public)
+    let CanisterCommandResponseFragment::OperationAccepted(receipt) =
+        result.map_err(InternalError::observed_public)?;
+    if receipt.operation_id != operation_id {
+        return Err(InternalError::conflict());
+    }
+    query_component_runtime_status(canister, operation_id).await
 }
 
 async fn converge_subtree_directory_recipients(
@@ -4996,9 +5641,10 @@ async fn converge_active_member_directory(
     authority_hash: [u8; 32],
 ) -> Result<ComponentRuntimeDirectoryConvergenceEvidence, InternalError> {
     let canister = managed_canister_principal(binding);
+    let operation_id = ComponentRegistryOps::managed_runtime_operation_id(binding)?;
     let direct_children = active_component_direct_children_for_authority(authority, canister)?;
     let direct_children_hash = ComponentRuntimeOps::direct_children_hash(&direct_children)?;
-    let observed = query_component_runtime_status(canister).await?;
+    let observed = query_component_runtime_status(canister, operation_id).await?;
     let converged = if active_member_directory_is_converged(
         &observed,
         binding,
@@ -5016,7 +5662,7 @@ async fn converge_active_member_directory(
         match synchronize_target_component_directory(canister, request).await {
             Ok(status) => status,
             Err(call_error) => {
-                let reconciled = query_component_runtime_status(canister).await?;
+                let reconciled = query_component_runtime_status(canister, operation_id).await?;
                 if active_member_directory_is_converged(
                     &reconciled,
                     binding,
@@ -5043,7 +5689,7 @@ async fn converge_active_member_directory(
         return Err(InternalError::unavailable());
     }
 
-    let independently_observed = query_component_runtime_status(canister).await?;
+    let independently_observed = query_component_runtime_status(canister, operation_id).await?;
     exact_active_member_directory_receipt(
         &independently_observed,
         binding,
@@ -6329,6 +6975,7 @@ fn partition_response(
             content_hash: partition.content_hash,
         },
         binding: partition.binding,
+        protocol_profile_digest: partition.protocol_profile_digest,
         provisioning_origin: partition.provisioning_origin,
         release_set: partition.release_set,
         status: partition.status,

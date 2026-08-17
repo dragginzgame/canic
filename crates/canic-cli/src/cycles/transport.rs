@@ -40,6 +40,8 @@ use thiserror::Error as ThisError;
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
 const ICP_JSON_OUTPUT: &str = "json";
 const CYCLES_WORKER_PANIC: &str = "cycles query worker panicked";
+const CYCLE_HISTORY_SELECTOR: &str = "canic_status::CycleHistory";
+const CYCLE_TOPUPS_SELECTOR: &str = "canic_status::CycleTopups";
 
 ///
 /// CycleQueryTarget
@@ -393,17 +395,17 @@ fn query_topup_event_page(
     offset: u64,
     limit: u64,
 ) -> Result<crate::cycles::model::CycleTopupEventPage, CycleObservationError> {
-    let arg = page_request_arg(offset, limit);
+    let arg = status_page_request_arg("CycleTopups", offset, limit);
     let output = target.icp.canister_query_arg_output_with_candid(
         &target.canister_id,
-        canic_core::protocol::CANIC_CYCLE_TOPUPS,
+        canic_core::protocol::CANIC_STATUS,
         &arg,
         Some(ICP_JSON_OUTPUT),
         target.candid_path.as_deref(),
     )?;
 
     parse_topup_event_page(&output).map_err(|source| CycleObservationError::Response {
-        method: canic_core::protocol::CANIC_CYCLE_TOPUPS,
+        method: CYCLE_TOPUPS_SELECTOR,
         source,
     })
 }
@@ -425,17 +427,17 @@ fn query_cycle_tracker_page(
     offset: u64,
     limit: u64,
 ) -> Result<CycleTrackerPage, CycleObservationError> {
-    let arg = page_request_arg(offset, limit);
+    let arg = status_page_request_arg("CycleHistory", offset, limit);
     let output = target.icp.canister_query_arg_output_with_candid(
         &target.canister_id,
-        canic_core::protocol::CANIC_CYCLE_TRACKER,
+        canic_core::protocol::CANIC_STATUS,
         &arg,
         Some(ICP_JSON_OUTPUT),
         target.candid_path.as_deref(),
     )?;
 
     parse_cycle_tracker_page(&output).map_err(|source| CycleObservationError::Response {
-        method: canic_core::protocol::CANIC_CYCLE_TRACKER,
+        method: CYCLE_HISTORY_SELECTOR,
         source,
     })
 }
@@ -459,8 +461,10 @@ fn cycles_icp(options: &CyclesOptions, root: Option<&Path>) -> IcpCli {
     icp
 }
 
-fn page_request_arg(offset: u64, limit: u64) -> String {
-    format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})")
+fn status_page_request_arg(selector: &str, offset: u64, limit: u64) -> String {
+    format!(
+        "(variant {{ {selector} = record {{ offset = {offset} : nat64; limit = {limit} : nat64 }} }})"
+    )
 }
 
 fn signed_delta(latest: u128, baseline: u128) -> i128 {
@@ -572,7 +576,7 @@ mod tests {
     #[test]
     fn cycle_response_failure_preserves_typed_cause_until_projection() {
         let error = CycleObservationError::Response {
-            method: canic_core::protocol::CANIC_CYCLE_TRACKER,
+            method: CYCLE_HISTORY_SELECTOR,
             source: IcpJsonResponseError::MissingResponseBytes,
         };
         let source = std::error::Error::source(&error).expect("typed response source");

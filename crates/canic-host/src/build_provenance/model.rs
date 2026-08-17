@@ -26,9 +26,17 @@ pub struct BuildProvenanceV1 {
     pub build_status: BuildProvenanceStatusV1,
     pub source: SourceProvenanceV1,
     pub cargo: CargoProvenanceV1,
+    pub protocol_profile: ProtocolProfileProvenanceV1,
     pub artifacts: Vec<ArtifactProvenanceV1>,
     pub transforms: Vec<ArtifactTransformProvenanceV1>,
     pub warnings: Vec<EvidenceMessageV1>,
+}
+
+/// Exact generated binding identity carried beside one build artifact.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProtocolProfileProvenanceV1 {
+    pub candid_sha256: String,
+    pub protocol_profile_digest: String,
 }
 
 ///

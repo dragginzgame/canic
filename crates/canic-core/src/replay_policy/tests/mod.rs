@@ -7,21 +7,16 @@
 mod cost;
 mod coverage;
 mod endpoint;
+mod role_command;
 mod root_capability;
 
 use super::{
     quota::{
-        DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1, DURABLE_PUBLISH_QUOTA_V1,
-        DURABLE_PUBLISH_RESERVE_V1, ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1,
-        ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1, VALUE_TRANSFER_QUOTA_V1,
+        DURABLE_PUBLISH_QUOTA_V1, DURABLE_PUBLISH_RESERVE_V1,
+        ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1, VALUE_TRANSFER_QUOTA_V1,
         VALUE_TRANSFER_RESERVE_V1,
     },
     *,
-};
-use crate::protocol::{
-    CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-    CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES,
-    CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
 };
 use std::collections::BTreeSet;
 
@@ -30,23 +25,6 @@ fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
         include_str!("../../workflow/rpc/request/handler/capability.rs"),
         "pub(in crate::workflow::rpc) enum RootCapability",
     )
-}
-
-fn durable_publish_endpoint_names() -> BTreeSet<&'static str> {
-    std::iter::once("canic_wasm_store_admin").collect()
-}
-
-fn guarded_publication_effect_endpoint_names() -> BTreeSet<&'static str> {
-    let mut endpoints = [
-        CANIC_TEMPLATE_PREPARE_ADMIN,
-        CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-    ]
-    .into_iter()
-    .chain(CANIC_WASM_STORE_ROOT_UPDATE_METHODS.iter().copied())
-    .collect::<BTreeSet<_>>();
-    endpoints.remove(CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES);
-    endpoints
 }
 
 fn release_candidate_manifest_blockers() -> BTreeSet<String> {
@@ -60,7 +38,33 @@ fn release_candidate_manifest_blockers() -> BTreeSet<String> {
         .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
         .map(|entry| format!("root-capability:{}", entry.variant));
 
-    endpoint_blockers.chain(root_command_blockers).collect()
+    let root_role_blockers = ROOT_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
+        .map(|entry| format!("root-command:{}", entry.variant));
+
+    let coordinator_role_blockers = COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
+        .map(|entry| format!("coordinator-command:{}", entry.variant));
+
+    let managed_role_blockers = MANAGED_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
+        .map(|entry| format!("managed-command:{}", entry.variant));
+
+    let store_role_blockers = STORE_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
+        .map(|entry| format!("store-command:{}", entry.variant));
+
+    endpoint_blockers
+        .chain(root_command_blockers)
+        .chain(root_role_blockers)
+        .chain(coordinator_role_blockers)
+        .chain(managed_role_blockers)
+        .chain(store_role_blockers)
+        .collect()
 }
 
 const fn replay_command_kind(label: &'static str) -> ReplayCommandKindLabel {
@@ -75,13 +79,21 @@ fn enum_variant_names_from_source(
     source: &'static str,
     marker: &'static str,
 ) -> BTreeSet<&'static str> {
+    enum_variant_names_from_source_until(source, marker, "\n}")
+}
+
+fn enum_variant_names_from_source_until(
+    source: &'static str,
+    marker: &'static str,
+    closing: &'static str,
+) -> BTreeSet<&'static str> {
     let start = source.find(marker).expect("enum exists in source");
     let body_start = source[start..]
         .find('{')
         .map(|offset| start + offset + 1)
         .expect("enum has body");
     let body_end = source[body_start..]
-        .find("\n}")
+        .find(closing)
         .map(|offset| body_start + offset)
         .expect("enum body closes");
 
@@ -103,12 +115,42 @@ fn enum_variant_name_from_line(line: &'static str) -> Option<&'static str> {
     Some(&line[..end])
 }
 
+fn root_command_variant_names() -> BTreeSet<&'static str> {
+    enum_variant_names_from_source_until(
+        include_str!("../../../../canic/src/macros/endpoints/root.rs"),
+        "pub enum RootCommand",
+        "\n        }",
+    )
+}
+
+fn coordinator_command_variant_names() -> BTreeSet<&'static str> {
+    enum_variant_names_from_source(
+        include_str!("../../../../canic-control-plane/src/dto/fleet_coordinator.rs"),
+        "pub enum CoordinatorCommand",
+    )
+}
+
+fn managed_command_variant_names() -> BTreeSet<&'static str> {
+    enum_variant_names_from_source_until(
+        include_str!("../../../../canic/src/macros/endpoints/role.rs"),
+        "pub enum CanisterCommand",
+        "\n        }",
+    )
+}
+
+fn store_command_variant_names() -> BTreeSet<&'static str> {
+    enum_variant_names_from_source(
+        include_str!("../../../../canic-control-plane/src/dto/template/mod.rs"),
+        "pub enum StoreCommand",
+    )
+}
+
 fn emitted_update_endpoint_names() -> BTreeSet<&'static str> {
     [
         include_str!("../../../../canic/src/macros/endpoints/root.rs"),
-        include_str!("../../../../canic/src/macros/endpoints/shared.rs"),
         include_str!("../../../../canic/src/macros/endpoints/wasm_store.rs"),
-        include_str!("../../../../canic/src/macros/endpoints/nonroot.rs"),
+        include_str!("../../../../canic/src/macros/endpoints/role.rs"),
+        include_str!("../../../../canic/src/macros/endpoints/fleet_coordinator.rs"),
     ]
     .into_iter()
     .flat_map(update_endpoint_names_from_source)

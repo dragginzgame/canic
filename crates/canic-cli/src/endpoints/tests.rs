@@ -5,8 +5,9 @@ use super::*;
 fn renders_plain_endpoint_signatures_as_table() {
     let endpoints = vec![
         EndpointEntry {
-            name: "canic_log".to_string(),
-            candid: "canic_log : (opt text, opt text, Level, PageRequest) -> () query;".to_string(),
+            name: "canic_status".to_string(),
+            candid: "canic_status : (opt text, opt text, Level, PageRequest) -> () query;"
+                .to_string(),
             modes: vec![EndpointMode::Query],
             arguments: vec![
                 test_endpoint_type("opt text"),
@@ -17,16 +18,15 @@ fn renders_plain_endpoint_signatures_as_table() {
             returns: Vec::new(),
         },
         EndpointEntry {
-            name: "canic_import".to_string(),
-            candid: "canic_import : (Envelope) -> (Result);".to_string(),
+            name: "canic_command".to_string(),
+            candid: "canic_command : (Envelope) -> (Result);".to_string(),
             modes: Vec::new(),
             arguments: vec![test_endpoint_type("Envelope")],
             returns: vec![test_endpoint_type("Result")],
         },
         EndpointEntry {
-            name: "canic_response_capability_v1".to_string(),
-            candid: "canic_response_capability_v1 : (Envelope) -> (Result) query oneway;"
-                .to_string(),
+            name: "application_stream".to_string(),
+            candid: "application_stream : (Envelope) -> (Result) query oneway;".to_string(),
             modes: vec![EndpointMode::Query, EndpointMode::Oneway],
             arguments: vec![test_endpoint_type("Envelope")],
             returns: vec![test_endpoint_type("Result")],
@@ -36,11 +36,11 @@ fn renders_plain_endpoint_signatures_as_table() {
     assert_eq!(
         render_plain_endpoints(&endpoints),
         [
-            "FUNCTION                       MODE           SIGNATURE",
-            "----------------------------   ------------   ----------------------------------------------",
-            "canic_log                      query          (opt text, opt text, Level, PageRequest) -> ()",
-            "canic_import                   update         (Envelope) -> (Result)",
-            "canic_response_capability_v1   query oneway   (Envelope) -> (Result)",
+            "FUNCTION             MODE           SIGNATURE",
+            "------------------   ------------   ----------------------------------------------",
+            "canic_status         query          (opt text, opt text, Level, PageRequest) -> ()",
+            "canic_command        update         (Envelope) -> (Result)",
+            "application_stream   query oneway   (Envelope) -> (Result)",
         ]
         .join("\n")
     );

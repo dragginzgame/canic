@@ -8,6 +8,7 @@ use canic_core::dto::fleet_registry::{
     FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
     FleetSubnetRootSnapshotAcknowledgement,
 };
+use canic_core::dto::root_store::RootStoreBootstrapRequest;
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
@@ -42,6 +43,8 @@ eager_static! {
 /// Durable validated candidate and optional exact Coordinator acknowledgement.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootFleetRegistryCandidateRecord {
+    pub operation_id: [u8; 32],
+    pub store_bootstrap: RootStoreBootstrapRequest,
     pub snapshot: FleetRegistrySnapshotResponse,
     pub acknowledgement: Option<FleetSubnetRootSnapshotAcknowledgement>,
 }
@@ -59,6 +62,7 @@ pub struct RootFleetRegistryActiveRecord {
 pub struct RootFleetRegistryMirrorStateRecord {
     pub candidate: Option<RootFleetRegistryCandidateRecord>,
     pub active: Option<RootFleetRegistryActiveRecord>,
+    pub synchronization: Option<RootFleetRegistryCandidateRecord>,
 }
 
 impl RootFleetRegistryMirrorStateRecord {
@@ -77,6 +81,7 @@ impl_storable_bounded!(
 pub struct RootFleetRegistryMirrorData {
     pub candidate: Option<RootFleetRegistryCandidateRecord>,
     pub active: Option<RootFleetRegistryActiveRecord>,
+    pub synchronization: Option<RootFleetRegistryCandidateRecord>,
 }
 
 impl RootFleetRegistryMirrorData {
@@ -93,23 +98,32 @@ impl RootFleetRegistryMirrorStore {
         ROOT_FLEET_REGISTRY_MIRROR.with_borrow(|cell| RootFleetRegistryMirrorData {
             candidate: cell.get().candidate.clone(),
             active: cell.get().active.clone(),
+            synchronization: cell.get().synchronization.clone(),
         })
     }
 
     pub(crate) fn commit_candidate(record: RootFleetRegistryCandidateRecord) {
         ROOT_FLEET_REGISTRY_MIRROR.with_borrow_mut(|cell| {
+            let synchronization = cell.get().synchronization.clone();
             cell.set(RootFleetRegistryMirrorStateRecord {
                 candidate: Some(record),
                 active: None,
+                synchronization,
             });
         });
     }
 
     pub(crate) fn commit_active(record: RootFleetRegistryActiveRecord) {
         ROOT_FLEET_REGISTRY_MIRROR.with_borrow_mut(|cell| {
+            let synchronization = cell
+                .get()
+                .candidate
+                .clone()
+                .or_else(|| cell.get().synchronization.clone());
             cell.set(RootFleetRegistryMirrorStateRecord {
                 candidate: None,
                 active: Some(record),
+                synchronization,
             });
         });
     }

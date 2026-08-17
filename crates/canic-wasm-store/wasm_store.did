@@ -17,48 +17,8 @@ type CapabilityRequestMetadata = record {
   issued_at_ns : nat64;
 };
 type CapabilityService = variant { Root };
-//
-// ComponentBinding
-//
-// Complete immutable identity and placement of one concrete Component.
-//
-type ComponentBinding = record {
-  placement_subnet : principal;
-  component : text;
-  role : text;
-  canister_id : principal;
-  fleet_subnet_root : principal;
-  authority : FleetRegistryAuthority;
-  component_spec : text;
-  spec_hash : blob;
-};
-//
-// ComponentChildBinding
-//
-// Complete immutable identity of one child at any depth in one exact Component tree.
-//
-type ComponentChildBinding = record {
-  component : ComponentBinding;
-  parent_canister_id : principal;
-  role : text;
-  canister_id : principal;
-};
-type CycleTopupEvent = record {
-  status : CycleTopupEventStatus;
-  error : opt text;
-  requested_cycles : nat;
-  timestamp_secs : nat64;
-  transferred_cycles : opt nat;
-  sequence : nat32;
-};
-//
-// CycleTopupEventStatus
-//
-type CycleTopupEventStatus = variant {
-  RequestScheduled;
-  RequestOk;
-  RequestErr;
-};
+// Named response for the canister's current cycle balance.
+type CycleBalanceStatusResponse = record { cycles : nat };
 type CycleTrackerEntry = record { cycles : nat; timestamp_secs : nat64 };
 type CyclesFundingPreflightResponse = variant {
   CooldownActive : record { retry_after_secs : nat64 };
@@ -227,15 +187,6 @@ type FleetSubnetWasmStoreInitArgs = record {
   install_id : blob;
   authority : FleetSubnetWasmStoreAuthority;
 };
-//
-// ManagedCanisterBinding
-//
-// Immutable Registry-issued identity retained by one managed application Canister.
-//
-type ManagedCanisterBinding = variant {
-  ComponentChild : ComponentChildBinding;
-  Component : ComponentBinding;
-};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -244,32 +195,103 @@ type NonrootCyclesCapabilityEnvelopeV1 = record {
   capability : CyclesRequest;
 };
 type NonrootCyclesCapabilityResponseV1 = record { response : CyclesResponse };
-type Page = record { total : nat64; entries : vec CycleTopupEvent };
+// Durable identity returned when one role-owned asynchronous command is accepted.
+type OperationReceipt = record { operation_id : blob };
+// Lookup key shared by each role's local durable-operation status variant.
+type OperationStatusRequest = record { operation_id : blob };
+type Page = record { total : nat64; entries : vec CycleTrackerEntry };
 type PageRequest = record { offset : nat64; limit : nat64 };
-type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
-type Result = variant { Ok : FleetActivationStatusResponse; Err : Error };
-type Result_1 = variant { Ok : nat; Err : Error };
-type Result_10 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_11 = variant {
-  Ok : WasmStoreDeletionCycleReclamationResponse;
-  Err : Error;
+type Result = variant { Ok : StoreCommandResponse; Err : Error };
+type Result_1 = variant { Ok : StoreStatusResponse; Err : Error };
+type Result_2 = variant { Ok : TemplateChunkResponse; Err : Error };
+type Result_3 = variant { Ok; Err : Error };
+// Closed compiled capability identity exposed by the immutable role overview.
+type RoleCapability = variant {
+  Sharding;
+  Scaling;
+  Root;
+  FleetCoordinator;
+  Index;
+  Icrc21;
+  DelegatedTokenIssuer;
+  RoleAttestationSigner;
+  WasmStore;
+  DelegatedTokenVerifier;
+  RoleAttestationVerifier;
+  RootControlPlane;
+  Runtime;
+  AutomaticTopup;
 };
-type Result_12 = variant { Ok : WasmStoreStatusResponse; Err : Error };
-type Result_2 = variant { Ok : Page; Err : Error };
-type Result_3 = variant { Ok : Page_1; Err : Error };
-type Result_4 = variant { Ok : FleetSubnetWasmStoreAuthority; Err : Error };
-type Result_5 = variant { Ok : ManagedCanisterBinding; Err : Error };
-type Result_6 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_7 = variant { Ok; Err : Error };
-type Result_8 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_9 = variant { Ok : TemplateChunkResponse; Err : Error };
+// Immutable role, capability, release, and bootstrap profile-verification response.
+type RoleOverviewResponse = record {
+  capabilities : vec RoleCapability;
+  metadata : CanicMetadataResponse;
+  role : text;
+  bootstrap : BootstrapStatusResponse;
+  protocol_profile_digest : blob;
+};
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type StateSnapshotInput = record { fleet_state : opt FleetStateInput };
+// Closed Store control-plane command union.
+type StoreCommand = variant {
+  ActivateFleet : FleetActivationRequest;
+  RespondCapability : NonrootCyclesCapabilityEnvelopeV1;
+  PrepareChunkSet : TemplateChunkSetPrepareInput;
+  SynchronizeState : StateSnapshotInput;
+  StageManifest : TemplateManifestInput;
+  RunGc : OperationStatusRequest;
+  InspectTemplate : TemplateLookupRequest;
+  ReclaimDeletionCycles : WasmStoreDeletionCycleReclamationRequest;
+  PrepareFleetCredential : FleetCredentialGenerationRequest;
+  SynchronizeTopology : TopologySnapshotInput;
+};
+// Closed response union correlated to one accepted Store command.
+type StoreCommandResponse = variant {
+  RespondCapability : NonrootCyclesCapabilityResponseV1;
+  PrepareChunkSet : TemplateChunkSetInfoResponse;
+  SynchronizeState;
+  StageManifest;
+  InspectTemplate : TemplateChunkSetInfoResponse;
+  ReclaimDeletionCycles : WasmStoreDeletionCycleReclamationResponse;
+  OperationAccepted : OperationReceipt;
+  SynchronizeTopology;
+};
+// Store-owned durable operation detail selected by one operation ID.
+type StoreOperationStatusResponse = variant {
+  FleetActivation : FleetActivationStatusResponse;
+  GarbageCollection : WasmStoreGcOperationStatus;
+};
+// Closed Store observation selector carried by its single status query.
+type StoreStatusRequest = variant {
+  Storage;
+  Overview;
+  CycleHistory : PageRequest;
+  Operation : OperationReceipt;
+  Authority;
+  Catalog;
+  CycleBalance;
+};
+// Closed response union for the Store's single status query.
+type StoreStatusResponse = variant {
+  Storage : WasmStoreStatusResponse;
+  Overview : RoleOverviewResponse;
+  CycleHistory : Page;
+  Operation : StoreOperationStatusResponse;
+  Authority : FleetSubnetWasmStoreAuthority;
+  Catalog : vec WasmStoreCatalogEntryResponse;
+  CycleBalance : CycleBalanceStatusResponse;
+};
 type TemplateChunkInput = record {
   chunk_index : nat32;
   template_id : text;
   version : text;
   bytes : blob;
+};
+// Exact template chunk key used by the Store's bounded read lane.
+type TemplateChunkRequest = record {
+  chunk_index : nat32;
+  template_id : text;
+  version : text;
 };
 type TemplateChunkResponse = record { bytes : blob };
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
@@ -284,6 +306,8 @@ type TemplateChunkSetPrepareInput = record {
 // TemplateChunkingMode
 //
 type TemplateChunkingMode = variant { Chunked; Inline };
+// Exact template release key used by Store command inspection.
+type TemplateLookupRequest = record { template_id : text; version : text };
 type TemplateManifestInput = record {
   role : text;
   payload_size_bytes : nat64;
@@ -341,6 +365,11 @@ type WasmStoreGcMode = variant {
   Prepared;
   InProgress;
 };
+// Store garbage-collection detail projected through the operation lane.
+type WasmStoreGcOperationStatus = record {
+  gc : WasmStoreGcStatusResponse;
+  operation_id : blob;
+};
 type WasmStoreGcStatusResponse = record {
   prepared_at : opt nat64;
   changed_at : nat64;
@@ -371,36 +400,9 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (FleetSubnetWasmStoreInitArgs) -> {
-  canic_activate_fleet : (FleetActivationRequest) -> (Result);
-  canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
-  canic_cycle_balance : () -> (Result_1) query;
-  canic_cycle_topups : (PageRequest) -> (Result_2) query;
-  canic_cycle_tracker : (PageRequest) -> (Result_3) query;
-  canic_fleet_activation_status : () -> (Result) query;
-  canic_fleet_subnet_wasm_store_authority : () -> (Result_4) query;
-  canic_managed_canister_binding : () -> (Result_5) query;
-  canic_metadata : () -> (CanicMetadataResponse) query;
-  canic_prepare_fleet_credential_generation : (
-      FleetCredentialGenerationRequest,
-    ) -> (Result);
-  canic_ready : () -> (bool) query;
-  canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_6,
-    );
-  canic_sync_state : (StateSnapshotInput) -> (Result_7);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_7);
-  canic_wasm_store_begin_gc : () -> (Result_7);
-  canic_wasm_store_catalog : () -> (Result_8) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_9);
-  canic_wasm_store_complete_gc : () -> (Result_7);
-  canic_wasm_store_info : (text, text) -> (Result_10);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_10);
-  canic_wasm_store_prepare_gc : () -> (Result_7);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_7);
-  canic_wasm_store_reclaim_deletion_cycles : (
-      WasmStoreDeletionCycleReclamationRequest,
-    ) -> (Result_11);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_7);
-  canic_wasm_store_status : () -> (Result_12) query;
+  canic_command : (StoreCommand) -> (Result);
+  canic_status : (StoreStatusRequest) -> (Result_1) query;
+  canic_wasm_store_chunk : (TemplateChunkRequest) -> (Result_2);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_3);
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

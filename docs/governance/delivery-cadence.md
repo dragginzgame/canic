@@ -78,6 +78,17 @@ current planned release batch while any of its direct acceptance criteria
 remain incomplete. It does not imply that the previous implementation slice
 should be published first.
 
+When that batch is complete, the same ordinary continuation is sufficient to
+begin the next batch that is already accepted and sequenced in the active
+design/status tracker. A maintainer does not need to repeat the batch label or
+use a phase-specific authorization phrase. Trackers must not add a magic-word
+gate around ordinary in-repository implementation.
+
+Generic continuation does not approve an unaccepted design or scope expansion,
+broad validation, release/version mutation, Git publication, deployment,
+destructive action or external/network effect. Those boundaries retain their
+own explicit authority requirements.
+
 An agent should report a batch as ready to push only when:
 
 1. its complete bounded outcome is implemented;

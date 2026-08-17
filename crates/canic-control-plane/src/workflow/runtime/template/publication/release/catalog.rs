@@ -1,3 +1,6 @@
+use crate::workflow::runtime::template::exact_store_payload_bytes;
+#[cfg(test)]
+use crate::workflow::runtime::template::publication::snapshot::PublicationStoreSnapshot;
 use crate::{
     config,
     dto::template::{TemplateManifestInput, TemplateManifestResponse},
@@ -6,7 +9,6 @@ use crate::{
     workflow::runtime::template::publication::{
         WasmStorePublicationWorkflow,
         cost_guard::{PUBLICATION_RECOVERY_COMMAND_KIND, PublicationCostGuard},
-        snapshot::PublicationStoreSnapshot,
     },
 };
 use canic_core::control_plane_support::{
@@ -35,6 +37,7 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Reconcile one approved release against the exact adopted sibling Store.
+    #[cfg(test)]
     pub(in crate::workflow::runtime::template::publication) fn reconciled_binding_for_manifest(
         store: &PublicationStoreSnapshot,
         manifest: &TemplateManifestResponse,
@@ -97,19 +100,37 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<(), InternalError> {
         let store = Self::snapshot_adopted_wasm_store(publication_permit).await?;
         Self::require_active_publication_store(&store.binding)?;
-        for manifest in Self::managed_release_manifests()? {
-            let binding = Self::reconciled_binding_for_manifest(&store, &manifest)?;
+        let roles = config::fleet_subnet_root_managed_release_roles()?;
+        if store.releases.len() != roles.len() {
+            return Err(InternalError::conflict());
+        }
+        for role in roles {
+            let mut matches = store.releases.iter().filter(|entry| entry.role == role);
+            let Some(entry) = matches.next() else {
+                return Err(InternalError::conflict());
+            };
+            if matches.next().is_some() {
+                return Err(InternalError::conflict());
+            }
+            exact_store_payload_bytes(
+                store.pid,
+                &entry.template_id,
+                &entry.version,
+                &entry.payload_hash,
+                entry.payload_size_bytes,
+            )
+            .await?;
             TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {
-                template_id: manifest.template_id,
-                role: manifest.role,
-                version: manifest.version,
-                payload_hash: manifest.payload_hash,
-                payload_size_bytes: manifest.payload_size_bytes,
-                store_binding: binding,
-                chunking_mode: manifest.chunking_mode,
-                manifest_state: manifest.manifest_state,
-                approved_at: manifest.approved_at,
-                created_at: manifest.created_at,
+                template_id: entry.template_id.clone(),
+                role: entry.role.clone(),
+                version: entry.version.clone(),
+                payload_hash: entry.payload_hash.clone(),
+                payload_size_bytes: entry.payload_size_bytes,
+                store_binding: store.binding.clone(),
+                chunking_mode: TemplateChunkingMode::Chunked,
+                manifest_state: crate::ids::TemplateManifestState::Approved,
+                approved_at: Some(IcOps::now_secs()),
+                created_at: 0,
             });
         }
 

@@ -67,7 +67,7 @@ service : {
   get_blob_storage_status : (record { sync_gateway_principals : bool }) -> () query;
   "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
   "_immutableObjectStorageFundFromProjectCycles" : (nat) -> ();
-  canic_active_delegation_proof_status : () -> () query;
+  canic_status : (variant { ActiveDelegationProof }) -> () query;
 }
 EOF
 }

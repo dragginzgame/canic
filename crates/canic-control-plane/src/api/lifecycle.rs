@@ -1,3 +1,4 @@
+use crate::dto::root::RootOperationStatusResponse;
 use canic_core::{
     api::lifecycle::metrics::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
@@ -12,12 +13,11 @@ use canic_core::{
     dto::fleet_subnet_root::{
         FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary,
         FleetSubnetRootDeletionPreparationRequest, FleetSubnetRootDeletionPreparationResponse,
-        FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
-        FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
-        FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
-        FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootInitArgs,
-        FleetSubnetRootRemovalRequest, FleetSubnetRootRemovalStatusRequest,
-        FleetSubnetRootStoreBindingFinalizationRequest,
+        FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingResponse,
+        FleetSubnetRootDrainingStatusRequest, FleetSubnetRootFinalInventoryRequest,
+        FleetSubnetRootFinalInventoryResponse, FleetSubnetRootFinalInventoryStatusRequest,
+        FleetSubnetRootInitArgs, FleetSubnetRootRemovalRequest,
+        FleetSubnetRootRemovalStatusRequest, FleetSubnetRootStoreBindingFinalizationRequest,
         FleetSubnetRootStoreBindingFinalizationResponse,
         FleetSubnetRootStoreBindingFinalizationStatusRequest, FleetSubnetRootStoreDeletionRequest,
         FleetSubnetRootStoreDeletionResponse, FleetSubnetRootStoreDeletionStatusRequest,
@@ -75,6 +75,16 @@ use std::time::Duration;
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    /// Resolve one indexed Root-owned durable operation for the consolidated status lane.
+    pub fn root_operation_status(
+        operation_id: [u8; 32],
+        caller: candid::Principal,
+        caller_is_controller: bool,
+    ) -> Result<RootOperationStatusResponse, canic_core::dto::error::Error> {
+        crate::workflow::root_status::operation_status(operation_id, caller, caller_is_controller)
+            .map_err(Into::into)
+    }
+
     /// Delegate root init-time runtime seeding to the current core implementation.
     pub fn init_root_canister_before_bootstrap(
         args: FleetSubnetRootInitArgs,
@@ -137,14 +147,6 @@ impl LifecycleApi {
         request: FleetSubnetWasmStoreAdoptionRequest,
     ) -> Result<FleetSubnetWasmStoreAdoptionResponse, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::wasm_store_adoption_status(request).map_err(Into::into)
-    }
-
-    pub async fn begin_fleet_subnet_root_draining(
-        request: FleetSubnetRootDrainingRequest,
-    ) -> Result<FleetSubnetRootDrainingResponse, canic_core::dto::error::Error> {
-        crate::workflow::fleet_subnet_root::begin_draining(request)
-            .await
-            .map_err(Into::into)
     }
 
     pub fn fleet_subnet_root_draining_status(
@@ -248,6 +250,14 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    pub async fn accept_fleet_registry_synchronization(
+        request: FleetSubnetRootRegistrySyncRequest,
+    ) -> Result<canic_core::dto::role::OperationReceipt, canic_core::dto::error::Error> {
+        crate::workflow::fleet_registry_mirror::accept_synchronization(request)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn fleet_registry_sync_status(
         request: FleetSubnetRootRegistrySyncRequest,
     ) -> Result<FleetSubnetRootRegistrySyncResponse, canic_core::dto::error::Error> {
@@ -304,6 +314,60 @@ impl LifecycleApi {
         crate::workflow::component_registry::reserve_peer_allocation(request)
             .await
             .map_err(Into::into)
+    }
+
+    /// Detach private autonomous advancement for one accepted top-level allocation.
+    pub fn schedule_component_allocation(operation_id: [u8; 32]) {
+        crate::workflow::component_registry::schedule_component_allocation(operation_id);
+    }
+
+    /// Detach private autonomous advancement for one accepted direct-child allocation.
+    pub fn schedule_component_child_allocation(
+        component: canic_core::ids::ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) {
+        crate::workflow::component_registry::schedule_component_child_allocation(
+            component,
+            operation_id,
+        );
+    }
+
+    /// Detach private autonomous advancement for one accepted subtree removal.
+    pub fn schedule_component_subtree_removal(
+        component: canic_core::ids::ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) {
+        crate::workflow::component_registry::schedule_subtree_removal(component, operation_id);
+    }
+
+    /// Detach private autonomous advancement for one accepted top-level Component removal.
+    pub fn schedule_component_removal(
+        component: canic_core::ids::ComponentInstanceId,
+        operation_id: [u8; 32],
+    ) {
+        crate::workflow::component_registry::schedule_component_removal(component, operation_id);
+    }
+
+    /// Detach private autonomous advancement for one accepted Fleet Subnet Root removal.
+    pub fn schedule_fleet_subnet_root_removal(operation_id: [u8; 32]) {
+        crate::workflow::fleet_subnet_root::schedule_root_removal(operation_id);
+    }
+
+    pub fn accept_fleet_subnet_root_removal(
+        request: canic_core::dto::role::RootRemovalRequest,
+    ) -> Result<canic_core::dto::role::OperationReceipt, canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::accept_root_removal(request).map_err(Into::into)
+    }
+
+    pub fn authorize_fleet_subnet_root_removal_caller(
+        caller: candid::Principal,
+        caller_is_controller: bool,
+    ) -> Result<(), canic_core::dto::error::Error> {
+        crate::workflow::fleet_subnet_root::authorize_root_removal_caller(
+            caller,
+            caller_is_controller,
+        )
+        .map_err(Into::into)
     }
 
     pub fn peer_component_allocation_status(

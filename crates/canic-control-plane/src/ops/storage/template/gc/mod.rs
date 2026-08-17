@@ -45,7 +45,27 @@ impl WasmStoreGcOps {
     }
 
     // Mark this local wasm store as prepared for store-local GC execution.
-    pub fn prepare(changed_at: u64) -> Result<(), Error> {
+    pub fn prepare(operation_id: [u8; 32], changed_at: u64) -> Result<(), Error> {
+        if operation_id == [0; 32] {
+            return Err(Error::from_registered(
+                canic_core::diagnostics::codes::REQUEST_INVALID,
+            ));
+        }
+        let current = Self::status();
+        if current
+            .operation_id
+            .is_some_and(|current| current != operation_id)
+        {
+            return Err(Error::from_registered(
+                canic_core::diagnostics::codes::STATE_CONFLICT,
+            ));
+        }
+        if current.operation_id.is_none() {
+            WasmStoreGcStateStore::set(WasmStoreGcStateRecord {
+                operation_id: Some(operation_id),
+                ..current
+            });
+        }
         Self::transition_to(WasmStoreGcMode::Prepared, changed_at)
     }
 
@@ -173,6 +193,7 @@ mod tests {
     #[test]
     fn transition_record_can_return_from_clearing_to_in_progress_for_retry() {
         let current = WasmStoreGcStateRecord {
+            operation_id: Some([1; 32]),
             mode: WasmStoreGcMode::Clearing,
             changed_at: 30,
             prepared_at: Some(10),
@@ -193,6 +214,7 @@ mod tests {
     #[test]
     fn transition_record_is_idempotent_for_same_mode() {
         let current = WasmStoreGcStateRecord {
+            operation_id: Some([1; 32]),
             mode: WasmStoreGcMode::Prepared,
             changed_at: 10,
             prepared_at: Some(10),
@@ -228,7 +250,7 @@ mod tests {
         WasmStoreGcStateStore::set(WasmStoreGcStateRecord::default());
         WasmStoreGcOps::require_writable().expect("normal store should be writable");
 
-        WasmStoreGcOps::prepare(10).expect("prepare gc");
+        WasmStoreGcOps::prepare([1; 32], 10).expect("prepare gc");
         let err = WasmStoreGcOps::require_writable()
             .expect_err("prepared store must reject publication writes");
         assert_eq!(
@@ -242,10 +264,35 @@ mod tests {
     #[test]
     fn snapshot_reflects_persisted_state() {
         WasmStoreGcStateStore::clear_for_test();
-        WasmStoreGcOps::prepare(10).expect("prepare must succeed");
+        WasmStoreGcOps::prepare([1; 32], 10).expect("prepare must succeed");
         let snapshot = WasmStoreGcOps::snapshot();
         assert_eq!(snapshot.mode, WasmStoreGcMode::Prepared);
         assert_eq!(snapshot.prepared_at, Some(10));
+        WasmStoreGcStateStore::clear_for_test();
+    }
+
+    #[test]
+    fn prepare_binds_one_exact_nonzero_operation_identity() {
+        WasmStoreGcStateStore::clear_for_test();
+
+        let zero = WasmStoreGcOps::prepare([0; 32], 10)
+            .expect_err("zero operation identity must be rejected");
+        assert_eq!(
+            zero.code(),
+            canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
+
+        WasmStoreGcOps::prepare([7; 32], 20).expect("prepare exact GC operation");
+        WasmStoreGcOps::prepare([7; 32], 30).expect("same operation retry is idempotent");
+        assert_eq!(WasmStoreGcOps::status().operation_id, Some([7; 32]));
+
+        let conflict = WasmStoreGcOps::prepare([8; 32], 40)
+            .expect_err("another operation must not take over the GC fence");
+        assert_eq!(
+            conflict.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+
         WasmStoreGcStateStore::clear_for_test();
     }
 }

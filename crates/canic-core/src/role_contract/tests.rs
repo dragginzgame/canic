@@ -2,13 +2,14 @@ use super::{
     AllocationDefinition, AllocationOwner, BuiltInRoleKind, CanicFeatureEffect, CanicFeatureKey,
     MemoryId, RoleCapabilityKey, RoleContractFinding, RoleContractInput, RoleContractResolution,
     RoleContractSource, SelectionProvenance, StateAllocationKey, allocation,
+    built_in_role_capabilities,
     catalog::{self, default_features, implied_features},
     derive_role_capabilities, resolve_effective_features, resolve_role_contract,
 };
 use crate::{
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, IndexConfig, ScalingConfig,
-        ShardingConfig,
+        ShardingConfig, TopupPolicy,
     },
     ids::CanisterRole,
     test::config::ConfigTestBuilder,
@@ -239,6 +240,29 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Sharding,
         ])
+    );
+}
+
+#[test]
+fn automatic_topup_is_derived_only_from_the_exact_configured_role() {
+    let mut funded = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    funded.topup = Some(TopupPolicy::default());
+    let plain = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    let config = ConfigTestBuilder::new()
+        .with_default_canister("funded", funded)
+        .with_default_canister("plain", plain)
+        .build();
+
+    let funded = derive_role_capabilities(&config, &CanisterRole::owned("funded".to_string()))
+        .expect("funded role should resolve");
+    let plain = derive_role_capabilities(&config, &CanisterRole::owned("plain".to_string()))
+        .expect("plain role should resolve");
+
+    assert!(funded.contains(&RoleCapabilityKey::AutomaticTopup));
+    assert!(!plain.contains(&RoleCapabilityKey::AutomaticTopup));
+    assert_eq!(
+        built_in_role_capabilities(BuiltInRoleKind::WasmStore),
+        BTreeSet::from([RoleCapabilityKey::Runtime, RoleCapabilityKey::WasmStore])
     );
 }
 

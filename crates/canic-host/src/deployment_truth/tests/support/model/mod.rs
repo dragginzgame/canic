@@ -36,6 +36,7 @@ pub(in crate::deployment_truth::tests) fn sample_role_artifact() -> RoleArtifact
         installed_module_hash: Some("module".to_string()),
         candid_path: Some("root.did".to_string()),
         candid_sha256: Some("did".to_string()),
+        protocol_profile_digest: Some("profile".to_string()),
         raw_config_sha256: Some("raw".to_string()),
         canonical_embedded_config_sha256: Some("canonical".to_string()),
         embedded_topology_sha256: Some("topology".to_string()),

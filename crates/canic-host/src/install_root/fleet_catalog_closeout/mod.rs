@@ -11,7 +11,7 @@ use super::fleet_catalog_publication::{
 };
 use super::icp_context::InstallIcpContext;
 use crate::{
-    canister_protocol::{CanisterProtocolError, query_no_arg},
+    canister_protocol::{CanisterProtocolError, query_with_arg},
     fleet_catalog::CommittedFleetCatalog,
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::IcpCli,
@@ -19,19 +19,30 @@ use crate::{
 };
 use std::{path::Path, thread};
 
-use candid::Principal;
+use candid::{CandidType, Principal};
+use canic_control_plane::dto::fleet_coordinator::{
+    CoordinatorStatusRequest, CoordinatorStatusResponse,
+};
 use canic_core::{
     dto::{
-        fleet_registry::{
-            FleetRegistry, FleetRegistryManifest, FleetRegistrySnapshotResponse,
-            FleetRegistryVersion,
-        },
+        fleet_registry::{FleetRegistrySnapshotResponse, FleetRegistryVersion},
         fleet_subnet_root::FleetSubnetRootCanisterSummary,
     },
     ids::FleetName,
     protocol,
 };
+use serde::Deserialize;
 use thiserror::Error as ThisError;
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    Inventory,
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponseFragment {
+    Inventory(FleetSubnetRootCanisterSummary),
+}
 
 ///
 /// PublishInstalledFleetCatalogRequest
@@ -65,6 +76,9 @@ enum FleetCatalogCloseoutError {
 
     #[error("live Fleet Registry differs from terminal Component provisioning evidence")]
     TerminalRegistryMismatch,
+
+    #[error("Coordinator returned an unrelated {expected} status response")]
+    UnexpectedCoordinatorStatus { expected: &'static str },
 }
 
 /// Re-read terminal Coordinator/root authority and publish one durable Fleet discovery row.
@@ -105,18 +119,37 @@ fn query_registry(
     icp: &IcpCli,
     coordinator: Principal,
 ) -> Result<FleetRegistrySnapshotResponse, FleetCatalogCloseoutError> {
+    let registry = query_with_arg::<_, CoordinatorStatusResponse>(
+        icp,
+        coordinator,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::Registry,
+    )?;
+    let manifest = query_with_arg::<_, CoordinatorStatusResponse>(
+        icp,
+        coordinator,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::RegistryManifest,
+    )?;
+    let version = query_with_arg::<_, CoordinatorStatusResponse>(
+        icp,
+        coordinator,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequest::RegistryVersion,
+    )?;
     Ok(FleetRegistrySnapshotResponse {
-        registry: query_no_arg::<FleetRegistry>(icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?,
-        manifest: query_no_arg::<FleetRegistryManifest>(
-            icp,
-            coordinator,
-            protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-        )?,
-        version: query_no_arg::<FleetRegistryVersion>(
-            icp,
-            coordinator,
-            protocol::CANIC_FLEET_REGISTRY_VERSION,
-        )?,
+        registry: match registry {
+            CoordinatorStatusResponse::Registry(registry) => registry,
+            _ => return Err(protocol_mismatch("Registry")),
+        },
+        manifest: match manifest {
+            CoordinatorStatusResponse::RegistryManifest(manifest) => manifest,
+            _ => return Err(protocol_mismatch("RegistryManifest")),
+        },
+        version: match version {
+            CoordinatorStatusResponse::RegistryVersion(version) => version,
+            _ => return Err(protocol_mismatch("RegistryVersion")),
+        },
     })
 }
 
@@ -129,11 +162,15 @@ fn query_root_summaries(
         let root = registered.fleet_subnet_root;
         let worker_icp = icp.clone();
         let worker = thread::spawn(move || {
-            query_no_arg::<FleetSubnetRootCanisterSummary>(
+            query_with_arg::<_, RootStatusResponseFragment>(
                 &worker_icp,
                 root,
-                protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
+                protocol::CANIC_STATUS,
+                &RootStatusRequestFragment::Inventory,
             )
+            .map(|response| match response {
+                RootStatusResponseFragment::Inventory(summary) => summary,
+            })
         });
         workers.push((root, worker));
     }
@@ -147,4 +184,8 @@ fn query_root_summaries(
                 .map_err(Into::into)
         })
         .collect()
+}
+
+const fn protocol_mismatch(expected: &'static str) -> FleetCatalogCloseoutError {
+    FleetCatalogCloseoutError::UnexpectedCoordinatorStatus { expected }
 }

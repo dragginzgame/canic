@@ -1,11 +1,15 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
-    dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
-    protocol::{CANIC_FLEET_ACTIVATION_STATUS, CANIC_READY},
+    dto::{
+        fleet_activation::FleetActivationPhase,
+        role::{ComponentRuntimeOperationStatus, OperationStatusRequest},
+        runtime::{CanicReadinessStatus, ReadinessStatus},
+    },
+    protocol::CANIC_STATUS,
 };
 use canic_testing_internal::pic::{
     install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
@@ -15,6 +19,23 @@ use std::time::Duration;
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+
+#[derive(CandidType)]
+enum CanisterStatusRequest {
+    Operation(OperationStatusRequest),
+    Readiness,
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterStatusResponse {
+    Operation(CanisterOperationStatusResponse),
+    Readiness(CanicReadinessStatus),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterOperationStatusResponse {
+    ConfigureRuntime(ComponentRuntimeOperationStatus),
+}
 
 #[test]
 fn lifecycle_boundary_traps_are_phase_correct() {
@@ -90,18 +111,39 @@ fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
 }
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal) {
-    let status: Result<FleetActivationStatusResponse, Error> = pic
-        .query_candid(canister_id, CANIC_FLEET_ACTIVATION_STATUS, ())
+    let status: Result<CanisterStatusResponse, Error> = pic
+        .query_candid_as(
+            canister_id,
+            Principal::from_slice(&[1; 29]),
+            CANIC_STATUS,
+            (CanisterStatusRequest::Operation(OperationStatusRequest {
+                operation_id: [0x43; 32],
+            }),),
+        )
         .expect("query Prepared Fleet activation status");
+    let CanisterStatusResponse::Operation(CanisterOperationStatusResponse::ConfigureRuntime(
+        status,
+    )) = status.expect("Prepared activation status")
+    else {
+        panic!("managed Canister returned a differently correlated operation status");
+    };
     assert_eq!(
-        status.expect("Prepared activation status").phase,
+        status.fleet_activation.phase,
         FleetActivationPhase::Prepared
     );
-    assert!(
-        pic.query_candid::<bool, _>(canister_id, CANIC_READY, ())
-            .is_err(),
-        "Prepared managed Canister must fence readiness observation"
-    );
+    let readiness: Result<CanisterStatusResponse, Error> = pic
+        .query_candid(
+            canister_id,
+            CANIC_STATUS,
+            (CanisterStatusRequest::Readiness,),
+        )
+        .expect("query managed Canister readiness");
+    let CanisterStatusResponse::Readiness(readiness) =
+        readiness.expect("Prepared readiness status")
+    else {
+        panic!("managed Canister returned a differently correlated readiness status");
+    };
+    assert_ne!(readiness.status, ReadinessStatus::Ready);
 }
 
 #[test]

@@ -14,7 +14,11 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex, ids::ReleaseBuildId};
+use canic_core::{
+    CANIC_WASM_CHUNK_BYTES,
+    cdk::utils::hash::{hex_bytes, wasm_hash_hex},
+    ids::ReleaseBuildId,
+};
 use flate2::read::GzDecoder;
 
 pub(in crate::release_set) struct MaterializedReleaseArtifact {
@@ -45,6 +49,8 @@ pub(in crate::release_set) fn build_release_set_entry(
     icp_root: &Path,
     role_name: &str,
     artifact_path: &Path,
+    candid_sha256: [u8; 32],
+    protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
 ) -> Result<ReleaseSetEntry, Box<dyn std::error::Error>> {
     let artifact_relative_path = artifact_path
         .strip_prefix(icp_root)
@@ -69,6 +75,8 @@ pub(in crate::release_set) fn build_release_set_entry(
         role: role_name.to_string(),
         template_id: format!("embedded:{role_name}"),
         artifact_relative_path,
+        candid_sha256_hex: hex_bytes(candid_sha256),
+        protocol_profile_digest_hex: protocol_profile_digest.to_string(),
         payload_size_bytes: u64::try_from(artifact.len())?,
         payload_sha256_hex: wasm_hash_hex(&artifact),
         chunk_size_bytes: u64::try_from(CANIC_WASM_CHUNK_BYTES)?,

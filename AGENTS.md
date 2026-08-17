@@ -32,6 +32,13 @@ with this file, the code is wrong.
 - Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy
   for implementation slices, release batches, continuation and push-readiness
   handoffs.
+- Ordinary continuation wording such as `continue`, `keep going` or `next` is
+  sufficient authority to finish the current accepted in-repository batch and,
+  once it is complete, begin the next already accepted and sequenced
+  in-repository batch. Do not require a batch identifier, exact phrase or
+  separate mutation ceremony. This does not authorize broad validation,
+  versioning, Git publication, deployment, destructive actions or external
+  effects; those boundaries retain their own rules.
 - A focused implementation slice is not a patch release. Continue the current
   planned release batch until its direct implementation, adversarial/recovery
   evidence, propagation and cleanup are complete.

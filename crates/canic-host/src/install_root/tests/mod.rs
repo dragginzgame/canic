@@ -39,7 +39,8 @@ use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
     current_install_release_build, latest_deployment_truth_receipt_path_from_root,
-    require_current_release_builder,
+    require_current_release_builder, root_registry_synchronization_operation_id,
+    root_store_adoption_operation_id, root_store_bootstrap_operation_id,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -69,6 +70,29 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+#[test]
+fn root_install_phase_operation_ids_are_nonzero_distinct_and_stable() {
+    let install_operation_id = [7; 32];
+    let operation_ids = [
+        root_store_adoption_operation_id(install_operation_id),
+        root_store_bootstrap_operation_id(install_operation_id),
+        root_registry_synchronization_operation_id(install_operation_id),
+    ];
+    assert!(
+        operation_ids
+            .iter()
+            .all(|operation_id| *operation_id != [0; 32])
+    );
+    let unique = operation_ids
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(unique.len(), 3);
+    assert_eq!(
+        root_store_bootstrap_operation_id(install_operation_id),
+        root_store_bootstrap_operation_id(install_operation_id)
+    );
+}
 
 mod commands;
 mod config_selection;

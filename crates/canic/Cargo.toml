@@ -37,6 +37,7 @@ canic-core = { workspace = true }
 canic-macros = { workspace = true }
 ic-cdk = { workspace = true }
 ic0 = { workspace = true }
+serde = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 toml = { workspace = true }

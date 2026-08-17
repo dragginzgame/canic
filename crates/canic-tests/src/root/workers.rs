@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::{
@@ -17,6 +17,16 @@ use ic_testkit::pic::{CandidCallExt, PocketIc, PocketIcDiagnosticsExt};
 
 const TC: u128 = 1_000_000_000_000;
 const DEFAULT_FUNDING_COOLDOWN_SECS: u64 = 60;
+
+#[derive(CandidType)]
+enum CanisterStatusRequest {
+    Children(PageRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterStatusResponse {
+    Children(Page<CanisterInfo>),
+}
 
 /// Create a worker canister via the given hub canister.
 pub fn create_worker(pic: &PocketIc, hub_pid: Principal) -> Result<Principal, Error> {
@@ -42,17 +52,18 @@ fn wait_for_worker_sync(pic: &PocketIc, hub_pid: Principal, worker_pid: Principa
     for _ in 0..50 {
         pic.tick();
 
-        let children: Result<Page<CanisterInfo>, Error> = pic.query_candid_or_panic(
+        let children: Result<CanisterStatusResponse, Error> = pic.query_candid_or_panic(
             hub_pid,
-            protocol::CANIC_CANISTER_CHILDREN,
-            (PageRequest {
+            protocol::CANIC_STATUS,
+            (CanisterStatusRequest::Children(PageRequest {
                 limit: 100,
                 offset: 0,
-            },),
+            }),),
         );
 
+        let CanisterStatusResponse::Children(children) =
+            children.expect("query child list application");
         if children
-            .expect("query child list application")
             .entries
             .into_iter()
             .any(|entry| entry.pid == worker_pid)

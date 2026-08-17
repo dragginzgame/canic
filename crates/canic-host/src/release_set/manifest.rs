@@ -42,6 +42,8 @@ pub struct ReleaseSetEntry {
     pub role: String,
     pub template_id: String,
     pub artifact_relative_path: String,
+    pub candid_sha256_hex: String,
+    pub protocol_profile_digest_hex: String,
     pub payload_size_bytes: u64,
     pub payload_sha256_hex: String,
     pub chunk_size_bytes: u64,
@@ -114,6 +116,14 @@ pub fn validate_root_release_set_manifest(
             &entry.payload_sha256_hex,
             &format!("payload hash for role {}", entry.role),
         )?;
+        validate_nonzero_sha256_hex(
+            &entry.candid_sha256_hex,
+            &format!("Candid hash for role {}", entry.role),
+        )?;
+        validate_nonzero_sha256_hex(
+            &entry.protocol_profile_digest_hex,
+            &format!("protocol-profile digest for role {}", entry.role),
+        )?;
 
         let expected_chunk_count =
             usize::try_from(entry.payload_size_bytes.div_ceil(entry.chunk_size_bytes))?;
@@ -143,6 +153,14 @@ fn validate_sha256_hex(value: &str, field: &str) -> Result<(), Box<dyn std::erro
             bytes.len()
         )
         .into());
+    }
+    Ok(())
+}
+
+fn validate_nonzero_sha256_hex(value: &str, field: &str) -> Result<(), Box<dyn std::error::Error>> {
+    validate_sha256_hex(value, field)?;
+    if value.bytes().all(|byte| byte == b'0') {
+        return Err(format!("invalid {field}: digest must be nonzero").into());
     }
     Ok(())
 }
@@ -188,6 +206,8 @@ pub fn emit_root_release_set_manifest_from_build(
                 &snapshot.icp_root,
                 &target.role,
                 &output.output.wasm_gz_path,
+                output.output.candid_sha256,
+                output.output.protocol_profile_digest,
             )?);
         }
     }
@@ -233,6 +253,8 @@ mod tests {
                 role: "app".to_string(),
                 template_id: "embedded:app".to_string(),
                 artifact_relative_path: ".icp/local/canisters/app/app.wasm.gz".to_string(),
+                candid_sha256_hex: "01".repeat(32),
+                protocol_profile_digest_hex: "02".repeat(32),
                 payload_size_bytes: 128,
                 payload_sha256_hex: "00".repeat(32),
                 chunk_size_bytes: 1_048_576,
@@ -361,10 +383,16 @@ mod tests {
     fn release_set_manifest_artifact_shape_rejects_malformed_hashes() {
         let mut payload_hash = manifest();
         payload_hash.entries[0].payload_sha256_hex = "00".to_string();
+        let mut candid_hash = manifest();
+        candid_hash.entries[0].candid_sha256_hex = "00".to_string();
+        let mut profile_digest = manifest();
+        profile_digest.entries[0].protocol_profile_digest_hex = "not-hex".to_string();
         let mut chunk_hash = manifest();
         chunk_hash.entries[0].chunk_sha256_hex[0] = "not-hex".to_string();
 
         assert!(validate_root_release_set_manifest(&payload_hash).is_err());
+        assert!(validate_root_release_set_manifest(&candid_hash).is_err());
+        assert!(validate_root_release_set_manifest(&profile_digest).is_err());
         assert!(validate_root_release_set_manifest(&chunk_hash).is_err());
     }
 
@@ -393,6 +421,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["user_hub", "app"]
         );
+        assert!(manifest.entries.iter().all(|entry| {
+            entry.candid_sha256_hex == "03".repeat(32)
+                && entry.protocol_profile_digest_hex == "04".repeat(32)
+        }));
     }
 
     #[test]
@@ -466,6 +498,9 @@ mod tests {
                 wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
                 did_path: artifact_root.join(format!("{role}.did")),
                 artifact_root,
+                candid_sha256: [3; 32],
+                protocol_profile_digest:
+                    canic_core::role_contract::ProtocolProfileDigest::from_bytes([4; 32]),
                 transforms: Vec::new(),
             },
         }

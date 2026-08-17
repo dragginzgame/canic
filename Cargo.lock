@@ -496,6 +496,7 @@ dependencies = [
  "canic-macros",
  "ic-cdk",
  "ic0",
+ "serde",
  "toml 1.1.4+spec-1.1.0",
 ]
 
@@ -620,6 +621,7 @@ dependencies = [
  "canic-host",
  "flate2",
  "ic-testkit",
+ "serde",
  "serde_json",
 ]
 
@@ -1292,6 +1294,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+ "serde",
 ]
 
 [[package]]

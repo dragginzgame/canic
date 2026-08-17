@@ -5,8 +5,11 @@
 //! cross-canister orchestration, topology creation, and reconciliation.
 
 use crate::{
-    ids::{BuildNetwork, CanisterRole},
-    ops::{component_registry::ComponentRegistryOps, storage::template::TemplateChunkedOps},
+    ids::{BuildNetwork, CanisterRole, TemplateChunkingMode},
+    ops::{
+        component_registry::ComponentRegistryOps,
+        storage::{state::root_wasm_store::RootWasmStoreStateOps, template::TemplateManifestOps},
+    },
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 use canic_core::api::lifecycle::metrics::{
@@ -59,9 +62,7 @@ impl RootBootstrapContext {
 /// Root bootstrap entrypoints
 /// ---------------------------------------------------------------------------
 
-fn root_missing_staged_release_roles(
-    data: &RootBootstrapContext,
-) -> Result<Vec<CanisterRole>, InternalError> {
+fn root_missing_staged_release_roles(data: &RootBootstrapContext) -> Vec<CanisterRole> {
     let mut missing = Vec::new();
 
     for role in data.managed_release_roles() {
@@ -69,12 +70,17 @@ fn root_missing_staged_release_roles(
             continue;
         }
 
-        if !TemplateChunkedOps::has_publishable_chunked_approved_for_role(&role)? {
+        let available =
+            TemplateManifestOps::approved_for_role_response(&role).is_ok_and(|manifest| {
+                manifest.chunking_mode == TemplateChunkingMode::Chunked
+                    && RootWasmStoreStateOps::wasm_store_pid(&manifest.store_binding).is_some()
+            });
+        if !available {
             missing.push(role);
         }
     }
 
-    Ok(missing)
+    missing
 }
 
 fn record_root_bootstrap_metric(phase: LifecycleMetricPhase, outcome: LifecycleMetricOutcome) {
@@ -155,15 +161,7 @@ pub async fn bootstrap_init_root_canister() {
         }
     };
 
-    let missing_roles = match root_missing_staged_release_roles(&data) {
-        Ok(missing_roles) => missing_roles,
-        Err(err) => {
-            let message = format!("bootstrap (root:init) release-set preflight failed: {err}");
-            mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message.clone());
-            log!(Topic::Init, Error, "{message}");
-            return;
-        }
-    };
+    let missing_roles = root_missing_staged_release_roles(&data);
 
     if !missing_roles.is_empty() {
         record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
@@ -220,15 +218,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         }
     };
 
-    let missing_roles = match root_missing_staged_release_roles(&data) {
-        Ok(missing_roles) => missing_roles,
-        Err(err) => {
-            let message = format!("bootstrap (root:upgrade) release-set preflight failed: {err}");
-            log!(Topic::Init, Error, "{message}");
-            mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message);
-            return;
-        }
-    };
+    let missing_roles = root_missing_staged_release_roles(&data);
 
     if !missing_roles.is_empty() {
         record_root_bootstrap_metric(

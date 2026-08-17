@@ -22,9 +22,7 @@ use crate::{
     support::candid::role_candid_path,
     version_text,
 };
-use canic_core::protocol::{
-    CANIC_ACTIVE_DELEGATION_PROOF_STATUS, CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-};
+use canic_core::protocol::CANIC_STATUS;
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
@@ -44,8 +42,8 @@ use std::{
 use thiserror::Error as ThisError;
 
 use codec::{
-    parse_issuer_observed_status, parse_issuer_principal, parse_renewal_status_summary,
-    root_issuer_renewal_status_arg,
+    issuer_active_proof_status_arg, parse_issuer_observed_status, parse_issuer_principal,
+    parse_renewal_status_summary, root_issuer_renewal_status_arg,
 };
 use render::{render_issuer_observation, write_renewal_status_result};
 
@@ -311,6 +309,7 @@ trait AuthRenewalRuntime {
         options: &CommonOptions,
         target: &AuthIssuerCallTarget,
         method: &str,
+        arg: Option<&str>,
         output: Option<&str>,
     ) -> Result<String, AuthCommandError>;
 }
@@ -320,15 +319,11 @@ fn renewal_status_result_with_runtime(
     options: &RenewalStatusOptions,
 ) -> Result<AuthRenewalStatusResult, AuthCommandError> {
     let issuer_pid = parse_issuer_principal(&options.issuer)?;
-    let target = runtime.resolve_root_target(
-        &options.common,
-        &options.fleet,
-        CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-    )?;
+    let target = runtime.resolve_root_target(&options.common, &options.fleet, CANIC_STATUS)?;
     let output = runtime.query_output(
         &options.common,
         &target,
-        CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+        CANIC_STATUS,
         Some(&root_issuer_renewal_status_arg(&issuer_pid)),
         Some("json"),
     )?;
@@ -387,9 +382,10 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         options: &CommonOptions,
         target: &AuthIssuerCallTarget,
         method: &str,
+        arg: Option<&str>,
         output: Option<&str>,
     ) -> Result<String, AuthCommandError> {
-        live_query_issuer_output(options, target, method, output)
+        live_query_issuer_output(options, target, method, arg, output)
     }
 }
 
@@ -742,16 +738,27 @@ fn live_query_issuer_output(
     options: &CommonOptions,
     target: &AuthIssuerCallTarget,
     method: &str,
+    arg: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, AuthCommandError> {
     let icp = icp_cli(options).with_cwd(&target.icp_root);
-    icp.canister_query_output_with_candid(
-        &target.target.canister_id,
-        method,
-        output,
-        Some(target.candid_path.as_path()),
-    )
-    .map_err(AuthCommandError::from)
+    let result = if let Some(arg) = arg {
+        icp.canister_query_arg_output_with_candid(
+            &target.target.canister_id,
+            method,
+            arg,
+            output,
+            Some(target.candid_path.as_path()),
+        )
+    } else {
+        icp.canister_query_output_with_candid(
+            &target.target.canister_id,
+            method,
+            output,
+            Some(target.candid_path.as_path()),
+        )
+    };
+    result.map_err(AuthCommandError::from)
 }
 
 fn issuer_observation_with_runtime(
@@ -761,12 +768,8 @@ fn issuer_observation_with_runtime(
     issuer_pid: &str,
     status: &AuthRenewalStatusSummary,
 ) -> AuthIssuerObservation {
-    let target = match runtime.resolve_issuer_target(
-        options,
-        root_target,
-        issuer_pid,
-        CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
-    ) {
+    let target = match runtime.resolve_issuer_target(options, root_target, issuer_pid, CANIC_STATUS)
+    {
         Ok(Some(target)) => target,
         Ok(None) => return unavailable_issuer_observation(ISSUER_NOT_IN_COMPONENT_REGISTRY_REASON),
         Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
@@ -774,7 +777,8 @@ fn issuer_observation_with_runtime(
     let Ok(output) = runtime.query_issuer_output(
         options,
         &target,
-        CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+        CANIC_STATUS,
+        Some(issuer_active_proof_status_arg()),
         Some("json"),
     ) else {
         return unavailable_issuer_observation("issuer_status_query_failed");

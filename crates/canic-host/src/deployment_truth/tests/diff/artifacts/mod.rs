@@ -142,6 +142,30 @@ fn deployment_diff_blocks_conflicting_planned_artifacts_for_same_role() {
 }
 
 #[test]
+fn deployment_diff_blocks_profile_conflicts_for_the_same_planned_role() {
+    let mut plan = sample_plan();
+    let mut duplicate = sample_role_artifact();
+    duplicate.protocol_profile_digest = Some("different-profile".to_string());
+    plan.role_artifacts.push(duplicate);
+
+    let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.hard_failures.iter().any(|finding| finding.code
+        == PLANNED_ARTIFACT_ROLE_CONFLICT_CODE
+        && finding.subject.as_deref() == Some("root")));
+    assert!(diff.artifact_diff.iter().any(|item| {
+        item.category == PLANNED_ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY
+            && item.subject == "root"
+            && item
+                .observed
+                .as_deref()
+                .is_some_and(|observed| observed.contains("profile=different-profile"))
+            && item.severity == SafetySeverityV1::HardFailure
+    }));
+}
+
+#[test]
 fn deployment_diff_warns_for_duplicate_identical_planned_artifact_role() {
     let mut plan = sample_plan();
     plan.role_artifacts.push(sample_role_artifact());

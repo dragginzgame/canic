@@ -48,16 +48,39 @@ fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePayloa
 /// Panics if reading the configured payload limit finds a poisoned registry
 /// mutex.
 pub fn inspect_update_message() {
-    let method = ic_cdk::api::msg_method_name();
-    let payload_len = ic_cdk::api::msg_arg_data().len();
+    let method = current_method_name();
+    let payload_len = current_payload_bytes().len();
     let Ok(max_bytes) = update_limit_for(&method) else {
         return;
     };
     let max_bytes = max_bytes.unwrap_or(DEFAULT_UPDATE_INGRESS_MAX_BYTES);
 
     if payload_len <= max_bytes {
-        ic_cdk::api::accept_message();
+        accept_current_message();
     }
+}
+
+/// Return the method selected by the current ingress message.
+#[must_use]
+pub fn current_method_name() -> String {
+    ic_cdk::api::msg_method_name()
+}
+
+/// Return the current ingress payload for bounded role-specific decoding.
+#[must_use]
+pub fn current_payload_bytes() -> Vec<u8> {
+    ic_cdk::api::msg_arg_data()
+}
+
+/// Accept the current ingress after its role-specific bound has passed.
+pub fn accept_current_message() {
+    ic_cdk::api::accept_message();
+}
+
+/// Return whether one encoded payload fits its selected variant's exact bound.
+#[must_use]
+pub const fn payload_within_limit(payload_len: usize, max_bytes: usize) -> bool {
+    payload_len <= max_bytes
 }
 
 // Error returned when more than one limit is registered for the same method.
@@ -86,7 +109,7 @@ fn unique_limit_for(
 
 #[cfg(test)]
 mod tests {
-    use super::{UpdatePayloadLimit, unique_limit_for};
+    use super::{UpdatePayloadLimit, payload_within_limit, unique_limit_for};
 
     #[test]
     fn unique_limit_returns_registered_limit() {
@@ -115,5 +138,11 @@ mod tests {
             unique_limit_for(&limits, "save"),
             Err(super::DuplicateUpdatePayloadLimit)
         );
+    }
+
+    #[test]
+    fn variant_payload_limit_accepts_boundary_and_rejects_first_excess() {
+        assert!(payload_within_limit(16_384, 16_384));
+        assert!(!payload_within_limit(16_385, 16_384));
     }
 }

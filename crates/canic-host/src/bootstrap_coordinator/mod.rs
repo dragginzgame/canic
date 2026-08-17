@@ -21,6 +21,7 @@ use crate::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
+        extract_candid_bytes,
     },
     cargo_command,
     cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
@@ -74,12 +75,34 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_fleet_coordinator_source(context)?;
     require_built_in_fleet_coordinator_contract(&source.manifest_path)?;
-    run_coordinator_cargo_build(context, &source.manifest_path)?;
+    run_coordinator_cargo_build(context, &source.manifest_path, None, true)?;
 
     let built_wasm_path = canister_build_target_root(&context.workspace_root)
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{GENERATED_WRAPPER_CRATE_NAME}.wasm"));
+    let candid = extract_candid_bytes(&built_wasm_path)?;
+    let capabilities = canic_core::role_contract::built_in_role_capabilities(
+        canic_core::role_contract::BuiltInRoleKind::FleetCoordinator,
+    );
+    let profile = canic_core::role_contract::derive_protocol_profile_hashes(
+        &source.package_version,
+        &canic_core::ids::CanisterRole::new(FLEET_COORDINATOR_ROLE),
+        &capabilities,
+        &candid,
+    );
+    run_coordinator_cargo_build(
+        context,
+        &source.manifest_path,
+        Some(profile.protocol_profile_digest),
+        should_export_candid_artifacts(context.build_network),
+    )?;
+    if should_export_candid_artifacts(context.build_network) {
+        let final_candid = extract_candid_bytes(&built_wasm_path)?;
+        if final_candid != candid {
+            return Err("Fleet Coordinator Candid changed after protocol-profile binding".into());
+        }
+    }
     let artifact_root = context.artifact_root().join(FLEET_COORDINATOR_ROLE);
     fs::create_dir_all(&artifact_root)?;
     let wasm_path = artifact_root.join(format!("{FLEET_COORDINATOR_ROLE}.wasm"));
@@ -90,6 +113,11 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
     let mut transforms = vec![maybe_shrink_wasm_artifact(&wasm_path)?];
     if should_export_candid_artifacts(context.build_network) {
         ensure_fleet_coordinator_did(context, &source, &did_path)?;
+        if fs::read(&did_path)? != candid {
+            return Err(
+                "Fleet Coordinator canonical Candid differs from its compiled profile".into(),
+            );
+        }
         transforms.push(embed_candid_metadata(&wasm_path, &did_path)?);
     } else {
         remove_optional_file(&did_path)?;
@@ -106,6 +134,8 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
         wasm_path,
         wasm_gz_path,
         did_path,
+        candid_sha256: profile.candid_sha256,
+        protocol_profile_digest: profile.protocol_profile_digest,
         transforms,
     })
 }
@@ -278,8 +308,16 @@ candid = {{ version = \"={}\", default-features = false }}\n",
 fn run_coordinator_cargo_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
+    protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
+    force_candid_export: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = coordinator_cargo_build_command(context, manifest_path);
+    let mut command = coordinator_cargo_build_command(context, manifest_path, force_candid_export);
+    if let Some(digest) = protocol_profile_digest {
+        command.env(
+            canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
+            digest.to_string(),
+        );
+    }
     let output = command.output()?;
     if output.status.success() {
         return Ok(());
@@ -294,22 +332,29 @@ fn run_coordinator_cargo_build(
 fn coordinator_cargo_build_command(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
+    force_candid_export: bool,
 ) -> Command {
-    let local_candid = context.build_network == canic_core::ids::BuildNetwork::Local;
     let mut command = cargo_command();
     context.apply_to_command(&mut command);
-    command.current_dir(&context.workspace_root).args([
-        if local_candid { "rustc" } else { "build" },
-        "--locked",
-        "--manifest-path",
-        &manifest_path.display().to_string(),
-        "--target",
-        "wasm32-unknown-unknown",
-    ]);
+    command
+        .env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV)
+        .current_dir(&context.workspace_root)
+        .args([
+            if force_candid_export {
+                "rustc"
+            } else {
+                "build"
+            },
+            "--locked",
+            "--manifest-path",
+            &manifest_path.display().to_string(),
+            "--target",
+            "wasm32-unknown-unknown",
+        ]);
     configure_canister_cargo_command(&mut command, &context.workspace_root);
     append_coordinator_profile_config_args(&mut command, context.profile);
     command.args(context.profile.cargo_args());
-    if local_candid {
+    if force_candid_export {
         command.args([
             "--lib",
             "--",

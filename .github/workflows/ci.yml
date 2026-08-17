@@ -206,6 +206,16 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
+      - name: Install ordinary test helper tools
+        shell: bash
+        run: |
+          source tool-versions.env
+          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
+      - name: Check ordinary test helper tools
+        shell: bash
+        run: |
+          rg --version
+          rg --pcre2-version
       - name: Check runner disk before ordinary tests
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary tests before run" --min-free-mib 4096 --summary-only

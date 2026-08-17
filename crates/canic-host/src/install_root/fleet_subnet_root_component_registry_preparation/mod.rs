@@ -10,17 +10,33 @@ use super::fleet_subnet_root_install_journal::{
     record_component_registry_preparation_verified, record_component_registry_prepared,
 };
 use super::icp_context::InstallIcpContext;
-use super::operations::{call_with_arg, query_with_arg};
+use super::operations::call_with_arg;
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::Principal;
-use canic_core::{dto::component_registry::RootComponentRegistryPreparationRequest, protocol};
+use candid::{CandidType, Principal};
+use canic_core::{
+    dto::component_registry::{
+        RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
+    },
+    protocol,
+};
+use serde::Deserialize;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
 const MAX_COMPONENT_REGISTRY_PREPARATION_TRANSITIONS: usize = 4;
+
+#[derive(CandidType)]
+enum RootCommandFragment {
+    PrepareComponentRegistry(RootComponentRegistryPreparationRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponseFragment {
+    PrepareComponentRegistry(RootComponentRegistryStatusResponse),
+}
 
 #[derive(Debug, ThisError)]
 enum RootComponentRegistryPreparationError {
@@ -91,21 +107,23 @@ fn drive_component_registry_preparation(
                 begin_component_registry_preparation(&current, request.clone())?
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => {
-                let response = call_with_arg(
+                let response: RootCommandResponseFragment = call_with_arg(
                     icp,
                     root,
-                    protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-                    &request,
+                    protocol::CANIC_COMMAND,
+                    &RootCommandFragment::PrepareComponentRegistry(request.clone()),
                 )?;
+                let RootCommandResponseFragment::PrepareComponentRegistry(response) = response;
                 record_component_registry_prepared(&current, response)?
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPrepared => {
-                let response = query_with_arg(
+                let response: RootCommandResponseFragment = call_with_arg(
                     icp,
                     root,
-                    protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-                    &request,
+                    protocol::CANIC_COMMAND,
+                    &RootCommandFragment::PrepareComponentRegistry(request.clone()),
                 )?;
+                let RootCommandResponseFragment::PrepareComponentRegistry(response) = response;
                 record_component_registry_preparation_verified(&current, response)?
             }
             FleetSubnetRootInstallPhase::ComponentRegistryPreparationVerified => return Ok(()),

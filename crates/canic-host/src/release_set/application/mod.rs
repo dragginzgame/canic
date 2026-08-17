@@ -26,6 +26,7 @@ use canic_core::{
         CanisterRole, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
         ReleaseBuildId, ReleaseSetDigest,
     },
+    role_contract::ProtocolProfileDigest,
 };
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
@@ -70,6 +71,8 @@ pub struct ApplicationArtifactBuildOutput {
     pub wasm: Vec<u8>,
     pub wasm_gz_relative_path: String,
     pub wasm_gz: Vec<u8>,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -90,6 +93,8 @@ pub struct ApplicationArtifactEntry {
     pub wasm_gz_relative_path: String,
     pub wasm_gz_size_bytes: u64,
     pub wasm_gz_sha256_hex: String,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -337,6 +342,8 @@ impl FleetSubnetRootReleaseSetManifest {
                         wasm_gz_relative_path: entry.artifact.wasm_gz_relative_path.clone(),
                         wasm_gz_size_bytes: entry.artifact.wasm_gz_size_bytes,
                         wasm_gz_sha256_hex: entry.artifact.wasm_gz_sha256_hex.clone(),
+                        candid_sha256: entry.artifact.candid_sha256,
+                        protocol_profile_digest: entry.artifact.protocol_profile_digest,
                     },
                 })
                 .collect(),
@@ -837,6 +844,8 @@ fn compile_entry(
         wasm_gz_relative_path: output.wasm_gz_relative_path.clone(),
         wasm_gz_size_bytes,
         wasm_gz_sha256_hex: sha256_hex(&output.wasm_gz),
+        candid_sha256: output.candid_sha256,
+        protocol_profile_digest: output.protocol_profile_digest,
     };
     validate_entry(release_build_id, &entry)?;
     Ok(entry)

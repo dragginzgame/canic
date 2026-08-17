@@ -18,14 +18,12 @@ use operation::{
     pending_operation_input, resolve_operation_id, write_generated_operation_id_notice,
 };
 use options::ConvertOptions;
-use request::icp_refill_request_arg;
-use response::decode_icp_refill_response;
+use request::{root_refill_command_arg, root_refill_status_arg};
+use response::{decode_icp_refill_command_response, decode_icp_refill_status_response};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
 };
-
-const ICP_REFILL_METHOD: &str = "canic_icp_refill";
 
 fn extend_hash_part(bytes: &mut Vec<u8>, part: &[u8]) {
     bytes.extend_from_slice(&(part.len() as u64).to_be_bytes());
@@ -58,18 +56,14 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         options.dry_run,
         now_nanos,
     )?;
-    let request_arg = icp_refill_request_arg(
-        operation_id,
-        options.source_subaccount,
-        options.amount_e8s,
-        options.dry_run,
-    );
+    let request_arg =
+        root_refill_command_arg(operation_id, options.source_subaccount, options.amount_e8s);
     let root_candid_path =
         canister_target_candid_path(&root, &options.target.environment, &root_target);
     if options.dry_run {
         let command = icp.canister_call_arg_output_display_with_candid(
             &root_target.canister_id,
-            ICP_REFILL_METHOD,
+            canic_core::protocol::CANIC_COMMAND,
             &request_arg,
             Some("hex"),
             root_candid_path.as_deref(),
@@ -89,13 +83,23 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let output = icp
         .canister_call_arg_output_with_candid(
             &root_target.canister_id,
-            ICP_REFILL_METHOD,
+            canic_core::protocol::CANIC_COMMAND,
             &request_arg,
             Some("hex"),
             root_candid_path.as_deref(),
         )
         .map_err(CyclesCommandError::from)?;
-    let response = decode_icp_refill_response(&output, operation_id)?;
+    decode_icp_refill_command_response(&output, operation_id)?;
+    let status_output = icp
+        .canister_query_arg_output_with_candid(
+            &root_target.canister_id,
+            canic_core::protocol::CANIC_STATUS,
+            &root_refill_status_arg(operation_id),
+            Some("hex"),
+            root_candid_path.as_deref(),
+        )
+        .map_err(CyclesCommandError::from)?;
+    let response = decode_icp_refill_status_response(&status_output, operation_id)?;
     if !response.is_resumable() {
         mark_pending_operation_completed(&root, pending_operation_key.as_deref(), operation_id)?;
     }

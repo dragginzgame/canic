@@ -57,9 +57,10 @@ the controller-owned top-level Component lifecycle. The installed hub exposes:
 
 The sixth creation is rejected by the topology's five-worker cap.
 
-The current operator CLI does not yet wrap the multi-phase top-level Component
-lifecycle. Until it does, the controller must drive the root's typed
-`canic_root_component_*` endpoints with one fixed nonzero operation ID.
+The current operator CLI does not yet wrap the top-level Component lifecycle.
+Until it does, the controller submits the root's typed `canic_command`
+provision/removal variants with one fixed nonzero operation ID and observes
+that exact operation through `canic_status`.
 
 Browsers may block audible autoplay on a newly visited origin. Each child
 attempts full-volume playback immediately and withholds the image until audio
@@ -83,7 +84,7 @@ This demo treats reuse as lifecycle behavior, not source-code copying:
    claims suitable ready pool assets before paying for new Canisters.
 5. For a different Fleet, keep its root on this same physical Subnet, drain
    the old root, hand each empty asset to the new root, and import it there
-   through `canic_pool_admin`.
+   through `RootCommand::ImportPoolCanister` on `canic_command`.
 
 A physical Canister cannot move to another Subnet. Cross-Fleet reuse also does
 not retain application state or Wasm: handoff/import deliberately uninstalls

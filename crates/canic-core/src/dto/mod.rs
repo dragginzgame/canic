@@ -51,6 +51,7 @@ pub mod metrics;
 pub mod page;
 pub mod placement;
 pub mod pool;
+pub mod role;
 pub mod root_store;
 pub mod rpc;
 pub mod runtime;

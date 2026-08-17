@@ -153,12 +153,12 @@ fn renders_argument_update_call_with_local_candid() {
     assert_eq!(
         icp.canister_call_arg_output_display_with_candid(
             "root",
-            "canic_icp_refill",
-            "(record { dry_run = true })",
+            "canic_command",
+            "(variant { RefillCycles = record { amount_e8s = 100000000 : nat64 } })",
             Some("json"),
             Some(Path::new(".icp/local/canisters/root/root.did"))
         ),
-        "icp canister call root canic_icp_refill (record { dry_run = true }) --candid .icp/local/canisters/root/root.did --json -e local"
+        "icp canister call root canic_command (variant { RefillCycles = record { amount_e8s = 100000000 : nat64 } }) --candid .icp/local/canisters/root/root.did --json -e local"
     );
 }
 

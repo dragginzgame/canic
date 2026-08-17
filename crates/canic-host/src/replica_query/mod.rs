@@ -13,8 +13,16 @@ mod transport;
 use self::transport::local_query;
 use std::path::Path;
 
-use candid::Decode;
-use canic_core::{dto::error::Error as CanicError, ids::BuildNetwork};
+use candid::{CandidType, Decode, Deserialize, Encode};
+use canic_core::{
+    dto::{
+        error::Error as CanicError,
+        role::CycleBalanceStatusResponse,
+        runtime::{CanicReadinessStatus, ReadinessStatus},
+    },
+    ids::BuildNetwork,
+    protocol::CANIC_STATUS,
+};
 use thiserror::Error as ThisError;
 
 use crate::icp_config::{
@@ -32,8 +40,24 @@ fn nonempty_text(text: &str) -> Option<String> {
 }
 
 fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, ReplicaQueryError> {
-    let result = Decode!(bytes, Result<u128, CanicError>).map_err(ReplicaQueryError::Candid)?;
-    result.map_err(ReplicaQueryError::Canister)
+    let result = Decode!(bytes, Result<RoleStatusResponse, CanicError>)
+        .map_err(ReplicaQueryError::Candid)?;
+    match result.map_err(ReplicaQueryError::Canister)? {
+        RoleStatusResponse::CycleBalance(response) => Ok(response.cycles),
+        RoleStatusResponse::Readiness(_) => Err(unexpected_role_status_response()),
+    }
+}
+
+#[derive(CandidType)]
+enum RoleStatusRequest {
+    CycleBalance,
+    Readiness,
+}
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    CycleBalance(CycleBalanceStatusResponse),
+    Readiness(CanicReadinessStatus),
 }
 
 ///
@@ -90,22 +114,33 @@ pub fn uses_local_replica_transport(
     Ok(resolve_icp_build_network_from_root(root, environment)? == BuildNetwork::Local)
 }
 
-/// Query `canic_ready` directly through the local replica HTTP API.
+/// Query role-owned readiness directly through the local replica HTTP API.
 pub(crate) fn query_ready(
     environment: Option<&str>,
     canister: &str,
     icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
-    let bytes = local_query(environment, canister, "canic_ready", icp_root)?;
-    Decode!(&bytes, bool).map_err(ReplicaQueryError::Candid)
+    let arg = Encode!(&RoleStatusRequest::Readiness).map_err(ReplicaQueryError::Candid)?;
+    let bytes = local_query(environment, canister, CANIC_STATUS, &arg, icp_root)?;
+    let result = Decode!(&bytes, Result<RoleStatusResponse, CanicError>)
+        .map_err(ReplicaQueryError::Candid)?;
+    match result.map_err(ReplicaQueryError::Canister)? {
+        RoleStatusResponse::Readiness(response) => Ok(response.status == ReadinessStatus::Ready),
+        RoleStatusResponse::CycleBalance(_) => Err(unexpected_role_status_response()),
+    }
 }
 
-/// Query `canic_cycle_balance` directly through the local replica HTTP API.
+/// Query role-owned cycle balance directly through the local replica HTTP API.
 pub(crate) fn query_cycle_balance(
     environment: Option<&str>,
     canister: &str,
     icp_root: Option<&Path>,
 ) -> Result<u128, ReplicaQueryError> {
-    let bytes = local_query(environment, canister, "canic_cycle_balance", icp_root)?;
+    let arg = Encode!(&RoleStatusRequest::CycleBalance).map_err(ReplicaQueryError::Candid)?;
+    let bytes = local_query(environment, canister, CANIC_STATUS, &arg, icp_root)?;
     decode_cycle_balance_response(&bytes)
+}
+
+fn unexpected_role_status_response() -> ReplicaQueryError {
+    ReplicaQueryError::Query("role returned a differently correlated status response".to_string())
 }

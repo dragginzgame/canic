@@ -36,6 +36,8 @@ struct PreparedRoleArtifact {
     wasm_gz_path: PathBuf,
     wasm_sha256: String,
     wasm_gz_sha256: String,
+    candid_sha256: String,
+    protocol_profile_digest: String,
 }
 
 ///
@@ -59,26 +61,7 @@ impl PreparedPlanArtifacts {
         icp_root: &Path,
         environment: &str,
     ) -> Result<Self, PlanArtifactError> {
-        validate_environment_name(environment).map_err(|_| {
-            PlanArtifactError::InvalidEnvironment {
-                name: environment.to_string(),
-            }
-        })?;
-        if plan.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
-            return Err(PlanArtifactError::SchemaVersionMismatch {
-                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-                found: plan.schema_version,
-            });
-        }
-        if plan.deployment_identity.environment != environment {
-            return Err(PlanArtifactError::EnvironmentMismatch {
-                install: environment.to_string(),
-                plan: plan.deployment_identity.environment.clone(),
-            });
-        }
-        if plan.plan_id.trim().is_empty() {
-            return Err(PlanArtifactError::MissingPlanId);
-        }
+        validate_plan_identity(plan, environment)?;
 
         let canonical_root = canonicalize(icp_root)?;
         let artifact_root = artifact_root_path(&canonical_root, environment);
@@ -154,6 +137,8 @@ impl PreparedPlanArtifacts {
                 wasm_gz_path,
                 wasm_sha256: admitted.wasm_sha256,
                 wasm_gz_sha256: admitted.wasm_gz_sha256,
+                candid_sha256: admitted.candid_sha256,
+                protocol_profile_digest: admitted.protocol_profile_digest,
             });
         }
 
@@ -219,12 +204,39 @@ impl PreparedPlanArtifacts {
     }
 }
 
+fn validate_plan_identity(
+    plan: &DeploymentPlanV1,
+    environment: &str,
+) -> Result<(), PlanArtifactError> {
+    validate_environment_name(environment).map_err(|_| PlanArtifactError::InvalidEnvironment {
+        name: environment.to_string(),
+    })?;
+    if plan.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(PlanArtifactError::SchemaVersionMismatch {
+            expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+            found: plan.schema_version,
+        });
+    }
+    if plan.deployment_identity.environment != environment {
+        return Err(PlanArtifactError::EnvironmentMismatch {
+            install: environment.to_string(),
+            plan: plan.deployment_identity.environment.clone(),
+        });
+    }
+    if plan.plan_id.trim().is_empty() {
+        return Err(PlanArtifactError::MissingPlanId);
+    }
+    Ok(())
+}
+
 struct AdmittedRoleArtifact {
     role: String,
     wasm: Vec<u8>,
     wasm_gz: Vec<u8>,
     wasm_sha256: String,
     wasm_gz_sha256: String,
+    candid_sha256: String,
+    protocol_profile_digest: String,
 }
 
 fn admit_role_artifact(
@@ -260,6 +272,13 @@ fn admit_role_artifact(
         &wasm_sha256,
         &wasm_gz_sha256,
     )?;
+    let candid_sha256 =
+        canonical_profile_digest_pin(&artifact.role, "Candid", artifact.candid_sha256.as_deref())?;
+    let protocol_profile_digest = canonical_profile_digest_pin(
+        &artifact.role,
+        "protocol profile",
+        artifact.protocol_profile_digest.as_deref(),
+    )?;
 
     Ok(AdmittedRoleArtifact {
         role: artifact.role.clone(),
@@ -267,7 +286,32 @@ fn admit_role_artifact(
         wasm_gz,
         wasm_sha256,
         wasm_gz_sha256,
+        candid_sha256,
+        protocol_profile_digest,
     })
+}
+
+fn canonical_profile_digest_pin(
+    role: &str,
+    kind: &'static str,
+    value: Option<&str>,
+) -> Result<String, PlanArtifactError> {
+    let value = value.ok_or_else(|| PlanArtifactError::MissingDigestPin {
+        role: role.to_string(),
+        kind,
+    })?;
+    let canonical = value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        && value.bytes().any(|byte| byte != b'0');
+    if !canonical {
+        return Err(PlanArtifactError::InvalidDigest {
+            role: role.to_string(),
+            kind,
+        });
+    }
+    Ok(value.to_string())
 }
 
 fn normalize_representations(
@@ -541,6 +585,8 @@ fn release_set_entry(
         role: artifact.role.clone(),
         template_id: format!("embedded:{}", artifact.role),
         artifact_relative_path,
+        candid_sha256_hex: artifact.candid_sha256.clone(),
+        protocol_profile_digest_hex: artifact.protocol_profile_digest.clone(),
         payload_size_bytes: u64::try_from(bytes.len()).map_err(|_| {
             PlanArtifactError::InvalidWasm {
                 role: artifact.role.clone(),
@@ -614,4 +660,30 @@ fn write_artifact(path: &Path, bytes: &[u8]) -> Result<(), PlanArtifactError> {
         path: path.to_path_buf(),
         source,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_binding_requires_canonical_nonzero_sha256_pins() {
+        let canonical = "ab".repeat(32);
+        assert_eq!(
+            canonical_profile_digest_pin("app", "profile", Some(&canonical))
+                .expect("canonical profile digest"),
+            canonical
+        );
+
+        let zero = "00".repeat(32);
+        let uppercase = "AB".repeat(32);
+        for invalid in [
+            None,
+            Some("00"),
+            Some(zero.as_str()),
+            Some(uppercase.as_str()),
+        ] {
+            assert!(canonical_profile_digest_pin("app", "profile", invalid).is_err());
+        }
+    }
 }

@@ -696,6 +696,10 @@ fn build_output(
         release_build_id,
         wasm_path,
         wasm_gz_path,
+        candid_sha256: [3; 32],
+        protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+            [4; 32],
+        ),
     }
 }
 

@@ -13,6 +13,7 @@ pub mod candid_endpoints;
 pub mod canic_metadata;
 pub mod canister_build;
 mod canister_protocol;
+pub use canister_protocol::{CanisterProtocolError, query_with_arg as query_canister_with_arg};
 pub mod canister_ready;
 mod cargo_metadata;
 pub mod component_topology;

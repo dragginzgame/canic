@@ -1,4 +1,4 @@
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::auth::{
@@ -9,6 +9,26 @@ use canic::{
     protocol,
 };
 use ic_testkit::pic::{CandidCallExt, PocketIc};
+
+#[derive(CandidType)]
+enum CanisterCommand {
+    PrepareDelegatedToken(DelegatedTokenPrepareRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterCommandResponse {
+    PrepareDelegatedToken(DelegatedTokenPrepareResponse),
+}
+
+#[derive(CandidType)]
+enum CanisterStatusRequest {
+    DelegatedToken(DelegatedTokenGetRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterStatusResponse {
+    DelegatedToken(DelegatedToken),
+}
 
 /// Create one user shard through the reference `user_hub` path.
 ///
@@ -83,22 +103,27 @@ pub fn issue_delegated_token_from_active_proof_with_request_nonce(
         ttl_ns: token_ttl_ns,
         ext: None,
     };
-    let prepared: Result<DelegatedTokenPrepareResponse, Error> = pic.update_candid_as_or_panic(
+    let prepared: Result<CanisterCommandResponse, Error> = pic.update_candid_as_or_panic(
         issuer_pid,
         subject,
-        protocol::CANIC_PREPARE_DELEGATED_TOKEN,
-        (request,),
+        protocol::CANIC_COMMAND,
+        (CanisterCommand::PrepareDelegatedToken(request),),
     );
-    let prepared = prepared.expect("canic_prepare_delegated_token application failed");
-    let issued: Result<DelegatedToken, Error> = pic.query_candid_as_or_panic(
+    let CanisterCommandResponse::PrepareDelegatedToken(prepared) =
+        prepared.expect("delegated-token command application failed");
+    let issued: Result<CanisterStatusResponse, Error> = pic.query_candid_as_or_panic(
         issuer_pid,
         subject,
-        protocol::CANIC_GET_DELEGATED_TOKEN,
-        (DelegatedTokenGetRequest {
-            claims_hash: prepared.claims_hash,
-        },),
+        protocol::CANIC_STATUS,
+        (CanisterStatusRequest::DelegatedToken(
+            DelegatedTokenGetRequest {
+                claims_hash: prepared.claims_hash,
+            },
+        ),),
     );
-    issued.expect("canic_get_delegated_token application failed")
+    let CanisterStatusResponse::DelegatedToken(token) =
+        issued.expect("delegated-token status application failed");
+    token
 }
 
 fn issue_token_request_metadata(

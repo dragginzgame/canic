@@ -131,7 +131,7 @@ impl RuntimeIntrospectionApi {
                 ReadinessStatus::NotReady,
                 RuntimeCheckStatus::Fail,
                 "runtime readiness barrier is not ready",
-                Some("wait for bootstrap to complete or inspect canic_bootstrap_status"),
+                Some("wait for bootstrap to complete or inspect canic_status(Overview)"),
             )
         };
 

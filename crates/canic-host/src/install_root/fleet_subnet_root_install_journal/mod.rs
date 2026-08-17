@@ -435,7 +435,7 @@ pub(super) fn begin_store_staging(
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
     advance_without_evidence(
         current,
-        FleetSubnetRootInstallPhase::StoreAdopted,
+        FleetSubnetRootInstallPhase::InfrastructureVerified,
         FleetSubnetRootInstallPhase::StoreStaging,
     )
 }
@@ -445,7 +445,7 @@ pub(super) fn begin_store_adoption(
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
     advance_without_evidence(
         current,
-        FleetSubnetRootInstallPhase::InfrastructureVerified,
+        FleetSubnetRootInstallPhase::StoreStaged,
         FleetSubnetRootInstallPhase::StoreAdoptionInFlight,
     )
 }
@@ -478,7 +478,7 @@ pub(super) fn begin_store_bootstrap(
 ) -> Result<ResolvedFleetSubnetRootInstall, FleetSubnetRootInstallJournalError> {
     advance_without_evidence(
         current,
-        FleetSubnetRootInstallPhase::StoreStaged,
+        FleetSubnetRootInstallPhase::StoreAdopted,
         FleetSubnetRootInstallPhase::StoreBootstrapInFlight,
     )
 }
@@ -1127,10 +1127,10 @@ const fn phase_sequence(phase: FleetSubnetRootInstallPhase) -> u64 {
         FleetSubnetRootInstallPhase::RootInstallInFlight => 7,
         FleetSubnetRootInstallPhase::RootInstalled => 8,
         FleetSubnetRootInstallPhase::InfrastructureVerified => 9,
-        FleetSubnetRootInstallPhase::StoreAdoptionInFlight => 10,
-        FleetSubnetRootInstallPhase::StoreAdopted => 11,
-        FleetSubnetRootInstallPhase::StoreStaging => 12,
-        FleetSubnetRootInstallPhase::StoreStaged => 13,
+        FleetSubnetRootInstallPhase::StoreStaging => 10,
+        FleetSubnetRootInstallPhase::StoreStaged => 11,
+        FleetSubnetRootInstallPhase::StoreAdoptionInFlight => 12,
+        FleetSubnetRootInstallPhase::StoreAdopted => 13,
         FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 14,
         FleetSubnetRootInstallPhase::StoreBootstrapped => 15,
         FleetSubnetRootInstallPhase::StoreVerified => 16,
@@ -1161,10 +1161,10 @@ const fn phase_evidence_count(phase: FleetSubnetRootInstallPhase) -> usize {
         | FleetSubnetRootInstallPhase::RootInstallInFlight => 4,
         FleetSubnetRootInstallPhase::RootInstalled => 5,
         FleetSubnetRootInstallPhase::InfrastructureVerified
-        | FleetSubnetRootInstallPhase::StoreAdoptionInFlight => 7,
-        FleetSubnetRootInstallPhase::StoreAdopted
         | FleetSubnetRootInstallPhase::StoreStaging
         | FleetSubnetRootInstallPhase::StoreStaged
+        | FleetSubnetRootInstallPhase::StoreAdoptionInFlight => 7,
+        FleetSubnetRootInstallPhase::StoreAdopted
         | FleetSubnetRootInstallPhase::StoreBootstrapInFlight => 8,
         FleetSubnetRootInstallPhase::StoreBootstrapped
         | FleetSubnetRootInstallPhase::StoreVerified => 9,
@@ -1320,7 +1320,7 @@ fn validate_wasm_store_adoption_evidence(
     ];
     temporary_controllers.sort();
     let expected = FleetSubnetWasmStoreAdoptionResponse {
-        operation_id: journal.install_operation_id,
+        operation_id: super::root_store_adoption_operation_id(journal.install_operation_id),
         authority: authority.clone(),
         temporary_controllers,
         final_controllers: vec![authority.fleet_subnet_root],

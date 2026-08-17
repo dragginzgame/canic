@@ -19,11 +19,15 @@ pub mod deployment;
 #[cfg(feature = "fleet-coordinator-canister")]
 pub mod fleet_coordinator;
 #[cfg(feature = "root-control-plane")]
+mod fleet_coordinator_client;
+#[cfg(feature = "root-control-plane")]
 pub mod fleet_registry_mirror;
 #[cfg(feature = "root-control-plane")]
 pub mod fleet_subnet_root;
 #[cfg(feature = "root-control-plane")]
 mod root_authority;
+#[cfg(feature = "root-control-plane")]
+pub mod root_status;
 #[cfg(feature = "root-control-plane")]
 pub mod runtime;
 #[cfg(feature = "root-control-plane")]

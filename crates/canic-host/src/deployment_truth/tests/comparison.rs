@@ -77,6 +77,27 @@ fn deployment_comparison_report_detects_cross_deployment_drift() {
 }
 
 #[test]
+fn deployment_comparison_report_detects_protocol_profile_drift() {
+    let left = sample_check(sample_plan(), sample_matching_inventory());
+    let mut right_plan = sample_plan();
+    right_plan.role_artifacts[0].protocol_profile_digest = Some("different-profile".to_string());
+    let right = sample_check(right_plan, sample_matching_inventory());
+
+    let report = deployment_comparison_report_from_checks(
+        "comparison-1",
+        "2026-05-26T00:00:00Z",
+        "left",
+        "right",
+        &left,
+        &right,
+    );
+
+    assert!(report.artifact_diff.iter().any(|item| {
+        item.category == DeploymentComparisonCategoryV1::Artifact && item.subject == "root"
+    }));
+}
+
+#[test]
 fn deployment_comparison_report_validation_rejects_digest_drift() {
     let left = sample_check(sample_plan(), sample_matching_inventory());
     let right = sample_check(sample_plan(), sample_matching_inventory());

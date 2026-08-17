@@ -72,6 +72,17 @@ macro_rules! __canic_build_internal {
                 "cargo:rustc-env={__canic_release_build_id_env}={release_build_id}"
             );
         }
+        let __canic_protocol_profile_digest_env =
+            $crate::__internal::core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV;
+        println!("cargo:rerun-if-env-changed={__canic_protocol_profile_digest_env}");
+        if let Ok(value) = std::env::var(__canic_protocol_profile_digest_env) {
+            let digest = value
+                .parse::<$crate::__internal::core::role_contract::ProtocolProfileDigest>()
+                .expect("CANIC_PROTOCOL_PROFILE_DIGEST must be one canonical lowercase SHA-256");
+            println!(
+                "cargo:rustc-env={__canic_protocol_profile_digest_env}={digest}"
+            );
+        }
 
         let __canic_default_role = (__canic_role_name != "root").then(|| __canic_role_name.clone());
 
@@ -177,6 +188,53 @@ macro_rules! __canic_build_internal {
             .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Scaling);
         let has_sharding = __canic_capabilities
             .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Sharding);
+
+        for capability in &__canic_capabilities {
+            match capability {
+                $crate::__internal::core::role_contract::RoleCapabilityKey::AutomaticTopup => {
+                    println!("cargo:rustc-cfg=canic_capability_automatic_topup");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer => {
+                    println!("cargo:rustc-cfg=canic_capability_delegated_token_issuer");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenVerifier => {
+                    println!("cargo:rustc-cfg=canic_capability_delegated_token_verifier");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator => {
+                    println!("cargo:rustc-cfg=canic_capability_fleet_coordinator");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::Index => {
+                    println!("cargo:rustc-cfg=canic_capability_index");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21 => {
+                    println!("cargo:rustc-cfg=canic_capability_icrc21");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::RoleAttestationSigner => {
+                    println!("cargo:rustc-cfg=canic_capability_role_attestation_signer");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::RoleAttestationVerifier => {
+                    println!("cargo:rustc-cfg=canic_capability_role_attestation_verifier");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::Root => {
+                    println!("cargo:rustc-cfg=canic_capability_root");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::RootControlPlane => {
+                    println!("cargo:rustc-cfg=canic_capability_root_control_plane");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::Runtime => {
+                    println!("cargo:rustc-cfg=canic_capability_runtime");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::Scaling => {
+                    println!("cargo:rustc-cfg=canic_capability_scaling");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::Sharding => {
+                    println!("cargo:rustc-cfg=canic_capability_sharding");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::WasmStore => {
+                    println!("cargo:rustc-cfg=canic_capability_wasm_store");
+                }
+            }
+        }
 
         if __canic_capabilities
             .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Root)

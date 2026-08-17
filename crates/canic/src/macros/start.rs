@@ -423,6 +423,30 @@ macro_rules! __canic_start_ingress_payload_inspect {
             $crate::__internal::core::ingress::payload::inspect_update_message();
         }
     };
+    (root) => {
+        #[$crate::__internal::cdk::inspect_message]
+        fn canic_inspect_message() {
+            __canic_inspect_root_update_message();
+        }
+    };
+    (fleet_coordinator) => {
+        #[$crate::__internal::cdk::inspect_message]
+        fn canic_inspect_message() {
+            __canic_inspect_fleet_coordinator_update_message();
+        }
+    };
+    (managed) => {
+        #[$crate::__internal::cdk::inspect_message]
+        fn canic_inspect_message() {
+            __canic_inspect_managed_update_message();
+        }
+    };
+    (wasm_store) => {
+        #[$crate::__internal::cdk::inspect_message]
+        fn canic_inspect_message() {
+            __canic_inspect_wasm_store_update_message();
+        }
+    };
 }
 
 // Require canisters using the Canic lifecycle macros to close the file with
@@ -506,15 +530,22 @@ macro_rules! start {
             $(, $init)?
         );
 
-        $crate::__canic_start_ingress_payload_inspect!();
-
-        $crate::canic_bundle_shared_runtime_endpoints!();
+        #[cfg(canic_is_root)]
+        $crate::__canic_start_ingress_payload_inspect!(root);
 
         #[cfg(not(canic_is_root))]
-        $crate::canic_bundle_managed_nonroot_only_endpoints!();
+        $crate::__canic_start_ingress_payload_inspect!(managed);
+
+        #[cfg(not(canic_is_root))]
+        $crate::__canic_emit_managed_command_endpoint!();
+
+        #[cfg(not(canic_is_root))]
+        $crate::__canic_emit_managed_status_endpoint!();
 
         #[cfg(canic_is_root)]
         $crate::canic_bundle_root_only_endpoints!();
+
+        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -542,8 +573,8 @@ macro_rules! start_local {
             $(, $init)?
         );
         $crate::__canic_start_ingress_payload_inspect!();
-        $crate::canic_bundle_shared_runtime_endpoints!();
-        $crate::canic_bundle_local_nonroot_only_endpoints!();
+        $crate::__canic_emit_local_status_endpoint!();
+        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 
@@ -578,8 +609,9 @@ macro_rules! start_wasm_store {
         async fn canic_upgrade() {}
 
         $crate::__canic_start_wasm_store_lifecycle_core!($(, $init)?);
-        $crate::__canic_start_ingress_payload_inspect!();
+        $crate::__canic_start_ingress_payload_inspect!(wasm_store);
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
+        $crate::canic_emit_icrc_standards_endpoints!();
     };
 }
 

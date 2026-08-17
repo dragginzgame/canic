@@ -174,6 +174,8 @@ fn application_file_build_outputs(
             release_build_id,
             wasm_path: output.output.wasm_path.clone(),
             wasm_gz_path: output.output.wasm_gz_path.clone(),
+            candid_sha256: output.output.candid_sha256,
+            protocol_profile_digest: output.output.protocol_profile_digest,
         })
         .collect()
 }
@@ -450,6 +452,8 @@ maximum_instances = 1
                 role: output.role.clone(),
                 package_name: output.output.package_name.clone(),
                 package_version: output.output.package_version.clone(),
+                canic_version: "0.101.51".to_string(),
+                capabilities: std::collections::BTreeSet::new(),
                 package_manifest_path: root.join("Cargo.toml"),
                 cargo_workspace_root: root.to_path_buf(),
                 artifact_root: output.output.artifact_root.clone(),
@@ -482,6 +486,9 @@ maximum_instances = 1
                 wasm_path,
                 wasm_gz_path,
                 did_path: root.join(format!("{role}.did")),
+                candid_sha256: [3; 32],
+                protocol_profile_digest:
+                    canic_core::role_contract::ProtocolProfileDigest::from_bytes([4; 32]),
                 transforms: Vec::new(),
             },
         }
@@ -501,6 +508,8 @@ maximum_instances = 1
                 release_build_id,
                 wasm_path: coordinator.output.wasm_path,
                 wasm_gz_path: coordinator.output.wasm_gz_path,
+                candid_sha256: coordinator.output.candid_sha256,
+                protocol_profile_digest: coordinator.output.protocol_profile_digest,
             },
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::FleetSubnetRoot,
@@ -508,6 +517,8 @@ maximum_instances = 1
                 release_build_id,
                 wasm_path: root_output.output.wasm_path.clone(),
                 wasm_gz_path: root_output.output.wasm_gz_path.clone(),
+                candid_sha256: root_output.output.candid_sha256,
+                protocol_profile_digest: root_output.output.protocol_profile_digest,
             },
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::WasmStore,
@@ -515,6 +526,8 @@ maximum_instances = 1
                 release_build_id,
                 wasm_path: wasm_store.output.wasm_path,
                 wasm_gz_path: wasm_store.output.wasm_gz_path,
+                candid_sha256: wasm_store.output.candid_sha256,
+                protocol_profile_digest: wasm_store.output.protocol_profile_digest,
             },
         ]
     }

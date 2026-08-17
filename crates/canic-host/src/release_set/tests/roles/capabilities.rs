@@ -6,6 +6,7 @@ fn configured_role_capabilities_lists_enabled_role_features() {
     use canic_core::role_contract::RoleCapabilityKey;
 
     let capabilities = BTreeSet::from([
+        RoleCapabilityKey::AutomaticTopup,
         RoleCapabilityKey::DelegatedTokenIssuer,
         RoleCapabilityKey::Index,
         RoleCapabilityKey::Root,
@@ -17,6 +18,7 @@ fn configured_role_capabilities_lists_enabled_role_features() {
     assert_eq!(
         crate::release_set::config::project_role_capabilities(&capabilities),
         vec![
+            "automatic_topup".to_string(),
             "auth".to_string(),
             "index".to_string(),
             "scaling".to_string(),

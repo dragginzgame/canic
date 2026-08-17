@@ -33,6 +33,7 @@ pub struct RoleArtifactV1 {
     pub installed_module_hash: Option<String>,
     pub candid_path: Option<String>,
     pub candid_sha256: Option<String>,
+    pub protocol_profile_digest: Option<String>,
     pub raw_config_sha256: Option<String>,
     pub canonical_embedded_config_sha256: Option<String>,
     pub embedded_topology_sha256: Option<String>,

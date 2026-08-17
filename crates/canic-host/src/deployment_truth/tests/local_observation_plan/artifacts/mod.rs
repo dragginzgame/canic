@@ -93,6 +93,14 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
         user_hub.wasm_gz_sha256_source,
         Some(ArtifactDigestSourceV1::ReleaseSetManifest)
     );
+    assert_eq!(
+        user_hub.candid_sha256.as_deref(),
+        Some(RELEASE_SET_USER_HUB_CANDID_SHA256)
+    );
+    assert_eq!(
+        user_hub.protocol_profile_digest.as_deref(),
+        Some(RELEASE_SET_USER_HUB_PROFILE_DIGEST)
+    );
     assert_eq!(user_hub.wasm_gz_size_bytes, Some(17));
     assert_eq!(
         user_hub.observed_wasm_gz_file_sha256_source,

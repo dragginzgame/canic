@@ -2,19 +2,30 @@
 
 #![expect(clippy::unused_async)]
 
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     api::auth::AuthApi,
     api::call::Call,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
-        component_registry::{RootComponentAllocationResponse, RootPeerComponentAllocationRequest},
+        component_registry::RootPeerComponentAllocationRequest,
+        role::OperationReceipt,
     },
     ids::cap,
     prelude::*,
-    protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
+    protocol::CANIC_COMMAND,
 };
+
+#[derive(CandidType)]
+enum RootCommand {
+    ProvisionPeer(RootPeerComponentAllocationRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponse {
+    OperationAccepted(OperationReceipt),
+}
 
 canic::start!();
 
@@ -86,13 +97,15 @@ async fn issuer_guard_is_parent() -> Result<(), Error> {
 async fn forward_peer_allocation(
     fleet_subnet_root: Principal,
     request: RootPeerComponentAllocationRequest,
-) -> Result<RootComponentAllocationResponse, Error> {
-    let response: Result<RootComponentAllocationResponse, Error> =
-        Call::bounded_wait(fleet_subnet_root, CANIC_ROOT_PEER_COMPONENT_ALLOCATE)
-            .with_arg(request)?
+) -> Result<OperationReceipt, Error> {
+    let response: Result<RootCommandResponse, Error> =
+        Call::bounded_wait(fleet_subnet_root, CANIC_COMMAND)
+            .with_arg(RootCommand::ProvisionPeer(request))?
             .execute_candid()
             .await?;
-    response
+    match response? {
+        RootCommandResponse::OperationAccepted(receipt) => Ok(receipt),
+    }
 }
 
 canic::finish!();

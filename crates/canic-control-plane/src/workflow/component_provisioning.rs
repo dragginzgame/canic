@@ -25,8 +25,9 @@ use crate::{
         runtime::fleet_activation as root_fleet_activation,
     },
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
 use canic_core::{
+    api::timer::TimerApi,
     control_plane_support::{
         error::InternalError,
         ops::{
@@ -35,7 +36,7 @@ use canic_core::{
             },
             component_runtime::ComponentRuntimeOps,
             config::ConfigOps,
-            ic::IcOps,
+            ic::{IcOps, call::CallOps},
         },
         workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
@@ -52,14 +53,36 @@ use canic_core::{
             RootComponentAllocationRequest, RootComponentMembershipActivationRequest,
             RootComponentRuntimeActivationRequest,
         },
+        error::Error,
         fleet_activation::{
             FleetActivationPhase, FleetActivationResumeRequest, FleetActivationStatusResponse,
         },
         fleet_registry::FleetSubnetRootStatus,
         fleet_subnet_root::FleetSubnetRootAuthority,
+        role::{OperationReceipt, OperationStatusRequest},
     },
     ids::ManagedCanisterBinding,
+    protocol,
 };
+use serde::Deserialize;
+use std::time::Duration;
+
+#[derive(CandidType)]
+enum RemoteCoordinatorStatusRequest {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RemoteCoordinatorStatusResponse {
+    Operation(RemoteCoordinatorOperationStatusResponse),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RemoteCoordinatorOperationStatusResponse {
+    ComponentProvisioning(
+        canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    ),
+}
 
 /// Durably accept one complete root batch under the exact protected Coordinator.
 pub async fn accept(
@@ -116,6 +139,147 @@ pub async fn accept(
     Ok(crate::ops::component_provisioning::status_response(
         accepted,
     ))
+}
+
+/// Accept one high-level root batch and privately schedule its local provisioning work.
+pub async fn accept_and_schedule(
+    caller: Principal,
+    request: RootComponentProvisioningAcceptanceRequest,
+) -> Result<OperationReceipt, InternalError> {
+    let operation_id = request.operation_id;
+    let plan_hash = request.plan_hash;
+    let status = accept(caller, request).await?;
+    if status.operation_id != operation_id || status.plan_hash != plan_hash {
+        return Err(InternalError::invariant());
+    }
+    schedule_provisioning(operation_id, plan_hash, Duration::ZERO);
+    Ok(OperationReceipt { operation_id })
+}
+
+fn schedule_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Subnet Root Component provisioning",
+        async move {
+            Box::pin(advance_scheduled_provisioning(operation_id, plan_hash)).await;
+        },
+    );
+}
+
+async fn advance_scheduled_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32]) {
+    let Ok(current) =
+        RootComponentProvisioningOps::status(RootComponentProvisioningStatusRequest {
+            operation_id,
+            plan_hash,
+        })
+    else {
+        return;
+    };
+    let coordinator = match validated_root_authority() {
+        Ok((authority, _root)) => authority.binding.authority.binding.coordinator,
+        Err(_) => return,
+    };
+    let result = match current.phase {
+        RootComponentProvisioningPhase::Accepted => {
+            advance(
+                coordinator,
+                RootComponentProvisioningAdvanceRequest {
+                    operation_id,
+                    plan_hash,
+                    expected_reserved_component_count: current
+                        .reservation_cursor
+                        .reserved_component_count,
+                    expected_claimed_component_count: current.claim_cursor.claimed_component_count,
+                    expected_installed_component_count: current
+                        .install_cursor
+                        .installed_component_count,
+                    expected_registry_committed_component_count: current
+                        .registry_cursor
+                        .registry_committed_component_count,
+                },
+            )
+            .await
+        }
+        RootComponentProvisioningPhase::Provisioned => {
+            let coordinator_status =
+                query_coordinator_provisioning(coordinator, operation_id, plan_hash).await;
+            match coordinator_status {
+                Ok(status) => match status.published_fleet_registry {
+                    Some(published_fleet_registry) => {
+                        Box::pin(publish(
+                            coordinator,
+                            RootComponentPublicationRequest {
+                                operation_id,
+                                plan_hash,
+                                published_fleet_registry,
+                                expected_published_component_count: current
+                                    .published_component_count,
+                            },
+                        ))
+                        .await
+                    }
+                    None => Err(InternalError::unavailable()),
+                },
+                Err(error) => Err(error),
+            }
+        }
+        RootComponentProvisioningPhase::Published => {
+            let coordinator_status =
+                query_coordinator_provisioning(coordinator, operation_id, plan_hash).await;
+            match coordinator_status {
+                Ok(status)
+                    if matches!(
+                        status.phase,
+                        canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::DirectoriesConfirmed
+                            | canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes
+                            | canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::RuntimesActivated
+                    ) =>
+                {
+                    activate(
+                        coordinator,
+                        RootComponentActivationRequest {
+                            operation_id,
+                            plan_hash,
+                            expected_activated_component_count: current.activated_component_count,
+                            expected_root_runtime_active: current.root_runtime_active,
+                        },
+                    )
+                    .await
+                }
+                Ok(_) => Err(InternalError::unavailable()),
+                Err(error) => Err(error),
+            }
+        }
+        RootComponentProvisioningPhase::RuntimesActive => return,
+    };
+    match result {
+        Ok(status) if status.phase == RootComponentProvisioningPhase::RuntimesActive => {}
+        Ok(_) => schedule_provisioning(operation_id, plan_hash, Duration::ZERO),
+        Err(_) => schedule_provisioning(operation_id, plan_hash, Duration::from_secs(1)),
+    }
+}
+
+async fn query_coordinator_provisioning(
+    coordinator: Principal,
+    operation_id: [u8; 32],
+    plan_hash: [u8; 32],
+) -> Result<
+    canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+    InternalError,
+> {
+    let call = CallOps::unbounded_wait(coordinator, protocol::CANIC_STATUS)
+        .with_arg(RemoteCoordinatorStatusRequest::Operation(
+            OperationStatusRequest { operation_id },
+        ))?
+        .execute()
+        .await?;
+    let result: Result<RemoteCoordinatorStatusResponse, Error> = call.candid()?;
+    match result.map_err(InternalError::observed_public)? {
+        RemoteCoordinatorStatusResponse::Operation(
+            RemoteCoordinatorOperationStatusResponse::ComponentProvisioning(status),
+        ) if status.operation_id == operation_id && status.plan_hash == plan_hash => Ok(status),
+        RemoteCoordinatorStatusResponse::Operation(_) => Err(InternalError::conflict()),
+    }
 }
 
 /// Read one exact durable acceptance receipt under Coordinator authentication.
@@ -316,7 +480,12 @@ async fn activate_root_runtime(
     let observed = FleetActivationWorkflow::status()?;
     match provisioning.runtime_mode {
         RootComponentProvisioningRuntimeMode::FreshRoot => {
-            activate_fresh_root_runtime(request, &provisioning, observed).await
+            Box::pin(activate_fresh_root_runtime(
+                request,
+                &provisioning,
+                observed,
+            ))
+            .await
         }
         RootComponentProvisioningRuntimeMode::ActiveRoot => {
             activate_active_root_batch(request, &provisioning, observed)

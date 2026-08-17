@@ -15,6 +15,8 @@ use crate::{
     storage::stable::log::{Log, LogEntryRecord, LogRetentionBatch},
 };
 
+const LOG_PAGE_MAX_LIMIT: u64 = 1_000;
+
 ///
 /// LogOps
 ///
@@ -111,7 +113,7 @@ impl LogOps {
         let mut entries = Vec::new();
         let mut total = 0u64;
         let offset = page.offset;
-        let limit = page.limit.min(1_000);
+        let limit = bounded_log_page_limit(page.limit);
 
         for entry in Log::snapshot().into_iter().rev() {
             if !record_matches(&entry, crate_name, topic, min_level) {
@@ -127,6 +129,11 @@ impl LogOps {
 
         Page { entries, total }
     }
+}
+
+#[must_use]
+fn bounded_log_page_limit(requested: u64) -> u64 {
+    requested.min(LOG_PAGE_MAX_LIMIT)
 }
 
 // Convert a stored log record into the public query DTO.
@@ -155,4 +162,21 @@ fn record_matches(
 // Compare an optional stored topic against the query filter label.
 fn topic_matches(topic: Option<Topic>, needle: &str) -> bool {
     topic.is_some_and(|topic| topic.log_label() == needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn log_page_limit_accepts_the_boundary_and_clamps_its_first_excess() {
+        assert_eq!(
+            bounded_log_page_limit(LOG_PAGE_MAX_LIMIT),
+            LOG_PAGE_MAX_LIMIT
+        );
+        assert_eq!(
+            bounded_log_page_limit(LOG_PAGE_MAX_LIMIT + 1),
+            LOG_PAGE_MAX_LIMIT
+        );
+    }
 }

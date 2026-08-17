@@ -5,14 +5,21 @@
 //! Boundary: accepts only the canonical ICP JSON envelope with typed Candid bytes.
 
 use crate::metrics::model::{MetricEntry, MetricValue};
+use candid::{CandidType, Deserialize};
 use canic_core::dto::{
     metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
     page::Page,
 };
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
 
+#[derive(CandidType, Deserialize)]
+pub(super) enum MetricsStatusResponse {
+    Metrics(Page<MetricEntryDto>),
+}
+
 pub(super) fn parse_metrics_page(output: &str) -> Result<Vec<MetricEntry>, IcpJsonResponseError> {
-    let page = decode_json_result_response::<Page<MetricEntryDto>>(output)?;
+    let response = decode_json_result_response::<MetricsStatusResponse>(output)?;
+    let MetricsStatusResponse::Metrics(page) = response;
     Ok(page.entries.into_iter().map(metric_entry).collect())
 }
 

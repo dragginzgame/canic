@@ -119,6 +119,19 @@ pub struct CanisterPoolStatusRequest {
     pub limit: u16,
 }
 
+/// Selects one pool Canister for an import or reset retry command.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolCanisterRequest {
+    pub canister_id: Principal,
+}
+
+/// Selects one pool Canister and its exact handoff recipient.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolHandoffRequest {
+    pub canister_id: Principal,
+    pub recipient: Principal,
+}
+
 /// Exact pool policy and current exclusive root-owned physical inventory.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolResponse {
@@ -201,6 +214,68 @@ pub enum PoolAdminResponse {
         canister_id: Principal,
         reason: String,
     },
+}
+
+/// Narrow result of one explicit maintenance pass.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum PoolMaintenanceResponse {
+    Maintained,
+    MaintenancePaused {
+        reason: String,
+    },
+    Created {
+        canister_id: Principal,
+    },
+    RefillWaitingForCycles {
+        available: Cycles,
+        creation_amount: Cycles,
+    },
+    RefillPending {
+        operation_id: [u8; 32],
+        uncertain_result: bool,
+    },
+    RefillBlocked {
+        operation_id: [u8; 32],
+        failure: CanisterPoolCreationFailure,
+    },
+    ResetReady {
+        canister_id: Principal,
+    },
+    ResetFailed {
+        canister_id: Principal,
+        reason: String,
+    },
+}
+
+/// Narrow result of importing one existing physical Canister.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum PoolImportResponse {
+    Imported {
+        canister_id: Principal,
+    },
+    ResetFailed {
+        canister_id: Principal,
+        reason: String,
+    },
+}
+
+/// Exact result of scheduling another blocked refill attempt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolRefillRetryResponse {
+    pub previous_operation_id: [u8; 32],
+}
+
+/// Exact result of scheduling another reset attempt.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolResetRetryResponse {
+    pub canister_id: Principal,
+}
+
+/// Exact result of handing one physical Canister to replacement authority.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct PoolHandoffResponse {
+    pub canister_id: Principal,
+    pub recipient: Principal,
 }
 
 // -----------------------------------------------------------------------------

@@ -27,6 +27,12 @@ impl AuthorityRestoreApi {
         AuthorityRestoreWorkflow::status().map_err(Into::into)
     }
 
+    #[doc(hidden)]
+    pub fn require_command_variant_allowed(recovery_command: bool) -> Result<(), Error> {
+        AuthorityRestoreWorkflow::require_command_variant_allowed(recovery_command)
+            .map_err(Into::into)
+    }
+
     /// Seal ordinary mutation before an external authority snapshot is captured.
     pub async fn prepare_snapshot(
         request: AuthoritySnapshotRequest,

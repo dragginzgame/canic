@@ -9,7 +9,7 @@ use crate::info_subnets::{
     model::{FleetSubnetInventoryReportV1, SubnetInventoryPlan},
 };
 
-use std::{path::Path, thread};
+use std::thread;
 
 use candid::CandidType;
 use canic_core::{
@@ -20,11 +20,33 @@ use canic_core::{
     protocol,
 };
 use canic_host::{
-    icp::{IcpCli, decode_json_result_response},
-    icp_config::resolve_current_canic_icp_root,
-    installed_fleet::read_installed_fleet_from_root,
+    icp::IcpCli, icp_config::resolve_current_canic_icp_root,
+    installed_fleet::read_installed_fleet_from_root, query_canister_with_arg,
 };
-use serde::de::DeserializeOwned;
+
+#[derive(CandidType)]
+enum CoordinatorStatusRequestFragment {
+    Registry,
+    RegistryManifest,
+    RegistryVersion,
+}
+
+#[derive(CandidType, serde::Deserialize)]
+enum CoordinatorStatusResponseFragment {
+    Registry(FleetRegistry),
+    RegistryManifest(FleetRegistryManifest),
+    RegistryVersion(FleetRegistryVersion),
+}
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    Inventory,
+}
+
+#[derive(CandidType, serde::Deserialize)]
+enum RootStatusResponseFragment {
+    Inventory(FleetSubnetRootCanisterSummary),
+}
 
 pub(super) fn load_report(
     options: &InfoSubnetsOptions,
@@ -33,18 +55,36 @@ pub(super) fn load_report(
     let catalog = read_installed_fleet_from_root(&options.environment, &options.fleet, &icp_root)?;
     let icp = IcpCli::new(&options.icp, Some(options.environment.clone())).with_cwd(&icp_root);
     let coordinator = &catalog.coordinator_principal;
-    let registry =
-        query_result::<FleetRegistry>(&icp, coordinator, protocol::CANIC_FLEET_REGISTRY)?;
-    let manifest = query_result::<FleetRegistryManifest>(
+    let coordinator_principal = candid::Principal::from_text(coordinator).map_err(|_| {
+        InfoSubnetsCommandError::Usage("installed Coordinator Principal is invalid".to_string())
+    })?;
+    let registry = match query_canister_with_arg(
         &icp,
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-    )?;
-    let version = query_result::<FleetRegistryVersion>(
+        coordinator_principal,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequestFragment::Registry,
+    )? {
+        CoordinatorStatusResponseFragment::Registry(registry) => registry,
+        _ => return Err(correlation_error()),
+    };
+    let manifest = match query_canister_with_arg(
         &icp,
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_VERSION,
-    )?;
+        coordinator_principal,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequestFragment::RegistryManifest,
+    )? {
+        CoordinatorStatusResponseFragment::RegistryManifest(manifest) => manifest,
+        _ => return Err(correlation_error()),
+    };
+    let version = match query_canister_with_arg(
+        &icp,
+        coordinator_principal,
+        protocol::CANIC_STATUS,
+        &CoordinatorStatusRequestFragment::RegistryVersion,
+    )? {
+        CoordinatorStatusResponseFragment::RegistryVersion(version) => version,
+        _ => return Err(correlation_error()),
+    };
     let plan = SubnetInventoryPlan::compile(catalog, registry, manifest, version)?;
     let summaries = query_root_summaries(&icp, plan.root_principals())?;
     plan.complete(summaries).map_err(Into::into)
@@ -57,14 +97,17 @@ fn query_root_summaries(
     let mut handles = Vec::with_capacity(roots.len());
     for root in roots {
         let canister = root.to_text();
-        let worker_canister = canister.clone();
         let icp = icp.clone();
         let handle = thread::spawn(move || {
-            query_result::<FleetSubnetRootCanisterSummary>(
+            let response: RootStatusResponseFragment = query_canister_with_arg(
                 &icp,
-                &worker_canister,
-                protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
-            )
+                root,
+                protocol::CANIC_STATUS,
+                &RootStatusRequestFragment::Inventory,
+            )?;
+            match response {
+                RootStatusResponseFragment::Inventory(summary) => Ok(summary),
+            }
         });
         handles.push((canister, handle));
     }
@@ -79,24 +122,8 @@ fn query_root_summaries(
         .collect()
 }
 
-fn query_result<T>(
-    icp: &IcpCli,
-    canister: &str,
-    method: &'static str,
-) -> Result<T, InfoSubnetsCommandError>
-where
-    T: CandidType + DeserializeOwned,
-{
-    let output = icp
-        .canister_query_output_with_candid(canister, method, Some("json"), None::<&Path>)
-        .map_err(|source| InfoSubnetsCommandError::Query {
-            canister: canister.to_string(),
-            method,
-            source,
-        })?;
-    decode_json_result_response(&output).map_err(|source| InfoSubnetsCommandError::Response {
-        canister: canister.to_string(),
-        method,
-        source,
-    })
+fn correlation_error() -> InfoSubnetsCommandError {
+    InfoSubnetsCommandError::Usage(
+        "Coordinator returned a differently correlated status response".to_string(),
+    )
 }

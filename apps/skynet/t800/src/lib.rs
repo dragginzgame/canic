@@ -68,13 +68,13 @@ fn console_snapshot() -> ConsoleSnapshot {
             canister_version: canister_version(),
         },
         runtime: RuntimeSummary {
-            ready: canic_ready(),
+            ready: canic::api::runtime::ReadyApi::is_ready(),
             phase: runtime.as_ref().map_or_else(
                 || "Prepared".to_string(),
                 |status| format!("{:?}", status.phase),
             ),
             cycles: canister_cycle_balance(),
-            bootstrap: format!("{:?}", canic_bootstrap_status()),
+            bootstrap: format!("{:?}", canic::api::runtime::ReadyApi::bootstrap_status()),
             observation: "scaled Component child".to_string(),
         },
         environment: environment_facts(environment),

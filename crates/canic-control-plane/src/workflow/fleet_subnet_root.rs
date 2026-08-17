@@ -5,6 +5,7 @@
 //! Boundary: root actions require consistent protected, mirror, runtime and Component authority.
 
 use crate::{
+    dto::root::RootRemovalOperationStatus,
     ops::{
         canister_pool::CanisterPoolOps, component_provisioning::RootComponentProvisioningOps,
         component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
@@ -18,31 +19,30 @@ use crate::{
         RootFleetSubnetStoreDeletionView, RootFleetSubnetStoreReclamationView,
     },
     workflow::{
-        bootstrap::root_store, runtime::template::publication::WasmStorePublicationWorkflow,
+        bootstrap::root_store, component_registry, fleet_coordinator_client, fleet_registry_mirror,
+        runtime::template::publication::WasmStorePublicationWorkflow,
     },
 };
-use candid::Principal;
+use candid::{Nat, Principal};
 use canic_core::{
-    api::fleet_activation::FleetActivationApi,
+    api::{fleet_activation::FleetActivationApi, timer::TimerApi},
     control_plane_support::{
         error::InternalError,
         model::replay::CommandKind,
         ops::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
-            ic::{IcOps, call::CallOps, mgmt::MgmtOps},
+            ic::{IcOps, mgmt::MgmtOps},
             root_draining_reservation::FleetSubnetRootDrainingReservationOps,
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
-        workflow::runtime::fleet_activation::FleetActivationWorkflow,
     },
     dto::{
-        error::Error,
+        component_registry::{ComponentRegistryHead, RootComponentDrainingRequest},
         fleet_registry::{
             FleetRegistryVersion, FleetSubnetRootDeletionReadinessIntentRequest,
             FleetSubnetRootDeletionReadinessIntentResponse,
             FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
-            FleetSubnetRootDrainingReservationResponse,
-            FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootEntry,
+            FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
             FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
             FleetSubnetRootStatus,
         },
@@ -63,16 +63,25 @@ use canic_core::{
             FleetSubnetRootStoreReclamationResponse, FleetSubnetRootStoreReclamationStatusRequest,
             FleetSubnetWasmStoreAdoptionRequest, FleetSubnetWasmStoreAdoptionResponse,
         },
+        pool::{PoolAdminCommand, PoolAdminResponse},
+        role::{OperationReceipt, RootRemovalRequest},
     },
-    ids::{FleetSubnetRootBinding, FleetSubnetRootReleaseSet, FleetSubnetWasmStoreAuthority},
-    protocol,
+    ids::{
+        ComponentInstanceId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        FleetSubnetWasmStoreAuthority,
+    },
     replay_policy::CostClass,
 };
+use sha2::{Digest, Sha256};
+use std::time::Duration;
 
 const ROOT_DELETION_CYCLE_RECLAMATION_COMMAND_KIND: &str =
     "fleet_subnet_root.reclaim_deletion_cycles.v1";
 const VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_VALUE_TRANSFERS_PER_WINDOW: u64 = 60;
+const ROOT_COMPONENT_REMOVAL_OPERATION_DOMAIN: &[u8] =
+    b"canic.fleet-subnet-root.component-removal.v1";
+const SECONDS_PER_DAY: u128 = 86_400;
 
 struct ValidatedFleetSubnetRootState {
     fleet_registry: FleetRegistryVersion,
@@ -162,6 +171,20 @@ pub fn wasm_store_adoption_status(
         .ok_or_else(InternalError::unavailable)
 }
 
+/// Resolve the terminal sibling Store adoption through its durable operation identity.
+pub fn wasm_store_adoption_operation_status(
+    operation_id: [u8; 32],
+) -> Result<Option<FleetSubnetWasmStoreAdoptionResponse>, InternalError> {
+    if operation_id == [0; 32] {
+        return Err(InternalError::invalid_input());
+    }
+    let (authority, _) = crate::workflow::root_authority::validated_root_authority()?;
+    RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt_by_operation(
+        operation_id,
+        authority.wasm_store_authority,
+    )
+}
+
 fn protected_sibling_wasm_store_authority(
     request: &FleetSubnetWasmStoreAdoptionRequest,
 ) -> Result<FleetSubnetWasmStoreAuthority, InternalError> {
@@ -169,10 +192,6 @@ fn protected_sibling_wasm_store_authority(
         return Err(InternalError::invalid_input());
     }
     let (root_authority, _) = crate::workflow::root_authority::validated_root_authority()?;
-    let activation = FleetActivationWorkflow::status()?;
-    if request.operation_id != activation.identity.operation_id {
-        return Err(InternalError::conflict());
-    }
     if request.authority != root_authority.wasm_store_authority {
         return Err(InternalError::conflict());
     }
@@ -234,9 +253,9 @@ fn require_final_sibling_wasm_store_controllers(
     Ok(())
 }
 
-/// Durably fence new top-level Component allocation under exact active authority.
-pub async fn begin_draining(
+fn begin_draining_with_reservation(
     request: FleetSubnetRootDrainingRequest,
+    reservation: FleetSubnetRootDrainingReservationResponse,
 ) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
     let state = validated_root_state()?;
     if let Some(existing) = ComponentRegistryOps::root_draining_if_present(request.operation_id)? {
@@ -252,15 +271,6 @@ pub async fn begin_draining(
         return Err(InternalError::conflict());
     }
     RootComponentProvisioningOps::require_root_draining_open()?;
-    let coordinator = state.fleet_registry.authority.binding.coordinator;
-    let reservation = fetch_root_draining_reservation(
-        coordinator,
-        FleetSubnetRootDrainingReservationStatusRequest {
-            operation_id: request.operation_id,
-            fleet_subnet_root: state.root_entry.fleet_subnet_root,
-        },
-    )
-    .await?;
     validate_root_draining_reservation(&state, &request, &reservation)?;
 
     let current = validated_root_state()?;
@@ -276,6 +286,34 @@ pub async fn begin_draining(
     Ok(draining_response(draining))
 }
 
+/// Accept one high-level root-removal intent and schedule its private reconciler once.
+pub fn accept_root_removal(input: RootRemovalRequest) -> Result<OperationReceipt, InternalError> {
+    let request = FleetSubnetRootDrainingRequest {
+        operation_id: input.reservation.request.operation_id,
+        expected_registry: input.reservation.request.expected_registry.clone(),
+    };
+    let operation_id = request.operation_id;
+    if let Some(existing) = ComponentRegistryOps::root_draining_if_present(operation_id)? {
+        exact_draining_retry(&request, existing)?;
+        return Ok(OperationReceipt { operation_id });
+    }
+    begin_draining_with_reservation(request, input.reservation)?;
+    schedule_root_removal(operation_id);
+    Ok(OperationReceipt { operation_id })
+}
+
+/// Authorize the accepted removal command for the exact Coordinator.
+pub fn authorize_root_removal_caller(
+    caller: Principal,
+    _caller_is_controller: bool,
+) -> Result<(), InternalError> {
+    let (authority, _) = crate::workflow::root_authority::validated_root_authority()?;
+    if caller != authority.binding.authority.binding.coordinator {
+        return Err(InternalError::forbidden());
+    }
+    Ok(())
+}
+
 fn exact_draining_retry(
     request: &FleetSubnetRootDrainingRequest,
     existing: RootFleetSubnetDrainingView,
@@ -284,21 +322,6 @@ fn exact_draining_retry(
         return Err(InternalError::conflict());
     }
     Ok(draining_response(existing))
-}
-
-async fn fetch_root_draining_reservation(
-    coordinator: Principal,
-    request: FleetSubnetRootDrainingReservationStatusRequest,
-) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
-    let call = CallOps::unbounded_wait(
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
-    )
-    .with_arg(request)?
-    .execute()
-    .await?;
-    let result: Result<FleetSubnetRootDrainingReservationResponse, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
 }
 
 fn validate_root_draining_reservation(
@@ -374,7 +397,10 @@ pub async fn finalize_inventory(
         IcOps::now_nanos(),
     )?;
     let (wasm_store, store_status) =
-        WasmStorePublicationWorkflow::quiesce_single_root_store_for_final_inventory().await?;
+        WasmStorePublicationWorkflow::quiesce_single_root_store_for_final_inventory(
+            request.operation_id,
+        )
+        .await?;
     let store = root_store::status(state.component_registry.store_bootstrap).await?;
     if store.wasm_store != wasm_store {
         return Err(InternalError::invariant());
@@ -432,7 +458,10 @@ pub async fn publish_removal(
         expected_registry: request.expected_registry,
         final_inventory: final_inventory_response(inventory),
     };
-    let response = publish_removed_to_coordinator(coordinator, publication_request.clone()).await?;
+    let response = fleet_coordinator_client::root_removal_status(coordinator, request.operation_id)
+        .await?
+        .removal
+        .ok_or_else(InternalError::unavailable)?;
     validate_removal_publication_response(&publication_request, &response)?;
     let publication = ComponentRegistryOps::record_root_removal_publication(
         request.operation_id,
@@ -455,6 +484,241 @@ pub fn removal_status(
             .ok_or_else(InternalError::unavailable)?;
     let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
     removal_publication_response(publication, inventory)
+}
+
+/// Resolve root-removal progress from the first durable draining fence onward.
+pub fn removal_operation_status(
+    operation_id: [u8; 32],
+) -> Result<Option<RootRemovalOperationStatus>, InternalError> {
+    if ComponentRegistryOps::current().is_none() {
+        return Ok(None);
+    }
+    let Some(draining) = ComponentRegistryOps::root_draining_if_present(operation_id)? else {
+        return Ok(None);
+    };
+    let final_inventory = ComponentRegistryOps::root_final_inventory_if_present(operation_id)?
+        .map(final_inventory_response);
+    let removal = match ComponentRegistryOps::root_removal_publication_if_present(operation_id)? {
+        Some(publication) => {
+            let inventory = ComponentRegistryOps::root_final_inventory(operation_id)?;
+            Some(removal_publication_response(publication, inventory)?)
+        }
+        None => None,
+    };
+    let store_reclamation = ComponentRegistryOps::root_store_reclamation_if_present(operation_id)?
+        .map(store_reclamation_response);
+    let store_binding_finalization =
+        ComponentRegistryOps::root_store_binding_finalization_if_present(operation_id)?
+            .map(store_binding_finalization_response);
+    let store_deletion = ComponentRegistryOps::root_store_deletion_if_present(operation_id)?
+        .map(store_deletion_response);
+    let deletion_preparation_intent =
+        ComponentRegistryOps::root_deletion_preparation_intent_if_present(operation_id)?;
+    let deletion_readiness_intent = deletion_preparation_intent
+        .as_ref()
+        .map(root_deletion_readiness_intent_request);
+    let deletion_readiness = deletion_preparation_intent
+        .as_ref()
+        .filter(|intent| {
+            intent.coordinator_intent_hash.is_some()
+                && intent.observed_cycles_after_reclamation.is_some()
+                && intent.cycles_reclaimed_at_ns.is_some()
+        })
+        .map(root_deletion_readiness_request)
+        .transpose()?;
+    let deletion_preparation =
+        ComponentRegistryOps::root_deletion_preparation_if_present(operation_id)?
+            .map(deletion_preparation_response);
+    Ok(Some(RootRemovalOperationStatus {
+        operation_id,
+        draining: draining_response(draining),
+        final_inventory,
+        removal,
+        store_reclamation,
+        store_binding_finalization,
+        store_deletion,
+        deletion_readiness_intent,
+        deletion_readiness,
+        deletion_preparation,
+    }))
+}
+
+/// Privately advance one accepted Root removal through its domain-owned journals.
+pub fn schedule_root_removal(operation_id: [u8; 32]) {
+    schedule_root_removal_after(operation_id, Duration::ZERO);
+}
+
+fn schedule_root_removal_after(operation_id: [u8; 32], delay: Duration) {
+    let _ = TimerApi::defer_lifecycle_required(delay, "Fleet Subnet Root removal", async move {
+        match Box::pin(advance_root_removal_once(operation_id)).await {
+            Ok(true) => {}
+            Ok(false) => schedule_root_removal_after(operation_id, Duration::ZERO),
+            Err(_) => schedule_root_removal_after(operation_id, Duration::from_secs(1)),
+        }
+    });
+}
+
+async fn advance_root_removal_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
+    if let Some(partition) = ComponentRegistryOps::root_component_partitions()?
+        .into_iter()
+        .next()
+    {
+        let component = partition.binding.component;
+        let component_operation_id = root_component_removal_operation_id(operation_id, component);
+        if let Some(existing) = ComponentRegistryOps::component_draining(component)? {
+            if existing.operation_id != component_operation_id {
+                return Err(InternalError::conflict());
+            }
+        } else {
+            component_registry::begin_component_draining(RootComponentDrainingRequest {
+                operation_id: component_operation_id,
+                component,
+                expected_registry: ComponentRegistryHead {
+                    component,
+                    revision: partition.revision,
+                    content_hash: partition.content_hash,
+                },
+            })
+            .await?;
+            return Ok(false);
+        }
+        Box::pin(component_registry::advance_component_removal_once(
+            component,
+            component_operation_id,
+        ))
+        .await?;
+        return Ok(false);
+    }
+
+    if let Some(canister_id) = CanisterPoolOps::handoff_candidate() {
+        let (authority, _) = crate::workflow::root_authority::validated_root_authority()?;
+        let recipient = authority.binding.authority.binding.coordinator;
+        let response = crate::workflow::canister_pool::admin(PoolAdminCommand::Handoff {
+            canister_id,
+            recipient,
+        })
+        .await?;
+        if response
+            != (PoolAdminResponse::HandedOff {
+                canister_id,
+                recipient,
+            })
+        {
+            return Err(InternalError::invariant());
+        }
+        return Ok(false);
+    }
+
+    if ComponentRegistryOps::root_final_inventory_if_present(operation_id)?.is_none() {
+        let component_registry =
+            ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
+        fleet_registry_mirror::advance_to_draining_for_root_removal(
+            component_registry.store_bootstrap,
+        )
+        .await?;
+        let state = validated_root_state()?;
+        finalize_inventory(FleetSubnetRootFinalInventoryRequest {
+            operation_id,
+            expected_registry: state.fleet_registry,
+        })
+        .await?;
+        return Ok(false);
+    }
+
+    let inventory = ComponentRegistryOps::root_final_inventory(operation_id)?;
+    Box::pin(advance_root_store_removal(operation_id, inventory)).await
+}
+
+async fn advance_root_store_removal(
+    operation_id: [u8; 32],
+    inventory: RootFleetSubnetFinalInventoryView,
+) -> Result<bool, InternalError> {
+    if ComponentRegistryOps::root_removal_publication_if_present(operation_id)?.is_none() {
+        publish_removal(FleetSubnetRootRemovalRequest {
+            operation_id,
+            expected_registry: inventory.registry.clone(),
+        })
+        .await?;
+        return Ok(false);
+    }
+
+    let Some(reclamation) = ComponentRegistryOps::root_store_reclamation_if_present(operation_id)?
+    else {
+        reclaim_store(FleetSubnetRootStoreReclamationRequest {
+            operation_id,
+            expected_final_inventory_hash: inventory.inventory_hash,
+        })
+        .await?;
+        return Ok(false);
+    };
+    let Some(finalization) =
+        ComponentRegistryOps::root_store_binding_finalization_if_present(operation_id)?
+    else {
+        finalize_store_binding(FleetSubnetRootStoreBindingFinalizationRequest {
+            operation_id,
+            expected_reclamation_hash: reclamation.reclamation_hash,
+        })
+        .await?;
+        return Ok(false);
+    };
+    let Some(store_deletion) = ComponentRegistryOps::root_store_deletion_if_present(operation_id)?
+    else {
+        delete_store(FleetSubnetRootStoreDeletionRequest {
+            operation_id,
+            expected_binding_finalization_hash: finalization.finalization_hash,
+        })
+        .await?;
+        return Ok(false);
+    };
+    if ComponentRegistryOps::root_deletion_preparation_if_present(operation_id)?.is_some() {
+        return Ok(true);
+    }
+    let request =
+        root_deletion_preparation_request(operation_id, store_deletion.deletion_hash).await?;
+    prepare_deletion(request).await?;
+    Ok(true)
+}
+
+fn root_component_removal_operation_id(
+    root_operation_id: [u8; 32],
+    component: ComponentInstanceId,
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(ROOT_COMPONENT_REMOVAL_OPERATION_DOMAIN);
+    hasher.update(root_operation_id);
+    hasher.update(component.as_bytes());
+    hasher.finalize().into()
+}
+
+async fn root_deletion_preparation_request(
+    operation_id: [u8; 32],
+    expected_store_deletion_hash: [u8; 32],
+) -> Result<FleetSubnetRootDeletionPreparationRequest, InternalError> {
+    let status = MgmtOps::canister_status(IcOps::canister_self()).await?;
+    let observed_reserved_cycles = status_nat_as_u128(&status.reserved_cycles)?;
+    let observed_idle_cycles_burned_per_day =
+        status_nat_as_u128(&status.idle_cycles_burned_per_day)?;
+    let observed_freezing_threshold_seconds =
+        status_nat_as_u128(&status.settings.freezing_threshold)?;
+    let retained_cycles_target = observed_idle_cycles_burned_per_day
+        .checked_mul(observed_freezing_threshold_seconds)
+        .map(|reserve| reserve.div_ceil(SECONDS_PER_DAY))
+        .and_then(|reserve| {
+            reserve.checked_add(FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES)
+        })
+        .ok_or_else(InternalError::invalid_input)?;
+    Ok(FleetSubnetRootDeletionPreparationRequest {
+        operation_id,
+        expected_store_deletion_hash,
+        retained_cycles_target,
+        observed_reserved_cycles,
+        observed_idle_cycles_burned_per_day,
+        observed_freezing_threshold_seconds,
+    })
+}
+
+fn status_nat_as_u128(value: &Nat) -> Result<u128, InternalError> {
+    u128::try_from(value.0.clone()).map_err(|_| InternalError::invalid_input())
 }
 
 /// Reclaim the retained Store only after exact logical root removal is durable.
@@ -681,30 +945,51 @@ pub async fn prepare_deletion(
     }
     validate_root_deletion_cycle_reserve(&request)?;
     let coordinator = state.fleet_registry.authority.binding.coordinator;
-    let observed_cycles_before_reclamation = IcOps::canister_cycle_balance().to_u128();
-    let intent = ComponentRegistryOps::begin_root_deletion_preparation(
+    let intent = match ComponentRegistryOps::root_deletion_preparation_intent_if_present(
         request.operation_id,
-        RootFleetSubnetDeletionPreparationAuthority {
-            store_deletion_hash: request.expected_store_deletion_hash,
-            coordinator,
-            observed_cycles_before_reclamation,
-            retained_cycles_target: request.retained_cycles_target,
-            observed_reserved_cycles: request.observed_reserved_cycles,
-            observed_idle_cycles_burned_per_day: request.observed_idle_cycles_burned_per_day,
-            observed_freezing_threshold_seconds: request.observed_freezing_threshold_seconds,
-        },
-        IcOps::now_nanos(),
-    )?;
+    )? {
+        Some(intent) => {
+            let retry_is_exact = [
+                intent.store_deletion_hash == request.expected_store_deletion_hash,
+                intent.coordinator == coordinator,
+                intent.retained_cycles_target == request.retained_cycles_target,
+                intent.observed_reserved_cycles == request.observed_reserved_cycles,
+                intent.observed_idle_cycles_burned_per_day
+                    == request.observed_idle_cycles_burned_per_day,
+                intent.observed_freezing_threshold_seconds
+                    == request.observed_freezing_threshold_seconds,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !retry_is_exact {
+                return Err(InternalError::conflict());
+            }
+            intent
+        }
+        None => ComponentRegistryOps::begin_root_deletion_preparation(
+            request.operation_id,
+            RootFleetSubnetDeletionPreparationAuthority {
+                store_deletion_hash: request.expected_store_deletion_hash,
+                coordinator,
+                observed_cycles_before_reclamation: IcOps::canister_cycle_balance().to_u128(),
+                retained_cycles_target: request.retained_cycles_target,
+                observed_reserved_cycles: request.observed_reserved_cycles,
+                observed_idle_cycles_burned_per_day: request.observed_idle_cycles_burned_per_day,
+                observed_freezing_threshold_seconds: request.observed_freezing_threshold_seconds,
+            },
+            IcOps::now_nanos(),
+        )?,
+    };
 
     let intent = if intent.coordinator_intent_hash.is_some() {
         intent
     } else {
         let coordinator_intent_request = root_deletion_readiness_intent_request(&intent);
-        let coordinator_intent = prepare_root_deletion_readiness_with_coordinator(
-            coordinator,
-            coordinator_intent_request.clone(),
-        )
-        .await?;
+        let coordinator_intent =
+            fleet_coordinator_client::root_removal_status(coordinator, request.operation_id)
+                .await?
+                .readiness_intent
+                .ok_or_else(InternalError::unavailable)?;
         validate_root_deletion_readiness_intent_response(
             coordinator,
             &coordinator_intent_request,
@@ -726,8 +1011,10 @@ pub async fn prepare_deletion(
 
     let readiness_request = root_deletion_readiness_request(&intent)?;
     let readiness =
-        record_root_deletion_readiness_with_coordinator(coordinator, readiness_request.clone())
-            .await?;
+        fleet_coordinator_client::root_removal_status(coordinator, request.operation_id)
+            .await?
+            .readiness
+            .ok_or_else(InternalError::unavailable)?;
     validate_root_deletion_readiness_response(
         coordinator,
         &intent,
@@ -968,21 +1255,6 @@ fn final_inventory_response(
     }
 }
 
-async fn publish_removed_to_coordinator(
-    coordinator: candid::Principal,
-    request: FleetSubnetRootRemovalPublicationRequest,
-) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
-    let call = CallOps::unbounded_wait(
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
-    )
-    .with_arg(request)?
-    .execute()
-    .await?;
-    let result: Result<FleetSubnetRootRemovalPublicationResponse, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
-}
-
 fn validate_removal_publication_response(
     request: &FleetSubnetRootRemovalPublicationRequest,
     response: &FleetSubnetRootRemovalPublicationResponse,
@@ -1170,36 +1442,6 @@ fn root_deletion_readiness_request(
             .cycles_reclaimed_at_ns
             .ok_or_else(InternalError::unavailable)?,
     })
-}
-
-async fn prepare_root_deletion_readiness_with_coordinator(
-    coordinator: candid::Principal,
-    request: FleetSubnetRootDeletionReadinessIntentRequest,
-) -> Result<FleetSubnetRootDeletionReadinessIntentResponse, InternalError> {
-    let call = CallOps::unbounded_wait(
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE,
-    )
-    .with_arg(request)?
-    .execute()
-    .await?;
-    let result: Result<FleetSubnetRootDeletionReadinessIntentResponse, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
-}
-
-async fn record_root_deletion_readiness_with_coordinator(
-    coordinator: candid::Principal,
-    request: FleetSubnetRootDeletionReadinessRequest,
-) -> Result<FleetSubnetRootDeletionReadinessResponse, InternalError> {
-    let call = CallOps::unbounded_wait(
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READY,
-    )
-    .with_arg(request)?
-    .execute()
-    .await?;
-    let result: Result<FleetSubnetRootDeletionReadinessResponse, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
 }
 
 fn validate_root_deletion_readiness_intent_response(
@@ -1605,6 +1847,7 @@ mod tests {
             prepared_against_registry,
             release_set: authority.initial_release_set,
             store_bootstrap: RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
             next_allocation_sequence: 4,

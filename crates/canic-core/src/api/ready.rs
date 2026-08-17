@@ -18,6 +18,11 @@ use crate::{
 pub struct ReadyApi;
 
 impl ReadyApi {
+    /// Mark a synchronous built-in lifecycle adapter ready after all invariants commit.
+    pub fn mark_ready() {
+        ReadyOps::mark_ready();
+    }
+
     /// Return whether Canic runtime invariants have completed restoration.
     #[must_use]
     pub fn is_ready() -> bool {

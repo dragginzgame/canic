@@ -1,5 +1,39 @@
 use super::*;
 
+#[derive(CandidType)]
+enum RootCommand {
+    RespondCapability(RootCapabilityEnvelopeV1),
+    UpsertIssuerPolicy(RootIssuerPolicyUpsertRequest),
+    UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateUpsertRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponse {
+    RespondCapability(RootCapabilityResponseV1),
+    UpsertIssuerPolicy(RootIssuerPolicyResponse),
+    UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateResponse),
+}
+
+#[derive(CandidType)]
+enum CanisterCommand {
+    PrepareDelegatedToken(DelegatedTokenPrepareRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CanisterCommandResponse {
+    PrepareDelegatedToken(DelegatedTokenPrepareResponse),
+}
+
+#[derive(CandidType)]
+enum RoleStatusRequest {
+    Metrics(MetricsStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    Metrics(Page<MetricEntry>),
+}
+
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
         "root:bootstrap:init-checkpoints" => setup_root(RootSetupProfile::Topology),
@@ -44,7 +78,7 @@ fn is_registry_auth_scenario(scenario: &AuditScenario) -> bool {
     matches!(
         scenario.key,
         "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
-            | "issuer:canic_prepare_delegated_token:active-proof"
+            | "issuer:canic_command.PrepareDelegatedToken:active-proof"
             | "issuer_verifier:issuer_verify_token:valid-delegated-token"
     )
 }
@@ -95,7 +129,7 @@ fn prepare_registry_auth_scenario(
                 delegated_token: None,
             }
         }
-        "issuer:canic_prepare_delegated_token:active-proof" => {
+        "issuer:canic_command.PrepareDelegatedToken:active-proof" => {
             provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
             PreparedScenario {
                 target_pid: setup.issuer.canister_id,
@@ -143,7 +177,7 @@ fn execute_registry_auth_scenario(
                     .expect("root proof scenario must prepare an issuer"),
             );
         }
-        "issuer:canic_prepare_delegated_token:active-proof" => {
+        "issuer:canic_command.PrepareDelegatedToken:active-proof" => {
             execute_delegated_token_prepare(setup.pic(), prepared, &setup.verifier.role);
         }
         "issuer_verifier:issuer_verify_token:valid-delegated-token" => {
@@ -257,29 +291,8 @@ fn prepare_scenario(
     };
 
     match scenario.key {
-        "root:canic_response_capability_v1:request-cycles-replay" => {
+        "root:canic_command:respond-capability-request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
-            PreparedScenario {
-                target_pid,
-                caller_pid: None,
-                issuer_pid: None,
-                delegated_token: None,
-            }
-        }
-        "root:canic_template_prepare_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            stage_manifest(&setup.pic, target_pid, &fixture.manifest);
-            PreparedScenario {
-                target_pid,
-                caller_pid: None,
-                issuer_pid: None,
-                delegated_token: None,
-            }
-        }
-        "root:canic_template_publish_chunk_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            stage_manifest(&setup.pic, target_pid, &fixture.manifest);
-            prepare_chunk_set(&setup.pic, target_pid, &fixture.prepare);
             PreparedScenario {
                 target_pid,
                 caller_pid: None,
@@ -314,8 +327,8 @@ fn execute_scenario(
                 999
             );
         }
-        "root:canic_response_capability_v1:request-cycles-fresh"
-        | "root:canic_response_capability_v1:request-cycles-replay" => {
+        "root:canic_command:respond-capability-request-cycles-fresh"
+        | "root:canic_command:respond-capability-request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
         }
         "user_hub:create_account:new-principal" => {
@@ -335,18 +348,6 @@ fn execute_scenario(
                 .update_candid(target_pid, "create_worker", ())
                 .expect("create_worker transport failed");
             created.expect("create_worker application failed");
-        }
-        "root:canic_template_stage_manifest_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            stage_manifest(&setup.pic, target_pid, &fixture.manifest);
-        }
-        "root:canic_template_prepare_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            prepare_chunk_set(&setup.pic, target_pid, &fixture.prepare);
-        }
-        "root:canic_template_publish_chunk_admin:single-chunk" => {
-            let fixture = audit_template_fixture(scenario);
-            publish_chunk(&setup.pic, target_pid, &fixture.chunk);
         }
         other => panic!("unsupported audit scenario: {other}"),
     }
@@ -374,28 +375,31 @@ fn execute_delegated_token_prepare(
     let _issuer_pid = prepared
         .issuer_pid
         .expect("delegated prepare scenario must have an issuer");
-    let response: Result<DelegatedTokenPrepareResponse, Error> = pic
+    let response: Result<CanisterCommandResponse, Error> = pic
         .update_candid_as(
             prepared.target_pid,
             subject,
-            protocol::CANIC_PREPARE_DELEGATED_TOKEN,
-            (DelegatedTokenPrepareRequest {
-                metadata: Some(AuthRequestMetadata {
-                    request_id: [92; 32],
-                    ttl_ns: 60_000_000_000,
-                }),
-                subject,
-                aud: DelegationAudience::Fleet(test_fleet()),
-                grants: vec![role_grant(
-                    verifier_role.clone(),
-                    vec![cap::VERIFY.to_string()],
-                )],
-                ttl_ns: 10_000_000_000,
-                ext: None,
-            },),
+            protocol::CANIC_COMMAND,
+            (CanisterCommand::PrepareDelegatedToken(
+                DelegatedTokenPrepareRequest {
+                    metadata: Some(AuthRequestMetadata {
+                        request_id: [92; 32],
+                        ttl_ns: 60_000_000_000,
+                    }),
+                    subject,
+                    aud: DelegationAudience::Fleet(test_fleet()),
+                    grants: vec![role_grant(
+                        verifier_role.clone(),
+                        vec![cap::VERIFY.to_string()],
+                    )],
+                    ttl_ns: 10_000_000_000,
+                    ext: None,
+                },
+            ),),
         )
         .expect("delegated token prepare transport failed");
-    response.expect("delegated token prepare application failed");
+    let CanisterCommandResponse::PrepareDelegatedToken(_) =
+        response.expect("delegated token prepare application failed");
 }
 
 // Execute delegated-token confirmation through the second issuer Component.
@@ -424,24 +428,30 @@ fn upsert_delegation_issuer(
     issuer_pid: Principal,
     verifier_role: &canic::ids::CanisterRole,
 ) {
-    let registered: Result<RootIssuerPolicyResponse, Error> = pic
+    let registered: Result<RootCommandResponse, Error> = pic
         .update_candid(
             root,
-            protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
-            (RootIssuerPolicyUpsertRequest {
-                issuer_pid,
-                enabled: true,
-                allowed_audiences: vec![DelegationAudience::Fleet(test_fleet())],
-                allowed_grants: vec![role_grant(
-                    verifier_role.clone(),
-                    vec![cap::VERIFY.to_string()],
-                )],
-                max_cert_ttl_ns: 60_000_000_000,
-                refresh_after_ratio_bps: 8_000,
-            },),
+            protocol::CANIC_COMMAND,
+            (RootCommand::UpsertIssuerPolicy(
+                RootIssuerPolicyUpsertRequest {
+                    issuer_pid,
+                    enabled: true,
+                    allowed_audiences: vec![DelegationAudience::Fleet(test_fleet())],
+                    allowed_grants: vec![role_grant(
+                        verifier_role.clone(),
+                        vec![cap::VERIFY.to_string()],
+                    )],
+                    max_cert_ttl_ns: 60_000_000_000,
+                    refresh_after_ratio_bps: 8_000,
+                },
+            ),),
         )
         .expect("root issuer registration transport failed");
-    let registered = registered.expect("root issuer registration application failed");
+    let RootCommandResponse::UpsertIssuerPolicy(registered) =
+        registered.expect("root issuer registration application failed")
+    else {
+        panic!("unexpected Root command response");
+    };
     assert_eq!(registered.issuer.issuer_pid, issuer_pid);
 }
 
@@ -451,23 +461,29 @@ fn upsert_delegation_renewal_template(
     issuer_pid: Principal,
     verifier_role: &canic::ids::CanisterRole,
 ) {
-    let response: Result<RootIssuerRenewalTemplateResponse, Error> = pic
+    let response: Result<RootCommandResponse, Error> = pic
         .update_candid(
             root,
-            protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
-            (RootIssuerRenewalTemplateUpsertRequest {
-                issuer_pid,
-                enabled: true,
-                aud: DelegationAudience::Fleet(test_fleet()),
-                grants: vec![role_grant(
-                    verifier_role.clone(),
-                    vec![cap::VERIFY.to_string()],
-                )],
-                cert_ttl_ns: 60_000_000_000,
-            },),
+            protocol::CANIC_COMMAND,
+            (RootCommand::UpsertIssuerRenewalTemplate(
+                RootIssuerRenewalTemplateUpsertRequest {
+                    issuer_pid,
+                    enabled: true,
+                    aud: DelegationAudience::Fleet(test_fleet()),
+                    grants: vec![role_grant(
+                        verifier_role.clone(),
+                        vec![cap::VERIFY.to_string()],
+                    )],
+                    cert_ttl_ns: 60_000_000_000,
+                },
+            ),),
         )
         .expect("root issuer renewal template transport failed");
-    let response = response.expect("root issuer renewal template application failed");
+    let RootCommandResponse::UpsertIssuerRenewalTemplate(response) =
+        response.expect("root issuer renewal template application failed")
+    else {
+        panic!("unexpected Root command response");
+    };
     assert_eq!(response.template.issuer_pid, issuer_pid);
 }
 
@@ -491,99 +507,25 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
     }
 }
 
-// Build one synthetic staged-release fixture for root admin perf scenarios.
-fn audit_template_fixture(scenario: &AuditScenario) -> AuditTemplateFixture {
-    let slug = scenario.key.replace(':', "-");
-    let bytes = format!("canic-instruction-audit-{slug}").into_bytes();
-    let payload_hash = wasm_hash(&bytes);
-    let chunk_hashes = vec![wasm_hash(&bytes)];
-    let template_id = TemplateId::from(format!("audit:{slug}"));
-    let version = TemplateVersion::from(format!("instruction-audit-{slug}"));
-
-    AuditTemplateFixture {
-        manifest: TemplateManifestInput {
-            template_id: template_id.clone(),
-            role: APP,
-            version: version.clone(),
-            payload_hash: payload_hash.clone(),
-            payload_size_bytes: bytes.len() as u64,
-            store_binding: WasmStoreBinding::new("bootstrap"),
-            chunking_mode: TemplateChunkingMode::Chunked,
-            manifest_state: TemplateManifestState::Approved,
-            approved_at: None,
-            created_at: 0,
-        },
-        prepare: TemplateChunkSetPrepareInput {
-            template_id: template_id.clone(),
-            version: version.clone(),
-            payload_hash,
-            payload_size_bytes: bytes.len() as u64,
-            chunk_hashes,
-        },
-        chunk: TemplateChunkInput {
-            template_id,
-            version,
-            chunk_index: 0,
-            bytes,
-        },
-    }
-}
-
-// Stage one manifest through the root admin surface.
-fn stage_manifest(pic: &PocketIc, root_id: Principal, manifest: &TemplateManifestInput) {
-    let staged: Result<(), Error> = pic
-        .update_candid(
-            root_id,
-            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            (manifest.clone(),),
-        )
-        .expect("manifest staging transport failed");
-    staged.expect("manifest staging application failed");
-}
-
-// Prepare one staged chunk set through the root admin surface.
-fn prepare_chunk_set(pic: &PocketIc, root_id: Principal, request: &TemplateChunkSetPrepareInput) {
-    let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
-        .update_candid(
-            root_id,
-            protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
-            (request.clone(),),
-        )
-        .expect("template prepare transport failed");
-    let _ = prepared.expect("template prepare application failed");
-}
-
-// Publish one staged chunk through the root admin surface.
-fn publish_chunk(pic: &PocketIc, root_id: Principal, request: &TemplateChunkInput) {
-    let published: Result<(), Error> = pic
-        .update_candid(
-            root_id,
-            protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-            (request.clone(),),
-        )
-        .expect("template publish chunk transport failed");
-    published.expect("template publish chunk application failed");
-}
-
 // Read the current perf metrics table for one canister.
 fn perf_entries(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
-    let response: Result<Page<MetricEntry>, Error> = pic
+    let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
             canister_id,
-            protocol::CANIC_METRICS,
-            (
-                MetricsKind::Runtime,
-                PageRequest {
+            protocol::CANIC_STATUS,
+            (RoleStatusRequest::Metrics(MetricsStatusRequest {
+                kind: MetricsKind::Runtime,
+                page: PageRequest {
                     limit: PERF_PAGE_LIMIT,
                     offset: 0,
                 },
-            ),
+            }),),
         )
         .expect("perf metrics transport query failed");
 
-    response
-        .expect("perf metrics application query failed")
-        .entries
+    let RoleStatusResponse::Metrics(page) =
+        response.expect("perf metrics application query failed");
+    page.entries
 }
 
 // Derive one endpoint/timer delta from two perf snapshots.
@@ -724,15 +666,17 @@ fn root_capability_response_as(
         },
     };
 
-    let result: Result<Result<RootCapabilityResponseV1, Error>, _> = setup.pic.update_candid_as(
+    let result: Result<Result<RootCommandResponse, Error>, _> = setup.pic.update_candid_as(
         target_pid,
         caller,
-        protocol::CANIC_RESPONSE_CAPABILITY_V1,
-        (envelope,),
+        protocol::CANIC_COMMAND,
+        (RootCommand::RespondCapability(envelope),),
     );
-    result
-        .expect("root capability transport call failed")
-        .map(|response| response.response)
+    let response = result.expect("root capability transport call failed")?;
+    let RootCommandResponse::RespondCapability(response) = response else {
+        panic!("root capability command returned an uncorrelated response")
+    };
+    Ok(response.response)
 }
 
 // Read one canister's current time in nanoseconds for capability metadata issuance.

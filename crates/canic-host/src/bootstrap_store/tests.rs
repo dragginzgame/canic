@@ -103,6 +103,7 @@ fn wasm_store_build_uses_the_locked_resolver() {
     let command = wasm_store_cargo_build_command(
         &context,
         Path::new("/workspace/crates/canic-wasm-store/Cargo.toml"),
+        false,
     );
     assert!(command.get_args().any(|argument| argument == "--locked"));
 }

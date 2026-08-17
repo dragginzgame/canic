@@ -4,7 +4,10 @@ use crate::cycles::{
         CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample,
         CyclesCanisterStatus, CyclesCoverageStatus, CyclesReport,
     },
-    parse::{parse_cycle_tracker_page, parse_topup_event_page},
+    parse::{
+        CycleHistoryStatusResponse, CycleTopupsStatusResponse, parse_cycle_tracker_page,
+        parse_topup_event_page,
+    },
     transport::summarize_cycle_tracker,
 };
 use candid::{CandidType, Encode};
@@ -135,19 +138,21 @@ fn formats_cycle_history_durations() {
 
 #[test]
 fn parses_typed_cycle_tracker_page() {
-    let output = response_json(&Ok::<_, CanicError>(Page {
-        entries: vec![
-            CycleTrackerEntry {
-                timestamp_secs: 10,
-                cycles: Cycles::new(1_000),
-            },
-            CycleTrackerEntry {
-                timestamp_secs: 20,
-                cycles: Cycles::new(750),
-            },
-        ],
-        total: 2,
-    }));
+    let output = response_json(&Ok::<_, CanicError>(
+        CycleHistoryStatusResponse::CycleHistory(Page {
+            entries: vec![
+                CycleTrackerEntry {
+                    timestamp_secs: 10,
+                    cycles: Cycles::new(1_000),
+                },
+                CycleTrackerEntry {
+                    timestamp_secs: 20,
+                    cycles: Cycles::new(750),
+                },
+            ],
+            total: 2,
+        }),
+    ));
     let page = parse_cycle_tracker_page(&output).expect("parse page");
 
     assert_eq!(page.total, 2);
@@ -157,27 +162,29 @@ fn parses_typed_cycle_tracker_page() {
 
 #[test]
 fn parses_typed_topup_event_page() {
-    let output = response_json(&Ok::<_, CanicError>(Page {
-        entries: vec![
-            CycleTopupEvent {
-                timestamp_secs: 10,
-                sequence: 0,
-                requested_cycles: Cycles::new(4_000_000_000_000),
-                transferred_cycles: Some(Cycles::new(4_000_000_000_000)),
-                status: CycleTopupEventStatus::RequestOk,
-                error: None,
-            },
-            CycleTopupEvent {
-                timestamp_secs: 20,
-                sequence: 1,
-                requested_cycles: Cycles::new(4_000_000_000_000),
-                transferred_cycles: None,
-                status: CycleTopupEventStatus::RequestErr,
-                error: Some("no cycles".to_string()),
-            },
-        ],
-        total: 2,
-    }));
+    let output = response_json(&Ok::<_, CanicError>(
+        CycleTopupsStatusResponse::CycleTopups(Page {
+            entries: vec![
+                CycleTopupEvent {
+                    timestamp_secs: 10,
+                    sequence: 0,
+                    requested_cycles: Cycles::new(4_000_000_000_000),
+                    transferred_cycles: Some(Cycles::new(4_000_000_000_000)),
+                    status: CycleTopupEventStatus::RequestOk,
+                    error: None,
+                },
+                CycleTopupEvent {
+                    timestamp_secs: 20,
+                    sequence: 1,
+                    requested_cycles: Cycles::new(4_000_000_000_000),
+                    transferred_cycles: None,
+                    status: CycleTopupEventStatus::RequestErr,
+                    error: Some("no cycles".to_string()),
+                },
+            ],
+            total: 2,
+        }),
+    ));
     let page = parse_topup_event_page(&output).expect("parse topup page");
 
     assert_eq!(page.total, 2);

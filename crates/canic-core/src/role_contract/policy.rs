@@ -131,6 +131,9 @@ pub fn derive_role_capabilities(
             continue;
         };
 
+        if canister.topup.is_some() {
+            capabilities.insert(RoleCapabilityKey::AutomaticTopup);
+        }
         if canister.sharding.is_some() {
             capabilities.insert(RoleCapabilityKey::Sharding);
         }

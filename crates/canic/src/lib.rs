@@ -30,6 +30,7 @@ pub mod __internal {
     // NOTE:
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
+    pub use candid;
     #[cfg(any(
         feature = "control-plane",
         feature = "fleet-coordinator-canister",
@@ -37,6 +38,7 @@ pub mod __internal {
     ))]
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
+    pub use serde;
 
     pub mod cdk {
         pub use candid::Principal;

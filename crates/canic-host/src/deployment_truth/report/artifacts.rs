@@ -130,7 +130,7 @@ fn compare_planned_artifact_role_conflicts(
 
 fn planned_artifact_evidence_label(planned: &RoleArtifactV1) -> String {
     format!(
-        "wasm_gz_path={};wasm_gz={};file={};module={};raw_config={};canonical={}",
+        "wasm_gz_path={};wasm_gz={};file={};module={};candid={};profile={};raw_config={};canonical={}",
         planned.wasm_gz_path.as_deref().unwrap_or("<none>"),
         planned.wasm_gz_sha256.as_deref().unwrap_or("<none>"),
         planned
@@ -138,6 +138,11 @@ fn planned_artifact_evidence_label(planned: &RoleArtifactV1) -> String {
             .as_deref()
             .unwrap_or("<none>"),
         planned.installed_module_hash.as_deref().unwrap_or("<none>"),
+        planned.candid_sha256.as_deref().unwrap_or("<none>"),
+        planned
+            .protocol_profile_digest
+            .as_deref()
+            .unwrap_or("<none>"),
         planned.raw_config_sha256.as_deref().unwrap_or("<none>"),
         planned
             .canonical_embedded_config_sha256

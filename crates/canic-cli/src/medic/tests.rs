@@ -1119,7 +1119,7 @@ fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
     assert!(!candid_declares_blob_storage_billing(
         r"
             service : {
-                canic_ready : () -> (bool) query;
+                canic_status : (variant { Readiness }) -> (bool) query;
             }
         "
     ));

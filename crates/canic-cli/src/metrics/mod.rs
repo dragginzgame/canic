@@ -20,8 +20,6 @@ use canic_host::{
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
-const CANIC_METRICS_METHOD: &str = "canic_metrics";
-
 ///
 /// MetricsCommandError
 ///

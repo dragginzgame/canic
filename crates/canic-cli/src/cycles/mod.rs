@@ -71,9 +71,6 @@ pub enum CyclesCommandError {
         diagnostic: String,
     },
 
-    #[error("live ICP refill returned a dry-run response")]
-    IcpRefillUnexpectedResponse,
-
     #[error(transparent)]
     RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),
 
