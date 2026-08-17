@@ -271,9 +271,8 @@ fn issue_requested_role_attestation(
             (RootCommand::PrepareRoleAttestation(request),),
         )
         .expect("role attestation prepare transport");
-    let prepared = match prepared.expect("role attestation prepare") {
-        RootCommandResponse::PrepareRoleAttestation(prepared) => prepared,
-    };
+    let RootCommandResponse::PrepareRoleAttestation(prepared) =
+        prepared.expect("role attestation prepare");
     let signed: Result<RootStatusResponse, Error> = pic
         .query_candid_as(
             root,
