@@ -15,7 +15,7 @@ use super::{
     inputs::build_input_fingerprints,
     model::{
         BUILD_PROVENANCE_SCHEMA_ID, BuildProvenanceRequest, BuildProvenanceStatusV1,
-        BuildProvenanceV1, SourceVcsV1,
+        BuildProvenanceV1, ProtocolProfileProvenanceV1, SourceVcsV1,
     },
     source::source_provenance,
 };
@@ -106,6 +106,10 @@ fn build_provenance_payload(
         build_status: BuildProvenanceStatusV1::Success,
         source,
         cargo: cargo_provenance(request, package_manifest)?,
+        protocol_profile: ProtocolProfileProvenanceV1 {
+            candid_sha256: canic_core::cdk::utils::hash::hex_bytes(request.output.candid_sha256),
+            protocol_profile_digest: request.output.protocol_profile_digest.to_string(),
+        },
         artifacts: artifact_provenance(request)?,
         transforms: artifact_transform_provenance(request)?,
         warnings,

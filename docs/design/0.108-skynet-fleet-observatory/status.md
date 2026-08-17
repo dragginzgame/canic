@@ -22,7 +22,8 @@ Date: 2026-08-16
   projection delivery is a receiving-role command variant. Recipient,
   freshness, metrics and propagation phases add no Canic method; Skynet HTTP
   remains application-owned or externally fixed. Status authority is variant-
-  specific, and capability display reuses the one source frozen by 0.103 B1.
+  specific, and capability display reuses 0.103 B1's exact external protocol-
+  profile identity with bounded `Overview` serving only as verification.
 
 Empty module-free 0.107 estate assets appear in installed Canister pages but
 cannot serve HTTP without ceasing to be empty. “Every Canister” therefore

@@ -1,178 +1,175 @@
 //! Module: macros::endpoints::fleet_coordinator
 //!
-//! Responsibility: emit the dedicated Fleet Coordinator endpoint surface.
+//! Responsibility: emit the dedicated Fleet Coordinator role surface.
 //! Does not own: Registry state, validation, lifecycle orchestration, or root behavior.
 //! Boundary: every export delegates immediately to the Coordinator API facade.
 
-/// Emit the controller-facing Fleet Coordinator endpoint surface.
+/// Emit the Fleet Coordinator's exact command and status methods.
 #[macro_export]
 macro_rules! canic_emit_fleet_coordinator_endpoints {
     () => {
-        $crate::canic_emit_authority_restore_endpoints!();
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_registry(
-        ) -> Result<::canic::dto::fleet_registry::FleetRegistry, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::registry()
+        #[doc(hidden)]
+        const fn __canic_fleet_coordinator_payload_max_bytes(
+            command: &::canic::dto::fleet_coordinator::CoordinatorCommand,
+        ) -> usize {
+            match command {
+                ::canic::dto::fleet_coordinator::CoordinatorCommand::ProvisionComponents(_) => {
+                    ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES
+                }
+                _ => {
+                    ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES
+                }
+            }
         }
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_manifest(
-        ) -> Result<::canic::dto::fleet_registry::FleetRegistryManifest, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::manifest()
-        }
+        #[doc(hidden)]
+        fn __canic_inspect_fleet_coordinator_update_message() {
+            if $crate::__internal::core::ingress::payload::current_method_name()
+                != $crate::__internal::core::protocol::CANIC_COMMAND
+            {
+                $crate::__internal::core::ingress::payload::inspect_update_message();
+                return;
+            }
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_version(
-        ) -> Result<::canic::dto::fleet_registry::FleetRegistryVersion, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version()
-        }
-
-        #[$crate::canic_update(
-            requires(caller::is_controller()),
-            payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::fleet_registry::MAX_FLEET_REGISTRY_CANONICAL_BYTES)
-        )]
-        async fn canic_fleet_subnet_root_join(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootJoinRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootJoinResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::join_root(
-                request,
-            )
-        }
-
-        #[$crate::canic_update(public)]
-        async fn canic_fleet_registry_snapshot_for_root(
-        ) -> Result<::canic::dto::fleet_registry::FleetRegistrySnapshotResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::snapshot_for_calling_root()
-        }
-
-        #[$crate::canic_update(public)]
-        async fn canic_fleet_registry_acknowledge_root(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::acknowledge_calling_root_snapshot(
-                request,
-            )
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_root_acknowledgements(
-        ) -> Result<Vec<::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement>, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_snapshot_acknowledgements()
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_activate(
-            request: ::canic::dto::fleet_registry::FleetRegistryActivationRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetRegistryActivationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::activate_registry(
-                request,
-            )
+            let bytes = $crate::__internal::core::ingress::payload::current_payload_bytes();
+            if bytes.len()
+                > ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES
+            {
+                return;
+            }
+            let Ok(command) = ::canic::__internal::candid::decode_one::<
+                ::canic::dto::fleet_coordinator::CoordinatorCommand,
+            >(&bytes)
+            else {
+                return;
+            };
+            if $crate::__internal::core::ingress::payload::payload_within_limit(
+                bytes.len(),
+                __canic_fleet_coordinator_payload_max_bytes(&command),
+            ) {
+                $crate::__internal::core::ingress::payload::accept_current_message();
+            }
         }
 
         #[$crate::canic_update(
-            requires(caller::is_controller()),
+            public,
             payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES)
         )]
-        async fn canic_fleet_component_provisioning_prepare(
-            request: ::canic::dto::component_provisioning::FleetComponentProvisioningPrepareRequest,
-        ) -> Result<::canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_component_provisioning(
-                request,
+        async fn canic_command(
+            command: ::canic::dto::fleet_coordinator::CoordinatorCommand,
+        ) -> Result<::canic::dto::fleet_coordinator::CoordinatorCommandResponse, ::canic::Error>
+        {
+            use ::canic::dto::fleet_coordinator::CoordinatorCommand;
+
+            if !$crate::__internal::core::ingress::payload::payload_within_limit(
+                $crate::__internal::cdk::raw::msg_arg_data_size(),
+                __canic_fleet_coordinator_payload_max_bytes(&command),
+            ) {
+                return Err(::canic::Error::from_registered(
+                    $crate::__internal::core::diagnostics::codes::REQUEST_CAPACITY,
+                ));
+            }
+
+            let recovery_command = matches!(
+                &command,
+                CoordinatorCommand::PrepareAuthoritySnapshot(_)
+                    | CoordinatorCommand::ResumeAuthoritySnapshot(_)
+            );
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
+                recovery_command,
+            )?;
+            let controller_command = matches!(
+                &command,
+                CoordinatorCommand::ActivateRegistry(_)
+                    | CoordinatorCommand::CompleteRootDeletion(_)
+                    | CoordinatorCommand::JoinRoot(_)
+                    | CoordinatorCommand::PrepareAuthoritySnapshot(_)
+                    | CoordinatorCommand::PrepareRootDeletionExecution(_)
+                    | CoordinatorCommand::ProvisionComponents(_)
+                    | CoordinatorCommand::RemoveRoot(_)
+                    | CoordinatorCommand::ResumeAuthoritySnapshot(_)
+            );
+            if controller_command {
+                let caller = $crate::__internal::cdk::api::msg_caller();
+                $crate::__internal::core::access::auth::is_controller(caller)
+                    .await
+                    .map_err(::canic::Error::from)?;
+            }
+            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::command(
+                command,
             )
+            .await
         }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_component_provisioning_advance(
-            request: ::canic::dto::component_provisioning::FleetComponentProvisioningAdvanceRequest,
-        ) -> Result<::canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::advance_component_provisioning(
-                request,
-            ).await
-        }
+        #[$crate::canic_query(public)]
+        async fn canic_status(
+            request: ::canic::dto::fleet_coordinator::CoordinatorStatusRequest,
+        ) -> Result<::canic::dto::fleet_coordinator::CoordinatorStatusResponse, ::canic::Error>
+        {
+            use ::canic::dto::fleet_coordinator::{
+                CoordinatorStatusRequest, CoordinatorStatusResponse,
+            };
 
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_component_provisioning_status(
-            request: ::canic::dto::component_provisioning::FleetComponentProvisioningStatusRequest,
-        ) -> Result<::canic::dto::component_provisioning::FleetComponentProvisioningStatusResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::component_provisioning_status(
-                request,
-            )
-        }
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            if !matches!(
+                &request,
+                CoordinatorStatusRequest::Operation(_)
+                    | CoordinatorStatusRequest::Overview
+                    | CoordinatorStatusRequest::Registry
+            ) {
+                $crate::__internal::core::access::auth::is_controller(caller)
+                    .await
+                    .map_err(::canic::Error::from)?;
+            }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_publish_root_draining(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingPublicationRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingPublicationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::publish_root_draining(
-                request,
-            )
-        }
-
-
-        #[$crate::canic_update(public)]
-        async fn canic_fleet_registry_publish_root_removed(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootRemovalPublicationRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootRemovalPublicationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::publish_root_removed(
-                request,
-            )
-        }
-
-        #[$crate::canic_update(public)]
-        async fn canic_fleet_registry_root_deletion_readiness_prepare(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessIntentRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessIntentResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_root_deletion_readiness(request)
-        }
-
-        #[$crate::canic_update(public)]
-        async fn canic_fleet_registry_root_deletion_ready(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionReadinessResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::record_root_deletion_readiness(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_root_deletion_execution_begin(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionExecutionRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionExecutionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::begin_root_deletion_execution(request)
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_root_deletion_execution_status(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionStatusRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionExecutionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_deletion_execution_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_root_deletion_complete(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionCompletionRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::complete_root_deletion(request)
-        }
-
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_root_deletion_status(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDeletionStatusRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDeletionResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_deletion_status(request)
-        }
-
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_fleet_registry_root_draining_reservation_prepare(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::prepare_root_draining_reservation(request)
-        }
-
-        #[$crate::canic_update(public)]
-        async fn canic_fleet_registry_root_draining_reservation_status(
-            request: ::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationStatusRequest,
-        ) -> Result<::canic::dto::fleet_registry::FleetSubnetRootDrainingReservationResponse, ::canic::Error> {
-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_draining_reservation_status(request)
+            match request {
+                CoordinatorStatusRequest::AuthorityRestore => {
+                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
+                        .map(CoordinatorStatusResponse::AuthorityRestore)
+                }
+                CoordinatorStatusRequest::Operation(request) => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::operation_status(
+                        request.operation_id,
+                    )
+                    .map(CoordinatorStatusResponse::Operation)
+                }
+                CoordinatorStatusRequest::Overview => {
+                    let capabilities = ::std::collections::BTreeSet::from([
+                        $crate::__internal::core::role_contract::RoleCapabilityKey::FleetCoordinator,
+                    ]);
+                    Ok(CoordinatorStatusResponse::Overview(
+                        $crate::__internal::core::api::role::RoleOverviewApi::overview(
+                            $crate::__internal::core::ids::CanisterRole::from("fleet_coordinator"),
+                            &capabilities,
+                            $crate::__canic_protocol_profile_digest!(),
+                            $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
+                                env!("CARGO_PKG_NAME"),
+                                env!("CARGO_PKG_VERSION"),
+                                env!("CARGO_PKG_DESCRIPTION"),
+                                $crate::VERSION,
+                                $crate::__internal::cdk::api::canister_version(),
+                            ),
+                            $crate::__internal::core::api::ready::ReadyApi::bootstrap_status(),
+                        ),
+                    ))
+                }
+                CoordinatorStatusRequest::Registry => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::registry_for_calling_status()
+                        .map(CoordinatorStatusResponse::Registry)
+                }
+                CoordinatorStatusRequest::RegistryManifest => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::manifest()
+                        .map(CoordinatorStatusResponse::RegistryManifest)
+                }
+                CoordinatorStatusRequest::RegistryVersion => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version()
+                        .map(CoordinatorStatusResponse::RegistryVersion)
+                }
+                CoordinatorStatusRequest::RootAcknowledgements => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_snapshot_acknowledgements()
+                        .map(CoordinatorStatusResponse::RootAcknowledgements)
+                }
+            }
         }
     };
 }

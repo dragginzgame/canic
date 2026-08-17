@@ -91,17 +91,6 @@ where
     invoke_with_arg(icp, canister, method, input, ProtocolCallMode::Update)
 }
 
-pub fn query_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-) -> Result<O, CanisterProtocolError>
-where
-    O: CandidType + DeserializeOwned,
-{
-    invoke_no_arg(icp, canister, method, ProtocolCallMode::Query)
-}
-
 pub fn query_with_arg<I, O>(
     icp: &IcpCli,
     canister: Principal,
@@ -113,39 +102,6 @@ where
     O: CandidType + DeserializeOwned,
 {
     invoke_with_arg(icp, canister, method, input, ProtocolCallMode::Query)
-}
-
-fn invoke_no_arg<O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-    mode: ProtocolCallMode,
-) -> Result<O, CanisterProtocolError>
-where
-    O: CandidType + DeserializeOwned,
-{
-    let canister_text = canister.to_text();
-    let output = match mode {
-        ProtocolCallMode::Query => icp.canister_query_output_with_candid(
-            &canister_text,
-            method,
-            Some(ICP_JSON_OUTPUT),
-            None,
-        ),
-        ProtocolCallMode::Update => icp.canister_call_arg_output_with_candid(
-            &canister_text,
-            method,
-            "()",
-            Some(ICP_JSON_OUTPUT),
-            None,
-        ),
-    }
-    .map_err(|source| CanisterProtocolError::Invocation {
-        canister,
-        method,
-        source,
-    })?;
-    decode_response(canister, method, &output)
 }
 
 fn invoke_with_arg<I, O>(

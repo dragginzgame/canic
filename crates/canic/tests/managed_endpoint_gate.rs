@@ -234,13 +234,12 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         "only the root, non-root and Wasm Store activation adapters may schedule application install hooks"
     );
 
-    let nonroot_path = workspace.join("crates/canic/src/macros/endpoints/nonroot.rs");
+    let nonroot_path = workspace.join("crates/canic/src/macros/endpoints/role.rs");
     let nonroot_endpoints = fs::read_to_string(&nonroot_path)
         .unwrap_or_else(|error| panic!("read {}: {error}", nonroot_path.display()));
     assert!(
-        nonroot_endpoints.contains(
-            "__canic_schedule_prepared_activation_init(transition.application_init_args);"
-        ),
+        nonroot_endpoints.contains("__canic_schedule_prepared_activation_init(")
+            && nonroot_endpoints.contains("transition.application_init_args,"),
         "managed non-root activation must hand durable init bytes to the lifecycle adapter"
     );
 
@@ -254,7 +253,7 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
 }
 
 #[test]
-fn standalone_local_bundle_excludes_managed_fleet_activation_updates() {
+fn standalone_local_emits_only_local_status_and_standards() {
     let workspace = workspace_root();
     let start_path = workspace.join("crates/canic/src/macros/start.rs");
     let start = fs::read_to_string(&start_path)
@@ -269,38 +268,11 @@ fn standalone_local_bundle_excludes_managed_fleet_activation_updates() {
         .and_then(|rest| rest.split("macro_rules! start_wasm_store").next())
         .expect("standalone-local start macro");
     assert!(
-        local_start.contains("canic_bundle_local_nonroot_only_endpoints!()")
-            && !local_start.contains("canic_bundle_managed_nonroot_only_endpoints!()"),
-        "standalone-local startup must select only its local endpoint bundle"
-    );
-
-    let local_bundle = bundles
-        .split("macro_rules! canic_bundle_local_nonroot_only_endpoints")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("macro_rules! canic_bundle_wasm_store_runtime_endpoints")
-                .next()
-        })
-        .expect("standalone-local endpoint bundle");
-    assert!(
-        local_bundle.contains("canic_emit_nonroot_sync_topology_endpoints!()")
-            && !local_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()"),
-        "standalone-local canisters must not export managed Fleet activation updates"
-    );
-
-    let managed_bundle = bundles
-        .split("macro_rules! canic_bundle_managed_nonroot_only_endpoints")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("macro_rules! canic_bundle_local_nonroot_only_endpoints")
-                .next()
-        })
-        .expect("managed non-root endpoint bundle");
-    assert!(
-        managed_bundle.contains("canic_emit_component_runtime_endpoints!()")
-            && !managed_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()")
-            && !managed_bundle.contains("canic_emit_nonroot_sync_topology_endpoints!()"),
-        "managed Components must expose only their Directory-bound runtime activation surface"
+        local_start.contains("__canic_emit_local_status_endpoint!()")
+            && local_start.contains("canic_emit_icrc_standards_endpoints!()")
+            && !local_start.contains("__canic_emit_managed_command_endpoint!()")
+            && !local_start.contains("__canic_emit_managed_status_endpoint!()"),
+        "standalone-local startup must expose only local status and standards"
     );
 
     let store_bundle = bundles
@@ -308,8 +280,42 @@ fn standalone_local_bundle_excludes_managed_fleet_activation_updates() {
         .nth(1)
         .expect("Wasm Store endpoint bundle");
     assert!(
-        store_bundle.contains("canic_emit_nonroot_fleet_activation_endpoints!()")
-            && store_bundle.contains("canic_emit_nonroot_sync_topology_endpoints!()"),
-        "Wasm Store must retain its current Fleet cascade activation surface"
+        store_bundle.contains("canic_emit_local_wasm_store_endpoints!()")
+            && store_bundle.matches("canic_emit_").count() == 1,
+        "Wasm Store control must be owned by its role command/status dispatcher"
+    );
+}
+
+#[test]
+fn managed_start_remains_a_thin_profile_surface_composer() {
+    let workspace = workspace_root();
+    let start_path = workspace.join("crates/canic/src/macros/start.rs");
+    let source = fs::read_to_string(&start_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", start_path.display()));
+    let managed_start = source
+        .split("macro_rules! start")
+        .nth(1)
+        .and_then(|rest| rest.split("macro_rules! start_local").next())
+        .expect("managed start macro");
+
+    for emitter in [
+        "__canic_root_lifecycle_core!",
+        "__canic_start_nonroot_lifecycle_core!",
+        "__canic_start_ingress_payload_inspect!",
+        "__canic_emit_managed_command_endpoint!",
+        "__canic_emit_managed_status_endpoint!",
+        "canic_bundle_root_only_endpoints!",
+    ] {
+        assert!(
+            managed_start.contains(emitter),
+            "managed start macro must compose {emitter}"
+        );
+    }
+    assert!(
+        !managed_start.contains("workflow::")
+            && !managed_start.contains(".await")
+            && !managed_start.contains("fn canic_status")
+            && !managed_start.contains("fn canic_command"),
+        "start! must compose lifecycle and role emitters without owning orchestration or protocol handlers"
     );
 }

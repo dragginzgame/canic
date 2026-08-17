@@ -48,6 +48,7 @@ pub enum IcpJsonResponseError {
 }
 
 /// Decode a plain Candid value from the canonical ICP CLI JSON envelope.
+#[cfg(test)]
 pub fn decode_json_response<T>(output: &str) -> Result<T, IcpJsonResponseError>
 where
     T: CandidType + DeserializeOwned,

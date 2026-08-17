@@ -16,6 +16,7 @@ use canic_core::{
             RootComponentPublicationRequest,
         },
         error::Error,
+        role::OperationReceipt,
     },
 };
 
@@ -25,8 +26,8 @@ pub struct RootComponentProvisioningApi;
 impl RootComponentProvisioningApi {
     pub async fn accept(
         request: RootComponentProvisioningAcceptanceRequest,
-    ) -> Result<RootComponentProvisioningStatusResponse, Error> {
-        component_provisioning::accept(IcOps::msg_caller(), request)
+    ) -> Result<OperationReceipt, Error> {
+        component_provisioning::accept_and_schedule(IcOps::msg_caller(), request)
             .await
             .map_err(Into::into)
     }

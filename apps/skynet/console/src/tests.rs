@@ -38,7 +38,7 @@ fn snapshot() -> ConsoleSnapshot {
             detail: "full profile".to_string(),
         }],
         endpoints: vec![Endpoint {
-            name: "canic_ready".to_string(),
+            name: "canic_status".to_string(),
             mode: "query".to_string(),
             access: "public".to_string(),
             purpose: "runtime readiness".to_string(),
@@ -148,7 +148,7 @@ fn unsupported_method_and_unknown_path_fail_closed() {
 }
 
 #[test]
-fn endpoint_highlights_are_centralized_sorted_and_surface_aware() {
+fn endpoint_highlights_are_centralized_sorted_and_consolidated() {
     let component = endpoint_highlights(
         StandardEndpointSurface::Component,
         [endpoint("skynet_probe", "query", "public", "demo probe")],
@@ -156,11 +156,13 @@ fn endpoint_highlights_are_centralized_sorted_and_surface_aware() {
     let root = endpoint_highlights(StandardEndpointSurface::Root, []);
 
     assert!(component.is_sorted_by(|left, right| left.name <= right.name));
-    assert!(
-        component
-            .iter()
-            .any(|entry| entry.name == "canic_memory_ledger")
-    );
+    assert!(component.iter().any(|entry| entry.name == "canic_command"));
+    assert!(component.iter().any(|entry| entry.name == "canic_status"));
     assert!(component.iter().any(|entry| entry.name == "skynet_probe"));
-    assert!(root.iter().all(|entry| entry.name != "canic_memory_ledger"));
+    assert_eq!(
+        root.iter()
+            .filter(|entry| entry.name == "canic_status")
+            .count(),
+        1
+    );
 }

@@ -2,13 +2,13 @@ use super::{QueryOutcome, decode_query_response, decode_status_root_key, encode_
 
 #[test]
 fn anonymous_query_envelope_has_exact_wire_bytes() {
-    let bytes = encode_anonymous_query(&[1, 2, 3], "canic_ready", &[0x44, 0x49, 0x44, 0x4c], 42)
+    let bytes = encode_anonymous_query(&[1, 2, 3], "canic_status", &[0x44, 0x49, 0x44, 0x4c], 42)
         .expect("encode query");
 
     assert_eq!(
         bytes,
         fixture(
-            "a167636f6e74656e74a66c726571756573745f747970656571756572796b63616e69737465725f6964430102036b6d6574686f645f6e616d656b63616e69635f726561647963617267444449444c6673656e64657241046e696e67726573735f657870697279182a"
+            "a167636f6e74656e74a66c726571756573745f747970656571756572796b63616e69737465725f6964430102036b6d6574686f645f6e616d656c63616e69635f73746174757363617267444449444c6673656e64657241046e696e67726573735f657870697279182a"
         )
     );
 }

@@ -111,6 +111,7 @@ use canic_core::{
         ComponentSpecId, FleetSubnetRootBinding, FleetSubnetRootReleaseSet, IntentId,
         ManagedCanisterBinding,
     },
+    role_contract::ProtocolProfileDigest,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -445,6 +446,7 @@ struct ComponentAllocationPartitionAuthority<'a> {
     component_spec: &'a ComponentSpecId,
     spec_hash: [u8; 32],
     role: &'a CanisterRole,
+    protocol_profile_digest: ProtocolProfileDigest,
     provisioning_origin: &'a ComponentProvisioningOrigin,
     release_set: FleetSubnetRootReleaseSet,
     binding: &'a ComponentBinding,
@@ -458,6 +460,7 @@ impl<'a> ComponentAllocationPartitionAuthority<'a> {
             component_spec: &partition.binding.component_spec,
             spec_hash: partition.binding.spec_hash,
             role: &partition.binding.role,
+            protocol_profile_digest: partition.protocol_profile_digest,
             provisioning_origin: &partition.provisioning_origin,
             release_set: partition.release_set,
             binding: &partition.binding,
@@ -499,6 +502,7 @@ impl<'a> ComponentAllocationPartitionAuthority<'a> {
             component_spec: &record.component_spec,
             spec_hash: record.spec_hash,
             role: &record.role,
+            protocol_profile_digest: installation.protocol_profile_digest,
             provisioning_origin: &record.provisioning_origin,
             release_set: record.release_set,
             binding: &installation.binding,
@@ -1065,6 +1069,7 @@ impl RootComponentCreationPlan {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentInstallPlan {
     pub raw_module_hash: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentBinding,
     pub maximum_registry_bytes: u64,
@@ -1073,6 +1078,7 @@ pub struct RootComponentInstallPlan {
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentInstallAuthority<'a> {
     raw_module_hash: [u8; 32],
+    protocol_profile_digest: ProtocolProfileDigest,
     chunk_hashes: &'a [Vec<u8>],
     binding: &'a ComponentBinding,
 }
@@ -1081,6 +1087,7 @@ impl<'a> From<&'a RootComponentInstallPlan> for RootComponentInstallAuthority<'a
     fn from(plan: &'a RootComponentInstallPlan) -> Self {
         Self {
             raw_module_hash: plan.raw_module_hash,
+            protocol_profile_digest: plan.protocol_profile_digest,
             chunk_hashes: &plan.chunk_hashes,
             binding: &plan.binding,
         }
@@ -1091,6 +1098,7 @@ impl<'a> From<&'a RootComponentInstallEffectView> for RootComponentInstallAuthor
     fn from(effect: &'a RootComponentInstallEffectView) -> Self {
         Self {
             raw_module_hash: effect.raw_module_hash,
+            protocol_profile_digest: effect.protocol_profile_digest,
             chunk_hashes: &effect.chunk_hashes,
             binding: &effect.binding,
         }
@@ -1112,6 +1120,7 @@ impl RootComponentInstallPlan {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentChildInstallPlan {
     pub raw_module_hash: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentChildBinding,
     pub maximum_registry_bytes: u64,
@@ -1120,6 +1129,7 @@ pub struct RootComponentChildInstallPlan {
 #[derive(Debug, Eq, PartialEq)]
 struct RootComponentChildInstallAuthority<'a> {
     raw_module_hash: [u8; 32],
+    protocol_profile_digest: ProtocolProfileDigest,
     chunk_hashes: &'a [Vec<u8>],
     binding: &'a ComponentChildBinding,
 }
@@ -1136,6 +1146,7 @@ impl<'a> From<&'a RootComponentChildInstallPlan> for RootComponentChildInstallAu
     fn from(plan: &'a RootComponentChildInstallPlan) -> Self {
         Self {
             raw_module_hash: plan.raw_module_hash,
+            protocol_profile_digest: plan.protocol_profile_digest,
             chunk_hashes: &plan.chunk_hashes,
             binding: &plan.binding,
         }
@@ -1146,6 +1157,7 @@ impl<'a> From<&'a RootComponentChildInstallEffectView> for RootComponentChildIns
     fn from(effect: &'a RootComponentChildInstallEffectView) -> Self {
         Self {
             raw_module_hash: effect.raw_module_hash,
+            protocol_profile_digest: effect.protocol_profile_digest,
             chunk_hashes: &effect.chunk_hashes,
             binding: &effect.binding,
         }
@@ -1175,6 +1187,20 @@ impl ComponentRegistryOps {
             }
         }
         Ok(canisters.into_iter().collect())
+    }
+
+    /// Return every current top-level Component partition in canonical identity order.
+    pub(crate) fn root_component_partitions()
+    -> Result<Vec<ComponentRegistryPartitionView>, InternalError> {
+        let mut partitions = RootComponentRegistryStore::partitions();
+        partitions.sort_by_key(|partition| partition.binding.component);
+        partitions
+            .into_iter()
+            .map(|partition| {
+                validate_partition_record(&partition)?;
+                Ok(partition_record_to_view(partition))
+            })
+            .collect()
     }
 
     /// Resolve exact active top-level members selected by a Fleet-service Directory barrier.
@@ -1265,6 +1291,7 @@ impl ComponentRegistryOps {
             .ok_or_else(InternalError::resource_exhausted)?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
+            partition.protocol_profile_digest,
             &partition.provisioning_origin,
             partition.release_set,
             partition.status,
@@ -2917,6 +2944,7 @@ impl ComponentRegistryOps {
             canister,
             installation: RootComponentInstallEffectRecord {
                 raw_module_hash: plan.raw_module_hash,
+                protocol_profile_digest: plan.protocol_profile_digest,
                 chunk_hashes: plan.chunk_hashes,
                 binding: plan.binding,
                 cost_guard_settlement,
@@ -2964,6 +2992,7 @@ impl ComponentRegistryOps {
             canister,
             installation: RootComponentInstallEffectRecord {
                 raw_module_hash: plan.raw_module_hash,
+                protocol_profile_digest: plan.protocol_profile_digest,
                 chunk_hashes: plan.chunk_hashes.clone(),
                 binding: plan.binding.clone(),
                 cost_guard_settlement,
@@ -3182,6 +3211,51 @@ impl ComponentRegistryOps {
         )))
     }
 
+    /// Resolve the immutable install/runtime operation owned by one active managed binding.
+    pub(crate) fn managed_runtime_operation_id(
+        binding: &ManagedCanisterBinding,
+    ) -> Result<[u8; 32], InternalError> {
+        let (component, canister) = match binding {
+            ManagedCanisterBinding::Component(binding) => {
+                let partition = RootComponentRegistryStore::partition(binding.component)
+                    .ok_or_else(InternalError::invariant)?;
+                validate_partition_record(&partition)?;
+                if &partition.binding != binding {
+                    return Err(InternalError::conflict());
+                }
+                let allocation = committed_component_allocation(&partition)?;
+                return Ok(allocation.operation_id);
+            }
+            ManagedCanisterBinding::ComponentChild(binding) => {
+                (binding.component.component, binding.canister_id)
+            }
+        };
+
+        let Some((registered, status)) = Self::registered_parent(component, canister)? else {
+            return Err(InternalError::unavailable());
+        };
+        if &registered != binding || status != ComponentLifecycleStatus::Active {
+            return Err(InternalError::conflict());
+        }
+        let mut matches = RootComponentRegistryStore::child_allocations(component)
+            .into_iter()
+            .filter(|record| {
+                matches!(
+                    &record.progress,
+                    RootComponentChildAllocationProgressRecord::Committed {
+                        canister: committed,
+                        ..
+                    } if *committed == canister
+                )
+            });
+        let record = matches.next().ok_or_else(InternalError::invariant)?;
+        if matches.next().is_some() {
+            return Err(InternalError::invariant());
+        }
+        validate_child_allocation_record(&record)?;
+        Ok(record.operation_id)
+    }
+
     pub(crate) fn child_allocation(
         component: ComponentInstanceId,
         operation_id: [u8; 32],
@@ -3190,6 +3264,24 @@ impl ComponentRegistryOps {
         else {
             return Ok(None);
         };
+        validate_child_allocation_record(&record)?;
+        Ok(Some(child_allocation_record_to_view(record)))
+    }
+
+    /// Resolve one direct-child allocation through its domain-owned operation identity.
+    pub(crate) fn child_allocation_by_operation(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootComponentChildAllocationView>, InternalError> {
+        let mut matches = RootComponentRegistryStore::registry_components()
+            .into_iter()
+            .flat_map(RootComponentRegistryStore::child_allocations)
+            .filter(|record| record.operation_id == operation_id);
+        let Some(record) = matches.next() else {
+            return Ok(None);
+        };
+        if matches.next().is_some() {
+            return Err(InternalError::invariant());
+        }
         validate_child_allocation_record(&record)?;
         Ok(Some(child_allocation_record_to_view(record)))
     }
@@ -3212,6 +3304,30 @@ impl ComponentRegistryOps {
         Ok(Some(subtree_removal_record_to_view(record)))
     }
 
+    /// Resolve one subtree removal through its domain-owned operation identity.
+    pub(crate) fn subtree_removal_by_operation(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootComponentSubtreeRemovalView>, InternalError> {
+        let mut matches = RootComponentRegistryStore::registry_components()
+            .into_iter()
+            .flat_map(RootComponentRegistryStore::subtree_removals)
+            .filter(|record| record.operation_id == operation_id);
+        let Some(record) = matches.next() else {
+            return Ok(None);
+        };
+        if matches.next().is_some() {
+            return Err(InternalError::invariant());
+        }
+        validate_subtree_removal_record(&record)?;
+        let current = RootComponentRegistryStore::current().ok_or_else(InternalError::invariant)?;
+        validate_subtree_removal_root(&record, &current.root)?;
+        let partition = RootComponentRegistryStore::partition(record.component)
+            .ok_or_else(InternalError::invariant)?;
+        validate_partition_record(&partition)?;
+        validate_subtree_removal_progress(&partition, &record)?;
+        Ok(Some(subtree_removal_record_to_view(record)))
+    }
+
     pub(crate) fn component_draining(
         component: ComponentInstanceId,
     ) -> Result<Option<RootComponentDrainingView>, InternalError> {
@@ -3226,6 +3342,29 @@ impl ComponentRegistryOps {
             None => {
                 validate_removed_component_authority(&record)?;
             }
+        }
+        Ok(Some(component_draining_record_to_view(record)))
+    }
+
+    /// Resolve one top-level Component draining operation through its durable identity.
+    pub(crate) fn component_draining_by_operation(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootComponentDrainingView>, InternalError> {
+        let mut matches = RootComponentRegistryStore::component_drainings()
+            .into_iter()
+            .filter(|record| record.operation_id == operation_id);
+        let Some(record) = matches.next() else {
+            return Ok(None);
+        };
+        if matches.next().is_some() {
+            return Err(InternalError::invariant());
+        }
+        match RootComponentRegistryStore::partition(record.component) {
+            Some(partition) => {
+                validate_partition_record(&partition)?;
+                validate_component_draining_record(&partition, &record)?;
+            }
+            None => validate_removed_component_authority(&record)?,
         }
         Ok(Some(component_draining_record_to_view(record)))
     }
@@ -3295,6 +3434,7 @@ impl ComponentRegistryOps {
             .ok_or_else(InternalError::resource_exhausted)?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
+            partition.protocol_profile_digest,
             &partition.provisioning_origin,
             partition.release_set,
             ComponentLifecycleStatus::Draining,
@@ -4531,6 +4671,7 @@ impl ComponentRegistryOps {
         )?;
         let content_hash = component_partition_content_hash(
             &partition.binding,
+            partition.protocol_profile_digest,
             &partition.provisioning_origin,
             partition.release_set,
             partition.status,
@@ -5209,6 +5350,7 @@ impl ComponentRegistryOps {
             canister,
             installation: RootComponentChildInstallEffectRecord {
                 raw_module_hash: plan.raw_module_hash,
+                protocol_profile_digest: plan.protocol_profile_digest,
                 chunk_hashes: plan.chunk_hashes,
                 binding: plan.binding,
                 cost_guard_settlement,
@@ -5265,6 +5407,7 @@ impl ComponentRegistryOps {
             canister,
             installation: RootComponentChildInstallEffectRecord {
                 raw_module_hash: plan.raw_module_hash,
+                protocol_profile_digest: plan.protocol_profile_digest,
                 chunk_hashes: plan.chunk_hashes.clone(),
                 binding: plan.binding.clone(),
                 cost_guard_settlement,
@@ -6568,6 +6711,9 @@ fn root_store_final_inventory_evidence(
 ) -> Result<RootStoreFinalInventoryEvidence, InternalError> {
     let catalog_entries =
         u32::try_from(store.catalog.len()).map_err(|_| InternalError::invariant())?;
+    let expected_store_entries = catalog_entries
+        .checked_add(1)
+        .ok_or_else(InternalError::invariant)?;
     let template_entries =
         u32::try_from(status.templates.len()).map_err(|_| InternalError::invariant())?;
     let gc_prepared_at_secs = status.gc.prepared_at.ok_or_else(InternalError::conflict)?;
@@ -6580,8 +6726,9 @@ fn root_store_final_inventory_evidence(
     .all(|valid| valid);
     let catalog_is_exact = [
         catalog_entries > 0,
-        status.release_count == catalog_entries,
-        status.template_count == template_entries,
+        status.release_count == expected_store_entries,
+        status.template_count == expected_store_entries,
+        template_entries == expected_store_entries,
         status.occupied_store_bytes <= status.max_store_bytes,
     ]
     .into_iter()
@@ -7332,6 +7479,7 @@ fn install_effect_record_to_view(
 ) -> RootComponentInstallEffectView {
     RootComponentInstallEffectView {
         raw_module_hash: effect.raw_module_hash,
+        protocol_profile_digest: effect.protocol_profile_digest,
         chunk_hashes: effect.chunk_hashes,
         binding: effect.binding,
         cost_guard_settlement: effect.cost_guard_settlement,
@@ -7369,6 +7517,7 @@ fn partition_record_to_view(
 ) -> ComponentRegistryPartitionView {
     ComponentRegistryPartitionView {
         binding: record.binding,
+        protocol_profile_digest: record.protocol_profile_digest,
         provisioning_origin: record.provisioning_origin,
         release_set: record.release_set,
         status: record.status,
@@ -7769,6 +7918,7 @@ fn child_install_effect_record_to_view(
 ) -> RootComponentChildInstallEffectView {
     RootComponentChildInstallEffectView {
         raw_module_hash: effect.raw_module_hash,
+        protocol_profile_digest: effect.protocol_profile_digest,
         chunk_hashes: effect.chunk_hashes,
         binding: effect.binding,
         cost_guard_settlement: effect.cost_guard_settlement,
@@ -8439,6 +8589,7 @@ fn child_install_charged_entry_bytes(
     };
     let installation = RootComponentChildInstallEffectRecord {
         raw_module_hash: plan.raw_module_hash,
+        protocol_profile_digest: plan.protocol_profile_digest,
         chunk_hashes: plan.chunk_hashes.clone(),
         binding: plan.binding.clone(),
         cost_guard_settlement: ReplayCostGuardSettlement {
@@ -8489,6 +8640,7 @@ fn child_install_charged_entry_bytes(
         role: record.child_role.clone(),
         kind: record.child_kind,
         installed_artifact_hash: plan.raw_module_hash,
+        protocol_profile_digest: plan.protocol_profile_digest,
         status: ComponentLifecycleStatus::Active,
     };
     let traversal = ComponentRegistryChildTraversalRecord {
@@ -8566,6 +8718,7 @@ fn validate_child_install_effect_record(
     plan: &RootComponentChildInstallPlan,
 ) -> Result<(), InternalError> {
     if effect.raw_module_hash != plan.raw_module_hash
+        || effect.protocol_profile_digest != plan.protocol_profile_digest
         || effect.chunk_hashes != plan.chunk_hashes
         || effect.binding != plan.binding
     {
@@ -8679,6 +8832,7 @@ fn install_charged_entry_bytes(
     let mut maximum = record.clone();
     let installation = RootComponentInstallEffectRecord {
         raw_module_hash: plan.raw_module_hash,
+        protocol_profile_digest: plan.protocol_profile_digest,
         chunk_hashes: plan.chunk_hashes.clone(),
         binding: plan.binding.clone(),
         cost_guard_settlement: ReplayCostGuardSettlement {
@@ -8692,6 +8846,7 @@ fn install_charged_entry_bytes(
         revision: 1,
         content_hash: component_partition_content_hash(
             &plan.binding,
+            plan.protocol_profile_digest,
             &record.provisioning_origin,
             record.release_set,
             ComponentLifecycleStatus::Prepared,
@@ -8721,6 +8876,7 @@ fn install_charged_entry_bytes(
     };
     let partition = ComponentRegistryPartitionRecord {
         binding: plan.binding.clone(),
+        protocol_profile_digest: plan.protocol_profile_digest,
         provisioning_origin: record.provisioning_origin.clone(),
         release_set: record.release_set,
         status: ComponentLifecycleStatus::Active,
@@ -8779,6 +8935,7 @@ fn committed_child_records(
         role: record.child_role.clone(),
         kind: record.child_kind,
         installed_artifact_hash: installation.raw_module_hash,
+        protocol_profile_digest: installation.protocol_profile_digest,
         status: ComponentLifecycleStatus::Prepared,
     };
     validate_child_record(partition, &child)?;
@@ -8803,6 +8960,7 @@ fn committed_child_records(
     )?;
     let content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         partition.status,
@@ -8850,6 +9008,7 @@ fn committed_child_records(
     };
     let mut next_partition = ComponentRegistryPartitionRecord {
         binding: partition.binding.clone(),
+        protocol_profile_digest: partition.protocol_profile_digest,
         provisioning_origin: partition.provisioning_origin.clone(),
         release_set: partition.release_set,
         status: partition.status,
@@ -9029,6 +9188,7 @@ fn active_child_membership_records(
     )?;
     let content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         partition.status,
@@ -9079,6 +9239,7 @@ fn active_child_membership_records(
     };
     let mut active_partition = ComponentRegistryPartitionRecord {
         binding: partition.binding.clone(),
+        protocol_profile_digest: partition.protocol_profile_digest,
         provisioning_origin: partition.provisioning_origin.clone(),
         release_set: partition.release_set,
         status: partition.status,
@@ -9149,6 +9310,7 @@ fn committed_records(
     let revision = 1;
     let content_hash = component_partition_content_hash(
         &installation.binding,
+        installation.protocol_profile_digest,
         &record.provisioning_origin,
         record.release_set,
         ComponentLifecycleStatus::Prepared,
@@ -9194,6 +9356,7 @@ fn committed_records(
     };
     let mut partition = ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
+        protocol_profile_digest: installation.protocol_profile_digest,
         provisioning_origin: record.provisioning_origin.clone(),
         release_set: record.release_set,
         status: ComponentLifecycleStatus::Prepared,
@@ -9262,6 +9425,7 @@ fn active_membership_records(
         .ok_or_else(InternalError::resource_exhausted)?;
     let content_hash = component_partition_content_hash(
         &installation.binding,
+        installation.protocol_profile_digest,
         &record.provisioning_origin,
         record.release_set,
         ComponentLifecycleStatus::Active,
@@ -9281,6 +9445,7 @@ fn active_membership_records(
     let mut next_record = record.clone();
     let mut active = ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
+        protocol_profile_digest: installation.protocol_profile_digest,
         provisioning_origin: record.provisioning_origin.clone(),
         release_set: record.release_set,
         status: ComponentLifecycleStatus::Active,
@@ -9410,6 +9575,7 @@ fn exact_committed_child_partition(
     };
     let committed = ComponentRegistryPartitionRecord {
         binding: installation.binding.component.clone(),
+        protocol_profile_digest: current.protocol_profile_digest,
         provisioning_origin: current.provisioning_origin.clone(),
         release_set: record.release_set,
         status: ComponentLifecycleStatus::Active,
@@ -9487,6 +9653,7 @@ fn validate_active_child_partition(
     validate_child_record(current, &child)?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
+        protocol_profile_digest: current.protocol_profile_digest,
         provisioning_origin: current.provisioning_origin.clone(),
         release_set: current.release_set,
         status: current.status,
@@ -9541,6 +9708,7 @@ fn exact_committed_partition(
         .ok_or_else(InternalError::invariant)?;
     let prepared = ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
+        protocol_profile_digest: installation.protocol_profile_digest,
         provisioning_origin: record.provisioning_origin.clone(),
         release_set: record.release_set,
         status: ComponentLifecycleStatus::Prepared,
@@ -9595,12 +9763,14 @@ fn validate_active_partition(
         .ok_or_else(InternalError::resource_exhausted)?;
     let historical = ComponentRegistryPartitionRecord {
         binding: current.binding.clone(),
+        protocol_profile_digest: current.protocol_profile_digest,
         provisioning_origin: current.provisioning_origin.clone(),
         release_set: current.release_set,
         status: ComponentLifecycleStatus::Active,
         revision: expected_revision,
         content_hash: component_partition_content_hash(
             &current.binding,
+            current.protocol_profile_digest,
             &current.provisioning_origin,
             current.release_set,
             ComponentLifecycleStatus::Active,
@@ -9795,6 +9965,7 @@ fn validate_component_draining_record(
     validate_ordinary_component_lifecycle(partition)?;
     let previous_content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         ComponentLifecycleStatus::Active,
@@ -9804,6 +9975,7 @@ fn validate_component_draining_record(
     )?;
     let draining_content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         ComponentLifecycleStatus::Draining,
@@ -10257,6 +10429,7 @@ fn removed_component_partition(
     let inventory = &receipt.deleted.deletion.final_inventory;
     Ok(ComponentRegistryPartitionRecord {
         binding: installation.binding.clone(),
+        protocol_profile_digest: installation.protocol_profile_digest,
         provisioning_origin: allocation.provisioning_origin.clone(),
         release_set: allocation.release_set,
         status: ComponentLifecycleStatus::Draining,
@@ -10356,6 +10529,7 @@ fn validate_partition_shape(
     };
     let expected_content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         partition.status,
@@ -10366,6 +10540,7 @@ fn validate_partition_shape(
     let head_is_versioned = partition.revision > 0;
     let directory_is_synchronized = partition.directory_synchronized_at_ns > 0;
     let content_is_canonical = partition.descendant_content_hash != [0; 32]
+        && partition.protocol_profile_digest.as_bytes() != &[0; 32]
         && descendant_hash_matches_count
         && partition.content_hash == expected_content_hash;
     if !head_is_versioned || !directory_is_synchronized || !content_is_canonical {
@@ -10378,7 +10553,9 @@ fn validate_child_record(
     partition: &ComponentRegistryPartitionRecord,
     child: &ComponentRegistryChildRecord,
 ) -> Result<(), InternalError> {
-    if !ComponentTreeBoundary::from_partition(partition).admits(child) {
+    if child.protocol_profile_digest.as_bytes() == &[0; 32]
+        || !ComponentTreeBoundary::from_partition(partition).admits(child)
+    {
         return Err(InternalError::invariant());
     }
     Ok(())
@@ -10777,6 +10954,7 @@ fn validate_subtree_membership_removed(
     )?;
     let expected_content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         partition.status,
@@ -10786,6 +10964,7 @@ fn validate_subtree_membership_removed(
     )?;
     let expected_previous_content_hash = component_partition_content_hash(
         &partition.binding,
+        partition.protocol_profile_digest,
         &partition.provisioning_origin,
         partition.release_set,
         partition.status,
@@ -11167,6 +11346,7 @@ fn child_record_to_directory_view(
         },
         kind: child.kind,
         installed_artifact_hash: child.installed_artifact_hash,
+        protocol_profile_digest: child.protocol_profile_digest,
         status: child.status,
     }
 }
@@ -11187,8 +11367,13 @@ fn validate_child_allocation_record(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the arguments are the exact ordered fields of the canonical partition hash"
+)]
 fn component_partition_content_hash(
     binding: &ComponentBinding,
+    protocol_profile_digest: ProtocolProfileDigest,
     provisioning_origin: &ComponentProvisioningOrigin,
     release_set: FleetSubnetRootReleaseSet,
     status: ComponentLifecycleStatus,
@@ -11199,6 +11384,7 @@ fn component_partition_content_hash(
     const DOMAIN: &[u8] = b"canic.component-registry.partition.v1";
     let payload = candid::encode_one((
         binding.clone(),
+        protocol_profile_digest,
         provisioning_origin.clone(),
         release_set,
         status,
@@ -11284,6 +11470,7 @@ fn committed_component_descendant_content_hash(
         child.role.clone(),
         child.kind,
         child.installed_artifact_hash,
+        child.protocol_profile_digest,
         child.status,
     ))
     .map_err(|_error| InternalError::invariant())?;
@@ -11317,6 +11504,7 @@ fn activated_component_descendant_content_hash(
         child.role.clone(),
         child.kind,
         child.installed_artifact_hash,
+        child.protocol_profile_digest,
         ComponentLifecycleStatus::Prepared,
         child.status,
     ))
@@ -11359,6 +11547,7 @@ fn removed_component_descendant_content_hash(
         child.role.clone(),
         child.kind,
         child.installed_artifact_hash,
+        child.protocol_profile_digest,
         child.status,
     ))
     .map_err(|_error| InternalError::invariant())?;
@@ -11398,6 +11587,7 @@ fn validate_install_effect_record(
     plan: &RootComponentInstallPlan,
 ) -> Result<(), InternalError> {
     if effect.raw_module_hash != plan.raw_module_hash
+        || effect.protocol_profile_digest != plan.protocol_profile_digest
         || effect.chunk_hashes != plan.chunk_hashes
         || effect.binding != plan.binding
     {
@@ -11783,6 +11973,7 @@ mod tests {
             manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
         };
         let store_bootstrap = RootStoreBootstrapRequest {
+            operation_id: [8; 32],
             manifest_payload_size_bytes: 128,
         };
 
@@ -11844,6 +12035,7 @@ mod tests {
             version,
             release_set,
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -11938,6 +12130,7 @@ mod tests {
             },
             release_set,
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -12020,6 +12213,7 @@ mod tests {
             version.clone(),
             release_set,
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -12187,6 +12381,7 @@ mod tests {
             prepared_registry.clone(),
             release_set,
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -12215,9 +12410,11 @@ mod tests {
             wasm_store: store_pid,
             release_set,
             catalog: vec![canic_core::dto::root_store::RootStoreCatalogEntry {
-                role: CanisterRole::new("project_hub"),
+                role: CanisterRole::new("example_component"),
                 raw_module_hash: [14; 32],
-                payload_hash: [15; 32],
+                candid_sha256: [15; 32],
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([16; 32]),
+                payload_hash: [17; 32],
                 payload_size_bytes: 16_000,
             }],
         };
@@ -12309,14 +12506,20 @@ mod tests {
             headroom_bytes: None,
             headroom_size: None,
             within_headroom: true,
-            template_count: 1,
+            template_count: 2,
             max_templates: Some(10),
-            release_count: 1,
+            release_count: 2,
             max_template_versions_per_template: Some(2),
-            templates: vec![crate::dto::template::WasmStoreTemplateStatusResponse {
-                template_id: crate::ids::TemplateId::new("project_hub"),
-                versions: 1,
-            }],
+            templates: vec![
+                crate::dto::template::WasmStoreTemplateStatusResponse {
+                    template_id: crate::ids::TemplateId::new("component:example_component"),
+                    versions: 1,
+                },
+                crate::dto::template::WasmStoreTemplateStatusResponse {
+                    template_id: crate::ids::TemplateId::new("root-release-set:digest"),
+                    versions: 1,
+                },
+            ],
         }
     }
 
@@ -14749,6 +14952,7 @@ mod tests {
                 },
                 release_set,
                 store_bootstrap: RootStoreBootstrapRequest {
+                    operation_id: [8; 32],
                     manifest_payload_size_bytes: 128,
                 },
                 next_allocation_sequence: 3,
@@ -14889,6 +15093,7 @@ mod tests {
         };
         let mut partition = ComponentRegistryPartitionRecord {
             binding: binding.clone(),
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([12; 32]),
             provisioning_origin: ComponentProvisioningOrigin::FleetAdministrator {
                 caller: candid::Principal::from_slice(&[11; 29]),
             },
@@ -14897,6 +15102,7 @@ mod tests {
             revision: 2,
             content_hash: component_partition_content_hash(
                 &binding,
+                ProtocolProfileDigest::from_bytes([12; 32]),
                 &ComponentProvisioningOrigin::FleetAdministrator {
                     caller: candid::Principal::from_slice(&[11; 29]),
                 },
@@ -14939,6 +15145,7 @@ mod tests {
                 },
                 release_set,
                 store_bootstrap: RootStoreBootstrapRequest {
+                    operation_id: [8; 32],
                     manifest_payload_size_bytes: 128,
                 },
                 next_allocation_sequence: 2,
@@ -15138,6 +15345,7 @@ mod tests {
         );
         let install_plan = RootComponentChildInstallPlan {
             raw_module_hash: [56; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([59; 32]),
             chunk_hashes: vec![vec![57; 32], vec![58; 32]],
             binding: ComponentChildBinding {
                 component: binding,
@@ -15213,6 +15421,20 @@ mod tests {
             )
             .is_err()
         );
+        let mut conflicting_profile = install_plan.clone();
+        conflicting_profile.protocol_profile_digest = ProtocolProfileDigest::from_bytes([62; 32]);
+        assert!(
+            ComponentRegistryOps::renew_child_install_intent(
+                component,
+                [44; 32],
+                &conflicting_profile,
+                ReplayCostGuardSettlement {
+                    quota_intent_id: IntentId(62),
+                    reservation_intent_id: IntentId(63),
+                },
+            )
+            .is_err()
+        );
         restart_component_registry();
         let renewed = ComponentRegistryOps::renew_child_install_intent(
             component,
@@ -15230,6 +15452,10 @@ mod tests {
             panic!("renewed child install intent");
         };
         assert_eq!(installation.binding, install_plan.binding);
+        assert_eq!(
+            installation.protocol_profile_digest,
+            install_plan.protocol_profile_digest
+        );
         assert_eq!(
             installation.cost_guard_settlement.quota_intent_id,
             IntentId(64)
@@ -15604,6 +15830,10 @@ mod tests {
             complete_directory.entries[0].status,
             ComponentLifecycleStatus::Active
         );
+        assert_eq!(
+            complete_directory.entries[0].protocol_profile_digest,
+            install_plan.protocol_profile_digest
+        );
         assert!(complete_directory.next_cursor.is_none());
         let direct_active_children = ComponentRegistryOps::directory_page(
             component,
@@ -15697,6 +15927,7 @@ mod tests {
                 manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
             },
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -15803,6 +16034,7 @@ mod tests {
             .encoded_bytes;
         let plan = RootComponentInstallPlan {
             raw_module_hash: [20; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([23; 32]),
             chunk_hashes: vec![vec![21; 32], vec![22; 32]],
             binding: ComponentBinding {
                 authority: root.authority.clone(),
@@ -15855,6 +16087,10 @@ mod tests {
             RootComponentAllocationProgressView::Committed { .. }
         ));
         assert_eq!(partition.binding, plan.binding);
+        assert_eq!(
+            partition.protocol_profile_digest,
+            plan.protocol_profile_digest
+        );
         assert_eq!(partition.status, ComponentLifecycleStatus::Prepared);
         assert_eq!(partition.revision, 1);
         assert_ne!(partition.content_hash, [0; 32]);
@@ -16234,6 +16470,7 @@ mod tests {
                 },
                 release_set,
                 store_bootstrap: RootStoreBootstrapRequest {
+                    operation_id: [8; 32],
                     manifest_payload_size_bytes: 128,
                 },
                 next_allocation_sequence: 2,
@@ -16459,6 +16696,7 @@ mod tests {
                 manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
             },
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -16552,6 +16790,7 @@ mod tests {
                 manifest_digest: ReleaseSetDigest::from_bytes([9; 32]),
             },
             RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
         )
@@ -16640,6 +16879,7 @@ mod tests {
             role: CanisterRole::new("project_instance"),
             kind: ComponentChildKind::Instance,
             installed_artifact_hash: [31; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([41; 32]),
             status: ComponentLifecycleStatus::Active,
         };
         let descendant = ComponentRegistryChildRecord {
@@ -16649,6 +16889,7 @@ mod tests {
             role: CanisterRole::new("project_ledger"),
             kind: ComponentChildKind::Singleton,
             installed_artifact_hash: [32; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([42; 32]),
             status: ComponentLifecycleStatus::Active,
         };
         let unrelated = ComponentRegistryChildRecord {
@@ -16658,6 +16899,7 @@ mod tests {
             role: CanisterRole::new("project_instance"),
             kind: ComponentChildKind::Instance,
             installed_artifact_hash: [33; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([43; 32]),
             status: ComponentLifecycleStatus::Active,
         };
         let alternate_descendant = ComponentRegistryChildRecord {
@@ -16667,6 +16909,7 @@ mod tests {
             role: CanisterRole::new("project_machine"),
             kind: ComponentChildKind::Singleton,
             installed_artifact_hash: [34; 32],
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([44; 32]),
             status: ComponentLifecycleStatus::Active,
         };
         let children = vec![
@@ -16708,6 +16951,7 @@ mod tests {
         partition.descendant_content_hash = [77; 32];
         partition.content_hash = component_partition_content_hash(
             &partition.binding,
+            partition.protocol_profile_digest,
             &partition.provisioning_origin,
             partition.release_set,
             partition.status,
@@ -16746,6 +16990,7 @@ mod tests {
             },
             release_set,
             store_bootstrap: RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
             next_allocation_sequence: 2,
@@ -16788,6 +17033,7 @@ mod tests {
                 role: role.clone(),
                 kind: ComponentChildKind::Instance,
                 installed_artifact_hash: [principal_byte; 32],
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([principal_byte; 32]),
                 status: ComponentLifecycleStatus::Active,
             };
             data.children.push(child);
@@ -16820,6 +17066,7 @@ mod tests {
         partition.descendant_content_hash = [78; 32];
         partition.content_hash = component_partition_content_hash(
             &partition.binding,
+            partition.protocol_profile_digest,
             &partition.provisioning_origin,
             partition.release_set,
             partition.status,
@@ -16890,6 +17137,7 @@ mod tests {
         let mut partition = ComponentRegistryPartitionRecord {
             content_hash: component_partition_content_hash(
                 &binding,
+                ProtocolProfileDigest::from_bytes([42; 32]),
                 &provisioning_origin,
                 release_set,
                 ComponentLifecycleStatus::Active,
@@ -16899,6 +17147,7 @@ mod tests {
             )
             .expect("partition hash"),
             binding,
+            protocol_profile_digest: ProtocolProfileDigest::from_bytes([42; 32]),
             provisioning_origin,
             release_set,
             status: ComponentLifecycleStatus::Active,
@@ -16943,6 +17192,7 @@ mod tests {
         };
         let installation = RootComponentInstallEffectRecord {
             raw_module_hash: [19; 32],
+            protocol_profile_digest: partition.protocol_profile_digest,
             chunk_hashes: vec![vec![20; 32]],
             binding: partition.binding.clone(),
             cost_guard_settlement: ReplayCostGuardSettlement {

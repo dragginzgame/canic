@@ -8,15 +8,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.103.x] - 2026-08-17 - 0.102 Closeout and Role-Surface Evidence
+- Release publication and historical-tag cleanup now avoid implicit followed-
+  tag pushes, verify and fixture-test the remote-first deletion boundary,
+  protect every CI authority through CODEOWNERS and establish CI's required
+  `ripgrep` helper within the consuming job.
+
+## [0.103.x] - 2026-08-17 - Role-Owned Candid Surface
 
 Detailed patch breakdown: [docs/changelog/0.103.md](docs/changelog/0.103.md)
 
-- `0.103.0` closes the 0.102 audit with typed cycles-funding preflight outcomes,
-  tamper-evident released diagnostic identities, automatic host rendering and
-  exact final-tag Wasm evidence, freezes the review-ready role-surface baseline,
-  and makes release CI truthful and bounded through one Cargo version authority
-  plus gated, separately reported validation lanes.
+- `0.103.0` closes the 0.102 audit findings and hard-cuts Canic to profile-exact
+  role command/status control planes with autonomous durable operations,
+  atomic caller migration and legacy-emitter deletion, reducing the four
+  representative Canic surfaces from 188 method appearances to ten.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

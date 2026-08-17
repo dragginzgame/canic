@@ -2,7 +2,7 @@ use candid::Principal;
 use canic::{Error, ids::CanisterRole, protocol};
 use canic_control_plane::{
     dto::template::{
-        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetPrepareInput,
         TemplateManifestInput,
     },
     ids::{
@@ -111,13 +111,14 @@ Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=
     }
 }
 
-// Stage the configured ordinary release set into root before bootstrap resumes.
+// Stage the configured ordinary release set directly into the fresh Store before Root adoption.
 pub(super) fn stage_managed_release_set(
     spec: &RootBaselineSpec<'_>,
     pic: &PocketIc,
-    root_id: Principal,
+    store: Principal,
+    installation_controller: Principal,
 ) {
-    let now_secs = root_time_secs(pic, root_id);
+    let now_secs = root_time_secs(pic, store);
     let version = TemplateVersion::owned(spec.package_version.to_string());
     let roles = configured_release_roles(spec);
     let total = roles.len();
@@ -149,7 +150,7 @@ pub(super) fn stage_managed_release_set(
             approved_at: Some(now_secs),
             created_at: now_secs,
         };
-        stage_manifest(pic, root_id, manifest);
+        stage_manifest(pic, store, installation_controller, manifest);
 
         let prepare = TemplateChunkSetPrepareInput {
             template_id: template_id.clone(),
@@ -158,12 +159,13 @@ pub(super) fn stage_managed_release_set(
             payload_size_bytes,
             chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
         };
-        prepare_chunk_set(pic, root_id, prepare);
+        prepare_chunk_set(pic, store, installation_controller, prepare);
 
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
             publish_chunk(
                 pic,
-                root_id,
+                store,
+                installation_controller,
                 TemplateChunkInput {
                     template_id: template_id.clone(),
                     version: version.clone(),
@@ -329,39 +331,65 @@ fn configured_release_roles(spec: &RootBaselineSpec<'_>) -> Vec<CanisterRole> {
         .collect()
 }
 
-// Stage one manifest through the root admin surface.
-fn stage_manifest(pic: &PocketIc, root_id: Principal, manifest: TemplateManifestInput) {
-    let staged: Result<(), Error> = pic
-        .update_candid(
-            root_id,
-            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            (manifest,),
+// Stage one manifest through the exact pre-adoption Store authority.
+fn stage_manifest(
+    pic: &PocketIc,
+    store: Principal,
+    installation_controller: Principal,
+    manifest: TemplateManifestInput,
+) {
+    let result: Result<StoreCommandResponse, Error> = pic
+        .update_candid_as(
+            store,
+            installation_controller,
+            protocol::CANIC_COMMAND,
+            (StoreCommand::StageManifest(manifest),),
         )
-        .expect("stage release manifest transport");
-
-    staged.expect("stage release manifest application");
+        .expect("Store manifest transport");
+    let StoreCommandResponse::StageManifest = result.expect("stage release manifest application")
+    else {
+        panic!("Store returned a differently correlated manifest response");
+    };
 }
 
-// Prepare one staged chunk set through the root admin surface.
-fn prepare_chunk_set(pic: &PocketIc, root_id: Principal, prepare: TemplateChunkSetPrepareInput) {
-    let prepared: Result<TemplateChunkSetInfoResponse, Error> = pic
-        .update_candid(root_id, protocol::CANIC_TEMPLATE_PREPARE_ADMIN, (prepare,))
-        .expect("prepare release chunk set transport");
-
-    let _ = prepared.expect("prepare release chunk set application");
+// Prepare one staged chunk set through the exact pre-adoption Store authority.
+fn prepare_chunk_set(
+    pic: &PocketIc,
+    store: Principal,
+    installation_controller: Principal,
+    prepare: TemplateChunkSetPrepareInput,
+) {
+    let result: Result<StoreCommandResponse, Error> = pic
+        .update_candid_as(
+            store,
+            installation_controller,
+            protocol::CANIC_COMMAND,
+            (StoreCommand::PrepareChunkSet(prepare),),
+        )
+        .expect("Store prepare transport");
+    let StoreCommandResponse::PrepareChunkSet(_) =
+        result.expect("prepare release chunk set application")
+    else {
+        panic!("Store returned a differently correlated prepare response");
+    };
 }
 
-// Publish one staged release chunk through the root admin surface.
-fn publish_chunk(pic: &PocketIc, root_id: Principal, chunk: TemplateChunkInput) {
-    let published: Result<(), Error> = pic
-        .update_candid(
-            root_id,
-            protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+// Publish one staged release chunk through the admitted Store byte lane.
+fn publish_chunk(
+    pic: &PocketIc,
+    store: Principal,
+    installation_controller: Principal,
+    chunk: TemplateChunkInput,
+) {
+    let result: Result<(), Error> = pic
+        .update_candid_as(
+            store,
+            installation_controller,
+            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             (chunk,),
         )
-        .expect("publish release chunk transport");
-
-    published.expect("publish release chunk application");
+        .expect("Store chunk transport");
+    result.expect("publish release chunk application");
 }
 
 // Read the current PocketIC wall clock in whole seconds.

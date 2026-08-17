@@ -12,12 +12,19 @@ use crate::{
     icp_config::IcpConfigError,
     replica_query::{self, ReplicaQueryError},
 };
+use candid::{CandidType, Deserialize};
+use canic_core::dto::role::CycleBalanceStatusResponse;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
 use canic_core::protocol;
 
 const ICP_JSON_OUTPUT: &str = "json";
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    CycleBalance(CycleBalanceStatusResponse),
+}
 
 ///
 /// CycleBalanceQueryError
@@ -38,7 +45,7 @@ pub enum CycleBalanceQueryError {
     Response(#[from] IcpJsonResponseError),
 }
 
-/// Query `canic_cycle_balance` through the transport selected by the environment.
+/// Query the role-owned cycle-balance status through the selected transport.
 pub fn query_cycle_balance(
     icp: &IcpCli,
     canister_id: &str,
@@ -51,11 +58,14 @@ pub fn query_cycle_balance(
             .map_err(Into::into);
     }
 
-    let output = icp.canister_query_output_with_candid(
+    let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        protocol::CANIC_CYCLE_BALANCE,
+        protocol::CANIC_STATUS,
+        "(variant { CycleBalance })",
         Some(ICP_JSON_OUTPUT),
         candid_path,
     )?;
-    decode_json_result_response(&output).map_err(Into::into)
+    let response = decode_json_result_response::<RoleStatusResponse>(&output)?;
+    let RoleStatusResponse::CycleBalance(response) = response;
+    Ok(response.cycles)
 }

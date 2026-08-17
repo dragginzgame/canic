@@ -12,7 +12,14 @@ use crate::{
     canister_protocol::{CanisterProtocolError, call_with_arg, query_with_arg},
     icp::{IcpCanisterStatusReport, IcpCli, IcpDiagnostic, LocalReplicaTarget},
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
+use canic_control_plane::dto::{
+    fleet_coordinator::{
+        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
+        CoordinatorStatusRequest, CoordinatorStatusResponse,
+    },
+    root::RootOperationStatusResponse,
+};
 use canic_core::{
     cdk::utils::hash::decode_hex,
     diagnostics::codes,
@@ -24,13 +31,13 @@ use canic_core::{
         },
         fleet_subnet_root::{
             FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-            FleetSubnetRootDeletionPreparationRequest, FleetSubnetRootDeletionPreparationResponse,
-            FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootStoreDeletionResponse,
-            FleetSubnetRootStoreDeletionStatusRequest,
+            FleetSubnetRootDeletionPreparationResponse,
         },
+        role::OperationStatusRequest,
     },
     protocol,
 };
+use serde::Deserialize;
 use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -56,9 +63,7 @@ pub enum FleetSubnetRootDeletionProtocolStage {
     Completion,
     ExecutionBegin,
     ExecutionStatus,
-    Preparation,
     PreparationStatus,
-    StoreDeletionStatus,
     TerminalStatus,
 }
 
@@ -75,7 +80,7 @@ pub enum FleetSubnetRootDeletionError {
     RootAbsentBeforeExecution,
 
     #[error(
-        "Coordinator has no durable Fleet Subnet Root deletion execution intent; run preparation in a separate process first"
+        "Coordinator has no durable Fleet Subnet Root deletion execution intent; wait for autonomous Root removal preparation and retry"
     )]
     ExecutionNotPrepared,
 
@@ -152,20 +157,8 @@ trait FleetSubnetRootDeletionAdapter {
     fn preparation_status(
         &mut self,
         root: Principal,
-        request: FleetSubnetRootDeletionPreparationStatusRequest,
+        operation_id: [u8; 32],
     ) -> Result<Option<FleetSubnetRootDeletionPreparationResponse>, FleetSubnetRootDeletionError>;
-
-    fn store_deletion_status(
-        &mut self,
-        root: Principal,
-        request: FleetSubnetRootStoreDeletionStatusRequest,
-    ) -> Result<FleetSubnetRootStoreDeletionResponse, FleetSubnetRootDeletionError>;
-
-    fn prepare_root_deletion(
-        &mut self,
-        root: Principal,
-        request: FleetSubnetRootDeletionPreparationRequest,
-    ) -> Result<FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDeletionError>;
 
     fn begin_execution(
         &mut self,
@@ -192,6 +185,16 @@ trait FleetSubnetRootDeletionAdapter {
 struct IcpFleetSubnetRootDeletionAdapter {
     icp: IcpCli,
     coordinator: Principal,
+}
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponseFragment {
+    Operation(RootOperationStatusResponse),
 }
 
 /// Execute or resume one physical Fleet Subnet Root deletion from durable remote authority.
@@ -347,11 +350,9 @@ fn prepare_execution(
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionError> {
-    let preparation_request = FleetSubnetRootDeletionPreparationStatusRequest { operation_id };
-    let preparation = match adapter.preparation_status(root, preparation_request)? {
-        Some(preparation) => preparation,
-        None => prepare_root(adapter, coordinator, root, operation_id)?,
-    };
+    let preparation = adapter
+        .preparation_status(root, operation_id)?
+        .ok_or(FleetSubnetRootDeletionError::ExecutionNotPrepared)?;
     validate_preparation_identity(&preparation, coordinator, root, operation_id)?;
 
     let status = require_present_before_execution(adapter.observe_root(root)?)?;
@@ -382,60 +383,6 @@ fn prepare_execution(
     }
     validate_execution_identity(&execution, root, operation_id)?;
     Ok(execution)
-}
-
-fn prepare_root(
-    adapter: &mut impl FleetSubnetRootDeletionAdapter,
-    coordinator: Principal,
-    root: Principal,
-    operation_id: [u8; 32],
-) -> Result<FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDeletionError> {
-    let status = require_present_before_execution(adapter.observe_root(root)?)?;
-    if status.lifecycle != CanisterLifecycle::Running {
-        return Err(invalid_status(
-            "status",
-            "root must be running before deletion preparation",
-        ));
-    }
-    if status.reserved_cycles != 0 {
-        return Err(invalid_status(
-            "reserved_cycles",
-            "must be zero before deletion preparation",
-        ));
-    }
-    let store_deletion = adapter.store_deletion_status(
-        root,
-        FleetSubnetRootStoreDeletionStatusRequest { operation_id },
-    )?;
-    let store_deletion_is_exact = [
-        store_deletion.operation_id == operation_id,
-        store_deletion.fleet_subnet_root == root,
-        store_deletion.deletion_hash != [0; 32],
-        store_deletion.completed_at_ns > 0,
-    ]
-    .into_iter()
-    .all(|exact| exact);
-    if !store_deletion_is_exact {
-        return Err(protocol_invariant(
-            FleetSubnetRootDeletionProtocolStage::StoreDeletionStatus,
-            "Store deletion receipt differs from the requested root operation",
-        ));
-    }
-    let retained_cycles_target = root_deletion_retained_cycles_target(
-        status.idle_cycles_burned_per_day,
-        status.freezing_threshold_seconds,
-    )?;
-    let request = FleetSubnetRootDeletionPreparationRequest {
-        operation_id,
-        expected_store_deletion_hash: store_deletion.deletion_hash,
-        retained_cycles_target,
-        observed_reserved_cycles: status.reserved_cycles,
-        observed_idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
-        observed_freezing_threshold_seconds: status.freezing_threshold_seconds,
-    };
-    let preparation = adapter.prepare_root_deletion(root, request)?;
-    validate_preparation_identity(&preparation, coordinator, root, operation_id)?;
-    Ok(preparation)
 }
 
 fn drive_management_deletion(
@@ -748,13 +695,22 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
         &mut self,
         request: FleetSubnetRootDeletionStatusRequest,
     ) -> Result<Option<FleetSubnetRootDeletionResponse>, FleetSubnetRootDeletionError> {
-        query_optional(
+        let status = query_optional(
             &self.icp,
             self.coordinator,
-            protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS,
-            &request,
+            protocol::CANIC_STATUS,
+            &CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                operation_id: request.operation_id,
+            }),
             FleetSubnetRootDeletionProtocolStage::TerminalStatus,
-        )
+        )?;
+        let Some(CoordinatorStatusResponse::Operation(
+            CoordinatorOperationStatusResponse::RootRemoval(status),
+        )) = status
+        else {
+            return Ok(None);
+        };
+        Ok(status.completion)
     }
 
     fn executor_identity(&mut self) -> Result<Principal, FleetSubnetRootDeletionError> {
@@ -774,82 +730,84 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
         request: FleetSubnetRootDeletionStatusRequest,
     ) -> Result<Option<FleetSubnetRootDeletionExecutionResponse>, FleetSubnetRootDeletionError>
     {
-        query_optional(
+        let status = query_optional(
             &self.icp,
             self.coordinator,
-            protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
-            &request,
+            protocol::CANIC_STATUS,
+            &CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                operation_id: request.operation_id,
+            }),
             FleetSubnetRootDeletionProtocolStage::ExecutionStatus,
-        )
+        )?;
+        let Some(CoordinatorStatusResponse::Operation(
+            CoordinatorOperationStatusResponse::RootRemoval(status),
+        )) = status
+        else {
+            return Ok(None);
+        };
+        Ok(status.execution)
     }
 
     fn preparation_status(
         &mut self,
         root: Principal,
-        request: FleetSubnetRootDeletionPreparationStatusRequest,
+        operation_id: [u8; 32],
     ) -> Result<Option<FleetSubnetRootDeletionPreparationResponse>, FleetSubnetRootDeletionError>
     {
-        query_optional(
+        let status = query_optional(
             &self.icp,
             root,
-            protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
-            &request,
+            protocol::CANIC_STATUS,
+            &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
             FleetSubnetRootDeletionProtocolStage::PreparationStatus,
-        )
-    }
-
-    fn store_deletion_status(
-        &mut self,
-        root: Principal,
-        request: FleetSubnetRootStoreDeletionStatusRequest,
-    ) -> Result<FleetSubnetRootStoreDeletionResponse, FleetSubnetRootDeletionError> {
-        query_protocol(
-            &self.icp,
-            root,
-            protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS,
-            &request,
-            FleetSubnetRootDeletionProtocolStage::StoreDeletionStatus,
-        )
-    }
-
-    fn prepare_root_deletion(
-        &mut self,
-        root: Principal,
-        request: FleetSubnetRootDeletionPreparationRequest,
-    ) -> Result<FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDeletionError> {
-        call_protocol(
-            &self.icp,
-            root,
-            protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
-            &request,
-            FleetSubnetRootDeletionProtocolStage::Preparation,
-        )
+        )?;
+        let Some(RootStatusResponseFragment::Operation(RootOperationStatusResponse::RemoveRoot(
+            status,
+        ))) = status
+        else {
+            return Ok(None);
+        };
+        Ok(status.deletion_preparation)
     }
 
     fn begin_execution(
         &mut self,
         request: FleetSubnetRootDeletionExecutionRequest,
     ) -> Result<FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionError> {
-        call_protocol(
+        let response = call_protocol(
             &self.icp,
             self.coordinator,
-            protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
-            &request,
+            protocol::CANIC_COMMAND,
+            &CoordinatorCommand::PrepareRootDeletionExecution(request),
             FleetSubnetRootDeletionProtocolStage::ExecutionBegin,
-        )
+        )?;
+        match response {
+            CoordinatorCommandResponse::PrepareRootDeletionExecution(response) => Ok(response),
+            _ => Err(protocol_invariant(
+                FleetSubnetRootDeletionProtocolStage::ExecutionBegin,
+                "Coordinator returned a differently correlated command response",
+            )),
+        }
     }
 
     fn complete_deletion(
         &mut self,
         request: FleetSubnetRootDeletionCompletionRequest,
     ) -> Result<FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionError> {
-        call_protocol(
+        let response = call_protocol(
             &self.icp,
             self.coordinator,
-            protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE,
-            &request,
+            protocol::CANIC_COMMAND,
+            &CoordinatorCommand::CompleteRootDeletion(request),
             FleetSubnetRootDeletionProtocolStage::Completion,
-        )
+        )?;
+        match response {
+            CoordinatorCommandResponse::CompleteRootDeletion(response) => Ok(response),
+            _ => Err(protocol_invariant(
+                FleetSubnetRootDeletionProtocolStage::Completion,
+                "Coordinator returned a differently correlated command response",
+            )),
+        }
     }
 
     fn observe_root(
@@ -927,20 +885,6 @@ where
     O: candid::CandidType + serde::de::DeserializeOwned,
 {
     call_with_arg(icp, canister, method, input).map_err(|error| protocol_error(stage, error))
-}
-
-fn query_protocol<I, O>(
-    icp: &IcpCli,
-    canister: Principal,
-    method: &'static str,
-    input: &I,
-    stage: FleetSubnetRootDeletionProtocolStage,
-) -> Result<O, FleetSubnetRootDeletionError>
-where
-    I: candid::CandidType,
-    O: candid::CandidType + serde::de::DeserializeOwned,
-{
-    query_with_arg(icp, canister, method, input).map_err(|error| protocol_error(stage, error))
 }
 
 fn parse_status_report(

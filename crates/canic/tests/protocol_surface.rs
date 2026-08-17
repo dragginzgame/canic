@@ -32,19 +32,10 @@ use canic::{
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::cascade::StateSnapshotInput,
-    dto::component_provisioning::{
-        FleetComponentProvisioningAdvanceRequest, FleetComponentProvisioningPrepareRequest,
-        FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
-        RootComponentPublicationRequest,
-    },
     dto::cycles::Cycles,
     dto::env::{EnvBootstrapArgs, EnvSnapshotResponse},
     dto::error::Error as CanicError,
     dto::fleet_activation::FleetActivationStatusResponse,
-    dto::fleet_registry::{
-        FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
-        FleetSubnetRootDrainingReservationStatusRequest,
-    },
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
         ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
@@ -83,6 +74,56 @@ fn read_text(path: &Path) -> String {
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
 }
 
+#[test]
+fn endpoint_emitters_match_the_current_role_and_separate_blob_surfaces() {
+    let endpoint_root = workspace_root().join("crates/canic/src/macros/endpoints");
+    let mut methods = Vec::new();
+    for file in [
+        "blob_storage.rs",
+        "blob_storage_billing.rs",
+        "fleet_coordinator.rs",
+        "role.rs",
+        "root.rs",
+        "standards.rs",
+        "wasm_store.rs",
+    ] {
+        for line in read_text(&endpoint_root.join(file)).lines() {
+            let trimmed = line.trim_start();
+            let signature = trimmed
+                .strip_prefix("fn ")
+                .or_else(|| trimmed.strip_prefix("async fn "));
+            let Some(name) = signature
+                .and_then(|signature| signature.split_once('('))
+                .map(|(name, _)| name)
+                .filter(|name| name.starts_with("canic_"))
+            else {
+                continue;
+            };
+            methods.push(name.to_string());
+        }
+    }
+    methods.sort();
+    methods.dedup();
+
+    assert_eq!(
+        methods,
+        [
+            "canic_blob_storage_blobs_are_live",
+            "canic_blob_storage_blobs_to_delete",
+            "canic_blob_storage_confirm_blob_deletion",
+            "canic_blob_storage_create_certificate",
+            "canic_blob_storage_fund_from_project_cycles",
+            "canic_blob_storage_status",
+            "canic_blob_storage_update_gateway_principals",
+            "canic_command",
+            "canic_status",
+            "canic_wasm_store_chunk",
+            "canic_wasm_store_publish_chunk",
+        ],
+        "facade endpoint emitters diverged from the current role-owned and separately scoped blob surfaces"
+    );
+}
+
 fn assert_candid_roundtrip<T>(value: T)
 where
     T: candid::CandidType + for<'de> candid::Deserialize<'de> + Eq + Debug,
@@ -100,9 +141,6 @@ fn candid_type_env<T: candid::CandidType>() -> String {
 
 #[test]
 fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
-    assert_eq!(canic::protocol::CANIC_FLEET_ADMIN, "canic_fleet_admin");
-    assert_eq!(canic::protocol::CANIC_FLEET_STATE, "canic_fleet_state");
-
     let command_env = candid_type_env::<FleetCommand>();
     assert!(command_env.contains("FleetCommand"));
     let response_env = candid_type_env::<FleetCommandResponse>();
@@ -239,19 +277,15 @@ fn root_rpc_commands_without_result_data_use_unit_variants() {
 
 #[test]
 fn root_capability_surface_uses_component_registry_authority() {
-    assert_eq!(
-        canic::protocol::CANIC_RESPONSE_CAPABILITY_V1,
-        "canic_response_capability_v1"
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
-    let attribute = preceding_attribute_context(&source, "fn canic_response_capability_v1(");
-    assert!(attribute.contains("canic_update(internal, requires(custom("));
-    assert!(attribute.contains("RootCapabilityCallerPredicate"));
     assert!(
-        source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"),
-        "root capability endpoint must delegate through the control-plane authority facade"
+        source.contains("RespondCapability(::canic::dto::capability::RootCapabilityEnvelopeV1)")
+            && source.contains("if matches!(&command, RootCommand::RespondCapability(_))")
+            && source.contains("RootCapabilityCallerPredicate")
+            && source.contains("RootCommand::RespondCapability(envelope)")
+            && source.contains("ComponentRpcApi::response_capability_v1_root(envelope)"),
+        "Root RespondCapability must retain Component Registry authority inside its command variant"
     );
 }
 
@@ -309,32 +343,80 @@ fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
         .unwrap_or_else(|| panic!("{signature} should have a preceding attribute"))
 }
 
-fn preceding_attribute_context(source: &str, signature: &str) -> String {
-    let before = source
-        .split(signature)
-        .next()
-        .unwrap_or_else(|| panic!("source should contain {signature}"));
-    let mut lines = before.lines().rev().take(6).collect::<Vec<_>>();
-    lines.reverse();
-    lines.join("\n")
-}
-
 #[test]
-fn wasm_store_exposes_standard_cycle_tracker() {
+fn wasm_store_exposes_cycle_history_only_through_status() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
 
     assert!(
         did.contains("type PageRequest = record { offset : nat64; limit : nat64 };")
-            && did.contains("  canic_cycle_tracker : (PageRequest) -> ("),
-        "missing `canic_cycle_tracker` method in {}",
+            && did.contains("CycleHistory : PageRequest"),
+        "Store cycle history must be a status variant in {}",
         did_path.display()
     );
     assert!(
-        did.contains("type CycleTopupEvent = record")
-            && did.contains("  canic_cycle_topups : (PageRequest) -> ("),
-        "missing `canic_cycle_topups` method in {}",
+        !did.contains("type CycleTopupEvent = record")
+            && !did.contains("type CycleTopupEventStatus = variant"),
+        "Wasm Store must not retain AutomaticTopup types in {}",
         did_path.display()
+    );
+}
+
+#[test]
+fn role_capability_surfaces_are_pruned_at_the_destination_macro() {
+    let root = workspace_root();
+    let role_surface = read_text(&root.join("crates/canic/src/macros/endpoints/role.rs"));
+    assert!(
+        role_surface.contains("#[cfg(canic_capability_automatic_topup)]")
+            && role_surface.contains("CanisterStatusRequest::CycleTopups")
+            && role_surface.contains("CanisterStatusResponse::CycleTopups"),
+        "the top-up status variant must compile only for AutomaticTopup profiles"
+    );
+
+    assert!(
+        role_surface.contains("#[cfg(canic_capability_sharding)]")
+            && role_surface.contains("CanisterStatusRequest::Children")
+            && role_surface.contains("CanisterStatusResponse::Children"),
+        "the managed children status variant must compile only for Sharding profiles"
+    );
+
+    let root_surface = read_text(&root.join("crates/canic/src/macros/endpoints/root.rs"));
+    let command_macro = root_surface
+        .split("macro_rules! canic_emit_root_command_endpoint")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("macro_rules! canic_emit_root_status_endpoint")
+                .next()
+        })
+        .expect("Root command destination macro");
+    assert_eq!(
+        command_macro
+            .matches("#[cfg(canic_capability_role_attestation_signer)]")
+            .count(),
+        3,
+        "Root attestation command request, response and dispatch must share one compile-time capability"
+    );
+    let status_macro = root_surface
+        .split("macro_rules! canic_emit_root_status_endpoint")
+        .nth(1)
+        .expect("Root status destination macro");
+    assert_eq!(
+        status_macro
+            .matches("#[cfg(canic_capability_role_attestation_signer)]")
+            .count(),
+        4,
+        "Root attestation request, response, authority, and dispatch must share one compile-time capability"
+    );
+
+    assert!(
+        !root_surface.contains("canic_emit_root_auth_attestation_endpoints"),
+        "Root attestation must be pruned as command/status variants rather than standalone methods"
+    );
+
+    assert!(
+        role_surface.contains("RespondCapability(")
+            && role_surface.contains("CanisterCommandResponse::RespondCapability"),
+        "managed capability dispatch must remain a command variant"
     );
 }
 
@@ -370,10 +452,11 @@ fn wasm_store_canonical_did_parses() {
     assert!(
         did.contains("type FleetSubnetWasmStoreInitArgs = record")
             && did.contains("authority : FleetSubnetWasmStoreAuthority;")
-            && did.contains("  canic_fleet_subnet_wasm_store_authority : () -> (")
+            && did.contains("Authority : FleetSubnetWasmStoreAuthority")
             && did.contains(
                 "type StateSnapshotInput = record { fleet_state : opt FleetStateInput };"
             )
+            && did.contains("SynchronizeState : StateSnapshotInput")
             && !did.contains("type CanisterInitAuthority = variant")
             && !did.contains("FleetDirectoryInput")
             && !did.contains("fleet_directory"),
@@ -394,27 +477,64 @@ fn wasm_store_canonical_did_parses() {
             .all(|(name, _)| name != "canic_memory_ledger"),
         "parsed default wasm_store service must not include canic_memory_ledger"
     );
-    assert!(
-        service
-            .iter()
-            .any(|(name, _)| name == canic::protocol::CANIC_FLEET_ACTIVATION_STATUS),
-        "parsed default wasm_store service must include the canonical Fleet activation status query"
+    let methods = service
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        methods,
+        vec![
+            canic::protocol::CANIC_COMMAND,
+            canic::protocol::CANIC_STATUS,
+            canic::protocol::CANIC_WASM_STORE_CHUNK,
+            canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+            canic::protocol::ICRC10_SUPPORTED_STANDARDS,
+        ],
+        "canonical Store must expose only role-owned control, two byte lanes and ICRC-10"
     );
-    for endpoint in [
-        canic::protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-        canic::protocol::CANIC_ACTIVATE_FLEET,
-    ] {
-        assert!(
-            service.iter().any(|(name, _)| name == endpoint),
-            "parsed default wasm_store service must include {endpoint}"
-        );
-    }
 
     let status_env = candid_type_env::<FleetActivationStatusResponse>();
     assert!(status_env.contains("FleetActivationStatusResponse"));
     assert!(status_env.contains("FleetActivationIdentity"));
     assert!(status_env.contains("FleetCascadeActivationEvidence"));
     assert!(status_env.contains("FleetCredentialManifest"));
+}
+
+#[test]
+fn wasm_store_status_surface_is_profile_exact() {
+    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did = read_text(&did_path);
+    let request = did
+        .split("type StoreStatusRequest = variant {")
+        .nth(1)
+        .and_then(|tail| tail.split("};").next())
+        .expect("canonical Store DID must declare StoreStatusRequest");
+
+    for variant in [
+        "Authority",
+        "Catalog",
+        "CycleBalance",
+        "CycleHistory : PageRequest",
+        "Operation : OperationReceipt",
+        "Overview",
+        "Storage",
+    ] {
+        assert!(
+            request.contains(variant),
+            "StoreStatusRequest omits {variant}:\n{request}"
+        );
+    }
+    assert!(
+        !request.contains("CycleTopups"),
+        "the implicit Store profile must not acquire AutomaticTopup"
+    );
+    assert!(
+        did.contains(&format!(
+            "{} : (StoreStatusRequest) -> (Result_1) query;",
+            canic::protocol::CANIC_STATUS
+        )),
+        "canonical Store DID must expose its role-owned status query"
+    );
 }
 
 #[test]
@@ -430,1412 +550,321 @@ fn fleet_coordinator_canonical_did_parses() {
         .as_service(&actor)
         .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
 
-    for endpoint in [
-        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
-        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-        canic::protocol::CANIC_FLEET_REGISTRY,
-        canic::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-        canic::protocol::CANIC_FLEET_REGISTRY_VERSION,
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
+    let methods = service
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        methods,
+        vec![
+            canic::protocol::CANIC_COMMAND,
+            canic::protocol::CANIC_STATUS,
+        ],
+        "Fleet Coordinator must expose only its role-owned command and status methods"
+    );
+}
+
+#[test]
+fn fleet_coordinator_command_surface_is_profile_exact() {
+    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
+    let did = read_text(&did_path);
+    let request = did
+        .split("type CoordinatorCommand = variant {")
+        .nth(1)
+        .and_then(|tail| tail.split("};").next())
+        .expect("canonical Coordinator DID must declare CoordinatorCommand");
+
+    for variant in [
+        "AcknowledgeRootSnapshot",
+        "ActivateRegistry",
+        "CompleteRootDeletion",
+        "JoinRoot",
+        "PrepareAuthoritySnapshot",
+        "PrepareRootDeletionExecution",
+        "ProvisionComponents",
+        "RemoveRoot",
+        "ResumeAuthoritySnapshot",
     ] {
         assert!(
-            service.iter().any(|(name, _)| name == endpoint),
-            "parsed Fleet Coordinator service must include {endpoint}"
+            request.contains(variant),
+            "CoordinatorCommand omits {variant}:\n{request}"
         );
     }
-}
-
-#[test]
-fn fleet_activation_status_is_a_controller_query_on_the_shared_runtime_surface() {
     assert_eq!(
-        canic::protocol::CANIC_FLEET_ACTIVATION_STATUS,
-        "canic_fleet_activation_status"
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
-    let source = read_text(&macro_path);
-    let attribute =
-        preceding_attribute_context(&source, "async fn canic_fleet_activation_status()");
-
-    assert!(
-        attribute.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet activation status must remain a controller-guarded query"
+        request.lines().filter(|line| line.contains(';')).count(),
+        9,
+        "CoordinatorCommand acquired an unreviewed variant:\n{request}"
     );
 }
 
 #[test]
-fn fleet_subnet_root_authority_is_a_controller_query_on_the_root_surface() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_AUTHORITY,
-        "canic_fleet_subnet_root_authority"
-    );
+fn fleet_coordinator_status_surface_is_profile_exact() {
+    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
+    let did = read_text(&did_path);
+    let request = did
+        .split("type CoordinatorStatusRequest = variant {")
+        .nth(1)
+        .and_then(|tail| tail.split("};").next())
+        .expect("canonical Coordinator DID must declare CoordinatorStatusRequest");
 
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let attribute =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_authority(");
-
-    assert!(
-        attribute.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root authority must remain a controller-guarded query"
-    );
-}
-
-#[test]
-fn fleet_subnet_wasm_store_authority_is_a_controller_query_on_the_store_surface() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_WASM_STORE_AUTHORITY,
-        "canic_fleet_subnet_wasm_store_authority"
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs");
-    let source = read_text(&macro_path);
-    let attribute =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_wasm_store_authority(");
-
-    assert!(
-        attribute.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Wasm Store authority must remain a controller-guarded query"
-    );
-}
-
-#[test]
-fn fleet_subnet_root_canister_summary_is_a_controller_query_on_the_root_surface() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_CANISTER_SUMMARY,
-        "canic_fleet_subnet_root_canister_summary"
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let attribute = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_canister_summary(",
-    );
-
-    assert!(
-        attribute.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Canister summary must remain a controller-guarded query"
-    );
-}
-
-#[test]
-fn canister_pool_inventory_and_admin_are_controller_guarded_root_surfaces() {
-    assert_eq!(canic::protocol::CANIC_POOL_LIST, "canic_pool_list");
-    assert_eq!(canic::protocol::CANIC_POOL_ADMIN, "canic_pool_admin");
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    for endpoint in ["async fn canic_pool_list(", "async fn canic_pool_admin("] {
-        let attribute = preceding_attribute_context(&source, endpoint);
-        assert!(
-            attribute.contains("requires(caller::is_controller())"),
-            "{endpoint} must remain controller guarded",
-        );
-    }
-}
-
-#[test]
-fn fleet_subnet_root_draining_is_controller_guarded_on_the_root_surface() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_BEGIN
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_FINALIZE
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_INVENTORY_STATUS
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DRAINING_STATUS
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_PUBLISH
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_REMOVAL_STATUS
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAIM
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_RECLAMATION_STATUS
-    );
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let begin =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_draining_begin(");
-    let status =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_draining_status(");
-    let finalize = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_draining_inventory_finalize(",
-    );
-    let inventory_status = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_draining_inventory_status(",
-    );
-    let removal =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_removal_publish(");
-    let removal_status =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_removal_status(");
-    let store_reclaim =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_store_reclaim(");
-    let store_reclamation_status = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_store_reclamation_status(",
-    );
-    assert!(
-        begin.contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Subnet Root draining begin must remain a controller-guarded update"
-    );
-    assert!(
-        status.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root draining status must remain a controller-guarded query"
-    );
-    assert!(
-        finalize.contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Subnet Root final inventory must remain a controller-guarded update"
-    );
-    assert!(
-        inventory_status.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root final inventory status must remain a controller-guarded query"
-    );
-    assert!(
-        removal.contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Subnet Root removal publication must remain a controller-guarded update"
-    );
-    assert!(
-        removal_status.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root removal status must remain a controller-guarded query"
-    );
-    assert!(
-        store_reclaim.contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Store reclamation must remain a controller-guarded update"
-    );
-    assert!(
-        store_reclamation_status.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Store reclamation status must remain a controller-guarded query"
-    );
-}
-
-#[test]
-fn fleet_subnet_root_store_binding_finalization_is_controller_guarded() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZE
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_BINDING_FINALIZATION_STATUS
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let finalize = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_store_binding_finalize(",
-    );
-    let status = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_store_binding_finalization_status(",
-    );
-
-    assert!(
-        finalize.contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Store binding finalization must remain a controller-guarded update"
-    );
-    assert!(
-        status.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Store binding finalization status must remain a controller-guarded query"
-    );
-}
-
-#[test]
-fn fleet_subnet_root_store_deletion_is_controller_guarded() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETE,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETE
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_STORE_DELETION_STATUS
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let deletion =
-        preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_store_delete(");
-    let status = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_subnet_root_store_deletion_status(",
-    );
-
-    assert!(
-        deletion.contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Store deletion must remain a controller-guarded update"
-    );
-    assert!(
-        status.contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Subnet Root Store deletion status must remain a controller-guarded query"
-    );
-}
-
-#[test]
-fn fleet_subnet_root_physical_deletion_handoff_has_exact_authority_guards() {
-    for (facade, core) in [
-        (
-            canic::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
-            canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARE,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
-            canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_DELETION_PREPARATION_STATUS,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READINESS_PREPARE,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READY,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_READY,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_BEGIN,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_EXECUTION_STATUS,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_COMPLETE,
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DELETION_STATUS,
-        ),
-    ] {
-        assert_eq!(facade, core);
-    }
-
-    let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
-    for signature in [
-        "async fn canic_fleet_subnet_root_deletion_prepare(",
-        "async fn canic_fleet_subnet_root_deletion_preparation_status(",
+    for variant in [
+        "AuthorityRestore",
+        // Candid is structural: the extractor deduplicates the identical
+        // OperationStatusRequest and OperationReceipt records under this name.
+        "Operation : OperationReceipt",
+        "Overview",
+        "Registry",
+        "RegistryManifest",
+        "RegistryVersion",
+        "RootAcknowledgements",
     ] {
         assert!(
-            preceding_attribute_context(&root, signature)
-                .contains("requires(caller::is_controller())"),
-            "{signature} must remain controller guarded"
+            request.contains(variant),
+            "CoordinatorStatusRequest omits {variant}:\n{request}"
         );
     }
+    assert_eq!(
+        request.lines().filter(|line| line.contains(';')).count(),
+        7,
+        "CoordinatorStatusRequest acquired an unreviewed variant:\n{request}"
+    );
+    assert!(
+        did.contains("canic_status : (CoordinatorStatusRequest) -> (Result_1) query;"),
+        "canonical Coordinator DID must expose its role-owned status query"
+    );
+}
 
+#[test]
+fn role_status_dispatchers_keep_variant_specific_authority() {
     let coordinator =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
-    for signature in [
-        "async fn canic_fleet_registry_root_deletion_readiness_prepare(",
-        "async fn canic_fleet_registry_root_deletion_ready(",
-    ] {
-        assert!(
-            preceding_attribute_context(&coordinator, signature).contains("canic_update(public)"),
-            "{signature} must remain callable by the authenticated root"
-        );
-    }
-    for signature in [
-        "async fn canic_fleet_registry_root_deletion_execution_begin(",
-        "async fn canic_fleet_registry_root_deletion_execution_status(",
-        "async fn canic_fleet_registry_root_deletion_complete(",
-        "async fn canic_fleet_registry_root_deletion_status(",
-    ] {
-        assert!(
-            preceding_attribute_context(&coordinator, signature)
-                .contains("requires(caller::is_controller())"),
-            "{signature} must remain controller guarded"
-        );
-    }
-}
-
-#[test]
-fn fleet_subnet_root_join_is_a_controller_update_on_the_coordinator_surface() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-        "canic_fleet_subnet_root_join"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-        canic_core::protocol::CANIC_FLEET_SUBNET_ROOT_JOIN
-    );
-
-    let macro_path =
-        workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs");
-    let source = read_text(&macro_path);
-    let attribute = preceding_attribute_context(&source, "async fn canic_fleet_subnet_root_join(");
-
     assert!(
-        attribute.contains("requires(caller::is_controller())")
-            && attribute.contains("payload(max_bytes"),
-        "Fleet Subnet Root join must remain a controller-guarded update"
+        coordinator.contains("CoordinatorStatusRequest::Operation(_)")
+            && coordinator.contains("| CoordinatorStatusRequest::Overview")
+            && coordinator.contains("| CoordinatorStatusRequest::Registry")
+            && coordinator.contains("access::auth::is_controller(caller)"),
+        "only Coordinator Overview and owner-authorized Operation/Registry may bypass the blanket controller check"
+    );
+    assert!(
+        coordinator.contains("FleetCoordinatorApi::operation_status(")
+            && coordinator.contains("FleetCoordinatorApi::registry_for_calling_status()"),
+        "Coordinator participant-visible status variants must delegate to their caller-aware owners"
+    );
+    let coordinator_api = read_text(
+        &workspace_root().join("crates/canic-control-plane/src/api/fleet_coordinator.rs"),
+    );
+    assert!(
+        coordinator_api.contains("FleetCoordinatorWorkflow::operation_status_for_caller(")
+            && coordinator_api.contains("FleetCoordinatorWorkflow::registry_for_caller(")
+            && coordinator_api.matches("is_controller(&caller)").count() >= 2,
+        "Coordinator Operation and Registry owners must receive the exact caller and controller fact"
+    );
+
+    let store =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs"));
+    let store_operation_authority = store
+        .split("StoreStatusRequest::Operation(_) => {")
+        .nth(1)
+        .and_then(|tail| tail.split("StoreStatusRequest::CycleBalance").next())
+        .expect("Store Operation authority arm");
+    assert!(
+        store_operation_authority.contains("access::auth::is_controller(caller)")
+            && !store_operation_authority.contains("access::auth::is_root(caller)"),
+        "the current Store Operation owner is Fleet activation and remains controller-only"
+    );
+    assert!(
+        store.contains("StoreStatusRequest::Catalog | StoreStatusRequest::Storage")
+            && store.contains("access::auth::is_root(caller)"),
+        "Store catalogue and storage observations remain exact-root-only"
+    );
+
+    let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    let root_operation_dispatch = root
+        .split("RootStatusRequest::Operation(request) => {")
+        .nth(1)
+        .and_then(|tail| tail.split("RootStatusRequest::Overview").next())
+        .expect("Root Operation dispatch arm");
+    assert!(
+        root_operation_dispatch.contains("request.operation_id")
+            && root_operation_dispatch.contains("caller,")
+            && root_operation_dispatch.contains("is_controller(&caller)"),
+        "Root Operation dispatch must pass the caller and controller fact to its durable owner"
+    );
+
+    let root_operation = read_text(
+        &workspace_root().join("crates/canic-control-plane/src/workflow/root_status/mod.rs"),
+    );
+    let allocation = read_text(
+        &workspace_root().join("crates/canic-control-plane/src/workflow/component_registry/mod.rs"),
+    );
+    assert!(
+        root_operation.contains("if !caller_is_controller")
+            && allocation.contains("ComponentProvisioningOrigin::FleetAdministrator")
+            && allocation.contains("revalidate_retained_peer_origin(")
+            && allocation
+                .contains("ComponentProvisioningOrigin::ComponentGroup { .. } => return Ok(None)"),
+        "Root Operation authority must distinguish controller, exact peer, and group owners"
     );
 }
 
 #[test]
-fn fleet_component_provisioning_plan_surface_is_controller_guarded_and_bounded() {
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
-        "canic_fleet_component_provisioning_prepare"
+fn root_and_coordinator_role_ingress_are_command_status_only() {
+    assert_eq!(canic::protocol::CANIC_COMMAND, "canic_command");
+    assert_eq!(canic::protocol::CANIC_STATUS, "canic_status");
+
+    let bundles = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs"));
+    let root_bundle = bundles
+        .split("macro_rules! canic_bundle_root_only_endpoints")
+        .nth(1)
+        .and_then(|tail| tail.split("macro_rules!").next())
+        .expect("Root endpoint bundle");
+    assert!(
+        root_bundle.contains("$crate::canic_emit_root_command_endpoint!();")
+            && root_bundle.contains("$crate::canic_emit_root_status_endpoint!();"),
+        "Root bundle must emit its one command and one status method"
     );
     assert_eq!(
-        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-        "canic_fleet_component_provisioning_status"
+        root_bundle.matches("$crate::canic_emit_").count(),
+        2,
+        "Root bundle acquired another endpoint family:\n{root_bundle}"
     );
-    assert_eq!(
-        canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
-        "canic_fleet_component_provisioning_advance"
+
+    let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    for variant in [
+        "ProvisionComponent(",
+        "ProvisionComponents(",
+        "RemoveComponent(",
+        "RemoveRoot(",
+        "SynchronizeRegistry(",
+    ] {
+        assert!(
+            root.contains(variant),
+            "Root command union omits current intent {variant}"
+        );
+    }
+    for variant in [
+        "FleetAuthority",
+        "Inventory",
+        "Operation(",
+        "Overview",
+        "Pool(",
+        "StoreOverview",
+    ] {
+        assert!(
+            root.contains(variant),
+            "Root status union omits current selector {variant}"
+        );
+    }
+    assert!(
+        root.contains("require_root_command_variant_allowed")
+            && root.contains("require_root_status_variant_allowed")
+            && root.contains("LifecycleApi::root_operation_status(")
+            && root.contains("__canic_inspect_root_update_message")
+            && root.contains("__canic_payload_max_bytes"),
+        "Root ingress must retain variant-aware lifecycle and durable-operation authority"
     );
-    assert_fleet_component_provisioning_endpoint_guards();
-    assert_fleet_component_provisioning_candid_surface();
+    for removed_phase in [
+        "ActivateComponents(",
+        "AdvanceComponents(",
+        "PublishComponents(",
+    ] {
+        assert!(
+            !root.contains(removed_phase),
+            "Root command surface retained autonomous phase {removed_phase}"
+        );
+    }
+
+    assert_coordinator_ingress_is_command_status_only();
 }
 
-fn assert_fleet_component_provisioning_endpoint_guards() {
-    let source =
+fn assert_coordinator_ingress_is_command_status_only() {
+    let coordinator = read_text(
+        &workspace_root().join("crates/canic-control-plane/src/dto/fleet_coordinator.rs"),
+    );
+    for variant in [
+        "ActivateRegistry(",
+        "JoinRoot(",
+        "ProvisionComponents(",
+        "RemoveRoot(",
+    ] {
+        assert!(
+            coordinator.contains(variant),
+            "Coordinator command union omits current intent {variant}"
+        );
+    }
+    let coordinator_endpoints =
         read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
-    let prepare = preceding_attribute_context(
-        &source,
-        "async fn canic_fleet_component_provisioning_prepare(",
-    );
     assert!(
-        prepare.contains("requires(caller::is_controller())")
-            && prepare.contains("payload(max_bytes"),
-        "Fleet Component plan preparation must remain controller guarded and payload bounded"
+        coordinator_endpoints.contains("__canic_inspect_fleet_coordinator_update_message")
+            && coordinator_endpoints.contains("__canic_fleet_coordinator_payload_max_bytes"),
+        "Coordinator ingress must decode the selected command before accepting its exact bound"
     );
-    assert!(
-        preceding_attribute_context(
-            &source,
-            "async fn canic_fleet_component_provisioning_advance(",
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "Fleet Component plan advance must remain a controller-guarded update"
-    );
-    let root_source =
-        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
-    let root_accept = preceding_attribute_context(
-        &root_source,
-        "async fn canic_root_component_provisioning_accept(",
-    );
-    assert!(
-        root_acceptance_is_bounded_public_update(&root_accept),
-        "root Component plan acceptance must remain an internal public and payload-bounded update"
-    );
-    let root_publish = preceding_attribute_context(
-        &root_source,
-        "async fn canic_root_component_provisioning_publish(",
-    );
-    assert!(
-        root_publication_is_bounded_public_update(&root_publish),
-        "root Component Directory publication must remain an internal public and payload-bounded update"
-    );
-    let root_synchronization = preceding_attribute_context(
-        &root_source,
-        "async fn canic_root_component_directories_synchronize(",
-    );
-    assert!(
-        root_publication_is_bounded_public_update(&root_synchronization),
-        "root scale-out Directory synchronization must remain an internal public and payload-bounded update"
-    );
-    let root_activation = preceding_attribute_context(
-        &root_source,
-        "async fn canic_root_component_provisioning_activate(",
-    );
-    assert!(
-        root_activation_is_bounded_public_update(&root_activation),
-        "root Component runtime activation must remain an internal public and payload-bounded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            &source,
-            "async fn canic_fleet_component_provisioning_status(",
-        )
-        .contains("canic_query(requires(caller::is_controller()))"),
-        "Fleet Component plan status must remain a controller-guarded query"
-    );
-}
+    for variant in [
+        "Operation(OperationStatusRequest)",
+        "Overview",
+        "Registry",
+        "RegistryVersion",
+    ] {
+        assert!(
+            coordinator.contains(variant),
+            "Coordinator status union omits current selector {variant}"
+        );
+    }
 
-fn assert_fleet_component_provisioning_candid_surface() {
-    let prepare_env = candid_type_env::<FleetComponentProvisioningPrepareRequest>();
-    for field in [
-        "operation_id",
-        "plan",
-        "directory_confirmation_roots",
-        "batches",
-    ] {
-        assert!(
-            prepare_env.contains(field),
-            "Fleet Component preparation Candid is missing {field}:\n{prepare_env}"
-        );
-    }
-    let advance_env = candid_type_env::<FleetComponentProvisioningAdvanceRequest>();
-    for field in [
-        "expected_accepted_root_count",
-        "expected_phase",
-        "expected_provisioned_root_count",
-        "expected_current_root",
-        "registry_committed_component_count",
-        "expected_directory_confirmed_root_count",
-        "expected_current_synchronization",
-        "expected_current_publication",
-        "expected_runtime_activated_root_count",
-        "expected_current_activation",
-    ] {
-        assert!(
-            advance_env.contains(field),
-            "Fleet Component advance Candid is missing {field}:\n{advance_env}"
-        );
-    }
-    let status_env = candid_type_env::<FleetComponentProvisioningStatusResponse>();
-    for field in [
-        "operation_id",
-        "plan_hash",
-        "phase",
-        "accepted_root_count",
-        "acceptance_in_flight_root",
-        "provisioned_root_count",
-        "current_root",
-        "provisioning_in_flight_root",
-        "component_count",
-        "planned_at_ns",
-        "roots_accepted_at_ns",
-        "components_provisioned_at_ns",
-        "published_fleet_registry",
-        "service_topology_published_at_ns",
-        "directory_confirmed_root_count",
-        "current_synchronization",
-        "current_publication",
-        "publication_in_flight_root",
-        "directories_confirmed_at_ns",
-        "runtime_activated_root_count",
-        "current_activation",
-        "activation_in_flight_root",
-        "runtimes_activated_at_ns",
-    ] {
-        assert!(
-            status_env.contains(field),
-            "Fleet Component status Candid is missing {field}:\n{status_env}"
-        );
-    }
-    let publication_env = candid_type_env::<RootComponentPublicationRequest>();
-    for field in [
-        "operation_id",
-        "plan_hash",
-        "published_fleet_registry",
-        "expected_published_component_count",
-    ] {
-        assert!(
-            publication_env.contains(field),
-            "root Component publication Candid is missing {field}:\n{publication_env}"
-        );
-    }
-    let activation_env = candid_type_env::<RootComponentActivationRequest>();
-    for field in [
-        "operation_id",
-        "plan_hash",
-        "expected_activated_component_count",
-        "expected_root_runtime_active",
-    ] {
-        assert!(
-            activation_env.contains(field),
-            "root Component activation Candid is missing {field}:\n{activation_env}"
-        );
-    }
+    let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
+    let did = read_text(&did_path);
+    let (env, actor) = CandidSource::Text(&did)
+        .load()
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
+    let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
+    let service = env
+        .as_service(&actor)
+        .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
+    let mut canic_methods = service
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .filter(|name| name.starts_with("canic_"))
+        .collect::<Vec<_>>();
+    canic_methods.sort_unstable();
+    assert_eq!(canic_methods, ["canic_command", "canic_status"]);
 }
 
 #[test]
-fn fleet_registry_snapshot_synchronization_protocol_and_guards_are_pinned() {
-    assert_fleet_registry_protocol_constants();
-
-    let coordinator_path =
-        workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs");
-    let coordinator = read_text(&coordinator_path);
-    for signature in [
-        "async fn canic_fleet_registry_snapshot_for_root(",
-        "async fn canic_fleet_registry_acknowledge_root(",
-    ] {
-        assert!(
-            preceding_attribute_context(&coordinator, signature).contains("canic_update(public)"),
-            "{signature} must remain inter-canister callable"
-        );
-    }
+fn managed_and_store_activation_variants_are_guarded_by_the_exact_root() {
+    let managed = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/role.rs"));
     assert!(
-        preceding_attribute_context(
-            &coordinator,
-            "async fn canic_fleet_registry_root_acknowledgements(",
-        )
-        .contains("canic_query(requires(caller::is_controller()))"),
-        "root acknowledgement inventory must remain controller-guarded"
-    );
-    assert!(
-        preceding_attribute_context(&coordinator, "async fn canic_fleet_registry_activate(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "Registry activation must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            &coordinator,
-            "async fn canic_fleet_registry_publish_root_draining(",
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Draining publication must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            &coordinator,
-            "async fn canic_fleet_registry_publish_root_removed(",
-        )
-        .contains("canic_update(public)"),
-        "root Removed publication must remain inter-canister callable"
-    );
-    assert_root_draining_reservation_protocol(&coordinator);
-
-    let coordinator_api_path =
-        workspace_root().join("crates/canic-control-plane/src/api/fleet_coordinator.rs");
-    let coordinator_api = read_text(&coordinator_api_path);
-    assert!(
-        coordinator_api.contains("FleetCoordinatorWorkflow::snapshot_for_root(msg_caller())",)
-            && coordinator_api.contains(
-                "FleetCoordinatorWorkflow::acknowledge_root_snapshot(msg_caller(), request)",
-            )
-            && coordinator_api
-                .contains("FleetCoordinatorWorkflow::publish_root_removed(msg_caller(), request)",),
-        "public Coordinator transports must authenticate the exact calling root in the API facade"
-    );
-    assert!(
-        coordinator_api.contains("FleetCoordinatorWorkflow::root_draining_reservation_status(")
-            && coordinator_api.contains("is_controller(&caller)"),
-        "root-draining reservation status must authenticate the controller or exact target root"
+        managed.contains("ConfigureRuntime(request)")
+            && managed.contains("access::auth::is_root(caller)"),
+        "managed runtime configuration must authorize its command variant through the exact Root"
     );
 
-    let root_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let root = read_text(&root_path);
+    let store =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs"));
     assert!(
-        preceding_attribute_context(&root, "async fn canic_fleet_registry_synchronize(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Registry synchronization must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(&root, "async fn canic_fleet_registry_sync_status(")
-            .contains("canic_query(composite, requires(caller::is_controller()))"),
-        "root Registry synchronization status must remain a controller-guarded composite query"
-    );
-    assert_root_registry_mirror_guards(&root);
-}
-
-fn assert_root_draining_reservation_protocol(coordinator: &str) {
-    assert!(
-        preceding_attribute_context(
-            coordinator,
-            "async fn canic_fleet_registry_root_draining_reservation_prepare(",
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root-draining reservation preparation must remain controller guarded"
-    );
-    assert!(
-        preceding_attribute_context(
-            coordinator,
-            "async fn canic_fleet_registry_root_draining_reservation_status(",
-        )
-        .contains("canic_update(public)"),
-        "root-draining reservation status must remain inter-Canister callable by the exact target root"
-    );
-    for (name, env) in [
-        (
-            "request",
-            candid_type_env::<FleetSubnetRootDrainingReservationRequest>(),
-        ),
-        (
-            "status request",
-            candid_type_env::<FleetSubnetRootDrainingReservationStatusRequest>(),
-        ),
-        (
-            "response",
-            candid_type_env::<FleetSubnetRootDrainingReservationResponse>(),
-        ),
-    ] {
-        assert!(
-            env.contains("operation_id") && env.contains("fleet_subnet_root"),
-            "root-draining reservation {name} must bind operation and root identity:\n{env}"
-        );
-    }
-}
-
-fn assert_fleet_registry_protocol_constants() {
-    for (facade, core, expected) in [
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY,
-            canic_core::protocol::CANIC_FLEET_REGISTRY,
-            "canic_fleet_registry",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_MANIFEST,
-            "canic_fleet_registry_manifest",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_VERSION,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_VERSION,
-            "canic_fleet_registry_version",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-            "canic_fleet_registry_snapshot_for_root",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-            "canic_fleet_registry_acknowledge_root",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-            "canic_fleet_registry_activate",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
-            canic_core::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_ADVANCE,
-            "canic_fleet_component_provisioning_advance",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
-            canic_core::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
-            "canic_fleet_component_provisioning_prepare",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-            canic_core::protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-            "canic_fleet_component_provisioning_status",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-            "canic_fleet_registry_publish_root_draining",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
-            "canic_fleet_registry_publish_root_removed",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-            "canic_fleet_registry_root_acknowledgements",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
-            "canic_fleet_registry_root_draining_reservation_prepare",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_STATUS,
-            "canic_fleet_registry_root_draining_reservation_status",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNCHRONIZE,
-            "canic_fleet_registry_synchronize",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_SYNC_STATUS,
-            "canic_fleet_registry_sync_status",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-            "canic_fleet_registry_activate_mirror",
-        ),
-        (
-            canic::protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-            canic_core::protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-            "canic_fleet_registry_mirror_status",
-        ),
-    ] {
-        assert_eq!(facade, core);
-        assert_eq!(facade, expected);
-    }
-    assert_component_registry_protocol_constants();
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "one table pins the complete Component Registry protocol family"
-)]
-fn assert_component_registry_protocol_constants() {
-    for (facade, core, expected) in [
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PREPARE,
-            "canic_root_component_registry_prepare",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_STATUS,
-            "canic_root_component_registry_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACCEPT,
-            "canic_root_component_provisioning_accept",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ADVANCE,
-            "canic_root_component_provisioning_advance",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_PUBLISH,
-            "canic_root_component_provisioning_publish",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORIES_SYNCHRONIZE,
-            "canic_root_component_directories_synchronize",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_ACTIVATE,
-            "canic_root_component_provisioning_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_PROVISIONING_STATUS,
-            "canic_root_component_provisioning_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_ALLOCATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_ALLOCATE,
-            "canic_root_component_allocate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_ALLOCATION_STATUS,
-            "canic_root_component_allocation_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATE,
-            "canic_root_peer_component_allocate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_ALLOCATION_STATUS,
-            "canic_root_peer_component_allocation_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATE,
-            "canic_root_component_child_allocate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_ALLOCATION_STATUS,
-            "canic_root_component_child_allocation_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DRAINING_BEGIN,
-            "canic_root_component_draining_begin",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DRAINING_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DRAINING_STATUS,
-            "canic_root_component_draining_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_QUIESCE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_QUIESCE,
-            "canic_root_component_quiesce",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_QUIESCENCE_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_QUIESCENCE_STATUS,
-            "canic_root_component_quiescence_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DRAINING_ADVANCE,
-            "canic_root_component_draining_advance",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DRAINING_INVENTORY_FINALIZE,
-            "canic_root_component_draining_inventory_finalize",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DELETE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DELETE,
-            "canic_root_component_delete",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_MEMBERSHIP_REMOVE,
-            "canic_root_component_membership_remove",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DELETION_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DELETION_STATUS,
-            "canic_root_component_deletion_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_BEGIN,
-            "canic_root_component_subtree_removal_begin",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_ADVANCE,
-            "canic_root_component_subtree_removal_advance",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP_PREPARE,
-            "canic_root_component_subtree_removal_stop_prepare",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STOP,
-            "canic_root_component_subtree_removal_stop",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE_PREPARE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE_PREPARE,
-            "canic_root_component_subtree_removal_delete_prepare",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DELETE,
-            "canic_root_component_subtree_removal_delete",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_MEMBERSHIP_REMOVE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_MEMBERSHIP_REMOVE,
-            "canic_root_component_subtree_removal_membership_remove",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DIRECTORY_SYNCHRONIZE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_DIRECTORY_SYNCHRONIZE,
-            "canic_root_component_subtree_removal_directory_synchronize",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_LEAF_FINALIZE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_LEAF_FINALIZE,
-            "canic_root_component_subtree_removal_leaf_finalize",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_SUBTREE_REMOVAL_STATUS,
-            "canic_root_component_subtree_removal_status",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_CREATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_CREATE,
-            "canic_root_component_child_create",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_INSTALL,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_INSTALL,
-            "canic_root_component_child_install",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_COMMIT,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_COMMIT,
-            "canic_root_component_child_commit",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_DIRECTORY_PREPARE,
-            "canic_root_component_child_directory_prepare",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_RUNTIME_ACTIVATE,
-            "canic_root_component_child_runtime_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CHILD_MEMBERSHIP_ACTIVATE,
-            "canic_root_component_child_membership_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_CREATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_CREATE,
-            "canic_root_component_create",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_INSTALL,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_INSTALL,
-            "canic_root_component_install",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_COMMIT,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_COMMIT,
-            "canic_root_component_commit",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PREPARE,
-            "canic_root_component_directory_prepare",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_RUNTIME_ACTIVATE,
-            "canic_root_component_runtime_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_MEMBERSHIP_ACTIVATE,
-            "canic_root_component_membership_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_CREATE,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_CREATE,
-            "canic_root_peer_component_create",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_INSTALL,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_INSTALL,
-            "canic_root_peer_component_install",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_COMMIT,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_COMMIT,
-            "canic_root_peer_component_commit",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_DIRECTORY_PREPARE,
-            "canic_root_peer_component_directory_prepare",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_RUNTIME_ACTIVATE,
-            "canic_root_peer_component_runtime_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
-            canic_core::protocol::CANIC_ROOT_PEER_COMPONENT_MEMBERSHIP_ACTIVATE,
-            "canic_root_peer_component_membership_activate",
-        ),
-        (
-            canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
-            canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_PREPARE,
-            "canic_component_runtime_directory_prepare",
-        ),
-        (
-            canic::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_SYNCHRONIZE,
-            canic_core::protocol::CANIC_COMPONENT_RUNTIME_DIRECTORY_SYNCHRONIZE,
-            "canic_component_runtime_directory_synchronize",
-        ),
-        (
-            canic::protocol::CANIC_COMPONENT_RUNTIME_STATUS,
-            canic_core::protocol::CANIC_COMPONENT_RUNTIME_STATUS,
-            "canic_component_runtime_status",
-        ),
-        (
-            canic::protocol::CANIC_COMPONENT_RUNTIME_ACTIVATE,
-            canic_core::protocol::CANIC_COMPONENT_RUNTIME_ACTIVATE,
-            "canic_component_runtime_activate",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_REGISTRY_PARTITION,
-            "canic_root_component_registry_partition",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_HEAD,
-            "canic_root_component_directory_head",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
-            canic_core::protocol::CANIC_ROOT_COMPONENT_DIRECTORY_PAGE,
-            "canic_root_component_directory_page",
-        ),
-    ] {
-        assert_eq!(facade, core);
-        assert_eq!(facade, expected);
-    }
-}
-
-fn assert_root_registry_mirror_guards(root: &str) {
-    assert!(
-        preceding_attribute_context(root, "async fn canic_fleet_registry_activate_mirror(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Registry mirror activation must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_fleet_registry_mirror_status(")
-            .contains("canic_query(composite, requires(caller::is_controller()))"),
-        "root Registry mirror status must remain a controller-guarded composite query"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_registry_prepare(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component Registry preparation must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_registry_status(")
-            .contains("canic_query(composite, requires(caller::is_controller()))"),
-        "root Component Registry status must remain a controller-guarded composite query"
-    );
-    assert_root_component_provisioning_guards(root);
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_allocate(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component allocation must remain a controller-guarded update"
-    );
-    assert_peer_component_guards(root);
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_allocation_status(")
-            .contains("canic_query(requires(caller::is_controller()))"),
-        "root Component allocation status must remain a controller-guarded query"
-    );
-    for endpoint in [
-        "async fn canic_root_component_child_allocate(",
-        "async fn canic_root_component_child_create(",
-        "async fn canic_root_component_child_install(",
-        "async fn canic_root_component_child_commit(",
-        "async fn canic_root_component_child_directory_prepare(",
-        "async fn canic_root_component_child_runtime_activate(",
-        "async fn canic_root_component_child_membership_activate(",
-    ] {
-        assert!(
-            preceding_attribute_context(root, endpoint).contains("canic_update(internal, public)"),
-            "{endpoint} must remain a public update authenticated by workflow"
-        );
-    }
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_child_allocation_status("
-        )
-        .contains("canic_query(internal, public)"),
-        "root Component Child allocation status must remain a public query authenticated by workflow"
-    );
-    assert_component_draining_guards(root);
-    assert_subtree_removal_guards(root);
-    for endpoint in [
-        "async fn canic_root_component_create(",
-        "async fn canic_root_component_install(",
-        "async fn canic_root_component_commit(",
-        "async fn canic_root_component_directory_prepare(",
-        "async fn canic_root_component_runtime_activate(",
-        "async fn canic_root_component_membership_activate(",
-    ] {
-        assert!(
-            preceding_attribute_context(root, endpoint)
-                .contains("canic_update(requires(caller::is_controller()))"),
-            "{endpoint} must remain a controller-guarded update"
-        );
-    }
-    for endpoint in [
-        "async fn canic_root_component_registry_partition(",
-        "async fn canic_root_component_directory_head(",
-    ] {
-        assert!(
-            preceding_attribute_context(root, endpoint)
-                .contains("canic_query(requires(caller::is_controller()))"),
-            "{endpoint} must remain a controller-guarded query"
-        );
-    }
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_directory_page(")
-            .contains("canic_query(internal, public)"),
-        "root Component Directory pages must remain public queries authenticated by workflow"
-    );
-}
-
-fn assert_root_component_provisioning_guards(root: &str) {
-    let acceptance =
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_accept(");
-    assert!(
-        root_acceptance_is_bounded_public_update(&acceptance),
-        "root Component provisioning acceptance must remain a public update authenticated by workflow"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_advance(")
-            .contains("canic_update(internal, public)"),
-        "root Component provisioning advance must remain a public update authenticated by workflow"
-    );
-    let activation =
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_activate(");
-    assert!(
-        root_activation_is_bounded_public_update(&activation),
-        "root Component provisioning activation must remain a bounded public update authenticated by workflow"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_provisioning_status(")
-            .contains("canic_query(internal, public)"),
-        "root Component provisioning status must remain a public query authenticated by workflow"
-    );
-}
-
-fn root_acceptance_is_bounded_public_update(attribute: &str) -> bool {
-    is_bounded_public_update(
-        attribute,
-        "MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES",
-    )
-}
-
-fn root_publication_is_bounded_public_update(attribute: &str) -> bool {
-    is_bounded_public_update(
-        attribute,
-        "MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES",
-    )
-}
-
-fn root_activation_is_bounded_public_update(attribute: &str) -> bool {
-    is_bounded_public_update(
-        attribute,
-        "MAX_FLEET_SUBNET_ROOT_COMPONENT_ACTIVATION_PAYLOAD_BYTES",
-    )
-}
-
-fn is_bounded_public_update(attribute: &str, exact_envelope: &str) -> bool {
-    let is_internal_public = attribute.contains("internal") && attribute.contains("public");
-    let has_exact_envelope =
-        attribute.contains("payload(max_bytes") && attribute.contains(exact_envelope);
-    attribute.contains("canic_update(") && is_internal_public && has_exact_envelope
-}
-
-fn assert_peer_component_guards(root: &str) {
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_peer_component_allocate(")
-            .contains("canic_update(internal, public)"),
-        "peer Component allocation must remain a public update authenticated by workflow"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_peer_component_allocation_status("
-        )
-        .contains("canic_query(internal, public)"),
-        "peer Component allocation status must remain a public query authenticated by workflow"
-    );
-    for endpoint in [
-        "async fn canic_root_peer_component_create(",
-        "async fn canic_root_peer_component_install(",
-        "async fn canic_root_peer_component_commit(",
-        "async fn canic_root_peer_component_directory_prepare(",
-        "async fn canic_root_peer_component_runtime_activate(",
-        "async fn canic_root_peer_component_membership_activate(",
-    ] {
-        assert!(
-            preceding_attribute_context(root, endpoint).contains("canic_update(internal, public)"),
-            "{endpoint} must remain a public update authenticated by workflow"
-        );
-    }
-}
-
-fn assert_component_draining_guards(root: &str) {
-    for endpoint in [
-        "async fn canic_root_component_draining_begin(",
-        "async fn canic_root_component_quiesce(",
-        "async fn canic_root_component_draining_advance(",
-        "async fn canic_root_component_draining_inventory_finalize(",
-        "async fn canic_root_component_delete(",
-        "async fn canic_root_component_membership_remove(",
-    ] {
-        assert!(
-            preceding_attribute_context(root, endpoint)
-                .contains("canic_update(requires(caller::is_controller()))"),
-            "{endpoint} must remain a controller-guarded update"
-        );
-    }
-    for endpoint in [
-        "async fn canic_root_component_draining_status(",
-        "async fn canic_root_component_quiescence_status(",
-        "async fn canic_root_component_deletion_status(",
-    ] {
-        assert!(
-            preceding_attribute_context(root, endpoint)
-                .contains("canic_query(requires(caller::is_controller()))"),
-            "{endpoint} must remain a controller-guarded query"
-        );
-    }
-}
-
-fn assert_subtree_removal_guards(root: &str) {
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_subtree_removal_begin(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree-removal fencing must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_advance("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree-removal traversal must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_stop_prepare("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree stop preparation must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(root, "async fn canic_root_component_subtree_removal_stop(")
-            .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree stop must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_delete_prepare("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree deletion preparation must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_delete("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree deletion must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_membership_remove("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree membership removal must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_directory_synchronize("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree Directory synchronization must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_leaf_finalize("
-        )
-        .contains("canic_update(requires(caller::is_controller()))"),
-        "root Component subtree leaf finalization must remain a controller-guarded update"
-    );
-    assert!(
-        preceding_attribute_context(
-            root,
-            "async fn canic_root_component_subtree_removal_status("
-        )
-        .contains("canic_query(requires(caller::is_controller()))"),
-        "root Component subtree-removal status must remain a controller-guarded query"
+        store.contains("StoreCommand::ActivateFleet(_)")
+            && store.contains("StoreCommand::PrepareFleetCredential(_)")
+            && store.contains("access::auth::is_root(caller)"),
+        "Store activation variants must authorize through the exact Root"
     );
 }
 
 #[test]
-fn root_store_bootstrap_protocol_and_guards_are_pinned() {
+fn public_protocol_reexports_only_wasm_store_byte_lanes() {
     assert_eq!(
-        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP,
-        "canic_root_store_bootstrap"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-        "canic_root_store_bootstrap_status"
+        canic::protocol::CANIC_WASM_STORE_CHUNK,
+        canic_core::protocol::CANIC_WASM_STORE_CHUNK
     );
     assert_eq!(
-        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP,
-        canic_core::protocol::CANIC_ROOT_STORE_BOOTSTRAP
-    );
-    assert_eq!(
-        canic::protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-        canic_core::protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let bootstrap_attribute =
-        preceding_attribute_context(&source, "async fn canic_root_store_bootstrap(");
-    let status_attribute =
-        preceding_attribute_context(&source, "async fn canic_root_store_bootstrap_status(");
-
-    assert!(
-        bootstrap_attribute.contains("canic_update(requires(caller::is_controller()))"),
-        "root Store bootstrap must remain a controller-guarded update"
-    );
-    assert!(
-        status_attribute.contains("canic_query(composite, requires(caller::is_controller()))"),
-        "root Store bootstrap status must remain a controller-guarded composite query"
-    );
-}
-
-#[test]
-fn nonroot_runtime_activation_mutations_are_guarded_by_the_exact_root() {
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
-    let source = read_text(&macro_path);
-
-    for signature in [
-        "async fn canic_component_runtime_directory_prepare(",
-        "async fn canic_component_runtime_directory_synchronize(",
-        "async fn canic_component_runtime_activate(",
-        "async fn canic_prepare_fleet_credential_generation(",
-        "async fn canic_activate_fleet(",
-    ] {
-        let attribute = preceding_attribute_context(&source, signature);
-        assert!(
-            attribute.contains("canic_update(internal, requires(caller::is_root()))"),
-            "{signature} must remain guarded by the protected Fleet Subnet Root"
-        );
-    }
-}
-
-#[test]
-fn public_protocol_reexports_wasm_store_root_update_manifest() {
-    assert_eq!(
-        canic::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
-        canic_core::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS
-    );
-    assert_eq!(
-        canic::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
-        canic_core::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS
-    );
-    assert_eq!(
-        canic::protocol::CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES,
-        "canic_wasm_store_reclaim_deletion_cycles"
+        canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+        canic_core::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
     );
 
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs");
     let source = read_text(&macro_path);
-    let attribute = preceding_attribute_context(
-        &source,
-        "async fn canic_wasm_store_reclaim_deletion_cycles(",
-    );
     assert!(
-        attribute.contains("canic_update(internal, requires(caller::is_root()))"),
-        "Store deletion cycle reclamation must remain guarded by the protected root"
+        source.contains("StoreCommand::ReclaimDeletionCycles(request)")
+            && source.contains("StoreCommand::RunGc(request)"),
+        "Store control effects must be command variants"
     );
 }
 
@@ -2271,81 +1300,44 @@ fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
 
 #[test]
 fn active_delegation_proof_installer_surface_is_issuer_gated() {
-    assert_eq!(
-        canic::protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
-        canic_core::protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS
-    );
-    assert_eq!(
-        canic::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
-        canic_core::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF
-    );
-    assert_eq!(
-        canic::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
-        "canic_install_active_delegation_proof"
-    );
-
-    let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
-    let bundle = read_text(&bundle_path);
-    assert!(
-        bundle.contains("#[cfg(canic_delegated_token_issuer)]\n        $crate::canic_emit_nonroot_auth_attestation_endpoints!();"),
-        "non-root issuer provisioning endpoints must be gated by canic_delegated_token_issuer"
-    );
-
-    let endpoint_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
+    let endpoint_path = workspace_root().join("crates/canic/src/macros/endpoints/role.rs");
     let endpoint_source = read_text(&endpoint_path);
-    let endpoint = endpoint_source
-        .split("fn canic_install_active_delegation_proof(")
-        .nth(1)
-        .expect("non-root auth endpoint should emit active proof installer");
-    let prefix = endpoint_source
-        .split("fn canic_install_active_delegation_proof(")
-        .next()
-        .expect("source should have endpoint prefix");
-    let preceding_attribute = prefix
-        .lines()
-        .rev()
-        .find(|line| line.trim_start().starts_with("#["))
-        .expect("active proof installer endpoint should have an attribute");
-
     assert!(
-        preceding_attribute.contains("canic_update")
-            && preceding_attribute.contains("caller::is_controller()"),
-        "active proof installer must be a controller-gated update endpoint"
+        endpoint_source.contains("#[cfg(canic_delegated_token_issuer)]")
+            && endpoint_source.contains("InstallDelegationProof(")
+            && endpoint_source.contains("PrepareDelegatedToken(")
+            && endpoint_source.contains("ActiveDelegationProof")
+            && endpoint_source.contains("DelegatedToken("),
+        "managed auth command and status variants must be issuer-profile gated"
     );
     assert!(
-        endpoint.contains("InstallActiveDelegationProofRequest")
-            && endpoint.contains("InstallActiveDelegationProofResponse")
-            && endpoint.contains("AuthApi::install_active_delegation_proof"),
-        "active proof installer must call the auth API with the install DTOs"
-    );
-    assert!(
-        endpoint_source.contains("fn canic_active_delegation_proof_status(")
-            && endpoint_source.contains("ActiveDelegationProofStatusResponse")
-            && endpoint_source.contains("AuthApi::active_delegation_proof_status"),
-        "delegated-token issuer bundle must expose active proof status"
-    );
-
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
-    let did = read_text(&did_path);
-    assert!(
-        !did.contains("canic_install_active_delegation_proof")
-            && !did.contains("canic_active_delegation_proof_status")
-            && !did.contains("canic_prepare_delegated_token")
-            && !did.contains("canic_get_delegated_token")
-            && !did.contains("type InstallActiveDelegationProofRequest = record")
-            && !did.contains("type DelegatedTokenPrepareRequest = record"),
-        "canonical wasm_store DID must not expose delegated-token issuer provisioning"
+        endpoint_source.contains("access::auth::is_controller(caller)")
+            && endpoint_source.contains("AuthApi::install_active_delegation_proof"),
+        "active-proof installation must remain controller authorized"
     );
 }
 
 #[test]
-fn root_delegation_proof_batch_surface_is_pinned() {
+fn root_delegation_commands_are_variant_owned() {
     assert_root_provisioning_facade_is_public();
-    assert_root_delegation_protocol_constants();
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    assert_root_delegation_macro_guards(&source);
-    assert_root_delegation_endpoint_bindings(&source);
+
+    let source = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    for variant in [
+        "GetOrCreateDelegationProof",
+        "UpsertIssuerPolicy",
+        "UpsertIssuerRenewalTemplate",
+    ] {
+        assert!(
+            source.contains(variant),
+            "Root command surface lacks {variant}"
+        );
+    }
+    assert!(source.contains("IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest)"));
+    assert!(source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"));
+    assert!(source.contains("AuthApi::upsert_root_issuer_policy_root"));
+    assert!(source.contains("AuthApi::upsert_root_issuer_renewal_template_root"));
+    assert!(source.contains("AuthApi::root_issuer_renewal_status_root"));
+    assert!(source.contains("ActiveComponentMemberPredicate"));
 }
 
 fn assert_root_provisioning_facade_is_public() {
@@ -2361,100 +1353,6 @@ fn assert_root_provisioning_facade_is_public() {
         canic::api::auth::AuthApi::provision_chain_key_delegation_proof_for_issuer_root,
     );
 }
-
-fn assert_root_delegation_protocol_constants() {
-    for (public, core, expected) in [
-        (
-            canic::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
-            canic_core::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
-            "canic_upsert_root_issuer_policy",
-        ),
-        (
-            canic::protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
-            canic_core::protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
-            "canic_upsert_root_issuer_renewal_template",
-        ),
-        (
-            canic::protocol::CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-            canic_core::protocol::CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-            "canic_root_issuer_renewal_status",
-        ),
-        (
-            canic::protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
-            canic_core::protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
-            "canic_get_or_create_chain_key_delegation_proof",
-        ),
-    ] {
-        assert_eq!(public, core);
-        assert_eq!(public, expected);
-    }
-}
-
-fn assert_root_delegation_macro_guards(source: &str) {
-    let upsert_attr = preceding_attribute(source, "fn canic_upsert_root_issuer_policy(");
-    let renewal_upsert_attr =
-        preceding_attribute(source, "fn canic_upsert_root_issuer_renewal_template(");
-    let renewal_status_attr = preceding_attribute(source, "fn canic_root_issuer_renewal_status(");
-    let lazy_repair_attr =
-        preceding_attribute_context(source, "fn canic_get_or_create_chain_key_delegation_proof(");
-    assert!(
-        upsert_attr.contains("canic_update")
-            && upsert_attr.contains("caller::is_controller()")
-            && !upsert_attr.contains("internal"),
-        "root issuer policy upsert must remain a public controller-gated update"
-    );
-    assert!(
-        renewal_upsert_attr.contains("canic_update")
-            && renewal_upsert_attr.contains("caller::is_controller()")
-            && !renewal_upsert_attr.contains("internal"),
-        "root issuer renewal template upsert must remain a public controller-gated update"
-    );
-    assert!(
-        renewal_status_attr.contains("canic_query")
-            && renewal_status_attr.contains("caller::is_controller()")
-            && !renewal_status_attr.contains("internal"),
-        "root issuer renewal status must remain a public controller-gated query"
-    );
-    assert!(
-        lazy_repair_attr.contains("canic_update")
-            && lazy_repair_attr.contains("internal")
-            && lazy_repair_attr.contains("ActiveComponentMemberPredicate")
-            && lazy_repair_attr.contains("custom(")
-            && !lazy_repair_attr.contains("caller::is_controller()"),
-        "root chain-key lazy repair must remain an internal active-Component update"
-    );
-}
-
-fn assert_root_delegation_endpoint_bindings(source: &str) {
-    assert!(
-        source.contains("fn canic_upsert_root_issuer_policy(")
-            && source.contains("RootIssuerPolicyUpsertRequest")
-            && source.contains("RootIssuerPolicyResponse")
-            && source.contains("AuthApi::upsert_root_issuer_policy_root"),
-        "root auth endpoint bundle must expose issuer policy upsert"
-    );
-    assert!(
-        source.contains("fn canic_upsert_root_issuer_renewal_template(")
-            && source.contains("RootIssuerRenewalTemplateUpsertRequest")
-            && source.contains("RootIssuerRenewalTemplateResponse")
-            && source.contains("AuthApi::upsert_root_issuer_renewal_template_root"),
-        "root auth endpoint bundle must expose issuer renewal template upsert"
-    );
-    assert!(
-        source.contains("fn canic_root_issuer_renewal_status(")
-            && source.contains("RootIssuerRenewalStatusRequest")
-            && source.contains("RootIssuerRenewalStatusResponse")
-            && source.contains("AuthApi::root_issuer_renewal_status_root"),
-        "root auth endpoint bundle must expose issuer renewal status"
-    );
-    assert!(
-        source.contains("fn canic_get_or_create_chain_key_delegation_proof(")
-            && source.contains("RootDelegationProofBatchProof")
-            && source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"),
-        "root auth endpoint bundle must expose chain-key lazy repair"
-    );
-}
-
 #[test]
 fn root_delegation_proof_dtos_roundtrip_through_candid() {
     assert_root_issuer_policy_dtos_roundtrip();
@@ -2688,83 +1586,6 @@ fn chain_key_root_proof(
 }
 
 #[test]
-fn root_role_attestation_prepare_get_surface_is_pinned() {
-    assert_eq!(
-        canic::protocol::CANIC_PREPARE_ROLE_ATTESTATION,
-        canic_core::protocol::CANIC_PREPARE_ROLE_ATTESTATION
-    );
-    assert_eq!(
-        canic::protocol::CANIC_GET_ROLE_ATTESTATION,
-        canic_core::protocol::CANIC_GET_ROLE_ATTESTATION
-    );
-    assert_eq!(
-        canic::protocol::CANIC_PREPARE_ROLE_ATTESTATION,
-        "canic_prepare_role_attestation"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_GET_ROLE_ATTESTATION,
-        "canic_get_role_attestation"
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let prepare_attribute = preceding_attribute(&source, "fn canic_prepare_role_attestation(");
-    let get_attribute = preceding_attribute(&source, "fn canic_get_role_attestation(");
-    assert!(
-        prepare_attribute.contains("canic_update(internal, public)")
-            && get_attribute.contains("canic_query(internal, public)"),
-        "role-attestation endpoints must defer to active Component Registry admission"
-    );
-    assert!(
-        source.contains("fn canic_prepare_role_attestation(")
-            && source.contains("RoleAttestationPrepareResponse")
-            && source.contains("ComponentAuthApi::prepare_role_attestation"),
-        "root auth endpoint bundle must expose role-attestation prepare"
-    );
-    assert!(
-        source.contains("fn canic_get_role_attestation(")
-            && source.contains("RoleAttestationGetRequest")
-            && source.contains("ComponentAuthApi::get_role_attestation"),
-        "root auth endpoint bundle must expose role-attestation get"
-    );
-}
-
-#[test]
-fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
-    let source = read_text(&macro_path);
-    let endpoint = source
-        .split("fn canic_memory_ledger()")
-        .nth(1)
-        .expect("memory ledger endpoint should exist");
-    let prefix = source
-        .split("fn canic_memory_ledger()")
-        .next()
-        .expect("source should have endpoint prefix");
-    let preceding_attribute = prefix
-        .lines()
-        .rev()
-        .find(|line| line.trim_start().starts_with("#["))
-        .expect("memory ledger endpoint should have an attribute");
-
-    assert!(
-        preceding_attribute.contains("$crate::__internal::cdk::query"),
-        "memory ledger diagnostic must use a raw query attribute in {}",
-        macro_path.display()
-    );
-    assert!(
-        !preceding_attribute.contains("canic_query"),
-        "memory ledger diagnostic must not use normal Canic query dispatch in {}",
-        macro_path.display()
-    );
-    assert!(
-        endpoint.contains("$crate::__internal::cdk::api::is_controller")
-            && endpoint.contains("MemoryQuery::ledger()"),
-        "memory ledger diagnostic must be controller-gated and read the restricted ledger path"
-    );
-}
-
-#[test]
 fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
     let ledger_env = candid_type_env::<MemoryLedgerResponse>();
 
@@ -2784,104 +1605,49 @@ fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
 }
 
 #[test]
-fn runtime_introspection_endpoints_are_controller_guarded_by_default() {
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+fn standalone_local_status_keeps_sensitive_selectors_controller_guarded() {
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/role.rs");
     let source = read_text(&macro_path);
     let endpoint_macro = source
-        .split("macro_rules! canic_emit_runtime_introspection_endpoints")
+        .split("macro_rules! __canic_emit_local_status_endpoint")
         .nth(1)
         .and_then(|rest| {
-            rest.split("macro_rules! canic_emit_icrc_standards_endpoints")
+            rest.split("macro_rules! __canic_emit_managed_command_endpoint")
                 .next()
         })
-        .expect("runtime introspection endpoint macro should exist");
+        .expect("standalone-local status macro should exist");
 
-    for endpoint in [
-        "fn canic_health()",
-        "fn canic_readiness(",
-        "fn canic_runtime_status(",
+    for selector in [
+        "CanisterStatusRequest::Health",
+        "CanisterStatusRequest::Logs(_)",
+        "CanisterStatusRequest::Readiness",
+        "CanisterStatusRequest::Runtime",
     ] {
         assert!(
-            endpoint_macro.contains(endpoint),
-            "runtime introspection macro should emit {endpoint}"
+            endpoint_macro.contains(selector),
+            "standalone-local status authority omits {selector}"
         );
     }
 
     assert!(
-        endpoint_macro
-            .matches("requires(caller::is_controller())")
-            .count()
-            >= 3,
-        "runtime introspection endpoints must be controller-guarded by default"
-    );
-    assert!(
-        !endpoint_macro.contains("public)]"),
-        "runtime introspection endpoints must not be public by default"
+        endpoint_macro.contains("access::auth::is_controller(caller)")
+            && !endpoint_macro.contains("CanisterStatusRequest::Binding")
+            && !endpoint_macro.contains("CanisterStatusRequest::Operation")
+            && !endpoint_macro.contains("CanisterCommand"),
+        "standalone-local status must stay controller-guarded and omit Fleet-only authority"
     );
 }
 
 #[test]
-fn authority_snapshot_restore_endpoints_are_controller_guarded_and_authority_scoped() {
-    let shared_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
-    let shared = read_text(&shared_path);
-    let endpoint_macro = shared
-        .split("macro_rules! canic_emit_authority_restore_endpoints")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("macro_rules! canic_emit_lifecycle_core_endpoints")
-                .next()
-        })
-        .expect("authority restore endpoint macro");
-    for endpoint in [
-        "canic_authority_restore_fence_status",
-        "canic_authority_snapshot_prepare",
-        "canic_authority_snapshot_resume",
-    ] {
-        assert!(
-            endpoint_macro.contains(endpoint),
-            "authority restore macro must emit {endpoint}"
-        );
-    }
-    assert_eq!(
-        endpoint_macro
-            .matches("requires(caller::is_controller())")
-            .count(),
-        3,
-        "every authority restore endpoint must remain controller-guarded"
-    );
-    assert!(
-        !endpoint_macro.contains("public)]"),
-        "authority restore endpoints must not become public"
-    );
-
-    let bundles = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs"));
-    let root_bundle = bundles
-        .split("macro_rules! canic_bundle_root_only_endpoints")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("macro_rules! canic_bundle_managed_nonroot_only_endpoints")
-                .next()
-        })
-        .expect("root-only endpoint bundle");
-    assert!(root_bundle.contains("canic_emit_authority_restore_endpoints!"));
-
-    let coordinator =
-        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
-    assert!(coordinator.contains("canic_emit_authority_restore_endpoints!"));
+fn root_authority_restore_and_cycle_refill_are_variant_guarded() {
+    let source = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    assert!(source.contains("AuthorityRestoreApi::require_command_variant_allowed"));
+    assert!(source.contains("RootCommand::PrepareAuthoritySnapshot(_)"));
+    assert!(source.contains("RootCommand::ResumeAuthoritySnapshot(_)"));
+    assert!(source.contains("RootCommand::PreviewCycleRefill(_)"));
+    assert!(source.contains("RootCommand::RefillCycles(_)"));
+    assert!(source.contains("let controller_command = matches!"));
 }
-
-#[test]
-fn root_icp_refill_endpoint_is_controller_guarded() {
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
-    let source = read_text(&macro_path);
-    let attribute = preceding_attribute_context(&source, "async fn canic_icp_refill(");
-
-    assert!(
-        attribute.contains("canic_update(requires(caller::is_controller()))"),
-        "root ICP refill endpoint must remain controller-guarded"
-    );
-}
-
 #[test]
 fn root_icp_refill_dto_candid_shapes_are_named() {
     let request_env = candid_type_env::<IcpRefillRequest>();
@@ -3007,39 +1773,6 @@ fn runtime_introspection_dto_candid_shapes_are_named() {
         correlation_id: None,
         redacted: true,
     };
-}
-
-#[test]
-fn memory_ledger_is_config_gated() {
-    let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
-    let bundles = read_text(&bundle_path);
-    let shared_bundle = bundles
-        .split("macro_rules! canic_bundle_shared_runtime_endpoints")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("macro_rules! canic_bundle_root_only_endpoints")
-                .next()
-        })
-        .expect("shared runtime bundle should exist");
-    let wasm_store_bundle = bundles
-        .split("macro_rules! canic_bundle_wasm_store_runtime_endpoints")
-        .nth(1)
-        .expect("wasm_store runtime bundle should exist");
-
-    assert!(
-        shared_bundle.contains("#[cfg(canic_memory_ledger_enabled)]")
-            && shared_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
-        "shared runtime bundle must config-gate the ABI ledger recovery endpoint"
-    );
-    assert!(
-        wasm_store_bundle.contains("#[cfg(canic_memory_ledger_enabled)]")
-            && wasm_store_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
-        "wasm_store runtime bundle must config-gate the ABI ledger recovery endpoint"
-    );
-    assert!(
-        !shared_bundle.contains("canic_emit_memory_observability_endpoints!"),
-        "live memory registry diagnostics must not be in the default bundle"
-    );
 }
 
 #[test]

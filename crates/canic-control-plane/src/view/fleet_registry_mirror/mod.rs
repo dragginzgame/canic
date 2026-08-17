@@ -8,6 +8,7 @@ use canic_core::dto::fleet_registry::{
     FleetDirectorySnapshot, FleetRegistrySnapshotResponse, FleetRegistryVersion,
     FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
 };
+use canic_core::dto::root_store::RootStoreBootstrapRequest;
 
 ///
 /// RootFleetRegistryCandidateView
@@ -17,6 +18,8 @@ use canic_core::dto::fleet_registry::{
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootFleetRegistryCandidateView {
+    pub operation_id: [u8; 32],
+    pub store_bootstrap: RootStoreBootstrapRequest,
     pub snapshot: FleetRegistrySnapshotResponse,
     pub acknowledgement: Option<FleetSubnetRootSnapshotAcknowledgement>,
 }
@@ -56,4 +59,5 @@ pub struct ValidatedRootFleetRegistryMirrorView {
 pub struct RootFleetRegistryMirrorView {
     pub candidate: Option<RootFleetRegistryCandidateView>,
     pub active: Option<RootFleetRegistryActiveView>,
+    pub synchronization: Option<RootFleetRegistryCandidateView>,
 }

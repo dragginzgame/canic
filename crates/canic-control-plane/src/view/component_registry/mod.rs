@@ -22,6 +22,7 @@ use canic_core::{
         ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
         FleetSubnetRootReleaseSet, ManagedCanisterBinding, SubnetId,
     },
+    role_contract::ProtocolProfileDigest,
 };
 
 ///
@@ -868,6 +869,7 @@ pub struct ComponentDirectoryChildView {
     pub binding: ComponentChildBinding,
     pub kind: ComponentChildKind,
     pub installed_artifact_hash: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub status: ComponentLifecycleStatus,
 }
 
@@ -952,6 +954,7 @@ pub struct RootComponentCreationEffectView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentInstallEffectView {
     pub raw_module_hash: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
@@ -967,6 +970,7 @@ pub struct RootComponentInstallEffectView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentChildInstallEffectView {
     pub raw_module_hash: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentChildBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
@@ -1013,6 +1017,7 @@ pub struct RootComponentMembershipView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentRegistryPartitionView {
     pub binding: ComponentBinding,
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
     pub status: ComponentLifecycleStatus,

@@ -22,7 +22,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use canic_core::ids::ReleaseBuildId;
+use canic_core::{ids::ReleaseBuildId, role_contract::ProtocolProfileDigest};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
@@ -59,6 +59,8 @@ pub struct CanicInfrastructureArtifactBuildOutput {
     pub release_build_id: ReleaseBuildId,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -156,6 +158,8 @@ struct MaterializedBuildOutput {
     wasm: Vec<u8>,
     wasm_gz_relative_path: String,
     wasm_gz: Vec<u8>,
+    candid_sha256: [u8; 32],
+    protocol_profile_digest: ProtocolProfileDigest,
 }
 
 impl MaterializedBuildOutput {
@@ -168,6 +172,8 @@ impl MaterializedBuildOutput {
             wasm: &self.wasm,
             wasm_gz_relative_path: &self.wasm_gz_relative_path,
             wasm_gz: &self.wasm_gz,
+            candid_sha256: self.candid_sha256,
+            protocol_profile_digest: self.protocol_profile_digest,
         }
     }
 }
@@ -286,6 +292,8 @@ fn materialize_build_output(
         wasm: wasm.bytes,
         wasm_gz_relative_path: wasm_gz.relative_path,
         wasm_gz: wasm_gz.bytes,
+        candid_sha256: output.candid_sha256,
+        protocol_profile_digest: output.protocol_profile_digest,
     })
 }
 

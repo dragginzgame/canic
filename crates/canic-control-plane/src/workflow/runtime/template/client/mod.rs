@@ -1,9 +1,10 @@
 use crate::{
     dto::template::{
-        TemplateChunkResponse, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-        TemplateManifestInput, WasmStoreCatalogEntryResponse,
-        WasmStoreDeletionCycleReclamationRequest, WasmStoreDeletionCycleReclamationResponse,
-        WasmStoreStatusResponse,
+        StoreCommand, StoreCommandResponse, StoreStatusRequest, StoreStatusResponse,
+        TemplateChunkRequest, TemplateChunkResponse, TemplateChunkSetInfoResponse,
+        TemplateChunkSetPrepareInput, TemplateLookupRequest, TemplateManifestInput,
+        WasmStoreCatalogEntryResponse, WasmStoreDeletionCycleReclamationRequest,
+        WasmStoreDeletionCycleReclamationResponse, WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
 };
@@ -14,7 +15,7 @@ use canic_core::{
         error::InternalError,
         ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
     },
-    dto::error::Error,
+    dto::{error::Error, role::OperationStatusRequest},
     protocol,
 };
 
@@ -26,29 +27,15 @@ pub(in crate::workflow::runtime::template) struct WasmStoreInternalClient {
 }
 
 impl WasmStoreInternalClient {
-    const BEGIN_GC: &str = protocol::CANIC_WASM_STORE_BEGIN_GC;
-    const CATALOG: &str = protocol::CANIC_WASM_STORE_CATALOG;
+    const COMMAND: &str = protocol::CANIC_COMMAND;
     const CHUNK: &str = protocol::CANIC_WASM_STORE_CHUNK;
-    const COMPLETE_GC: &str = protocol::CANIC_WASM_STORE_COMPLETE_GC;
-    const INFO: &str = protocol::CANIC_WASM_STORE_INFO;
-    const PREPARE: &str = protocol::CANIC_WASM_STORE_PREPARE;
-    const PREPARE_GC: &str = protocol::CANIC_WASM_STORE_PREPARE_GC;
     const PUBLISH_CHUNK: &str = protocol::CANIC_WASM_STORE_PUBLISH_CHUNK;
-    const RECLAIM_DELETION_CYCLES: &str = protocol::CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES;
-    const STAGE_MANIFEST: &str = protocol::CANIC_WASM_STORE_STAGE_MANIFEST;
-    const STATUS: &str = protocol::CANIC_WASM_STORE_STATUS;
+    const STATUS: &str = protocol::CANIC_STATUS;
     #[cfg(test)]
     const ENDPOINTS: &[&str] = &[
-        Self::BEGIN_GC,
-        Self::CATALOG,
+        Self::COMMAND,
         Self::CHUNK,
-        Self::COMPLETE_GC,
-        Self::INFO,
-        Self::PREPARE,
-        Self::PREPARE_GC,
         Self::PUBLISH_CHUNK,
-        Self::RECLAIM_DELETION_CYCLES,
-        Self::STAGE_MANIFEST,
         Self::STATUS,
     ];
 
@@ -59,7 +46,10 @@ impl WasmStoreInternalClient {
     pub(super) async fn catalog(
         &self,
     ) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
-        self.call_result(Self::CATALOG, ()).await
+        match self.status_request(StoreStatusRequest::Catalog).await? {
+            StoreStatusResponse::Catalog(catalog) => Ok(catalog),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn info(
@@ -67,18 +57,23 @@ impl WasmStoreInternalClient {
         template_id: &TemplateId,
         version: &TemplateVersion,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        self.call_result(
-            Self::INFO,
-            (
-                template_id.as_str().to_string(),
-                version.as_str().to_string(),
-            ),
-        )
-        .await
+        match self
+            .command(StoreCommand::InspectTemplate(TemplateLookupRequest {
+                template_id: template_id.clone(),
+                version: version.clone(),
+            }))
+            .await?
+        {
+            StoreCommandResponse::InspectTemplate(info) => Ok(info),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn status(&self) -> Result<WasmStoreStatusResponse, InternalError> {
-        self.call_result(Self::STATUS, ()).await
+        match self.status_request(StoreStatusRequest::Storage).await? {
+            StoreStatusResponse::Storage(status) => Ok(status),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn prepare_chunk_set(
@@ -86,7 +81,10 @@ impl WasmStoreInternalClient {
         _publication_permit: &CostGuardPermit,
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        self.call_result(Self::PREPARE, (request,)).await
+        match self.command(StoreCommand::PrepareChunkSet(request)).await? {
+            StoreCommandResponse::PrepareChunkSet(info) => Ok(info),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn stage_manifest(
@@ -94,7 +92,10 @@ impl WasmStoreInternalClient {
         _publication_permit: &CostGuardPermit,
         request: TemplateManifestInput,
     ) -> Result<(), InternalError> {
-        self.call_result(Self::STAGE_MANIFEST, (request,)).await
+        match self.command(StoreCommand::StageManifest(request)).await? {
+            StoreCommandResponse::StageManifest => Ok(()),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn publish_chunk(
@@ -117,24 +118,31 @@ impl WasmStoreInternalClient {
         .await
     }
 
-    pub(super) async fn prepare_gc(&self) -> Result<(), InternalError> {
-        self.call_result(Self::PREPARE_GC, ()).await
-    }
-
-    pub(super) async fn begin_gc(&self) -> Result<(), InternalError> {
-        self.call_result(Self::BEGIN_GC, ()).await
-    }
-
-    pub(super) async fn complete_gc(&self) -> Result<(), InternalError> {
-        self.call_result(Self::COMPLETE_GC, ()).await
+    pub(super) async fn run_gc(&self, operation_id: [u8; 32]) -> Result<(), InternalError> {
+        match self
+            .command(StoreCommand::RunGc(OperationStatusRequest { operation_id }))
+            .await?
+        {
+            StoreCommandResponse::OperationAccepted(receipt)
+                if receipt.operation_id == operation_id =>
+            {
+                Ok(())
+            }
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn reclaim_deletion_cycles(
         &self,
         request: WasmStoreDeletionCycleReclamationRequest,
     ) -> Result<WasmStoreDeletionCycleReclamationResponse, InternalError> {
-        self.call_result(Self::RECLAIM_DELETION_CYCLES, (request,))
-            .await
+        match self
+            .command(StoreCommand::ReclaimDeletionCycles(request))
+            .await?
+        {
+            StoreCommandResponse::ReclaimDeletionCycles(response) => Ok(response),
+            _ => Err(InternalError::conflict()),
+        }
     }
 
     pub(super) async fn chunk(
@@ -146,15 +154,36 @@ impl WasmStoreInternalClient {
         let response: TemplateChunkResponse = self
             .call_result(
                 Self::CHUNK,
-                (
-                    template_id.as_str().to_string(),
-                    version.as_str().to_string(),
+                (TemplateChunkRequest {
+                    template_id: template_id.clone(),
+                    version: version.clone(),
                     chunk_index,
-                ),
+                },),
             )
             .await?;
 
         Ok(response.bytes)
+    }
+
+    async fn command(&self, command: StoreCommand) -> Result<StoreCommandResponse, InternalError> {
+        let call = CallOps::bounded_wait(self.store_pid, Self::COMMAND)
+            .with_arg(command)?
+            .execute()
+            .await?;
+        let result: Result<StoreCommandResponse, Error> = call.candid()?;
+        result.map_err(InternalError::observed_public)
+    }
+
+    async fn status_request(
+        &self,
+        request: StoreStatusRequest,
+    ) -> Result<StoreStatusResponse, InternalError> {
+        let call = CallOps::bounded_wait(self.store_pid, Self::STATUS)
+            .with_arg(request)?
+            .execute()
+            .await?;
+        let result: Result<StoreStatusResponse, Error> = call.candid()?;
+        result.map_err(InternalError::observed_public)
     }
 
     async fn call_result<T, A>(&self, method: &'static str, arg: A) -> Result<T, InternalError>
@@ -190,39 +219,23 @@ struct TemplateChunkInputRef<'a> {
 #[cfg(test)]
 mod tests {
     use super::WasmStoreInternalClient;
-    use canic_core::protocol;
     use std::collections::BTreeSet;
 
     #[test]
-    fn typed_client_endpoint_table_matches_protocol_manifests() {
-        let root_updates = WasmStoreInternalClient::ENDPOINTS
-            .iter()
-            .filter(|method| protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(method))
-            .copied()
-            .collect::<BTreeSet<_>>();
-        let structural = WasmStoreInternalClient::ENDPOINTS
-            .iter()
-            .filter(|method| protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS.contains(method))
-            .copied()
-            .collect::<BTreeSet<_>>();
+    fn typed_client_uses_only_store_command_status_and_byte_lanes() {
         let all = WasmStoreInternalClient::ENDPOINTS
             .iter()
             .copied()
             .collect::<BTreeSet<_>>();
 
         assert_eq!(
-            root_updates,
-            protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS
-                .iter()
-                .copied()
-                .collect::<BTreeSet<_>>()
-        );
-        assert_eq!(
-            structural,
-            protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS
-                .iter()
-                .copied()
-                .collect::<BTreeSet<_>>()
+            all,
+            BTreeSet::from([
+                "canic_command",
+                "canic_status",
+                "canic_wasm_store_chunk",
+                "canic_wasm_store_publish_chunk",
+            ])
         );
         assert_eq!(
             all.len(),

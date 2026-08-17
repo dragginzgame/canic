@@ -51,11 +51,12 @@ pub enum CanicFeatureEffect {
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RoleCapabilityKey {
+    AutomaticTopup,
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
     FleetCoordinator,
-    Index,
     Icrc21,
+    Index,
     RoleAttestationSigner,
     RoleAttestationVerifier,
     Root,
@@ -64,6 +65,29 @@ pub enum RoleCapabilityKey {
     Scaling,
     Sharding,
     WasmStore,
+}
+
+impl RoleCapabilityKey {
+    /// Stable manifest spelling used by protocol-profile identity encoding.
+    #[must_use]
+    pub const fn manifest_name(self) -> &'static str {
+        match self {
+            Self::AutomaticTopup => "AutomaticTopup",
+            Self::DelegatedTokenIssuer => "DelegatedTokenIssuer",
+            Self::DelegatedTokenVerifier => "DelegatedTokenVerifier",
+            Self::FleetCoordinator => "FleetCoordinator",
+            Self::Icrc21 => "Icrc21",
+            Self::Index => "Index",
+            Self::RoleAttestationSigner => "RoleAttestationSigner",
+            Self::RoleAttestationVerifier => "RoleAttestationVerifier",
+            Self::Root => "Root",
+            Self::RootControlPlane => "RootControlPlane",
+            Self::Runtime => "Runtime",
+            Self::Scaling => "Scaling",
+            Self::Sharding => "Sharding",
+            Self::WasmStore => "WasmStore",
+        }
+    }
 }
 
 ///

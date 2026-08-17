@@ -20,8 +20,9 @@ use crate::{
             FleetCredentialGenerationRequest, FleetCredentialManifest,
         },
         fleet_subnet_root::FleetSubnetRootAuthority,
+        role::{OperationReceipt, OperationStatusRequest},
     },
-    ids::{EndpointCall, FleetSubnetWasmStoreAuthority},
+    ids::{EndpointCall, EndpointCallKind, EndpointId, FleetSubnetWasmStoreAuthority},
     ops::{
         cascade::CascadeOps,
         fleet_activation::FleetActivationEvidenceOps,
@@ -38,6 +39,34 @@ use crate::{
         topology::TopologyCascadeWorkflow,
     },
 };
+use candid::CandidType;
+use serde::Deserialize;
+
+#[derive(CandidType)]
+enum StoreCommandFragment {
+    ActivateFleet(FleetActivationRequest),
+    PrepareFleetCredential(FleetCredentialGenerationRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum StoreCommandResponseFragment {
+    OperationAccepted(OperationReceipt),
+}
+
+#[derive(CandidType)]
+enum StoreStatusRequestFragment {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum StoreStatusResponseFragment {
+    Operation(StoreOperationStatusFragment),
+}
+
+#[derive(CandidType, Deserialize)]
+enum StoreOperationStatusFragment {
+    FleetActivation(FleetActivationStatusResponse),
+}
 
 ///
 /// FleetActivationWorkflow
@@ -123,7 +152,7 @@ impl FleetActivationWorkflow {
         .map_err(StorageOpsError::from)?;
 
         StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &[wasm_store.pid]).await?;
-        CascadeOps::send_topology_snapshot(wasm_store.pid, topology).await?;
+        CascadeOps::send_topology_snapshot(wasm_store.pid, &topology).await?;
         Self::status()
     }
 
@@ -230,10 +259,10 @@ impl FleetActivationWorkflow {
             credential,
         };
 
-        let prepared = match RpcOps::call_rpc_result(
+        let prepared = match submit_store_fleet_command(
             pid,
-            protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-            generation_request,
+            StoreCommandFragment::PrepareFleetCredential(generation_request),
+            root_status.identity.operation_id,
         )
         .await
         {
@@ -262,21 +291,26 @@ impl FleetActivationWorkflow {
             credential,
             activation_evidence_hash,
         };
-        let activated =
-            match RpcOps::call_rpc_result(pid, protocol::CANIC_ACTIVATE_FLEET, request).await {
-                Ok(status) => status,
-                Err(error) => {
-                    reconcile_nonroot_activation_status_after_call_error(
-                        pid,
-                        &root_status,
-                        &expected_cascade,
-                        Some(FleetActivationPhase::Active),
-                        "activation",
-                        error,
-                    )
-                    .await?
-                }
-            };
+        let activated = match submit_store_fleet_command(
+            pid,
+            StoreCommandFragment::ActivateFleet(request),
+            root_status.identity.operation_id,
+        )
+        .await
+        {
+            Ok(status) => status,
+            Err(error) => {
+                reconcile_nonroot_activation_status_after_call_error(
+                    pid,
+                    &root_status,
+                    &expected_cascade,
+                    Some(FleetActivationPhase::Active),
+                    "activation",
+                    error,
+                )
+                .await?
+            }
+        };
         validate_nonroot_activation_status(
             &root_status,
             &activated,
@@ -299,7 +333,7 @@ impl FleetActivationWorkflow {
         let topology = TopologyCascadeWorkflow::root_wasm_store_snapshot_input(wasm_store)?;
 
         StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &[wasm_store]).await?;
-        CascadeOps::send_topology_snapshot(wasm_store, topology.clone()).await?;
+        CascadeOps::send_topology_snapshot(wasm_store, &topology).await?;
         Self::complete_provisioned_nonroot_activation(wasm_store, state_input, topology).await
     }
 
@@ -318,6 +352,51 @@ impl FleetActivationWorkflow {
 
         require_endpoint_for_phase(is_root, status.phase, call).map_err(InternalError::from)
     }
+
+    /// Preserve the prepared-Root fence after role methods collapse many variants into one name.
+    pub fn require_root_command_variant_allowed(
+        prepared_allowed: bool,
+    ) -> Result<(), InternalError> {
+        Self::require_root_role_variant_allowed(
+            prepared_allowed,
+            EndpointCall {
+                endpoint: EndpointId::new(protocol::CANIC_COMMAND),
+                kind: EndpointCallKind::Update,
+            },
+        )
+    }
+
+    /// Preserve the prepared-Root observation fence for the consolidated status selector.
+    pub fn require_root_status_variant_allowed(
+        prepared_allowed: bool,
+    ) -> Result<(), InternalError> {
+        Self::require_root_role_variant_allowed(
+            prepared_allowed,
+            EndpointCall {
+                endpoint: EndpointId::new(protocol::CANIC_STATUS),
+                kind: EndpointCallKind::Query,
+            },
+        )
+    }
+
+    fn require_root_role_variant_allowed(
+        prepared_allowed: bool,
+        call: EndpointCall,
+    ) -> Result<(), InternalError> {
+        EnvOps::require_root()?;
+        let status = FleetActivationOps::status(true)
+            .map_err(StorageOpsError::from)
+            .map_err(InternalError::from)?;
+        if status.phase == FleetActivationPhase::Active || prepared_allowed {
+            return Ok(());
+        }
+        Err(InternalError::from(PolicyError::from(
+            crate::domain::policy::pure::fleet_activation::FleetActivationEndpointPolicyError::Fenced {
+                endpoint: call.endpoint.name,
+                kind: call.kind,
+            },
+        )))
+    }
 }
 
 async fn resume_nonroot_activation(
@@ -329,13 +408,13 @@ async fn resume_nonroot_activation(
         state_snapshot_hash: entry.state_snapshot_hash,
         topology_snapshot_hash: entry.topology_snapshot_hash,
     };
-    let prepared: FleetActivationStatusResponse = match RpcOps::call_rpc_result(
+    let prepared: FleetActivationStatusResponse = match submit_store_fleet_command(
         entry.principal,
-        protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
-        FleetCredentialGenerationRequest {
+        StoreCommandFragment::PrepareFleetCredential(FleetCredentialGenerationRequest {
             operation_id: request.operation_id,
             credential: request.credential,
-        },
+        }),
+        request.operation_id,
     )
     .await
     {
@@ -359,14 +438,14 @@ async fn resume_nonroot_activation(
         &expected_cascade,
         request.credential,
     )?;
-    let activated: FleetActivationStatusResponse = match RpcOps::call_rpc_result(
+    let activated: FleetActivationStatusResponse = match submit_store_fleet_command(
         entry.principal,
-        protocol::CANIC_ACTIVATE_FLEET,
-        FleetActivationRequest {
+        StoreCommandFragment::ActivateFleet(FleetActivationRequest {
             operation_id: request.operation_id,
             credential: request.credential,
             activation_evidence_hash,
-        },
+        }),
+        request.operation_id,
     )
     .await
     {
@@ -400,7 +479,7 @@ async fn reconcile_nonroot_activation_status_after_call_error(
     call_error: InternalError,
 ) -> Result<FleetActivationStatusResponse, InternalError> {
     let observed: FleetActivationStatusResponse =
-        match RpcOps::call_rpc_result(pid, protocol::CANIC_FLEET_ACTIVATION_STATUS, ()).await {
+        match query_store_fleet_activation_status(pid, root_status.identity.operation_id).await {
             Ok(status) => status,
             Err(_observation_error) => {
                 return Err(call_error);
@@ -412,6 +491,39 @@ async fn reconcile_nonroot_activation_status_after_call_error(
         return Err(call_error);
     }
     Ok(observed)
+}
+
+async fn submit_store_fleet_command(
+    pid: Principal,
+    command: StoreCommandFragment,
+    operation_id: [u8; 32],
+) -> Result<FleetActivationStatusResponse, InternalError> {
+    let response: StoreCommandResponseFragment =
+        RpcOps::call_rpc_result(pid, protocol::CANIC_COMMAND, command).await?;
+    let StoreCommandResponseFragment::OperationAccepted(receipt) = response;
+    if receipt.operation_id != operation_id {
+        return Err(InternalError::conflict());
+    }
+    query_store_fleet_activation_status(pid, operation_id).await
+}
+
+async fn query_store_fleet_activation_status(
+    pid: Principal,
+    operation_id: [u8; 32],
+) -> Result<FleetActivationStatusResponse, InternalError> {
+    let response: StoreStatusResponseFragment = RpcOps::call_rpc_result(
+        pid,
+        protocol::CANIC_STATUS,
+        StoreStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+    )
+    .await?;
+    let StoreStatusResponseFragment::Operation(StoreOperationStatusFragment::FleetActivation(
+        status,
+    )) = response;
+    if status.identity.operation_id != operation_id {
+        return Err(InternalError::conflict());
+    }
+    Ok(status)
 }
 
 fn validate_nonroot_activation_status(

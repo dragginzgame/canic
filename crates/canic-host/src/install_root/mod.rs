@@ -8,6 +8,7 @@ use crate::{
     release_set::{AppConfigSnapshot, icp_root, workspace_root},
 };
 use config_selection::resolve_install_config_path;
+use sha2::{Digest, Sha256};
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -96,6 +97,33 @@ use plan_artifacts::emit_manifest_with_phase;
 use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
+
+pub(super) fn root_store_bootstrap_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
+    root_install_phase_operation_id(install_operation_id, b"store-bootstrap")
+}
+
+pub(super) fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
+    root_install_phase_operation_id(install_operation_id, b"store-adoption")
+}
+
+pub(super) fn root_registry_synchronization_operation_id(
+    install_operation_id: [u8; 32],
+) -> [u8; 32] {
+    root_install_phase_operation_id(install_operation_id, b"registry-synchronization")
+}
+
+fn root_install_phase_operation_id(install_operation_id: [u8; 32], phase: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"canic.fleet-install.root-operation.v1\0");
+    hasher.update(phase);
+    hasher.update([0]);
+    hasher.update(install_operation_id);
+    let mut operation_id: [u8; 32] = hasher.finalize().into();
+    if operation_id == [0; 32] {
+        operation_id[31] = 1;
+    }
+    operation_id
+}
 
 #[cfg(test)]
 mod tests;

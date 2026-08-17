@@ -5,15 +5,24 @@
 //! Boundary: selects one transport and decodes the canonical boolean response.
 
 use crate::{
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_response},
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::IcpConfigError,
     replica_query::{self, ReplicaQueryError},
+};
+use candid::{CandidType, Deserialize};
+use canic_core::{
+    dto::runtime::{CanicReadinessStatus, ReadinessStatus},
+    protocol::CANIC_STATUS,
 };
 use std::path::Path;
 use thiserror::Error as ThisError;
 
-const CANIC_READY_METHOD: &str = "canic_ready";
 const ICP_JSON_OUTPUT: &str = "json";
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    Readiness(CanicReadinessStatus),
+}
 
 ///
 /// CanisterReadyQueryError
@@ -34,7 +43,7 @@ pub enum CanisterReadyQueryError {
     Response(#[from] IcpJsonResponseError),
 }
 
-/// Query `canic_ready`, using the local replica API for local environment targets.
+/// Query role-owned readiness, using the local replica API for local targets.
 pub fn query_canister_ready(
     icp: &IcpCli,
     canister_id: &str,
@@ -49,7 +58,7 @@ pub fn query_canister_ready(
     query_canister_ready_with_icp(icp, canister_id, candid_path)
 }
 
-/// Query `canic_ready` directly through the local replica API.
+/// Query role-owned readiness directly through the local replica API.
 pub fn query_local_canister_ready(
     environment: &str,
     canister_id: &str,
@@ -63,11 +72,14 @@ fn query_canister_ready_with_icp(
     canister_id: &str,
     candid_path: Option<&Path>,
 ) -> Result<bool, CanisterReadyQueryError> {
-    let output = icp.canister_query_output_with_candid(
+    let output = icp.canister_query_arg_output_with_candid(
         canister_id,
-        CANIC_READY_METHOD,
+        CANIC_STATUS,
+        "(variant { Readiness })",
         Some(ICP_JSON_OUTPUT),
         candid_path,
     )?;
-    decode_json_response(&output).map_err(Into::into)
+    let response = decode_json_result_response::<RoleStatusResponse>(&output)?;
+    let RoleStatusResponse::Readiness(response) = response;
+    Ok(response.status == ReadinessStatus::Ready)
 }

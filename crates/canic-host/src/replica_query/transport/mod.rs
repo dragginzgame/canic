@@ -4,7 +4,7 @@ use crate::icp_config::{
     DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port,
     configured_local_gateway_port_from_root,
 };
-use candid::{Encode, Principal};
+use candid::Principal;
 use std::{
     io::{Read, Write},
     net::TcpStream,
@@ -16,13 +16,14 @@ pub(super) fn local_query(
     environment: Option<&str>,
     canister: &str,
     method: &str,
+    arg: &[u8],
     icp_root: Option<&Path>,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
     let endpoint = icp_root.map_or_else(
         || local_replica_endpoint(environment),
         |root| local_replica_endpoint_from_root(environment, root),
     );
-    local_query_with_endpoint(canister, method, endpoint)
+    local_query_with_endpoint(canister, method, arg, endpoint)
 }
 
 #[must_use]
@@ -48,17 +49,13 @@ pub(super) fn get_http_status(endpoint: &str) -> Result<Vec<u8>, ReplicaQueryErr
 fn local_query_with_endpoint(
     canister: &str,
     method: &str,
+    arg: &[u8],
     endpoint: String,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
     let canister_id =
         Principal::from_text(canister).map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let arg = Encode!().map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let body = encode_anonymous_query(
-        canister_id.as_slice(),
-        method,
-        &arg,
-        ingress_expiry_nanos()?,
-    )?;
+    let body =
+        encode_anonymous_query(canister_id.as_slice(), method, arg, ingress_expiry_nanos()?)?;
     let response = post_cbor(
         &endpoint,
         &format!("/api/v2/canister/{canister}/query"),

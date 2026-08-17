@@ -5,7 +5,7 @@
 //! Boundary: preserves query causes until projecting per-canister report diagnostics.
 
 use crate::metrics::{
-    CANIC_METRICS_METHOD, MetricsCommandError,
+    MetricsCommandError,
     model::{
         MetricEntry, MetricValue, MetricsCanisterReport, MetricsCanisterStatus, MetricsKind,
         MetricsReport,
@@ -26,7 +26,7 @@ use std::{sync::Arc, thread};
 use thiserror::Error as ThisError;
 
 const METRICS_UNAVAILABLE_HINT: &str =
-    "canic_metrics unavailable; check deployed Wasm and metrics profile";
+    "canic_status Metrics unavailable; check deployed Wasm and metrics profile";
 const METRICS_EMPTY_HINT: &str =
     "no metrics rows; check whether this tier is enabled by the deployed role profile";
 const METRICS_NONZERO_EMPTY_HINT: &str =
@@ -38,7 +38,7 @@ enum MetricsQueryError {
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error("invalid canic_metrics response: {0}")]
+    #[error("invalid canic_status Metrics response: {0}")]
     Response(#[source] IcpJsonResponseError),
 }
 
@@ -219,7 +219,7 @@ fn query_metrics(
     entry: &RegistryEntry,
 ) -> Result<Vec<MetricEntry>, MetricsQueryError> {
     let arg = format!(
-        "(variant {{ {} }}, record {{ offset = 0 : nat64; limit = {} : nat64 }})",
+        "(variant {{ Metrics = record {{ kind = variant {{ {} }}; page = record {{ offset = 0 : nat64; limit = {} : nat64 }} }} }})",
         metrics_kind_candid_variant(options.kind),
         options.limit
     );
@@ -231,7 +231,7 @@ fn query_metrics(
     }
     let output = icp.canister_query_arg_output_with_candid(
         &entry.pid,
-        CANIC_METRICS_METHOD,
+        canic_core::protocol::CANIC_STATUS,
         &arg,
         Some("json"),
         candid_path.as_deref(),
@@ -272,7 +272,7 @@ mod tests {
     fn shortens_metrics_unavailable_errors() {
         let error = MetricsQueryError::Icp(IcpCommandError::Failed {
             command: "icp canister call".to_string(),
-            stderr: "Canister has no query method 'canic_metrics'.".to_string(),
+            stderr: "Canister has no query method 'canic_status'.".to_string(),
         });
         let report = metrics_query_error_report(&registry_entry(), &error);
 

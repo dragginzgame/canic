@@ -2,6 +2,14 @@ use crate::{cdk::types::Cycles, dto::prelude::*};
 
 pub use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus};
 
+/// Exact input shared by the Root's preview and durable refill commands.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CycleRefillInput {
+    pub operation_id: [u8; 32],
+    pub source_subaccount: Option<[u8; 32]>,
+    pub amount_e8s: u64,
+}
+
 ///
 /// IcpRefillRequest
 ///
@@ -88,6 +96,17 @@ mod tests {
 
     #[test]
     fn narrowed_root_request_roundtrips_through_candid() {
+        let input = CycleRefillInput {
+            operation_id: [9; 32],
+            source_subaccount: None,
+            amount_e8s: 10_000,
+        };
+        let bytes = candid::encode_one(&input).expect("encode cycle refill input");
+        assert_eq!(
+            candid::decode_one::<CycleRefillInput>(&bytes).expect("decode cycle refill input"),
+            input,
+        );
+
         let request = IcpRefillRequest {
             operation_id: [9; 32],
             source_subaccount: None,

@@ -5,6 +5,7 @@ use crate::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterBuildProfile, WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
+        extract_candid_bytes,
     },
     cargo_command,
     cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
@@ -70,13 +71,35 @@ pub fn build_bootstrap_wasm_store_artifact(
     let artifact_root = context.artifact_root().join(WASM_STORE_ROLE);
     fs::create_dir_all(&artifact_root)?;
 
-    run_wasm_store_cargo_build(context, &source.manifest_path)?;
+    run_wasm_store_cargo_build(context, &source.manifest_path, None, true)?;
 
     let target_root = canister_build_target_root(&context.workspace_root);
     let built_wasm_path = target_root
         .join("wasm32-unknown-unknown")
         .join(context.profile.target_dir_name())
         .join(format!("{CANONICAL_WASM_STORE_CRATE_NAME}.wasm"));
+    let candid = extract_candid_bytes(&built_wasm_path)?;
+    let capabilities = canic_core::role_contract::built_in_role_capabilities(
+        canic_core::role_contract::BuiltInRoleKind::WasmStore,
+    );
+    let profile = canic_core::role_contract::derive_protocol_profile_hashes(
+        &source.package_version,
+        &canic_core::ids::CanisterRole::new(WASM_STORE_ROLE),
+        &capabilities,
+        &candid,
+    );
+    run_wasm_store_cargo_build(
+        context,
+        &source.manifest_path,
+        Some(profile.protocol_profile_digest),
+        should_export_candid_artifacts(context.build_network),
+    )?;
+    if should_export_candid_artifacts(context.build_network) {
+        let final_candid = extract_candid_bytes(&built_wasm_path)?;
+        if final_candid != candid {
+            return Err("Wasm Store Candid changed after protocol-profile binding".into());
+        }
+    }
 
     let wasm_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm"));
     let wasm_gz_path = artifact_root.join(format!("{WASM_STORE_ROLE}.wasm.gz"));
@@ -87,6 +110,9 @@ pub fn build_bootstrap_wasm_store_artifact(
     fs::write(profile_path, context.profile.target_dir_name())?;
     if should_export_candid_artifacts(context.build_network) {
         ensure_wasm_store_did(context, &source, &did_path)?;
+        if fs::read(&did_path)? != candid {
+            return Err("Wasm Store canonical Candid differs from its compiled profile".into());
+        }
         transforms.push(embed_candid_metadata(&wasm_path, &did_path)?);
     } else {
         remove_optional_file(&did_path)?;
@@ -103,6 +129,8 @@ pub fn build_bootstrap_wasm_store_artifact(
         wasm_path,
         wasm_gz_path,
         did_path,
+        candid_sha256: profile.candid_sha256,
+        protocol_profile_digest: profile.protocol_profile_digest,
         transforms,
     })
 }
@@ -467,8 +495,16 @@ pub fn render_profile(output: &mut String, profile: &str, settings: &[(&str, &st
 fn run_wasm_store_cargo_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
+    protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
+    force_candid_export: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = wasm_store_cargo_build_command(context, manifest_path);
+    let mut command = wasm_store_cargo_build_command(context, manifest_path, force_candid_export);
+    if let Some(digest) = protocol_profile_digest {
+        command.env(
+            canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
+            digest.to_string(),
+        );
+    }
 
     let output = command.output()?;
     if output.status.success() {
@@ -485,17 +521,23 @@ fn run_wasm_store_cargo_build(
 fn wasm_store_cargo_build_command(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
+    force_candid_export: bool,
 ) -> Command {
     let mut command = cargo_command();
     context.apply_to_command(&mut command);
     command
+        .env_remove(canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV)
         .current_dir(&context.workspace_root)
         .env(
             canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
             canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
         )
         .args([
-            "build",
+            if force_candid_export {
+                "rustc"
+            } else {
+                "build"
+            },
             "--locked",
             "--manifest-path",
             &manifest_path.display().to_string(),
@@ -505,6 +547,15 @@ fn wasm_store_cargo_build_command(
     configure_canister_cargo_command(&mut command, &context.workspace_root);
     append_wasm_store_profile_config_args(&mut command, context.profile);
     command.args(context.profile.cargo_args());
+    if force_candid_export {
+        command.args([
+            "--lib",
+            "--",
+            "--cfg",
+            "canic_export_candid",
+            "--check-cfg=cfg(canic_export_candid)",
+        ]);
+    }
     command
 }
 

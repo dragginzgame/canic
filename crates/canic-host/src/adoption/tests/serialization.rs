@@ -22,6 +22,7 @@ fn adoption_report_round_trips_through_json() {
             installed_module_hash: None,
             candid_path: None,
             candid_sha256: None,
+            protocol_profile_digest: None,
             raw_config_sha256: None,
             canonical_embedded_config_sha256: None,
             embedded_topology_sha256: None,

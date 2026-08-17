@@ -274,6 +274,8 @@ fn qualify_infrastructure_outputs(
             release_build_id,
             wasm_path: coordinator.wasm_path,
             wasm_gz_path: coordinator.wasm_gz_path,
+            candid_sha256: coordinator.candid_sha256,
+            protocol_profile_digest: coordinator.protocol_profile_digest,
         },
         CanicInfrastructureArtifactBuildOutput {
             role: CanicInfrastructureRole::FleetSubnetRoot,
@@ -281,6 +283,8 @@ fn qualify_infrastructure_outputs(
             release_build_id,
             wasm_path: root_output.output.wasm_path.clone(),
             wasm_gz_path: root_output.output.wasm_gz_path.clone(),
+            candid_sha256: root_output.output.candid_sha256,
+            protocol_profile_digest: root_output.output.protocol_profile_digest,
         },
         CanicInfrastructureArtifactBuildOutput {
             role: CanicInfrastructureRole::WasmStore,
@@ -288,6 +292,8 @@ fn qualify_infrastructure_outputs(
             release_build_id,
             wasm_path: wasm_store.wasm_path,
             wasm_gz_path: wasm_store.wasm_gz_path,
+            candid_sha256: wasm_store.candid_sha256,
+            protocol_profile_digest: wasm_store.protocol_profile_digest,
         },
     ];
     Ok((outputs, infrastructure_started_at.elapsed()))

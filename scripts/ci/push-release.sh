@@ -14,6 +14,6 @@ workspace_version="$(bash "$VERSION_READER" --committed)"
 branch="$(git symbolic-ref --quiet --short HEAD)"
 tag="v$workspace_version"
 
-git push --atomic origin \
+git push --no-follow-tags --atomic origin \
     "HEAD:refs/heads/$branch" \
     "refs/tags/$tag:refs/tags/$tag"

@@ -256,6 +256,9 @@ fn installed_allocation(
         canister,
         installation: RootComponentInstallEffectView {
             raw_module_hash: [33; 32],
+            protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+                [34; 32],
+            ),
             chunk_hashes: vec![vec![34; 32]],
             binding: canic_core::ids::ComponentBinding {
                 authority: root.authority.clone(),
@@ -295,6 +298,7 @@ fn committed_allocation(
     };
     let partition = ComponentRegistryPartitionView {
         binding: installation.binding.clone(),
+        protocol_profile_digest: installation.protocol_profile_digest,
         provisioning_origin: allocation.provisioning_origin.clone(),
         release_set: allocation.release_set,
         status: ComponentLifecycleStatus::Prepared,

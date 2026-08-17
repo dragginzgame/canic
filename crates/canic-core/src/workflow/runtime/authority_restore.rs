@@ -7,7 +7,11 @@
 use crate::{
     InternalError,
     domain::policy::pure::{
-        PolicyError, authority_restore::require_update_allowed as require_policy_update_allowed,
+        PolicyError,
+        authority_restore::{
+            require_command_variant_allowed as require_policy_command_variant_allowed,
+            require_update_allowed as require_policy_update_allowed,
+        },
     },
     dto::authority_restore::{AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest},
     ids::{EndpointCall, EndpointCallKind},
@@ -109,6 +113,17 @@ impl AuthorityRestoreWorkflow {
         }
         let is_sealed = AuthorityRestoreFenceOps::is_sealed_for(IcOps::canister_self())?;
         require_policy_update_allowed(is_sealed, call.endpoint.name)
+            .map_err(PolicyError::from)
+            .map_err(InternalError::from)
+    }
+
+    /// Apply the sealed-authority fence after the common command has been decoded.
+    pub fn require_command_variant_allowed(recovery_command: bool) -> Result<(), InternalError> {
+        if !is_authority_runtime()? {
+            return Ok(());
+        }
+        let is_sealed = AuthorityRestoreFenceOps::is_sealed_for(IcOps::canister_self())?;
+        require_policy_command_variant_allowed(is_sealed, recovery_command)
             .map_err(PolicyError::from)
             .map_err(InternalError::from)
     }

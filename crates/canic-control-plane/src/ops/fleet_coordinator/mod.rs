@@ -10,7 +10,10 @@ mod root_deletion;
 use root_deletion::validate_root_deletion_history;
 
 use crate::{
-    dto::fleet_coordinator::FleetCoordinatorInitArgs,
+    dto::fleet_coordinator::{
+        CoordinatorOperationStatusResponse, CoordinatorRootRemovalOperationStatus,
+        FleetCoordinatorInitArgs,
+    },
     storage::stable::fleet_coordinator::{
         FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
         FleetComponentGroupDeploymentRecord, FleetComponentProvisioningRecord,
@@ -78,9 +81,9 @@ use canic_core::{
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
-            FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
+            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDrainingPublicationRequest,
+            FleetSubnetRootDrainingPublicationResponse, FleetSubnetRootDrainingReservationRequest,
+            FleetSubnetRootDrainingReservationResponse,
             FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootEntry,
             FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
             FleetSubnetRootRemovalPublicationRequest, FleetSubnetRootRemovalPublicationResponse,
@@ -107,6 +110,109 @@ const COMPONENT_SCALE_OUT_RECEIPT_HASH_DOMAIN: &[u8] =
 pub struct FleetCoordinatorOps;
 
 impl FleetCoordinatorOps {
+    /// Authorize a controller or exact Root participating in one durable operation.
+    pub(crate) fn authorize_operation_caller(
+        operation_id: [u8; 32],
+        caller: candid::Principal,
+        caller_is_controller: bool,
+    ) -> Result<(), InternalError> {
+        if caller_is_controller {
+            return Ok(());
+        }
+        let current = Self::current()?;
+        let active_provisioning = [
+            current.component_provisioning.as_ref(),
+            current.component_scale_out.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .find(|record| record.operation_id == operation_id);
+        let active_participant = active_provisioning.is_some_and(|record| {
+            record
+                .plan
+                .batches
+                .iter()
+                .any(|batch| batch.root.fleet_subnet_root == caller)
+                || record.plan.directory_confirmation_roots.contains(&caller)
+        });
+        let retired_participant = current
+            .component_scale_out_receipts
+            .iter()
+            .find(|receipt| receipt.operation_id == operation_id)
+            .is_some_and(|receipt| {
+                receipt
+                    .placements
+                    .iter()
+                    .any(|placement| placement.fleet_subnet_root == caller)
+            });
+        let removal_participant = current.root_draining_reservations.iter().any(|record| {
+            record.response.request.operation_id == operation_id
+                && record.response.request.expected_root.fleet_subnet_root == caller
+        });
+        if active_participant || retired_participant || removal_participant {
+            Ok(())
+        } else {
+            Err(InternalError::forbidden())
+        }
+    }
+
+    /// Resolve one Coordinator-owned durable operation without caller-supplied secondary keys.
+    pub(crate) fn operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
+        if operation_id == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        let current = Self::current()?;
+
+        let mut active_provisioning_matches = [
+            current.component_provisioning.as_ref(),
+            current.component_scale_out.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|record| record.operation_id == operation_id);
+        let active_provisioning = active_provisioning_matches.next();
+        if active_provisioning_matches.next().is_some() {
+            return Err(receipt_invariant(
+                "Coordinator operation ID identifies multiple active provisioning records",
+            ));
+        }
+        let retired_provisioning = component_scale_out_receipt_for_operation(
+            &current.component_scale_out_receipts,
+            operation_id,
+        )?;
+        if active_provisioning.is_some() && retired_provisioning.is_some() {
+            return Err(receipt_invariant(
+                "Coordinator operation ID identifies active and retired provisioning records",
+            ));
+        }
+        let provisioning = if let Some(record) = active_provisioning {
+            Some(component_provisioning_status_response(record)?)
+        } else if let Some(receipt) = retired_provisioning {
+            Some(component_scale_out_receipt_response(receipt)?)
+        } else {
+            None
+        };
+
+        let root_removal = coordinator_root_removal_operation_status(&current, operation_id)?;
+        if provisioning.is_some() && root_removal.is_some() {
+            return Err(receipt_invariant(
+                "Coordinator operation ID crosses provisioning and root-removal domains",
+            ));
+        }
+
+        if let Some(status) = provisioning {
+            return Ok(CoordinatorOperationStatusResponse::ComponentProvisioning(
+                status,
+            ));
+        }
+        if let Some(status) = root_removal {
+            return Ok(CoordinatorOperationStatusResponse::RootRemoval(status));
+        }
+        Err(InternalError::unavailable())
+    }
+
     pub(crate) fn compile_genesis(
         args: FleetCoordinatorInitArgs,
         coordinator_canister: Principal,
@@ -231,28 +337,15 @@ impl FleetCoordinatorOps {
         )
     }
 
-    pub(crate) fn snapshot_for_root(
+    pub(crate) fn registry_for_caller(
         caller: Principal,
-    ) -> Result<FleetRegistrySnapshotResponse, InternalError> {
+        caller_is_controller: bool,
+    ) -> Result<FleetRegistry, InternalError> {
         let current = Self::current()?;
-        require_snapshot_root(&current, caller)?;
-        let manifest = FleetRegistryOps::manifest(
-            &current.authority,
-            &current
-                .component_deployment_configuration
-                .component_topology,
-            &current.registry,
-        )?;
-        let version = FleetRegistryVersion {
-            authority: manifest.authority.clone(),
-            revision: manifest.revision,
-            content_hash: manifest.content_hash,
-        };
-        Ok(FleetRegistrySnapshotResponse {
-            registry: current.registry,
-            manifest,
-            version,
-        })
+        if !caller_is_controller {
+            require_snapshot_root(&current, caller)?;
+        }
+        Ok(current.registry)
     }
 
     pub(crate) fn acknowledge_root_snapshot(
@@ -2897,6 +2990,90 @@ fn component_scale_out_receipt_for_operation(
         ));
     }
     Ok(receipt)
+}
+
+fn coordinator_root_removal_operation_status(
+    current: &FleetCoordinatorRegistryRecord,
+    operation_id: [u8; 32],
+) -> Result<Option<CoordinatorRootRemovalOperationStatus>, InternalError> {
+    let reservation = unique_operation_match(
+        current
+            .root_draining_reservations
+            .iter()
+            .filter(|record| record.response.request.operation_id == operation_id),
+    )?;
+    let readiness_intent = unique_operation_match(
+        current
+            .root_deletion_readiness_intents
+            .iter()
+            .filter(|response| response.request.operation_id == operation_id),
+    )?;
+    let draining = unique_operation_match(
+        current
+            .root_draining_publication_receipts
+            .iter()
+            .filter(|receipt| receipt.request.root_draining.operation_id == operation_id),
+    )?;
+    let removal = unique_operation_match(
+        current
+            .root_removal_publication_receipts
+            .iter()
+            .filter(|receipt| receipt.request.final_inventory.operation_id == operation_id),
+    )?;
+    let readiness = unique_operation_match(
+        current
+            .root_deletion_readiness_receipts
+            .iter()
+            .filter(|response| response.request.operation_id == operation_id),
+    )?;
+    let execution = unique_operation_match(
+        current
+            .root_deletion_execution_intents
+            .iter()
+            .filter(|response| response.request.operation_id == operation_id),
+    )?;
+    let completion = unique_operation_match(
+        current
+            .root_deletion_receipts
+            .iter()
+            .filter(|response| response.operation_id == operation_id),
+    )?;
+
+    let any_phase = reservation.is_some()
+        || draining.is_some()
+        || removal.is_some()
+        || readiness_intent.is_some()
+        || readiness.is_some()
+        || execution.is_some()
+        || completion.is_some();
+    if !any_phase {
+        return Ok(None);
+    }
+    let reservation = reservation.ok_or_else(|| {
+        receipt_invariant("Coordinator root-removal operation has no reservation authority")
+    })?;
+    Ok(Some(CoordinatorRootRemovalOperationStatus {
+        operation_id,
+        reservation: reservation.response.clone(),
+        draining: draining.map(|receipt| receipt.response.clone()),
+        removal: removal.map(|receipt| receipt.response.clone()),
+        readiness_intent: readiness_intent.cloned(),
+        readiness: readiness.cloned(),
+        execution: execution.cloned(),
+        completion: completion.cloned(),
+    }))
+}
+
+fn unique_operation_match<'a, T: 'a>(
+    mut matches: impl Iterator<Item = &'a T>,
+) -> Result<Option<&'a T>, InternalError> {
+    let first = matches.next();
+    if matches.next().is_some() {
+        return Err(receipt_invariant(
+            "Coordinator operation ID identifies duplicate durable records",
+        ));
+    }
+    Ok(first)
 }
 
 #[derive(Clone)]
@@ -7596,6 +7773,10 @@ fn validate_removal_publication_request(
     }
     let removed_instances_are_exact = u64::from(inventory.removed_component_instances)
         == inventory.next_allocation_sequence.saturating_sub(1);
+    let expected_store_entries = inventory
+        .wasm_store_catalog_entries
+        .checked_add(1)
+        .ok_or("Fleet Subnet Root final inventory Store count overflows")?;
     let terminal_facts_are_exact = [
         inventory.operation_id != [0; 32],
         inventory.next_allocation_sequence > 0,
@@ -7605,8 +7786,8 @@ fn validate_removal_publication_request(
         inventory.wasm_store != Principal::anonymous(),
         inventory.wasm_store_catalog_hash != [0; 32],
         inventory.wasm_store_catalog_entries > 0,
-        inventory.wasm_store_release_count == inventory.wasm_store_catalog_entries,
-        inventory.wasm_store_template_count > 0,
+        inventory.wasm_store_release_count == expected_store_entries,
+        inventory.wasm_store_template_count == expected_store_entries,
         inventory.wasm_store_occupied_bytes <= target.limits.maximum_wasm_store_bytes,
         inventory.wasm_store_gc_prepared_at_secs > 0,
         inventory.finalized_at_ns > 0,

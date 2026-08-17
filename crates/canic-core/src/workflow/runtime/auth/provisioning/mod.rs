@@ -32,7 +32,19 @@ use crate::{
     protocol,
     workflow::runtime::auth::{RuntimeAuthWorkflow, root_delegation_batch},
 };
+use candid::CandidType;
+use serde::Deserialize;
 use std::future::Future;
+
+#[derive(CandidType)]
+enum IssuerCommandFragment {
+    InstallDelegationProof(InstallActiveDelegationProofRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum IssuerCommandResponseFragment {
+    InstallDelegationProof(InstallActiveDelegationProofResponse),
+}
 
 impl RuntimeAuthWorkflow {
     /// Create or reuse and install one chain-key root delegation proof.
@@ -164,10 +176,9 @@ async fn install_delegation_proof_on_issuer(
     issuer_pid: Principal,
     request: InstallActiveDelegationProofRequest,
 ) -> Result<(), IssuerProofInstallError> {
-    let builder =
-        CallOps::unbounded_wait(issuer_pid, protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF)
-            .with_arg(request)
-            .map_err(|_| IssuerProofInstallError::RequestEncoding)?;
+    let builder = CallOps::unbounded_wait(issuer_pid, protocol::CANIC_COMMAND)
+        .with_arg(IssuerCommandFragment::InstallDelegationProof(request))
+        .map_err(|_| IssuerProofInstallError::RequestEncoding)?;
     let call = builder
         .execute()
         .await
@@ -176,10 +187,12 @@ async fn install_delegation_proof_on_issuer(
 }
 
 fn issuer_install_outcome(call: CallResult) -> Result<(), IssuerProofInstallError> {
-    let result: Result<InstallActiveDelegationProofResponse, Error> = call
+    let result: Result<IssuerCommandResponseFragment, Error> = call
         .candid()
         .map_err(|_| IssuerProofInstallError::InvalidResponse)?;
-    issuer_install_response(result)
+    issuer_install_response(result.map(|response| match response {
+        IssuerCommandResponseFragment::InstallDelegationProof(response) => response,
+    }))
 }
 
 fn issuer_install_response(

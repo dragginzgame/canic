@@ -18,6 +18,53 @@ use canic_core::control_plane_support::{
 use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
 
 impl WasmStorePublicationWorkflow {
+    // Restore the management install cache for one exact release staged directly in a fresh
+    // Store. Stable Store bytes remain authoritative; the management cache is mechanical and
+    // may be empty after staging or later eviction.
+    pub(super) async fn ensure_pre_staged_manifest_install_cache(
+        publication_permit: &CostGuardPermit,
+        target_store: &mut PublicationStoreSnapshot,
+        manifest: &TemplateManifestResponse,
+    ) -> Result<(), InternalError> {
+        target_store
+            .ensure_stored_chunk_hashes(publication_permit)
+            .await?;
+        let client = WasmStoreInternalClient::new(target_store.pid);
+        let info = client
+            .info(&manifest.template_id, &manifest.version)
+            .await?;
+
+        for (chunk_index, expected_hash) in info.chunk_hashes.into_iter().enumerate() {
+            if target_store
+                .stored_chunk_hashes
+                .as_ref()
+                .is_some_and(|hashes| hashes.contains(&expected_hash))
+            {
+                continue;
+            }
+            let chunk_index = u32::try_from(chunk_index).map_err(|_| {
+                crate::workflow::runtime::template::publication::error::PublicationWorkflowError::ChunkIndexOverflow {
+                    template_id: manifest.template_id.clone(),
+                }
+            })?;
+            let bytes = client
+                .chunk(&manifest.template_id, &manifest.version, chunk_index)
+                .await?;
+            Self::ensure_target_store_upload_cache(
+                publication_permit,
+                target_store,
+                manifest,
+                chunk_index,
+                expected_hash,
+                bytes,
+                false,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
     // Publish every source chunk to the target store and refresh install-cache chunks.
     pub(super) async fn publish_manifest_chunks_to_store(
         publication_permit: &CostGuardPermit,
@@ -127,7 +174,7 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Ensure the target store's management chunk cache contains one published chunk.
-    async fn ensure_target_store_upload_cache(
+    pub(super) async fn ensure_target_store_upload_cache(
         _publication_permit: &CostGuardPermit,
         target_store: &mut PublicationStoreSnapshot,
         manifest: &TemplateManifestResponse,

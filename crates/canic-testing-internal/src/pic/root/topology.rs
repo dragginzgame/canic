@@ -1,7 +1,7 @@
 use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
 };
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::{
@@ -15,7 +15,22 @@ use canic_control_plane::dto::template::WasmStoreOverviewResponse;
 use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
 use std::{collections::HashMap, fs, time::Instant};
 
-use crate::pic::CanicPicExt;
+use crate::pic::{
+    CanicPicExt,
+    canic::{adopt_sibling_wasm_store, create_and_install_pre_adoption_root},
+};
+
+#[derive(CandidType)]
+enum RootStatusRequest {
+    Children(PageRequest),
+    StoreOverview,
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponse {
+    Children(Page<CanisterInfo>),
+    StoreOverview(WasmStoreOverviewResponse),
+}
 
 /// Install root, stage one ordinary release profile, resume bootstrap, and fetch root children.
 ///
@@ -65,15 +80,27 @@ pub fn setup_root_topology(
 
         progress(spec, "installing root canister");
         let root_install_started_at = Instant::now();
-        let root_id = pic
-            .create_and_install_root_canister(root_wasm, wasm_store_wasm, &spec.build_config_path)
-            .expect("install root canister");
+        let prepared = create_and_install_pre_adoption_root(
+            &pic,
+            root_wasm,
+            wasm_store_wasm,
+            &spec.build_config_path,
+        )
+        .expect("install root canister");
+        let root_id = prepared.root_id;
         progress_elapsed(spec, "root canister installed", root_install_started_at);
 
         progress(spec, "staging managed release set");
         let stage_started_at = Instant::now();
-        super::stage_managed_release_set(spec, &pic, root_id);
+        super::stage_managed_release_set(
+            spec,
+            &pic,
+            prepared.wasm_store,
+            prepared.installation_controller,
+        );
         progress_elapsed(spec, "staged managed release set", stage_started_at);
+
+        adopt_sibling_wasm_store(&pic, root_id, &prepared.root_args);
 
         progress(spec, "activating managed Fleet");
         let resume_started_at = Instant::now();
@@ -125,12 +152,12 @@ pub fn setup_root_topology(
     unreachable!("setup_root must return or panic")
 }
 
-// Wait until root reports `canic_ready`.
+// Wait until root reports `canic_status(Readiness)`.
 pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &PocketIc, root_id: Principal) {
     pic.wait_for_ready(root_id, spec.bootstrap_tick_limit, "root bootstrap");
 }
 
-// Wait until every child canister reports `canic_ready`.
+// Wait until every child canister reports `canic_status(Readiness)`.
 pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &PocketIc,
@@ -175,17 +202,20 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
     let mut entries = Vec::new();
     let mut offset = 0;
     loop {
-        let page: Result<Page<CanisterInfo>, Error> = pic
+        let page: Result<RootStatusResponse, Error> = pic
             .query_candid(
                 root_id,
-                protocol::CANIC_CANISTER_CHILDREN,
-                (PageRequest {
+                protocol::CANIC_STATUS,
+                (RootStatusRequest::Children(PageRequest {
                     limit: PAGE_LIMIT,
                     offset,
-                },),
+                }),),
             )
             .expect("query root children transport");
-        let page = page.expect("query root children application");
+        let page = match page.expect("query root children application") {
+            RootStatusResponse::Children(page) => page,
+            RootStatusResponse::StoreOverview(_) => panic!("unexpected Root status response"),
+        };
         assert!(
             !page.entries.is_empty() || offset >= page.total,
             "root child pagination made no progress at offset {offset}"
@@ -200,14 +230,20 @@ fn fetch_root_children(pic: &PocketIc, root_id: Principal) -> Vec<CanisterInfo> 
 
 // Fetch the currently tracked managed wasm_store canister ids from root-owned state.
 fn fetch_managed_store_pids(pic: &PocketIc, root_id: Principal) -> Vec<Principal> {
-    let overview: Result<WasmStoreOverviewResponse, canic::Error> = pic
-        .query_candid(root_id, canic::protocol::CANIC_WASM_STORE_OVERVIEW, ())
+    let overview: Result<RootStatusResponse, canic::Error> = pic
+        .query_candid(
+            root_id,
+            canic::protocol::CANIC_STATUS,
+            (RootStatusRequest::StoreOverview,),
+        )
         .expect("query wasm_store overview transport");
 
-    overview
-        .expect("query wasm_store overview application")
-        .stores
-        .into_iter()
-        .map(|store| store.pid)
-        .collect()
+    match overview.expect("query wasm_store overview application") {
+        RootStatusResponse::StoreOverview(overview) => overview,
+        RootStatusResponse::Children(_) => panic!("unexpected Root status response"),
+    }
+    .stores
+    .into_iter()
+    .map(|store| store.pid)
+    .collect()
 }

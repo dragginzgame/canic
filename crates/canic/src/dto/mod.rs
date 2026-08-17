@@ -5,6 +5,11 @@ pub mod fleet_coordinator {
     pub use canic_control_plane::dto::fleet_coordinator::*;
 }
 
+#[cfg(feature = "control-plane")]
+pub mod root {
+    pub use canic_control_plane::dto::root::*;
+}
+
 #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
 pub mod template {
     pub use canic_control_plane::dto::template::*;

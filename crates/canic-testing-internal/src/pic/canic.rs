@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use candid::{Principal, encode_one};
+use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic::{
     Error,
     dto::{
@@ -9,8 +9,10 @@ use canic::{
         },
         fleet_subnet_root::{
             FleetSubnetRootAuthority, FleetSubnetRootInitArgs, FleetSubnetWasmStoreAdoptionRequest,
-            FleetSubnetWasmStoreAdoptionResponse, FleetSubnetWasmStoreInitArgs,
+            FleetSubnetWasmStoreInitArgs,
         },
+        role::{OperationReceipt, OperationStatusRequest},
+        runtime::{CanicReadinessStatus, ReadinessStatus},
     },
     ids::{
         CanisterRole, ComponentSpecAdmission, CyclesFundingBudget, FleetCoordinatorBinding,
@@ -20,6 +22,7 @@ use canic::{
     },
     protocol,
 };
+use canic_control_plane::dto::root::RootOperationStatusResponse;
 use canic_core::{
     cdk::{types::Cycles, utils::hash::wasm_hash},
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId},
@@ -28,7 +31,7 @@ use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{
-        CandidCallError, CandidCallExt, CanisterInstallExt, InstallSpec, PocketIc, PocketIcBuilder,
+        CandidCallExt, CanisterInstallExt, InstallSpec, PocketIc, PocketIcBuilder,
         PocketIcDiagnosticsExt, StandaloneCanisterFixture,
     },
 };
@@ -39,6 +42,56 @@ use super::artifacts::{
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
+
+#[derive(CandidType)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the test decoder mirrors the direct Root command wire without a parallel DTO"
+)]
+enum RootCommandFragment {
+    AdoptStore(FleetSubnetWasmStoreAdoptionRequest),
+    PrepareFleetActivation,
+    ResumeFleetActivation(FleetActivationResumeRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponseFragment {
+    OperationAccepted(OperationReceipt),
+}
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    Operation(OperationStatusRequest),
+    Readiness,
+}
+
+#[derive(CandidType, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the test decoder mirrors the direct Root status wire without a parallel DTO"
+)]
+enum RootStatusResponseFragment {
+    Operation(RootOperationStatusResponse),
+    Readiness(CanicReadinessStatus),
+}
+
+fn root_command(
+    pic: &PocketIc,
+    root: Principal,
+    command: RootCommandFragment,
+) -> Result<RootCommandResponseFragment, Error> {
+    pic.update_candid(root, protocol::CANIC_COMMAND, (command,))
+        .expect("Root command transport")
+}
+
+fn root_status(
+    pic: &PocketIc,
+    root: Principal,
+    request: RootStatusRequestFragment,
+) -> Result<RootStatusResponseFragment, Error> {
+    pic.query_candid(root, protocol::CANIC_STATUS, (request,))
+        .expect("Root status transport")
+}
 
 ///
 /// ManagedRootInstallInput
@@ -57,6 +110,61 @@ pub(super) struct ManagedRootInstallInput<'a> {
     pub release_set_digest: ReleaseSetDigest,
 }
 
+pub(super) struct PreparedManagedRoot {
+    pub root_id: Principal,
+    pub wasm_store: Principal,
+    pub installation_controller: Principal,
+    pub root_args: FleetSubnetRootInitArgs,
+}
+
+pub(super) fn create_and_install_pre_adoption_root(
+    pic: &PocketIc,
+    root_wasm: Vec<u8>,
+    wasm_store_wasm: Vec<u8>,
+    config_path: &Path,
+) -> Result<PreparedManagedRoot, Error> {
+    let root_id = pic.create_canister();
+    pic.add_cycles(root_id, INSTALL_CYCLES);
+    let wasm_store = pic.create_canister();
+    pic.add_cycles(wasm_store, INSTALL_CYCLES);
+    let installation_controller = Principal::from_slice(&[0x46; 29]);
+    let root_args = managed_test_root_init_args(ManagedRootInstallInput {
+        root_id,
+        wasm_store,
+        installation_controller,
+        coordinator: Principal::from_slice(&[0x41; 29]),
+        root_wasm: &root_wasm,
+        wasm_store_wasm: &wasm_store_wasm,
+        config_path,
+        release_set_digest: ReleaseSetDigest::from_bytes([0x44; 32]),
+    })?;
+    let store_args = FleetSubnetWasmStoreInitArgs {
+        authority: root_args.authority.wasm_store_authority.clone(),
+        install_id: root_args.install_id,
+    };
+    prepare_sibling_wasm_store_controllers(pic, wasm_store, installation_controller, root_id);
+    pic.install_canister(
+        wasm_store,
+        wasm_store_wasm,
+        encode_one(store_args)
+            .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?,
+        Some(installation_controller),
+    );
+    pic.install_canister(
+        root_id,
+        root_wasm,
+        encode_one(&root_args)
+            .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))?,
+        None,
+    );
+    Ok(PreparedManagedRoot {
+        root_id,
+        wasm_store,
+        installation_controller,
+        root_args,
+    })
+}
+
 ///
 /// CanicPicExt
 ///
@@ -70,10 +178,10 @@ pub trait CanicPicExt {
         config_path: &Path,
     ) -> Result<Principal, Error>;
 
-    /// Wait until one Canic canister reports `canic_ready`.
+    /// Wait until one Canic canister reports `canic_status(Readiness)`.
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str);
 
-    /// Wait until all provided Canic canisters report `canic_ready`.
+    /// Wait until all provided Canic canisters report `canic_status(Readiness)`.
     fn wait_for_all_ready<I>(&self, canister_ids: I, tick_limit: usize, context: &str)
     where
         I: IntoIterator<Item = Principal>;
@@ -86,44 +194,10 @@ impl CanicPicExt for PocketIc {
         wasm_store_wasm: Vec<u8>,
         config_path: &Path,
     ) -> Result<Principal, Error> {
-        let root_id = self.create_canister();
-        self.add_cycles(root_id, INSTALL_CYCLES);
-        let wasm_store = self.create_canister();
-        self.add_cycles(wasm_store, INSTALL_CYCLES);
-        let installation_controller = Principal::from_slice(&[0x46; 29]);
-        let root_args = managed_test_root_init_args(ManagedRootInstallInput {
-            root_id,
-            wasm_store,
-            installation_controller,
-            coordinator: Principal::from_slice(&[0x41; 29]),
-            root_wasm: &root_wasm,
-            wasm_store_wasm: &wasm_store_wasm,
-            config_path,
-            release_set_digest: ReleaseSetDigest::from_bytes([0x44; 32]),
-        })?;
-        let store_args = FleetSubnetWasmStoreInitArgs {
-            authority: root_args.authority.wasm_store_authority.clone(),
-            install_id: root_args.install_id,
-        };
-        prepare_sibling_wasm_store_controllers(self, wasm_store, installation_controller, root_id);
-        self.install_canister(
-            wasm_store,
-            wasm_store_wasm,
-            encode_one(store_args).map_err(|_| {
-                Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED)
-            })?,
-            Some(installation_controller),
-        );
-        self.install_canister(
-            root_id,
-            root_wasm,
-            encode_one(&root_args).map_err(|_| {
-                Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED)
-            })?,
-            None,
-        );
-        adopt_sibling_wasm_store(self, root_id, &root_args);
-        Ok(root_id)
+        let prepared =
+            create_and_install_pre_adoption_root(self, root_wasm, wasm_store_wasm, config_path)?;
+        adopt_sibling_wasm_store(self, prepared.root_id, &prepared.root_args);
+        Ok(prepared.root_id)
     }
 
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str) {
@@ -188,34 +262,57 @@ pub(super) fn adopt_sibling_wasm_store(
     root_args: &FleetSubnetRootInitArgs,
 ) {
     let request = FleetSubnetWasmStoreAdoptionRequest {
-        operation_id: root_args.install_id,
+        operation_id: root_store_adoption_operation_id(root_args.install_id),
         authority: root_args.authority.wasm_store_authority.clone(),
     };
-    let adopted: Result<FleetSubnetWasmStoreAdoptionResponse, Error> = pic
-        .update_candid(
+    let RootCommandResponseFragment::OperationAccepted(receipt) =
+        root_command(pic, root, RootCommandFragment::AdoptStore(request.clone()))
+            .expect("adopt sibling Wasm Store application");
+    assert_eq!(receipt.operation_id, request.operation_id);
+    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::AdoptStore(adopted)) =
+        root_status(
+            pic,
             root,
-            protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
-            (request.clone(),),
+            RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: request.operation_id,
+            }),
         )
-        .expect("adopt sibling Wasm Store transport");
-    let adopted = adopted.expect("adopt sibling Wasm Store application");
+        .expect("query sibling Wasm Store adoption application")
+    else {
+        panic!("Root returned a differently correlated operation status");
+    };
     assert_eq!(adopted.authority, request.authority);
     assert_eq!(adopted.final_controllers, vec![root]);
     let live = pic
         .canister_status(request.authority.wasm_store, Some(root))
         .expect("observe adopted sibling Wasm Store controllers");
     assert_eq!(live.settings.controllers, vec![root]);
-    let status: Result<Option<FleetSubnetWasmStoreAdoptionResponse>, Error> = pic
-        .query_candid(
+    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::AdoptStore(status)) =
+        root_status(
+            pic,
             root,
-            protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
-            (request,),
+            RootStatusRequestFragment::Operation(OperationStatusRequest {
+                operation_id: request.operation_id,
+            }),
         )
-        .expect("query sibling Wasm Store adoption transport");
-    assert_eq!(
-        status.expect("query sibling Wasm Store adoption application"),
-        Some(adopted)
-    );
+        .expect("query sibling Wasm Store adoption application")
+    else {
+        panic!("Root returned a differently correlated operation status");
+    };
+    assert_eq!(status, adopted);
+}
+
+// Match the host install journal's distinct operation identity for Store adoption.
+fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
+    let mut input = b"canic.fleet-install.root-operation.v1\0store-adoption\0".to_vec();
+    input.extend_from_slice(&install_operation_id);
+    let mut operation_id: [u8; 32] = wasm_hash(&input)
+        .try_into()
+        .expect("SHA-256 Store-adoption operation identity");
+    if operation_id == [0; 32] {
+        operation_id[31] = 1;
+    }
+    operation_id
 }
 
 /// Drive one prepared managed Fleet through the exact controller activation protocol.
@@ -228,34 +325,58 @@ pub(super) fn activate_managed_fleet(
     pic: &PocketIc,
     root_id: Principal,
 ) -> FleetActivationStatusResponse {
-    let prepared: Result<FleetActivationStatusResponse, Error> = pic
-        .update_candid(root_id, protocol::CANIC_PREPARE_FLEET_ACTIVATION, ())
-        .expect("Fleet activation preparation transport");
-    let prepared = prepared.unwrap_or_else(|error| {
-        pic.dump_canister_debug(root_id, "Fleet activation preparation application");
-        panic!("Fleet activation preparation application: {error:?}");
-    });
+    let RootCommandResponseFragment::OperationAccepted(receipt) =
+        root_command(pic, root_id, RootCommandFragment::PrepareFleetActivation).unwrap_or_else(
+            |error| {
+                pic.dump_canister_debug(root_id, "Fleet activation preparation application");
+                panic!("Fleet activation preparation application: {error:?}");
+            },
+        );
+    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::FleetActivation(
+        prepared,
+    )) = root_status(
+        pic,
+        root_id,
+        RootStatusRequestFragment::Operation(OperationStatusRequest {
+            operation_id: receipt.operation_id,
+        }),
+    )
+    .expect("Fleet activation preparation status")
+    else {
+        panic!("Root returned a differently correlated operation status");
+    };
     assert_eq!(prepared.phase, FleetActivationPhase::Prepared);
     let credential = prepared
         .credential
         .expect("prepared root must expose its credential generation");
 
-    let activated: Result<FleetActivationStatusResponse, Error> = pic
-        .update_candid(
-            root_id,
-            protocol::CANIC_RESUME_FLEET_ACTIVATION,
-            (FleetActivationResumeRequest {
-                operation_id: prepared.identity.operation_id,
-                credential,
-            },),
-        )
-        .expect("Fleet activation resume transport");
-    let activated = activated.expect("Fleet activation resume application");
+    let RootCommandResponseFragment::OperationAccepted(resumed) = root_command(
+        pic,
+        root_id,
+        RootCommandFragment::ResumeFleetActivation(FleetActivationResumeRequest {
+            operation_id: prepared.identity.operation_id,
+            credential,
+        }),
+    )
+    .expect("Fleet activation resume application");
+    let RootStatusResponseFragment::Operation(RootOperationStatusResponse::FleetActivation(
+        activated,
+    )) = root_status(
+        pic,
+        root_id,
+        RootStatusRequestFragment::Operation(OperationStatusRequest {
+            operation_id: resumed.operation_id,
+        }),
+    )
+    .expect("Fleet activation resume status")
+    else {
+        panic!("Root returned a differently correlated operation status");
+    };
     assert_eq!(activated.phase, FleetActivationPhase::Active);
     activated
 }
 
-/// Wait until one Canic canister reports `canic_ready`.
+/// Wait until one Canic canister reports `canic_status(Readiness)`.
 ///
 /// # Panics
 ///
@@ -263,13 +384,20 @@ pub(super) fn activate_managed_fleet(
 /// if querying readiness traps.
 pub fn wait_until_ready(pic: &PocketIc, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
-        if let Ok(ready) = pic.query_candid_as::<bool, _>(
-            canister_id,
-            Principal::anonymous(),
-            protocol::CANIC_READY,
-            (),
-        ) && ready
-        {
+        if matches!(
+            pic.query_candid_as::<Result<RootStatusResponseFragment, Error>, _>(
+                canister_id,
+                Principal::anonymous(),
+                protocol::CANIC_STATUS,
+                (RootStatusRequestFragment::Readiness,),
+            ),
+            Ok(Ok(RootStatusResponseFragment::Readiness(
+                CanicReadinessStatus {
+                    status: ReadinessStatus::Ready,
+                    ..
+                }
+            )))
+        ) {
             return;
         }
         pic.tick();
@@ -360,22 +488,19 @@ pub fn install_standalone_canister_on_pic(
 }
 
 fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> bool {
-    match pic.query_candid(canister_id, protocol::CANIC_READY, ()) {
-        Ok(ready) => ready,
+    match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
+        canister_id,
+        protocol::CANIC_STATUS,
+        (RootStatusRequestFragment::Readiness,),
+    ) {
+        Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
+            readiness.status == ReadinessStatus::Ready
+        }
+        Ok(Ok(_)) => panic!("role returned a differently correlated readiness status"),
+        Ok(Err(_)) => false,
         Err(err) => {
-            let activation: Result<Result<FleetActivationStatusResponse, Error>, CandidCallError> =
-                pic.query_candid(canister_id, protocol::CANIC_FLEET_ACTIVATION_STATUS, ());
-            if matches!(
-                activation,
-                Ok(Ok(FleetActivationStatusResponse {
-                    phase: FleetActivationPhase::Prepared,
-                    ..
-                }))
-            ) {
-                return false;
-            }
-            pic.dump_canister_debug(canister_id, "query canic_ready failed");
-            panic!("query canic_ready failed: {err:?}");
+            pic.dump_canister_debug(canister_id, "query canic_status readiness failed");
+            panic!("query canic_status readiness failed: {err:?}");
         }
     }
 }

@@ -13,27 +13,40 @@ use super::{
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
     icp_context::InstallIcpContext,
-    operations::{call_with_arg, query_with_arg},
+    operations::query_with_arg,
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
+use canic_control_plane::dto::root::RootOperationStatusResponse;
 use canic_core::{
     control_plane_support::ops::fleet_registry::FleetRegistryOps,
     dto::{
         fleet_registry::{
             FleetRegistry, FleetRegistryVersion, FleetSubnetRootRegistryMirrorActivationRequest,
         },
+        role::OperationStatusRequest,
         root_store::RootStoreBootstrapRequest,
     },
     protocol,
 };
+use serde::Deserialize;
 use std::path::Path;
 use thiserror::Error as ThisError;
 
 const MAX_MIRROR_ACTIVATION_TRANSITIONS: usize = 4;
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponseFragment {
+    Operation(RootOperationStatusResponse),
+}
 
 #[derive(Debug, ThisError)]
 enum RootRegistryMirrorActivationError {
@@ -112,6 +125,9 @@ pub(super) fn activate_and_verify_fleet_subnet_root_registry_mirrors(
             expected_registry: request.active_version.clone(),
             expected_directory: directory,
             store_bootstrap: RootStoreBootstrapRequest {
+                operation_id: super::root_store_bootstrap_operation_id(
+                    request.install_operation_id,
+                ),
                 manifest_payload_size_bytes: canonical_manifest_bytes(release_set)?.len() as u64,
             },
         };
@@ -136,22 +152,30 @@ fn drive_root_mirror_activation(
                 begin_registry_mirror_activation(&current, request.clone())?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => {
-                let response = call_with_arg(
+                let response = query_registry_synchronization(
                     icp,
                     root,
-                    protocol::CANIC_FLEET_REGISTRY_ACTIVATE_MIRROR,
-                    &request,
+                    super::root_registry_synchronization_operation_id(
+                        current.journal.install_operation_id,
+                    ),
                 )?;
-                record_registry_mirror_activated(&current, response)?
+                let Some(activation) = response.activation else {
+                    continue;
+                };
+                record_registry_mirror_activated(&current, activation)?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivated => {
-                let response = query_with_arg(
+                let response = query_registry_synchronization(
                     icp,
                     root,
-                    protocol::CANIC_FLEET_REGISTRY_MIRROR_STATUS,
-                    &request,
+                    super::root_registry_synchronization_operation_id(
+                        current.journal.install_operation_id,
+                    ),
                 )?;
-                record_registry_mirror_activation_verified(&current, response)?
+                let activation = response
+                    .activation
+                    .ok_or(RootRegistryMirrorActivationError::LiveEvidenceMismatch)?;
+                record_registry_mirror_activation_verified(&current, activation)?
             }
             FleetSubnetRootInstallPhase::RegistryMirrorActivationVerified
             | FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight
@@ -163,4 +187,28 @@ fn drive_root_mirror_activation(
         };
     }
     Err(RootRegistryMirrorActivationError::TransitionBoundExceeded.into())
+}
+
+fn query_registry_synchronization(
+    icp: &crate::icp::IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<
+    canic_control_plane::dto::root::RootRegistrySynchronizationOperationStatus,
+    Box<dyn std::error::Error>,
+> {
+    let response: RootStatusResponseFragment = query_with_arg(
+        icp,
+        root,
+        protocol::CANIC_STATUS,
+        &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+    )?;
+    match response {
+        RootStatusResponseFragment::Operation(
+            RootOperationStatusResponse::SynchronizeRegistry(response),
+        ) => Ok(response),
+        RootStatusResponseFragment::Operation(_) => {
+            Err(RootRegistryMirrorActivationError::LiveEvidenceMismatch.into())
+        }
+    }
 }

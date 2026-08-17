@@ -84,6 +84,10 @@ impl OwnedInput {
             wasm: &self.wasm,
             wasm_gz_relative_path: &self.wasm_gz_relative_path,
             wasm_gz: &self.wasm_gz,
+            candid_sha256: [3; 32],
+            protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+                [4; 32],
+            ),
         }
     }
 }

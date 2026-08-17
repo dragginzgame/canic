@@ -27,9 +27,7 @@ use crate::{
 use std::{ffi::OsString, io};
 
 use canic_host::{
-    icp::{IcpCommandError, IcpJsonResponseError},
-    icp_config::IcpConfigError,
-    installed_fleet::InstalledFleetError,
+    CanisterProtocolError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
 };
 use clap::Command as ClapCommand;
 use thiserror::Error as ThisError;
@@ -59,21 +57,8 @@ pub enum InfoSubnetsCommandError {
     #[error(transparent)]
     Inventory(#[from] SubnetInventoryError),
 
-    #[error("failed to query {method} on Canister {canister}: {source}")]
-    Query {
-        canister: String,
-        method: &'static str,
-        #[source]
-        source: IcpCommandError,
-    },
-
-    #[error("invalid {method} response from Canister {canister}: {source}")]
-    Response {
-        canister: String,
-        method: &'static str,
-        #[source]
-        source: IcpJsonResponseError,
-    },
+    #[error(transparent)]
+    Protocol(#[from] CanisterProtocolError),
 
     #[error("Subnet summary query worker panicked for Fleet Subnet Root {root}")]
     SummaryWorkerPanicked { root: String },

@@ -25,6 +25,7 @@ use std::{
 use canic_core::{
     bootstrap::compiled::ComponentTopology,
     ids::{CanisterRole, ReleaseBuildId},
+    role_contract::ProtocolProfileDigest,
 };
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
@@ -49,6 +50,8 @@ pub struct ApplicationArtifactFileBuildOutput {
     pub release_build_id: ReleaseBuildId,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -257,6 +260,8 @@ fn materialize_build_output(
         wasm: wasm.bytes,
         wasm_gz_relative_path: wasm_gz.relative_path,
         wasm_gz: wasm_gz.bytes,
+        candid_sha256: output.candid_sha256,
+        protocol_profile_digest: output.protocol_profile_digest,
     })
 }
 

@@ -13,6 +13,7 @@ pub mod allocation;
 pub mod catalog;
 mod model;
 mod policy;
+mod profile;
 #[cfg(test)]
 mod tests;
 
@@ -25,4 +26,8 @@ pub use model::{
 pub use policy::{
     built_in_role_capabilities, derive_role_capabilities, required_features_for_role,
     resolve_effective_features, resolve_role_contract,
+};
+pub use profile::{
+    PROTOCOL_PROFILE_DIGEST_ENV, ProtocolProfileDigest, ProtocolProfileDigestParseError,
+    ProtocolProfileHashes, derive_protocol_profile_hashes,
 };

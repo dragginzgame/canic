@@ -185,14 +185,14 @@ pub struct EndpointReplayPolicy {
 }
 
 ///
-/// RootCapabilityCommandReplayPolicy
+/// CommandReplayPolicy
 ///
-/// Replay manifest row for an internal root-capability command variant.
-/// Owned by replay policy and stored in the root-capability command manifest.
+/// Replay manifest row for one selected command variant.
+/// Owned by replay policy and stored in the role-specific command manifests.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RootCapabilityCommandReplayPolicy {
+pub struct CommandReplayPolicy {
     pub variant: &'static str,
     pub replay_policy: ReplayPolicy,
     pub implementation_status: ReplayImplementationStatus,

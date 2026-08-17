@@ -1,8 +1,8 @@
 use crate::ops::storage::state::root_wasm_store::RootWasmStoreStateOps;
 use crate::{
     dto::template::{TemplateManifestResponse, WasmStoreCatalogEntryResponse},
-    ops::storage::template::TemplateChunkedOps,
     workflow::runtime::template::{
+        exact_store_payload_bytes,
         publication::{
             WasmStorePublicationWorkflow,
             cost_guard::{PUBLICATION_BOOTSTRAP_COMMAND_KIND, PublicationCostGuard},
@@ -35,36 +35,56 @@ impl WasmStorePublicationWorkflow {
         Ok((store_pid, store_catalog(store_pid).await?))
     }
 
-    /// Publish one exact initial root release set into exactly one local Store.
-    pub async fn bootstrap_exact_staged_release_set(
+    /// Adopt one exact release set already staged directly in the fresh sibling Store.
+    pub async fn bootstrap_exact_pre_staged_release_set(
         manifests: Vec<TemplateManifestResponse>,
     ) -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
         let cost_guard = PublicationCostGuard::reserve(PUBLICATION_BOOTSTRAP_COMMAND_KIND)?;
-        let result =
-            Self::bootstrap_exact_staged_release_set_with_permit(manifests, cost_guard.permit())
-                .await;
+        let result = Self::bootstrap_exact_pre_staged_release_set_with_permit(
+            manifests,
+            cost_guard.permit(),
+        )
+        .await;
         cost_guard.settle(result)
     }
 
-    async fn bootstrap_exact_staged_release_set_with_permit(
+    async fn bootstrap_exact_pre_staged_release_set_with_permit(
         manifests: Vec<TemplateManifestResponse>,
         publication_permit: &CostGuardPermit,
     ) -> Result<(Principal, Vec<WasmStoreCatalogEntryResponse>), InternalError> {
-        for manifest in &manifests {
-            TemplateChunkedOps::validate_staged_release(manifest)?;
-        }
-
         let mut store = Self::snapshot_adopted_wasm_store(publication_permit).await?;
         Self::pin_initial_publication_store(store.binding.clone())?;
-        let store_pid = store.pid;
-
-        for manifest in manifests {
-            Self::publish_manifest_to_adopted_store(&mut store, manifest, publication_permit)
-                .await?;
+        for manifest in &manifests {
+            if !store.has_exact_release(manifest) {
+                return Err(PublicationWorkflowError::ExactReleaseMissing {
+                    role: manifest.role.clone(),
+                    template_id: manifest.template_id.clone(),
+                    version: manifest.version.clone(),
+                    expected_binding: store.binding.clone(),
+                }
+                .into());
+            }
+            exact_store_payload_bytes(
+                store.pid,
+                &manifest.template_id,
+                &manifest.version,
+                &manifest.payload_hash,
+                manifest.payload_size_bytes,
+            )
+            .await?;
+            Self::ensure_pre_staged_manifest_install_cache(
+                publication_permit,
+                &mut store,
+                manifest,
+            )
+            .await?;
+            Self::mirror_manifest_to_root_state(
+                publication_permit,
+                store.binding.clone(),
+                manifest,
+            );
         }
-
-        let catalog = store_catalog(store_pid).await?;
-        Ok((store_pid, catalog))
+        Ok((store.pid, store.releases))
     }
 
     // Publish one approved manifest to the exact adopted Store or reuse its exact release.

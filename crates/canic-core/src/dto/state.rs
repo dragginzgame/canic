@@ -2,6 +2,18 @@ use crate::dto::prelude::*;
 
 pub use crate::domain::state::{FleetMode, FleetStatus};
 
+/// Explicit input for changing automatic cycles funding.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct SetCyclesFundingRequest {
+    pub enabled: bool,
+}
+
+/// Explicit input for changing the Fleet's public status.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct SetFleetStatusRequest {
+    pub status: FleetStatus,
+}
+
 //
 // FleetCommand
 //

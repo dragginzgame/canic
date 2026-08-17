@@ -261,7 +261,9 @@ fn role_artifact_from_local_files(
         observed_wasm_gz_file_sha256_source,
         installed_module_hash: None,
         candid_path: None,
-        candid_sha256: None,
+        candid_sha256: release_entry.map(|entry| entry.candid_sha256_hex.clone()),
+        protocol_profile_digest: release_entry
+            .map(|entry| entry.protocol_profile_digest_hex.clone()),
         raw_config_sha256: None,
         canonical_embedded_config_sha256: None,
         embedded_topology_sha256: None,

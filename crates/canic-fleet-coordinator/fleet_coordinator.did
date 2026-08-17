@@ -10,6 +10,18 @@ type AuthorityRestoreFenceStatusResponse = record {
 };
 // Controller-selected identity for one authority snapshot operation.
 type AuthoritySnapshotRequest = record { operation_id : blob };
+type BootstrapStatusResponse = record {
+  last_error : opt text;
+  phase : text;
+  ready : bool;
+};
+type CanicMetadataResponse = record {
+  package_description : text;
+  canister_version : nat64;
+  canic_version : text;
+  package_version : text;
+  package_name : text;
+};
 //
 // ComponentChildFundingPolicy
 //
@@ -203,6 +215,65 @@ type ComponentTopology = record {
   provisioning_grants : vec ComponentProvisioningGrant;
   component_specs : vec ComponentSpec;
 };
+// Closed controller command union for the Fleet Coordinator.
+type CoordinatorCommand = variant {
+  JoinRoot : FleetSubnetRootJoinRequest;
+  ActivateRegistry : FleetRegistryActivationRequest;
+  AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgementRequest;
+  PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionRequest;
+  ResumeAuthoritySnapshot : AuthoritySnapshotRequest;
+  ProvisionComponents : FleetComponentProvisioningPrepareRequest;
+  RemoveRoot : FleetSubnetRootDrainingReservationRequest;
+  CompleteRootDeletion : FleetSubnetRootDeletionCompletionRequest;
+  PrepareAuthoritySnapshot : AuthoritySnapshotRequest;
+};
+// Closed correlated success union for Fleet Coordinator commands.
+type CoordinatorCommandResponse = variant {
+  JoinRoot : FleetSubnetRootJoinResponse;
+  ActivateRegistry : FleetRegistryActivationResponse;
+  AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgement;
+  PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionResponse;
+  ResumeAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
+  OperationAccepted : OperationReceipt;
+  CompleteRootDeletion : FleetSubnetRootDeletionResponse;
+  PrepareAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
+};
+// Coordinator-owned durable operation detail selected by one operation ID.
+type CoordinatorOperationStatusResponse = variant {
+  RootRemoval : CoordinatorRootRemovalOperationStatus;
+  ComponentProvisioning : FleetComponentProvisioningStatusResponse;
+};
+// Coordinator-owned progress across the existing durable root-removal boundaries.
+type CoordinatorRootRemovalOperationStatus = record {
+  completion : opt FleetSubnetRootDeletionResponse;
+  readiness_intent : opt FleetSubnetRootDeletionReadinessIntentResponse;
+  operation_id : blob;
+  draining : opt FleetSubnetRootDrainingPublicationResponse;
+  reservation : FleetSubnetRootDrainingReservationResponse;
+  execution : opt FleetSubnetRootDeletionExecutionResponse;
+  removal : opt FleetSubnetRootRemovalPublicationResponse;
+  readiness : opt FleetSubnetRootDeletionReadinessResponse;
+};
+// Closed Coordinator observation selector carried by its single status query.
+type CoordinatorStatusRequest = variant {
+  RootAcknowledgements;
+  Overview;
+  Operation : OperationReceipt;
+  RegistryManifest;
+  Registry;
+  AuthorityRestore;
+  RegistryVersion;
+};
+// Closed response union for the Coordinator's single status query.
+type CoordinatorStatusResponse = variant {
+  RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
+  Overview : RoleOverviewResponse;
+  Operation : CoordinatorOperationStatusResponse;
+  RegistryManifest : FleetRegistryManifest;
+  Registry : FleetRegistry;
+  AuthorityRestore : AuthorityRestoreFenceStatusResponse;
+  RegistryVersion : FleetRegistryVersion;
+};
 //
 // CyclesFundingBudget
 //
@@ -237,20 +308,6 @@ type FleetComponentActivationRootProgress = record {
   root_runtime_active : bool;
   fleet_subnet_root : principal;
   component_count : nat32;
-};
-// Controller-authenticated command advancing one exact Coordinator provisioning step.
-type FleetComponentProvisioningAdvanceRequest = record {
-  expected_provisioned_root_count : nat32;
-  plan_hash : blob;
-  expected_directory_confirmed_root_count : nat32;
-  expected_accepted_root_count : nat32;
-  expected_current_publication : opt FleetComponentPublicationRootProgress;
-  expected_current_root : opt FleetComponentProvisioningRootProgress;
-  operation_id : blob;
-  expected_phase : FleetComponentProvisioningPhase;
-  expected_current_activation : opt FleetComponentActivationRootProgress;
-  expected_current_synchronization : opt FleetComponentSynchronizationRootProgress;
-  expected_runtime_activated_root_count : nat32;
 };
 // Fresh-install or monotonic scale-out scope covered by one plan.
 type FleetComponentProvisioningOperation = variant {
@@ -296,11 +353,6 @@ type FleetComponentProvisioningRootProgress = record {
   reserved_component_count : nat32;
   registry_committed_component_count : nat32;
   component_count : nat32;
-};
-// Exact passive lookup key for one Coordinator-owned provisioning operation.
-type FleetComponentProvisioningStatusRequest = record {
-  plan_hash : blob;
-  operation_id : blob;
 };
 // Compact exact status for one Coordinator-owned provisioning operation.
 type FleetComponentProvisioningStatusResponse = record {
@@ -432,16 +484,6 @@ type FleetRegistryManifest = record {
   byte_length : nat64;
   authority : FleetRegistryAuthority;
   revision : nat64;
-};
-//
-// FleetRegistrySnapshotResponse
-//
-// Complete current Coordinator snapshot supplied only to one registered root.
-//
-type FleetRegistrySnapshotResponse = record {
-  version : FleetRegistryVersion;
-  manifest : FleetRegistryManifest;
-  registry : FleetRegistry;
 };
 //
 // FleetRegistryVersion
@@ -613,20 +655,6 @@ type FleetSubnetRootDeletionResponse = record {
   observed_module_hash : blob;
   coordinator : principal;
 };
-// Read-only lookup key for one durable root-deletion execution intent or receipt.
-type FleetSubnetRootDeletionStatusRequest = record {
-  operation_id : blob;
-  fleet_subnet_root : principal;
-};
-//
-// FleetSubnetRootDrainingPublicationRequest
-//
-// Controller command publishing one root's exact local draining fence to the Coordinator.
-//
-type FleetSubnetRootDrainingPublicationRequest = record {
-  root_draining : FleetSubnetRootDrainingResponse;
-  expected_registry : FleetRegistryVersion;
-};
 //
 // FleetSubnetRootDrainingPublicationResponse
 //
@@ -767,15 +795,6 @@ type FleetSubnetRootReleaseSet = record {
   release_build_id : text;
 };
 //
-// FleetSubnetRootRemovalPublicationRequest
-//
-// Root-authenticated command publishing one exact terminal inventory to the Coordinator.
-//
-type FleetSubnetRootRemovalPublicationRequest = record {
-  final_inventory : FleetSubnetRootFinalInventoryResponse;
-  expected_registry : FleetRegistryVersion;
-};
-//
 // FleetSubnetRootRemovalPublicationResponse
 //
 // Durable response authority for one root's canonical `Draining -> Removed` transition.
@@ -808,103 +827,36 @@ type FleetSubnetRootSnapshotAcknowledgementRequest = record {
 // Lifecycle state of one Fleet Subnet Root in the Fleet Registry snapshot.
 //
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
-type Result = variant { Ok : AuthorityRestoreFenceStatusResponse; Err : Error };
-type Result_1 = variant {
-  Ok : FleetComponentProvisioningStatusResponse;
-  Err : Error;
+// Durable identity returned when one role-owned asynchronous command is accepted.
+type OperationReceipt = record { operation_id : blob };
+type Result = variant { Ok : CoordinatorCommandResponse; Err : Error };
+type Result_1 = variant { Ok : CoordinatorStatusResponse; Err : Error };
+// Closed compiled capability identity exposed by the immutable role overview.
+type RoleCapability = variant {
+  Sharding;
+  Scaling;
+  Root;
+  FleetCoordinator;
+  Index;
+  Icrc21;
+  DelegatedTokenIssuer;
+  RoleAttestationSigner;
+  WasmStore;
+  DelegatedTokenVerifier;
+  RoleAttestationVerifier;
+  RootControlPlane;
+  Runtime;
+  AutomaticTopup;
 };
-type Result_10 = variant {
-  Ok : FleetSubnetRootDeletionExecutionResponse;
-  Err : Error;
+// Immutable role, capability, release, and bootstrap profile-verification response.
+type RoleOverviewResponse = record {
+  capabilities : vec RoleCapability;
+  metadata : CanicMetadataResponse;
+  role : text;
+  bootstrap : BootstrapStatusResponse;
+  protocol_profile_digest : blob;
 };
-type Result_11 = variant {
-  Ok : FleetSubnetRootDeletionReadinessIntentResponse;
-  Err : Error;
-};
-type Result_12 = variant {
-  Ok : FleetSubnetRootDeletionReadinessResponse;
-  Err : Error;
-};
-type Result_13 = variant {
-  Ok : FleetSubnetRootDrainingReservationResponse;
-  Err : Error;
-};
-type Result_14 = variant { Ok : FleetRegistrySnapshotResponse; Err : Error };
-type Result_15 = variant { Ok : FleetRegistryVersion; Err : Error };
-type Result_16 = variant { Ok : FleetSubnetRootJoinResponse; Err : Error };
-type Result_2 = variant { Ok : FleetRegistry; Err : Error };
-type Result_3 = variant {
-  Ok : FleetSubnetRootSnapshotAcknowledgement;
-  Err : Error;
-};
-type Result_4 = variant { Ok : FleetRegistryActivationResponse; Err : Error };
-type Result_5 = variant { Ok : FleetRegistryManifest; Err : Error };
-type Result_6 = variant {
-  Ok : FleetSubnetRootDrainingPublicationResponse;
-  Err : Error;
-};
-type Result_7 = variant {
-  Ok : FleetSubnetRootRemovalPublicationResponse;
-  Err : Error;
-};
-type Result_8 = variant {
-  Ok : vec FleetSubnetRootSnapshotAcknowledgement;
-  Err : Error;
-};
-type Result_9 = variant { Ok : FleetSubnetRootDeletionResponse; Err : Error };
 service : (FleetCoordinatorInitArgs) -> {
-  canic_authority_restore_fence_status : () -> (Result) query;
-  canic_authority_snapshot_prepare : (AuthoritySnapshotRequest) -> (Result);
-  canic_authority_snapshot_resume : (AuthoritySnapshotRequest) -> (Result);
-  canic_fleet_component_provisioning_advance : (
-      FleetComponentProvisioningAdvanceRequest,
-    ) -> (Result_1);
-  canic_fleet_component_provisioning_prepare : (
-      FleetComponentProvisioningPrepareRequest,
-    ) -> (Result_1);
-  canic_fleet_component_provisioning_status : (
-      FleetComponentProvisioningStatusRequest,
-    ) -> (Result_1) query;
-  canic_fleet_registry : () -> (Result_2) query;
-  canic_fleet_registry_acknowledge_root : (
-      FleetSubnetRootSnapshotAcknowledgementRequest,
-    ) -> (Result_3);
-  canic_fleet_registry_activate : (FleetRegistryActivationRequest) -> (
-      Result_4,
-    );
-  canic_fleet_registry_manifest : () -> (Result_5) query;
-  canic_fleet_registry_publish_root_draining : (
-      FleetSubnetRootDrainingPublicationRequest,
-    ) -> (Result_6);
-  canic_fleet_registry_publish_root_removed : (
-      FleetSubnetRootRemovalPublicationRequest,
-    ) -> (Result_7);
-  canic_fleet_registry_root_acknowledgements : () -> (Result_8) query;
-  canic_fleet_registry_root_deletion_complete : (
-      FleetSubnetRootDeletionCompletionRequest,
-    ) -> (Result_9);
-  canic_fleet_registry_root_deletion_execution_begin : (
-      FleetSubnetRootDeletionExecutionRequest,
-    ) -> (Result_10);
-  canic_fleet_registry_root_deletion_execution_status : (
-      FleetSubnetRootDeletionStatusRequest,
-    ) -> (Result_10) query;
-  canic_fleet_registry_root_deletion_readiness_prepare : (
-      FleetSubnetRootDeletionReadinessIntentRequest,
-    ) -> (Result_11);
-  canic_fleet_registry_root_deletion_ready : (
-      FleetSubnetRootDeletionReadinessRequest,
-    ) -> (Result_12);
-  canic_fleet_registry_root_deletion_status : (
-      FleetSubnetRootDeletionStatusRequest,
-    ) -> (Result_9) query;
-  canic_fleet_registry_root_draining_reservation_prepare : (
-      FleetSubnetRootDrainingReservationRequest,
-    ) -> (Result_13);
-  canic_fleet_registry_root_draining_reservation_status : (
-      FleetSubnetRootDeletionStatusRequest,
-    ) -> (Result_13);
-  canic_fleet_registry_snapshot_for_root : () -> (Result_14);
-  canic_fleet_registry_version : () -> (Result_15) query;
-  canic_fleet_subnet_root_join : (FleetSubnetRootJoinRequest) -> (Result_16);
+  canic_command : (CoordinatorCommand) -> (Result);
+  canic_status : (CoordinatorStatusRequest) -> (Result_1) query;
 }

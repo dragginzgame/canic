@@ -5,19 +5,22 @@
 //! Boundary: each monotonic commit follows exact root, Store, Registry, and Directory validation.
 
 use crate::{
+    dto::root::RootRegistrySynchronizationOperationStatus,
     ops::{
         component_registry::ComponentRegistryOps, fleet_registry_mirror::FleetRegistryMirrorOps,
     },
     view::fleet_registry_mirror::RootFleetRegistryActiveView,
-    workflow::{bootstrap::root_store, root_authority::validated_root_authority},
+    workflow::{
+        bootstrap::root_store, fleet_coordinator_client, root_authority::validated_root_authority,
+    },
 };
 use canic_core::{
+    api::timer::TimerApi,
     control_plane_support::{
         error::InternalError,
-        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps, ic::call::CallOps},
+        ops::{config::ConfigOps, fleet_registry::FleetRegistryOps},
     },
     dto::{
-        error::Error,
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistryManifest, FleetRegistrySnapshotResponse,
             FleetRegistryVersion, FleetSubnetRootEntry,
@@ -26,9 +29,10 @@ use canic_core::{
             FleetSubnetRootRegistrySyncResponse, FleetSubnetRootSnapshotAcknowledgement,
             FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
         },
+        role::OperationReceipt,
     },
-    protocol,
 };
+use std::time::Duration;
 
 /// Validated source and target authority retained before one mirror commit.
 pub(super) struct PreparedComponentPublicationTransition {
@@ -45,7 +49,7 @@ pub async fn synchronize(
     let (authority, root) = validated_root_authority()?;
     root_store::status(request.store_bootstrap.clone()).await?;
 
-    let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
+    let snapshot = fetch_snapshot(&authority).await?;
     validate_snapshot(&authority, &snapshot, FleetSubnetRootStatus::Joining)?;
     if snapshot.version != request.expected_registry {
         return Err(InternalError::conflict());
@@ -56,14 +60,22 @@ pub async fn synchronize(
     }
     let candidate = mirror.candidate;
     if let Some(existing) = &candidate {
-        if existing.snapshot != snapshot {
+        if existing.operation_id != request.operation_id
+            || existing.store_bootstrap != request.store_bootstrap
+            || existing.snapshot != snapshot
+        {
             return Err(InternalError::conflict());
         }
         if let Some(acknowledgement) = &existing.acknowledgement {
             return response(root, &snapshot, acknowledgement.clone());
         }
     } else {
-        FleetRegistryMirrorOps::commit_candidate(snapshot.clone(), None);
+        FleetRegistryMirrorOps::commit_candidate(
+            request.operation_id,
+            request.store_bootstrap.clone(),
+            snapshot.clone(),
+            None,
+        );
     }
 
     let acknowledgement = acknowledge_snapshot(
@@ -74,8 +86,38 @@ pub async fn synchronize(
     if acknowledgement.fleet_subnet_root != root || acknowledgement.version != snapshot.version {
         return Err(InternalError::invalid_input());
     }
-    FleetRegistryMirrorOps::commit_candidate(snapshot.clone(), Some(acknowledgement.clone()));
+    FleetRegistryMirrorOps::commit_candidate(
+        request.operation_id,
+        request.store_bootstrap.clone(),
+        snapshot.clone(),
+        Some(acknowledgement.clone()),
+    );
     response(root, &snapshot, acknowledgement)
+}
+
+/// Accept or exactly replay one synchronization intent and ensure its reconciler is scheduled.
+pub async fn accept_synchronization(
+    request: FleetSubnetRootRegistrySyncRequest,
+) -> Result<OperationReceipt, InternalError> {
+    let mirror = FleetRegistryMirrorOps::current();
+    let existing = mirror
+        .candidate
+        .as_ref()
+        .or(mirror.synchronization.as_ref());
+    if let Some(existing) = existing {
+        let replay_is_exact = existing.operation_id == request.operation_id
+            && existing.store_bootstrap == request.store_bootstrap
+            && existing.snapshot.version == request.expected_registry;
+        if !replay_is_exact {
+            return Err(InternalError::conflict());
+        }
+    } else {
+        synchronize(request.clone()).await?;
+    }
+    schedule_registry_synchronization(request.operation_id);
+    Ok(OperationReceipt {
+        operation_id: request.operation_id,
+    })
 }
 
 /// Revalidate durable local evidence without changing it.
@@ -83,10 +125,15 @@ pub async fn status(
     request: FleetSubnetRootRegistrySyncRequest,
 ) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
     let (authority, root) = validated_root_authority()?;
-    root_store::status(request.store_bootstrap).await?;
+    root_store::status(request.store_bootstrap.clone()).await?;
     let candidate = FleetRegistryMirrorOps::current()
         .candidate
         .ok_or_else(InternalError::unavailable)?;
+    if candidate.operation_id != request.operation_id
+        || candidate.store_bootstrap != request.store_bootstrap
+    {
+        return Err(InternalError::conflict());
+    }
     validate_snapshot(
         &authority,
         &candidate.snapshot,
@@ -99,6 +146,97 @@ pub async fn status(
         .acknowledgement
         .ok_or_else(InternalError::unavailable)?;
     response(root, &candidate.snapshot, acknowledgement)
+}
+
+/// Resolve the initial Registry synchronization through its retained operation receipt.
+pub fn synchronization_operation_status(
+    operation_id: [u8; 32],
+) -> Result<Option<RootRegistrySynchronizationOperationStatus>, InternalError> {
+    let mirror = FleetRegistryMirrorOps::current();
+    let candidate = mirror
+        .candidate
+        .filter(|candidate| candidate.operation_id == operation_id)
+        .or_else(|| {
+            mirror
+                .synchronization
+                .filter(|candidate| candidate.operation_id == operation_id)
+        });
+    let Some(candidate) = candidate else {
+        return Ok(None);
+    };
+    let acknowledgement = candidate
+        .acknowledgement
+        .ok_or_else(InternalError::unavailable)?;
+    let synchronization = FleetSubnetRootRegistrySyncResponse {
+        fleet_subnet_root: acknowledgement.fleet_subnet_root,
+        version: candidate.snapshot.version,
+        acknowledgement,
+    };
+    let activation = mirror
+        .active
+        .map(|active| active_response(synchronization.fleet_subnet_root, &active));
+    Ok(Some(RootRegistrySynchronizationOperationStatus {
+        synchronization,
+        activation,
+    }))
+}
+
+/// Privately wait for and activate the Coordinator's all-Active Registry.
+pub fn schedule_registry_synchronization(operation_id: [u8; 32]) {
+    schedule_registry_synchronization_after(operation_id, Duration::ZERO);
+}
+
+fn schedule_registry_synchronization_after(operation_id: [u8; 32], delay: Duration) {
+    let _ = TimerApi::defer_lifecycle_required(
+        delay,
+        "Fleet Subnet Root Registry synchronization",
+        async move {
+            match advance_registry_synchronization_once(operation_id).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    schedule_registry_synchronization_after(operation_id, Duration::ZERO);
+                }
+                Err(_) => {
+                    schedule_registry_synchronization_after(operation_id, Duration::from_secs(1));
+                }
+            }
+        },
+    );
+}
+
+async fn advance_registry_synchronization_once(
+    operation_id: [u8; 32],
+) -> Result<bool, InternalError> {
+    let mirror = FleetRegistryMirrorOps::current();
+    if mirror
+        .synchronization
+        .as_ref()
+        .is_some_and(|synchronization| synchronization.operation_id == operation_id)
+        && mirror.active.is_some()
+    {
+        return Ok(true);
+    }
+    let candidate = mirror.candidate.ok_or_else(InternalError::unavailable)?;
+    if candidate.operation_id != operation_id {
+        return Err(InternalError::conflict());
+    }
+    let (authority, root) = validated_root_authority()?;
+    let target = fetch_snapshot(&authority).await?;
+    validate_snapshot(&authority, &target, FleetSubnetRootStatus::Active)?;
+    let expected_directory = FleetRegistryOps::directory_for_root(
+        &authority.binding.authority,
+        &ConfigOps::component_topology()?,
+        &target.registry,
+        root,
+    )?;
+    activate(FleetSubnetRootRegistryMirrorActivationRequest {
+        previous_registry: candidate.snapshot.version,
+        expected_registry: target.version,
+        expected_directory,
+        store_bootstrap: candidate.store_bootstrap,
+    })
+    .await?;
+    Ok(true)
 }
 
 /// Atomically activate the requested complete mirror and Directory without allowing regression.
@@ -116,7 +254,7 @@ pub async fn activate(
         }
     }
 
-    let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
+    let snapshot = fetch_snapshot(&authority).await?;
     let directory = validate_target(&authority, root, &request, &snapshot)?;
     let mirror = FleetRegistryMirrorOps::current();
 
@@ -187,7 +325,7 @@ pub async fn advance_for_component_publication(
         }
         return Ok(active_response(root, &active));
     }
-    let snapshot = fetch_snapshot(authority.binding.authority.binding.coordinator).await?;
+    let snapshot = fetch_snapshot(&authority).await?;
     let expected_directory = FleetRegistryOps::directory_for_root(
         &authority.binding.authority,
         &ConfigOps::component_topology()?,
@@ -213,6 +351,22 @@ pub async fn advance_for_component_publication(
     }
 }
 
+/// Advance the local mirror to the Coordinator-published Draining root entry.
+///
+/// Root removal owns this refresh privately after the high-level removal intent
+/// is accepted. It does not expose another phase-selecting endpoint.
+pub(super) async fn advance_to_draining_for_root_removal(
+    store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
+) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    root_store::status(store_bootstrap.clone()).await?;
+    let current = validated_active(&authority, root)?;
+    let target = fetch_snapshot(&authority).await?;
+    validate_snapshot(&authority, &target, FleetSubnetRootStatus::Draining)?;
+    advance_for_component_publication(current.snapshot.version, target.version, store_bootstrap)
+        .await
+}
+
 /// Fetch and validate one exact publication target without mutating the local mirror.
 pub(super) async fn prepare_component_publication_transition(
     previous_registry: FleetRegistryVersion,
@@ -228,7 +382,7 @@ pub(super) async fn prepare_component_publication_transition(
     let target = if previous_registry == expected_registry {
         current.snapshot.clone()
     } else {
-        fetch_snapshot(authority.binding.authority.binding.coordinator).await?
+        fetch_snapshot(&authority).await?
     };
     let directory = FleetRegistryOps::directory_for_root(
         &authority.binding.authority,
@@ -277,29 +431,33 @@ pub(super) fn commit_component_publication_transition(
 }
 
 async fn fetch_snapshot(
-    coordinator: candid::Principal,
+    authority: &canic_core::dto::fleet_subnet_root::FleetSubnetRootAuthority,
 ) -> Result<FleetRegistrySnapshotResponse, InternalError> {
-    let call = CallOps::unbounded_wait(
-        coordinator,
-        protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-    )
-    .execute()
-    .await?;
-    let result: Result<FleetRegistrySnapshotResponse, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
+    let registry =
+        fleet_coordinator_client::registry(authority.binding.authority.binding.coordinator).await?;
+    let topology = ConfigOps::component_topology()?;
+    let manifest = FleetRegistryOps::manifest(&authority.binding.authority, &topology, &registry)?;
+    let version = FleetRegistryVersion {
+        authority: manifest.authority.clone(),
+        revision: manifest.revision,
+        content_hash: manifest.content_hash,
+    };
+    Ok(FleetRegistrySnapshotResponse {
+        registry,
+        manifest,
+        version,
+    })
 }
 
 async fn acknowledge_snapshot(
     coordinator: candid::Principal,
     version: canic_core::dto::fleet_registry::FleetRegistryVersion,
 ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
-    let call =
-        CallOps::unbounded_wait(coordinator, protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT)
-            .with_arg(FleetSubnetRootSnapshotAcknowledgementRequest { version })?
-            .execute()
-            .await?;
-    let result: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
+    fleet_coordinator_client::acknowledge_root_snapshot(
+        coordinator,
+        FleetSubnetRootSnapshotAcknowledgementRequest { version },
+    )
+    .await
 }
 
 fn validate_snapshot(
@@ -576,6 +734,7 @@ mod tests {
             expected_directory: directory(expected_registry.clone()),
             expected_registry,
             store_bootstrap: RootStoreBootstrapRequest {
+                operation_id: [6; 32],
                 manifest_payload_size_bytes: 1,
             },
         }

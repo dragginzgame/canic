@@ -8,7 +8,10 @@
 mod tests {
     use crate::pic::artifacts::build_canonical_fleet_coordinator_wasm;
     use candid::{Principal, encode_one};
-    use canic_control_plane::dto::fleet_coordinator::FleetCoordinatorInitArgs;
+    use canic_control_plane::dto::fleet_coordinator::{
+        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
+        CoordinatorStatusRequest, CoordinatorStatusResponse, FleetCoordinatorInitArgs,
+    };
     use canic_core::{
         bootstrap::parse_config_model,
         cdk::types::Cycles,
@@ -17,31 +20,20 @@ mod tests {
             fleet_registry::FleetRegistryOps,
         },
         dto::{
-            authority_restore::{
-                AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
-                AuthoritySnapshotRequest,
-            },
+            authority_restore::{AuthorityRestoreFencePhase, AuthoritySnapshotRequest},
             component_provisioning::{
                 ComponentGroupPlacementPlan, ComponentGroupPlanEntry,
                 FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
                 FleetComponentProvisioningPlan, FleetComponentProvisioningPrepareRequest,
-                FleetComponentProvisioningStatusRequest, FleetSubnetRootProvisioningBatch,
+                FleetSubnetRootProvisioningBatch,
             },
             error::Error,
             fleet_registry::{
                 FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-                FleetRegistrySnapshotResponse, FleetSubnetRootDrainingPublicationRequest,
-                FleetSubnetRootDrainingPublicationResponse,
-                FleetSubnetRootDrainingReservationRequest,
-                FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
-                FleetSubnetRootJoinRequest, FleetSubnetRootJoinResponse,
-                FleetSubnetRootRemovalPublicationRequest,
-                FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+                FleetSubnetRootEntry, FleetSubnetRootJoinRequest,
                 FleetSubnetRootSnapshotAcknowledgementRequest, FleetSubnetRootStatus,
             },
-            fleet_subnet_root::{
-                FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryResponse,
-            },
+            role::OperationStatusRequest,
         },
         ids::{
             AppId, CanonicalNetworkId, ComponentGroupPlacementId, ComponentSpecAdmission,
@@ -61,6 +53,64 @@ mod tests {
     };
 
     const INSTALL_CYCLES: u128 = 500_000_000_000_000;
+
+    fn command(
+        pic: &PocketIc,
+        coordinator: Principal,
+        command: CoordinatorCommand,
+    ) -> Result<CoordinatorCommandResponse, Error> {
+        pic.update_candid(coordinator, protocol::CANIC_COMMAND, (command,))
+            .expect("Coordinator command transport")
+    }
+
+    fn command_as(
+        pic: &PocketIc,
+        coordinator: Principal,
+        caller: Principal,
+        command: CoordinatorCommand,
+    ) -> Result<CoordinatorCommandResponse, Error> {
+        pic.update_candid_as(coordinator, caller, protocol::CANIC_COMMAND, (command,))
+            .expect("Coordinator command transport")
+    }
+
+    fn status(
+        pic: &PocketIc,
+        coordinator: Principal,
+        request: CoordinatorStatusRequest,
+    ) -> Result<CoordinatorStatusResponse, Error> {
+        pic.query_candid(coordinator, protocol::CANIC_STATUS, (request,))
+            .expect("Coordinator status transport")
+    }
+
+    fn status_as(
+        pic: &PocketIc,
+        coordinator: Principal,
+        caller: Principal,
+        request: CoordinatorStatusRequest,
+    ) -> Result<CoordinatorStatusResponse, Error> {
+        pic.query_candid_as(coordinator, caller, protocol::CANIC_STATUS, (request,))
+            .expect("Coordinator status transport")
+    }
+
+    fn command_error(
+        result: Result<CoordinatorCommandResponse, Error>,
+        message: &'static str,
+    ) -> Error {
+        match result {
+            Err(error) => error,
+            Ok(_) => panic!("{message}"),
+        }
+    }
+
+    fn status_error(
+        result: Result<CoordinatorStatusResponse, Error>,
+        message: &'static str,
+    ) -> Error {
+        match result {
+            Err(error) => error,
+            Ok(_) => panic!("{message}"),
+        }
+    }
     const COORDINATOR_CONFIG: &str = r#"
 [app]
 name = "demo"
@@ -117,75 +167,74 @@ placement.minimum_distinct_roots = 2
             None,
         );
 
-        let genesis: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
-            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
-            .expect("query genesis version");
-        let genesis = genesis.expect("genesis version");
+        let CoordinatorStatusResponse::RegistryVersion(genesis) =
+            status(&pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
+                .expect("genesis version")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
         let first_request = FleetSubnetRootJoinRequest {
             expected_registry: genesis,
             entry: joining_entry(&topology, 5, 21, 1),
         };
-        let first: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                (first_request.clone(),),
-            )
-            .expect("first join transport");
-        let first = first.expect("first join");
+        let CoordinatorCommandResponse::JoinRoot(first) = command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::JoinRoot(first_request.clone()),
+        )
+        .expect("first join") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
         assert_eq!(first.version.revision, 2);
 
         let second_request = FleetSubnetRootJoinRequest {
             expected_registry: first.version.clone(),
             entry: joining_entry(&topology, 7, 22, 2),
         };
-        let second: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                (second_request,),
-            )
-            .expect("second join transport");
-        let second = second.expect("second join");
+        let CoordinatorCommandResponse::JoinRoot(second) = command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::JoinRoot(second_request),
+        )
+        .expect("second join") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
         assert_eq!(second.version.revision, 3);
 
-        let retried: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                (first_request,),
-            )
-            .expect("late first retry transport");
+        let CoordinatorCommandResponse::JoinRoot(retried) = command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::JoinRoot(first_request),
+        )
+        .expect("late first retry") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
         assert_eq!(
-            retried.expect("late first retry"),
-            first,
+            retried, first,
             "late exact retry must retain the original revision-two response"
         );
 
-        let registry: Result<FleetRegistry, Error> = pic
-            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
-            .expect("query joined Registry");
-        let registry = registry.expect("joined Registry");
+        let CoordinatorStatusResponse::Registry(registry) =
+            status(&pic, coordinator, CoordinatorStatusRequest::Registry).expect("joined Registry")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
         assert_eq!(registry.revision, 3);
         assert_eq!(registry.fleet_subnet_roots.len(), 2);
 
         assert_root_snapshot_endpoints(&pic, coordinator, &registry, &second.version);
 
-        let unauthorized: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                principal(99),
-                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                (FleetSubnetRootJoinRequest {
-                    expected_registry: second.version,
-                    entry: joining_entry(&topology, 9, 23, 1),
-                },),
-            )
-            .expect("unauthorized join transport");
+        let unauthorized = command_as(
+            &pic,
+            coordinator,
+            principal(99),
+            CoordinatorCommand::JoinRoot(FleetSubnetRootJoinRequest {
+                expected_registry: second.version,
+                entry: joining_entry(&topology, 9, 23, 1),
+            }),
+        );
         assert_eq!(
-            unauthorized
-                .expect_err("non-controller join must fail")
-                .code(),
+            command_error(unauthorized, "non-controller join must fail").code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
 
@@ -218,67 +267,76 @@ placement.minimum_distinct_roots = 2
             operation_id: [71; 32],
             plan,
         };
-        let prepared: Result<
-            canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
-            Error,
-        > = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_COMPONENT_PROVISIONING_PREPARE,
-                (request,),
-            )
-            .expect("prepare Component provisioning transport");
-        let prepared = prepared.expect("prepare Component provisioning");
+        let CoordinatorCommandResponse::OperationAccepted(receipt) = command(
+            &pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(request),
+        )
+        .expect("prepare Component provisioning") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        assert_eq!(receipt.operation_id, [71; 32]);
+        let CoordinatorStatusResponse::Operation(
+            CoordinatorOperationStatusResponse::ComponentProvisioning(prepared),
+        ) = status(
+            &pic,
+            coordinator,
+            CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                operation_id: [71; 32],
+            }),
+        )
+        .expect("Component provisioning status")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
         assert_eq!(prepared.phase, FleetComponentProvisioningPhase::Planned);
         assert_eq!(prepared.plan_hash, plan_hash);
         assert_eq!(prepared.root_batch_count, 2);
         assert_eq!(prepared.component_count, 2);
 
-        let observed: Result<
-            canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
-            Error,
-        > = pic
-            .query_candid(
-                coordinator,
-                protocol::CANIC_FLEET_COMPONENT_PROVISIONING_STATUS,
-                (FleetComponentProvisioningStatusRequest {
-                    operation_id: [71; 32],
-                    plan_hash,
-                },),
-            )
-            .expect("query Component provisioning status transport");
-        assert_eq!(observed.expect("Component provisioning status"), prepared);
+        let CoordinatorStatusResponse::Operation(
+            CoordinatorOperationStatusResponse::ComponentProvisioning(observed),
+        ) = status(
+            &pic,
+            coordinator,
+            CoordinatorStatusRequest::Operation(OperationStatusRequest {
+                operation_id: [71; 32],
+            }),
+        )
+        .expect("Component provisioning status")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
+        assert_eq!(observed, prepared);
     }
 
     fn assert_authority_snapshot_restore_fence(pic: &PocketIc, coordinator: Principal) {
         let request = AuthoritySnapshotRequest {
             operation_id: [41; 32],
         };
-        let sealed: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_AUTHORITY_SNAPSHOT_PREPARE,
-                (request,),
-            )
-            .expect("authority snapshot prepare transport");
-        let sealed = sealed.expect("authority snapshot prepare");
+        let CoordinatorCommandResponse::PrepareAuthoritySnapshot(sealed) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::PrepareAuthoritySnapshot(request),
+        )
+        .expect("authority snapshot prepare") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
         assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
         assert_eq!(sealed.operation_id, Some(request.operation_id));
 
         let snapshots = pic
             .capture_controller_snapshots(coordinator, [coordinator])
             .expect("Coordinator snapshot capture");
-        let resumed: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_AUTHORITY_SNAPSHOT_RESUME,
-                (request,),
-            )
-            .expect("live authority snapshot resume transport");
-        assert_eq!(
-            resumed.expect("live authority snapshot resume").phase,
-            AuthorityRestoreFencePhase::Open
-        );
+        let CoordinatorCommandResponse::ResumeAuthoritySnapshot(resumed) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ResumeAuthoritySnapshot(request),
+        )
+        .expect("live authority snapshot resume") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
 
         pic.restore_snapshots_with_captured_senders_and_funding(
             &snapshots,
@@ -287,39 +345,34 @@ placement.minimum_distinct_roots = 2
             },
         )
         .expect("Coordinator snapshot restore");
-        let restored: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .query_candid(
-                coordinator,
-                protocol::CANIC_AUTHORITY_RESTORE_FENCE_STATUS,
-                (),
-            )
-            .expect("restored authority fence status transport");
-        assert_eq!(
-            restored.expect("restored authority fence status").phase,
-            AuthorityRestoreFencePhase::Sealed
-        );
+        let CoordinatorStatusResponse::AuthorityRestore(restored) =
+            status(pic, coordinator, CoordinatorStatusRequest::AuthorityRestore)
+                .expect("restored authority fence status")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
+        assert_eq!(restored.phase, AuthorityRestoreFencePhase::Sealed);
 
-        let rejected_resume: Result<AuthorityRestoreFenceStatusResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_AUTHORITY_SNAPSHOT_RESUME,
-                (request,),
-            )
-            .expect("restored authority snapshot resume transport");
+        let rejected_resume = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ResumeAuthoritySnapshot(request),
+        );
         assert_eq!(
-            rejected_resume
-                .expect_err("restored authority must remain mutation-fenced")
-                .code(),
+            command_error(
+                rejected_resume,
+                "restored authority must remain mutation-fenced",
+            )
+            .code(),
             canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
         );
-        let ordinary_mutation: Result<Result<FleetRegistryActivationResponse, Error>, _> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-                (FleetRegistryActivationRequest {
-                    expected_registry: registry_version(pic, coordinator),
-                },),
-            );
+        let ordinary_mutation = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+                expected_registry: registry_version(pic, coordinator),
+            }),
+        );
         assert!(
             ordinary_mutation.is_err(),
             "restored authority must reject ordinary mutation before handler dispatch"
@@ -330,10 +383,13 @@ placement.minimum_distinct_roots = 2
         pic: &PocketIc,
         coordinator: Principal,
     ) -> canic_core::dto::fleet_registry::FleetRegistryVersion {
-        let version: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
-            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
-            .expect("restored Registry version transport");
-        version.expect("restored Registry version")
+        let CoordinatorStatusResponse::RegistryVersion(version) =
+            status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
+                .expect("restored Registry version")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
+        version
     }
 
     fn assert_root_snapshot_endpoints(
@@ -343,77 +399,76 @@ placement.minimum_distinct_roots = 2
         version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
     ) {
         let first_root = principal(21);
-        let snapshot: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                first_root,
-                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-                (),
-            )
-            .expect("registered root snapshot transport");
-        let snapshot = snapshot.expect("registered root snapshot");
-        assert_eq!(&snapshot.registry, registry);
-        assert_eq!(&snapshot.version, version);
+        let CoordinatorStatusResponse::Registry(snapshot) = status_as(
+            pic,
+            coordinator,
+            first_root,
+            CoordinatorStatusRequest::Registry,
+        )
+        .expect("registered root snapshot") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        assert_eq!(&snapshot, registry);
 
-        let unregistered_snapshot: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                principal(99),
-                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-                (),
-            )
-            .expect("unregistered snapshot transport");
+        let unregistered_snapshot = status_as(
+            pic,
+            coordinator,
+            principal(99),
+            CoordinatorStatusRequest::Registry,
+        );
         assert_eq!(
-            unregistered_snapshot
-                .expect_err("unregistered root snapshot must fail")
-                .code(),
+            status_error(
+                unregistered_snapshot,
+                "unregistered root snapshot must fail",
+            )
+            .code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
 
         let request = FleetSubnetRootSnapshotAcknowledgementRequest {
             version: version.clone(),
         };
-        let first_ack: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-            .update_candid_as(
-                coordinator,
-                first_root,
-                protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-                (request.clone(),),
-            )
-            .expect("first acknowledgement transport");
-        let first_ack = first_ack.expect("first acknowledgement");
-        let repeated: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-            .update_candid_as(
-                coordinator,
-                first_root,
-                protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-                (request.clone(),),
-            )
-            .expect("acknowledgement retry transport");
-        assert_eq!(repeated.expect("exact acknowledgement retry"), first_ack);
-        let second_ack: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-            .update_candid_as(
-                coordinator,
-                principal(22),
-                protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-                (request,),
-            )
-            .expect("second acknowledgement transport");
-        second_ack.expect("second acknowledgement");
+        let CoordinatorCommandResponse::AcknowledgeRootSnapshot(first_ack) = command_as(
+            pic,
+            coordinator,
+            first_root,
+            CoordinatorCommand::AcknowledgeRootSnapshot(request.clone()),
+        )
+        .expect("first acknowledgement") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        let CoordinatorCommandResponse::AcknowledgeRootSnapshot(repeated) = command_as(
+            pic,
+            coordinator,
+            first_root,
+            CoordinatorCommand::AcknowledgeRootSnapshot(request.clone()),
+        )
+        .expect("acknowledgement retry") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        assert_eq!(repeated, first_ack);
+        let CoordinatorCommandResponse::AcknowledgeRootSnapshot(_) = command_as(
+            pic,
+            coordinator,
+            principal(22),
+            CoordinatorCommand::AcknowledgeRootSnapshot(request),
+        )
+        .expect("second acknowledgement") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
 
-        let acknowledgements: Result<Vec<FleetSubnetRootSnapshotAcknowledgement>, Error> = pic
-            .query_candid(
-                coordinator,
-                protocol::CANIC_FLEET_REGISTRY_ROOT_ACKNOWLEDGEMENTS,
-                (),
-            )
-            .expect("acknowledgement inventory transport");
-        let acknowledgements = acknowledgements.expect("acknowledgement inventory");
+        let CoordinatorStatusResponse::RootAcknowledgements(acknowledgements) = status(
+            pic,
+            coordinator,
+            CoordinatorStatusRequest::RootAcknowledgements,
+        )
+        .expect("acknowledgement inventory") else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
         assert_eq!(acknowledgements.len(), 2);
         assert!(acknowledgements.iter().all(|ack| &ack.version == version));
 
-        let active = assert_registry_activation(pic, coordinator, version);
-        assert_removed_root_snapshot_exclusion(pic, coordinator, registry, &active.version);
+        assert_registry_activation(pic, coordinator, version);
     }
 
     fn assert_registry_activation(
@@ -424,47 +479,43 @@ placement.minimum_distinct_roots = 2
         let activation_request = FleetRegistryActivationRequest {
             expected_registry: version.clone(),
         };
-        let activated: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-                (activation_request.clone(),),
-            )
-            .expect("Registry activation transport");
-        let activated = activated.expect("Registry activation");
+        let CoordinatorCommandResponse::ActivateRegistry(activated) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ActivateRegistry(activation_request.clone()),
+        )
+        .expect("Registry activation") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
         assert_eq!(&activated.previous_version, version);
         assert_eq!(activated.version.revision, version.revision + 1);
-        let repeated: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-                (activation_request.clone(),),
-            )
-            .expect("Registry activation retry transport");
-        assert_eq!(
-            repeated.expect("exact Registry activation retry"),
-            activated
+        let CoordinatorCommandResponse::ActivateRegistry(repeated) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ActivateRegistry(activation_request.clone()),
+        )
+        .expect("Registry activation retry") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        assert_eq!(repeated, activated);
+        let unauthorized = command_as(
+            pic,
+            coordinator,
+            principal(99),
+            CoordinatorCommand::ActivateRegistry(activation_request),
         );
-        let unauthorized: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                principal(99),
-                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-                (activation_request,),
-            )
-            .expect("unauthorized Registry activation transport");
         assert_eq!(
-            unauthorized
-                .expect_err("non-controller activation must fail")
-                .code(),
+            command_error(unauthorized, "non-controller activation must fail").code(),
             canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
         );
-        let active: Result<FleetRegistry, Error> = pic
-            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
-            .expect("query active Registry");
+        let CoordinatorStatusResponse::Registry(active) =
+            status(pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query active Registry")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
         assert!(
             active
-                .expect("active Registry")
                 .fleet_subnet_roots
                 .iter()
                 .all(|entry| entry.status == FleetSubnetRootStatus::Active)
@@ -472,201 +523,71 @@ placement.minimum_distinct_roots = 2
         activated
     }
 
-    fn assert_removed_root_snapshot_exclusion(
-        pic: &PocketIc,
-        coordinator: Principal,
-        joining_registry: &FleetRegistry,
-        active_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
-    ) {
-        let removed_root = principal(21);
-        let surviving_root = principal(22);
-        let removed = publish_logical_root_removal(
-            pic,
-            coordinator,
-            joining_registry,
-            active_version,
-            removed_root,
-        );
-
-        let rejected: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                removed_root,
-                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-                (),
-            )
-            .expect("Removed root snapshot transport");
-        assert_eq!(
-            rejected
-                .expect_err("Removed root must not remain a snapshot source")
-                .code(),
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
-        );
-        let surviving: Result<FleetRegistrySnapshotResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                surviving_root,
-                protocol::CANIC_FLEET_REGISTRY_SNAPSHOT_FOR_ROOT,
-                (),
-            )
-            .expect("surviving root snapshot transport");
-        let surviving = surviving.expect("surviving root snapshot");
-        assert_eq!(surviving.version, removed.version);
-        assert_eq!(
-            surviving
-                .registry
-                .fleet_subnet_roots
-                .iter()
-                .find(|entry| entry.fleet_subnet_root == removed_root)
-                .expect("Removed peer row")
-                .status,
-            FleetSubnetRootStatus::Removed
-        );
-    }
-
-    fn publish_logical_root_removal(
-        pic: &PocketIc,
-        coordinator: Principal,
-        joining_registry: &FleetRegistry,
-        active_version: &canic_core::dto::fleet_registry::FleetRegistryVersion,
-        removed_root: Principal,
-    ) -> FleetSubnetRootRemovalPublicationResponse {
-        let removed_entry = joining_registry
-            .fleet_subnet_roots
-            .iter()
-            .find(|entry| entry.fleet_subnet_root == removed_root)
-            .expect("removed root entry");
-        let mut expected_root = removed_entry.clone();
-        expected_root.status = FleetSubnetRootStatus::Active;
-        let reservation: Result<FleetSubnetRootDrainingReservationResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_REGISTRY_ROOT_DRAINING_RESERVATION_PREPARE,
-                (FleetSubnetRootDrainingReservationRequest {
-                    operation_id: [31; 32],
-                    expected_registry: active_version.clone(),
-                    expected_root,
-                },),
-            )
-            .expect("prepare root Draining reservation transport");
-        let reservation = reservation.expect("prepare root Draining reservation");
-        let draining: Result<FleetSubnetRootDrainingPublicationResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_DRAINING,
-                (FleetSubnetRootDrainingPublicationRequest {
-                    expected_registry: active_version.clone(),
-                    root_draining: FleetSubnetRootDrainingResponse {
-                        operation_id: [31; 32],
-                        fleet_subnet_root: removed_root,
-                        placement_subnet: removed_entry.placement_subnet,
-                        active_registry: active_version.clone(),
-                        reservation_hash: reservation.reservation_hash,
-                        component_topology_digest: removed_entry.component_topology_digest,
-                        active_release_set: removed_entry.active_release_set,
-                        next_allocation_sequence: 1,
-                        reserved_component_instances: 0,
-                        committed_component_instances: 0,
-                        managed_descendants: 0,
-                        known_created_component_canisters: 0,
-                        root_registry_encoded_bytes: 0,
-                        started_at_ns: 32,
-                    },
-                },),
-            )
-            .expect("publish root Draining transport");
-        let draining = draining.expect("publish root Draining");
-        let final_inventory = FleetSubnetRootFinalInventoryResponse {
-            operation_id: [31; 32],
-            fleet_subnet_root: removed_root,
-            placement_subnet: removed_entry.placement_subnet,
-            registry: draining.version.clone(),
-            component_topology_digest: removed_entry.component_topology_digest,
-            active_release_set: removed_entry.active_release_set,
-            next_allocation_sequence: 1,
-            removed_component_instances: 0,
-            terminal_component_history_hash: [33; 32],
-            root_registry_encoded_bytes: 0,
-            wasm_store: principal(23),
-            wasm_store_catalog_hash: [34; 32],
-            wasm_store_catalog_entries: 1,
-            wasm_store_occupied_bytes: 1_024,
-            wasm_store_template_count: 1,
-            wasm_store_release_count: 1,
-            wasm_store_gc_prepared_at_secs: 35,
-            finalized_at_ns: 36,
-            inventory_hash: [37; 32],
-        };
-        let removed: Result<FleetSubnetRootRemovalPublicationResponse, Error> = pic
-            .update_candid_as(
-                coordinator,
-                removed_root,
-                protocol::CANIC_FLEET_REGISTRY_PUBLISH_ROOT_REMOVED,
-                (FleetSubnetRootRemovalPublicationRequest {
-                    expected_registry: draining.version,
-                    final_inventory,
-                },),
-            )
-            .expect("publish root Removed transport");
-        removed.expect("publish root Removed")
-    }
-
     fn activate_two_roots(
         pic: &PocketIc,
         coordinator: Principal,
         topology: &canic_core::control_plane_support::config::ComponentTopology,
     ) -> FleetRegistry {
-        let genesis: Result<canic_core::dto::fleet_registry::FleetRegistryVersion, Error> = pic
-            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY_VERSION, ())
-            .expect("query genesis version");
-        let first: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                (FleetSubnetRootJoinRequest {
-                    expected_registry: genesis.expect("genesis version"),
-                    entry: joining_entry(topology, 5, 21, 1),
-                },),
-            )
-            .expect("first join transport");
-        let second: Result<FleetSubnetRootJoinResponse, Error> = pic
-            .update_candid(
-                coordinator,
-                protocol::CANIC_FLEET_SUBNET_ROOT_JOIN,
-                (FleetSubnetRootJoinRequest {
-                    expected_registry: first.expect("first join").version,
-                    entry: joining_entry(topology, 7, 22, 1),
-                },),
-            )
-            .expect("second join transport");
-        let joined_version = second.expect("second join").version;
+        let CoordinatorStatusResponse::RegistryVersion(genesis) =
+            status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
+                .expect("genesis version")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
+        let CoordinatorCommandResponse::JoinRoot(first) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::JoinRoot(FleetSubnetRootJoinRequest {
+                expected_registry: genesis,
+                entry: joining_entry(topology, 5, 21, 1),
+            }),
+        )
+        .expect("first join") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        let CoordinatorCommandResponse::JoinRoot(second) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::JoinRoot(FleetSubnetRootJoinRequest {
+                expected_registry: first.version,
+                entry: joining_entry(topology, 7, 22, 1),
+            }),
+        )
+        .expect("second join") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        let joined_version = second.version;
         for root in [principal(21), principal(22)] {
-            let acknowledgement: Result<FleetSubnetRootSnapshotAcknowledgement, Error> = pic
-                .update_candid_as(
-                    coordinator,
-                    root,
-                    protocol::CANIC_FLEET_REGISTRY_ACKNOWLEDGE_ROOT,
-                    (FleetSubnetRootSnapshotAcknowledgementRequest {
-                        version: joined_version.clone(),
-                    },),
-                )
-                .expect("root acknowledgement transport");
-            acknowledgement.expect("root acknowledgement");
-        }
-        let active: Result<FleetRegistryActivationResponse, Error> = pic
-            .update_candid(
+            let CoordinatorCommandResponse::AcknowledgeRootSnapshot(_) = command_as(
+                pic,
                 coordinator,
-                protocol::CANIC_FLEET_REGISTRY_ACTIVATE,
-                (FleetRegistryActivationRequest {
-                    expected_registry: joined_version,
-                },),
+                root,
+                CoordinatorCommand::AcknowledgeRootSnapshot(
+                    FleetSubnetRootSnapshotAcknowledgementRequest {
+                        version: joined_version.clone(),
+                    },
+                ),
             )
-            .expect("activate Registry transport");
-        active.expect("activate Registry");
-        let registry: Result<FleetRegistry, Error> = pic
-            .query_candid(coordinator, protocol::CANIC_FLEET_REGISTRY, ())
-            .expect("query active Registry transport");
-        registry.expect("active Registry")
+            .expect("root acknowledgement") else {
+                panic!("Coordinator returned a differently correlated command response");
+            };
+        }
+        let CoordinatorCommandResponse::ActivateRegistry(_) = command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+                expected_registry: joined_version,
+            }),
+        )
+        .expect("activate Registry") else {
+            panic!("Coordinator returned a differently correlated command response");
+        };
+        let CoordinatorStatusResponse::Registry(registry) =
+            status(pic, coordinator, CoordinatorStatusRequest::Registry).expect("active Registry")
+        else {
+            panic!("Coordinator returned a differently correlated status response");
+        };
+        registry
     }
 
     fn fresh_component_plan(

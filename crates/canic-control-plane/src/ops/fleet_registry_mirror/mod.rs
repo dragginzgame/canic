@@ -50,6 +50,7 @@ impl FleetRegistryMirrorOps {
         RootFleetRegistryMirrorView {
             candidate: data.candidate.map(candidate_record_to_view),
             active: data.active.map(active_record_to_view),
+            synchronization: data.synchronization.map(candidate_record_to_view),
         }
     }
 
@@ -107,10 +108,14 @@ impl FleetRegistryMirrorOps {
     }
 
     pub(crate) fn commit_candidate(
+        operation_id: [u8; 32],
+        store_bootstrap: canic_core::dto::root_store::RootStoreBootstrapRequest,
         snapshot: FleetRegistrySnapshotResponse,
         acknowledgement: Option<FleetSubnetRootSnapshotAcknowledgement>,
     ) {
         RootFleetRegistryMirrorStore::commit_candidate(RootFleetRegistryCandidateRecord {
+            operation_id,
+            store_bootstrap,
             snapshot,
             acknowledgement,
         });
@@ -171,6 +176,8 @@ fn candidate_record_to_view(
     record: RootFleetRegistryCandidateRecord,
 ) -> RootFleetRegistryCandidateView {
     RootFleetRegistryCandidateView {
+        operation_id: record.operation_id,
+        store_bootstrap: record.store_bootstrap,
         snapshot: record.snapshot,
         acknowledgement: record.acknowledgement,
     }

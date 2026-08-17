@@ -424,6 +424,7 @@ pub struct FleetSubnetRootSnapshotAcknowledgement {
 /// Controller command asking a Prepared root to synchronize and acknowledge its Registry.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetSubnetRootRegistrySyncRequest {
+    pub operation_id: [u8; 32],
     pub expected_registry: FleetRegistryVersion,
     pub store_bootstrap: RootStoreBootstrapRequest,
 }

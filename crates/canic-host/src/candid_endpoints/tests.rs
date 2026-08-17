@@ -2,8 +2,9 @@ use super::*;
 
 const CANDID: &str = r#"
 type Nested = record { field : text };
+type Status = variant { Readiness };
 service : (record { init : text }) -> {
-  canic_ready : () -> (bool) query;
+  canic_status : (Status) -> (bool) query;
   "icrc10-supported-standards" : () -> (vec record { text; text }) query;
   canic_update : (Nested) -> (
   variant { Ok; Err : text },
@@ -15,10 +16,10 @@ service : (record { init : text }) -> {
 #[test]
 fn parses_candid_service_endpoints() {
     let endpoints = parse_candid_service_endpoints(CANDID).expect("parse endpoints");
-    let canic_ready = endpoints
+    let canic_status = endpoints
         .iter()
-        .find(|endpoint| endpoint.name == "canic_ready")
-        .expect("canic_ready endpoint");
+        .find(|endpoint| endpoint.name == "canic_status")
+        .expect("canic_status endpoint");
     let icrc10 = endpoints
         .iter()
         .find(|endpoint| endpoint.name == "icrc10-supported-standards")
@@ -29,8 +30,11 @@ fn parses_candid_service_endpoints() {
         .expect("canic_update endpoint");
 
     assert_eq!(endpoints.len(), 3);
-    assert_eq!(canic_ready.candid, "canic_ready : () -> (bool) query;");
-    assert_eq!(canic_ready.modes, vec![EndpointMode::Query]);
+    assert_eq!(
+        canic_status.candid,
+        "canic_status : (Status) -> (bool) query;"
+    );
+    assert_eq!(canic_status.modes, vec![EndpointMode::Query]);
     assert_eq!(
         icrc10.candid,
         "\"icrc10-supported-standards\" : () -> (vec record { text; text }) query;"
@@ -153,7 +157,7 @@ fn serializes_structured_endpoint_json() {
 type MaybeText = opt text;
 type Level = variant { Debug; Info; Error : text };
 service : {
-  canic_log : (MaybeText, Level) -> ();
+  application_log : (MaybeText, Level) -> ();
 }
 ";
 

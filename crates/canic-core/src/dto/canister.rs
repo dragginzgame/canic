@@ -2,6 +2,12 @@ use crate::dto::prelude::*;
 
 pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
 
+/// Exact management-canister inspection target selected by a Root controller.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct CanisterInspectionRequest {
+    pub canister_id: Principal,
+}
+
 //
 // CanisterInfo
 //

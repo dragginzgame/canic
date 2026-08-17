@@ -56,12 +56,23 @@ struct StubCreateCanisterResult {
 #[ic_cdk::init]
 fn init() {}
 
+#[derive(CandidType, Deserialize)]
+enum RootCommand {
+    RespondCapability(RootCapabilityEnvelopeV1),
+}
+
+#[derive(CandidType)]
+enum RootCommandResponse {
+    RespondCapability(RootCapabilityResponseV1),
+}
+
 #[ic_cdk::update]
-async fn canic_response_capability_v1(
-    envelope: RootCapabilityEnvelopeV1,
-) -> Result<RootCapabilityResponseV1, Error> {
-    let response = handle_request(envelope.capability).await?;
-    Ok(RootCapabilityResponseV1 { response })
+async fn canic_command(command: RootCommand) -> Result<RootCommandResponse, Error> {
+    let RootCommand::RespondCapability(envelope) = command;
+    let response = RootCapabilityResponseV1 {
+        response: handle_request(envelope.capability).await?,
+    };
+    Ok(RootCommandResponse::RespondCapability(response))
 }
 
 async fn handle_request(request: Request) -> Result<Response, Error> {

@@ -3,8 +3,8 @@ use super::*;
 use crate::build_provenance::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, ArtifactTransformKindV1,
     ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1, BuildProvenanceStatusV1,
-    BuildProvenanceV1, BuildScriptInputStateV1, CargoProvenanceV1, SourceDirtyPolicyV1,
-    SourceProvenanceV1, SourceVcsV1,
+    BuildProvenanceV1, BuildScriptInputStateV1, CargoProvenanceV1, ProtocolProfileProvenanceV1,
+    SourceDirtyPolicyV1, SourceProvenanceV1, SourceVcsV1,
 };
 use crate::evidence_envelope::{
     CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
@@ -184,6 +184,10 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
             rustflags_digest_algorithm: None,
             cargo_config_fingerprints: Vec::new(),
             build_script_inputs: BuildScriptInputStateV1::NotRecorded,
+        },
+        protocol_profile: ProtocolProfileProvenanceV1 {
+            candid_sha256: "3".repeat(64),
+            protocol_profile_digest: "4".repeat(64),
         },
         artifacts: vec![
             sample_artifact(ArtifactProvenanceKindV1::Wasm, "a"),

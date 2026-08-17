@@ -5,7 +5,10 @@
 //! Boundary: the dedicated facade macro is the only canister export authority.
 
 use crate::{
-    dto::fleet_coordinator::FleetCoordinatorInitArgs,
+    dto::fleet_coordinator::{
+        CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
+        FleetCoordinatorInitArgs,
+    },
     workflow::fleet_coordinator::FleetCoordinatorWorkflow,
 };
 use canic_core::{
@@ -19,18 +22,12 @@ use canic_core::{
         error::Error,
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
-            FleetRegistryManifest, FleetRegistrySnapshotResponse, FleetRegistryVersion,
-            FleetSubnetRootDeletionCompletionRequest, FleetSubnetRootDeletionExecutionRequest,
-            FleetSubnetRootDeletionExecutionResponse,
-            FleetSubnetRootDeletionReadinessIntentRequest,
-            FleetSubnetRootDeletionReadinessIntentResponse,
-            FleetSubnetRootDeletionReadinessRequest, FleetSubnetRootDeletionReadinessResponse,
+            FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
+            FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionExecutionResponse,
             FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionStatusRequest,
-            FleetSubnetRootDrainingPublicationRequest, FleetSubnetRootDrainingPublicationResponse,
             FleetSubnetRootDrainingReservationRequest, FleetSubnetRootDrainingReservationResponse,
             FleetSubnetRootDrainingReservationStatusRequest, FleetSubnetRootJoinRequest,
-            FleetSubnetRootJoinResponse, FleetSubnetRootRemovalPublicationRequest,
-            FleetSubnetRootRemovalPublicationResponse, FleetSubnetRootSnapshotAcknowledgement,
+            FleetSubnetRootJoinResponse, FleetSubnetRootSnapshotAcknowledgement,
             FleetSubnetRootSnapshotAcknowledgementRequest,
         },
     },
@@ -61,6 +58,64 @@ impl FleetCoordinatorApi {
             .unwrap_or_else(|error| {
                 ic_cdk::trap(format!("Fleet Coordinator init failed: {error}"))
             });
+        canic_core::api::ready::ReadyApi::mark_ready();
+    }
+
+    pub fn operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<CoordinatorOperationStatusResponse, Error> {
+        let caller = msg_caller();
+        FleetCoordinatorWorkflow::operation_status_for_caller(
+            operation_id,
+            caller,
+            is_controller(&caller),
+        )
+        .map_err(Into::into)
+    }
+
+    /// Dispatch one closed Coordinator command and preserve its exact response correlation.
+    pub async fn command(command: CoordinatorCommand) -> Result<CoordinatorCommandResponse, Error> {
+        match command {
+            CoordinatorCommand::AcknowledgeRootSnapshot(request) => {
+                Self::acknowledge_calling_root_snapshot(request)
+                    .map(CoordinatorCommandResponse::AcknowledgeRootSnapshot)
+            }
+            CoordinatorCommand::ActivateRegistry(request) => {
+                Self::activate_registry(request).map(CoordinatorCommandResponse::ActivateRegistry)
+            }
+            CoordinatorCommand::CompleteRootDeletion(request) => {
+                Self::complete_root_deletion(request)
+                    .map(CoordinatorCommandResponse::CompleteRootDeletion)
+            }
+            CoordinatorCommand::JoinRoot(request) => {
+                Self::join_root(request).map(CoordinatorCommandResponse::JoinRoot)
+            }
+            CoordinatorCommand::PrepareAuthoritySnapshot(request) => {
+                canic_core::api::authority_restore::AuthorityRestoreApi::prepare_snapshot(request)
+                    .await
+                    .map(CoordinatorCommandResponse::PrepareAuthoritySnapshot)
+            }
+            CoordinatorCommand::PrepareRootDeletionExecution(request) => {
+                Self::begin_root_deletion_execution(request)
+                    .map(CoordinatorCommandResponse::PrepareRootDeletionExecution)
+            }
+            CoordinatorCommand::ProvisionComponents(request) => {
+                FleetCoordinatorWorkflow::accept_component_provisioning(request)
+                    .map(CoordinatorCommandResponse::OperationAccepted)
+                    .map_err(Into::into)
+            }
+            CoordinatorCommand::RemoveRoot(request) => {
+                FleetCoordinatorWorkflow::accept_root_removal(request)
+                    .await
+                    .map(CoordinatorCommandResponse::OperationAccepted)
+                    .map_err(Into::into)
+            }
+            CoordinatorCommand::ResumeAuthoritySnapshot(request) => {
+                canic_core::api::authority_restore::AuthorityRestoreApi::resume_snapshot(request)
+                    .await
+                    .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
+            }
+        }
     }
 
     pub fn registry() -> Result<FleetRegistry, Error> {
@@ -77,8 +132,10 @@ impl FleetCoordinatorApi {
         FleetCoordinatorWorkflow::manifest().map_err(Into::into)
     }
 
-    pub fn snapshot_for_calling_root() -> Result<FleetRegistrySnapshotResponse, Error> {
-        FleetCoordinatorWorkflow::snapshot_for_root(msg_caller()).map_err(Into::into)
+    pub fn registry_for_calling_status() -> Result<FleetRegistry, Error> {
+        let caller = msg_caller();
+        FleetCoordinatorWorkflow::registry_for_caller(caller, is_controller(&caller))
+            .map_err(Into::into)
     }
 
     pub fn acknowledge_calling_root_snapshot(
@@ -119,12 +176,6 @@ impl FleetCoordinatorApi {
             .map_err(Into::into)
     }
 
-    pub fn publish_root_draining(
-        request: FleetSubnetRootDrainingPublicationRequest,
-    ) -> Result<FleetSubnetRootDrainingPublicationResponse, Error> {
-        FleetCoordinatorWorkflow::publish_root_draining(request).map_err(Into::into)
-    }
-
     pub fn prepare_root_draining_reservation(
         request: FleetSubnetRootDrainingReservationRequest,
     ) -> Result<FleetSubnetRootDrainingReservationResponse, Error> {
@@ -138,34 +189,6 @@ impl FleetCoordinatorApi {
         FleetCoordinatorWorkflow::root_draining_reservation_status(
             caller,
             is_controller(&caller),
-            request,
-        )
-        .map_err(Into::into)
-    }
-
-    pub fn publish_root_removed(
-        request: FleetSubnetRootRemovalPublicationRequest,
-    ) -> Result<FleetSubnetRootRemovalPublicationResponse, Error> {
-        FleetCoordinatorWorkflow::publish_root_removed(msg_caller(), request).map_err(Into::into)
-    }
-
-    pub fn prepare_root_deletion_readiness(
-        request: FleetSubnetRootDeletionReadinessIntentRequest,
-    ) -> Result<FleetSubnetRootDeletionReadinessIntentResponse, Error> {
-        FleetCoordinatorWorkflow::prepare_root_deletion_readiness(
-            msg_caller(),
-            canister_self(),
-            request,
-        )
-        .map_err(Into::into)
-    }
-
-    pub fn record_root_deletion_readiness(
-        request: FleetSubnetRootDeletionReadinessRequest,
-    ) -> Result<FleetSubnetRootDeletionReadinessResponse, Error> {
-        FleetCoordinatorWorkflow::record_root_deletion_readiness(
-            msg_caller(),
-            canister_self(),
             request,
         )
         .map_err(Into::into)

@@ -94,6 +94,7 @@ pub(super) fn sample_role_artifact() -> RoleArtifactV1 {
         installed_module_hash: Some("module".to_string()),
         candid_path: Some("root.did".to_string()),
         candid_sha256: Some(sample_sha256("b")),
+        protocol_profile_digest: Some(sample_sha256("e")),
         raw_config_sha256: Some("raw".to_string()),
         canonical_embedded_config_sha256: Some(sample_sha256("c")),
         embedded_topology_sha256: Some("topology".to_string()),

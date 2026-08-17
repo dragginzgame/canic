@@ -7,7 +7,7 @@ use super::{
     AuthCommandError, AuthIssuerObservedStatus, AuthRenewalBatchStatus, AuthRenewalStateStatus,
     AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
 };
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic_core::{
     cdk::utils::hash::hex_bytes as encode_hex,
     dto::auth::{
@@ -16,6 +16,16 @@ use canic_core::{
     },
 };
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
+
+#[derive(CandidType, Deserialize)]
+pub(super) enum RootStatusResponse {
+    IssuerRenewal(RootIssuerRenewalStatusResponse),
+}
+
+#[derive(CandidType, Deserialize)]
+pub(super) enum CanisterStatusResponse {
+    ActiveDelegationProof(ActiveDelegationProofStatusResponse),
+}
 
 pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
     Principal::from_text(issuer)
@@ -28,7 +38,8 @@ pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommand
 pub(super) fn parse_renewal_status_summary(
     output: &str,
 ) -> Result<AuthRenewalStatusSummary, IcpJsonResponseError> {
-    let response = decode_json_result_response::<RootIssuerRenewalStatusResponse>(output)?;
+    let response = decode_json_result_response::<RootStatusResponse>(output)?;
+    let RootStatusResponse::IssuerRenewal(response) = response;
 
     let template = response.template;
     let state = response.state;
@@ -91,7 +102,8 @@ pub(super) fn parse_renewal_status_summary(
 pub(super) fn parse_issuer_observed_status(
     output: &str,
 ) -> Result<AuthIssuerObservedStatus, IcpJsonResponseError> {
-    let response = decode_json_result_response::<ActiveDelegationProofStatusResponse>(output)?;
+    let CanisterStatusResponse::ActiveDelegationProof(response) =
+        decode_json_result_response::<CanisterStatusResponse>(output)?;
 
     Ok(AuthIssuerObservedStatus {
         status: active_proof_status_label(&response.status).to_string(),
@@ -99,6 +111,10 @@ pub(super) fn parse_issuer_observed_status(
         expires_at_ns: response.expires_at_ns.map(|value| value.to_string()),
         refresh_after_ns: response.refresh_after_ns.map(|value| value.to_string()),
     })
+}
+
+pub(super) fn issuer_active_proof_status_arg() -> &'static str {
+    "(variant { ActiveDelegationProof })"
 }
 
 const fn active_proof_status_label(status: &ActiveDelegationProofStatus) -> &'static str {
@@ -122,5 +138,5 @@ const fn renewal_batch_status_label(status: &RootIssuerRenewalBatchStatus) -> &'
 }
 
 pub(super) fn root_issuer_renewal_status_arg(issuer_pid: &str) -> String {
-    format!(r#"(record {{ issuer_pid = principal "{issuer_pid}" }})"#)
+    format!(r#"(variant {{ IssuerRenewal = record {{ issuer_pid = principal "{issuer_pid}" }} }})"#)
 }

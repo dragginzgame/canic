@@ -5,7 +5,6 @@
 //! Boundary: test-only checks over manifest rows.
 
 use super::*;
-use std::collections::BTreeSet;
 
 #[test]
 fn costed_manifest_entries_declare_guards() {
@@ -49,68 +48,55 @@ fn costed_root_capability_command_entries_declare_guards() {
 }
 
 #[test]
-fn durable_publish_entries_are_wasm_store_publication_surfaces() {
-    let expected = durable_publish_endpoint_names();
-    let actual = ENDPOINT_REPLAY_POLICY_MANIFEST
+fn costed_role_command_entries_declare_guards() {
+    for entry in ROOT_COMMAND_REPLAY_POLICY_MANIFEST
         .iter()
-        .filter(|entry| entry.cost_class == CostClass::DurablePublish)
-        .map(|entry| entry.endpoint)
-        .collect::<BTreeSet<_>>();
-
-    assert_eq!(
-        actual, expected,
-        "durable-publish cost class must stay scoped to wasm-store publication surfaces"
-    );
-
-    for endpoint in expected {
-        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-            .iter()
-            .find(|entry| entry.endpoint == endpoint)
-            .expect("durable publish endpoint entry");
-
-        assert_eq!(
-            entry.implementation_status,
-            ReplayImplementationStatus::Implemented
-        );
-        assert_eq!(entry.endpoint_kind, EndpointKind::Update);
+        .chain(COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST)
+        .chain(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST)
+        .chain(STORE_COMMAND_REPLAY_POLICY_MANIFEST)
+    {
+        if entry.cost_class == CostClass::None {
+            continue;
+        }
         assert!(
-            matches!(
-                entry.replay_policy,
-                ReplayPolicy::MonotonicTransition { .. }
-            ),
-            "{endpoint} must stay classified as monotonic publication"
+            entry.quota_policy.is_some(),
+            "costed role command {} missing quota policy",
+            entry.variant
         );
-        assert_eq!(entry.quota_policy, Some(DURABLE_PUBLISH_QUOTA_V1));
-        assert_eq!(entry.cycle_reserve_policy, Some(DURABLE_PUBLISH_RESERVE_V1));
+        assert!(
+            entry.cost_class == CostClass::RootCanisterSignaturePrepare
+                || entry.cost_class == CostClass::RootChainKeySigning
+                || entry.cost_class == CostClass::IssuerCanisterSignaturePrepare
+                || entry.cycle_reserve_policy.is_some(),
+            "costed role command {} missing cycle-reserve policy",
+            entry.variant
+        );
     }
 }
 
 #[test]
-fn publication_effect_endpoints_delegate_cost_admission_to_root_workflow() {
-    for endpoint in guarded_publication_effect_endpoint_names() {
-        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-            .iter()
-            .find(|entry| entry.endpoint == endpoint)
-            .expect("publication effect endpoint entry");
+fn root_release_publication_is_the_role_owned_durable_publish_command() {
+    let entry = ROOT_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.variant == "PublishReleaseSet")
+        .expect("Root release-publication command entry");
 
-        assert!(matches!(
-            entry.replay_policy,
-            ReplayPolicy::MonotonicTransition { .. }
-        ));
-        assert_eq!(entry.cost_class, CostClass::None);
-        assert_eq!(entry.quota_policy, None);
-        assert_eq!(entry.cycle_reserve_policy, None);
-    }
+    assert_eq!(entry.cost_class, CostClass::DurablePublish);
+    assert!(matches!(
+        entry.replay_policy,
+        ReplayPolicy::MonotonicTransition { .. }
+    ));
+    assert_eq!(entry.quota_policy, Some(DURABLE_PUBLISH_QUOTA_V1));
+    assert_eq!(entry.cycle_reserve_policy, Some(DURABLE_PUBLISH_RESERVE_V1));
 }
 
 #[test]
 fn store_deletion_cycle_reclamation_is_guarded_and_convergent() {
-    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+    let entry = STORE_COMMAND_REPLAY_POLICY_MANIFEST
         .iter()
-        .find(|entry| entry.endpoint == CANIC_WASM_STORE_RECLAIM_DELETION_CYCLES)
-        .expect("Store deletion cycle-reclamation entry");
+        .find(|entry| entry.variant == "ReclaimDeletionCycles")
+        .expect("Store deletion cycle-reclamation variant");
 
-    assert_eq!(entry.endpoint_kind, EndpointKind::Update);
     assert!(matches!(
         entry.replay_policy,
         ReplayPolicy::SnapshotConvergent { command_kind }

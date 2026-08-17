@@ -2,7 +2,7 @@
 //!
 //! Responsibility: inspect one Fleet canister's runtime-observed Canic status.
 //! Does not own: deployment planning, runtime endpoint DTOs, or broad topology fanout.
-//! Boundary: resolves one explicit target, queries `canic_runtime_status`, and renders a report.
+//! Boundary: resolves one explicit target, selects `canic_status::Runtime`, and renders a report.
 
 use crate::{
     cli::{
@@ -14,10 +14,10 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use candid::{Principal, types::principal::PrincipalError};
+use candid::{CandidType, Deserialize, Principal, types::principal::PrincipalError};
 use canic_core::{
     dto::runtime::{CanicRuntimeStatus, RuntimeFeatureStatus, RuntimeStatus},
-    protocol::CANIC_RUNTIME_STATUS,
+    protocol::CANIC_STATUS,
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
@@ -39,7 +39,7 @@ Examples:
   canic inspect canister aaaaa-aa
   canic inspect fleet demo-local --role root
 
-Inspect is read-only. It queries the guarded canic_runtime_status endpoint for
+Inspect is read-only. It queries the guarded canic_status Runtime selector for
 one explicit target and does not fan out across Fleet roles. Use
 `canic deploy inspect` for local deployment-truth artifacts and saved reports.";
 
@@ -63,7 +63,7 @@ pub enum InspectCommandError {
     #[error("icp command failed: {0}")]
     Icp(#[from] IcpCommandError),
 
-    #[error("invalid canic_runtime_status response: {0}")]
+    #[error("invalid canic_status Runtime response: {0}")]
     InvalidResponse(#[source] IcpJsonResponseError),
 
     #[error("runtime status reported {0}")]
@@ -127,6 +127,11 @@ struct ResolvedInspectTarget {
     candid_path: Option<PathBuf>,
     icp_root: Option<PathBuf>,
     json: bool,
+}
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    Runtime(CanicRuntimeStatus),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -329,9 +334,10 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     if let Some(root) = &target.icp_root {
         icp = icp.with_cwd(root);
     }
-    let output = icp.canister_query_output_with_candid(
+    let output = icp.canister_query_arg_output_with_candid(
         &target.canister_id,
-        CANIC_RUNTIME_STATUS,
+        CANIC_STATUS,
+        "(variant { Runtime })",
         Some("json"),
         target.candid_path.as_deref(),
     )?;
@@ -348,15 +354,16 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
             environment: target.environment.clone(),
             source: target.source,
         },
-        endpoint: CANIC_RUNTIME_STATUS,
+        endpoint: CANIC_STATUS,
         status,
         runtime_status,
     })
 }
 
 fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
-    let status = decode_json_result_response::<CanicRuntimeStatus>(output)
+    let response = decode_json_result_response::<RoleStatusResponse>(output)
         .map_err(InspectCommandError::InvalidResponse)?;
+    let RoleStatusResponse::Runtime(status) = response;
 
     Ok(RuntimeStatusPayload {
         source: RUNTIME_OBSERVED_SOURCE,
@@ -694,7 +701,7 @@ mod tests {
     fn usage_distinguishes_runtime_inspect_from_deploy_artifacts() {
         let text = usage();
 
-        assert!(text.contains("guarded canic_runtime_status endpoint"));
+        assert!(text.contains("guarded canic_status Runtime selector"));
         assert!(text.contains("canic deploy inspect"));
         assert!(text.contains("local deployment-truth artifacts"));
     }
@@ -712,7 +719,8 @@ mod tests {
     #[test]
     fn decodes_runtime_status_from_response_bytes() {
         let status = sample_runtime_status(RuntimeStatus::Ok);
-        let response = Ok::<_, canic_core::dto::error::Error>(status.clone());
+        let response =
+            Ok::<_, canic_core::dto::error::Error>(RoleStatusResponse::Runtime(status.clone()));
         let output = format!(
             r#"{{"response_bytes":"{}"}}"#,
             hex_bytes(Encode!(&response).expect("encode runtime status response"))
@@ -744,7 +752,7 @@ mod tests {
 
         assert!(rendered.contains("source: cli_arg"));
         assert!(rendered.contains("source: runtime_observed"));
-        assert!(rendered.contains("endpoint: canic_runtime_status"));
+        assert!(rendered.contains("endpoint: canic_status"));
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
@@ -779,7 +787,7 @@ mod tests {
         assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
         assert_eq!(value["command"], "canic inspect canister");
         assert_eq!(value["target_resolution"]["source"], "cli_arg");
-        assert_eq!(value["endpoint"], CANIC_RUNTIME_STATUS);
+        assert_eq!(value["endpoint"], CANIC_STATUS);
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
@@ -859,7 +867,7 @@ mod tests {
                 environment: "local".to_string(),
                 source: InspectSource::CliArg,
             },
-            endpoint: CANIC_RUNTIME_STATUS,
+            endpoint: CANIC_STATUS,
             status: RuntimeStatus::Ok,
             runtime_status: RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE,

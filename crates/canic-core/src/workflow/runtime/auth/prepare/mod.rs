@@ -42,6 +42,7 @@ use crate::{
     workflow::{replay::abort_reserved_receipt_after_failure, runtime::auth::RuntimeAuthWorkflow},
 };
 use admission::{validate_role_attestation_request, validate_token_prepare_public_request};
+use candid::CandidType;
 use replay::{
     encode_role_attestation_prepare_response, encode_token_prepare_response,
     map_role_attestation_replay_decision, map_role_attestation_replay_store_error,
@@ -51,6 +52,16 @@ use replay::{
     token_prepare_replay_payload_hash, token_replay_metadata,
 };
 use std::future::Future;
+
+#[derive(CandidType)]
+enum RootCommand {
+    GetOrCreateDelegationProof,
+}
+
+#[derive(CandidType, serde::Deserialize)]
+enum RootCommandResponse {
+    GetOrCreateDelegationProof(RootDelegationProofBatchProof),
+}
 
 impl RuntimeAuthWorkflow {
     /// Prepare a delegated token from issuer-local root-certified delegation material.
@@ -340,12 +351,10 @@ async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError>
     let verifier = AuthOps::auth_proof_verifier_config()?;
     let root_canister_id = verifier.root_canister_id;
     crate::perf!("delegated_token_resolve_root");
-    let call = CallOps::unbounded_wait(
-        root_canister_id,
-        protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
-    )
-    .execute()
-    .await?;
+    let call = CallOps::unbounded_wait(root_canister_id, protocol::CANIC_COMMAND)
+        .with_arg(RootCommand::GetOrCreateDelegationProof)?
+        .execute()
+        .await?;
     let proof = chain_key_delegation_proof_from_root_call(call)?;
     crate::perf!("delegated_token_fetch_root_proof");
     AuthOps::install_active_delegation_proof(proof.proof, root_canister_id)?;
@@ -356,8 +365,10 @@ async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError>
 fn chain_key_delegation_proof_from_root_call(
     call: CallResult,
 ) -> Result<RootDelegationProofBatchProof, InternalError> {
-    let result: Result<RootDelegationProofBatchProof, Error> = call.candid()?;
-    result.map_err(InternalError::observed_public)
+    let result: Result<RootCommandResponse, Error> = call.candid()?;
+    match result.map_err(InternalError::observed_public)? {
+        RootCommandResponse::GetOrCreateDelegationProof(proof) => Ok(proof),
+    }
 }
 
 #[cfg(test)]

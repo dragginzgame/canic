@@ -243,6 +243,18 @@ struct ProvisionedResultMemberAuthority<'a> {
 pub struct RootComponentProvisioningOps;
 
 impl RootComponentProvisioningOps {
+    /// Resolve one durable provisioning operation without requiring its secondary plan hash.
+    pub(crate) fn status_by_operation_id(
+        operation_id: [u8; 32],
+    ) -> Result<Option<RootComponentProvisioningView>, InternalError> {
+        if operation_id == [0; 32] {
+            return Err(InternalError::invalid_input());
+        }
+        RootComponentProvisioningStore::operation(operation_id)
+            .map(validated_record)
+            .transpose()
+    }
+
     /// Return an exact durable acceptance replay before consulting mutable live prerequisites.
     pub(crate) fn acceptance_replay(
         request: &RootComponentProvisioningAcceptanceRequest,

@@ -69,6 +69,10 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
             wasm_path,
             wasm_gz_path,
             did_path,
+            candid_sha256: [3; 32],
+            protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+                [4; 32],
+            ),
             transforms: Vec::new(),
         },
     );
@@ -120,6 +124,11 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert_eq!(payload.cargo.package_metadata_app, "demo");
     assert_eq!(payload.cargo.package_metadata_role, "app");
     assert!(payload.cargo.cargo_lock_sha256.is_some());
+    assert_eq!(payload.protocol_profile.candid_sha256, "03".repeat(32));
+    assert_eq!(
+        payload.protocol_profile.protocol_profile_digest,
+        "04".repeat(32)
+    );
     assert_eq!(payload.artifacts.len(), 2);
     assert_eq!(payload.transforms.len(), 2);
     assert!(
@@ -271,6 +280,10 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
         wasm_path,
         wasm_gz_path,
         did_path,
+        candid_sha256: [3; 32],
+        protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+            [4; 32],
+        ),
         transforms: vec![
             ArtifactTransformOutput {
                 transform: ArtifactTransformKind::Shrink,

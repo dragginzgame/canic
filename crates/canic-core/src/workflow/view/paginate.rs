@@ -36,3 +36,31 @@ pub fn paginate_vec<T>(items: Vec<T>, request: PageRequest) -> Page<T> {
 
     Page { entries, total }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn page_limit_accepts_the_boundary_and_clamps_its_first_excess() {
+        let items = (0..PAGE_REQUEST_MAX_LIMIT + 2).collect::<Vec<_>>();
+        let at_limit = paginate_vec(
+            items.clone(),
+            PageRequest {
+                limit: PAGE_REQUEST_MAX_LIMIT,
+                offset: 0,
+            },
+        );
+        let first_excess = paginate_vec(
+            items,
+            PageRequest {
+                limit: PAGE_REQUEST_MAX_LIMIT + 1,
+                offset: 0,
+            },
+        );
+
+        assert_eq!(at_limit.entries.len() as u64, PAGE_REQUEST_MAX_LIMIT);
+        assert_eq!(first_excess.entries, at_limit.entries);
+        assert_eq!(first_excess.total, PAGE_REQUEST_MAX_LIMIT + 2);
+    }
+}

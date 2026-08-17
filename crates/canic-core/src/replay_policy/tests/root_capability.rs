@@ -19,29 +19,6 @@ fn root_capability_command_variants_have_replay_policy_entries() {
 }
 
 #[test]
-fn root_capability_endpoint_is_manifested_as_command_dispatch() {
-    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-        .iter()
-        .find(|entry| entry.endpoint == "canic_response_capability_v1")
-        .expect("root capability endpoint policy entry");
-
-    assert_eq!(
-        entry.implementation_status,
-        ReplayImplementationStatus::Implemented
-    );
-    assert_eq!(
-        entry.replay_policy,
-        ReplayPolicy::CommandDispatch {
-            command_kind: replay_command_kind("root.capability_rpc.v1"),
-            command_manifest: replay_command_manifest("root.capability.command_manifest.v1"),
-        }
-    );
-    assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
-    assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
-    assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
-}
-
-#[test]
 fn root_capability_command_blockers_are_explicit() {
     let blockers = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
         .iter()

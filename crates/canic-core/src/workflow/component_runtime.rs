@@ -92,6 +92,39 @@ pub fn prepare_directory(
     Ok(status)
 }
 
+/// Converge one managed runtime to the requested current Directory and active state.
+pub fn configure(
+    request: ComponentRuntimeDirectoryPreparationRequest,
+) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
+    let current = status()?;
+    match current.phase {
+        ComponentRuntimePhase::AwaitingDirectory | ComponentRuntimePhase::DirectoryPrepared => {
+            let prepared = prepare_directory(request.clone())?;
+            let directory_authority_hash = prepared
+                .authority_hash
+                .ok_or_else(InternalError::invariant)?;
+            activate(ComponentRuntimeActivationRequest {
+                operation_id: request.operation_id,
+                directory_authority_hash,
+            })
+        }
+        ComponentRuntimePhase::Active => {
+            let status = synchronize_directory(ComponentRuntimeDirectorySynchronizationRequest {
+                operation_id: request.operation_id,
+                authority: request.authority,
+                direct_children: request.direct_children,
+            })?;
+            Ok(
+                crate::view::fleet_activation::ComponentRuntimeActivationTransition {
+                    status,
+                    transitioned: false,
+                    application_init_args: None,
+                },
+            )
+        }
+    }
+}
+
 /// Synchronize one exact next current Directory authority on an Active Component runtime.
 pub fn synchronize_directory(
     request: ComponentRuntimeDirectorySynchronizationRequest,

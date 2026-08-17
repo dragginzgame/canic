@@ -62,6 +62,9 @@ pub(in crate::install_root) enum PlanArtifactError {
     #[error("deployment plan role {role} artifact does not contain a Wasm module")]
     InvalidWasm { role: String },
 
+    #[error("deployment plan role {role} has an invalid {kind} digest")]
+    InvalidDigest { role: String, kind: &'static str },
+
     #[error("deployment plan role {role} {kind} artifact has no matching digest pin")]
     MissingDigestPin { role: String, kind: &'static str },
 

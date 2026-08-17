@@ -4,6 +4,7 @@ use crate::ids::{
     CanisterRole, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootReleaseSet,
     ReleaseBuildId,
 };
+use crate::role_contract::ProtocolProfileDigest;
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,8 @@ pub struct RootStoreArtifact {
     pub wasm_gz_relative_path: String,
     pub wasm_gz_size_bytes: u64,
     pub wasm_gz_sha256_hex: String,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -87,6 +90,7 @@ pub struct RootStoreReleaseSetManifest {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootStoreBootstrapRequest {
+    pub operation_id: [u8; 32],
     pub manifest_payload_size_bytes: u64,
 }
 
@@ -101,6 +105,10 @@ pub struct RootStoreCatalogEntry {
     pub role: CanisterRole,
     /// SHA-256 of the raw Wasm qualified by the release set.
     pub raw_module_hash: [u8; 32],
+    /// SHA-256 of the exact canonical Candid qualified by the release set.
+    pub candid_sha256: [u8; 32],
+    /// Exact profile identity used to select the role binding before the first call.
+    pub protocol_profile_digest: ProtocolProfileDigest,
     /// SHA-256 of the exact gzip payload retained by the Store.
     pub payload_hash: [u8; 32],
     pub payload_size_bytes: u64,

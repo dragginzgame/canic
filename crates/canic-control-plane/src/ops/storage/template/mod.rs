@@ -317,7 +317,7 @@ impl TemplateManifestOps {
     }
 
     // Return whether exactly one approved manifest exists for this role.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     pub fn has_approved_for_role(role: &CanisterRole) -> Result<bool, InternalError> {
         let approved_count = TemplateManifestStateStore::export()
             .entries

@@ -1,12 +1,13 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test exercises the maintained application timer surface in PocketIC.
 
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::{
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
+        role::MetricsStatusRequest,
         runtime::{
             CanicRuntimeStatus, RuntimeCheckStatus, TimerProcessCondition, TimerRegistrationStatus,
             TimerSchedulingMode,
@@ -21,6 +22,18 @@ use std::time::Duration;
 const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+
+#[derive(CandidType)]
+enum RoleStatusRequest {
+    Metrics(MetricsStatusRequest),
+    Runtime,
+}
+
+#[derive(CandidType, Deserialize)]
+enum RoleStatusResponse {
+    Metrics(Page<MetricEntry>),
+    Runtime(CanicRuntimeStatus),
+}
 
 #[test]
 fn application_timers_cancel_and_recur_only_after_completion() {
@@ -334,10 +347,18 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
 }
 
 fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus {
-    let result: Result<CanicRuntimeStatus, canic::Error> = pic
-        .query_candid(canister_id, protocol::CANIC_RUNTIME_STATUS, ())
+    let result: Result<RoleStatusResponse, canic::Error> = pic
+        .query_candid(
+            canister_id,
+            protocol::CANIC_STATUS,
+            (RoleStatusRequest::Runtime,),
+        )
         .expect("query runtime status");
-    result.expect("runtime status application result")
+    let RoleStatusResponse::Runtime(status) = result.expect("runtime status application result")
+    else {
+        panic!("canic_status returned a non-Runtime response")
+    };
+    status
 }
 
 fn intent_cleanup_status(
@@ -373,23 +394,25 @@ fn counts(pic: &PocketIc, canister_id: Principal) -> (u64, u64, u64) {
 }
 
 fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
-    let response: Result<Page<MetricEntry>, Error> = pic
+    let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
             canister_id,
-            protocol::CANIC_METRICS,
-            (
-                MetricsKind::Runtime,
-                PageRequest {
+            protocol::CANIC_STATUS,
+            (RoleStatusRequest::Metrics(MetricsStatusRequest {
+                kind: MetricsKind::Runtime,
+                page: PageRequest {
                     limit: 256,
                     offset: 0,
                 },
-            ),
+            }),),
         )
         .expect("query runtime metrics");
 
-    response
-        .expect("runtime metrics application result")
-        .entries
+    let RoleStatusResponse::Metrics(page) = response.expect("runtime metrics application result")
+    else {
+        panic!("canic_status returned a non-Metrics response")
+    };
+    page.entries
 }
 
 fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {

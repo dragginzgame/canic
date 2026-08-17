@@ -113,12 +113,11 @@ resolution.
 The `empty_fleet_subnet_root_retirement` and
 `fleet_subnet_root_deletion` examples exist for the bounded 0.100 real-network
 proof. They are not general operator commands. The first helper fences an
-empty root, publishes its logical removal, hands prepaid Canister assets to
-the surviving Coordinator, reclaims and physically deletes the sibling Store.
-The root helper's `prepare` phase may return excess root cycles and durably
-freezes the Coordinator execution intent; `execute` stops and irreversibly
-deletes the exact root before recording typed absence at the surviving
-Coordinator.
+empty root by submitting one Coordinator `RemoveRoot` command. The Root then
+autonomously publishes its logical removal, hands prepaid Canister assets to
+the surviving Coordinator, reclaims cycles and physically deletes the sibling
+Store. The host retains only the final management-controller stop/delete
+effect after Root status contains durable deletion-preparation evidence.
 
 Begin only with a disposable root whose Component Registry inventory is empty.
 Use one fresh nonzero operation ID throughout:
@@ -127,14 +126,13 @@ Use one fresh nonzero operation ID throughout:
 cargo run -p canic-host --example empty_fleet_subnet_root_retirement -- \
   --confirm-disposable-empty-root \
   icp . <environment> <coordinator> <root> \
-  <store-bootstrap-manifest-bytes> <64-hex-operation-id>
+  <64-hex-operation-id>
 ```
 
-If that helper is interrupted after Store binding finalization, repeat it with
-`--confirm-resume-store-deletion` and the same arguments. Do not begin physical
-root deletion until the helper has returned terminal Store-deletion evidence.
-Run root preparation and execution as separate processes to prove recovery
-from remote authority.
+If autonomous preparation is still in progress, repeat the exact command with
+the same operation ID. Exact retry reuses the durable operation; it does not
+replay completed phases. Run physical-root preparation and execution as
+separate processes when specifically proving recovery from remote authority.
 `execute` refuses to synthesize a missing execution intent, so the durable
 Coordinator receipt from `prepare` is a mandatory phase boundary:
 

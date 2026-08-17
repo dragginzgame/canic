@@ -17,6 +17,7 @@ use crate::{
         ComponentGroupPlacementId, ComponentInstanceId, ComponentSpecId, ComponentTopologyDigest,
         FleetServiceId, FleetSubnetRootReleaseSet, ManagedCanisterBinding,
     },
+    role_contract::ProtocolProfileDigest,
 };
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
@@ -793,6 +794,7 @@ pub struct ComponentRegistryPartitionRequest {
 pub struct ComponentRegistryPartitionResponse {
     pub head: ComponentRegistryHead,
     pub binding: ComponentBinding,
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
     pub status: ComponentLifecycleStatus,
@@ -875,6 +877,7 @@ pub struct ComponentDirectoryChildEntry {
     pub binding: ComponentChildBinding,
     pub kind: ComponentChildKind,
     pub installed_artifact_hash: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub status: ComponentLifecycleStatus,
 }
 
@@ -914,6 +917,7 @@ pub struct ComponentRuntimeDirectoryAuthority {
 pub struct ComponentRuntimeDirectChild {
     pub canister_id: Principal,
     pub role: CanisterRole,
+    pub protocol_profile_digest: ProtocolProfileDigest,
 }
 
 ///
@@ -1459,6 +1463,7 @@ mod tests {
     fn component_registry_contracts_round_trip_through_candid() {
         let request = RootComponentRegistryPreparationRequest {
             store_bootstrap: RootStoreBootstrapRequest {
+                operation_id: [8; 32],
                 manifest_payload_size_bytes: 128,
             },
             expected_fleet_registry: FleetRegistryVersion {
@@ -1604,6 +1609,7 @@ mod tests {
             registry: ComponentRegistryPartitionResponse {
                 head: head.clone(),
                 binding: binding.clone(),
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([24; 32]),
                 provisioning_origin,
                 release_set,
                 status: ComponentLifecycleStatus::Prepared,
@@ -1674,6 +1680,7 @@ mod tests {
                 },
                 kind: ComponentChildKind::Instance,
                 installed_artifact_hash: [22; 32],
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([24; 32]),
                 status: ComponentLifecycleStatus::Active,
             }],
             next_cursor: Some(ComponentDirectoryPageCursor(vec![23; 64])),
@@ -2544,6 +2551,7 @@ mod tests {
                     content_hash: [25; 32],
                 },
                 binding: child_binding.component.clone(),
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([27; 32]),
                 provisioning_origin: ComponentProvisioningOrigin::FleetAdministrator {
                     caller: Principal::from_slice(&[26; 29]),
                 },
@@ -2655,6 +2663,7 @@ mod tests {
                     content_hash: [34; 32],
                 },
                 binding: child_binding.component.clone(),
+                protocol_profile_digest: ProtocolProfileDigest::from_bytes([36; 32]),
                 provisioning_origin: commit_response.registry.provisioning_origin.clone(),
                 release_set: commit_response.registry.release_set,
                 status: ComponentLifecycleStatus::Active,

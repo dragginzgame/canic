@@ -22,10 +22,11 @@ use crate::{
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
     },
 };
-use candid::Principal;
+use candid::{CandidType, Principal};
 use canic_control_plane::{
+    dto::root::RootOperationStatusResponse,
     dto::template::{
-        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetPrepareInput,
         TemplateManifestInput,
     },
     ids::{
@@ -37,6 +38,7 @@ use canic_core::{
     dto::fleet_subnet_root::{
         FleetSubnetWasmStoreAdoptionRequest, FleetSubnetWasmStoreAdoptionResponse,
     },
+    dto::role::{OperationReceipt, OperationStatusRequest},
     dto::root_store::{
         ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
         ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX, RootStoreBootstrapRequest,
@@ -44,6 +46,7 @@ use canic_core::{
     },
     protocol,
 };
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -52,6 +55,27 @@ use std::{
 use thiserror::Error as ThisError;
 
 const MAX_STORE_TRANSITIONS: usize = 10;
+
+#[derive(CandidType)]
+enum RootCommandFragment {
+    AdoptStore(Box<FleetSubnetWasmStoreAdoptionRequest>),
+    BootstrapStore(RootStoreBootstrapRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootCommandResponseFragment {
+    OperationAccepted(OperationReceipt),
+}
+
+#[derive(CandidType)]
+enum RootStatusRequestFragment {
+    Operation(OperationStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponseFragment {
+    Operation(Box<RootOperationStatusResponse>),
+}
 
 #[derive(Debug, ThisError)]
 enum RootStoreBootstrapError {
@@ -146,22 +170,25 @@ fn drive_store_bootstrap(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let manifest_bytes = canonical_manifest_bytes(release_set)?;
     let request = RootStoreBootstrapRequest {
+        operation_id: super::root_store_bootstrap_operation_id(
+            current.journal.install_operation_id,
+        ),
         manifest_payload_size_bytes: manifest_bytes.len() as u64,
     };
 
     for _ in 0..MAX_STORE_TRANSITIONS {
         current = match current.journal.phase {
-            FleetSubnetRootInstallPhase::InfrastructureVerified => begin_store_adoption(&current)?,
-            FleetSubnetRootInstallPhase::StoreAdoptionInFlight => {
-                let evidence = adopt_store(icp_context, &current)?;
-                record_store_adopted(&current, evidence)?
-            }
-            FleetSubnetRootInstallPhase::StoreAdopted => begin_store_staging(&current)?,
+            FleetSubnetRootInstallPhase::InfrastructureVerified => begin_store_staging(&current)?,
             FleetSubnetRootInstallPhase::StoreStaging => {
                 stage_release_set(icp_context, &current, release_set, &manifest_bytes)?;
                 record_store_staged(&current)?
             }
-            FleetSubnetRootInstallPhase::StoreStaged => begin_store_bootstrap(&current)?,
+            FleetSubnetRootInstallPhase::StoreStaged => begin_store_adoption(&current)?,
+            FleetSubnetRootInstallPhase::StoreAdoptionInFlight => {
+                let evidence = adopt_store(icp_context, &current)?;
+                record_store_adopted(&current, evidence)?
+            }
+            FleetSubnetRootInstallPhase::StoreAdopted => begin_store_bootstrap(&current)?,
             FleetSubnetRootInstallPhase::StoreBootstrapInFlight => {
                 let evidence = call_store_bootstrap(icp_context, &current, request.clone())?;
                 record_store_bootstrapped(&current, evidence)?
@@ -205,27 +232,27 @@ fn adopt_store(
         .fleet_subnet_root
         .expect("Store adoption follows verified root installation");
     let request = FleetSubnetWasmStoreAdoptionRequest {
-        operation_id: current.journal.install_operation_id,
+        operation_id: super::root_store_adoption_operation_id(current.journal.install_operation_id),
         authority: expected_wasm_store_authority(&current.journal)?,
     };
     let icp = icp_context.cli();
-    let updated = call_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
+    let updated = call_with_arg::<_, RootCommandResponseFragment>(
         icp,
         root,
-        protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPT,
-        &request,
+        protocol::CANIC_COMMAND,
+        &RootCommandFragment::AdoptStore(Box::new(request.clone())),
     );
-    let observed = query_with_arg::<_, FleetSubnetWasmStoreAdoptionResponse>(
-        icp,
-        root,
-        protocol::CANIC_FLEET_SUBNET_WASM_STORE_ADOPTION_STATUS,
-        &request,
-    )?;
+    let observed = query_root_operation(icp, root, request.operation_id)?;
+    let RootOperationStatusResponse::AdoptStore(observed) = observed else {
+        return Err(RootStoreBootstrapError::LiveEvidenceMismatch.into());
+    };
     match updated {
-        Ok(updated) if updated != observed => {
+        Ok(RootCommandResponseFragment::OperationAccepted(receipt))
+            if receipt.operation_id != request.operation_id =>
+        {
             return Err(RootStoreBootstrapError::AdoptionResponseMismatch.into());
         }
-        Ok(_) | Err(_) => {}
+        Ok(RootCommandResponseFragment::OperationAccepted(_)) | Err(_) => {}
     }
     Ok(observed)
 }
@@ -256,10 +283,10 @@ fn stage_release_set(
     release_set: &PersistedFleetSubnetRootReleaseSet,
     manifest_bytes: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let root = current
+    let store = current
         .journal
-        .fleet_subnet_root
-        .expect("Store staging follows verified root installation");
+        .wasm_store
+        .expect("Store staging follows verified Store installation");
     let icp = icp_context.cli();
     let version = TemplateVersion::owned(release_set.manifest.release_build_id.to_string());
     let manifest_template_id = TemplateId::owned(format!(
@@ -268,7 +295,7 @@ fn stage_release_set(
     ));
     stage_chunk_set(
         icp,
-        root,
+        store,
         manifest_template_id,
         version.clone(),
         release_set.digest.as_bytes().to_vec(),
@@ -280,11 +307,11 @@ fn stage_release_set(
         let bytes = load_artifact_bytes(icp_context.root(), artifact)?;
         let template_id = TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
         let payload_hash = wasm_hash(&bytes);
-        call_with_arg::<_, ()>(
+        let response = call_with_arg::<_, StoreCommandResponse>(
             icp,
-            root,
-            protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-            &TemplateManifestInput {
+            store,
+            protocol::CANIC_COMMAND,
+            &StoreCommand::StageManifest(TemplateManifestInput {
                 template_id: template_id.clone(),
                 role,
                 version: version.clone(),
@@ -295,11 +322,14 @@ fn stage_release_set(
                 manifest_state: TemplateManifestState::Approved,
                 approved_at: Some(0),
                 created_at: 0,
-            },
+            }),
         )?;
+        if !matches!(response, StoreCommandResponse::StageManifest) {
+            return Err(RootStoreBootstrapError::PreparedChunkSetMismatch.into());
+        }
         stage_chunk_set(
             icp,
-            root,
+            store,
             template_id,
             version.clone(),
             payload_hash,
@@ -370,7 +400,7 @@ fn load_artifact_bytes(
 
 fn stage_chunk_set(
     icp: &IcpCli,
-    root: Principal,
+    store: Principal,
     template_id: TemplateId,
     version: TemplateVersion,
     payload_hash: Vec<u8>,
@@ -384,26 +414,29 @@ fn stage_chunk_set(
         .iter()
         .map(|chunk| wasm_hash(chunk))
         .collect::<Vec<_>>();
-    let prepared = call_with_arg::<_, TemplateChunkSetInfoResponse>(
+    let response = call_with_arg::<_, StoreCommandResponse>(
         icp,
-        root,
-        protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
-        &TemplateChunkSetPrepareInput {
+        store,
+        protocol::CANIC_COMMAND,
+        &StoreCommand::PrepareChunkSet(TemplateChunkSetPrepareInput {
             template_id: template_id.clone(),
             version: version.clone(),
             payload_hash,
             payload_size_bytes: bytes.len() as u64,
             chunk_hashes: chunk_hashes.clone(),
-        },
+        }),
     )?;
+    let StoreCommandResponse::PrepareChunkSet(prepared) = response else {
+        return Err(RootStoreBootstrapError::PreparedChunkSetMismatch.into());
+    };
     if prepared.chunk_hashes != chunk_hashes {
         return Err(RootStoreBootstrapError::PreparedChunkSetMismatch.into());
     }
     for (chunk_index, bytes) in chunks.into_iter().enumerate() {
         call_with_arg::<_, ()>(
             icp,
-            root,
-            protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
+            store,
+            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
             &TemplateChunkInput {
                 template_id: template_id.clone(),
                 version: version.clone(),
@@ -424,13 +457,17 @@ fn call_store_bootstrap(
         .journal
         .fleet_subnet_root
         .expect("Store bootstrap follows verified root installation");
-    call_with_arg(
+    let response = call_with_arg::<_, RootCommandResponseFragment>(
         icp_context.cli(),
         root,
-        protocol::CANIC_ROOT_STORE_BOOTSTRAP,
-        &request,
-    )
-    .map_err(Into::into)
+        protocol::CANIC_COMMAND,
+        &RootCommandFragment::BootstrapStore(request.clone()),
+    )?;
+    let RootCommandResponseFragment::OperationAccepted(receipt) = response;
+    if receipt.operation_id != request.operation_id {
+        return Err(RootStoreBootstrapError::LiveEvidenceMismatch.into());
+    }
+    query_store_bootstrap_status(icp_context, current, request)
 }
 
 fn query_store_bootstrap_status(
@@ -442,11 +479,25 @@ fn query_store_bootstrap_status(
         .journal
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
-    query_with_arg(
-        icp_context.cli(),
+    let response = query_root_operation(icp_context.cli(), root, request.operation_id)?;
+    match response {
+        RootOperationStatusResponse::BootstrapStore(response) => Ok(response),
+        _ => Err(RootStoreBootstrapError::LiveEvidenceMismatch.into()),
+    }
+}
+
+fn query_root_operation(
+    icp: &IcpCli,
+    root: Principal,
+    operation_id: [u8; 32],
+) -> Result<RootOperationStatusResponse, Box<dyn std::error::Error>> {
+    let response: RootStatusResponseFragment = query_with_arg(
+        icp,
         root,
-        protocol::CANIC_ROOT_STORE_BOOTSTRAP_STATUS,
-        &request,
-    )
-    .map_err(Into::into)
+        protocol::CANIC_STATUS,
+        &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+    )?;
+    match response {
+        RootStatusResponseFragment::Operation(response) => Ok(*response),
+    }
 }

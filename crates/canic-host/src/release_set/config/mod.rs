@@ -320,6 +320,9 @@ pub(in crate::release_set) fn project_role_capabilities(
     let mut labels = BTreeSet::new();
     for capability in capabilities {
         match capability {
+            RoleCapabilityKey::AutomaticTopup => {
+                labels.insert("automatic_topup");
+            }
             RoleCapabilityKey::DelegatedTokenIssuer
             | RoleCapabilityKey::DelegatedTokenVerifier
             | RoleCapabilityKey::RoleAttestationSigner

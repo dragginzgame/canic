@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CI="$ROOT/.github/workflows/ci.yml"
+CODEOWNERS="$ROOT/.github/CODEOWNERS"
 MAKEFILE="$ROOT/Makefile"
 TOOLS="$ROOT/tool-versions.env"
 RUST_TOOLCHAIN="$ROOT/rust-toolchain.toml"
@@ -37,6 +38,7 @@ POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
 WORKSPACE_TEST_RUNNER="$ROOT/scripts/ci/run-workspace-tests.sh"
+TAG_DELETE_TEST="$ROOT/scripts/ci/test-delete-github-tags-up-to.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
     "$ROOT/scripts/ci/install-gitleaks.sh"
@@ -51,7 +53,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -74,6 +76,13 @@ mapfile -t workflow_files < <(
     find "$ROOT/.github/workflows" -maxdepth 1 -type f \
         \( -name '*.yml' -o -name '*.yaml' \) | sort
 )
+for workflow_file in "${workflow_files[@]}"; do
+    rg -q '^permissions:$' "$workflow_file" ||
+        fail "workflow does not declare top-level token permissions: $workflow_file"
+done
+if rg -n 'runs-on:[[:space:]]+ubuntu-latest' "${workflow_files[@]}" >/dev/null; then
+    fail "workflow runners must use the fixed Ubuntu 24.04 image"
+fi
 checkout_count="$(rg -o --no-filename 'uses:[[:space:]]*actions/checkout@' "${workflow_files[@]}" | wc -l)"
 nonpersisting_checkout_count="$(rg -o --no-filename 'persist-credentials:[[:space:]]*false' "${workflow_files[@]}" | wc -l)"
 [ "$checkout_count" -eq "$nonpersisting_checkout_count" ] ||
@@ -81,6 +90,20 @@ nonpersisting_checkout_count="$(rg -o --no-filename 'persist-credentials:[[:spac
 job_count="$(rg -o --no-filename '^[[:space:]]{4}runs-on:[[:space:]]*ubuntu-24\.04$' "${workflow_files[@]}" | wc -l)"
 timeout_count="$(rg -o --no-filename '^[[:space:]]{4}timeout-minutes:[[:space:]]*[0-9]+$' "${workflow_files[@]}" | wc -l)"
 [ "$job_count" -eq "$timeout_count" ] || fail "every CI job must declare a timeout"
+
+for owned_path in \
+    '/.github/workflows/' \
+    '/.github/dependabot.yml' \
+    '/.githooks/' \
+    '/Makefile' \
+    '/scripts/ci/' \
+    '/rust-toolchain.toml' \
+    '/tool-versions.env' \
+    '/docs/governance/ci-deployment.md' \
+    '/docs/governance/supported-platforms.md'; do
+    rg -q --fixed-strings "$owned_path @dragginzgame" "$CODEOWNERS" ||
+        fail "CODEOWNERS is missing CI authority $owned_path"
+done
 
 rg -F 'runs-on: ubuntu-24.04' "$CI" >/dev/null ||
     fail "CI does not declare a job on the canonical ubuntu-24.04 host"
@@ -116,6 +139,14 @@ rg -F 'run: bash scripts/ci/check-current-document-semantics.sh' "$CI" >/dev/nul
     fail "the current document semantics guard is not active in CI"
 rg -F '"$SHELLCHECK_BIN" --exclude=SC2001,SC2016' "$CI" >/dev/null ||
     fail "CI does not run the pinned ShellCheck boundary"
+ordinary_job="$(sed -n '/^  tests-ordinary:/,/^  tests-pocketic:/p' "$CI")"
+rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
+    <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not install the feature-qualified ripgrep test helper"
+rg -F 'rg --version' <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not verify the ripgrep test helper"
+rg -F 'rg --pcre2-version' <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not verify ripgrep PCRE2 support"
 pocketic_job="$(sed -n '/^  tests-pocketic:/,/^  release-build:/p' "$CI")"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
     <<<"$pocketic_job" >/dev/null ||
@@ -321,7 +352,7 @@ fi
 if rg -F 'TEST_SCRATCH="$TEST_SCRATCH_PARENT/test-runtime"' "$RELEASE_CLEANUP" >/dev/null; then
     fail "release cleanup retains the shared test-scratch deletion path"
 fi
-rg -F 'git push --atomic origin' "$RELEASE_PUSH" >/dev/null ||
+rg -F 'git push --no-follow-tags --atomic origin' "$RELEASE_PUSH" >/dev/null ||
     fail "release push does not require one atomic remote update"
 rg -F '"HEAD:refs/heads/$branch"' "$RELEASE_PUSH" >/dev/null ||
     fail "release push does not name the exact branch ref"
@@ -653,9 +684,12 @@ printf '%s\n' \
 chmod +x "$release_push_bin/git"
 CANIC_RELEASE_PUSH_READY=1 PATH="$release_push_bin:$PATH" \
     bash "$release_push_fixture/scripts/ci/push-release.sh"
-expected_push_arguments=$'push\n--atomic\norigin\nHEAD:refs/heads/main\nrefs/tags/v0.101.10:refs/tags/v0.101.10'
+expected_push_arguments=$'push\n--no-follow-tags\n--atomic\norigin\nHEAD:refs/heads/main\nrefs/tags/v0.101.10:refs/tags/v0.101.10'
 [ "$(cat "$release_push_fixture/push-arguments")" = "$expected_push_arguments" ] ||
     fail "release push did not send the exact branch and tag refs atomically"
+
+bash "$TAG_DELETE_TEST" >/dev/null ||
+    fail "historical-tag deletion fixture failed"
 
 fake_gitleaks="$tmp_dir/gitleaks"
 # shellcheck disable=SC2016 # Preserve variable expansion for the generated fixture.

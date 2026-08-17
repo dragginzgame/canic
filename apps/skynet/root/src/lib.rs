@@ -17,8 +17,7 @@ use canic::{
 use ic_cdk::api::{canister_cycle_balance, canister_self, canister_version, time};
 use skynet_console::{
     ConsoleSnapshot, Endpoint, HttpRequest, HttpResponse, MetricRow, NetworkView, NodeIdentity,
-    RuntimeSummary, StandardEndpointSurface, capability, endpoint, endpoint_highlights, fact,
-    option_text,
+    RuntimeSummary, StandardEndpointSurface, capability, endpoint_highlights, fact, option_text,
 };
 
 canic::start!();
@@ -48,10 +47,15 @@ fn console_snapshot() -> ConsoleSnapshot {
             canister_version: canister_version(),
         },
         runtime: RuntimeSummary {
-            ready: canic_ready(),
-            phase: if canic_ready() { "Active" } else { "Prepared" }.to_string(),
+            ready: canic::api::runtime::ReadyApi::is_ready(),
+            phase: if canic::api::runtime::ReadyApi::is_ready() {
+                "Active"
+            } else {
+                "Prepared"
+            }
+            .to_string(),
             cycles: canister_cycle_balance(),
-            bootstrap: format!("{:?}", canic_bootstrap_status()),
+            bootstrap: format!("{:?}", canic::api::runtime::ReadyApi::bootstrap_status()),
             observation: "root-local control plane".to_string(),
         },
         environment: vec![
@@ -111,35 +115,7 @@ fn console_snapshot() -> ConsoleSnapshot {
 }
 
 fn endpoint_rows() -> Vec<Endpoint> {
-    endpoint_highlights(
-        StandardEndpointSurface::Root,
-        [
-            endpoint(
-                "canic_config",
-                "query",
-                "controller",
-                "compiled configuration",
-            ),
-            endpoint(
-                "canic_fleet_state",
-                "query",
-                "controller",
-                "root Fleet state",
-            ),
-            endpoint(
-                "canic_pool_list",
-                "query",
-                "controller",
-                "prepaid asset ledger",
-            ),
-            endpoint(
-                "canic_root_component_directory_page",
-                "query",
-                "public protocol",
-                "Component Directory",
-            ),
-        ],
-    )
+    endpoint_highlights(StandardEndpointSurface::Root, [])
 }
 
 fn metric_rows() -> Vec<MetricRow> {

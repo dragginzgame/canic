@@ -9,7 +9,9 @@
 /.github/workflows/ @dragginzgame
 /.github/dependabot.yml @dragginzgame
 /.githooks/ @dragginzgame
+/Makefile @dragginzgame
 /scripts/ci/ @dragginzgame
+/rust-toolchain.toml @dragginzgame
 /tool-versions.env @dragginzgame
 /docs/governance/ci-deployment.md @dragginzgame
 /docs/governance/supported-platforms.md @dragginzgame

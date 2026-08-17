@@ -272,6 +272,31 @@ top-up authority and remains sensitive to the later certified conversion.
 The identity's private key and recovery material are not evidence and were not
 written to the repository or command transcript.
 
+## Final Global Attempt And Preserved Balance
+
+The later separately authorized global attempt used plan digest
+`dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9`.
+Pre-roll began at `2026-08-17T02:30:00+02:00` and the intended 24-hour chart
+began at `03:30`. The controller executed exactly 535 receipts and burned
+`5,859,496,546,135,400 cycles` before the maintainer ordered Abort.
+
+The abort followed an unrelated global-metric spike beginning at
+`2026-08-17T16:36:50+02:00`. Public per-Subnet evidence localized the spike to
+Subnet
+`brlsh-zidhj-3yy3e-6vqbz-7xnih-xeq2l-as5oc-g32c4-i5pdn-2wwof-oae`,
+which rose from approximately `2.4` to `215 Bcycles/second`; the waveform
+canister's owning Subnet remained on its expected declining trace. The spike
+therefore did not originate from an extra waveform receipt. Its approximately
+`180 Bcycles/second` addition permanently distorted the public 24-hour canvas.
+
+The terminal update and an independent controller query both reported
+`Aborted` / `ControllerAbort`, 535 receipts and no authority for another pulse.
+At final verification canister `w47na-gaaaa-aaaad-qmclq-cai` retained
+`2,589,936,553,122,558 cycles`; the controller identity retained
+`0.00010000 ICP`. The cycles are not convertible back to ICP. The canister must
+not be reinstalled or deleted without an explicit disposition plan for this
+approximately `2.590 Pcycle` asset.
+
 ## Frozen Placement And Artifact
 
 | Field | Value |

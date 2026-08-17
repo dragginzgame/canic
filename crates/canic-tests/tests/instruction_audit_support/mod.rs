@@ -1,4 +1,4 @@
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use canic::{
     Error,
     dto::{
@@ -14,21 +14,12 @@ use canic::{
         },
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
+        role::MetricsStatusRequest,
         rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
     },
     ids::cap,
     protocol,
 };
-use canic_control_plane::{
-    dto::template::{
-        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-        TemplateManifestInput,
-    },
-    ids::{
-        TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
-    },
-};
-use canic_core::cdk::utils::hash::wasm_hash;
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
     ActiveComponentRegistryFixture, issue_delegated_token_from_active_proof,
@@ -199,16 +190,6 @@ struct CheckpointDeltaRow {
     count: u64,
     total_local_instructions: u64,
     avg_local_instructions: u64,
-}
-
-///
-/// AuditTemplateFixture
-///
-
-struct AuditTemplateFixture {
-    manifest: TemplateManifestInput,
-    prepare: TemplateChunkSetPrepareInput,
-    chunk: TemplateChunkInput,
 }
 
 ///

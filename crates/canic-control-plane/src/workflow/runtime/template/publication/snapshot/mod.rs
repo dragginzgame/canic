@@ -7,7 +7,9 @@
 use crate::dto::template::{
     TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
 };
-use crate::ids::{TemplateReleaseKey, WasmStoreBinding, WasmStoreGcMode};
+#[cfg(test)]
+use crate::ids::WasmStoreGcMode;
+use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
     error::InternalError,
@@ -35,6 +37,7 @@ impl PublicationStoreSnapshot {
     }
 
     // Return whether the store remains eligible for publication and release authority.
+    #[cfg(test)]
     pub(in crate::workflow::runtime::template::publication) fn is_available_for_publication(
         &self,
     ) -> bool {

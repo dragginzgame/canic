@@ -1,7 +1,7 @@
 use super::*;
 use crate::metrics::{
     model::{MetricValue, MetricsKind, MetricsReport},
-    parse::parse_metrics_page,
+    parse::{MetricsStatusResponse, parse_metrics_page},
 };
 use candid::{CandidType, Encode, Principal};
 use canic_core::{
@@ -110,7 +110,7 @@ fn missing_metrics_fleet_preserves_canonical_typed_error() {
 
 #[test]
 fn parses_typed_metrics_page() {
-    let output = response_json(&Ok::<_, CanicError>(Page {
+    let output = response_json(&Ok::<_, CanicError>(MetricsStatusResponse::Metrics(Page {
         entries: vec![
             MetricEntryDto {
                 labels: vec!["lifecycle".into(), "init".into(), "started".into()],
@@ -132,7 +132,7 @@ fn parses_typed_metrics_page() {
             },
         ],
         total: 3,
-    }));
+    })));
     let entries = parse_metrics_page(&output).expect("parse metrics page");
 
     assert_eq!(entries.len(), 3);

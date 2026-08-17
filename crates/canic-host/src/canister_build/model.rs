@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use canic_core::role_contract::ProtocolProfileDigest;
+
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
 pub(super) const WASM_TARGET: &str = "wasm32-unknown-unknown";
@@ -28,6 +30,9 @@ pub struct CanisterArtifactBuildSpec {
     pub(crate) role: String,
     pub(crate) package_name: String,
     pub(crate) package_version: String,
+    pub(crate) canic_version: String,
+    pub(crate) capabilities:
+        std::collections::BTreeSet<canic_core::role_contract::RoleCapabilityKey>,
     pub(crate) package_manifest_path: PathBuf,
     pub(crate) cargo_workspace_root: PathBuf,
     pub(crate) artifact_root: PathBuf,
@@ -51,6 +56,8 @@ pub struct CanisterArtifactBuildOutput {
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
     pub did_path: PathBuf,
+    pub candid_sha256: [u8; 32],
+    pub protocol_profile_digest: ProtocolProfileDigest,
     pub transforms: Vec<ArtifactTransformOutput>,
 }
 

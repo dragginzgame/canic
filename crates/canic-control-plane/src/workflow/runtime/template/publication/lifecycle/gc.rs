@@ -135,8 +135,9 @@ impl Drop for LifecycleOperationGuard {
 
 impl WasmStorePublicationWorkflow {
     /// One-way write-fence the sole root-local Store while retaining its exact inventory.
-    pub async fn quiesce_single_root_store_for_final_inventory()
-    -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
+    pub async fn quiesce_single_root_store_for_final_inventory(
+        operation_id: [u8; 32],
+    ) -> Result<(Principal, WasmStoreStatusResponse), InternalError> {
         let _guard = LifecycleOperationGuard::try_enter()?;
         let stores = RootWasmStoreStateOps::wasm_stores();
         if stores.len() != 1 {
@@ -150,7 +151,7 @@ impl WasmStorePublicationWorkflow {
         let mut live = store_status(runtime.pid).await?;
         match (runtime.gc.mode, live.gc.mode) {
             (WasmStoreGcMode::Normal, WasmStoreGcMode::Normal) => {
-                store_prepare_gc(runtime.pid).await?;
+                store_prepare_gc(runtime.pid, operation_id).await?;
                 live = store_status(runtime.pid).await?;
             }
             (WasmStoreGcMode::Normal | WasmStoreGcMode::Prepared, WasmStoreGcMode::Prepared) => {}
@@ -247,18 +248,18 @@ impl WasmStorePublicationWorkflow {
         let mut live = store_status(runtime.pid).await?;
         validate_live_store_gc_lineage(inventory, &live)?;
         if live.gc.mode == WasmStoreGcMode::Clearing {
-            store_begin_gc(runtime.pid).await?;
+            store_begin_gc(runtime.pid, inventory.operation_id).await?;
             live = store_status(runtime.pid).await?;
             validate_live_store_gc_lineage(inventory, &live)?;
         }
         if live.gc.mode == WasmStoreGcMode::Prepared {
-            store_begin_gc(runtime.pid).await?;
+            store_begin_gc(runtime.pid, inventory.operation_id).await?;
             live = store_status(runtime.pid).await?;
             validate_live_store_gc_lineage(inventory, &live)?;
         }
         if live.gc.mode == WasmStoreGcMode::InProgress {
             Self::reconcile_single_root_store_gc(&runtime, &live.gc)?;
-            store_complete_gc(runtime.pid).await?;
+            store_complete_gc(runtime.pid, inventory.operation_id).await?;
             live = store_status(runtime.pid).await?;
             validate_live_store_gc_lineage(inventory, &live)?;
         }

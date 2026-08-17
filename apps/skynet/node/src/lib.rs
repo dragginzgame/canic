@@ -109,10 +109,10 @@ fn console_snapshot() -> ConsoleSnapshot {
             canister_version: canister_version(),
         },
         runtime: RuntimeSummary {
-            ready: canic_ready(),
+            ready: canic::api::runtime::ReadyApi::is_ready(),
             phase,
             cycles: canister_cycle_balance(),
-            bootstrap: format!("{:?}", canic_bootstrap_status()),
+            bootstrap: format!("{:?}", canic::api::runtime::ReadyApi::bootstrap_status()),
             observation: observation.to_string(),
         },
         environment: environment_facts(environment_snapshot),

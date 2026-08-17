@@ -180,6 +180,10 @@ fn output(role: &str, release_build_id: ReleaseBuildId) -> ApplicationArtifactBu
         wasm_gz_relative_path: target.wasm_gz_relative_path,
         wasm_gz: gzip(&wasm),
         wasm,
+        candid_sha256: [3; 32],
+        protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+            [4; 32],
+        ),
     }
 }
 

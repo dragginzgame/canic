@@ -1167,6 +1167,10 @@ mod tests {
             wasm_path,
             wasm_gz_path,
             did_path: artifact_root.join(format!("{role}.did")),
+            candid_sha256: [0; 32],
+            protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest::from_bytes(
+                [0; 32],
+            ),
             transforms: Vec::new(),
         }
     }

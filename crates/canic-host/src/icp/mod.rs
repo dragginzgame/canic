@@ -20,7 +20,6 @@ pub use model::{
     IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli, IcpRawOutput, IcpSnapshot,
     LocalReplicaTarget,
 };
-pub(crate) use response::decode_json_response;
 pub use response::{IcpJsonResponseError, decode_json_result_response};
 pub(crate) use run::{run_output_to_file, run_status, run_success};
 pub use run::{run_output_with_stderr, run_raw_output};

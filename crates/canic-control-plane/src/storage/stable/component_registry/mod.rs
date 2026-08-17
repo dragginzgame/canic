@@ -5,6 +5,8 @@
 //! Boundary: ops commit only exact authority and records already validated by workflow.
 
 #[cfg(feature = "root-control-plane")]
+use canic_core::dto::fleet_registry::{FleetSubnetRootEntry, FleetSubnetRootStatus};
+#[cfg(feature = "root-control-plane")]
 use canic_core::impl_storable_bounded;
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
@@ -29,10 +31,7 @@ use canic_core::{
             ComponentLifecycleStatus, ComponentProvisioningOrigin, ComponentRegistryHead,
             ComponentRuntimeActivationEvidence,
         },
-        fleet_registry::{
-            FleetRegistryVersion, FleetSubnetRootDrainingReservationResponse, FleetSubnetRootEntry,
-            FleetSubnetRootStatus,
-        },
+        fleet_registry::{FleetRegistryVersion, FleetSubnetRootDrainingReservationResponse},
         root_store::RootStoreBootstrapRequest,
     },
     ids::{
@@ -1153,6 +1152,7 @@ pub struct RootComponentCreationEffectRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentInstallEffectRecord {
     pub raw_module_hash: [u8; 32],
+    pub protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
@@ -1199,6 +1199,7 @@ pub struct RootComponentMembershipRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRegistryPartitionRecord {
     pub binding: ComponentBinding,
+    pub protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
     pub provisioning_origin: ComponentProvisioningOrigin,
     pub release_set: FleetSubnetRootReleaseSet,
     pub status: ComponentLifecycleStatus,
@@ -2068,6 +2069,7 @@ impl_storable_bounded!(
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildInstallEffectRecord {
     pub raw_module_hash: [u8; 32],
+    pub protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
     pub chunk_hashes: Vec<Vec<u8>>,
     pub binding: ComponentChildBinding,
     pub cost_guard_settlement: ReplayCostGuardSettlement,
@@ -2140,6 +2142,7 @@ pub struct ComponentRegistryChildRecord {
     pub role: CanisterRole,
     pub kind: ComponentChildKind,
     pub installed_artifact_hash: [u8; 32],
+    pub protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
     pub status: ComponentLifecycleStatus,
 }
 

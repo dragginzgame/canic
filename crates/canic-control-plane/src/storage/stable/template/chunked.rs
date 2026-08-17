@@ -12,7 +12,7 @@ use canic_core::role_contract::allocation::memory::control_plane::{
     TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "root-control-plane")]
+#[cfg(test)]
 use std::collections::BTreeMap as StdBTreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
@@ -266,6 +266,7 @@ pub struct TemplateChunkSetStateStore;
 
 impl TemplateChunkSetStateStore {
     // Insert or replace one template chunk-set metadata record.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn upsert(release: TemplateReleaseKey, record: TemplateChunkSetRecord) {
         TEMPLATE_CHUNK_SETS.with_borrow_mut(|map| {
             let previous = map.insert(release.clone(), record.clone());
@@ -357,6 +358,7 @@ pub struct TemplateChunkStore;
 
 impl TemplateChunkStore {
     // Insert or replace one template chunk.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     pub fn upsert(chunk_key: TemplateChunkKey, record: TemplateChunkRecord) {
         let payload_len = u32::try_from(record.bytes.len()).unwrap_or(u32::MAX);
         let next_bytes = chunk_entry_size(&chunk_key, payload_len);
@@ -456,7 +458,7 @@ impl TemplateChunkStore {
     }
 
     // Count staged chunks by release without cloning chunk payload bytes.
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(test)]
     #[must_use]
     pub fn count_by_release() -> StdBTreeMap<TemplateReleaseKey, u32> {
         let mut counts: StdBTreeMap<TemplateReleaseKey, u32> = StdBTreeMap::new();
@@ -559,6 +561,7 @@ impl TemplateChunkStore {
     }
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 fn chunk_set_entry_size(release: &TemplateReleaseKey, record: &TemplateChunkSetRecord) -> u64 {
     (release.to_bytes().len() + record.to_bytes().len()) as u64
 }
@@ -572,6 +575,7 @@ fn reset_chunk_payloads() -> TemplateChunkPayloadVec {
     TEMPLATE_CHUNK_PAYLOADS_MEMORY.with(|memory| StableVec::new(memory.clone()))
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 fn chunk_entry_size(chunk_key: &TemplateChunkKey, payload_len: u32) -> u64 {
     (chunk_key.to_bytes().len() + TEMPLATE_CHUNK_REF_RECORD_BYTES + payload_len as usize) as u64
 }

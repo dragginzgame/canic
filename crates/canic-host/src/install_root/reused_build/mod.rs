@@ -42,32 +42,37 @@ pub(super) fn load_reused_install_build(
 
     let mut outputs = Vec::with_capacity(snapshot.targets.len());
     for target in &snapshot.targets {
-        let (package, wasm_relative_path, wasm_gz_relative_path) = if target.role
-            == snapshot
-                .targets
-                .first()
-                .ok_or("complete install snapshot has no root target")?
-                .role
-        {
-            (
-                root.package.as_str(),
-                root.wasm_relative_path.as_str(),
-                root.wasm_gz_relative_path.as_str(),
-            )
-        } else {
-            let role = CanisterRole::owned(target.role.clone());
-            let entry = application
-                .union
-                .entries
-                .iter()
-                .find(|entry| entry.role == role)
-                .ok_or_else(|| format!("finalized application union has no role {role}"))?;
-            (
-                entry.package.as_str(),
-                entry.wasm_relative_path.as_str(),
-                entry.wasm_gz_relative_path.as_str(),
-            )
-        };
+        let (package, wasm_relative_path, wasm_gz_relative_path, candid_sha256, profile_digest) =
+            if target.role
+                == snapshot
+                    .targets
+                    .first()
+                    .ok_or("complete install snapshot has no root target")?
+                    .role
+            {
+                (
+                    root.package.as_str(),
+                    root.wasm_relative_path.as_str(),
+                    root.wasm_gz_relative_path.as_str(),
+                    root.candid_sha256,
+                    root.protocol_profile_digest,
+                )
+            } else {
+                let role = CanisterRole::owned(target.role.clone());
+                let entry = application
+                    .union
+                    .entries
+                    .iter()
+                    .find(|entry| entry.role == role)
+                    .ok_or_else(|| format!("finalized application union has no role {role}"))?;
+                (
+                    entry.package.as_str(),
+                    entry.wasm_relative_path.as_str(),
+                    entry.wasm_gz_relative_path.as_str(),
+                    entry.candid_sha256,
+                    entry.protocol_profile_digest,
+                )
+            };
         if package != target.spec.package_name {
             return Err(format!(
                 "finalized role {} package {package} differs from current App package {}",
@@ -84,6 +89,8 @@ pub(super) fn load_reused_install_build(
                 &target.spec.package_version,
                 wasm_relative_path,
                 wasm_gz_relative_path,
+                candid_sha256,
+                profile_digest,
             )?,
         });
     }
@@ -102,6 +109,8 @@ pub(super) fn load_reused_install_build(
                     icp_root,
                     &entry.wasm_gz_relative_path,
                 )?,
+                candid_sha256: entry.candid_sha256,
+                protocol_profile_digest: entry.protocol_profile_digest,
             })
         })
         .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
@@ -112,6 +121,10 @@ pub(super) fn load_reused_install_build(
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one flat finalized artifact entry is copied without adding a parallel model"
+)]
 fn reused_output(
     icp_root: &Path,
     role: &str,
@@ -119,6 +132,8 @@ fn reused_output(
     package_version: &str,
     wasm_relative_path: &str,
     wasm_gz_relative_path: &str,
+    candid_sha256: [u8; 32],
+    protocol_profile_digest: canic_core::role_contract::ProtocolProfileDigest,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let wasm_path = resolve_release_artifact_path(icp_root, wasm_relative_path)?;
     let wasm_gz_path = resolve_release_artifact_path(icp_root, wasm_gz_relative_path)?;
@@ -133,6 +148,8 @@ fn reused_output(
         artifact_root,
         wasm_path,
         wasm_gz_path,
+        candid_sha256,
+        protocol_profile_digest,
         transforms: Vec::new(),
     })
 }

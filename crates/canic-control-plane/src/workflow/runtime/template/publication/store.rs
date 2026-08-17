@@ -50,18 +50,33 @@ pub(super) async fn store_stage_manifest(
 }
 
 // Mark one local wasm store as prepared for store-local GC execution.
-pub(super) async fn store_prepare_gc(store_pid: Principal) -> Result<(), InternalError> {
-    WasmStoreInternalClient::new(store_pid).prepare_gc().await
+pub(super) async fn store_prepare_gc(
+    store_pid: Principal,
+    operation_id: [u8; 32],
+) -> Result<(), InternalError> {
+    WasmStoreInternalClient::new(store_pid)
+        .run_gc(operation_id)
+        .await
 }
 
 // Mark one local wasm store as actively executing store-local GC.
-pub(super) async fn store_begin_gc(store_pid: Principal) -> Result<(), InternalError> {
-    WasmStoreInternalClient::new(store_pid).begin_gc().await
+pub(super) async fn store_begin_gc(
+    store_pid: Principal,
+    operation_id: [u8; 32],
+) -> Result<(), InternalError> {
+    WasmStoreInternalClient::new(store_pid)
+        .run_gc(operation_id)
+        .await
 }
 
 // Mark one local wasm store as having completed the current local GC pass.
-pub(super) async fn store_complete_gc(store_pid: Principal) -> Result<(), InternalError> {
-    WasmStoreInternalClient::new(store_pid).complete_gc().await
+pub(super) async fn store_complete_gc(
+    store_pid: Principal,
+    operation_id: [u8; 32],
+) -> Result<(), InternalError> {
+    WasmStoreInternalClient::new(store_pid)
+        .run_gc(operation_id)
+        .await
 }
 
 // Return transferable cycles from one empty GC-complete Store to its authenticated root.

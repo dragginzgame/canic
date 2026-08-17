@@ -11,8 +11,9 @@ use crate::{
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimeStatusResponse,
         },
         error::Error,
+        role::ComponentRuntimeOperationStatus,
     },
-    workflow::component_runtime,
+    workflow::{component_runtime, runtime::fleet_activation::FleetActivationWorkflow},
 };
 
 ///
@@ -22,6 +23,13 @@ use crate::{
 pub struct ComponentRuntimeApi;
 
 impl ComponentRuntimeApi {
+    /// Converge one managed runtime through its single role-owned command.
+    pub fn configure(
+        request: ComponentRuntimeDirectoryPreparationRequest,
+    ) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, Error> {
+        component_runtime::configure(request).map_err(Error::from)
+    }
+
     pub fn prepare_directory(
         request: ComponentRuntimeDirectoryPreparationRequest,
     ) -> Result<ComponentRuntimeStatusResponse, Error> {
@@ -30,6 +38,27 @@ impl ComponentRuntimeApi {
 
     pub fn status() -> Result<ComponentRuntimeStatusResponse, Error> {
         component_runtime::status().map_err(Error::from)
+    }
+
+    /// Return the complete target-local runtime configuration operation projection.
+    pub fn operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<ComponentRuntimeOperationStatus, Error> {
+        let fleet_activation = FleetActivationWorkflow::status().map_err(Error::from)?;
+        let runtime = component_runtime::status().map_err(Error::from)?;
+        if fleet_activation.identity.operation_id != operation_id
+            || runtime.operation_id != operation_id
+        {
+            return Err(Error::from_registered(
+                crate::diagnostics::codes::STATE_CONFLICT,
+            ));
+        }
+
+        Ok(ComponentRuntimeOperationStatus {
+            operation_id,
+            fleet_activation,
+            runtime,
+        })
     }
 
     pub fn synchronize_directory(

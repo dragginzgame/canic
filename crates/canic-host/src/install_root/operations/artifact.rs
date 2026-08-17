@@ -167,6 +167,9 @@ mod tests {
                     wasm_gz_relative_path: "coordinator.wasm.gz".to_string(),
                     wasm_gz_size_bytes: 0,
                     wasm_gz_sha256_hex: String::new(),
+                    candid_sha256: [3; 32],
+                    protocol_profile_digest:
+                        canic_core::role_contract::ProtocolProfileDigest::from_bytes([4; 32]),
                 }],
             },
             digest: [0; 32],

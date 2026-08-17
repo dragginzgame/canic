@@ -26,6 +26,7 @@ eager_static! {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WasmStoreGcStateRecord {
+    pub operation_id: Option<[u8; 32]>,
     pub mode: WasmStoreGcMode,
     pub changed_at: u64,
     pub prepared_at: Option<u64>,
@@ -38,7 +39,7 @@ impl WasmStoreGcStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "WasmStoreGcStateRecord";
 }
 
-impl_storable_bounded!(WasmStoreGcStateRecord, 64, true);
+impl_storable_bounded!(WasmStoreGcStateRecord, 128, true);
 
 ///
 /// WasmStoreGcStateData
@@ -103,6 +104,7 @@ mod tests {
     fn gc_state_round_trips_through_canonical_data_snapshot() {
         WasmStoreGcStateStore::clear_for_test();
         WasmStoreGcStateStore::set(WasmStoreGcStateRecord {
+            operation_id: Some([10; 32]),
             mode: WasmStoreGcMode::Complete,
             changed_at: 11,
             prepared_at: Some(12),

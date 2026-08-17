@@ -60,11 +60,6 @@ pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES: usize = 8_38
 /// Maximum Candid payload bytes for the batch plus its fixed acceptance authority.
 pub const MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES: usize =
     MAX_FLEET_SUBNET_ROOT_PROVISIONING_BATCH_CANONICAL_BYTES + 65_536;
-/// Maximum Candid payload bytes for one compact root Directory-publication command.
-pub const MAX_FLEET_SUBNET_ROOT_COMPONENT_PUBLICATION_PAYLOAD_BYTES: usize = 65_536;
-/// Maximum Candid payload bytes for one compact root runtime-activation command.
-pub const MAX_FLEET_SUBNET_ROOT_COMPONENT_ACTIVATION_PAYLOAD_BYTES: usize = 65_536;
-
 /// Validated local capacity and artifact facts derived from one exact root batch.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentProvisioningBatchValidation {

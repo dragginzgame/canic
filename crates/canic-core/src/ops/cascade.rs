@@ -6,11 +6,13 @@
 
 use crate::{
     InternalError,
-    dto::cascade::{TopologyPathNode, TopologySnapshotInput},
+    dto::cascade::{StateSnapshotInput, TopologyPathNode, TopologySnapshotInput},
     ids::CanisterRole,
     ops::{prelude::*, rpc::RpcOps},
     protocol,
 };
+use candid::CandidType;
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error as ThisError;
 
@@ -158,6 +160,18 @@ fn validate_topology_receiver(
 
 pub struct CascadeOps;
 
+#[derive(CandidType)]
+enum StoreCommandFragment<'a> {
+    SynchronizeState(&'a StateSnapshotInput),
+    SynchronizeTopology(&'a TopologySnapshotInput),
+}
+
+#[derive(CandidType, Deserialize)]
+enum StoreCommandResponseFragment {
+    SynchronizeState,
+    SynchronizeTopology,
+}
+
 impl CascadeOps {
     pub(crate) fn validate_topology_snapshot(
         snapshot: &TopologySnapshotInput,
@@ -262,18 +276,36 @@ impl CascadeOps {
         Ok(())
     }
 
-    pub async fn send_state_snapshot<S: CandidType>(
+    pub async fn send_state_snapshot(
         pid: Principal,
-        snapshot: S,
+        snapshot: &StateSnapshotInput,
     ) -> Result<(), InternalError> {
-        RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_STATE, snapshot).await
+        let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
+            pid,
+            protocol::CANIC_COMMAND,
+            StoreCommandFragment::SynchronizeState(snapshot),
+        )
+        .await?;
+        match response {
+            StoreCommandResponseFragment::SynchronizeState => Ok(()),
+            StoreCommandResponseFragment::SynchronizeTopology => Err(InternalError::conflict()),
+        }
     }
 
-    pub async fn send_topology_snapshot<S: CandidType>(
+    pub async fn send_topology_snapshot(
         pid: Principal,
-        snapshot: S,
+        snapshot: &TopologySnapshotInput,
     ) -> Result<(), InternalError> {
-        RpcOps::call_rpc_result::<()>(pid, protocol::CANIC_SYNC_TOPOLOGY, snapshot).await
+        let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
+            pid,
+            protocol::CANIC_COMMAND,
+            StoreCommandFragment::SynchronizeTopology(snapshot),
+        )
+        .await?;
+        match response {
+            StoreCommandResponseFragment::SynchronizeTopology => Ok(()),
+            StoreCommandResponseFragment::SynchronizeState => Err(InternalError::conflict()),
+        }
     }
 }
 
