@@ -184,10 +184,6 @@ pub struct WasmStoreGcOperationStatus {
 
 /// Closed Store control-plane command union.
 #[derive(CandidType, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the Store command carries each accepted existing control DTO directly"
-)]
 pub enum StoreCommand {
     ActivateFleet(FleetActivationRequest),
     InspectTemplate(TemplateLookupRequest),
