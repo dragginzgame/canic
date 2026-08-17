@@ -58,32 +58,32 @@ pub(super) fn load_report(
     let coordinator_principal = candid::Principal::from_text(coordinator).map_err(|_| {
         InfoSubnetsCommandError::Usage("installed Coordinator Principal is invalid".to_string())
     })?;
-    let registry = match query_canister_with_arg(
+    let CoordinatorStatusResponseFragment::Registry(registry) = query_canister_with_arg(
         &icp,
         coordinator_principal,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequestFragment::Registry,
-    )? {
-        CoordinatorStatusResponseFragment::Registry(registry) => registry,
-        _ => return Err(correlation_error()),
+    )?
+    else {
+        return Err(correlation_error());
     };
-    let manifest = match query_canister_with_arg(
+    let CoordinatorStatusResponseFragment::RegistryManifest(manifest) = query_canister_with_arg(
         &icp,
         coordinator_principal,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequestFragment::RegistryManifest,
-    )? {
-        CoordinatorStatusResponseFragment::RegistryManifest(manifest) => manifest,
-        _ => return Err(correlation_error()),
+    )?
+    else {
+        return Err(correlation_error());
     };
-    let version = match query_canister_with_arg(
+    let CoordinatorStatusResponseFragment::RegistryVersion(version) = query_canister_with_arg(
         &icp,
         coordinator_principal,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequestFragment::RegistryVersion,
-    )? {
-        CoordinatorStatusResponseFragment::RegistryVersion(version) => version,
-        _ => return Err(correlation_error()),
+    )?
+    else {
+        return Err(correlation_error());
     };
     let plan = SubnetInventoryPlan::compile(catalog, registry, manifest, version)?;
     let summaries = query_root_summaries(&icp, plan.root_principals())?;

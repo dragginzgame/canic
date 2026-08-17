@@ -113,7 +113,7 @@ pub(super) fn parse_issuer_observed_status(
     })
 }
 
-pub(super) fn issuer_active_proof_status_arg() -> &'static str {
+pub(super) const fn issuer_active_proof_status_arg() -> &'static str {
     "(variant { ActiveDelegationProof })"
 }
 
