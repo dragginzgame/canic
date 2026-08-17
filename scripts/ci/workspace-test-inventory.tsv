@@ -13,7 +13,6 @@ canic-testing-internal	fixture_payloads	full	parallel	ordinary
 canic	blob_storage_endpoint_macro	full	parallel	ordinary
 canic	build_cfg_surface	full	parallel	ordinary
 canic	call_facade	full	parallel	ordinary
-canic	canic_metadata	full	parallel	ordinary
 canic	changelog_governance	full	parallel	ordinary
 canic	component_deployment_ids	full	parallel	ordinary
 canic	config_guide	full	parallel	ordinary
