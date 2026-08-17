@@ -85,9 +85,10 @@ balance cannot increase the immutable schedule or total ceiling.
 `Arm` authorizes only the 35-pulse pre-roll. Surplus balance cannot cross the
 pre-roll-to-waveform boundary: the first drawing pulse fails terminally unless
 the controller separately submits `AuthorizeWaveform` with the exact plan
-digest. That command also rejects unless the current balance covers every
-remaining embedded burn plus the retained reserve; the externally funded
-execution allowance absorbs transient message reservation and run costs.
+digest. That command requires the remaining pre-roll, first drawing pulse and
+retained reserve. It grants consent without requiring all 24 hours to be
+funded. Every later pulse independently preserves the reserve, so partial
+funding stops before the first unaffordable pulse.
 
 The application-owned Candid surface is exactly two methods:
 
