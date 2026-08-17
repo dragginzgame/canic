@@ -184,9 +184,11 @@ authority.
 `Arm` is now an immutable staged authority: it can burn only the 35-pulse
 pre-roll. Surplus balance cannot enter the drawing. The first waveform pulse
 requires a separate exact-digest `AuthorizeWaveform` command whose current
-balance covers every remaining burn plus the retained reserve. Focused
-PocketIC proves an underfunded continuation rejects, an absent continuation
-fails before burn and a fully funded continuation completes all 899 receipts.
+balance covers the remaining pre-roll, first waveform pulse and retained
+reserve. Every later pulse separately preserves that reserve. Focused PocketIC
+proves an absent or minimally underfunded continuation rejects, a partially
+funded continuation stops before its first unaffordable pulse, Abort prevents
+later pulses and a fully funded continuation completes all 899 receipts.
 
 ## Next Action
 

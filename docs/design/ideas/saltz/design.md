@@ -211,11 +211,12 @@ point through 200 seconds before it. Arming requires the exact
 exceeds that amount, so qualification requires no new ICP conversion.
 
 `Arm` cannot authorize the 864 drawing pulses. `AuthorizeWaveform` is a second
-variant of the same command endpoint, accepts only the exact embedded digest
-and requires the current balance to cover every remaining burn plus the
-retained reserve. The separately funded execution allowance absorbs transient
-message reservation and later execution cost. If authorization is absent at
-the first waveform deadline, the run fails terminally before burn with
+variant of the same command endpoint and accepts only the exact embedded
+digest. It requires the current balance to cover every still-pending pre-roll
+pulse, the first drawing pulse and the retained reserve. It grants operator
+consent to the immutable schedule; it is not a claim that all 24 drawing hours
+are already collateralized. If authorization is absent at the first waveform
+deadline, the run fails terminally before burn with
 `WaveformNotAuthorized`. Surplus balance alone cannot cross the boundary.
 
 The canister cannot mint, request or move funding. A controller may deposit
@@ -226,13 +227,15 @@ retained reserve fails terminally; nothing catches up or resumes.
 
 Arm funding includes both the retained reserve and execution allowance. Every
 intentional-burn precondition preserves the retained reserve; the immutable
-plan total prevents explicit burn from exceeding its separately funded
+plan total prevents explicit burn from exceeding its separately authorized
 allocation, while ordinary message execution may consume the allowance. A
 stricter per-pulse `reserve + allowance` check was rejected by the full local
 run because it safely stopped at receipt 898 after ordinary execution consumed
-part of the allowance. Targeted PocketIC evidence now funds the complete
+part of the allowance. Every pulse instead requires its exact embedded amount
+plus the retained reserve. Targeted PocketIC evidence now funds the complete
 pre-roll, proves an unfunded first waveform pulse fails before burn, crosses
-that boundary under full funding, and completes all 899 exact receipts while
+that boundary under partial funding, stops before the first unaffordable pulse,
+and separately completes all 899 exact receipts under full funding while
 retaining the reserve and an unexhausted portion of the allowance.
 
 The mainnet financial authorization must bind discrete ICP e8s and the maximum
@@ -292,9 +295,11 @@ a fresh inert installation, but reinstall is a separate controller effect and
 never follows from canister code.
 
 `waveform_authorized` is a monotonic per-run fact, not another phase. It starts
-false at `Arm`, can become true only through the exact-digest, fully funded
-`AuthorizeWaveform` command, and can never return to false. Without it,
-`Running` is limited to pre-roll receipts.
+false at `Arm`, can become true only through the exact-digest
+`AuthorizeWaveform` command after the pre-roll-to-first-waveform minimum is
+funded, and can never return to false. Without it, `Running` is limited to
+pre-roll receipts. With it, the controller may still abort at any time and a
+later balance shortfall stops before burn with `InsufficientBalance`.
 
 ## Burn And Receipt Atomicity
 
@@ -397,8 +402,9 @@ Required targeted evidence is:
 7. exhaustive pure checks cover all 899 amounts, exact summed burn and every
    derived deadline;
 8. PocketIC commits exact consecutive timer pulses, crosses the
-   pre-roll-to-waveform boundary, completes all 899 pulses under full synthetic
-   funding and proves Abort prevents every later pulse;
+   pre-roll-to-waveform boundary under partial funding, stops before an
+   unaffordable pulse, completes all 899 pulses under full synthetic funding
+   and proves Abort prevents every later pulse;
 9. release Wasm build and structural validation; and
 10. inert mainnet install reports `Prepared`, zero receipts and zero
     intentional burn before funding.
