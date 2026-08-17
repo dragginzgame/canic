@@ -924,8 +924,7 @@ mod tests {
     #[test]
     #[expect(
         clippy::significant_drop_tightening,
-        clippy::too_many_lines,
-        reason = "the pooled Fleet fixture lease and complete autonomous deletion journey stay together"
+        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
     )]
     fn restored_root_preserves_its_inventory_but_cannot_allocate() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
@@ -1033,7 +1032,8 @@ mod tests {
     #[test]
     #[expect(
         clippy::significant_drop_tightening,
-        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+        clippy::too_many_lines,
+        reason = "the pooled Fleet fixture lease and complete autonomous deletion journey stay together"
     )]
     fn published_draining_root_autonomously_reaches_external_deletion_readiness() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
