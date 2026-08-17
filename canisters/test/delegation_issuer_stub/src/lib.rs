@@ -58,6 +58,14 @@ async fn issuer_verify_role_attestation(
     AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
+#[canic_update(requires(auth::attested_local_subnet()))]
+async fn issuer_require_attested_local_subnet(
+    attestation: SignedRoleAttestation,
+) -> Result<(), Error> {
+    let _ = attestation;
+    Ok(())
+}
+
 #[canic_update(requires(caller::is_root()))]
 async fn issuer_guard_is_root() -> Result<(), Error> {
     Ok(())

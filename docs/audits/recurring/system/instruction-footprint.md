@@ -44,7 +44,7 @@ Every scenario gets a fresh smallest applicable root-harness topology. Setup
 and prerequisites happen before the measured call. No mutable PocketIC state
 is shared between scenario rows. Delegated-auth scenarios use a real
 Coordinator, Fleet Subnet Root, root-local Wasm Store and active
-Component Registry-issued issuer and verifier Components. They do not use the
+Component Registry-issued issuer and verifier instances. They do not use the
 retired Subnet Registry or a dynamically created legacy shard as issuer
 identity.
 
@@ -55,7 +55,7 @@ identity.
 | `user_hub:create_account:new-principal` | update | sharding assignment and shard allocation |
 | `root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer` | update | explicit first delegation-proof provisioning for an active Registry-issued Component |
 | `issuer:canic_prepare_delegated_token:active-proof` | update | active Registry-issued issuer Component token preparation from an active proof |
-| `project_hub:verifier_verify_token:valid-delegated-token` | update | active Registry-issued verifier Component confirmation of a freshly issued delegated token |
+| `issuer_verifier:issuer_verify_token:valid-delegated-token` | update | a second active Registry-issued issuer Component confirms a freshly issued delegated token |
 | `root:canic_response_capability_v1:request-cycles-fresh` | update | fresh capability, policy, and execution path |
 | `root:canic_response_capability_v1:request-cycles-replay` | update | identical second request returns the cached replay response |
 | `root:canic_template_stage_manifest_admin:single-chunk` | update | stage one approved manifest |
