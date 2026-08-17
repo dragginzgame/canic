@@ -133,7 +133,7 @@ update-dev:
 #
 
 version:
-	@cargo get workspace.package.version
+	@bash scripts/ci/read-workspace-version.sh
 
 tags:
 	@git tag --sort=-version:refname | head -10
@@ -187,7 +187,7 @@ release-candidate:
 release-commit:
 	@scripts/ci/check-release-index.sh
 	@$(MAKE) --no-print-directory release-candidate
-	@version="$$(cargo get workspace.package.version)"; \
+	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
 	if git rev-parse "v$$version" >/dev/null 2>&1; then \
 		echo "❌ Tag v$$version already exists. Aborting." >&2; \
 		exit 1; \

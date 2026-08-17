@@ -20,7 +20,6 @@ pub const fn evaluate(
     let remaining_budget = limits.max_per_child.saturating_sub(ledger.granted_total);
     if remaining_budget == 0 {
         return Err(FundingPolicyViolation::MaxPerChild {
-            requested: requested_cycles,
             max_per_child: limits.max_per_child,
             remaining_budget,
         });
@@ -85,7 +84,6 @@ pub struct FundingDecision {
 #[derive(Clone, Copy, Debug)]
 pub enum FundingPolicyViolation {
     MaxPerChild {
-        requested: u128,
         max_per_child: u128,
         remaining_budget: u128,
     },
@@ -146,11 +144,9 @@ mod tests {
         let err = evaluate(limits, ledger, 1, 10).expect_err("budget exhaustion must deny");
         match err {
             FundingPolicyViolation::MaxPerChild {
-                requested,
                 max_per_child,
                 remaining_budget,
             } => {
-                assert_eq!(requested, 1);
                 assert_eq!(max_per_child, 1_000);
                 assert_eq!(remaining_budget, 0);
             }

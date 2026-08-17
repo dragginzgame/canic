@@ -31,7 +31,18 @@ pub fn extract_candid_bytes(debug_wasm_path: &Path) -> Result<Vec<u8>, Box<dyn s
         .into());
     }
 
-    Ok(output.stdout)
+    let candid = String::from_utf8(output.stdout)
+        .map_err(|err| format!("candid-extractor emitted non-UTF-8 output: {err}"))?;
+    Ok(normalize_candid(&candid).into_bytes())
+}
+
+fn normalize_candid(candid: &str) -> String {
+    let mut normalized = String::with_capacity(candid.len());
+    for line in candid.lines() {
+        normalized.push_str(line.trim_end());
+        normalized.push('\n');
+    }
+    normalized
 }
 
 // Remove stale ICP-generated Candid sidecars so local surface scans match the
@@ -53,4 +64,17 @@ pub(super) fn remove_stale_icp_candid_sidecars(artifact_root: &Path) -> std::io:
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_candid;
+
+    #[test]
+    fn extracted_candid_has_one_terminal_newline_and_no_trailing_whitespace() {
+        assert_eq!(
+            normalize_candid("//  \nservice : {  \n  method : () -> ();\t\n}"),
+            "//\nservice : {\n  method : () -> ();\n}\n"
+        );
+    }
 }

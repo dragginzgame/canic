@@ -9,6 +9,13 @@ changes no endpoint. The current-source census and row-by-row classification
 were completed and approved before B2 materialized the separate permanent
 allocation; this producer evidence remains repository-only.
 
+The per-slice class and proposed-owner columns below preserve the original B1
+review state. The final closeout reconciliation immediately below is the
+authoritative disposition after the design adopted the narrower qualification
+rule. It supersedes the 68 provisional category-4 owner proposals; those
+proposals do not authorize new status, receipt, observability or correlation
+infrastructure.
+
 Diagnostic labels in this ledger are reconciliation links or provisional row
 anchors. They do not add to the qualified symbolic count until their producer,
 action, projection and reuse have been reconciled in the semantic ledgers.
@@ -18,6 +25,45 @@ a dynamic value that a caller needs for correctness, recovery or remediation.
 The durable-string inventory in [inventory.md](inventory.md) answers a different
 question: whether text stored across interruption owns recovery state. A value
 may require an entry in both ledgers.
+
+## Final Closeout Reconciliation
+
+The final design distinguishes caller continuation from operator convenience
+and from closed local discriminators. Reapplying that rule to the 68 original
+category-4 values produces no unresolved owner:
+
+- `DPC-065`, `DPC-066`, `DPC-067`, `DPC-099`, `DPC-102`, `DPC-348`,
+  `DPC-349`, `DPC-350`, `DPC-354`, `DPC-359`, `DPC-396`, `DPC-404`,
+  `DPC-540`, `DPC-541`, `DPC-542`, `DPC-544` and `DPC-592` are closed local
+  discriminators. Their typed source or construction site selects the safe
+  registered reason before public conversion; the former formatted label is
+  not caller data and receives no new global exact identity.
+- `DPC-015`, `DPC-049`, `DPC-061`, `DPC-062`, `DPC-073`, `DPC-075`,
+  `DPC-076`, `DPC-078`, `DPC-088`, `DPC-094`, `DPC-104` through `DPC-106`,
+  `DPC-111` through `DPC-113`, `DPC-128`, `DPC-129`, `DPC-486`, `DPC-488`,
+  `DPC-490`, `DPC-492`, `DPC-494`, `DPC-501`, `DPC-503`, `DPC-505`,
+  `DPC-507`, `DPC-509`, `DPC-511`, `DPC-513`, `DPC-515`, `DPC-517`,
+  `DPC-519`, `DPC-521`, `DPC-523`, `DPC-525`, `DPC-527`, `DPC-529`,
+  `DPC-533`, `DPC-535`, `DPC-537`, `DPC-549` and `DPC-552` are guarded
+  operator convenience or transient implementation operands. No recovery or
+  correctness decision depends on them after the rejecting operation leaves
+  state unchanged. They are deliberately dropped rather than creating the B1
+  proposed status/preflight systems.
+- `DPC-100` and `DPC-101` remain owned by controller-authenticated Canister
+  status plus the durable Store-deletion intent/terminal response. `DPC-288`
+  remains derivable from the maintained ICP-rate source and refill policy.
+  `DPC-620` remains derivable by the application from its submitted limit and
+  its own outstanding local-intent operations.
+- `DPC-629`, `DPC-632`, `DPC-633` and `DPC-634` are the genuine
+  caller-continuation values. `CyclesFundingPreflightResponse` now carries the
+  approved transfer amount, remaining and maximum child budget, or exact
+  cooldown delay as a typed `CyclesResponse::PreflightRejected` outcome. The
+  parent Canister's live balance remains private.
+
+The final 656-value disposition is therefore 289 caller-derivable, 110
+sensitive/operator-only, 257 authoritatively typed and zero caller-required
+but unowned. This reconciliation changes no diagnostic count and creates no
+generic diagnostic context surface.
 
 ## Census Boundary
 
@@ -2007,6 +2053,7 @@ allocation work. The three auth/refill dependency decoder causes remain owned
 by `DPC-233`, `DPC-235` and `DPC-321`; this slice adds only the schema helper's
 separate label/version operands.
 
-Across all sixty-three classified slices, the dynamic ledger now contains 656
-values: 287 caller-derivable, 67 sensitive operator-only, 234 authoritatively
-typed and 68 caller-required but unowned.
+Across all sixty-three original B1 slices, the census contains 656 values. The
+authoritative final disposition is recorded in Final Closeout Reconciliation:
+289 caller-derivable, 110 sensitive/operator-only, 257 authoritatively typed
+and zero caller-required but unowned.

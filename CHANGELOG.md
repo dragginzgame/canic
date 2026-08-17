@@ -8,15 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.103.x] - 2026-08-17 - Role-Surface Evidence and Release Reliability
+## [0.103.x] - 2026-08-17 - 0.102 Closeout and Role-Surface Evidence
 
 Detailed patch breakdown: [docs/changelog/0.103.md](docs/changelog/0.103.md)
 
-- `0.103.0` freezes the released 207-method role-surface baseline and the
-  review-ready disposition of all 188 Canic-owned appearances without changing
-  runtime or Candid behavior, while making release CI truthful, bounded and
-  easier to diagnose through one Cargo version authority, preflight/security
-  gates, separated ordinary/PocketIC reporting and post-bump candidate checks.
+- `0.103.0` closes the 0.102 audit with typed cycles-funding preflight outcomes,
+  tamper-evident released diagnostic identities, automatic host rendering and
+  exact final-tag Wasm evidence, freezes the review-ready role-surface baseline,
+  and makes release CI truthful and bounded through one Cargo version authority
+  plus gated, separately reported validation lanes.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
 cd "$ROOT_DIR"
 
 fail() {
@@ -9,23 +10,8 @@ fail() {
     exit 1
 }
 
-workspace_version() {
-    awk '
-        /^\[workspace.package\]/ { in_section = 1; next }
-        /^\[/ && in_section { exit }
-        in_section && $1 == "version" {
-            gsub(/"/, "", $3)
-            print $3
-            exit
-        }
-    '
-}
-
-committed_manifest="$(git show HEAD:Cargo.toml 2>/dev/null)" ||
-    fail "HEAD does not contain Cargo.toml"
-version="$(printf '%s\n' "$committed_manifest" | workspace_version)"
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] ||
-    fail "HEAD Cargo.toml does not declare a valid workspace release version"
+version="$(bash "$VERSION_READER" --committed)" ||
+    fail "cargo-get could not read the committed workspace version"
 
 branch="$(git symbolic-ref --quiet --short HEAD)" ||
     fail "HEAD is detached"

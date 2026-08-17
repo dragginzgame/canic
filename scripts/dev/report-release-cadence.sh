@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 MAX_RELEASES_PER_MINOR=12
 
 if [ "$#" -gt 1 ]; then
@@ -10,7 +11,7 @@ if [ "$#" -gt 1 ]; then
 fi
 
 cd "$ROOT"
-version="${1:-$(cargo get workspace.package.version)}"
+version="${1:-$(bash "$VERSION_READER")}"
 if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
     echo "release cadence report requires a semantic workspace version, got: $version" >&2
     exit 1

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INSTALL_DEV="$ROOT/scripts/dev/install_dev.sh"
+VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 
 fail() {
     echo "release candidate guard failed: $1" >&2
@@ -13,19 +14,8 @@ command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 command -v rg >/dev/null 2>&1 || fail "rg is unavailable"
 
-workspace_version="$({
-    awk '
-        /^\[workspace.package\]/ { in_section = 1; next }
-        /^\[/ && in_section { exit }
-        in_section && $1 == "version" {
-            gsub(/"/, "", $3)
-            print $3
-            exit
-        }
-    ' "$ROOT/Cargo.toml"
-} || true)"
-[[ "$workspace_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] ||
-    fail "root Cargo.toml does not declare a valid workspace version"
+workspace_version="$(bash "$VERSION_READER")" ||
+    fail "cargo-get could not read the root workspace version"
 
 metadata="$(cd "$ROOT" && cargo metadata --locked --offline --format-version 1 --no-deps)" ||
     fail "locked offline Cargo metadata is unavailable"

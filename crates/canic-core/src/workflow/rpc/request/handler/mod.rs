@@ -58,13 +58,12 @@ struct RootContext {
 ///
 /// PreparedExecution
 ///
-/// Replay reservation plus any authorization artifact required for execution.
+/// Replay reservation for an authorized capability execution.
 ///
 
 #[derive(Clone, Debug)]
 struct PreparedExecution {
     pending: ReplayPending,
-    authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,
 }
 
 ///
@@ -169,7 +168,6 @@ impl RootResponseWorkflow {
             &ctx,
             &prepared.pending,
             capability,
-            prepared.authorized_cycles,
             authority,
             lifecycle,
         )
@@ -224,37 +222,13 @@ impl RootResponseWorkflow {
     ) -> Result<RootPreflight, InternalError> {
         match Self::check_replay(ctx, capability)? {
             replay::ReplayPreflight::Fresh(pending) => {
-                let authorized_cycles = match Self::authorize_with_hint(ctx, capability, authority)
-                {
-                    Ok(authorized_cycles) => authorized_cycles,
-                    Err(err) => {
-                        return Err(Self::abort_replay_after_failure(pending, err));
-                    }
-                };
-                Ok(RootPreflight::Fresh(PreparedExecution {
-                    pending,
-                    authorized_cycles,
-                }))
+                if let Err(err) = Self::authorize(ctx, capability, authority) {
+                    return Err(Self::abort_replay_after_failure(pending, err));
+                }
+                Ok(RootPreflight::Fresh(PreparedExecution { pending }))
             }
             replay::ReplayPreflight::Cached(response) => Ok(RootPreflight::Cached(response)),
         }
-    }
-
-    fn authorize_with_hint(
-        ctx: &RootContext,
-        capability: &RootCapability,
-        authority: &RootCapabilityAuthority,
-    ) -> Result<Option<nonroot_cycles::AuthorizedCyclesGrant>, InternalError> {
-        if let RootCapability::RequestCycles(req) = capability {
-            return if ctx.is_root_env {
-                nonroot_cycles::authorize_root_request_cycles_plan(ctx, req, authority).map(Some)
-            } else {
-                nonroot_cycles::authorize_request_cycles_plan(ctx, req).map(Some)
-            };
-        }
-
-        Self::authorize(ctx, capability, authority)?;
-        Ok(None)
     }
 
     fn authorize(
@@ -269,19 +243,10 @@ impl RootResponseWorkflow {
         ctx: &RootContext,
         pending: &ReplayPending,
         capability: RootCapability,
-        authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,
         authority: &RootCapabilityAuthority,
         lifecycle: &dyn RootCapabilityLifecycleExecutor,
     ) -> Result<Response, InternalError> {
-        execute::execute_root_capability(
-            ctx,
-            pending,
-            capability,
-            authorized_cycles,
-            authority,
-            lifecycle,
-        )
-        .await
+        execute::execute_root_capability(ctx, pending, capability, authority, lifecycle).await
     }
 
     fn check_replay(

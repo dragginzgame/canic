@@ -40,7 +40,10 @@ pub enum IcpJsonResponseError {
     #[error("ICP JSON response is missing top-level string `response_bytes`")]
     MissingResponseBytes,
 
-    #[error("canister rejected request: {0}")]
+    #[error(
+        "canister rejected request: {diagnostic}",
+        diagnostic = crate::diagnostics::render_diagnostic(.0.code())
+    )]
     Rejected(CanicError),
 }
 

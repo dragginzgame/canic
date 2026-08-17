@@ -12,6 +12,7 @@ use crate::{
     config::schema::TopupPolicy,
     diagnostics::codes,
     domain::{policy::pure as policy, runtime::TimerExecutionOutcome},
+    dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse},
     log,
     log::Topic,
     model::replay::OperationId,
@@ -45,6 +46,11 @@ struct AutomaticTopupConfig {
 struct CycleBalanceSample {
     timestamp_secs: u64,
     cycles: Cycles,
+}
+
+enum ParentFundingOutcome {
+    PreflightRejected(CyclesFundingPreflightResponse),
+    Transferred,
 }
 
 /// Runtime owner for cycle observations and configured automatic funding.
@@ -136,83 +142,127 @@ impl CycleWorkflow {
         let after = Self::read_sample();
         Self::record_observation(&after);
 
+        Self::finish_topup(&config, &sample, &after, result)
+    }
+
+    fn finish_topup(
+        config: &AutomaticTopupConfig,
+        before: &CycleBalanceSample,
+        after: &CycleBalanceSample,
+        result: Result<ParentFundingOutcome, InternalError>,
+    ) -> TimerRunResult {
         match result {
-            Ok(()) => {
-                reset_resource_exhaustion_recovery();
-                let timing = policy::cycles::cycle_topup_timing(
-                    after.timestamp_secs,
-                    after.cycles.to_u128(),
-                    config.threshold,
-                    Some(policy::cycles::CycleBalanceObservation {
-                        timestamp_secs: sample.timestamp_secs,
-                        balance: sample.cycles.to_u128(),
-                    }),
-                );
-                let directive = if matches!(timing, policy::cycles::CycleTopupTiming::Due) {
-                    Self::deadline_after_secs(
-                        IcOps::now_nanos(),
-                        config.minimum_funding_spacing_secs,
-                    )
-                    .map(TimerDirective::ScheduleAt)
-                } else {
-                    Self::directive(IcOps::now_nanos(), timing)
-                };
-                match directive {
-                    Ok(directive) => TimerRunResult::success(1, directive),
-                    Err(err) => {
-                        log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                        TimerRunResult::invariant_failure()
-                    }
-                }
+            Ok(ParentFundingOutcome::Transferred) => {
+                Self::finish_transferred_topup(config, before, after)
             }
-            Err(failure) if is_retryable_funding_error(&failure) => {
-                log!(
-                    Topic::Cycles,
-                    Warn,
-                    "automatic top-up will retry: {}",
-                    failure
-                );
-                let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::CycleTopup);
-                TimerRunResult {
-                    outcome: TimerExecutionOutcome::RetryableFailure,
-                    work_count: 0,
-                    directive: TimerDirective::RetryAfter(retry_delay(streak)),
-                }
+            Ok(ParentFundingOutcome::PreflightRejected(preflight)) => {
+                Self::finish_preflight_rejection(preflight)
             }
-            Err(failure) if claim_resource_exhaustion_recovery(&failure) => {
-                log!(
-                    Topic::Cycles,
-                    Warn,
-                    "automatic top-up will make one resource-exhaustion recovery attempt: {}",
-                    failure
-                );
-                TimerRunResult {
-                    outcome: TimerExecutionOutcome::RetryableFailure,
-                    work_count: 0,
-                    directive: TimerDirective::RetryAfter(RETRY_INITIAL),
-                }
-            }
-            Err(failure) => {
-                log!(
-                    Topic::Cycles,
-                    Error,
-                    "automatic top-up stopped: {}",
-                    failure
-                );
+            Err(failure) => Self::finish_funding_failure(failure),
+        }
+    }
+
+    fn finish_transferred_topup(
+        config: &AutomaticTopupConfig,
+        before: &CycleBalanceSample,
+        after: &CycleBalanceSample,
+    ) -> TimerRunResult {
+        reset_resource_exhaustion_recovery();
+        let timing = policy::cycles::cycle_topup_timing(
+            after.timestamp_secs,
+            after.cycles.to_u128(),
+            config.threshold,
+            Some(policy::cycles::CycleBalanceObservation {
+                timestamp_secs: before.timestamp_secs,
+                balance: before.cycles.to_u128(),
+            }),
+        );
+        let directive = if matches!(timing, policy::cycles::CycleTopupTiming::Due) {
+            Self::deadline_after_secs(IcOps::now_nanos(), config.minimum_funding_spacing_secs)
+                .map(TimerDirective::ScheduleAt)
+        } else {
+            Self::directive(IcOps::now_nanos(), timing)
+        };
+        match directive {
+            Ok(directive) => TimerRunResult::success(1, directive),
+            Err(err) => {
+                log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
                 TimerRunResult::invariant_failure()
             }
         }
     }
 
+    fn finish_preflight_rejection(preflight: CyclesFundingPreflightResponse) -> TimerRunResult {
+        match preflight {
+            CyclesFundingPreflightResponse::CooldownActive { retry_after_secs } => {
+                log!(
+                    Topic::Cycles,
+                    Warn,
+                    "automatic top-up is waiting for the parent funding cooldown ({retry_after_secs}s)"
+                );
+                retryable_topup_after(Duration::from_secs(retry_after_secs.max(1)))
+            }
+            CyclesFundingPreflightResponse::ParentFundingUnavailable { approved_cycles } => {
+                log!(
+                    Topic::Cycles,
+                    Warn,
+                    "automatic top-up is waiting for parent funding capacity (approved_cycles={approved_cycles})"
+                );
+                let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::CycleTopup);
+                retryable_topup_after(retry_delay(streak))
+            }
+            CyclesFundingPreflightResponse::ChildBudgetExhausted {
+                remaining_child_budget,
+                max_per_child,
+            } => {
+                log!(
+                    Topic::Cycles,
+                    Warn,
+                    "automatic top-up stopped at the parent child-budget limit (remaining_child_budget={remaining_child_budget}, max_per_child={max_per_child})"
+                );
+                TimerRunResult::no_work(TimerDirective::Stop)
+            }
+        }
+    }
+
+    fn finish_funding_failure(failure: InternalError) -> TimerRunResult {
+        if is_retryable_funding_error(&failure) {
+            log!(
+                Topic::Cycles,
+                Warn,
+                "automatic top-up will retry: {}",
+                failure
+            );
+            let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::CycleTopup);
+            return retryable_topup_after(retry_delay(streak));
+        }
+        if claim_resource_exhaustion_recovery(&failure) {
+            log!(
+                Topic::Cycles,
+                Warn,
+                "automatic top-up will make one resource-exhaustion recovery attempt: {}",
+                failure
+            );
+            return retryable_topup_after(RETRY_INITIAL);
+        }
+        log!(
+            Topic::Cycles,
+            Error,
+            "automatic top-up stopped: {}",
+            failure
+        );
+        TimerRunResult::invariant_failure()
+    }
+
     async fn request_parent_funding(
         amount: &Cycles,
         operation_id: OperationId,
-    ) -> Result<(), InternalError> {
+    ) -> Result<ParentFundingOutcome, InternalError> {
         CyclesTopupMetrics::record_request_scheduled();
         CycleTopupEventOps::record_scheduled(IcOps::now_secs(), amount.clone());
         match RequestOps::request_cycles_with_operation_id(amount.to_u128(), operation_id).await {
-            Ok(response) => {
-                let transferred = Cycles::from(response.cycles_transferred);
+            Ok(CyclesResponse::Transferred { cycles_transferred }) => {
+                let transferred = Cycles::from(cycles_transferred);
                 CyclesTopupMetrics::record_request_ok();
                 CycleTopupEventOps::record_ok(
                     IcOps::now_secs(),
@@ -225,7 +275,16 @@ impl CycleWorkflow {
                     "requested {amount}, topped up by {transferred}, now {}",
                     IcOps::canister_cycle_balance()
                 );
-                Ok(())
+                Ok(ParentFundingOutcome::Transferred)
+            }
+            Ok(CyclesResponse::PreflightRejected(preflight)) => {
+                CyclesTopupMetrics::record_request_err();
+                CycleTopupEventOps::record_err(
+                    IcOps::now_secs(),
+                    amount.clone(),
+                    format!("parent funding preflight rejected: {preflight:?}"),
+                );
+                Ok(ParentFundingOutcome::PreflightRejected(preflight))
             }
             Err(err) => {
                 CyclesTopupMetrics::record_request_err();
@@ -346,6 +405,14 @@ fn claim_resource_exhaustion_recovery(err: &InternalError) -> bool {
 
 fn reset_resource_exhaustion_recovery() {
     RESOURCE_EXHAUSTION_RECOVERY_CONSUMED.with(|consumed| consumed.set(false));
+}
+
+const fn retryable_topup_after(delay: Duration) -> TimerRunResult {
+    TimerRunResult {
+        outcome: TimerExecutionOutcome::RetryableFailure,
+        work_count: 0,
+        directive: TimerDirective::RetryAfter(delay),
+    }
 }
 
 fn retry_delay(streak: u64) -> Duration {

@@ -35,6 +35,11 @@ fn preserves_typed_canister_rejection() {
         panic!("expected typed canister rejection");
     };
     assert_eq!(error.code(), codes::AUTHORITY_UNAUTHORIZED.raw_code());
+
+    let rendered = IcpJsonResponseError::Rejected(error).to_string();
+    assert!(rendered.contains("canister rejected request: E30 AUTHORITY_UNAUTHORIZED"));
+    assert!(rendered.contains("origin: topology_authority"));
+    assert!(rendered.contains("Authority is unauthorized."));
 }
 
 #[test]

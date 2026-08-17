@@ -280,7 +280,7 @@ fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCom
 }
 
 fn try_encode_compact_root_replay_response(response: &Response) -> Option<Vec<u8>> {
-    let Response::Cycles(CyclesResponse { cycles_transferred }) = response else {
+    let Response::Cycles(CyclesResponse::Transferred { cycles_transferred }) = response else {
         return None;
     };
 
@@ -335,7 +335,7 @@ fn try_decode_compact_root_replay_response(
                     "root replay compact cycles payload had trailing bytes".to_string(),
                 ));
             }
-            Ok(Some(Response::Cycles(CyclesResponse {
+            Ok(Some(Response::Cycles(CyclesResponse::Transferred {
                 cycles_transferred,
             })))
         }
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn compact_root_replay_round_trips_cycles_response() {
-        let response = Response::Cycles(CyclesResponse {
+        let response = Response::Cycles(CyclesResponse::Transferred {
             cycles_transferred: 123_456_789_012_345_678_901_234_567_890u128,
         });
         let encoded = encode_root_replay_response(&response).expect("encode");
@@ -428,7 +428,7 @@ mod tests {
         let decoded = decode_root_replay_response(&encoded).expect("decode");
         match (decoded, response) {
             (Response::Cycles(decoded), Response::Cycles(expected)) => {
-                assert_eq!(decoded.cycles_transferred, expected.cycles_transferred);
+                assert_eq!(decoded.cycles_transferred(), expected.cycles_transferred());
             }
             _ => panic!("expected cycles replay response"),
         }

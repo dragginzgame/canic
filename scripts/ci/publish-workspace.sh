@@ -4,6 +4,7 @@ set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SELF_DIR/../.." && pwd)"
+VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
 cd "$ROOT_DIR"
 
 PUBLISH_DRY_RUN="${PUBLISH_DRY_RUN:-0}"
@@ -27,19 +28,6 @@ PUBLISH_ORDER=(
 # depends at runtime or build time on a local crate marked `publish = false`.
 validate_publish_manifest_boundary() {
     cargo test --locked -p canic --test workspace_manifest publishable_members_do_not_depend_on_unpublished_workspace_members
-}
-
-# Extracts the current workspace version from the root manifest.
-workspace_version() {
-    awk '
-        /^\[workspace.package\]/ { in_section = 1; next }
-        /^\[/ && in_section { exit }
-        in_section && $1 == "version" {
-            gsub(/"/, "", $3);
-            print $3;
-            exit;
-        }
-    ' Cargo.toml
 }
 
 # Returns success once crates.io reports the expected version for a crate.
@@ -70,11 +58,7 @@ wait_for_registry_version() {
     return 1
 }
 
-version="$(workspace_version)"
-if [ -z "$version" ]; then
-    echo "Failed to determine workspace version from Cargo.toml" >&2
-    exit 1
-fi
+version="$(bash "$VERSION_READER")"
 
 validate_publish_manifest_boundary
 

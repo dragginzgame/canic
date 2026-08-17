@@ -4,9 +4,7 @@
 //! Does not own: endpoint auth, replay guard classification, or storage schemas.
 //! Boundary: RPC handler delegates capability side effects and response construction here.
 
-use super::{
-    RootCapability, RootContext, nonroot_cycles, nonroot_cycles::AuthorizedCyclesGrant, replay,
-};
+use super::{RootCapability, RootContext, replay};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -39,7 +37,6 @@ pub(super) async fn execute_root_capability(
     ctx: &RootContext,
     pending: &ReplayPending,
     capability: RootCapability,
-    authorized_cycles: Option<AuthorizedCyclesGrant>,
     authority: &RootCapabilityAuthority,
     lifecycle: &dyn RootCapabilityLifecycleExecutor,
 ) -> Result<Response, InternalError> {
@@ -64,15 +61,8 @@ pub(super) async fn execute_root_capability(
         RootCapability::RecycleCanister(req) => {
             execute_recycle(ctx, pending, &req, authority, lifecycle).await
         }
-        RootCapability::RequestCycles(req) => {
-            let response = if let Some(grant) = authorized_cycles {
-                nonroot_cycles::execute_authorized_request_cycles(ctx, pending, grant).await
-            } else if ctx.is_root_env {
-                nonroot_cycles::execute_root_request_cycles(ctx, pending, &req, authority).await
-            } else {
-                nonroot_cycles::execute_request_cycles(ctx, pending, &req).await
-            }?;
-            Ok(Response::Cycles(response))
+        RootCapability::RequestCycles(_) => {
+            unreachable!("request-cycles owns its typed preflight and execution path")
         }
     };
 

@@ -9,7 +9,7 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     domain::policy::pure::cycles_funding::{FundingPolicyViolation, evaluate},
-    dto::rpc::{CyclesRequest, CyclesResponse},
+    dto::rpc::{CyclesFundingPreflightResponse, CyclesRequest, CyclesResponse},
     ids::CanisterRole,
     log,
     log::Topic,
@@ -62,9 +62,27 @@ pub(in crate::workflow::rpc) struct NonrootCyclesCapabilityWorkflow;
 /// Owned by RPC workflow and passed into execution helpers.
 ///
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct AuthorizedCyclesGrant {
     approved_cycles: u128,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum CyclesAuthorization {
+    Grant(AuthorizedCyclesGrant),
+    Preflight(CyclesFundingPreflightResponse),
+}
+
+#[derive(Debug)]
+enum CyclesAuthorizationError {
+    Internal(InternalError),
+    Preflight(CyclesFundingPreflightResponse),
+}
+
+impl From<InternalError> for CyclesAuthorizationError {
+    fn from(error: InternalError) -> Self {
+        Self::Internal(error)
+    }
 }
 
 ///
@@ -118,8 +136,16 @@ async fn response_replay_first_with_child(
 
     let grant = match authorize_request_cycles_with_child(&ctx, &req, child) {
         Ok(grant) => grant,
-        Err(err) => {
+        Err(CyclesAuthorizationError::Internal(err)) => {
             return Err(replay::abort_replay_after_failure(pending, err));
+        }
+        Err(CyclesAuthorizationError::Preflight(preflight)) => {
+            replay::abort_replay(pending)?;
+            RootCapabilityMetrics::record_execution(
+                RootCapabilityMetricKey::RequestCycles,
+                RootCapabilityMetricOutcome::Success,
+            );
+            return Ok(CyclesResponse::PreflightRejected(preflight));
         }
     };
 
@@ -183,8 +209,8 @@ pub(super) fn authorize_root_request_cycles(
 pub(super) fn authorize_request_cycles_plan(
     ctx: &RootContext,
     req: &CyclesRequest,
-) -> Result<AuthorizedCyclesGrant, InternalError> {
-    authorize_request_cycles_with_child(ctx, req, direct_child_record(ctx.caller))
+) -> Result<CyclesAuthorization, InternalError> {
+    authorize_request_cycles_plan_with_child(ctx, req, direct_child_record(ctx.caller))
 }
 
 /// Resolve an approved root cycles grant in one authorization pass.
@@ -192,15 +218,33 @@ pub(super) fn authorize_root_request_cycles_plan(
     ctx: &RootContext,
     req: &CyclesRequest,
     authority: &RootCapabilityAuthority,
-) -> Result<AuthorizedCyclesGrant, InternalError> {
-    authorize_request_cycles_with_child(ctx, req, component_registry_child_record(ctx, authority))
+) -> Result<CyclesAuthorization, InternalError> {
+    authorize_request_cycles_plan_with_child(
+        ctx,
+        req,
+        component_registry_child_record(ctx, authority),
+    )
+}
+
+fn authorize_request_cycles_plan_with_child(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+    child: Option<ResolvedCyclesChild>,
+) -> Result<CyclesAuthorization, InternalError> {
+    match authorize_request_cycles_with_child(ctx, req, child) {
+        Ok(grant) => Ok(CyclesAuthorization::Grant(grant)),
+        Err(CyclesAuthorizationError::Preflight(preflight)) => {
+            Ok(CyclesAuthorization::Preflight(preflight))
+        }
+        Err(CyclesAuthorizationError::Internal(error)) => Err(error),
+    }
 }
 
 fn authorize_request_cycles_with_child(
     ctx: &RootContext,
     req: &CyclesRequest,
     child: Option<ResolvedCyclesChild>,
-) -> Result<AuthorizedCyclesGrant, InternalError> {
+) -> Result<AuthorizedCyclesGrant, CyclesAuthorizationError> {
     let decision = authorize_request_cycles_inner(ctx, req, child);
 
     match &decision {
@@ -218,7 +262,7 @@ fn authorize_request_cycles_with_child(
                 ctx.now
             );
         }
-        Err(err) => {
+        Err(CyclesAuthorizationError::Internal(err)) => {
             RootCapabilityMetrics::record_authorization(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Denied,
@@ -227,6 +271,20 @@ fn authorize_request_cycles_with_child(
                 Topic::Rpc,
                 Warn,
                 "capability denied (capability=RequestCycles, caller={}, subnet={}, now={}): {err}",
+                ctx.caller,
+                ctx.subnet_id,
+                ctx.now
+            );
+        }
+        Err(CyclesAuthorizationError::Preflight(preflight)) => {
+            RootCapabilityMetrics::record_authorization(
+                RootCapabilityMetricKey::RequestCycles,
+                RootCapabilityMetricOutcome::Denied,
+            );
+            log!(
+                Topic::Rpc,
+                Info,
+                "capability preflight rejected (capability=RequestCycles, caller={}, subnet={}, now={}, outcome={preflight:?})",
                 ctx.caller,
                 ctx.subnet_id,
                 ctx.now
@@ -242,7 +300,7 @@ fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
     child: Option<ResolvedCyclesChild>,
-) -> Result<AuthorizedCyclesGrant, InternalError> {
+) -> Result<AuthorizedCyclesGrant, CyclesAuthorizationError> {
     CyclesFundingMetrics::record_requested(ctx.caller, req.cycles);
 
     let Some(child) = child else {
@@ -251,7 +309,7 @@ fn authorize_request_cycles_inner(
             req.cycles,
             CyclesFundingDeniedReason::ChildNotFound,
         );
-        return Err(RpcWorkflowError::ChildNotFound(ctx.caller).into());
+        return Err(InternalError::from(RpcWorkflowError::ChildNotFound(ctx.caller)).into());
     };
     if child.parent_pid != Some(ctx.self_pid) {
         CyclesFundingMetrics::record_denied(
@@ -259,7 +317,11 @@ fn authorize_request_cycles_inner(
             req.cycles,
             CyclesFundingDeniedReason::NotDirectChild,
         );
-        return Err(RpcWorkflowError::NotChildOfCaller(ctx.caller, ctx.self_pid).into());
+        return Err(InternalError::from(RpcWorkflowError::NotChildOfCaller(
+            ctx.caller,
+            ctx.self_pid,
+        ))
+        .into());
     }
 
     if !crate::ops::storage::state::fleet::FleetStateOps::cycles_funding_enabled() {
@@ -268,7 +330,7 @@ fn authorize_request_cycles_inner(
             req.cycles,
             CyclesFundingDeniedReason::KillSwitchDisabled,
         );
-        return Err(RpcWorkflowError::CyclesFundingDisabled.into());
+        return Err(InternalError::from(RpcWorkflowError::CyclesFundingDisabled).into());
     }
 
     reject_competing_funding_operation(ctx, req)?;
@@ -281,7 +343,11 @@ fn authorize_request_cycles_inner(
     let ledger = CyclesFundingLedgerOps::snapshot(ctx.caller);
     let decision = match evaluate(limits, ledger, req.cycles, ctx.now) {
         Ok(decision) => decision,
-        Err(violation) => return Err(map_funding_policy_violation(ctx, req.cycles, violation)),
+        Err(violation) => {
+            return Err(CyclesAuthorizationError::Preflight(
+                map_funding_policy_violation(ctx, req.cycles, violation),
+            ));
+        }
     };
 
     if decision.clamped_max_per_request || decision.clamped_max_per_child {
@@ -298,17 +364,13 @@ fn authorize_request_cycles_inner(
     }
 
     let available = IcOps::canister_cycle_balance().to_u128();
-    if decision.approved_cycles > available {
+    if let Some(preflight) = parent_funding_preflight(decision.approved_cycles, available) {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             decision.approved_cycles,
             CyclesFundingDeniedReason::InsufficientCycles,
         );
-        return Err(RpcWorkflowError::InsufficientFundingCycles {
-            requested: decision.approved_cycles,
-            available,
-        }
-        .into());
+        return Err(CyclesAuthorizationError::Preflight(preflight));
     }
 
     Ok(AuthorizedCyclesGrant {
@@ -346,29 +408,8 @@ fn reject_competing_funding_operation(
     Err(RpcWorkflowError::FundingOperationInProgress { child: ctx.caller }.into())
 }
 
-/// Execute the approved cycles transfer and return the canonical cycles response.
-pub(super) async fn execute_request_cycles(
-    ctx: &RootContext,
-    pending: &ReplayPending,
-    req: &CyclesRequest,
-) -> Result<CyclesResponse, InternalError> {
-    let grant = authorize_request_cycles_plan(ctx, req)?;
-    execute_authorized_request_cycles(ctx, pending, grant).await
-}
-
-/// Execute root cycles funding against the authoritative subnet registry.
-pub(super) async fn execute_root_request_cycles(
-    ctx: &RootContext,
-    pending: &ReplayPending,
-    req: &CyclesRequest,
-    authority: &RootCapabilityAuthority,
-) -> Result<CyclesResponse, InternalError> {
-    let grant = authorize_root_request_cycles_plan(ctx, req, authority)?;
-    execute_authorized_request_cycles(ctx, pending, grant).await
-}
-
 /// Execute an already-authorized cycles transfer.
-pub(super) async fn execute_authorized_request_cycles(
+async fn execute_authorized_request_cycles(
     ctx: &RootContext,
     pending: &ReplayPending,
     grant: AuthorizedCyclesGrant,
@@ -395,13 +436,11 @@ pub(super) async fn execute_authorized_request_cycles(
 
     CyclesFundingMetrics::record_granted(ctx.caller, grant.approved_cycles);
 
-    let response = CyclesResponse {
+    let response = CyclesResponse::Transferred {
         cycles_transferred: grant.approved_cycles,
     };
-    if let Err(err) = replay::stage_response(
-        pending,
-        &crate::dto::rpc::Response::Cycles(response.clone()),
-    ) {
+    if let Err(err) = replay::stage_response(pending, &crate::dto::rpc::Response::Cycles(response))
+    {
         let reason = match CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
             Ok(()) => RecoveryReason::ResponseCommitFailed,
             Err(_settlement_err) => RecoveryReason::CostSettlementFailed,
@@ -440,36 +479,54 @@ fn component_registry_child_record(
     })
 }
 
-fn map_funding_policy_violation(
+pub(super) const fn parent_funding_preflight(
+    approved_cycles: u128,
+    available_cycles: u128,
+) -> Option<CyclesFundingPreflightResponse> {
+    if approved_cycles > available_cycles {
+        Some(CyclesFundingPreflightResponse::ParentFundingUnavailable { approved_cycles })
+    } else {
+        None
+    }
+}
+
+pub(super) fn map_funding_policy_violation(
     ctx: &RootContext,
     requested_cycles: u128,
     violation: FundingPolicyViolation,
-) -> InternalError {
-    match violation {
-        FundingPolicyViolation::MaxPerChild {
-            requested,
-            max_per_child,
-            remaining_budget,
-        } => {
+) -> CyclesFundingPreflightResponse {
+    match &violation {
+        FundingPolicyViolation::MaxPerChild { .. } => {
             CyclesFundingMetrics::record_denied(
                 ctx.caller,
                 requested_cycles,
                 CyclesFundingDeniedReason::MaxPerChildExceeded,
             );
-            RpcWorkflowError::FundingRequestExceedsChildBudget {
-                requested,
-                remaining_budget,
-                max_per_child,
-            }
-            .into()
         }
-        FundingPolicyViolation::CooldownActive { retry_after_secs } => {
+        FundingPolicyViolation::CooldownActive { .. } => {
             CyclesFundingMetrics::record_denied(
                 ctx.caller,
                 requested_cycles,
                 CyclesFundingDeniedReason::CooldownActive,
             );
-            RpcWorkflowError::FundingCooldownActive { retry_after_secs }.into()
+        }
+    }
+    funding_policy_preflight(violation)
+}
+
+pub(super) const fn funding_policy_preflight(
+    violation: FundingPolicyViolation,
+) -> CyclesFundingPreflightResponse {
+    match violation {
+        FundingPolicyViolation::MaxPerChild {
+            max_per_child,
+            remaining_budget,
+        } => CyclesFundingPreflightResponse::ChildBudgetExhausted {
+            remaining_child_budget: remaining_budget,
+            max_per_child,
+        },
+        FundingPolicyViolation::CooldownActive { retry_after_secs } => {
+            CyclesFundingPreflightResponse::CooldownActive { retry_after_secs }
         }
     }
 }

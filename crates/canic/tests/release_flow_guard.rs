@@ -58,6 +58,12 @@ fn write_executable(root: &Path, relative: &str, contents: &str) {
     fs::set_permissions(path, permissions).expect("executable mode should be set");
 }
 
+fn install_version_reader(root: &Path) {
+    let source = fs::read_to_string(workspace_root().join("scripts/ci/read-workspace-version.sh"))
+        .expect("workspace-version reader should be readable");
+    write_executable(root, "scripts/ci/read-workspace-version.sh", &source);
+}
+
 fn commit_all(root: &Path, message: &str) {
     run_git(root, &["add", "."]);
     run_git(
@@ -101,6 +107,7 @@ fn create_release_repo(name: &str) -> PathBuf {
         "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.8\"\n",
     );
     write_file(&root, "Cargo.lock", "# initial\n");
+    install_version_reader(&root);
     commit_all(&root, "implementation");
     root
 }
@@ -221,6 +228,7 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
     write_file(&root, "crates/demo/Cargo.toml", member_toml);
     write_file(&root, "Cargo.lock", cargo_lock);
     write_file(&root, "scripts/dev/install_dev.sh", install_script);
+    install_version_reader(&root);
     write_executable(
         &root,
         "scripts/ci/sync-release-surface-version.sh",
@@ -235,8 +243,11 @@ case "$*" in
     "set-version --help")
         exit 0
         ;;
-    "get workspace.package.version")
-        awk '/^version = / { gsub(/"/, "", $3); print $3; exit }' Cargo.toml
+    "get --version")
+        printf 'cargo-get 1.4.0\n'
+        ;;
+    get\ --entry\ *\ workspace.package.version)
+        awk '/^version = / { gsub(/"/, "", $3); print $3; exit }' "$3/Cargo.toml"
         ;;
     "set-version --workspace --bump patch")
         sed -i 's/0.92.7/0.92.8/g' Cargo.toml crates/demo/Cargo.toml

@@ -7,18 +7,10 @@ if [[ "${CANIC_RELEASE_PUSH_READY:-}" != "1" ]]; then
 fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 cd "$ROOT" || exit 1
 
-committed_manifest="$(git show HEAD:Cargo.toml)"
-workspace_version="$(printf '%s\n' "$committed_manifest" | awk '
-    /^\[workspace.package\]/ { in_section = 1; next }
-    /^\[/ && in_section { exit }
-    in_section && $1 == "version" {
-        gsub(/"/, "", $3)
-        print $3
-        exit
-    }
-')"
+workspace_version="$(bash "$VERSION_READER" --committed)"
 branch="$(git symbolic-ref --quiet --short HEAD)"
 tag="v$workspace_version"
 
