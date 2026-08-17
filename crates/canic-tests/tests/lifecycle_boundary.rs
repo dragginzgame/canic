@@ -28,7 +28,7 @@ enum CanisterStatusRequest {
 
 #[derive(CandidType, Deserialize)]
 enum CanisterStatusResponse {
-    Operation(CanisterOperationStatusResponse),
+    Operation(Box<CanisterOperationStatusResponse>),
     Readiness(CanicReadinessStatus),
 }
 
@@ -121,12 +121,11 @@ fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal) {
             }),),
         )
         .expect("query Prepared Fleet activation status");
-    let CanisterStatusResponse::Operation(CanisterOperationStatusResponse::ConfigureRuntime(
-        status,
-    )) = status.expect("Prepared activation status")
+    let CanisterStatusResponse::Operation(operation) = status.expect("Prepared activation status")
     else {
         panic!("managed Canister returned a differently correlated operation status");
     };
+    let CanisterOperationStatusResponse::ConfigureRuntime(status) = *operation;
     assert_eq!(
         status.fleet_activation.phase,
         FleetActivationPhase::Prepared
