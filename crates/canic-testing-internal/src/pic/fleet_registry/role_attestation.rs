@@ -266,7 +266,7 @@ fn require_attested_local_subnet(
     pic.update_candid_as(
         verifier,
         caller,
-        "verifier_require_attested_local_subnet",
+        "issuer_require_attested_local_subnet",
         (attestation,),
     )
     .expect("attested local-Subnet access transport")
@@ -282,7 +282,7 @@ fn verify_role_attestation(
     pic.update_candid_as(
         verifier,
         caller,
-        "verifier_verify_role_attestation",
+        "issuer_verify_role_attestation",
         (attestation, minimum_epoch),
     )
     .expect("role attestation verification transport")

@@ -339,7 +339,7 @@ pub(super) fn write_report(
     out.push_str(&format!(
         "- Target endpoints/flows in scope: {target_endpoints}\n"
     ));
-    out.push_str("- Deferred from this baseline: query instruction totals require a future authoritative same-call fixture and method version. The fixed roster covers root capability/replay, root-proof provisioning, issuer prepare, verifier confirmation, scaling, sharding, publication, and root bootstrap.\n\n");
+    out.push_str("- Deferred from this baseline: query instruction totals require a future authoritative same-call fixture and method version. The fixed roster covers root capability/replay, root-proof provisioning, issuer prepare and verification, scaling, sharding, publication, and root bootstrap.\n\n");
 
     out.push_str("## Findings / Checklist\n\n");
     out.push_str("| Check | Result | Evidence |\n| --- | --- | --- |\n");

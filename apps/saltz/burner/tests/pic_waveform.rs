@@ -29,7 +29,8 @@ fn immutable_waveform_burns_exact_steps_and_abort_stops_future_burns() {
     assert_arm_rejects_insufficient_funding(&pic, &wasm);
     assert_abort_stops_future_burns(&pic, &wasm);
     assert_fully_funded_waveform_completes_exactly(&pic, &wasm);
-    assert_trial_window_cannot_burn_a_later_step(&pic, &wasm);
+    assert_partially_funded_waveform_stops_at_balance_limit(&pic, &wasm);
+    assert_unauthorized_trial_window_cannot_burn_a_waveform_step(&pic, &wasm);
 }
 
 fn assert_fully_funded_waveform_completes_exactly(pic: &PocketIc, wasm: &[u8]) {
@@ -119,7 +120,59 @@ fn assert_fully_funded_waveform_completes_exactly(pic: &PocketIc, wasm: &[u8]) {
     );
 }
 
-fn assert_trial_window_cannot_burn_a_later_step(pic: &PocketIc, wasm: &[u8]) {
+fn assert_partially_funded_waveform_stops_at_balance_limit(pic: &PocketIc, wasm: &[u8]) {
+    let canister_id = install(pic, wasm, 2_000 * BILLION);
+    let prepared = summary(pic, canister_id);
+    let target_balance = prepared.required_cycles_to_arm + 50_000 * BILLION;
+    pic.add_cycles(
+        canister_id,
+        target_balance - prepared.current_balance_cycles,
+    );
+    let chart_start_at_ns = aligned_chart_start(pic, &prepared);
+    let armed = command(
+        pic,
+        canister_id,
+        BurnerCommand::Arm {
+            authorization_digest: prepared.authorization_digest,
+            chart_start_at_ns,
+        },
+    )
+    .expect("partial waveform fixture should arm");
+    let authorized = command(
+        pic,
+        canister_id,
+        BurnerCommand::AuthorizeWaveform {
+            authorization_digest: armed.authorization_digest.clone(),
+        },
+    )
+    .expect("balance covering the pre-roll and first waveform pulse should authorize");
+    assert!(authorized.waveform_authorized);
+    set_time_ns(
+        pic,
+        armed
+            .schedule_start_at_ns
+            .expect("armed run should expose schedule start"),
+    );
+
+    for step in 0..(armed.pre_roll_step_count + 10) {
+        if step > 0 {
+            pic.advance_time(Duration::from_secs(armed.control_step_seconds));
+        }
+        pic.tick();
+    }
+
+    let stopped = summary(pic, canister_id);
+    assert_eq!(stopped.phase, RunPhase::Failed);
+    assert_eq!(
+        stopped.terminal_reason,
+        Some(TerminalReason::InsufficientBalance)
+    );
+    assert!(stopped.receipt_count > armed.pre_roll_step_count);
+    assert!(stopped.receipt_count < armed.total_step_count);
+    assert!(stopped.current_balance_cycles >= stopped.minimum_retained_cycles);
+}
+
+fn assert_unauthorized_trial_window_cannot_burn_a_waveform_step(pic: &PocketIc, wasm: &[u8]) {
     let canister_id = install(pic, wasm, 2_000 * BILLION);
     let prepared = summary(pic, canister_id);
     let target_balance = prepared.required_cycles_to_arm + 100 * BILLION;

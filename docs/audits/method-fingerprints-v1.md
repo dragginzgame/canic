@@ -35,7 +35,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-COMPLEXITY-001` | `2` | `76bb53a536f252348567d32fd0779a40347e54c254c5fd726207253dcd069fce` | `docs/audits/recurring/system/complexity-accretion.md` |
 | `CANIC-DEPENDENCY-001` | `2` | `ad7b459667545ec5b3adfd33a614803e2c11fa77a28af873392a1d3344333f6f` | `docs/audits/recurring/system/dependency-hygiene.md` |
 | `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` |
-| `CANIC-INSTRUCTION-001` | `3` | `8703ef62ed315bbe0fe73f869c9f6934dfb1b9e08735ebe3c0f61fec47fa9d3e` | `docs/audits/recurring/system/instruction-footprint.md` |
+| `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` |
 | `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
 | `CANIC-STRUCTURE-001` | `1` | `ca370a2c910c4d9d3755af74099c6d5715086d8b1ff226c29a40c77c5ee9f58e` | `docs/audits/recurring/system/module-structure.md` |
 | `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` |

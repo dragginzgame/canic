@@ -45,7 +45,7 @@ fn is_registry_auth_scenario(scenario: &AuditScenario) -> bool {
         scenario.key,
         "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
             | "issuer:canic_prepare_delegated_token:active-proof"
-            | "verifier:verifier_verify_token:valid-delegated-token"
+            | "issuer_verifier:issuer_verify_token:valid-delegated-token"
     )
 }
 
@@ -104,7 +104,7 @@ fn prepare_registry_auth_scenario(
                 delegated_token: None,
             }
         }
-        "verifier:verifier_verify_token:valid-delegated-token" => {
+        "issuer_verifier:issuer_verify_token:valid-delegated-token" => {
             provision_delegation_proof(setup.pic(), setup.root, setup.issuer.canister_id);
             let token = issue_delegated_token_from_active_proof(
                 setup.pic(),
@@ -146,7 +146,7 @@ fn execute_registry_auth_scenario(
         "issuer:canic_prepare_delegated_token:active-proof" => {
             execute_delegated_token_prepare(setup.pic(), prepared, &setup.verifier.role);
         }
-        "verifier:verifier_verify_token:valid-delegated-token" => {
+        "issuer_verifier:issuer_verify_token:valid-delegated-token" => {
             execute_verifier_auth_scenario(setup.pic(), prepared.target_pid, prepared);
         }
         other => panic!("unsupported Registry-bound auth audit scenario: {other}"),
@@ -398,7 +398,7 @@ fn execute_delegated_token_prepare(
     response.expect("delegated token prepare application failed");
 }
 
-// Execute the verifier-side delegated token confirmation scenario.
+// Execute delegated-token confirmation through the second issuer Component.
 fn execute_verifier_auth_scenario(
     pic: &PocketIc,
     target_pid: Principal,
@@ -412,10 +412,10 @@ fn execute_verifier_auth_scenario(
         .clone()
         .expect("verifier auth audit scenario must issue a delegated token");
     let response: Result<Result<(), Error>, _> =
-        pic.update_candid_as(target_pid, caller, "verifier_verify_token", (token,));
+        pic.update_candid_as(target_pid, caller, "issuer_verify_token", (token,));
     response
-        .expect("verifier_verify_token transport failed")
-        .expect("verifier_verify_token application failed");
+        .expect("issuer_verify_token transport failed")
+        .expect("issuer_verify_token application failed");
 }
 
 fn upsert_delegation_issuer(

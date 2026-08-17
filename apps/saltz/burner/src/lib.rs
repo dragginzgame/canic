@@ -407,11 +407,11 @@ fn authorize_waveform(authorization_digest: &[u8]) -> Result<(), BurnerError> {
         return Ok(());
     }
 
-    let remaining_cycles = remaining_burn_cycles(next_step_index).ok_or(BurnerError::Rejected {
-        reason: RejectionReason::Timer,
-    })?;
-    // The externally funded allowance absorbs this message's transient cycle reservation.
-    let required_cycles = remaining_cycles
+    let minimum_authorized_cycles =
+        minimum_cycles_to_authorize(next_step_index).ok_or(BurnerError::Rejected {
+            reason: RejectionReason::Timer,
+        })?;
+    let required_cycles = minimum_authorized_cycles
         .checked_add(plan::MIN_RETAINED_CYCLES)
         .ok_or(BurnerError::Rejected {
             reason: RejectionReason::Timer,
@@ -433,6 +433,16 @@ fn authorize_waveform(authorization_digest: &[u8]) -> Result<(), BurnerError> {
         run.waveform_authorized = true;
     });
     Ok(())
+}
+
+fn minimum_cycles_to_authorize(next_step_index: u32) -> Option<u128> {
+    let start = usize::try_from(next_step_index).ok()?;
+    let first_waveform = usize::try_from(plan::PRE_ROLL_STEP_COUNT).ok()?;
+    let end = start.max(first_waveform);
+    plan::BURN_CYCLES
+        .get(start..=end)?
+        .iter()
+        .try_fold(0_u128, |sum, amount| sum.checked_add(*amount))
 }
 
 fn abort() -> Result<(), BurnerError> {
@@ -611,14 +621,6 @@ const fn required_cycles_to_arm() -> u128 {
 const fn required_balance_before_burn(burn_cycles: u128) -> Option<u128> {
     // Embedded burn allocation is separate; ordinary execution may consume the allowance.
     burn_cycles.checked_add(plan::MIN_RETAINED_CYCLES)
-}
-
-fn remaining_burn_cycles(next_step_index: u32) -> Option<u128> {
-    let start = usize::try_from(next_step_index).ok()?;
-    plan::BURN_CYCLES
-        .get(start..)?
-        .iter()
-        .try_fold(0_u128, |sum, amount| sum.checked_add(*amount))
 }
 
 const fn total_step_count() -> u32 {
