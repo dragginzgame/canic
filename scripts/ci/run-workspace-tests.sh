@@ -9,11 +9,12 @@ SUMMARY_DURATIONS=()
 SUMMARY_KINDS=()
 HEAVY_BUILD_TARGETS_USED=0
 PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
+STEP_SUMMARY_INITIALIZED=0
 
 case "$MODE" in
-    fast | full) ;;
+    fast | full | ordinary | pocketic) ;;
     *)
-        echo "usage: $0 <fast|full>" >&2
+        echo "usage: $0 <fast|full|ordinary|pocketic>" >&2
         exit 2
         ;;
 esac
@@ -39,6 +40,28 @@ record_summary() {
     SUMMARY_KINDS+=("$3")
 }
 
+append_step_summary() {
+    local execution="$1"
+    local elapsed="$2"
+    local label="$3"
+    local result="$4"
+
+    if [[ "$PLAN_ONLY" -eq 1 || -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
+        return
+    fi
+    if [[ "$STEP_SUMMARY_INITIALIZED" -eq 0 ]]; then
+        {
+            echo "### Workspace test timing"
+            echo
+            echo "| Kind | Elapsed | Result | Suite |"
+            echo "| --- | ---: | --- | --- |"
+        } >>"$GITHUB_STEP_SUMMARY"
+        STEP_SUMMARY_INITIALIZED=1
+    fi
+    printf '| `%s` | %s | %s | %s |\n' \
+        "$execution" "$elapsed" "$result" "$label" >>"$GITHUB_STEP_SUMMARY"
+}
+
 print_summary() {
     local count="${#SUMMARY_LABELS[@]}"
     if [[ "$count" -eq 0 ]]; then
@@ -57,6 +80,7 @@ print_summary() {
             "${SUMMARY_DURATIONS[$i]}" \
             "${SUMMARY_LABELS[$i]}"
     done
+
 }
 
 run_test() {
@@ -77,12 +101,13 @@ run_test() {
         return
     fi
     local started_at="$SECONDS"
+    local status=0
     case "$execution" in
         parallel)
-            cargo test --locked "$@" -- --nocapture
+            cargo test --locked "$@" -- --nocapture || status=$?
             ;;
         pocketic-serial)
-            cargo test --locked "$@" -- --test-threads=1 --nocapture
+            cargo test --locked "$@" -- --test-threads=1 --nocapture || status=$?
             ;;
         *)
             echo "unknown test execution class: $execution" >&2
@@ -91,8 +116,15 @@ run_test() {
     esac
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
-    echo "==> $label done in $elapsed"
     record_summary "$label" "$elapsed" "$execution"
+    if [[ "$status" -eq 0 ]]; then
+        echo "==> $label done in $elapsed"
+        append_step_summary "$execution" "$elapsed" "$label" "PASS"
+        return
+    fi
+    echo "==> $label failed in $elapsed (exit $status)" >&2
+    append_step_summary "$execution" "$elapsed" "$label" "FAIL ($status)"
+    return "$status"
 }
 
 run_parallel_test() {
@@ -203,7 +235,7 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     # Role-package contract tests inspect the Wasm graph with locked offline Cargo
     # metadata. Populate the complete locked graph once so results do not depend on
     # whether the restored Cargo cache contains every target and host/build package.
-    if [[ "$MODE" == "full" && -z "${POCKET_IC_BIN:-}" ]]; then
+    if [[ ("$MODE" == "full" || "$MODE" == "pocketic") && -z "${POCKET_IC_BIN:-}" ]]; then
         POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"
         export POCKET_IC_BIN
         echo "==> using persistent PocketIC server: $POCKET_IC_BIN"
@@ -217,16 +249,19 @@ fi
 # Run ordinary unit/lib/bin tests with libtest's default parallelism. The
 # internal harness remains separate because its library contains PocketIC
 # journeys protected by process-local fixture serialization.
-run_parallel_test \
-    "workspace parallel lib/bin tests" \
-    --workspace \
-    --lib \
-    --bins \
-    --exclude canic-testing-internal
+if [[ "$MODE" != "pocketic" ]]; then
+    run_parallel_test \
+        "workspace parallel lib/bin tests" \
+        --workspace \
+        --lib \
+        --bins \
+        --exclude canic-testing-internal
+fi
 
 if [[ "$MODE" == "fast" ]]; then
-    # The internal crate's PocketIC journeys run in the full lane. Compile its
-    # complete test harness here and retain its pure embedded-config unit proof.
+    # The internal crate's PocketIC journeys run in the dedicated PocketIC
+    # lane. Compile its complete test harness here and retain its pure
+    # embedded-config unit proof.
     run_parallel_test \
         "canic-testing-internal embedded config" \
         -p canic-testing-internal \
@@ -237,16 +272,24 @@ if [[ "$MODE" == "fast" ]]; then
     exit 0
 fi
 
-# Every checked-in top-level integration target is classified by the guarded
-# inventory. Parallel-safe targets run before expensive PocketIC work.
-run_inventory_tests "canic-cli integration tests" canic-cli parallel ordinary
-run_inventory_tests "canic-core integration tests" canic-core parallel ordinary
-run_inventory_tests \
-    "canic-testing-internal integration tests" \
-    canic-testing-internal \
-    parallel \
-    ordinary
-run_inventory_tests "canic integration tests" canic parallel ordinary
+if [[ "$MODE" != "pocketic" ]]; then
+    # Every checked-in top-level integration target is classified by the
+    # guarded inventory. Parallel-safe targets form an independently runnable
+    # CI lane before the expensive PocketIC work.
+    run_inventory_tests "canic-cli integration tests" canic-cli parallel ordinary
+    run_inventory_tests "canic-core integration tests" canic-core parallel ordinary
+    run_inventory_tests \
+        "canic-testing-internal integration tests" \
+        canic-testing-internal \
+        parallel \
+        ordinary
+    run_inventory_tests "canic integration tests" canic parallel ordinary
+
+    if [[ "$MODE" == "ordinary" ]]; then
+        print_summary
+        exit 0
+    fi
+fi
 
 # The internal library owns several PocketIC journeys in its adjacent unit
 # tests. Keep only this mixed harness serial.

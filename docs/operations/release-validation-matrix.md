@@ -72,14 +72,15 @@ The active workflow is the source of truth. Do not reproduce its step-by-step
 command inventory here. The maintained outcome categories are:
 
 - MSRV workspace checking for pull requests and `main`;
-- pinned internal-toolchain formatting, lint, default-example, layering,
+- pinned preflight, ShellCheck, formatting, lint, default-example, layering,
   feature, dependency, secret, audit, release-contract, and current-document
   checks for pull requests and `main`;
-- the classified unit/PocketIC test runner for pull requests and `main`; and
-- the locked release workspace build for version tags.
+- separately reported ordinary and ordered serial PocketIC test lanes for pull
+  requests and `main`; and
+- the locked release workspace build for a `Release ...` commit on `main`.
 
-CI also validates workflow syntax, installs declared ICP/Wasm helpers, and
-runs the pinned full-history secret scanner with fully redacted findings. The
+CI also validates workflow syntax, installs ICP/Wasm helpers only in the lane
+that exercises them, and runs the pinned full-history secret scanner with fully redacted findings. The
 release-integrity guard checks security and release outcomes without freezing
 job counts or step adjacency. Audit definitions must not claim a guard runs in
 CI unless the current workflow contains it.

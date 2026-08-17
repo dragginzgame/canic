@@ -145,6 +145,11 @@ authority. Promotion requires a concrete need and owner, accepted release
 position, complete batch plan, explicit maintainer approval and a deliberate
 index/guard update.
 
+The compact boundary governs Markdown authority documents. Reference images,
+datasets and other non-Markdown working assets inside an optional idea topic do
+not count as design authorities and must not block Canic validation merely by
+being added, removed or revised.
+
 The historical post-46 and optional-ideas collections remain bounded by their
 approved directory and file ceilings. Adding another collection or topic
 requires explicit maintainer approval and a deliberate guard update; a new

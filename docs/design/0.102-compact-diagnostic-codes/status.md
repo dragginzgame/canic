@@ -4,12 +4,12 @@ Date: 2026-08-17
 
 ## Status
 
-- State: Register, Map and the atomic Cut are complete in the untagged
-  `0.102.2` draft. The maintained model is: canisters send `u16`, runtime
-  reasons are typed and the host owns prose.
-- The same `.2` draft stages one flat `code + name` release baseline and
-  removes the archived B1 census and initial row counts from permanent test
-  authority. The baseline may move freely until `.2` ships.
+- State: published as `v0.102.2` at
+  `8cf4723cecd7579cbe3304b980c63b1bc3969d68`. Register, Map, Cut, and Clean
+  and measure are complete. The maintained model is: canisters send `u16`,
+  runtime reasons are typed and the host owns prose.
+- The release freezes the flat `code + name` identity baseline and removes the
+  archived B1 census and initial row counts from permanent test authority.
 - Release: the public wire is now exactly `Error { code: u16 }`.
   `InternalError` owns an exact registered code and its explicit public
   projection; it stores no message, class, origin or optional public DTO.
@@ -143,7 +143,7 @@ diagnostic-savings claim.
 
 ## Next Action
 
-The focused `.2` identity guard and migration-authority cleanup pass their
-targeted tests and warning-denied Clippy targets. Do not generate JSON, add
-handling metadata, restore B1 test authority or create new observability
-infrastructure. The maintainer owns full validation when publishing.
+0.102 is closed and published. Do not generate JSON, add handling metadata,
+restore B1 test authority or create new observability infrastructure. The
+authorized successor is 0.103 B1 repository evidence; it does not reopen the
+released diagnostic identities.

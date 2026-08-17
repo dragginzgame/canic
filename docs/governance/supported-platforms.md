@@ -8,13 +8,16 @@ not create a support claim.
 
 | Host environment | Native target | Canister target | Status | Evidence owner |
 | --- | --- | --- | --- | --- |
-| Ubuntu 24.04, x86_64 | `x86_64-unknown-linux-gnu` | `wasm32-unknown-unknown` | Release-supported | All four jobs in `.github/workflows/ci.yml`; RC/final gates in `docs/operations/release-validation-matrix.md`. |
+| Ubuntu 24.04, x86_64 | `x86_64-unknown-linux-gnu` | `wasm32-unknown-unknown` | Release-supported | Native lanes and the explicit serial PocketIC/Wasm lane in `.github/workflows/ci.yml`; RC/final gates in `docs/operations/release-validation-matrix.md`. |
 
 The supported cell covers the Canic CLI, host/build helpers, workspace checks,
 tests, native release packages, and IC canister Wasm production. CI selects the
 fixed `ubuntu-24.04` runner image. The Rust toolchain versions, downloaded tool
 versions, and archive digests are fixed by the workflow and
 `tool-versions.env`.
+The MSRV, ordinary-check and release-build lanes are native-target evidence.
+Installing a Wasm target does not itself constitute Canister evidence; the
+PocketIC lane owns CI's Wasm compilation and execution evidence.
 
 ## Install-Capable But Not Release-Supported
 

@@ -1,0 +1,5 @@
+profile	sha256	total	canic_owned	external_standard	application_owned
+fleet-subnet-root	a99a02931896a3fe5907cb854657d6cb3da5f5839c2208577eabb7fed574033d	124	117	1	6
+managed-auth	c023d9c56a4f856742ca06a8bce7da70423df62f0b12ebe5434923fc697d2635	34	23	1	10
+fleet-coordinator	e6bdf58478929c1a2599c3284c33f81d646efd60cdf6c387ea364f207ff572bd	24	24	0	0
+wasm-store	4c053e03ccce23d49c7dbc4ec307a0f22ed2fdffe80329cd0f7dd7c3c669810f	25	24	1	0

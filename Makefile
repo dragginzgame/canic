@@ -1,14 +1,14 @@
 .PHONY: help version tags patch minor major \
         release-patch release-minor release-major \
-        release-stage release-commit release-push release-cadence package publish \
+        release-stage release-candidate release-commit release-push release-cadence package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         check-invariants control-plane-feature-gate \
-        dependency-risk-gate gitleaks-scan \
+        dependency-risk-gate gitleaks-scan shellcheck \
         install install-dev install-hooks update-dev test-fleet-install \
-        ensure-clean test-unit test-unit-fast workspace-test-inventory-gate \
+        ensure-clean test-unit test-unit-fast test-ordinary test-pocketic workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
         test-canisters cloc
 
@@ -49,6 +49,7 @@ help:
 	@echo "  release-minor    Confirm, bump, stage, commit, tag, and push a minor release"
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
+	@echo "  release-candidate Verify post-bump package-version and lock consistency"
 	@echo "  release-commit   Commit and tag the staged release"
 	@echo "  release-push     Atomically push the verified release commit and tag"
 	@echo "  release-cadence  Report the current minor's advisory release-batch count"
@@ -76,6 +77,7 @@ help:
 	@echo "  clean            Clean Cargo artifacts; each test invocation cleans its own scratch"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
 	@echo "  gitleaks-scan     Scan complete repository history with pinned Gitleaks"
+	@echo "  shellcheck        Lint repository shell automation with pinned ShellCheck"
 	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
 	@echo ""
 	@echo "Utilities:"
@@ -179,8 +181,12 @@ release-stage:
 	git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
 		scripts/ci/sync-release-surface-version.sh $$(git ls-files -m -- '*/Cargo.toml' || true)
 
+release-candidate:
+	bash scripts/ci/check-release-candidate.sh
+
 release-commit:
 	@scripts/ci/check-release-index.sh
+	@$(MAKE) --no-print-directory release-candidate
 	@version="$$(cargo get workspace.package.version)"; \
 	if git rev-parse "v$$version" >/dev/null 2>&1; then \
 		echo "❌ Tag v$$version already exists. Aborting." >&2; \
@@ -233,6 +239,7 @@ validate:
 	+@$(MAKE) --no-print-directory check-invariants
 	+@$(MAKE) --no-print-directory dependency-risk-gate
 	+@$(MAKE) --no-print-directory gitleaks-scan
+	+@$(MAKE) --no-print-directory shellcheck
 	+@$(MAKE) --no-print-directory control-plane-feature-gate
 	+@$(MAKE) --no-print-directory check
 	+@$(MAKE) --no-print-directory clippy
@@ -256,6 +263,10 @@ dependency-risk-gate:
 gitleaks-scan:
 	GITLEAKS_BIN="$(GITLEAKS_INSTALL_DIR)/gitleaks" bash scripts/ci/run-secret-scan.sh
 
+shellcheck:
+	"$(SHELLCHECK_INSTALL_DIR)/shellcheck" --exclude=SC2001,SC2016 \
+		scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit
+
 control-plane-feature-gate:
 	bash scripts/ci/check-control-plane-feature-matrix.sh
 
@@ -275,6 +286,14 @@ workspace-test-inventory-gate:
 test-unit:
 	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
 		bash scripts/ci/run-workspace-tests.sh full
+
+test-ordinary:
+	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+		bash scripts/ci/run-workspace-tests.sh ordinary
+
+test-pocketic:
+	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
+		bash scripts/ci/run-workspace-tests.sh pocketic
 
 test-unit-fast:
 	CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-with-test-scratch.sh \
