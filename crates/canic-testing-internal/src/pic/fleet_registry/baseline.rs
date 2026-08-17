@@ -618,6 +618,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one PocketIC journey verifies bootstrap, replay, and exact Store reverification"
+    )]
     fn prepared_root_bootstraps_and_reverifies_its_exact_local_store() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let root_wasm = build_test_root_wasm();
@@ -920,7 +924,8 @@ mod tests {
     #[test]
     #[expect(
         clippy::significant_drop_tightening,
-        reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
+        clippy::too_many_lines,
+        reason = "the pooled Fleet fixture lease and complete autonomous deletion journey stay together"
     )]
     fn restored_root_preserves_its_inventory_but_cannot_allocate() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
