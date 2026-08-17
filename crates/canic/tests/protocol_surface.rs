@@ -51,7 +51,7 @@ use canic::{
         ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
     },
     dto::memory::MemoryLedgerResponse,
-    dto::rpc::Response as RootRpcResponse,
+    dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse, Response as RootRpcResponse},
     dto::runtime::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
         RuntimeFieldVisibility,
@@ -142,6 +142,65 @@ fn public_error_contract_is_the_compact_nat16_hard_cut() {
             "checked-in service DID lacks the compact Error shape in {relative_path}"
         );
     }
+}
+
+#[test]
+fn cycles_preflight_contract_preserves_caller_continuation_values() {
+    for response in [
+        CyclesResponse::PreflightRejected(
+            CyclesFundingPreflightResponse::ParentFundingUnavailable {
+                approved_cycles: 123,
+            },
+        ),
+        CyclesResponse::PreflightRejected(CyclesFundingPreflightResponse::ChildBudgetExhausted {
+            remaining_child_budget: 456,
+            max_per_child: 789,
+        }),
+        CyclesResponse::PreflightRejected(CyclesFundingPreflightResponse::CooldownActive {
+            retry_after_secs: 30,
+        }),
+        CyclesResponse::Transferred {
+            cycles_transferred: 100,
+        },
+    ] {
+        assert_candid_roundtrip(response);
+    }
+
+    let response_env = candid_type_env::<CyclesResponse>();
+    for field in [
+        "approved_cycles : nat",
+        "remaining_child_budget : nat",
+        "max_per_child : nat",
+        "retry_after_secs : nat64",
+        "cycles_transferred : nat",
+    ] {
+        assert!(
+            response_env.contains(field),
+            "cycles response omits caller-required field {field}:\n{response_env}"
+        );
+    }
+    assert!(
+        !response_env.contains("available_cycles"),
+        "cycles response must not expose the parent balance:\n{response_env}"
+    );
+
+    let relative_path = "crates/canic-wasm-store/wasm_store.did";
+    let did = read_text(&workspace_root().join(relative_path));
+    for field in [
+        "approved_cycles : nat",
+        "remaining_child_budget : nat",
+        "max_per_child : nat",
+        "retry_after_secs : nat64",
+    ] {
+        assert!(
+            did.contains(field),
+            "checked-in service DID omits {field} in {relative_path}"
+        );
+    }
+    assert!(
+        !did.contains("type CyclesResponse = record { cycles_transferred : nat };"),
+        "checked-in service DID retains the pre-closeout cycles record in {relative_path}"
+    );
 }
 
 #[test]
@@ -309,14 +368,16 @@ fn wasm_store_canonical_did_parses() {
         "canonical Wasm-store DID must expose the exact FleetKey member names"
     );
     assert!(
-        did.contains("type CanisterInitAuthority = variant")
-            && did.contains("authority : CanisterInitAuthority;")
+        did.contains("type FleetSubnetWasmStoreInitArgs = record")
+            && did.contains("authority : FleetSubnetWasmStoreAuthority;")
+            && did.contains("  canic_fleet_subnet_wasm_store_authority : () -> (")
             && did.contains(
                 "type StateSnapshotInput = record { fleet_state : opt FleetStateInput };"
             )
+            && !did.contains("type CanisterInitAuthority = variant")
             && !did.contains("FleetDirectoryInput")
             && !did.contains("fleet_directory"),
-        "canonical Wasm-store DID must expose current managed init and state-cascade authority"
+        "canonical Wasm-store DID must expose its exact sibling authority and state-cascade contract"
     );
     let (env, actor) = CandidSource::Text(&did)
         .load()

@@ -8,6 +8,10 @@ Date: 2026-08-17
   `8cf4723cecd7579cbe3304b980c63b1bc3969d68`. Register, Map, Cut, and Clean
   and measure are complete. The maintained model is: canisters send `u16`,
   runtime reasons are typed and the host owns prose.
+- Closeout correction: active after the immutable release audit found four
+  caller-continuation values still trapped in local funding errors, a mutable
+  identity snapshot and a central host decoder that rendered only `E<number>`.
+  The bounded correction is implemented in the open batch before 0.103 B2.
 - The release freezes the flat `code + name` identity baseline and removes the
   archived B1 census and initial row counts from permanent test authority.
 - Release: the public wire is now exactly `Error { code: u16 }`.
@@ -124,8 +128,8 @@ suites during focused 0.102 development.
 
 For the simplified contract, targeted checks must cover only:
 
-- unique nonzero reason rows and no reuse relative to the latest released
-  ledger;
+- unique nonzero reason rows and no reuse relative to the reason ledger read
+  directly from the exact immutable latest-release commit;
 - generated runtime-constant and host-catalogue drift;
 - raw decoding/forwarding and registered producer construction boundaries;
 - typed reason mappings and explicit public projection;
@@ -133,7 +137,7 @@ For the simplified contract, targeted checks must cover only:
 - current encoding/lifecycle behavior for stable records actually changed; and
 - representative release-Wasm absence plus closeout measurement.
 
-The targeted [closeout Wasm evidence](../../audits/working/0.102-diagnostic-inventory/inventory.md#targeted-0102-closeout)
+The targeted [closeout Wasm evidence](../../audits/working/0.102-diagnostic-inventory/inventory.md#published-v01022-verification)
 builds a representative Component, Fleet Subnet Root, Fleet Coordinator and
 Wasm Store through the canonical release builder. All four data sections are
 smaller than the retained baseline and bounded scans find no host catalogue or
@@ -141,9 +145,16 @@ B1 register material. Root is smaller overall; the other three roles grow
 across the non-isolated release-line comparison, so 0.102 makes no causal
 diagnostic-savings claim.
 
+The bounded post-tag correction is covered by focused request-cycles policy,
+replay, Candid round-trip and canonical Store-declaration checks; exact release
+ledger transition checks; central host and CLI rendering tests; canonical
+Coordinator/Store builds; and warning-denied checks for the changed packages.
+Those checks pass without rerunning the broad workspace or PocketIC suites.
+
 ## Next Action
 
-0.102 is closed and published. Do not generate JSON, add handling metadata,
+Publish the bounded closeout correction, then re-anchor 0.103 B1 to the
+corrected public cycles response. Do not generate JSON, add handling metadata,
 restore B1 test authority or create new observability infrastructure. The
-authorized successor is 0.103 B1 repository evidence; it does not reopen the
-released diagnostic identities.
+successor remains 0.103 B1 repository evidence; it does not reopen the released
+diagnostic identities.

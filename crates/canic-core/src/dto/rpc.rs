@@ -163,11 +163,42 @@ pub struct CreateCanisterResponse {
 }
 
 //
-// CyclesResponse
-// Result of transferring cycles to a child canister
+// CyclesFundingPreflightResponse
+// Typed caller-owned context for a request rejected before any cycles transfer.
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct CyclesResponse {
-    pub cycles_transferred: u128,
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CyclesFundingPreflightResponse {
+    ChildBudgetExhausted {
+        remaining_child_budget: u128,
+        max_per_child: u128,
+    },
+    CooldownActive {
+        retry_after_secs: u64,
+    },
+    ParentFundingUnavailable {
+        approved_cycles: u128,
+    },
+}
+
+//
+// CyclesResponse
+// Typed outcome of requesting cycles from the current parent.
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CyclesResponse {
+    PreflightRejected(CyclesFundingPreflightResponse),
+    Transferred { cycles_transferred: u128 },
+}
+
+impl CyclesResponse {
+    /// Return the transferred amount only for a completed funding effect.
+    #[must_use]
+    pub const fn cycles_transferred(self) -> Option<u128> {
+        match self {
+            Self::Transferred { cycles_transferred } => Some(cycles_transferred),
+            Self::PreflightRejected(_) => None,
+        }
+    }
 }

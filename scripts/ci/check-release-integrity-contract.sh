@@ -23,8 +23,11 @@ DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
+CONFIRM_VERSION_BUMP="$ROOT/scripts/ci/confirm-version-bump.sh"
 RELEASE_CANDIDATE="$ROOT/scripts/ci/check-release-candidate.sh"
 RELEASE_CADENCE="$ROOT/scripts/dev/report-release-cadence.sh"
+VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
+PUBLISH_WORKSPACE="$ROOT/scripts/ci/publish-workspace.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
@@ -48,7 +51,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -87,16 +90,18 @@ fi
 rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound ic-wasm installer"
 for single_use_tool in \
+    'cargo install cargo-get' \
     'cargo install candid-extractor' \
     'bash scripts/ci/install-icp-cli.sh' \
     'bash scripts/ci/install-ic-wasm.sh' \
     'rustup target add'; do
     [ "$(rg -c -F "$single_use_tool" "$CI")" -eq 1 ] ||
-        fail "CI must install $single_use_tool only in its PocketIC/Wasm lane"
+        fail "CI must install $single_use_tool exactly once in its owning lane"
 done
-if rg -F 'cargo install cargo-get' "$CI" >/dev/null; then
-    fail "CI installs the maintainer-only cargo-get release helper"
-fi
+rg -F 'cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked' "$CI" >/dev/null ||
+    fail "CI does not install the exact pinned cargo-get version"
+rg -F 'cargo get --version' "$CI" >/dev/null ||
+    fail "CI does not verify the installed cargo-get version"
 rg -F 'run: bash scripts/ci/check-release-integrity-contract.sh' "$CI" >/dev/null ||
     fail "release integrity guard is not active in CI"
 rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
@@ -251,6 +256,18 @@ rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
 rg -F 'cargo metadata --locked --offline --format-version 1 --no-deps' "$RELEASE_CANDIDATE" >/dev/null ||
     fail "post-bump release candidate does not verify locked offline metadata"
+for version_consumer in \
+    "$MAKEFILE" \
+    "$BUMP_VERSION" \
+    "$CONFIRM_VERSION_BUMP" \
+    "$RELEASE_CANDIDATE" \
+    "$RELEASE_CADENCE" \
+    "$PUBLISH_WORKSPACE" \
+    "$RELEASE_PUSH_READY" \
+    "$RELEASE_PUSH"; do
+    rg -F 'read-workspace-version.sh' "$version_consumer" >/dev/null ||
+        fail "workspace-version consumer bypasses the canonical cargo-get reader: $version_consumer"
+done
 release_commit_recipe="$(sed -n '/^release-commit:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-candidate' <<<"$release_commit_recipe" >/dev/null ||
     fail "release commit does not verify the exact post-bump candidate"
@@ -265,9 +282,15 @@ expected_release_push_recipe=$'release-push:\n\t@bash scripts/ci/check-release-p
 [ "$release_push_recipe" = "$expected_release_push_recipe" ] ||
     fail "release push is not limited to readiness and the atomic network update"
 for release_push_script in "$RELEASE_PUSH_READY" "$RELEASE_PUSH"; do
-    rg -F 'git show HEAD:Cargo.toml' "$release_push_script" >/dev/null ||
+    rg -F 'read-workspace-version.sh' "$release_push_script" >/dev/null ||
+        fail "release push does not use the canonical workspace-version reader"
+    rg -F -- '--committed' "$release_push_script" >/dev/null ||
         fail "release push does not derive its version from committed HEAD"
 done
+rg -F 'cargo get --entry "$entry" workspace.package.version' "$VERSION_READER" >/dev/null ||
+    fail "workspace-version reader does not use cargo-get"
+rg -F 'git show HEAD:Cargo.toml' "$VERSION_READER" >/dev/null ||
+    fail "workspace-version reader cannot inspect committed HEAD"
 if rg -F 'git status --porcelain' "$RELEASE_PUSH_READY" >/dev/null; then
     fail "release push still rejects unrelated local worktree or index changes"
 fi
@@ -611,7 +634,7 @@ wait "$foreign_server_pid" 2>/dev/null || :
 release_push_fixture="$tmp_dir/release-push"
 release_push_bin="$release_push_fixture/bin"
 mkdir -p "$release_push_fixture/scripts/ci" "$release_push_bin"
-cp "$RELEASE_PUSH" "$release_push_fixture/scripts/ci/"
+cp "$RELEASE_PUSH" "$VERSION_READER" "$release_push_fixture/scripts/ci/"
 printf '%s\n' \
     '[workspace.package]' \
     'version = "9.9.9"' >"$release_push_fixture/Cargo.toml"
@@ -727,7 +750,7 @@ fi
 rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
     fail "checksum mismatch did not preserve its deterministic cause"
 
-bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$RELEASE_CANDIDATE" "$DEV_INSTALL" "$ICP_UPDATE"
+bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$RELEASE_CANDIDATE" "$VERSION_READER" "$DEV_INSTALL" "$ICP_UPDATE"
 bash "$POCKET_IC_ALIGNMENT" >/dev/null
 
 echo "release integrity contract guard passed ($external_action_count immutable Actions)"

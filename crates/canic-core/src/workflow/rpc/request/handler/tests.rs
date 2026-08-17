@@ -803,11 +803,55 @@ fn root_cycles_funding_uses_child_role_policy_without_a_component_spec() {
         metadata: Some(meta(24, secs_to_ns(60))),
     };
 
-    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req, &authority)
-        .expect_err("configured child budget must deny");
+    let outcome = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req, &authority)
+        .expect("configured child budget is a typed preflight outcome");
     assert_eq!(
-        err.public_error().code(),
-        crate::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+        outcome,
+        nonroot_cycles::CyclesAuthorization::Preflight(
+            crate::dto::rpc::CyclesFundingPreflightResponse::ChildBudgetExhausted {
+                remaining_child_budget: 0,
+                max_per_child: 30,
+            },
+        )
+    );
+}
+
+#[test]
+fn cycles_funding_preflight_preserves_all_caller_continuation_values() {
+    assert_eq!(
+        nonroot_cycles::parent_funding_preflight(50, 49),
+        Some(
+            crate::dto::rpc::CyclesFundingPreflightResponse::ParentFundingUnavailable {
+                approved_cycles: 50,
+            },
+        )
+    );
+    assert_eq!(nonroot_cycles::parent_funding_preflight(50, 50), None);
+
+    let budget = nonroot_cycles::funding_policy_preflight(
+        crate::domain::policy::pure::cycles_funding::FundingPolicyViolation::MaxPerChild {
+            max_per_child: 100,
+            remaining_budget: 7,
+        },
+    );
+    assert_eq!(
+        budget,
+        crate::dto::rpc::CyclesFundingPreflightResponse::ChildBudgetExhausted {
+            remaining_child_budget: 7,
+            max_per_child: 100,
+        }
+    );
+
+    let cooldown = nonroot_cycles::funding_policy_preflight(
+        crate::domain::policy::pure::cycles_funding::FundingPolicyViolation::CooldownActive {
+            retry_after_secs: 13,
+        },
+    );
+    assert_eq!(
+        cooldown,
+        crate::dto::rpc::CyclesFundingPreflightResponse::CooldownActive {
+            retry_after_secs: 13,
+        }
     );
 }
 
@@ -1125,7 +1169,7 @@ fn check_replay_rejects_expired_entry() {
     let replay_input = capability.replay_input().expect("metadata");
     let payload_hash = replay_input.payload_hash;
     let request_id = replay_input.metadata.request_id;
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse {
+    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
         cycles_transferred: 500,
     }))
     .expect("encode");
@@ -1164,7 +1208,7 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
 
-    let response = Response::Cycles(CyclesResponse {
+    let response = Response::Cycles(CyclesResponse::Transferred {
         cycles_transferred: 77,
     });
     replay::stage_response(&pending, &response).expect("stage response");
@@ -1173,7 +1217,7 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
     let preflight = RootResponseWorkflow::check_replay(&ctx, &capability).expect("must cache-hit");
     match preflight {
         replay::ReplayPreflight::Cached(Response::Cycles(response)) => {
-            assert_eq!(response.cycles_transferred, 77);
+            assert_eq!(response.cycles_transferred(), Some(77));
         }
         replay::ReplayPreflight::Cached(other) => {
             panic!("expected cached cycles response, got: {other:?}");
@@ -1351,7 +1395,7 @@ fn request_cycles_retry_finishes_cost_settlement_without_reexecuting_deposit() {
         .expect("mark costed cycles effect");
     replay::stage_response(
         &pending,
-        &Response::Cycles(CyclesResponse {
+        &Response::Cycles(CyclesResponse::Transferred {
             cycles_transferred: 77,
         }),
     )
@@ -1363,7 +1407,7 @@ fn request_cycles_retry_finishes_cost_settlement_without_reexecuting_deposit() {
         .expect("identical retry should finish accounting");
     assert!(matches!(
         recovered,
-        replay::ReplayPreflight::Cached(Response::Cycles(CyclesResponse {
+        replay::ReplayPreflight::Cached(Response::Cycles(CyclesResponse::Transferred {
             cycles_transferred: 77
         }))
     ));
@@ -1499,7 +1543,7 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
     };
     replay::stage_response(
         &pending,
-        &Response::Cycles(CyclesResponse {
+        &Response::Cycles(CyclesResponse::Transferred {
             cycles_transferred: 10,
         }),
     )
@@ -1588,7 +1632,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
 fn check_replay_rejects_when_capacity_reached() {
     ReplayReceiptOps::reset_for_tests();
 
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse {
+    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
         cycles_transferred: 1,
     }))
     .expect("encode");
@@ -1626,7 +1670,7 @@ fn check_replay_rejects_when_capacity_reached() {
 fn placement_receipt_acknowledgement_does_not_reserve_replay_capacity() {
     ReplayReceiptOps::reset_for_tests();
 
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse {
+    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
         cycles_transferred: 1,
     }))
     .expect("encode");
@@ -1657,7 +1701,7 @@ fn check_replay_rejects_when_caller_capacity_reached() {
     ReplayReceiptOps::reset_for_tests();
 
     let caller = p(9);
-    let response_bytes = encode_one(Response::Cycles(CyclesResponse {
+    let response_bytes = encode_one(Response::Cycles(CyclesResponse::Transferred {
         cycles_transferred: 1,
     }))
     .expect("encode");

@@ -18,8 +18,10 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   release: `v0.102.2` at `8cf4723cecd7579cbe3304b980c63b1bc3969d68`.
 - The published release owns the completed 161-reason register, typed mappings,
   compact public wire and flat `code + name` release baseline. B1 census/count
-  coupling is absent from permanent tests, and released `code + name`
-  identities are now immutable. Closed checklist:
+  coupling is absent from permanent tests. The open closeout-correction batch
+  makes that released baseline tamper-evident, preserves the four genuine
+  caller-continuation values and routes ordinary host failures through the
+  prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - Scheduled reserve-Fleet path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 `ic-timers` consumer hard cut](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 platform qualification](../design/0.105-fleet-estate-platform-qualification/status.md), [0.106 Coordinator-backed root funding](../design/0.106-coordinator-backed-root-funding/status.md), [0.107 reusable Fleet Subnet Canister estates](../design/0.107-fleet-subnet-canister-estates/status.md) and [0.108 Skynet T2 Fleet observatory](../design/0.108-skynet-fleet-observatory/status.md). The scheduled post-path line is [0.109 framework-neutral local application authorization](../design/0.109-framework-neutral-local-application-authorization/status.md); implementation remains held pending accepted 0.108 closeout and explicit promotion. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
@@ -29,7 +31,18 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Progress
 
-0.102 is published. B1's 2,895 labels exposed the rejected unreleased 991-row
+0.102.2 is published. Its read-only closeout audit confirmed the compact wire,
+typed runtime, host-only catalogue and Wasm boundary, then found one dynamic
+data-loss defect plus released-baseline, ordinary-rendering and release-truth
+closeout defects. The bounded correction is implemented before any 0.103 B2
+mutation: one typed cycles-funding preflight response owns the four genuine
+caller-continuation values; the other 64 provisional B1 owner proposals are
+reconciled as local typed state, caller-derived data, existing authority or
+deliberately dropped operator convenience. The release guard reads the exact
+0.102.2 reason ledger Git object, including retirement state, and the central
+host decoder now renders known diagnostics automatically.
+
+B1's 2,895 labels exposed the rejected unreleased 991-row
 tuple taxonomy. The accepted frontier is 161 registered causes and ten local
 typed families. All
 four phases—Register, Map, Cut, Clean and measure—are complete: lossless raw
@@ -99,14 +112,17 @@ ideas authorize none of these mutations.
 
 ## Validation
 
-The retained `v0.101.53` `CANIC-WASM-001/v3` baseline and focused `.2` checks
+The retained `v0.101.53` `CANIC-WASM-001/v3` baseline, exact final-tag
+`v0.102.2` artifact identities and focused correction checks
 cover ledger generation, released identities, raw/registered separation,
 projection, host lookup, compact Candid, typed mappings and generic
 current/retired catalogue invariants. Core, control-plane, host, CLI,
 Coordinator and Wasm Store targets compile. Representative `app`, Root,
 Coordinator and Store release builds pass integrity and bounded absence scans;
 all data sections shrink, but only Root shrinks overall, so no causal size claim
-is made. The complete 2026-08-16 `make validate` remains historical push
+is made. Correction-specific unit, Candid, host/CLI rendering, canonical
+Coordinator/Store build and warning-denied package checks pass. The complete
+2026-08-16 `make validate` remains historical push
 evidence and is not rerun during focused development.
 
 The open CI-reliability batch removes the contradictory tag-only green signal,
@@ -212,8 +228,10 @@ later pulses and a fully funded continuation completes all 899 receipts.
 
 ## Next Action
 
-Review the complete 0.103 B1 register and manifest. Do not mutate runtime or
-protocol surfaces until the maintainer explicitly accepts B1 and promotes B2.
+Publish the bounded 0.102 closeout correction. Then reconcile the 0.103 B1
+register against that corrected baseline. Do not
+mutate any other 0.103 runtime or protocol surface until the maintainer
+explicitly accepts the reconciled B1 register and promotes B2.
 Do not mutate runtime/protocol surfaces or promote B2 before that register is
 accepted. Do not rerun the broad census/full suite or reopen 0.102 with JSON,
 generic handling metadata, observability infrastructure, compatibility

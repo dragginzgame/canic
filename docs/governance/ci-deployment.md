@@ -140,7 +140,9 @@ leaves the version unchanged. The underlying bump script rejects direct
 invocation without the private validation marker supplied by those targets.
 The root `Cargo.toml` is the sole live workspace package-version authority;
 status and planning documents must not duplicate a version whose release-only
-commit they cannot update. After staging, `make release-commit` runs the fast
+commit they cannot update. Current and committed version queries must use the
+shared pinned `cargo-get` reader; release scripts must not maintain parallel
+manifest parsers. After staging, `make release-commit` runs the fast
 post-bump `make release-candidate` guard before committing or tagging. That
 guard verifies locked offline Cargo metadata, uniform workspace package
 versions and the installed-CLI default without repeating the already completed

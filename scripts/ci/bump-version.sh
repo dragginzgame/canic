@@ -16,9 +16,10 @@ fi
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
+VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
 
 # Current version (from [workspace.package]).
-PREV=$(cargo get workspace.package.version)
+PREV="$(bash "$VERSION_READER")"
 
 TRANSACTION_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-bump.XXXXXX")"
 BACKUP_ARCHIVE="$TRANSACTION_DIR/release-surfaces.tar"
@@ -53,7 +54,7 @@ trap 'rollback_release_surfaces 143' TERM
 cargo set-version --workspace --bump "$BUMP_TYPE" >/dev/null
 
 # New version.
-NEW=$(cargo get workspace.package.version)
+NEW="$(bash "$VERSION_READER")"
 
 if [[ "$PREV" == "$NEW" ]]; then
   finish_release_surface_transaction

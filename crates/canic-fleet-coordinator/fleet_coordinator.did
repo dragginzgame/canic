@@ -10,27 +10,27 @@ type AuthorityRestoreFenceStatusResponse = record {
 };
 // Controller-selected identity for one authority snapshot operation.
 type AuthoritySnapshotRequest = record { operation_id : blob };
-// 
+//
 // ComponentChildFundingPolicy
-// 
+//
 // Compiled child-level funding limits without configuration-only deserializers.
-// 
+//
 type ComponentChildFundingPolicy = record {
   max_per_child : nat;
   max_per_request : nat;
   cooldown_secs : nat64;
 };
-// 
+//
 // ComponentChildKind
-// 
+//
 // Lifecycle class for a managed Component child at any tree depth.
-// 
+//
 type ComponentChildKind = variant { instance; shard; replica; singleton };
-// 
+//
 // ComponentChildSpec
-// 
+//
 // One canonically ordered role permitted anywhere below a Component.
-// 
+//
 type ComponentChildSpec = record {
   kind : ComponentChildKind;
   role : text;
@@ -140,41 +140,41 @@ type ComponentGroupSpec = record {
 type ComponentGroupTopology = record {
   component_groups : vec ComponentGroupSpec;
 };
-// 
+//
 // ComponentLimits
-// 
+//
 // Explicit aggregate quotas compiled for every concrete instance of one Spec.
-// 
+//
 type ComponentLimits = record {
   maximum_descendants : nat32;
   maximum_registry_bytes : nat64;
   cycles_funding : CyclesFundingBudget;
 };
-// 
+//
 // ComponentProvisioningGrant
-// 
+//
 // Non-parent authorization for one requester Spec to create one exact peer Spec.
-// 
+//
 type ComponentProvisioningGrant = record {
   requester_component_spec : text;
   maximum_instances_per_requester_per_root : nat32;
   target_component_spec : text;
 };
-// 
+//
 // ComponentSpawnGrant
-// 
+//
 // One explicit parent-role capability to create one direct child role.
-// 
+//
 type ComponentSpawnGrant = record {
   child_role : text;
   maximum_instances_per_parent : nat32;
   parent_role : text;
 };
-// 
+//
 // ComponentSpec
-// 
+//
 // One compiled Component role, immutable Spec hash, limits, and child-role catalog.
-// 
+//
 type ComponentSpec = record {
   children : vec ComponentChildSpec;
   component_role : text;
@@ -184,31 +184,37 @@ type ComponentSpec = record {
   limits : ComponentLimits;
   maximum_fleet_instances : nat32;
 };
-// 
+//
 // ComponentSpecAdmission
-// 
+//
 // Immutable permission and concrete-instance ceiling for one Spec on one Fleet Subnet Root.
-// 
+//
 type ComponentSpecAdmission = record {
   maximum_root_instances : nat32;
   component_spec : text;
   spec_hash : blob;
 };
-// 
+//
 // ComponentTopology
-// 
+//
 // Canonically ordered Fleet Component admissions and flat potential child-role catalogs.
-// 
+//
 type ComponentTopology = record {
   provisioning_grants : vec ComponentProvisioningGrant;
   component_specs : vec ComponentSpec;
 };
-// 
+//
 // CyclesFundingBudget
-// 
+//
 // Positive aggregate cycles-funding ceiling applied over one bounded window.
-// 
+//
 type CyclesFundingBudget = record { window_secs : nat64; maximum_cycles : nat };
+//
+// Error
+//
+// Public API error payload. Only registered runtime reasons may originate a
+// value; Candid/Serde decoding may still preserve any raw `u16`.
+//
 type Error = record { code : nat16 };
 // One exact flattened Component occurrence within an independent deployment.
 type FlattenedComponentGroupDeploymentMember = record {
@@ -219,11 +225,11 @@ type FlattenedComponentGroupDeploymentMember = record {
   purpose : ComponentDeploymentPurpose;
   limits : ComponentDeploymentLimits;
 };
-// 
+//
 // FleetBinding
-// 
+//
 // Immutable binding between one installed Fleet and its source App.
-// 
+//
 type FleetBinding = record { app : text; fleet : FleetKey };
 // Exact root-local runtime-activation cursor copied from passive Coordinator status.
 type FleetComponentActivationRootProgress = record {
@@ -334,11 +340,11 @@ type FleetComponentPublicationRootProgress = record {
   fleet_subnet_root : principal;
   component_count : nat32;
 };
-// 
+//
 // FleetComponentSpecEntry
-// 
+//
 // Fleet-wide immutable Component Spec declaration projected into the Registry.
-// 
+//
 type FleetComponentSpecEntry = record {
   component_role : text;
   component_spec : text;
@@ -352,37 +358,37 @@ type FleetComponentSynchronizationRootProgress = record {
   complete : bool;
   fleet_subnet_root : principal;
 };
-// 
+//
 // FleetCoordinatorBinding
-// 
+//
 // Immutable identity and exact physical placement of one Fleet Coordinator.
-// 
+//
 type FleetCoordinatorBinding = record {
   fleet : FleetBinding;
   coordinator_subnet : principal;
   coordinator : principal;
 };
-// 
+//
 // FleetCoordinatorInitArgs
-// 
+//
 // Exact authority and compiled provisioning configuration installed into a fresh Coordinator.
-// 
+//
 type FleetCoordinatorInitArgs = record {
   component_deployment_configuration : ComponentDeploymentConfiguration;
   authority : FleetRegistryAuthority;
   configured_app : text;
 };
-// 
+//
 // FleetKey
-// 
+//
 // Complete network-qualified Fleet identity.
-// 
+//
 type FleetKey = record { fleet_id : text; canonical_network_id : text };
-// 
+//
 // FleetRegistry
-// 
+//
 // Complete canonical Fleet Registry snapshot distributed by one Coordinator.
-// 
+//
 type FleetRegistry = record {
   fleet_subnet_roots : vec FleetSubnetRootEntry;
   component_specs : vec FleetComponentSpecEntry;
@@ -390,65 +396,65 @@ type FleetRegistry = record {
   revision : nat64;
   services : vec FleetServiceBinding;
 };
-// 
+//
 // FleetRegistryActivationRequest
-// 
+//
 // Controller compare-and-commit command for the complete acknowledged `Joining` root set.
-// 
+//
 type FleetRegistryActivationRequest = record {
   expected_registry : FleetRegistryVersion;
 };
-// 
+//
 // FleetRegistryActivationResponse
-// 
+//
 // Durable response authority for one atomic all-`Active` Registry transition.
-// 
+//
 type FleetRegistryActivationResponse = record {
   version : FleetRegistryVersion;
   previous_version : FleetRegistryVersion;
 };
-// 
+//
 // FleetRegistryAuthority
-// 
+//
 // Exact Coordinator binding and reinstall-local authority epoch for one Fleet Registry.
-// 
+//
 type FleetRegistryAuthority = record {
   epoch : nat64;
   binding : FleetCoordinatorBinding;
 };
-// 
+//
 // FleetRegistryManifest
-// 
+//
 // Compact current-head evidence for one complete canonical Registry snapshot.
-// 
+//
 type FleetRegistryManifest = record {
   content_hash : blob;
   byte_length : nat64;
   authority : FleetRegistryAuthority;
   revision : nat64;
 };
-// 
+//
 // FleetRegistrySnapshotResponse
-// 
+//
 // Complete current Coordinator snapshot supplied only to one registered root.
-// 
+//
 type FleetRegistrySnapshotResponse = record {
   version : FleetRegistryVersion;
   manifest : FleetRegistryManifest;
   registry : FleetRegistry;
 };
-// 
+//
 // FleetRegistryVersion
-// 
+//
 // Compact immutable identity used by mirrors, acknowledgements, and journals.
-// 
+//
 type FleetRegistryVersion = record {
   content_hash : blob;
   authority : FleetRegistryAuthority;
   revision : nat64;
 };
 // Complete configured member set for one logical Fleet service.
-// 
+//
 // This is topology intent only. It deliberately carries no health, readiness,
 // replication progress, promotion, consistency or load-balancer eligibility.
 type FleetServiceBinding = record {
@@ -495,14 +501,14 @@ type FleetServiceTargetMode = variant {
 };
 // Canonical Fleet-service targets in raw service-ID order.
 type FleetServiceTopology = record { targets : vec FleetServiceTarget };
-// 
+//
 // FleetSubnetCanisterPoolConfig
-// 
+//
 // Immutable prepaid empty-Canister inventory policy for one Fleet Subnet Root.
-// 
+//
 type FleetSubnetCanisterPoolConfig = record {
   // Ceiling for standby and operator-imported pool assets.
-  // 
+  //
   // Recycled assets remain tracked even when their return temporarily exceeds this target.
   maximum_size : nat32;
   // Ready empty Canisters automatically maintained for the root.
@@ -510,11 +516,11 @@ type FleetSubnetCanisterPoolConfig = record {
   // Minimum retained balance required before a pool asset becomes Ready.
   canister_cycles : nat;
 };
-// 
+//
 // FleetSubnetRootBinding
-// 
+//
 // Complete immutable identity, placement, admissions, and limits of one Fleet Subnet Root.
-// 
+//
 type FleetSubnetRootBinding = record {
   placement_subnet : principal;
   component_topology_digest : blob;
@@ -612,51 +618,51 @@ type FleetSubnetRootDeletionStatusRequest = record {
   operation_id : blob;
   fleet_subnet_root : principal;
 };
-// 
+//
 // FleetSubnetRootDrainingPublicationRequest
-// 
+//
 // Controller command publishing one root's exact local draining fence to the Coordinator.
-// 
+//
 type FleetSubnetRootDrainingPublicationRequest = record {
   root_draining : FleetSubnetRootDrainingResponse;
   expected_registry : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootDrainingPublicationResponse
-// 
+//
 // Durable response authority for one root's canonical `Active -> Draining` transition.
-// 
+//
 type FleetSubnetRootDrainingPublicationResponse = record {
   root_draining : FleetSubnetRootDrainingResponse;
   version : FleetRegistryVersion;
   previous_version : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootDrainingReservationRequest
-// 
+//
 // Controller command serializing one root's Fleet-wide draining decision against placement.
-// 
+//
 type FleetSubnetRootDrainingReservationRequest = record {
   operation_id : blob;
   expected_root : FleetSubnetRootEntry;
   expected_registry : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootDrainingReservationResponse
-// 
+//
 // Durable Coordinator authority that must precede the target root's local draining fence.
-// 
+//
 type FleetSubnetRootDrainingReservationResponse = record {
   reservation_hash : blob;
   request : FleetSubnetRootDrainingReservationRequest;
   prepared_at_ns : nat64;
   coordinator : principal;
 };
-// 
+//
 // FleetSubnetRootDrainingResponse
-// 
+//
 // Durable root-local admission cutoff and exact active authority frozen at that boundary.
-// 
+//
 type FleetSubnetRootDrainingResponse = record {
   placement_subnet : principal;
   reservation_hash : blob;
@@ -673,11 +679,11 @@ type FleetSubnetRootDrainingResponse = record {
   active_registry : FleetRegistryVersion;
   fleet_subnet_root : principal;
 };
-// 
+//
 // FleetSubnetRootEntry
-// 
+//
 // One Fleet Subnet Root's immutable placement and admission facts plus lifecycle state.
-// 
+//
 type FleetSubnetRootEntry = record {
   placement_subnet : principal;
   status : FleetSubnetRootStatus;
@@ -687,11 +693,11 @@ type FleetSubnetRootEntry = record {
   component_admissions : vec ComponentSpecAdmission;
   limits : FleetSubnetRootLimits;
 };
-// 
+//
 // FleetSubnetRootFinalInventoryResponse
-// 
+//
 // Exact terminal Component history and retained write-fenced Store authority.
-// 
+//
 type FleetSubnetRootFinalInventoryResponse = record {
   placement_subnet : principal;
   next_allocation_sequence : nat64;
@@ -713,29 +719,29 @@ type FleetSubnetRootFinalInventoryResponse = record {
   wasm_store_catalog_hash : blob;
   wasm_store_occupied_bytes : nat64;
 };
-// 
+//
 // FleetSubnetRootJoinRequest
-// 
+//
 // Controller command that compare-and-commits one exact root as Registry `Joining`.
-// 
+//
 type FleetSubnetRootJoinRequest = record {
   entry : FleetSubnetRootEntry;
   expected_registry : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootJoinResponse
-// 
+//
 // Durable response receipt for one exact root's original `Joining` commit.
-// 
+//
 type FleetSubnetRootJoinResponse = record {
   entry : FleetSubnetRootEntry;
   version : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootLimits
-// 
+//
 // Immutable aggregate policy ceilings for one Fleet Subnet Root.
-// 
+//
 type FleetSubnetRootLimits = record {
   maximum_registry_bytes : nat64;
   // Maximum accepted or committed Component Group placements on this root.
@@ -751,56 +757,56 @@ type FleetSubnetRootProvisioningBatch = record {
   root : FleetSubnetRootBinding;
   active_release_set : FleetSubnetRootReleaseSet;
 };
-// 
+//
 // FleetSubnetRootReleaseSet
-// 
+//
 // Exact release-build and manifest identity admitted for one Fleet Subnet Root.
-// 
+//
 type FleetSubnetRootReleaseSet = record {
   manifest_digest : blob;
   release_build_id : text;
 };
-// 
+//
 // FleetSubnetRootRemovalPublicationRequest
-// 
+//
 // Root-authenticated command publishing one exact terminal inventory to the Coordinator.
-// 
+//
 type FleetSubnetRootRemovalPublicationRequest = record {
   final_inventory : FleetSubnetRootFinalInventoryResponse;
   expected_registry : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootRemovalPublicationResponse
-// 
+//
 // Durable response authority for one root's canonical `Draining -> Removed` transition.
-// 
+//
 type FleetSubnetRootRemovalPublicationResponse = record {
   final_inventory : FleetSubnetRootFinalInventoryResponse;
   version : FleetRegistryVersion;
   previous_version : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootSnapshotAcknowledgement
-// 
+//
 // Durable Coordinator receipt proving which root acknowledged which version.
-// 
+//
 type FleetSubnetRootSnapshotAcknowledgement = record {
   version : FleetRegistryVersion;
   fleet_subnet_root : principal;
 };
-// 
+//
 // FleetSubnetRootSnapshotAcknowledgementRequest
-// 
+//
 // Root-authenticated acknowledgement of one exact durably staged snapshot.
-// 
+//
 type FleetSubnetRootSnapshotAcknowledgementRequest = record {
   version : FleetRegistryVersion;
 };
-// 
+//
 // FleetSubnetRootStatus
-// 
+//
 // Lifecycle state of one Fleet Subnet Root in the Fleet Registry snapshot.
-// 
+//
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
 type Result = variant { Ok : AuthorityRestoreFenceStatusResponse; Err : Error };
 type Result_1 = variant {

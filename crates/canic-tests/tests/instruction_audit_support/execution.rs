@@ -485,7 +485,7 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
         .expect("fresh root cycles capability request must succeed");
     match response {
         Response::Cycles(response) => {
-            assert_eq!(response.cycles_transferred, 999);
+            assert_eq!(response.cycles_transferred(), Some(999));
         }
         other => panic!("expected cycles response, got: {other:?}"),
     }

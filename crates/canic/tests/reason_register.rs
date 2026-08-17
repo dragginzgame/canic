@@ -9,9 +9,13 @@ use std::{
     fmt::Write as _,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
-#[derive(Debug)]
+const RELEASED_BASELINE_COMMIT: &str = "8cf4723cecd7579cbe3304b980c63b1bc3969d68";
+const REASON_LEDGER_PATH: &str = "crates/canic-host/diagnostics/reasons.toml";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Reason {
     code: u16,
     name: String,
@@ -21,39 +25,20 @@ struct Reason {
     retired: bool,
 }
 
-fn released_identities() -> BTreeMap<u16, String> {
-    let source = read(&workspace_root().join("crates/canic-host/diagnostics/released.toml"));
-    let document = toml::from_str::<toml::Table>(&source).expect("valid released ledger TOML");
-    assert_eq!(
-        document.len(),
-        2,
-        "released ledger owns only its version and code/name identities"
-    );
-    let release = document
-        .get("release")
-        .and_then(toml::Value::as_str)
-        .expect("released ledger version");
+fn released_reasons() -> Vec<Reason> {
+    let object = format!("{RELEASED_BASELINE_COMMIT}:{REASON_LEDGER_PATH}");
+    let output = Command::new("git")
+        .args(["show", object.as_str()])
+        .current_dir(workspace_root())
+        .output()
+        .expect("git must be available for the repository release guard");
     assert!(
-        !release.is_empty(),
-        "released ledger version must not be empty"
+        output.status.success(),
+        "immutable diagnostic baseline {object} is unavailable: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
-
-    let mut identities = BTreeMap::new();
-    for (name, code) in document
-        .get("identity")
-        .and_then(toml::Value::as_table)
-        .expect("released identity table")
-    {
-        let code = code
-            .as_integer()
-            .and_then(|value| u16::try_from(value).ok())
-            .unwrap_or_else(|| panic!("released diagnostic {name} must have a u16 code"));
-        assert!(
-            identities.insert(code, name.clone()).is_none(),
-            "released diagnostic code E{code} must be unique"
-        );
-    }
-    identities
+    let source = String::from_utf8(output.stdout).expect("released reason ledger must be UTF-8");
+    parse_reasons(&source)
 }
 
 fn workspace_root() -> PathBuf {
@@ -70,8 +55,12 @@ fn read(path: &Path) -> String {
 }
 
 fn reasons() -> Vec<Reason> {
-    let source = read(&workspace_root().join("crates/canic-host/diagnostics/reasons.toml"));
-    let document = toml::from_str::<toml::Table>(&source).expect("valid reason ledger TOML");
+    let source = read(&workspace_root().join(REASON_LEDGER_PATH));
+    parse_reasons(&source)
+}
+
+fn parse_reasons(source: &str) -> Vec<Reason> {
+    let document = toml::from_str::<toml::Table>(source).expect("valid reason ledger TOML");
     assert_eq!(document.len(), 1, "reason ledger owns only the reason rows");
     document
         .get("reason")
@@ -187,6 +176,50 @@ fn generated_runtime_block(source: &str) -> &str {
     block
 }
 
+fn validate_released_reasons(released: &[Reason], current: &[Reason]) -> Result<(), String> {
+    let current_by_code = current
+        .iter()
+        .map(|reason| (reason.code, reason))
+        .collect::<BTreeMap<_, _>>();
+    let current_by_name = current
+        .iter()
+        .map(|reason| (reason.name.as_str(), reason))
+        .collect::<BTreeMap<_, _>>();
+
+    for released_reason in released {
+        let current_at_code = current_by_code.get(&released_reason.code).ok_or_else(|| {
+            format!(
+                "released diagnostic E{} {} was deleted",
+                released_reason.code, released_reason.name
+            )
+        })?;
+        if current_at_code.name != released_reason.name {
+            return Err(format!(
+                "released diagnostic E{} changed name from {} to {}",
+                released_reason.code, released_reason.name, current_at_code.name
+            ));
+        }
+
+        let current_at_name = current_by_name
+            .get(released_reason.name.as_str())
+            .ok_or_else(|| format!("released diagnostic {} was deleted", released_reason.name))?;
+        if current_at_name.code != released_reason.code {
+            return Err(format!(
+                "released diagnostic {} changed code from E{} to E{}",
+                released_reason.name, released_reason.code, current_at_name.code
+            ));
+        }
+        if released_reason.retired && !current_at_code.retired {
+            return Err(format!(
+                "released retired diagnostic E{} {} became active",
+                released_reason.code, released_reason.name
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 #[test]
 fn reason_ledger_is_unique_nonzero_and_sorted() {
     let reasons = reasons();
@@ -210,17 +243,60 @@ fn reason_ledger_is_unique_nonzero_and_sorted() {
 
 #[test]
 fn released_code_and_name_identities_are_preserved() {
-    let current = reasons()
-        .into_iter()
-        .map(|reason| (reason.code, reason.name))
-        .collect::<BTreeMap<_, _>>();
+    validate_released_reasons(&released_reasons(), &reasons())
+        .expect("released diagnostic identities and retirement state must be preserved");
+}
 
-    for (code, released_name) in released_identities() {
-        assert_eq!(
-            current.get(&code),
-            Some(&released_name),
-            "released diagnostic E{code} must retain its name"
+#[test]
+fn released_identity_guard_rejects_rebinding_deletion_and_retirement_reversal() {
+    let released = vec![
+        fixture_reason(1, "ONE", false),
+        fixture_reason(2, "TWO", true),
+    ];
+    let valid = vec![
+        Reason {
+            origin: "reviewed-origin".to_string(),
+            summary: "Updated summary.".to_string(),
+            guidance: Some("Updated guidance.".to_string()),
+            retired: true,
+            ..fixture_reason(1, "ONE", false)
+        },
+        fixture_reason(2, "TWO", true),
+        fixture_reason(3, "THREE", false),
+    ];
+    validate_released_reasons(&released, &valid)
+        .expect("presentation changes, retirement, and additions are allowed");
+
+    for invalid in [
+        vec![
+            fixture_reason(1, "RENAMED", false),
+            fixture_reason(2, "TWO", true),
+        ],
+        vec![
+            fixture_reason(2, "ONE", false),
+            fixture_reason(3, "TWO", true),
+        ],
+        vec![fixture_reason(1, "ONE", false)],
+        vec![
+            fixture_reason(1, "ONE", false),
+            fixture_reason(2, "TWO", false),
+        ],
+    ] {
+        assert!(
+            validate_released_reasons(&released, &invalid).is_err(),
+            "invalid released-identity transition was accepted: {invalid:?}"
         );
+    }
+}
+
+fn fixture_reason(code: u16, name: &str, retired: bool) -> Reason {
+    Reason {
+        code,
+        name: name.to_string(),
+        origin: "origin".to_string(),
+        summary: "Summary.".to_string(),
+        guidance: None,
+        retired,
     }
 }
 

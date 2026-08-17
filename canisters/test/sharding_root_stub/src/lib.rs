@@ -74,7 +74,7 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
             }))
         }
         Request::RecycleCanister(_) => Ok(Response::RecycleCanister),
-        Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse {
+        Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse::Transferred {
             cycles_transferred: req.cycles,
         })),
     }

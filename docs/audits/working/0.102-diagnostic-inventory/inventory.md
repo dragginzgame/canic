@@ -592,6 +592,31 @@ independently of size. This evidence closes the 0.102 measurement requirement
 without authorizing another compaction programme; a future full
 `CANIC-WASM-001/v3` run remains maintainer-owned release validation.
 
+### Published `v0.102.2` Verification
+
+The read-only closeout audit rebuilt the immutable published tag
+`v0.102.2` / `8cf4723cecd7579cbe3304b980c63b1bc3969d68` through the same canonical
+host builder, release profile and `apps/test/canic.toml` role configuration.
+This final-tag verification supersedes the candidate artifact identities above
+without changing their qualitative conclusion.
+
+| Role | Raw Wasm | Builder gzip | SHA-256 | Functions | Data bytes | Exports |
+| --- | ---: | ---: | --- | ---: | ---: | ---: |
+| `app` | 3,121,590 | 1,027,682 | `7f7ea92b5781196697f180ea8eadbc908c4a5721b84f8fc6c207a2f5967fefe8` | 5,782 | 213,728 | 27 |
+| `root` | 7,215,346 | 2,328,463 | `ebc9bbb6fd2f6da3d253528bf56776ca3ef436267a7f8042d8f729f525b4fb73` | 11,275 | 332,636 | 127 |
+| `fleet_coordinator` | 3,517,072 | 1,109,266 | `dca72bddfe18327fd341e8338959828786473c5f8db67a6895780027628d2b31` | 5,489 | 194,828 | 29 |
+| `wasm_store` | 2,695,009 | 893,802 | `8a62532ac7978718cb069704db155d72e45989014a64a921c864ce1d76026167` | 5,337 | 190,956 | 32 |
+
+Every builder gzip decoded to the exact raw-Wasm digest. `ic-wasm 0.11.1`
+accepted every artifact, extracted Candid retained exactly
+`type Error = record { code : nat16 }`, and bounded `twiggy` inspection passed.
+Complete scans over all 161 released names and summaries plus the ledger,
+working-audit, rejected-tuple and generic-handling markers found zero retained
+matches. The final comparison remains non-isolated: all four data sections are
+smaller than the immutable `v0.101.53` baseline, Root is smaller overall and
+the other three roles are larger, so no causal diagnostic-size saving is
+claimed.
+
 ## Reproducible Discovery Commands
 
 The source census is reproduced with bounded `rg` scans over `canic-core`,

@@ -2,6 +2,8 @@
 set -euo pipefail
 
 BUMP_TYPE="${1:?usage: confirm-version-bump.sh <minor|major>}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 
 case "$BUMP_TYPE" in
     minor | major) ;;
@@ -11,7 +13,7 @@ case "$BUMP_TYPE" in
         ;;
 esac
 
-CURRENT_VERSION="$(cargo get workspace.package.version)"
+CURRENT_VERSION="$(bash "$VERSION_READER")"
 
 cat >&2 <<MSG
 This will run make validate and bump Canic from $CURRENT_VERSION ($BUMP_TYPE).

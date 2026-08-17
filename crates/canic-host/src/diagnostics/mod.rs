@@ -153,7 +153,10 @@ pub fn lookup_diagnostic(code: DiagnosticCode) -> DiagnosticLookup<'static> {
 pub fn render_diagnostic(code: DiagnosticCode) -> String {
     match lookup_diagnostic(code) {
         DiagnosticLookup::Current(entry) => {
-            let mut rendered = format!("{} {}: {}", entry.code, entry.name, entry.summary);
+            let mut rendered = format!(
+                "{} {} (origin: {}): {}",
+                entry.code, entry.name, entry.origin, entry.summary
+            );
             if let Some(guidance) = entry.guidance {
                 rendered.push(' ');
                 rendered.push_str(guidance);

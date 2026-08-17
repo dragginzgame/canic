@@ -41,23 +41,8 @@ pub enum RpcWorkflowError {
     #[error("canister {0}'s parent was not found")]
     ParentNotFound(Principal),
 
-    #[error("insufficient funding cycles: requested={requested}, available={available}")]
-    InsufficientFundingCycles { requested: u128, available: u128 },
-
     #[error("cycles funding disabled")]
     CyclesFundingDisabled,
-
-    #[error(
-        "funding request exceeds child budget: requested={requested}, remaining_budget={remaining_budget}, max_per_child={max_per_child}"
-    )]
-    FundingRequestExceedsChildBudget {
-        requested: u128,
-        remaining_budget: u128,
-        max_per_child: u128,
-    },
-
-    #[error("funding request is in cooldown: retry_after_secs={retry_after_secs}")]
-    FundingCooldownActive { retry_after_secs: u64 },
 
     #[error("cycles funding operation already in progress for child {child}")]
     FundingOperationInProgress { child: Principal },
@@ -107,20 +92,11 @@ impl From<RpcWorkflowError> for InternalError {
             RpcWorkflowError::NotChildOfCaller(_, _) => {
                 Self::public(codes::AUTHORITY_INVALID_STATE)
             }
-            RpcWorkflowError::InsufficientFundingCycles { .. } => {
-                Self::public(codes::CAPACITY_INSUFFICIENT)
-            }
             RpcWorkflowError::CyclesFundingDisabled => Self::public(codes::CAPACITY_INACTIVE),
             RpcWorkflowError::MissingReplayMetadata(_) => {
                 Self::public(codes::AUTHORITY_UNAVAILABLE)
             }
-            RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
-            | RpcWorkflowError::ReplayStoreCapacityReached(_) => {
-                Self::public(codes::CAPACITY_LIMIT)
-            }
-            RpcWorkflowError::FundingCooldownActive { .. } => {
-                Self::public(codes::CAPACITY_UNEXPECTED_STATE)
-            }
+            RpcWorkflowError::ReplayStoreCapacityReached(_) => Self::public(codes::CAPACITY_LIMIT),
             RpcWorkflowError::FundingOperationInProgress { .. }
             | RpcWorkflowError::ReplayDuplicateSame(_) => Self::public(codes::REQUEST_INCOMPLETE),
             RpcWorkflowError::InvalidReplayTtl { ttl_ns: 0, .. } => {
@@ -162,17 +138,5 @@ mod tests {
         let public = internal.public_error();
 
         assert_eq!(public.code(), codes::AUTHORITY_UNAVAILABLE.raw_code());
-    }
-
-    #[test]
-    fn insufficient_funding_cycles_preserves_resource_exhaustion_cause() {
-        let internal: InternalError = RpcWorkflowError::InsufficientFundingCycles {
-            requested: 5_000,
-            available: 4_000,
-        }
-        .into();
-        let public = internal.public_error();
-
-        assert_eq!(public.code(), codes::CAPACITY_INSUFFICIENT.raw_code());
     }
 }
