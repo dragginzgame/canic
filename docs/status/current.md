@@ -14,13 +14,12 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Release
 
-- Workspace package version: `0.102.1`. Latest published release: `v0.102.1`
-  at `86763c5f16478e2e548e2059e5efaa963bf9a966`.
-- The open `0.102.2` draft owns the completed 161-reason register, typed
-  mappings, compact public wire and flat `code + name` release baseline. B1
-  census/count coupling is removed from permanent tests. All assignments remain
-  unreleased and freely changeable until `.2` ships; package/version mutation
-  remains maintainer-owned. Active checklist:
+- Workspace package-version authority is the root `Cargo.toml`. Latest published
+  release: `v0.102.2` at `8cf4723cecd7579cbe3304b980c63b1bc3969d68`.
+- The published release owns the completed 161-reason register, typed mappings,
+  compact public wire and flat `code + name` release baseline. B1 census/count
+  coupling is absent from permanent tests, and released `code + name`
+  identities are now immutable. Closed checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - Scheduled reserve-Fleet path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 `ic-timers` consumer hard cut](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 platform qualification](../design/0.105-fleet-estate-platform-qualification/status.md), [0.106 Coordinator-backed root funding](../design/0.106-coordinator-backed-root-funding/status.md), [0.107 reusable Fleet Subnet Canister estates](../design/0.107-fleet-subnet-canister-estates/status.md) and [0.108 Skynet T2 Fleet observatory](../design/0.108-skynet-fleet-observatory/status.md). The scheduled post-path line is [0.109 framework-neutral local application authorization](../design/0.109-framework-neutral-local-application-authorization/status.md); implementation remains held pending accepted 0.108 closeout and explicit promotion. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
@@ -30,18 +29,32 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Progress
 
-B1's 2,895 labels exposed the rejected unreleased 991-row tuple taxonomy. The
-accepted frontier is 161 registered causes and ten local typed families. All
+0.102 is published. B1's 2,895 labels exposed the rejected unreleased 991-row
+tuple taxonomy. The accepted frontier is 161 registered causes and ten local
+typed families. All
 four phases—Register, Map, Cut, Clean and measure—are complete: lossless raw
 codes, producer-only registered codes, `Error { code: u16 }`, code-first
 `InternalError`, and host-only prose. The flat release guard freezes only
 released `code + name`; it neither reads B1 evidence nor freezes row counts,
 and the ledger rejects fields beyond its six maintained fields.
 
-Scheduled 0.103 owns role methods and autonomous operations. Root/Coordinator
-emit two methods, managed roles at most two and Store begins with two; only
-durable async work receives operation identity. B1 evidence is approved, but
-no product mutation is promoted and B2/B3 remain held pending exact pruning.
+Scheduled 0.103 owns role methods and autonomous operations. Its B1 evidence
+is review-ready: the immutable `v0.102.2` baseline freezes 207 methods across
+representative Root/managed profiles and canonical Coordinator/Store
+interfaces, separated into 188 Canic-owned, three external-standard and 16
+fixture-owned methods. No product mutation is promoted and B2/B3 remain held
+pending explicit B1 acceptance. Endpoint
+source, authorization/payload attributes, immediate delegates and replay
+policy are frozen; existing typed config derivation remains the capability
+authority, with bounded `Overview` status selected for exact compiled
+discovery. The six-way review disposes all 188 Canic-owned appearances: 45
+role-command variants, 80 role-status variants, two Store byte lanes and 61
+private deletions. Every retained row names its exact role-specific variant,
+released Rust signature and reviewed executable-caller subset. Distinct status
+concepts stay flat rather than becoming nested family enums; remote composite
+phase observations collapse into local operation status and update-only
+canister inspection becomes an atomic Root command. DTOs, the exact pruning
+matrix, operation ownership and the no-new-timer 0.104 handoff are frozen.
 
 Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
 hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its
@@ -68,8 +81,8 @@ stay ideas.
 
 ## Current Decision
 
-Diagnostic registration is active on untagged 0.102.2. Codes identify semantic
-causes; typed callers retain handling. Only public, retrievable operator,
+Diagnostic registration shipped in `v0.102.2`. Codes identify semantic causes;
+typed callers retain handling. Only public, retrievable operator,
 durable-evidence or machine-decision boundaries qualify. Projection is explicit;
 masked reasons without an independent exact owner stay local, required dynamic
 data stays typed, and nonessential context creates no infrastructure. The 991
@@ -95,6 +108,13 @@ Coordinator and Store release builds pass integrity and bounded absence scans;
 all data sections shrink, but only Root shrinks overall, so no causal size claim
 is made. The complete 2026-08-16 `make validate` remains historical push
 evidence and is not rerun during focused development.
+
+The open CI-reliability batch removes the contradictory tag-only green signal,
+uses Cargo as the sole live package-version authority, adds a post-bump release
+candidate guard, gates expensive jobs behind preflight/security and reports
+ordinary versus serial PocketIC timing separately. Targeted actionlint,
+ShellCheck, release/current-document guards, release-flow tests and plan-only
+test-lane checks pass; the complete suite has not been rerun.
 
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
@@ -192,9 +212,12 @@ later pulses and a fully funded continuation completes all 899 receipts.
 
 ## Next Action
 
-The focused `.2` identity-guard cleanup is complete. Do not rerun the broad
-census/full suite or add JSON, generic handling metadata, observability
-infrastructure, compatibility decoding, B1 test coupling or retired 991 rows.
+Review the complete 0.103 B1 register and manifest. Do not mutate runtime or
+protocol surfaces until the maintainer explicitly accepts B1 and promotes B2.
+Do not mutate runtime/protocol surfaces or promote B2 before that register is
+accepted. Do not rerun the broad census/full suite or reopen 0.102 with JSON,
+generic handling metadata, observability infrastructure, compatibility
+decoding, B1 test coupling or retired 991 rows.
 
 For the standalone waveform idea, retain the terminal canister and its
 remaining cycles without further effects until all 26 pulse expirations are

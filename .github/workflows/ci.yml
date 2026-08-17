@@ -16,119 +16,52 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   pull_request:
 
 jobs:
-  msrv:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+  preflight:
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: ${{ env.CANIC_MSRV }}
-      - name: Install wasm target
-        shell: bash
-        run: |
-          echo "RUSTUP_TOOLCHAIN=$CANIC_MSRV" >> "$GITHUB_ENV"
-          rustup target add --toolchain "$CANIC_MSRV" wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-targets: false
-      - name: Check runner disk after Rust cache restore
-        shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV after Rust cache restore" --min-free-mib 3072
-      - name: Check workspace MSRV
-        run: cargo check --workspace --locked
-      - name: Report runner disk at MSRV finish
-        if: ${{ always() }}
-        shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV finish"
-
-  checks:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          fetch-depth: 0
-          clean: true
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
-          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
-      - name: Check runner disk after Rust cache restore
-        shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks after Rust cache restore" --min-free-mib 3072
-      - name: Install Rust helper tools
+      - name: Install source-inspection tools
         shell: bash
         run: |
           source tool-versions.env
-          cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
-          cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked
-          cargo install cargo-sort --version "$CANIC_CARGO_SORT_VERSION" --locked
-          cargo install cargo-sort-derives --version "$CANIC_CARGO_SORT_DERIVES_VERSION" --locked
-          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
-      - name: Check Rust helper tools
+          ACTIONLINT_BIN="$(bash scripts/ci/install-actionlint.sh)"
+          SHELLCHECK_BIN="$(bash scripts/ci/install-shellcheck.sh)"
+          echo "ACTIONLINT_BIN=$ACTIONLINT_BIN" >> "$GITHUB_ENV"
+          echo "SHELLCHECK_BIN=$SHELLCHECK_BIN" >> "$GITHUB_ENV"
+      - name: Check source-inspection tools
         shell: bash
         run: |
-          cargo audit --version
-          cargo get --version
-          cargo sort --version
-          cargo sort-derives --version
-          candid-extractor --version
           rg --version
-      - name: Install wasm target
-        shell: bash
-        run: |
-          echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
-          rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
-      - name: Install actionlint
-        shell: bash
-        run: |
-          BIN="$(bash scripts/ci/install-actionlint.sh)"
-          echo "ACTIONLINT_BIN=$BIN" >> "$GITHUB_ENV"
+          rg --pcre2-version
+          "$ACTIONLINT_BIN" -version
+          "$SHELLCHECK_BIN" --version
       - name: Lint GitHub Actions workflows
         shell: bash
         run: "$ACTIONLINT_BIN"
-      - name: Install Gitleaks
+      - name: Lint repository shell automation
         shell: bash
-        run: |
-          BIN="$(bash scripts/ci/install-gitleaks.sh)"
-          echo "GITLEAKS_BIN=$BIN" >> "$GITHUB_ENV"
-      - name: Scan repository history for secrets
-        shell: bash
-        run: bash scripts/ci/run-secret-scan.sh
-      - name: Check dependency risk inventory
-        shell: bash
-        run: bash scripts/ci/check-dependency-risk-inventory.sh
-      - name: Check dependency risk rejection cases
-        shell: bash
-        run: bash scripts/ci/test-dependency-risk-inventory.sh
-      - name: Install IC CLI tools
-        shell: bash
-        run: |
-          bash scripts/ci/install-icp-cli.sh
-          bash scripts/ci/install-ic-wasm.sh
-      - name: Check IC CLI tools
-        run: |
-          icp --version
-          ic-wasm --version
+        run: >-
+          "$SHELLCHECK_BIN" --exclude=SC2001,SC2016
+          scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit
       - name: Layering guards
         shell: bash
         run: bash scripts/ci/run-layering-guards.sh
       - name: Current document semantics guard
         shell: bash
         run: bash scripts/ci/check-current-document-semantics.sh
-      - name: Control-plane feature matrix
-        shell: bash
-        run: bash scripts/ci/check-control-plane-feature-matrix.sh
       - name: Blob storage inventory gate
         shell: bash
         run: bash scripts/ci/check-blob-storage-inventory-gate.sh
@@ -147,36 +80,155 @@ jobs:
       - name: Recovery runbooks guard
         shell: bash
         run: bash scripts/ci/check-recovery-runbooks.sh
-      - name: Check runner disk before Rust validation
+      - name: Workspace test inventory guard
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096
-      - run: make fmt-check
-      - run: make clippy
-      - name: Build examples (default)
-        run: cargo build -p canic --examples --locked
-      - name: Report runner disk at checks finish
-        if: ${{ always() }}
-        shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks finish"
+        run: bash scripts/ci/check-workspace-test-inventory.sh
 
-  test-unit:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+  security:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
-          clean: true
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
-      - name: Check runner disk after Rust cache restore
+      - name: Install security tools
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit after Rust cache restore" --min-free-mib 3072
-      - name: Install Rust test helper tools
+        run: |
+          source tool-versions.env
+          cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
+          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
+          GITLEAKS_BIN="$(bash scripts/ci/install-gitleaks.sh)"
+          echo "GITLEAKS_BIN=$GITLEAKS_BIN" >> "$GITHUB_ENV"
+      - name: Check security tools
+        shell: bash
+        run: |
+          cargo audit --version
+          rg --version
+          "$GITLEAKS_BIN" version
+      - name: Scan repository history for secrets
+        shell: bash
+        run: bash scripts/ci/run-secret-scan.sh
+      - name: Check dependency risk inventory
+        shell: bash
+        run: bash scripts/ci/check-dependency-risk-inventory.sh
+      - name: Check dependency risk rejection cases
+        shell: bash
+        run: bash scripts/ci/test-dependency-risk-inventory.sh
+
+  msrv:
+    needs: [preflight, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.CANIC_MSRV }}
+      - name: Select MSRV toolchain
+        shell: bash
+        run: echo "RUSTUP_TOOLCHAIN=$CANIC_MSRV" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+      - name: Check runner disk before MSRV
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV before check" --min-free-mib 3072 --summary-only
+      - name: Check workspace MSRV
+        run: cargo check --workspace --locked
+      - name: Report runner disk after MSRV failure
+        if: ${{ failure() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV failure"
+
+  checks:
+    needs: [preflight, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+      - name: Install formatting tools
+        shell: bash
+        run: |
+          source tool-versions.env
+          cargo install cargo-sort --version "$CANIC_CARGO_SORT_VERSION" --locked
+          cargo install cargo-sort-derives --version "$CANIC_CARGO_SORT_DERIVES_VERSION" --locked
+      - name: Check formatting tools
+        shell: bash
+        run: |
+          cargo sort --version
+          cargo sort-derives --version
+      - name: Check runner disk before Rust checks
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096 --summary-only
+      - name: Control-plane feature matrix
+        shell: bash
+        run: bash scripts/ci/check-control-plane-feature-matrix.sh
+      - run: make fmt-check
+      - run: make clippy
+      - name: Build examples (default)
+        run: cargo build -p canic --examples --locked
+      - name: Report runner disk after checks failure
+        if: ${{ failure() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks failure"
+
+  tests-ordinary:
+    needs: [preflight, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+      - name: Check runner disk before ordinary tests
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary tests before run" --min-free-mib 4096 --summary-only
+      - name: Run workspace ordinary tests
+        run: make test-ordinary
+      - name: Report runner disk after ordinary-test failure
+        if: ${{ failure() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary-test failure"
+
+  tests-pocketic:
+    needs: [preflight, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+      - name: Install PocketIC test helper tools
         shell: bash
         run: |
           source tool-versions.env
@@ -192,7 +244,7 @@ jobs:
         run: |
           bash scripts/ci/install-icp-cli.sh
           bash scripts/ci/install-ic-wasm.sh
-      - name: Check Rust test and IC CLI tools
+      - name: Check PocketIC test helper tools
         run: |
           candid-extractor --version
           icp --version
@@ -208,58 +260,39 @@ jobs:
         run: |
           BIN="$(bash scripts/ci/install-pocketic.sh)"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
-      - name: Check runner disk before test-unit
+      - name: Check runner disk before PocketIC tests
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit before tests" --min-free-mib 4096
-      - run: make test-unit
-      - name: Report runner disk at test-unit finish
-        if: ${{ always() }}
+        run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC tests before run" --min-free-mib 4096 --summary-only
+      - name: Run serial PocketIC tests
+        run: make test-pocketic
+      - name: Report runner disk after PocketIC-test failure
+        if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit finish"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC-test failure"
 
-  build:
-    if: startsWith(github.ref, 'refs/tags/')
+  release-build:
+    needs: [preflight, security]
+    if: >-
+      ${{ success() && github.event_name == 'push' && github.ref ==
+      'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release ') }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          fetch-depth: 0
-          clean: true
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
-      - name: Check runner disk after Rust cache restore
+      - name: Check runner disk before release build
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "build after Rust cache restore" --min-free-mib 3072
-      - name: Install Rust build helper tools
-        shell: bash
-        run: |
-          source tool-versions.env
-          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
-      - name: Install wasm target
-        shell: bash
-        run: |
-          echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
-          rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
-      - name: Install IC CLI tools
-        shell: bash
-        run: |
-          bash scripts/ci/install-icp-cli.sh
-          bash scripts/ci/install-ic-wasm.sh
-      - name: Check IC CLI tools
-        run: |
-          candid-extractor --version
-          icp --version
-          ic-wasm --version
-      - name: Check runner disk before build
-        shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "build before cargo build" --min-free-mib 4096
+        run: bash scripts/ci/check-runner-disk-space.sh --label "release build before compile" --min-free-mib 4096 --summary-only
       - name: Build release workspace
         run: cargo build --release --workspace --locked
-      - name: Report runner disk at build finish
-        if: ${{ always() }}
+      - name: Report runner disk after release-build failure
+        if: ${{ failure() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "build finish"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "release-build failure"

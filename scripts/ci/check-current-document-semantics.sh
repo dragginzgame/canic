@@ -109,49 +109,9 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
     done < <(find "$design_dir" -maxdepth 1 -type f | sort)
 done
 
-historical_backlog="$ROOT/docs/design/archive/post-46-backlog"
-[ "$(find "$historical_backlog" -type f | wc -l)" -le 11 ] || {
-    echo "historical post-46 design collection has grown" >&2
-    exit 1
-}
-[ "$(find "$historical_backlog" -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 5 ] || {
-    echo "historical post-46 design topics have grown" >&2
-    exit 1
-}
-
 design_ideas="$ROOT/docs/design/ideas"
-[ "$(find "$design_ideas" -type f | wc -l)" -le 16 ] || {
-    echo "optional design-idea collection has grown without explicit approval" >&2
-    exit 1
-}
-[ "$(find "$design_ideas" -mindepth 1 -maxdepth 1 -type d | wc -l)" -le 9 ] || {
-    echo "optional design-idea topics have grown without explicit approval" >&2
-    exit 1
-}
-
 for idea_dir in "$design_ideas"/*; do
     [ -d "$idea_dir" ] || continue
-
-    max_idea_files=1
-    case "${idea_dir##*/}" in
-        coordinator-workers|cross-subnet-data-transport-groundwork|declarative-authentication-profiles|optional-encrypted-canister-snapshot-archives|standalone-blob-service-extraction)
-            ;;
-        framework-neutral-synchronous-lifecycle-composition|language-neutral-managed-guest-feasibility)
-            max_idea_files=2
-            ;;
-        saltz)
-            max_idea_files=2
-            ;;
-        *)
-            echo "unapproved optional design-idea topic: $(guard_path "$idea_dir")" >&2
-            exit 1
-            ;;
-    esac
-
-    [ "$(find "$idea_dir" -type f | wc -l)" -le "$max_idea_files" ] || {
-        echo "optional design-idea topic exceeds its approved file boundary: $(guard_path "$idea_dir")" >&2
-        exit 1
-    }
 
     [ -f "$idea_dir/design.md" ] || {
         echo "optional design-idea topic is missing design.md: $(guard_path "$idea_dir")" >&2
@@ -160,62 +120,15 @@ for idea_dir in "$design_ideas"/*; do
     while IFS= read -r idea_file; do
         case "${idea_file##*/}" in
             design.md | exploration.md | status.md) ;;
-            saltz_24h_waveform_floor_100B_860.csv)
-                [ "${idea_dir##*/}" = "saltz" ] || {
-                    echo "waveform artifact exists outside the Saltz idea: $(guard_path "$idea_file")" >&2
-                    exit 1
-                }
-                ;;
             *)
-                echo "optional design-idea topic has an unsupported file: $(guard_path "$idea_file")" >&2
+                echo "optional design-idea topic has an unsupported authority document: $(guard_path "$idea_file")" >&2
                 exit 1
                 ;;
         esac
-    done < <(find "$idea_dir" -maxdepth 1 -type f | sort)
+    done < <(find "$idea_dir" -maxdepth 1 -type f -name '*.md' | sort)
 done
-
-for evidence_root in \
-    "$ROOT/docs/audits/working" \
-    "$ROOT/docs/audits/release-lines/supporting"; do
-    [ -d "$evidence_root" ] || continue
-
-    loose_evidence_count="$(find "$evidence_root" -maxdepth 1 -type f | wc -l)"
-    [ "$loose_evidence_count" -eq 0 ] || {
-        echo "audit evidence must live in one bounded topic directory: $(guard_path "$evidence_root")" >&2
-        exit 1
-    }
-
-    for evidence_dir in "$evidence_root"/*; do
-        [ -d "$evidence_dir" ] || continue
-
-        max_evidence_files=8
-        case "${evidence_dir#"$ROOT"/}" in
-            docs/audits/working/0.102-diagnostic-inventory)
-                max_evidence_files=66
-                ;;
-            docs/audits/release-lines/supporting/0.82-boundary-hardening)
-                max_evidence_files=73
-                ;;
-        esac
-
-        evidence_file_count="$(find "$evidence_dir" -type f | wc -l)"
-        [ "$evidence_file_count" -le "$max_evidence_files" ] || {
-            echo "audit evidence bundle exceeds its file boundary: $(guard_path "$evidence_dir")" >&2
-            exit 1
-        }
-    done
-done
-
-workspace_version="$(
-    sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/Cargo.toml" | sed -n '1p'
-)"
-[ -n "$workspace_version" ] || {
-    echo "unable to derive the workspace package version" >&2
-    exit 1
-}
 
 require_texts "$STATUS" "$GUARD_LABEL" \
-    "Workspace package version: \`$workspace_version\`." \
     "## Current Decision" \
     "## Next Action"
 

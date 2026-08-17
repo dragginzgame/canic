@@ -4,14 +4,17 @@ set -euo pipefail
 LABEL="runner disk"
 MIN_FREE_MIB=0
 TOP_LIMIT=16
+SUMMARY_ONLY=0
 
 usage() {
     cat >&2 <<'USAGE'
-usage: check-runner-disk-space.sh [--label <name>] [--min-free-mib <mib>] [--top-limit <count>]
+usage: check-runner-disk-space.sh [--label <name>] [--min-free-mib <mib>] [--top-limit <count>] [--summary-only]
 
 Print GitHub runner disk availability plus the largest likely CI disk consumers.
 When --min-free-mib is set above zero, fail if the workspace filesystem has
 less free space than that threshold.
+Use --summary-only for routine threshold checks that do not need recursive
+largest-consumer diagnostics.
 USAGE
 }
 
@@ -40,6 +43,10 @@ while [ "$#" -gt 0 ]; do
             exit 2
         fi
         shift 2
+        ;;
+    --summary-only)
+        SUMMARY_ONLY=1
+        shift
         ;;
     -h | --help)
         usage
@@ -172,5 +179,7 @@ assert_min_free_space() {
 }
 
 print_filesystem_summary
-print_disk_consumers
+if [ "$SUMMARY_ONLY" -eq 0 ]; then
+    print_disk_consumers
+fi
 assert_min_free_space

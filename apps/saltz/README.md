@@ -23,8 +23,9 @@ Fleet role and has no Canic runtime dependency. It exposes one read-only
   observation and provenance facts.
 
 The preview has no update call, timer, stable state, scheduler, authorization
-surface or `cycles_burn` path. The repository and preview contain no source
-photograph, raster derivative, graphical overlay or image route. Ordinary
+surface or `cycles_burn` path. The original source photograph is retained only
+as offline design evidence under `docs/design/ideas/saltz/`; the preview does
+not embed, transform or serve it and has no raster-image route. Ordinary
 canister execution consumes normal platform cycles; the displayed zero refers
 specifically to intentional waveform burn.
 
@@ -44,8 +45,9 @@ The checked-in CSV preserves the numeric geometry and exact rational 24-hour
 time axis. The burner resamples that geometry into one immutable integer plan:
 35 pre-roll pulses followed by 864 drawing pulses, one every 100 seconds. The
 build fails if its digest, duration, per-pulse rate or total ceiling drifts.
-The removed image-authoring pipeline does not exist in the workspace, so the
-CSV does not independently establish source provenance.
+The removed image-authoring pipeline does not exist in the workspace. The
+retained photograph records the selected visual reference, while the CSV
+remains the sole numeric input to the executable plan.
 
 The current local candidate is deliberately global-homepage-scoped. Seven
 pre-run days put the global mean at `37.983 Bcycles/second`, its maximum at

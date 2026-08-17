@@ -182,7 +182,7 @@ while IFS= read -r candidate_method_path; do
   candidate_day_dir="${candidate_artifacts_dir%/artifacts/*}"
   candidate_report="$candidate_day_dir/$candidate_stem.md"
   if [[ -f "$candidate_report" ]]; then
-    BASELINE_REPORT="${candidate_report#$ROOT/}"
+    BASELINE_REPORT="${candidate_report#"$ROOT"/}"
   fi
 done < <(
   find "$ROOT/docs/audits/reports" -type f \
@@ -232,8 +232,8 @@ if [[ "${ICP_ENVIRONMENT:-local}" == "ic" ]]; then
 fi
 
 capture_source_status() {
-  local report_rel="${REPORT_PATH#$ROOT/}"
-  local artifacts_rel="${ARTIFACTS_DIR#$ROOT/}/"
+  local report_rel="${REPORT_PATH#"$ROOT"/}"
+  local artifacts_rel="${ARTIFACTS_DIR#"$ROOT"/}/"
 
   git status --porcelain=v1 --untracked-files=all \
     | awk -v report="$report_rel" -v artifacts="$artifacts_rel" '
@@ -280,9 +280,9 @@ completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 retained_hashes="$(
   {
     if [[ -f "$REPORT_PATH" ]]; then
-      printf '%s\n' "${REPORT_PATH#$ROOT/}"
+      printf '%s\n' "${REPORT_PATH#"$ROOT"/}"
     fi
-    find "${ARTIFACTS_DIR#$ROOT/}" -maxdepth 1 -type f ! -name evidence-manifest.yml -print
+    find "${ARTIFACTS_DIR#"$ROOT"/}" -maxdepth 1 -type f ! -name evidence-manifest.yml -print
   } | sort | xargs -r sha256sum
 )"
 {

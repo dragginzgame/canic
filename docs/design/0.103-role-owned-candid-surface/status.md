@@ -5,14 +5,15 @@ Date: 2026-08-16
 ## Status
 
 - State: accepted and scheduled as reserve-Fleet critical-path step 1. B1
-  repository evidence/inventory is approved; B2 and runtime mutation are held.
+  repository evidence/inventory is review-ready; B2 and runtime mutation are held.
 - Outcome: one bounded command/status control plane per Canic role. Compiled
   capabilities add variants, command/status authority is variant-specific
   and workflows retain every private phase. Only genuinely asynchronous or
   durable commands acquire operation identities.
-- Baseline signal: the generated working-tree Saltz Fleet Subnet Root exposes
-  118 methods and the inert Burner exposes 20. B1 must reproduce exact
-  immutable role baselines before these figures become evidence.
+- Baseline evidence: the immutable [`v0.102.2` role-surface capture](../../audits/working/0.103-role-owned-candid-surface/README.md)
+  freezes all 207 methods across representative Root and managed profiles plus
+  canonical Coordinator and Store interfaces. It separates 188 Canic-owned,
+  three external-standard and 16 fixture-owned methods.
 - Runtime impact: none from this design and renumbering cut.
 - Release boundary: reinstall only; no old method alias, fallback caller,
   dual protocol, migration or mixed-version release set is permitted.
@@ -48,12 +49,12 @@ amendment and cannot be hidden in implementation.
 
 | Batch | Outcome | Direct evidence and fallout | Focused validation | Status |
 | --- | --- | --- | --- | --- |
-| B1 | Exact endpoint/caller inventory and role manifest | six-way disposition, command/status authority, capability discovery, reserved-name rule, old-to-new variant map and immutable counts | reproducible Candid/source/caller inventory and review | Approved to begin |
-| B2 | Manifest-exact role status surfaces and standards | only accepted Root/Coordinator/Store/managed status variants, standards and bounded observations | DTO/policy, Candid, command/status auth and first-excess tests | Blocked on accepted B1 and completed 0.102 contract |
+| B1 | Exact endpoint/caller inventory and role manifest | six-way disposition, command/status authority, capability discovery, reserved-name rule, old-to-new variant map and immutable counts | reproducible Candid/source/caller inventory and review | Review-ready: complete register, DTO/pruning manifest, operation ownership and 0.104 handoff; awaiting explicit acceptance |
+| B2 | Manifest-exact role status surfaces and standards | only accepted Root/Coordinator/Store/managed status variants, standards and bounded observations | DTO/policy, Candid, command/status auth and first-excess tests | Blocked on accepted B1 |
 | B3 | Compile-time variant pruning | pruned variants, DTOs, handlers and types; reserved-name failures; thin `start!` | build pass/fail, Candid absence, collision, reachability and role guards | Blocked on B2; B2/B3 unreleased until complete |
 | B4 | Root and Coordinator autonomous intent | command variants, async/durable receipts, typed atomic responses, variant auth/replay, self-advance and private phases | property and PocketIC replay/interruption journeys | Blocked on B3 |
 | B5 | Managed and Store role surfaces | optional managed command, inert pruning, Store control variants and justified byte lanes | authority, absence, payload and cross-canister PocketIC tests | Blocked on B4 |
-| B6 | Caller and generated propagation | host, CLI, protocol constants, replay manifests, bindings, fixtures and inert Saltz profiles | targeted host/CLI/build/PocketIC checks | Blocked on B5 |
+| B6 | Caller and generated propagation | host, CLI, protocol constants, replay manifests, bindings, fixtures and representative configured profiles | targeted host/CLI/build/PocketIC checks | Blocked on B5 |
 | B7 | Removal and measured closeout | old surface deletion, residue guards, count/size report and documentation | generated count, forbidden-method and residue checks | Blocked on B6 |
 
 B2 may not emit a temporary all-capabilities status superset. B2 and B3 remain
@@ -96,8 +97,8 @@ reserve-Fleet prerequisite. Unnumbered ideas remain outside the path.
 
 ## Next Authorized Action
 
-B1 repository evidence is authorized; no runtime or protocol mutation is.
-Challenge every current method against the six dispositions and freeze the
-complete method/caller/capability evidence before promoting B2 or replacing
-any Candid method or generated caller. `private/delete` is the default until
-another disposition is proved; unused method-ceiling capacity is not evidence.
+B1 is review-ready; no runtime or protocol mutation is authorized. Review and
+explicitly accept the complete method register and capability/DTO/operation
+manifest before promoting B2 or replacing any Candid method or generated
+caller. `private/delete` remains the default and unused method-ceiling capacity
+is not evidence.

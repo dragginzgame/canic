@@ -47,7 +47,7 @@ not add new release behavior.
 | Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke and current retained operator CLI checks without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
 | Packaged downstream Canister and wasm store | `make test-packaged-downstream-wasm-store` | Can an ordinary typed Canister use packaged `build!`, `start!` and `finish!` under the MSRV/local/IC boundary, and can both `wasm_store` bootstrap paths build outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
-| Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Tag CI and RC validation. |
+| Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Release-commit `main` CI and RC validation. |
 | Local Fleet install | `make test-fleet-install` | Can an exact-input Coordinator-anchored single-root local Fleet reach terminal activation? | RC/final release in a selected local ICP environment. |
 | Local Canister tests | `make test-canisters` | Can the terminal local Fleet resolve and call the maintained test application surface? | RC/final release after the local Fleet install. |
 

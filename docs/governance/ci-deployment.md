@@ -11,6 +11,7 @@ versioning, releases, and deployment-adjacent automation.
 - Test: `make test`
 - Build: `make build`
 - Repository invariants: `make check-invariants`
+- Shell automation lint: `make shellcheck`
 - Complete local validation: `make validate`
 - Release-cadence advisory: `make release-cadence`
 
@@ -36,6 +37,11 @@ retain libtest's default parallelism; PocketIC suites remain explicitly
 single-threaded and ordered until a measured narrower concurrency policy is
 proven stable. `make test-wasm` is the fast lane and runs only its classified
 release-surface integrations, never the PocketIC suites.
+CI may run the ordinary and PocketIC lanes in separate jobs; it must not
+parallelize the PocketIC suites themselves without replacing this measured
+policy. Cheap source/governance preflight and security jobs gate every compile
+and test lane so a deterministic repository-policy failure does not leave an
+expensive PocketIC job running.
 
 ## Development Slices and Validation Tiers
 
@@ -132,6 +138,13 @@ not mutate source formatting; the pre-commit hook handles routine formatting,
 while validation's `make fmt-check` catches bypassed hooks. Any failed target
 leaves the version unchanged. The underlying bump script rejects direct
 invocation without the private validation marker supplied by those targets.
+The root `Cargo.toml` is the sole live workspace package-version authority;
+status and planning documents must not duplicate a version whose release-only
+commit they cannot update. After staging, `make release-commit` runs the fast
+post-bump `make release-candidate` guard before committing or tagging. That
+guard verifies locked offline Cargo metadata, uniform workspace package
+versions and the installed-CLI default without repeating the already completed
+full source validation.
 
 The test target allocates one private repository-owned
 `.tmp/test-runtime.<suffix>` directory. It clears only that scratch on success,
@@ -156,6 +169,11 @@ step runs after a successful push, and atomic push prevents a branch-only or
 tag-only remote update. A transport interruption can still make the remote
 outcome uncertain and must be resolved by inspecting the remote refs before
 retrying.
+GitHub Actions intentionally does not run a separate tag-only workflow. The
+new `main` release commit owns one CI result containing preflight, security,
+MSRV, Rust checks, ordinary tests, serial PocketIC tests and the conditional
+release-profile workspace build. A green tag must never coexist with a red CI
+result for the same source merely because the tag ran a weaker job graph.
 For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.
@@ -163,6 +181,9 @@ Minor and major release bumps require interactive command-line confirmation
 before running `make validate`.
 
 Tags are immutable.
+
+The dependency-risk inventory also runs on a weekly read-only schedule so a
+new advisory is visible even when the repository receives no source push.
 
 ## Environment Selection
 

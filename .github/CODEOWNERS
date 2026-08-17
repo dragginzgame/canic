@@ -4,3 +4,12 @@
 /crates/canic-core/src/ops/auth/delegated/verify.rs @dragginzgame
 /crates/canic-core/src/ops/auth/delegated/root_key.rs @dragginzgame
 /crates/canic-core/src/dto/auth.rs @dragginzgame
+
+# CI, release and toolchain authority requires explicit maintainer review.
+/.github/workflows/ @dragginzgame
+/.github/dependabot.yml @dragginzgame
+/.githooks/ @dragginzgame
+/scripts/ci/ @dragginzgame
+/tool-versions.env @dragginzgame
+/docs/governance/ci-deployment.md @dragginzgame
+/docs/governance/supported-platforms.md @dragginzgame

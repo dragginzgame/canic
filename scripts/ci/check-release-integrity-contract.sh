@@ -23,6 +23,7 @@ DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_TEST="$ROOT/scripts/ci/test-dependency-risk-inventory.sh"
 DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
+RELEASE_CANDIDATE="$ROOT/scripts/ci/check-release-candidate.sh"
 RELEASE_CADENCE="$ROOT/scripts/dev/report-release-cadence.sh"
 RELEASE_CLEANUP="$ROOT/scripts/ci/cleanup-release-artifacts.sh"
 TEST_SCRATCH_RUNNER="$ROOT/scripts/ci/run-with-test-scratch.sh"
@@ -47,7 +48,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CADENCE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -66,6 +67,18 @@ done < <(rg -o --no-filename 'uses:[[:space:]]*[^[:space:]#]+' "$ROOT/.github/wo
 
 [ "$external_action_count" -gt 0 ] || fail "no external Actions were inspected"
 
+mapfile -t workflow_files < <(
+    find "$ROOT/.github/workflows" -maxdepth 1 -type f \
+        \( -name '*.yml' -o -name '*.yaml' \) | sort
+)
+checkout_count="$(rg -o --no-filename 'uses:[[:space:]]*actions/checkout@' "${workflow_files[@]}" | wc -l)"
+nonpersisting_checkout_count="$(rg -o --no-filename 'persist-credentials:[[:space:]]*false' "${workflow_files[@]}" | wc -l)"
+[ "$checkout_count" -eq "$nonpersisting_checkout_count" ] ||
+    fail "every checkout must disable persisted GitHub credentials"
+job_count="$(rg -o --no-filename '^[[:space:]]{4}runs-on:[[:space:]]*ubuntu-24\.04$' "${workflow_files[@]}" | wc -l)"
+timeout_count="$(rg -o --no-filename '^[[:space:]]{4}timeout-minutes:[[:space:]]*[0-9]+$' "${workflow_files[@]}" | wc -l)"
+[ "$job_count" -eq "$timeout_count" ] || fail "every CI job must declare a timeout"
+
 rg -F 'runs-on: ubuntu-24.04' "$CI" >/dev/null ||
     fail "CI does not declare a job on the canonical ubuntu-24.04 host"
 if rg '^[[:space:]]+runs-on:' "$CI" | rg -v '^[[:space:]]+runs-on: ubuntu-24\.04$' >/dev/null; then
@@ -73,6 +86,17 @@ if rg '^[[:space:]]+runs-on:' "$CI" | rg -v '^[[:space:]]+runs-on: ubuntu-24\.04
 fi
 rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound ic-wasm installer"
+for single_use_tool in \
+    'cargo install candid-extractor' \
+    'bash scripts/ci/install-icp-cli.sh' \
+    'bash scripts/ci/install-ic-wasm.sh' \
+    'rustup target add'; do
+    [ "$(rg -c -F "$single_use_tool" "$CI")" -eq 1 ] ||
+        fail "CI must install $single_use_tool only in its PocketIC/Wasm lane"
+done
+if rg -F 'cargo install cargo-get' "$CI" >/dev/null; then
+    fail "CI installs the maintainer-only cargo-get release helper"
+fi
 rg -F 'run: bash scripts/ci/check-release-integrity-contract.sh' "$CI" >/dev/null ||
     fail "release integrity guard is not active in CI"
 rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
@@ -85,22 +109,21 @@ rg -F 'bash scripts/ci/test-dependency-risk-inventory.sh' "$CI" >/dev/null ||
     fail "the dependency risk rejection tests are not active in CI"
 rg -F 'run: bash scripts/ci/check-current-document-semantics.sh' "$CI" >/dev/null ||
     fail "the current document semantics guard is not active in CI"
-rg -F 'cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked' "$CI" >/dev/null ||
-    fail "CI does not install the pinned cargo-get release helper"
-rg -F 'cargo get --version' "$CI" >/dev/null ||
-    fail "CI does not verify the cargo-get release helper"
-test_unit_job="$(sed -n '/^  test-unit:/,/^  build:/p' "$CI")"
+rg -F '"$SHELLCHECK_BIN" --exclude=SC2001,SC2016' "$CI" >/dev/null ||
+    fail "CI does not run the pinned ShellCheck boundary"
+pocketic_job="$(sed -n '/^  tests-pocketic:/,/^  release-build:/p' "$CI")"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
-    <<<"$test_unit_job" >/dev/null ||
-    fail "CI test-unit does not install the feature-qualified ripgrep test helper"
-rg -F 'rg --version' <<<"$test_unit_job" >/dev/null ||
-    fail "CI test-unit does not verify the ripgrep test helper"
+    <<<"$pocketic_job" >/dev/null ||
+    fail "CI PocketIC tests do not install the feature-qualified ripgrep test helper"
+rg -F 'rg --version' <<<"$pocketic_job" >/dev/null ||
+    fail "CI PocketIC tests do not verify the ripgrep test helper"
 validate_recipe="$(sed -n '/^validate:/,/^$/p' "$MAKEFILE")"
 required_validate_targets=(
     fmt-check
     check-invariants
     dependency-risk-gate
     gitleaks-scan
+    shellcheck
     control-plane-feature-gate
     check
     clippy
@@ -189,14 +212,23 @@ if rg --multiline 'test(-wasm)?:[^\n]*(\\\n[^\n]*)?workspace-test-inventory-gate
 fi
 rg -F 'run: cargo build -p canic --examples --locked' "$CI" >/dev/null ||
     fail "CI omits the default example build"
-rg --multiline 'build:\n[[:space:]]+if: startsWith\(github\.ref, '\''refs/tags/'\''\)' "$CI" >/dev/null ||
-    fail "the release workspace build is not isolated to tag pushes"
+if rg '^[[:space:]]+tags:' "$CI" >/dev/null; then
+    fail "primary CI must not create a second tag-only release signal"
+fi
+rg -F "startsWith(github.event.head_commit.message, 'Release ')" "$CI" >/dev/null ||
+    fail "the release workspace build is not bound to a main release commit"
+rg -F 'run: cargo build --release --workspace --locked' "$CI" >/dev/null ||
+    fail "CI omits the release-profile workspace build"
 rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not isolate serial PocketIC execution"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||
     fail "the fast workspace test plan cannot be resolved"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
     fail "the full workspace test plan cannot be resolved"
+CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary >/dev/null ||
+    fail "the ordinary workspace test plan cannot be resolved"
+CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic >/dev/null ||
+    fail "the PocketIC workspace test plan cannot be resolved"
 for mode in patch minor major; do
     mode_recipe="$(sed -n "/^$mode:/,/^$/p" "$MAKEFILE")"
     if rg -F '$(MAKE) --no-print-directory fmt' <<<"$mode_recipe" >/dev/null; then
@@ -217,6 +249,11 @@ rg -F 'next release ordinal:' <<<"$cadence_output" >/dev/null ||
     fail "the release cadence tool does not report the next release ordinal"
 rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
+rg -F 'cargo metadata --locked --offline --format-version 1 --no-deps' "$RELEASE_CANDIDATE" >/dev/null ||
+    fail "post-bump release candidate does not verify locked offline metadata"
+release_commit_recipe="$(sed -n '/^release-commit:/,/^$/p' "$MAKEFILE")"
+rg -F '$(MAKE) --no-print-directory release-candidate' <<<"$release_commit_recipe" >/dev/null ||
+    fail "release commit does not verify the exact post-bump candidate"
 for release_target in patch minor major; do
     release_recipe="$(sed -n "/^$release_target:/,/^$/p" "$MAKEFILE")"
     clean_count="$(rg -c '\$\(MAKE\) ensure-clean' <<<"$release_recipe")"
@@ -690,7 +727,7 @@ fi
 rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
     fail "checksum mismatch did not preserve its deterministic cause"
 
-bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$DEV_INSTALL" "$ICP_UPDATE"
+bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$RELEASE_CANDIDATE" "$DEV_INSTALL" "$ICP_UPDATE"
 bash "$POCKET_IC_ALIGNMENT" >/dev/null
 
 echo "release integrity contract guard passed ($external_action_count immutable Actions)"

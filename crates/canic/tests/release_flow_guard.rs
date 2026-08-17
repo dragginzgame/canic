@@ -300,6 +300,12 @@ fn make_release_targets_are_sequential_and_push_is_guarded() {
         "release-patch must invoke each phase sequentially"
     );
 
+    let release_commit = "release-commit:\n\t@scripts/ci/check-release-index.sh\n\t@$(MAKE) --no-print-directory release-candidate";
+    assert!(
+        makefile.contains(release_commit),
+        "release-commit must verify the exact post-bump candidate before tagging"
+    );
+
     let release_push = "release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh";
     assert!(
         makefile.contains(release_push),

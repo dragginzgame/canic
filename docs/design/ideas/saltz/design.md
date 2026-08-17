@@ -92,10 +92,24 @@ SHA-256: 11fd75eb8fd0fed4f075d324051cc880db50619837bfe6c889fe9d654647d911
 ```
 
 It contains 860 contiguous rational buckets covering exactly 24 hours and
-normalized heights spanning `0..=1,000,000` parts per million. The repository
-contains no source photograph, raster derivative or image-decoding pipeline.
-The numeric geometry is sufficient to build the experiment but does not by
-itself establish external source provenance or permission.
+normalized heights spanning `0..=1,000,000` parts per million. The selected
+original photograph is deliberately retained as offline design evidence:
+
+```text
+docs/design/ideas/saltz/saltz_reference_dezeen_860x573.jpg
+SHA-256: 7287c3aa3c8884a56c386adb8802bbfca91ef8fec8de125d84942fee1799da80
+source dimensions: 936 x 624 pixels
+```
+
+![Original restaurant mountain-wall reference](saltz_reference_dezeen_860x573.jpg)
+
+*Original visual reference from
+[Dezeen's Saltz article](https://www.dezeen.com/2016/03/15/rolf-sachs-saltz-restaurant-interior-design-dolder-grand-hotel-zurich/).*
+
+This source asset must not be deleted as orphaned runtime content. It is not
+embedded, transformed or served by a canister, and no runtime image-decoding
+pipeline exists. The numeric geometry is the sole executable input; retaining
+the photograph records provenance but does not itself establish permission.
 
 The executable compiler resamples the normalized geometry at control-step
 midpoints using integer linear interpolation. It then applies the fixed target
