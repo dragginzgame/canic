@@ -492,8 +492,11 @@ macro_rules! __canic_emit_managed_command_endpoint {
 #[macro_export]
 macro_rules! __canic_protocol_profile_digest {
     () => {{
-        option_env!("CANIC_PROTOCOL_PROFILE_DIGEST")
-            .expect("canonical role artifact must embed its protocol-profile digest")
+        let Some(__canic_protocol_profile_digest) = option_env!("CANIC_PROTOCOL_PROFILE_DIGEST")
+        else {
+            panic!("canonical role artifact must embed its protocol-profile digest");
+        };
+        __canic_protocol_profile_digest
             .parse::<$crate::__internal::core::role_contract::ProtocolProfileDigest>()
             .expect("embedded protocol-profile digest must be canonical lowercase SHA-256")
             .into_bytes()

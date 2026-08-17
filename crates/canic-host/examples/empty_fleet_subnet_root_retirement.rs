@@ -48,14 +48,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .find(|entry| entry.fleet_subnet_root == context.fleet_subnet_root)
         .cloned()
         .ok_or("Fleet Subnet Root is absent from the Coordinator Registry")?;
-    let expected_registry = match query(
+    let CoordinatorStatusResponse::RegistryVersion(expected_registry) = query(
         &icp,
         context.coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RegistryVersion,
-    )? {
-        CoordinatorStatusResponse::RegistryVersion(version) => version,
-        _ => return Err("Coordinator returned a differently correlated status response".into()),
+    )?
+    else {
+        return Err("Coordinator returned a differently correlated status response".into());
     };
     let response: CoordinatorCommandResponse = call(
         &icp,
@@ -89,8 +89,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "removed Fleet Subnet Root {} with operation 0x{}; execution 0x{} completed at {}",
         terminal.fleet_subnet_root,
-        hex_bytes(&terminal.operation_id),
-        hex_bytes(&execution.execution_hash),
+        hex_bytes(terminal.operation_id),
+        hex_bytes(execution.execution_hash),
         terminal.completed_at_ns,
     );
     Ok(())
