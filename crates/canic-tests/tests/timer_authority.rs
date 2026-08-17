@@ -32,7 +32,7 @@ enum RoleStatusRequest {
 #[derive(CandidType, Deserialize)]
 enum RoleStatusResponse {
     Metrics(Page<MetricEntry>),
-    Runtime(CanicRuntimeStatus),
+    Runtime(Box<CanicRuntimeStatus>),
 }
 
 #[test]
@@ -358,7 +358,7 @@ fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus 
     else {
         panic!("canic_status returned a non-Runtime response")
     };
-    status
+    *status
 }
 
 fn intent_cleanup_status(
