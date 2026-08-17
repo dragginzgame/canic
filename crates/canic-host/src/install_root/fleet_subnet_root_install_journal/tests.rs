@@ -544,6 +544,10 @@ fn plan(
     })
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one fixture assembles the complete correlated install-plan authority"
+)]
 fn fixture(root: &Path) -> Fixture {
     let release_build_id =
         ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([6; 32]));
