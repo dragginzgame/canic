@@ -411,9 +411,8 @@ mod tests {
 
     #[test]
     fn store_operation_status_rejects_the_zero_identity_before_state_access() {
-        let error = match WasmStoreCanisterApi::operation_status([0; 32]) {
-            Ok(_) => panic!("the zero operation identity must be rejected"),
-            Err(error) => error,
+        let Err(error) = WasmStoreCanisterApi::operation_status([0; 32]) else {
+            panic!("the zero operation identity must be rejected");
         };
 
         assert_eq!(

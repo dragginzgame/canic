@@ -12362,6 +12362,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one end-to-end test owns durable finalization and exact replay"
+    )]
     fn empty_root_final_inventory_is_exact_durable_and_response_idempotent() {
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
         let root = root_binding();
@@ -12466,7 +12470,6 @@ mod tests {
         );
 
         assert_root_removal_publication_is_exact(&store, status, &inventory, &published_registry);
-
         RootComponentRegistryStore::import(RootComponentRegistryData::default());
     }
 

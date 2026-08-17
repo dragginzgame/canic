@@ -168,8 +168,8 @@ enum CanisterStatusRequestFragment {
 
 #[derive(CandidType, Deserialize)]
 enum CanisterStatusResponseFragment {
-    Binding(ManagedCanisterBinding),
-    Operation(CanisterOperationStatusFragment),
+    Binding(Box<ManagedCanisterBinding>),
+    Operation(Box<CanisterOperationStatusFragment>),
 }
 
 #[derive(CandidType, Deserialize)]
@@ -5017,7 +5017,7 @@ async fn query_managed_binding(
         .candid()
         .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
     match result.map_err(InternalError::observed_public)? {
-        CanisterStatusResponseFragment::Binding(binding) => Ok(binding),
+        CanisterStatusResponseFragment::Binding(binding) => Ok(*binding),
         CanisterStatusResponseFragment::Operation(_) => Err(InternalError::conflict()),
     }
 }
@@ -5386,11 +5386,15 @@ async fn query_component_runtime_status(
         .candid()
         .map_err(|_error| InternalError::public(canic_core::diagnostics::codes::STATE_INVALID))?;
     match result.map_err(InternalError::observed_public)? {
-        CanisterStatusResponseFragment::Operation(
-            CanisterOperationStatusFragment::ConfigureRuntime(status),
-        ) if status.operation_id == operation_id => Ok(status.runtime),
-        CanisterStatusResponseFragment::Operation(_)
-        | CanisterStatusResponseFragment::Binding(_) => Err(InternalError::conflict()),
+        CanisterStatusResponseFragment::Operation(operation) => {
+            let CanisterOperationStatusFragment::ConfigureRuntime(status) = *operation;
+            if status.operation_id == operation_id {
+                Ok(status.runtime)
+            } else {
+                Err(InternalError::conflict())
+            }
+        }
+        CanisterStatusResponseFragment::Binding(_) => Err(InternalError::conflict()),
     }
 }
 
