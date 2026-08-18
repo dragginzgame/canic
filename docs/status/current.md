@@ -207,8 +207,11 @@ inside their barriers, retain complete logs and do not admit expensive work
 after a cheap failure.
 Workspace tests continue across selected binaries and suites, while the serial
 PocketIC group preserves one warm Wasm build state instead of clearing it
-between suites. Configured deployment builds collect invalid roles before
-compilation and ask Cargo to continue across independent package failures.
+between suites. The internal harness now consumes `ic-testkit` 0.8.0's
+collect-all Wasm batch report and compatible-spec input snapshot reuse, so one
+bad package no longer prevents later independent Wasm acquisitions. Configured
+deployment builds collect invalid roles before compilation and ask Cargo to
+continue across independent package failures.
 Exact release publication
 also disables implicit followed-tag pushes; the historical-tag deletion helper
 now verifies the remote boundary before removing local refs. A disposable Git
@@ -217,6 +220,14 @@ resurrection from the cleaned clone; workflow permissions, fixed runners and
 CI ownership are guarded. Targeted actionlint, ShellCheck, release/current-
 document guards, release-flow tests and plan-only test-lane checks pass; the
 complete suite has not been rerun.
+
+Focused `ic-testkit` 0.8.0 adoption checks compile the internal harness,
+integration package and Saltz test target under the locked dependency graph.
+The payload-limit PocketIC suite passes with structured standalone-pool
+outcomes and exact cache paths. A warm three-spec lifecycle acquisition reused
+one compatible input snapshot: only the first spec resolved Cargo inputs, the
+two later specs reported zero input-resolution time, and the focused lifecycle
+test passed.
 
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.

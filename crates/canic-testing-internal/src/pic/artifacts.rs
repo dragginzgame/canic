@@ -3,7 +3,7 @@ use ic_testkit::artifacts::{
     ArtifactCacheMaintenance, ArtifactCachePrunePolicy, SharedIncrementalTargetMaintenanceConfig,
     SharedIncrementalTargetMaintenanceFailureMode, SharedIncrementalTargetPrunePolicy,
     WasmBuildBatchConfig, WasmBuildBatchProgressEvent, WasmBuildProgressConfig,
-    WasmBuildProgressEvent, WasmBuildSpec,
+    WasmBuildProgressEvent, WasmBuildProgressPhase, WasmBuildSpec,
     build_wasm_canisters_cached_batch_with_config_and_progress,
 };
 use std::{
@@ -170,9 +170,9 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
                 &[*package],
                 profile.target_dir_name(),
             )
-            .with_cargo_profile_args(&cargo_args)
-            .with_extra_env(&build_env)
-            .with_additional_input_paths(additional_inputs.iter().cloned())
+            .with_cargo_profile_args(cargo_args.iter().copied())
+            .with_extra_env(build_env.iter().copied())
+            .with_additional_inputs(additional_inputs.iter().cloned())
             .with_shared_incremental_target(internal_test_shared_wasm_target(
                 workspace_root,
                 &build_env,
@@ -194,19 +194,28 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         |event| {
             report_wasm_build_progress(packages, event);
         },
-    )
-    .unwrap_or_else(|err| {
-        let package = packages
-            .get(err.failed_index())
-            .copied()
-            .unwrap_or("unknown");
-        panic!("internal test Wasm build failed for `{package}`: {err}")
-    });
-    for (package, outcome) in packages.iter().zip(batch.outcomes()) {
-        eprintln!("[canic-test-wasm:{package}] {outcome}");
+    );
+    for (index, outcome) in batch.outcomes() {
+        let package = packages.get(index).copied().unwrap_or("unknown");
+        eprintln!(
+            "[canic-test-wasm:{package}] {outcome}; exact-cache={}",
+            outcome.record().exact_cache_path().display()
+        );
         report_artifact_cache_maintenance("canic-test-wasm", outcome.record().maintenance());
     }
     eprintln!("[canic-test-wasm] {batch}");
+    let failures = batch
+        .failures()
+        .map(|(index, error)| {
+            let package = packages.get(index).copied().unwrap_or("unknown");
+            format!("`{package}`: {error}")
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        failures.is_empty(),
+        "internal test Wasm builds failed:\n{}",
+        failures.join("\n")
+    );
 }
 
 fn canonical_build_config_inputs(
@@ -278,7 +287,11 @@ fn report_wasm_build_progress(packages: &[&str], event: WasmBuildBatchProgressEv
         }
         WasmBuildBatchProgressEvent::BuildProgress {
             index,
-            event: WasmBuildProgressEvent::CargoHeartbeat { elapsed },
+            event:
+                WasmBuildProgressEvent::Heartbeat {
+                    phase: WasmBuildProgressPhase::CargoBuild,
+                    elapsed,
+                },
         } => {
             let package = packages.get(index).copied().unwrap_or("unknown");
             eprintln!("[canic-test-wasm:{package}] Cargo still running after {elapsed:?}");

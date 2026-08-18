@@ -432,8 +432,8 @@ fn build_wasm() -> Vec<u8> {
         .to_path_buf();
     let target_dir = test_target_dir(&workspace_root, "saltz-burner-pic");
     let spec = WasmBuildSpec::new(&workspace_root, &target_dir, &[PACKAGE], "release")
-        .with_cargo_profile_args(&["--locked", "--release"])
-        .with_additional_inputs(&["docs/design/ideas/saltz/saltz_24h_waveform_floor_100B_860.csv"]);
+        .with_cargo_profile_args(["--locked", "--release"])
+        .with_additional_inputs(["docs/design/ideas/saltz/saltz_24h_waveform_floor_100B_860.csv"]);
     let outcome = build_wasm_canisters_cached(&spec).expect("build waveform Wasm");
     let artifact = outcome
         .record()

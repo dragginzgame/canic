@@ -131,8 +131,8 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
         &["canic-host", "canic-wasm-store"],
         CanicWasmBuildProfile::Fast.target_dir_name(),
     )
-    .with_cargo_profile_args(&["--profile", "fast", "--locked"])
-    .with_extra_env(&[
+    .with_cargo_profile_args(["--profile", "fast", "--locked"])
+    .with_extra_env([
         ("CARGO_INCREMENTAL", "0"),
         ("ICP_ENVIRONMENT", "local"),
         INTERNAL_TEST_RELEASE_BUILD_ID,
@@ -145,13 +145,13 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
         "canic/bootstrap-wasm-store/v1",
     )
     .with_coordination_scope("canic-external-artifact-builds")
-    .with_arguments(&[
+    .with_arguments([
         "cargo run -p canic-host --example build_artifact",
         "wasm_store",
         "fast",
         config_relative,
     ])
-    .with_environment(&[
+    .with_environment([
         ("CARGO_INCREMENTAL", "0"),
         ("ICP_ENVIRONMENT", "local"),
         INTERNAL_TEST_RELEASE_BUILD_ID,

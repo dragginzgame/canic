@@ -72,15 +72,12 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
 }
 
 fn acquire_probe_fixture() -> CachedStandaloneCanisterFixtureGuard<'static> {
-    let (fixture, reused) = PROBE_FIXTURES
+    let (fixture, outcome) = PROBE_FIXTURES
         .acquire(|| {
             install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast)
         })
         .expect("acquire payload-limit probe fixture");
-    eprintln!(
-        "[payload-limit-probe] {} cached standalone fixture",
-        if reused { "restored" } else { "built" }
-    );
+    eprintln!("[payload-limit-probe] cached standalone fixture {outcome}");
     fixture
 }
 

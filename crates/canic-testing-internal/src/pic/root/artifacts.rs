@@ -218,12 +218,12 @@ fn root_release_artifact_cache_spec(
         "canic/root-release-artifacts/v1",
     )
     .with_coordination_scope("canic-external-artifact-builds")
-    .with_arguments(&[
+    .with_arguments([
         "scripts/ci/build-ci-wasm-artifacts.sh",
         spec.build_profile.canic_wasm_profile_value(),
         config_path,
     ])
-    .with_environment(&environment)
+    .with_environment(environment.iter().copied())
     .with_input("build-config", &spec.build_config_path)
     .with_cargo_build_inputs("root-release-cargo", &cargo_build, &cargo_inputs)
     .with_prune_policy_at_most_every(
@@ -270,8 +270,8 @@ fn root_release_cargo_build_spec(
         &packages,
         spec.build_profile.target_dir_name(),
     )
-    .with_cargo_profile_args(&cargo_args)
-    .with_extra_env(environment)
+    .with_cargo_profile_args(cargo_args.iter().copied())
+    .with_extra_env(environment.iter().copied())
 }
 
 fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String, PathBuf> {

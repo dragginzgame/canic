@@ -57,8 +57,9 @@ mod tests {
     };
     use canic_control_plane::{
         dto::template::{
-            StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetInfoResponse,
-            TemplateChunkSetPrepareInput, TemplateManifestInput,
+            StoreCommand, StoreCommandResponse, StoreStatusRequest, StoreStatusResponse,
+            TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+            TemplateManifestInput,
         },
         dto::{
             fleet_coordinator::{
@@ -92,6 +93,8 @@ mod tests {
         },
     };
     use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
+    #[cfg(test)]
+    use ic_testkit::pic::PocketIcSnapshotExt;
     use ic_testkit::pic::{
         BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
@@ -101,8 +104,6 @@ mod tests {
         ResetRequirement, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
         ValidationReceipt, is_dead_pocket_ic_transport_error,
     };
-    #[cfg(test)]
-    use ic_testkit::pic::{PocketIcCapturedSnapshotExt, PocketIcSnapshotExt};
 
     use crate::pic::CanicPicExt;
     #[cfg(test)]
@@ -217,6 +218,29 @@ mod tests {
             panic!("Root returned a differently correlated pool status");
         };
         status
+    }
+
+    fn wait_for_store_ready(pic: &PocketIc, store: Principal, tick_limit: usize) {
+        for _ in 0..tick_limit {
+            match pic.query_candid::<Result<StoreStatusResponse, Error>, _>(
+                store,
+                canic::protocol::CANIC_STATUS,
+                (StoreStatusRequest::Overview,),
+            ) {
+                Ok(Ok(StoreStatusResponse::Overview(overview))) if overview.bootstrap.ready => {
+                    return;
+                }
+                Ok(Ok(StoreStatusResponse::Overview(_)) | Err(_)) => pic.tick(),
+                Ok(Ok(_)) => panic!("Store returned a differently correlated overview status"),
+                Err(err) => {
+                    pic.dump_canister_debug(store, "query Store overview readiness failed");
+                    panic!("query Store overview readiness failed: {err:?}");
+                }
+            }
+        }
+
+        pic.dump_canister_debug(store, "restored Store bootstrap");
+        panic!("Store {store} did not become ready after {tick_limit} ticks");
     }
 
     fn coordinator_command(
@@ -435,13 +459,13 @@ mod tests {
             baseline.pocket_ic().wait_for_all_ready(
                 [
                     metadata.root,
-                    metadata.wasm_store,
                     metadata.issuer.canister_id,
                     metadata.verifier.canister_id,
                 ],
                 60,
                 "restored active Component Registry baseline",
             );
+            wait_for_store_ready(baseline.pocket_ic(), metadata.wasm_store, 60);
             ReadinessReceipt::try_new("active-fleet-ready").map_err(Into::into)
         }
 
