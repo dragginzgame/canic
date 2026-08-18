@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-17
+Last updated: 2026-08-18
 
 ## Purpose
 
@@ -94,7 +94,11 @@ Host/CLI fixtures, Skynet presentation and active application documentation
 use the role surface. Legacy shared/non-root/cycle/topology emitters are
 deleted, `start_local!` emits one local status method, and the representative
 Canic count falls from 188 method appearances to ten. Current fast-profile
-Wasm identities are recorded without claiming causal size savings.
+Wasm identities are recorded without claiming causal size savings. Raw B1
+pre-cut Candid snapshots are no longer retained in the current worktree; the
+capture tool derives the immutable normalized register and manifest hashes
+from scratch-generated interfaces so historical contracts cannot be mistaken
+for live ones.
 
 Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
 hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its
@@ -208,7 +212,11 @@ all role replay manifests. Seven representative generated services expose two
 Canic methods per ordinary role and four for Store. The four-profile Canic
 total is ten instead of 188; representative fast-profile Wasm hashes and sizes
 are retained only as current artifact identity because no isolated same-source
-pre-cut pair exists. The complete suite was not rerun.
+pre-cut pair exists. Post-closeout cleanup removes raw pre-cut DID snapshots,
+regenerates the three still-configured stale local role artifacts and verifies
+all 19 remaining repository/build-local DIDs parse with zero retired Canic
+method declarations. The focused 35-test protocol-surface suite passes. The
+complete suite was not rerun.
 
 The standalone cycle-burn waveform idea completed its bounded B0b pulse and
 B0c plateau mainnet calibrations on 2026-08-16. Canister

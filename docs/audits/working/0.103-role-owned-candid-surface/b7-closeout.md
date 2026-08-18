@@ -53,8 +53,10 @@ a causal Wasm-size saving claim.
   command manifests.
 - Active generated services, callers, fixtures, CLI/host presentation and
   application-facing documentation contain no supported old Canic method.
-  The immutable B1 DIDs/register and historical audits retain old names only as
-  non-authoritative conversion evidence.
+  The immutable normalized B1 register and historical audits retain old names
+  only as non-authoritative conversion evidence. Raw pre-cut DID snapshots are
+  absent from the current worktree and the capture tool materializes them only
+  in temporary scratch while reproducing the register and manifest hashes.
 - Blob-service methods and application methods are separately owned protocols;
   they were not folded into 0.103 or renamed by this hard cut.
 

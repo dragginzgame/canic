@@ -25,9 +25,12 @@ separately. It likewise classifies the emitted ICRC-10 discovery method as an
 external standard rather than a Canic-owned control method.
 
 The post-B5 current method and variant totals are recorded in the
-[B6 representative surface report](b6-surface-report.md). The baseline DIDs
-and B3 totals remain immutable pre-cut and transitional evidence rather than
-current endpoint authority.
+[B6 representative surface report](b6-surface-report.md). The normalized B1
+register and B3 totals remain immutable pre-cut and transitional evidence
+rather than current endpoint authority. Raw pre-cut DIDs are deliberately not
+retained in the current worktree because they resemble callable current
+interfaces; the capture script reconstructs them only in temporary scratch
+while deriving the normalized evidence and hashes below.
 
 The [B7 hard-cut closeout](b7-closeout.md) records the final method reduction,
 legacy-emitter deletion and representative current Wasm identities without
@@ -52,18 +55,16 @@ and application methods do not consume the proposed Canic-owned role ceiling.
 
 ## Files and Reproduction
 
-- `fleet-subnet-root.did` and `managed-auth.did` are the exact generated fixture
-  interfaces. The canonical Coordinator and Store DIDs remain checked in at
-  their manifest-hashed source paths and released tag.
 - `baseline-methods.tsv` contains every method, normalized signature, execution
   mode, endpoint source, compile condition, authorization/payload attribute,
   immediate delegate, replay policy, protocol constant and candidate
   in-repository references.
 - `method-register.tsv` begins from that generated evidence and owns reviewed
   disposition decisions. Baseline recapture never overwrites it.
-- `manifest.tsv` freezes the interface hashes and counts.
-- `capture-baseline.sh` rebuilds and recaptures the evidence from a clean
-  `v0.102.2` checkout.
+- `manifest.tsv` freezes the transiently generated interface hashes and counts.
+- `capture-baseline.sh` rebuilds the source interfaces in temporary scratch and
+  recaptures only normalized evidence from a clean `v0.102.2` checkout. It
+  never installs a pre-cut DID into the current worktree.
 - `capability-manifest.md` freezes the existing closed config derivation,
   invalid-combination boundary, external profile-binding bootstrap, exact
   request/response correlation and reserved names.
