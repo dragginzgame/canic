@@ -393,8 +393,8 @@ fn role_capability_surfaces_are_pruned_at_the_destination_macro() {
         command_macro
             .matches("#[cfg(canic_capability_role_attestation_signer)]")
             .count(),
-        3,
-        "Root attestation command request, response and dispatch must share one compile-time capability"
+        4,
+        "Root attestation command request, response, authority, and dispatch must share one compile-time capability"
     );
     let status_macro = root_surface
         .split("macro_rules! canic_emit_root_status_endpoint")
