@@ -292,7 +292,10 @@ fn deploy_plan_report_keeps_complete_inputs_planned_without_root_comparison() {
     );
     let json = serde_json::to_value(&report).expect("report should serialize");
 
-    assert_eq!(json["status"], "planned");
+    assert_eq!(
+        json["status"], "planned",
+        "complete local plan unexpectedly emitted diagnostics: {json:#}"
+    );
     assert_eq!(json["comparison_status"], "not_requested");
     assert_eq!(json["blockers"], JsonValue::Array(vec![]));
     assert_eq!(json["warnings"], JsonValue::Array(vec![]));
@@ -793,12 +796,16 @@ fn write_release_set_manifest(icp_root: &std::path::Path) {
         .join("root")
         .join("root.release-set.json");
     let user_hub_hash = wasm_hash_hex(USER_HUB_ARTIFACT);
+    let candid_hash = sha256_hex(b"user-hub-candid");
+    let protocol_profile_digest = sha256_hex(b"user-hub-protocol-profile");
     let manifest = serde_json::json!({
         "release_version": "0.79.0",
         "entries": [{
             "role": "user_hub",
             "template_id": "embedded:user_hub",
             "artifact_relative_path": ".icp/local/canisters/user_hub/user_hub.wasm.gz",
+            "candid_sha256_hex": candid_hash,
+            "protocol_profile_digest_hex": protocol_profile_digest,
             "payload_size_bytes": USER_HUB_ARTIFACT.len(),
             "payload_sha256_hex": user_hub_hash,
             "chunk_size_bytes": CANIC_WASM_CHUNK_BYTES,
