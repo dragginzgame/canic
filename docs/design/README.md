@@ -20,36 +20,35 @@ Promotion from `ideas/` is a planning decision, not a rename performed during
 an implementation slice. It requires an owner, concrete need, scheduled line,
 release-batch plan and explicit maintainer acceptance.
 
-## Scheduled Reserve-Fleet Critical Path
+## Scheduled Application-Safety And Estate Path
 
 1. [0.103 role-owned Candid surface](0.103-role-owned-candid-surface/status.md)
    gives Root, Coordinator, Store and managed application canisters one
    bounded command/status control plane; capabilities add variants, never
    methods.
-2. [0.104 `ic-timers` consumer hard cut](0.104-ic-timers-consumer-hard-cut/status.md)
-   removes Canic-owned timer mechanics while preserving domain recovery.
-3. [0.105 Fleet estate platform qualification](0.105-fleet-estate-platform-qualification/status.md)
+2. [0.104 timer ownership and synchronous lifecycle composition](0.104-ic-timers-consumer-hard-cut/status.md)
+   removes Canic-owned timer mechanics, documents native adoption and lets one
+   application restore Canic with another synchronous runtime.
+3. [0.105 framework-neutral local application authorization](0.105-framework-neutral-local-application-authorization/status.md)
+   establishes bounded caller/scoped local authority before presentation or
+   estate work.
+4. [0.106 Fleet estate platform qualification](0.106-fleet-estate-platform-qualification/status.md)
    freezes local and separately authorized live-platform evidence.
-4. [0.106 Coordinator-backed root funding](0.106-coordinator-backed-root-funding/status.md)
+5. [0.107 Coordinator-backed root funding](0.107-coordinator-backed-root-funding/status.md)
    closes replay-safe root operating funding without funding the estate
    Cycles Ledger budget implicitly.
-5. [0.107 Fleet Subnet Canister estates](0.107-fleet-subnet-canister-estates/status.md)
-   implements indexed reusable estates, bounded parallel work, transfer and
-   the 10/100/1,000 proof.
-6. [0.108 Skynet T2 Fleet observatory](0.108-skynet-fleet-observatory/status.md)
-   turns the completed platform into an every-installed-Canister topology and
-   Fleet-overview demonstration.
+6. [0.108 Fleet Subnet Canister estates](0.108-fleet-subnet-canister-estates/status.md)
+   adds application retirement evidence before recycling, indexed reusable
+   estates, bounded parallel work, transfer and the 10/100/1,000 proof.
+7. [0.109 stateful Fleet release adoption](0.109-stateful-fleet-release-adoption/status.md)
+   qualifies one whole-Fleet stop-the-world predecessor-to-successor
+   transition before stateful production claims.
+8. [0.110 generic Fleet observatory](0.110-fleet-observatory/status.md)
+   publishes supported downstream views/rendering with external Prequel Wars
+   as the flagship consumer.
 
-Deferred ideas do not gate this six-line path unless a later explicit
+Deferred ideas do not gate this eight-line path unless a later explicit
 amendment moves one into a numbered design.
-
-## Scheduled Successor
-
-[0.109 framework-neutral local application authorization](0.109-framework-neutral-local-application-authorization/status.md)
-is accepted and scheduled after 0.108. It is not another reserve-Fleet
-critical-path dependency, and this scheduling cut authorizes no evidence or
-runtime implementation. B1 requires accepted 0.108 closeout and explicit
-maintainer promotion.
 
 ## Release-Batch Plan Template
 

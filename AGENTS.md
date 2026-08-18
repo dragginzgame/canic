@@ -77,6 +77,11 @@ with this file, the code is wrong.
   handoff, existing-installation adoption, mixed-version operation, rollback,
   or compatibility recovery unless the maintainer explicitly asks for an
   exception.
+- The maintainer approved one bounded exception on 2026-08-18: scheduled
+  0.109 may define one whole-Fleet, stop-the-world transition from one exact
+  released predecessor to one successor. This does not authorize rolling or
+  mixed-version operation, arbitrary historical adoption, downgrade, generic
+  compatibility code or implementation before the design's own gates.
 - Same-release interruption recovery, retry, idempotency, backup, and restore
   remain required. They are operational safety, not compatibility behavior.
 - Do not add anti-resurrection tests for removed legacy behavior or command
@@ -109,6 +114,8 @@ policy and ops independently; ops may call model. Policy never calls ops.
 ## Lifecycle
 - `canic::start!` must stay thin.
 - Lifecycle adapters restore synchronously and schedule async work; no `await`.
+- A configured synchronous lifecycle participant runs after Canic restoration
+  and before deferred work; it does not become a second lifecycle owner.
 - User hooks run after Canic invariants are restored, via zero-delay timers, and
   should be idempotent.
 

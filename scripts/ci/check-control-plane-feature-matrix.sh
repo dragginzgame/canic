@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+FAILED_CHECKS=()
 
 run_check() {
     local label="$1"
@@ -10,10 +11,13 @@ run_check() {
     local output=""
 
     echo "==> $label"
-    if ! output="$(cargo check "$@" 2>&1)"; then
+    if ! output="$(cargo check --keep-going "$@" 2>&1)"; then
         printf '%s\n' "$output" >&2
-        return 1
+        FAILED_CHECKS+=("$label")
+        echo "==> $label failed" >&2
+        return
     fi
+    echo "==> $label passed"
 }
 
 run_check \
@@ -31,3 +35,10 @@ run_check \
 run_check \
     "host control-plane consumer build" \
     --locked -p canic-host
+
+if [[ ${#FAILED_CHECKS[@]} -ne 0 ]]; then
+    printf 'CONTROL-PLANE FEATURE MATRIX FAILED: %s\n' "${FAILED_CHECKS[*]}" >&2
+    exit 1
+fi
+
+echo "CONTROL-PLANE FEATURE MATRIX PASSED: all requested profiles succeeded."

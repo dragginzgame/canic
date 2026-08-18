@@ -45,8 +45,9 @@ sample. Retained declarations preserve their normally completed observations.
 
 Authority snapshots currently fail closed when the shared registry contains a
 timer claim outside Canic custody. Combined-framework snapshot composition is
-not inferred from shared observation; it requires the separately qualified
-synchronous lifecycle seam before Canic can reconstruct another owner's
+not inferred from shared observation. Scheduled 0.104 owns the synchronous
+lifecycle participant, native downstream timer-adoption guide and combined
+Canic/IcyDB fixture required before Canic can reconstruct another owner's
 volatile claims after upgrade.
 
 ## Timer Reliability Classes
@@ -87,3 +88,4 @@ remain in their separately documented reliability classes.
 - [Minimal managed Fleet](../../getting-started/minimal-managed-fleet.md)
 - [Configuration reference](../../../CONFIG.md)
 - [Runtime architecture contract](../../contracts/ARCHITECTURE.md)
+- [Scheduled 0.104 timer/lifecycle hard cut](../../design/0.104-ic-timers-consumer-hard-cut/0.104-design.md)

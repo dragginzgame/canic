@@ -21,8 +21,10 @@ the durable on-chain authority needed for exact retry and reconciliation.
 
 Application canisters never receive filesystem, repository, identity-key, or
 operator configuration authority. A root owns platform effects on its Subnet;
-the Coordinator owns Fleet-wide planning and publication. Before 1.0, release
-transitions are reinstall-only rather than mixed-version adoption or migration.
+the Coordinator owns Fleet-wide planning and publication. Current release
+transitions are reinstall-only. Scheduled 0.109 defines one exact stop-the-
+world predecessor/successor exception without permitting mixed-version or
+arbitrary historical adoption.
 
 ## Start Here
 

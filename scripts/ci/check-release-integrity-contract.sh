@@ -38,6 +38,8 @@ POCKET_IC_ALIGNMENT="$ROOT/scripts/ci/check-pocketic-version-alignment.sh"
 WORKSPACE_TEST_INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 WORKSPACE_TEST_INVENTORY_GATE="$ROOT/scripts/ci/check-workspace-test-inventory.sh"
 WORKSPACE_TEST_RUNNER="$ROOT/scripts/ci/run-workspace-tests.sh"
+VALIDATION_RUNNER="$ROOT/scripts/ci/run-validation-targets.sh"
+VALIDATION_RUNNER_TEST="$ROOT/scripts/ci/test-validation-target-runner.sh"
 TAG_DELETE_TEST="$ROOT/scripts/ci/test-delete-github-tags-up-to.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
@@ -53,7 +55,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$TAG_DELETE_TEST"; do
+for file in "$CI" "$CODEOWNERS" "$MAKEFILE" "$TOOLS" "$RUST_TOOLCHAIN" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$ICP_MODEL" "$ICP_PROOF" "$DEV_INSTALL" "$GIT_HOOK_INSTALLER" "$PRE_COMMIT_HOOK" "$ICP_UPDATE" "$INSTALLING" "$README" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_TEST" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION" "$CONFIRM_VERSION_BUMP" "$RELEASE_CANDIDATE" "$RELEASE_CADENCE" "$VERSION_READER" "$PUBLISH_WORKSPACE" "$RELEASE_CLEANUP" "$TEST_SCRATCH_RUNNER" "$POCKET_IC_STOPPER" "$RELEASE_PUSH_READY" "$RELEASE_PUSH" "$POCKET_IC_ALIGNMENT" "$WORKSPACE_TEST_INVENTORY" "$WORKSPACE_TEST_INVENTORY_GATE" "$WORKSPACE_TEST_RUNNER" "$VALIDATION_RUNNER" "$VALIDATION_RUNNER_TEST" "$TAG_DELETE_TEST"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -125,20 +127,14 @@ rg -F 'cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked' "$
     fail "CI does not install the exact pinned cargo-get version"
 rg -F 'cargo get --version' "$CI" >/dev/null ||
     fail "CI does not verify the installed cargo-get version"
-rg -F 'run: bash scripts/ci/check-release-integrity-contract.sh' "$CI" >/dev/null ||
-    fail "release integrity guard is not active in CI"
 rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound Gitleaks installer"
-rg -F 'run: bash scripts/ci/run-secret-scan.sh' "$CI" >/dev/null ||
-    fail "the dedicated secret scan is not active in CI"
-rg -F 'run: bash scripts/ci/check-dependency-risk-inventory.sh' "$CI" >/dev/null ||
-    fail "the dependency risk inventory gate is not active in CI"
-rg -F 'bash scripts/ci/test-dependency-risk-inventory.sh' "$CI" >/dev/null ||
-    fail "the dependency risk rejection tests are not active in CI"
-rg -F 'run: bash scripts/ci/check-current-document-semantics.sh' "$CI" >/dev/null ||
-    fail "the current document semantics guard is not active in CI"
-rg -F '"$SHELLCHECK_BIN" --exclude=SC2001,SC2016' "$CI" >/dev/null ||
-    fail "CI does not run the pinned ShellCheck boundary"
+rg -F 'run: make ci-preflight' "$CI" >/dev/null ||
+    fail "CI does not run the failure-collecting preflight boundary"
+rg -F 'run: make ci-security' "$CI" >/dev/null ||
+    fail "CI does not run the failure-collecting security boundary"
+rg -F 'run: make ci-checks' "$CI" >/dev/null ||
+    fail "CI does not run the failure-collecting Rust-check boundary"
 ordinary_job="$(sed -n '/^  tests-ordinary:/,/^  tests-pocketic:/p' "$CI")"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
     <<<"$ordinary_job" >/dev/null ||
@@ -154,36 +150,106 @@ rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --featu
 rg -F 'rg --version' <<<"$pocketic_job" >/dev/null ||
     fail "CI PocketIC tests do not verify the ripgrep test helper"
 validate_recipe="$(sed -n '/^validate:/,/^$/p' "$MAKEFILE")"
-required_validate_targets=(
+rg -F 'VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh' "$MAKEFILE" >/dev/null ||
+    fail "Make does not use the canonical failure-collecting validation runner"
+ci_preflight_recipe="$(sed -n '/^ci-preflight:/,/^$/p' "$MAKEFILE")"
+[[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$ci_preflight_recipe")" -eq 1 ]] ||
+    fail "make ci-preflight must use one failure-collecting runner"
+for preflight_target in \
+    lint-workflows \
+    shellcheck \
+    layering-gate \
+    current-document-semantics-gate \
+    blob-storage-inventory-gate \
+    blob-storage-cashier-inventory-gate \
+    release-validation-matrix-gate \
+    release-integrity-contract-gate \
+    audit-method-catalog-gate \
+    recovery-runbooks-gate \
+    workspace-test-inventory-gate; do
+    rg -w "$preflight_target" <<<"$ci_preflight_recipe" >/dev/null ||
+        fail "make ci-preflight omits $preflight_target"
+done
+ci_security_recipe="$(sed -n '/^ci-security:/,/^$/p' "$MAKEFILE")"
+[[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$ci_security_recipe")" -eq 1 ]] ||
+    fail "make ci-security must use one failure-collecting runner"
+for security_target in \
+    gitleaks-scan \
+    dependency-risk-gate \
+    dependency-risk-inventory-test; do
+    rg -w "$security_target" <<<"$ci_security_recipe" >/dev/null ||
+        fail "make ci-security omits $security_target"
+done
+ci_checks_recipe="$(sed -n '/^ci-checks:/,/^$/p' "$MAKEFILE")"
+[[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$ci_checks_recipe")" -eq 1 ]] ||
+    fail "make ci-checks must use one failure-collecting runner"
+for checks_target in \
+    control-plane-feature-gate \
+    fmt-check \
+    clippy; do
+    rg -w "$checks_target" <<<"$ci_checks_recipe" >/dev/null ||
+        fail "make ci-checks omits $checks_target"
+done
+lint_workflows_recipe="$(sed -n '/^lint-workflows:/,/^$/p' "$MAKEFILE")"
+shellcheck_recipe="$(sed -n '/^shellcheck:/,/^$/p' "$MAKEFILE")"
+gitleaks_recipe="$(sed -n '/^gitleaks-scan:/,/^$/p' "$MAKEFILE")"
+rg -F '"$(ACTIONLINT_BIN)"' <<<"$lint_workflows_recipe" >/dev/null ||
+    fail "make lint-workflows does not use CI's pinned actionlint binary"
+rg -F '"$(SHELLCHECK_BIN)" --exclude=SC2001,SC2016' <<<"$shellcheck_recipe" >/dev/null ||
+    fail "make shellcheck does not use CI's pinned ShellCheck binary"
+rg -F 'GITLEAKS_BIN="$(GITLEAKS_BIN)" bash scripts/ci/run-secret-scan.sh' \
+    <<<"$gitleaks_recipe" >/dev/null ||
+    fail "make gitleaks-scan does not use CI's pinned Gitleaks binary"
+validation_runner_count="$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$validate_recipe")"
+[[ "$validation_runner_count" -eq 2 ]] ||
+    fail "make validate must retain exactly two sequential validation barriers"
+validation_preflight="$(awk '
+    /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
+    block == 1 { print }
+    block > 1 { exit }
+' <<<"$validate_recipe")"
+validation_expensive="$(awk '
+    /\$\(VALIDATION_RUNNER\)/ { block += 1; next }
+    block == 2 { print }
+' <<<"$validate_recipe")"
+preflight_validate_targets=(
     fmt-check
     check-invariants
     dependency-risk-gate
     gitleaks-scan
     shellcheck
     control-plane-feature-gate
+)
+expensive_validate_targets=(
     check
     clippy
     test
 )
-for validate_target in "${required_validate_targets[@]}"; do
-    rg -F "\$(MAKE) --no-print-directory $validate_target" <<<"$validate_recipe" >/dev/null ||
-        fail "make validate omits required target $validate_target"
+for validate_target in "${preflight_validate_targets[@]}"; do
+    rg -w "$validate_target" <<<"$validation_preflight" >/dev/null ||
+        fail "make validate preflight omits required target $validate_target"
+done
+for validate_target in "${expensive_validate_targets[@]}"; do
+    rg -w "$validate_target" <<<"$validation_expensive" >/dev/null ||
+        fail "make validate expensive barrier omits required target $validate_target"
 done
 
 invariant_recipe="$(sed -n '/^check-invariants:/,/^$/p' "$MAKEFILE")"
-# shellcheck disable=SC2016 # These are literal Make recipe fragments, not shell expansions.
-for invariant_command in \
-    'bash scripts/ci/run-layering-guards.sh' \
-    'bash scripts/ci/check-current-document-semantics.sh' \
-    '$(MAKE) --no-print-directory blob-storage-inventory-gate' \
-    '$(MAKE) --no-print-directory blob-storage-cashier-inventory-gate' \
-    'bash scripts/ci/test-dependency-risk-inventory.sh' \
-    'bash scripts/ci/check-release-validation-matrix.sh' \
-    'bash scripts/ci/check-release-integrity-contract.sh' \
-    'bash scripts/ci/check-audit-method-catalog.sh' \
-    'bash scripts/ci/check-recovery-runbooks.sh'; do
-    rg -F "$invariant_command" <<<"$invariant_recipe" >/dev/null ||
-        fail "make check-invariants omits $invariant_command"
+[[ "$(rg -c '\$\(VALIDATION_RUNNER\)' <<<"$invariant_recipe")" -eq 1 ]] ||
+    fail "make check-invariants must use one failure-collecting runner"
+for invariant_target in \
+    layering-gate \
+    current-document-semantics-gate \
+    blob-storage-inventory-gate \
+    blob-storage-cashier-inventory-gate \
+    dependency-risk-inventory-test \
+    release-validation-matrix-gate \
+    release-integrity-contract-gate \
+    audit-method-catalog-gate \
+    recovery-runbooks-gate \
+    validation-runner-gate; do
+    rg -w "$invariant_target" <<<"$invariant_recipe" >/dev/null ||
+        fail "make check-invariants omits $invariant_target"
 done
 
 declare -A primitive_commands=(
@@ -207,7 +273,7 @@ for primitive_target in "${!primitive_commands[@]}"; do
             ;;
     esac
 done
-rg -F 'cargo test --locked "${cargo_args[@]}"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+rg -F 'cargo test --locked --no-fail-fast "${cargo_args[@]}"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "workspace test execution does not freeze Cargo.lock"
 
 [ -x "$PRE_COMMIT_HOOK" ] || fail "formatting pre-commit hook is not executable"
@@ -246,8 +312,6 @@ fi
 if rg --multiline 'test(-wasm)?:[^\n]*(\\\n[^\n]*)?workspace-test-inventory-gate' "$MAKEFILE" >/dev/null; then
     fail "the public test targets duplicate the workspace runner inventory guard"
 fi
-rg -F 'run: cargo build -p canic --examples --locked' "$CI" >/dev/null ||
-    fail "CI omits the default example build"
 rg -F 'path: target/test-artifacts' <<<"$pocketic_job" >/dev/null ||
     fail "PocketIC CI does not retain its validated test-artifact cache"
 rg -F 'uses: actions/cache/restore@' <<<"$pocketic_job" >/dev/null ||
@@ -272,6 +336,28 @@ rg -F 'run: cargo build --release --workspace --locked' "$CI" >/dev/null ||
     fail "CI omits the release-profile workspace build"
 rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not isolate serial PocketIC execution"
+rg -F 'cargo test --locked --no-fail-fast' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the workspace test runner does not retain failures across Cargo test binaries"
+rg -F 'FAILED_LABELS+=("$label")' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the workspace test runner does not collect independent suite failures"
+rg -F '"$HEAVY_BUILD_TARGETS_USED" -eq 0' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the PocketIC integration group does not preserve Wasm build freshness between suites"
+for validation_runner_fragment in \
+    'target/validation-failures' \
+    'Validation summary:' \
+    'Failure details (repeated from the full logs):' \
+    'VALIDATION FAILED:'; do
+    rg -F "$validation_runner_fragment" "$VALIDATION_RUNNER" >/dev/null ||
+        fail "validation runner omits feedback contract: $validation_runner_fragment"
+done
+rg -F 'validation target runner test passed' "$VALIDATION_RUNNER_TEST" >/dev/null ||
+    fail "validation runner has no executable failure-collection fixture"
+build_recipe="$(sed -n '/^build:/,/^$/p' "$MAKEFILE")"
+check_recipe="$(sed -n '/^check:/,/^$/p' "$MAKEFILE")"
+rg -F -- '--keep-going' <<<"$build_recipe" >/dev/null ||
+    fail "make build does not continue across independent Cargo failures"
+rg -F -- '--keep-going' <<<"$check_recipe" >/dev/null ||
+    fail "make check does not continue across independent Cargo failures"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast >/dev/null ||
     fail "the fast workspace test plan cannot be resolved"
 CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||

@@ -1,6 +1,8 @@
 use std::{
     collections::BTreeMap,
-    env, fs,
+    env,
+    fmt::{self, Display, Formatter},
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -306,13 +308,24 @@ pub fn resolve_canister_artifact_build_specs(
     config: &canic_core::bootstrap::compiled::ConfigModel,
     roles: &[String],
 ) -> Result<Vec<CanisterArtifactBuildSpec>, Box<dyn std::error::Error>> {
-    let role_ids = roles
+    let mut failures = Vec::new();
+    let mut admitted = Vec::with_capacity(roles.len());
+    for role in roles {
+        match validate_artifact_role_deployable(config, role) {
+            Ok(()) => admitted.push((role, canic_core::ids::CanisterRole::owned(role.clone()))),
+            Err(source) => failures.push(ConfiguredBuildSpecFailure {
+                role: role.clone(),
+                source,
+            }),
+        }
+    }
+    if !failures.is_empty() {
+        return Err(ConfiguredBuildSpecFailures(failures).into());
+    }
+    let role_ids = admitted
         .iter()
-        .map(|role| {
-            validate_artifact_role_deployable(config, role)?;
-            Ok(canic_core::ids::CanisterRole::owned(role.clone()))
-        })
-        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+        .map(|(_, role_id)| role_id.clone())
+        .collect::<Vec<_>>();
     let validations = validate_declared_role_packages(
         &context.config_path,
         config,
@@ -320,14 +333,55 @@ pub fn resolve_canister_artifact_build_specs(
         PackageValidationMode::Build,
     );
 
-    roles
-        .iter()
-        .zip(validations)
-        .map(|(role, validation)| {
-            resolve_canister_artifact_build_spec_from_validation(context, config, role, validation)
-        })
-        .collect()
+    let mut specs = Vec::with_capacity(roles.len());
+    for ((role, _), validation) in admitted.into_iter().zip(validations) {
+        match resolve_canister_artifact_build_spec_from_validation(
+            context, config, role, validation,
+        ) {
+            Ok(spec) => specs.push(spec),
+            Err(source) => failures.push(ConfiguredBuildSpecFailure {
+                role: role.clone(),
+                source,
+            }),
+        }
+    }
+    if failures.is_empty() {
+        Ok(specs)
+    } else {
+        Err(ConfiguredBuildSpecFailures(failures).into())
+    }
 }
+
+#[derive(Debug)]
+struct ConfiguredBuildSpecFailures(Vec<ConfiguredBuildSpecFailure>);
+
+#[derive(Debug)]
+struct ConfiguredBuildSpecFailure {
+    role: String,
+    source: Box<dyn std::error::Error>,
+}
+
+impl Display for ConfiguredBuildSpecFailure {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}: {}", self.role, self.source)
+    }
+}
+
+impl Display for ConfiguredBuildSpecFailures {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "configured build specification failed: {}",
+            self.0
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    }
+}
+
+impl std::error::Error for ConfiguredBuildSpecFailures {}
 
 fn resolve_canister_artifact_build_spec_from_validation(
     context: &WorkspaceBuildContext,
@@ -546,6 +600,7 @@ fn canister_cargo_command(
         .args([
             cargo_subcommand,
             "--locked",
+            "--keep-going",
             "--manifest-path",
             &manifest_path.display().to_string(),
             "--target",
@@ -612,6 +667,7 @@ mod tests {
             [
                 "build",
                 "--locked",
+                "--keep-going",
                 "--manifest-path",
                 "/workspace/Cargo.toml",
                 "--target",
@@ -696,6 +752,39 @@ mod tests {
                 .capabilities
                 .contains(&canic_core::role_contract::RoleCapabilityKey::AutomaticTopup)
         );
+    }
+
+    #[test]
+    fn configured_spec_resolution_reports_every_invalid_role() {
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config_path = workspace_root.join("apps/demo/canic.toml");
+        let config = AppConfigSnapshot::load(&config_path).expect("load demo App config");
+        let context = WorkspaceBuildContext {
+            role: "root".to_string(),
+            profile: CanisterBuildProfile::Fast,
+            environment: "local".to_string(),
+            build_network: BuildNetwork::Local,
+            workspace_root: workspace_root.clone(),
+            icp_root: workspace_root,
+            config_path,
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: None,
+        };
+        let roles = ["missing-first", "missing-second"].map(str::to_string);
+
+        let error = resolve_canister_artifact_build_specs(&context, config.model(), &roles)
+            .expect_err("both invalid configured roles must fail");
+        let failures = error
+            .downcast_ref::<ConfiguredBuildSpecFailures>()
+            .expect("typed configured build failure");
+        let failed_roles = failures
+            .0
+            .iter()
+            .map(|failure| failure.role.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(failed_roles, ["missing-first", "missing-second"]);
     }
 
     fn build_context() -> WorkspaceBuildContext {

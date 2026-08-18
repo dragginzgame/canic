@@ -19,9 +19,9 @@ Date: 2026-07-26
   - [0.100 Fleet coordination and Registry synchronization](../../0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md);
   - [0.101 composable Component deployment and Fleet service publication](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md);
   - [0.102 compact diagnostic codes](../../0.102-compact-diagnostic-codes/0.102-design.md);
-  - the scheduled [0.109 local application authorization design](../../0.109-framework-neutral-local-application-authorization/0.109-design.md);
-  - the independent [synchronous lifecycle-composition idea](../framework-neutral-synchronous-lifecycle-composition/design.md); and
-  - the evidence-only [0.105 Fleet-estate platform qualification](../../0.105-fleet-estate-platform-qualification/0.105-design.md), which supplies no transport authority.
+  - the scheduled [0.105 local application authorization design](../../0.105-framework-neutral-local-application-authorization/0.105-design.md);
+  - the scheduled [0.104 synchronous lifecycle-participant contract](../../0.104-ic-timers-consumer-hard-cut/0.104-design.md); and
+  - the evidence-only [0.106 Fleet-estate platform qualification](../../0.106-fleet-estate-platform-qualification/0.106-design.md), which supplies no transport authority.
 - Dependency posture: the Fleet-aware route model depends on the protected
   topology and Fleet service bindings designed by 0.100 and 0.101. The
   generic call-wrapper measurements can be implemented independently once the
