@@ -97,7 +97,7 @@ fn assert_role_attestation_admission(pic: &PocketIc, root: Principal, issuer: &C
         root,
         Principal::anonymous(),
         unregistered,
-        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code(),
     );
 }
 
