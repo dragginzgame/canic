@@ -20,7 +20,8 @@ Detailed patch breakdown: [docs/changelog/0.103.md](docs/changelog/0.103.md)
 - `0.103.0` closes the 0.102 audit findings and hard-cuts Canic to profile-exact
   role command/status control planes with autonomous durable operations,
   atomic caller migration and legacy-emitter deletion, reducing the four
-  representative Canic surfaces from 188 method appearances to ten.
+  representative Canic surfaces from 188 method appearances to ten, and
+  updates the transitive HTTP/2 stack to close `RUSTSEC-2026-0258`.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

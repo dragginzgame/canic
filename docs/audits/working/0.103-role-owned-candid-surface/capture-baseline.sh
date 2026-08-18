@@ -2,7 +2,8 @@
 set -euo pipefail
 
 readonly EXPECTED_SHA="8cf4723cecd7579cbe3304b980c63b1bc3969d68"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly REPO_ROOT="${1:-$(git rev-parse --show-toplevel)}"
 readonly SCRATCH_ROOT="${2:-/tmp/canic-0.103-b1-v0.102.2}"
 
@@ -366,9 +367,6 @@ for profile in "${profiles[@]}"; do
     ' "$staging/methods.tsv" >>"$staging/manifest.tsv"
 done
 
-for profile in fleet-subnet-root managed-auth; do
-    install -m 0644 "$staging/$profile.did" "$SCRIPT_DIR/$profile.did"
-done
 install -m 0644 "$staging/methods.tsv" "$SCRIPT_DIR/baseline-methods.tsv"
 if [[ ! -f "$SCRIPT_DIR/method-register.tsv" ]]; then
     awk -F '\t' '
@@ -618,4 +616,4 @@ if [[ ! -f "$SCRIPT_DIR/method-register.tsv" ]]; then
 fi
 install -m 0644 "$staging/manifest.tsv" "$SCRIPT_DIR/manifest.tsv"
 
-echo "captured v0.102.2 role Candid baseline in $SCRIPT_DIR"
+echo "captured normalized v0.102.2 role Candid baseline in $SCRIPT_DIR"

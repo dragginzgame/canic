@@ -16,10 +16,19 @@ trap 'rm -rf "$tmp_dir"' EXIT
 base="$tmp_dir/base.json"
 audit_db="$tmp_dir/advisory-db"
 
+# The gate validates dependency ownership offline. Populate the exact locked
+# graph first so this test is independent of a runner's Cargo cache state.
 (
     cd "$ROOT"
+    cargo fetch --locked
+)
+
+if ! (
+    cd "$ROOT"
     cargo audit --db "$audit_db" --json
-) >"$base"
+) >"$base"; then
+    [ -s "$base" ] || fail "cargo audit did not produce advisory JSON"
+fi
 
 bash "$GATE" --audit-json "$base" >/dev/null
 
