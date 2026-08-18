@@ -216,7 +216,7 @@ mod tests {
             chunks
                 .matches("publication_permit: &CostGuardPermit")
                 .count(),
-            4,
+            5,
             "chunk store and management effects must remain behind the publication permit"
         );
         assert_eq!(
