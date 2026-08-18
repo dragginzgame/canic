@@ -350,6 +350,8 @@ fn configure_artifact(
     wasm_sha256: Option<String>,
     wasm_gz_sha256: Option<String>,
 ) {
+    artifact.candid_sha256 = Some("01".repeat(32));
+    artifact.protocol_profile_digest = Some("02".repeat(32));
     artifact.wasm_path = wasm_path.map(str::to_string);
     artifact.wasm_gz_path = wasm_gz_path.map(str::to_string);
     artifact.wasm_sha256 = wasm_sha256;

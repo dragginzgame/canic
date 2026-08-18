@@ -18,8 +18,8 @@ fn configured_role_capabilities_lists_enabled_role_features() {
     assert_eq!(
         crate::release_set::config::project_role_capabilities(&capabilities),
         vec![
-            "automatic_topup".to_string(),
             "auth".to_string(),
+            "automatic_topup".to_string(),
             "index".to_string(),
             "scaling".to_string(),
             "sharding".to_string(),

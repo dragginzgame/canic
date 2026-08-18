@@ -277,7 +277,7 @@ fn compiler_freezes_one_canonical_qualified_topology_union() {
     );
     assert_eq!(
         hex_bytes(union.digest(&topology).expect("frozen union digest")),
-        "d5b3b36c473ed468ed04b2ff99ed0031152c2555ccb0b7caff6004882a397546"
+        "09d025060d265b3aef66a6997a9cd53d2380c747c996c19d6b5b87843e4325f4"
     );
 }
 
@@ -415,7 +415,7 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
                 .expect("frozen manifest digest")
                 .into_bytes()
         ),
-        "6f677510ba7ad6725831b6a65b9861aa62f2d5b9bd0a1dbd174c9e9de65a3c4c"
+        "51a307345abaa80a0e45bd28b7d6d7714cb1d82bebd72bd0e0c604861d672b80"
     );
 }
 
