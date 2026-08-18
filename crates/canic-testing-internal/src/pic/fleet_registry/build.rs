@@ -14,7 +14,7 @@ use std::{
 };
 
 use super::super::artifacts::{
-    CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
+    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID,
     build_internal_test_wasm_canisters_with_env, internal_test_artifact_maintenance_interval,
     internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
 };
@@ -135,7 +135,6 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     .with_extra_env(&[
         ("CARGO_INCREMENTAL", "0"),
         ("ICP_ENVIRONMENT", "local"),
-        INTERNAL_TEST_ENDPOINTS_ENV,
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ]);
     let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
@@ -155,7 +154,6 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     .with_environment(&[
         ("CARGO_INCREMENTAL", "0"),
         ("ICP_ENVIRONMENT", "local"),
-        INTERNAL_TEST_ENDPOINTS_ENV,
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ])
     .with_input("build-config", config_path)
@@ -190,7 +188,6 @@ fn run_bootstrap_wasm_store_build(workspace_root: &Path, target_dir: &Path, conf
         .env("CARGO_INCREMENTAL", "0")
         .env("CARGO_TARGET_DIR", target_dir)
         .env("ICP_ENVIRONMENT", "local")
-        .env(INTERNAL_TEST_ENDPOINTS_ENV.0, INTERNAL_TEST_ENDPOINTS_ENV.1)
         .env(
             INTERNAL_TEST_RELEASE_BUILD_ID.0,
             INTERNAL_TEST_RELEASE_BUILD_ID.1,

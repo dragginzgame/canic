@@ -72,7 +72,7 @@ pub mod __build {
         assert_canonical_role_contract_build, config_app_id, config_contains_role,
         config_declares_role, configured_role_metrics_tier_mask, declared_package_metadata,
         declared_package_role, metrics_profile_tier_mask, read_config_source_or_default,
-        required_package_metadata, required_package_role, role_normal_dependency_metrics_enabled,
+        required_package_metadata, required_package_role,
     };
 }
 

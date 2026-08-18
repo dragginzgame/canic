@@ -22,7 +22,6 @@ const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE: Duration = Duration::from_hours(
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
 
-pub(super) const INTERNAL_TEST_ENDPOINTS_ENV: (&str, &str) = ("CANIC_INTERNAL_TEST_ENDPOINTS", "1");
 pub(super) const INTERNAL_TEST_RELEASE_BUILD_ID: (&str, &str) = (
     canic_core::ids::RELEASE_BUILD_ID_ENV,
     "1111111111111111111111111111111111111111111111111111111111111111",
@@ -43,7 +42,6 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
             .env("CARGO_INCREMENTAL", "0")
             .env("CARGO_TARGET_DIR", target_dir)
             .env("ICP_ENVIRONMENT", "local")
-            .env(INTERNAL_TEST_ENDPOINTS_ENV.0, INTERNAL_TEST_ENDPOINTS_ENV.1)
             .env(
                 INTERNAL_TEST_RELEASE_BUILD_ID.0,
                 INTERNAL_TEST_RELEASE_BUILD_ID.1,
@@ -159,7 +157,6 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
             canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
             canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
         ),
-        INTERNAL_TEST_ENDPOINTS_ENV,
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
     build_env.extend_from_slice(extra_env);
