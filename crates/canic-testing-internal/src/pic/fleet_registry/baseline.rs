@@ -112,6 +112,10 @@ mod tests {
 
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
+    #[cfg(test)]
+    const ROOT_REMOVAL_MAX_SIMULATED_SECONDS: usize = 512;
+    #[cfg(test)]
+    const ROOT_REMOVAL_TICKS_PER_SECOND: usize = 4;
 
     #[derive(CandidType)]
     enum RootCommandFragment {
@@ -1088,7 +1092,12 @@ mod tests {
 
         let mut terminal = None;
         let mut last_status = None;
-        for _ in 0..256 {
+        let mut progress_transitions = 0_u16;
+        let mut stagnant_seconds = 0_u16;
+        for _ in 0..ROOT_REMOVAL_MAX_SIMULATED_SECONDS {
+            for _ in 0..ROOT_REMOVAL_TICKS_PER_SECOND {
+                fixture.pic().tick();
+            }
             if let Ok(RootStatusResponseFragment::Operation(
                 RootOperationStatusResponse::RemoveRoot(status),
             )) = root_status(
@@ -1097,6 +1106,12 @@ mod tests {
                 RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
             ) {
                 let complete = status.deletion_preparation.is_some();
+                if last_status.as_ref() == Some(&status) {
+                    stagnant_seconds = stagnant_seconds.saturating_add(1);
+                } else {
+                    progress_transitions = progress_transitions.saturating_add(1);
+                    stagnant_seconds = 0;
+                }
                 last_status = Some(status.clone());
                 if complete {
                     terminal = Some(status);
@@ -1104,9 +1119,15 @@ mod tests {
                 }
             }
             fixture.pic().advance_time(Duration::from_secs(1));
-            fixture.pic().tick();
         }
         let terminal = terminal.unwrap_or_else(|| {
+            fixture
+                .pic()
+                .dump_canister_debug(fixture.root, "autonomous Root removal timeout");
+            fixture.pic().dump_canister_debug(
+                fixture.coordinator,
+                "autonomous Coordinator Root-removal timeout",
+            );
             let coordinator = coordinator_status(
                 fixture.pic(),
                 fixture.coordinator,
@@ -1147,7 +1168,8 @@ mod tests {
                  root(final_inventory, removal, reclamation, binding, store_deletion, \
                  readiness_intent, readiness, preparation)={root_progress:?}; \
                  pool(tracked, store, store_deletion_pending, workload, handing_off)=({}, {}, {}, {}, {}); \
-                 coordinator(draining, removal, readiness_intent, readiness, execution, completion)={coordinator_progress:?}",
+                 coordinator(draining, removal, readiness_intent, readiness, execution, completion)={coordinator_progress:?}; \
+                 progress_transitions={progress_transitions}; stagnant_seconds={stagnant_seconds}",
                 pool.tracked,
                 pool.store,
                 pool.store_deletion_pending,
