@@ -831,6 +831,7 @@ fn sample_fleet_catalog_entry(
         app: AppId::from("demo"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
+        release_build_id: "01".repeat(32).parse().expect("release build"),
         coordinator_principal: coordinator_principal.to_string(),
     }
 }

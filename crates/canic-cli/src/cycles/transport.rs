@@ -27,6 +27,7 @@ use canic_host::{
     installed_fleet::{
         InstalledFleetRequest, InstalledFleetResolution, resolve_installed_fleet_from_root,
     },
+    protocol_binding::ResolvedProtocolBinding,
     registry::RegistryEntry,
 };
 use std::{
@@ -52,7 +53,7 @@ struct CycleQueryTarget {
     canister_id: String,
     environment: String,
     icp_root: Option<PathBuf>,
-    candid_path: Option<PathBuf>,
+    binding: ResolvedProtocolBinding,
 }
 
 #[derive(Debug, ThisError)]
@@ -155,7 +156,18 @@ fn cycle_tracker_report(
     requested_since_secs: u64,
     generated_at_secs: u64,
 ) -> CyclesCanisterReport {
-    let target = cycle_query_target(options, entry);
+    let target = match cycle_query_target(options, entry) {
+        Ok(target) => target,
+        Err(error) => {
+            return cycles_error_report(
+                entry,
+                tree_prefix,
+                requested_since_secs,
+                None,
+                error.to_string(),
+            );
+        }
+    };
     let live_cycles = query_live_cycle_balance(&target);
     let result = query_cycle_tracker(&target, options.limit);
     match result {
@@ -342,7 +354,7 @@ fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, CycleObse
         &target.canister_id,
         &target.environment,
         target.icp_root.as_deref(),
-        target.candid_path.as_deref(),
+        &target.binding,
     )
     .map_err(Into::into)
 }
@@ -401,7 +413,7 @@ fn query_topup_event_page(
         canic_core::protocol::CANIC_STATUS,
         &arg,
         Some(ICP_JSON_OUTPUT),
-        target.candid_path.as_deref(),
+        Some(target.binding.candid_path()),
     )?;
 
     parse_topup_event_page(&output).map_err(|source| CycleObservationError::Response {
@@ -433,7 +445,7 @@ fn query_cycle_tracker_page(
         canic_core::protocol::CANIC_STATUS,
         &arg,
         Some(ICP_JSON_OUTPUT),
-        target.candid_path.as_deref(),
+        Some(target.binding.candid_path()),
     )?;
 
     parse_cycle_tracker_page(&output).map_err(|source| CycleObservationError::Response {
@@ -442,15 +454,19 @@ fn query_cycle_tracker_page(
     })
 }
 
-fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQueryTarget {
+fn cycle_query_target(
+    options: &CyclesOptions,
+    entry: &RegistryEntry,
+) -> Result<CycleQueryTarget, canic_host::protocol_binding::ProtocolBindingError> {
     let root = resolve_current_canic_icp_root().ok();
-    CycleQueryTarget {
+    let binding = registry_entry_candid_path(root.as_deref(), &options.environment, entry)?;
+    Ok(CycleQueryTarget {
         icp: cycles_icp(options, root.as_deref()),
         canister_id: entry.pid.clone(),
         environment: options.environment.clone(),
-        icp_root: root.clone(),
-        candid_path: registry_entry_candid_path(root.as_deref(), &options.environment, entry),
-    }
+        icp_root: root,
+        binding,
+    })
 }
 
 fn cycles_icp(options: &CyclesOptions, root: Option<&Path>) -> IcpCli {
@@ -542,6 +558,7 @@ mod tests {
             role: Some("root".to_string()),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         };
         let reports = collect_cycle_worker_reports(
             vec![(

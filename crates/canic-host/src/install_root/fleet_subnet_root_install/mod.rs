@@ -27,6 +27,7 @@ use super::{
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::IcpCli,
+    protocol_binding::{ResolvedProtocolBinding, resolve_infrastructure_protocol_binding},
     release_set::{
         AppConfigSnapshot, CanicInfrastructureRole,
         load_persisted_canic_infrastructure_artifact_manifest,
@@ -368,6 +369,7 @@ fn verify_live_infrastructure(
         .fleet_subnet_root
         .expect("installed root journal retains its principal");
     let icp = icp_context.cli();
+    let (root_binding, store_binding) = resolve_live_protocol_bindings(icp_context, journal)?;
     require_expected_controllers(
         icp,
         fleet_subnet_root,
@@ -388,6 +390,7 @@ fn verify_live_infrastructure(
     let expected = expected_root_authority(journal)?;
     let observed = query_with_arg::<_, RootStatusResponseFragment>(
         icp,
+        &root_binding,
         fleet_subnet_root,
         protocol::CANIC_STATUS,
         &RootStatusRequestFragment::FleetAuthority,
@@ -402,6 +405,7 @@ fn verify_live_infrastructure(
     if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
         require_initial_prepared_runtime(
             icp,
+            &root_binding,
             fleet_subnet_root,
             journal,
             "Fleet Subnet Root",
@@ -434,6 +438,7 @@ fn verify_live_infrastructure(
     )?;
     let observed_store = query_with_arg::<_, StoreStatusResponse>(
         icp,
+        &store_binding,
         wasm_store,
         protocol::CANIC_STATUS,
         &StoreStatusRequest::Authority,
@@ -445,13 +450,38 @@ fn verify_live_infrastructure(
         return Err(RootInstallStateError::WasmStoreAuthorityMismatch.into());
     }
     if journal.phase == FleetSubnetRootInstallPhase::RootInstalled {
-        require_initial_prepared_runtime(icp, wasm_store, journal, "Wasm Store", false)?;
+        require_initial_prepared_runtime(
+            icp,
+            &store_binding,
+            wasm_store,
+            journal,
+            "Wasm Store",
+            false,
+        )?;
     }
     Ok((expected, expected_store))
 }
 
+fn resolve_live_protocol_bindings(
+    icp_context: &InstallIcpContext,
+    journal: &FleetSubnetRootInstallJournal,
+) -> Result<(ResolvedProtocolBinding, ResolvedProtocolBinding), Box<dyn std::error::Error>> {
+    let root = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &journal.root_artifact,
+    )?;
+    let store = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &journal.wasm_store_artifact,
+    )?;
+    Ok((root, store))
+}
+
 fn require_initial_prepared_runtime(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     journal: &FleetSubnetRootInstallJournal,
     subject: &'static str,
@@ -460,6 +490,7 @@ fn require_initial_prepared_runtime(
     let observed = if root {
         let response = query_with_arg::<_, RootStatusResponseFragment>(
             icp,
+            binding,
             canister,
             protocol::CANIC_STATUS,
             &RootStatusRequestFragment::Operation(OperationStatusRequest {
@@ -480,6 +511,7 @@ fn require_initial_prepared_runtime(
     } else {
         let response = query_with_arg::<_, StoreStatusResponse>(
             icp,
+            binding,
             canister,
             protocol::CANIC_STATUS,
             &StoreStatusRequest::Operation(OperationStatusRequest {

@@ -11,7 +11,7 @@ fn package_tree_correlation_reconstructs_normal_edges_and_features() {
     let separator = TREE_FIELD_SEPARATOR;
     let tree = format!(
         "0role v1.0.0 (/workspace/role){separator}role{separator}\
-         \n1canic v1.0.0 (/workspace/canic){separator}canic{separator}metrics\
+         \n1canic v1.0.0 (/workspace/canic){separator}canic{separator}sharding\
          \n1domain v1.0.0 (/workspace/domain){separator}domain{separator}"
     );
 
@@ -34,7 +34,7 @@ fn package_tree_correlation_reconstructs_normal_edges_and_features() {
     );
     assert_eq!(
         evidence.packages["canic@1"].enabled_features,
-        BTreeSet::from(["metrics".to_string()])
+        BTreeSet::from(["sharding".to_string()])
     );
 }
 
@@ -48,7 +48,7 @@ fn package_tree_correlation_rejects_ambiguous_aliases() {
     let separator = TREE_FIELD_SEPARATOR;
     let tree = format!(
         "0role v1.0.0 (/workspace/role){separator}role{separator}\
-         \n1canic v1.0.0 (/workspace/canic){separator}canic{separator}metrics"
+         \n1canic v1.0.0 (/workspace/canic){separator}canic{separator}sharding"
     );
 
     assert!(
@@ -65,7 +65,7 @@ fn package_tree_correlation_rejects_depth_gaps() {
     let separator = TREE_FIELD_SEPARATOR;
     let tree = format!(
         "0role v1.0.0 (/workspace/role){separator}role{separator}\
-         \n2canic v1.0.0 (/workspace/canic){separator}canic{separator}metrics"
+         \n2canic v1.0.0 (/workspace/canic){separator}canic{separator}sharding"
     );
 
     assert!(
@@ -86,7 +86,7 @@ fn target_filtered_metadata_excludes_tree_only_packages() {
     let separator = TREE_FIELD_SEPARATOR;
     let tree = format!(
         "0role v1.0.0 (/workspace/role){separator}role{separator}\
-         \n1canic v1.0.0 (/workspace/canic){separator}canic{separator}metrics\
+         \n1canic v1.0.0 (/workspace/canic){separator}canic{separator}sharding\
          \n1domain v1.0.0 (/workspace/domain){separator}domain{separator}"
     );
 

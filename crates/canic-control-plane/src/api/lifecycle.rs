@@ -316,6 +316,15 @@ impl LifecycleApi {
             .map_err(Into::into)
     }
 
+    /// Authorize one peer-allocation command before endpoint workflow dispatch.
+    pub fn authorize_peer_component_allocation_caller(
+        request: &RootPeerComponentAllocationRequest,
+        caller: candid::Principal,
+    ) -> Result<(), canic_core::dto::error::Error> {
+        crate::workflow::component_registry::authorize_peer_allocation_caller(request, caller)
+            .map_err(Into::into)
+    }
+
     /// Detach private autonomous advancement for one accepted top-level allocation.
     pub fn schedule_component_allocation(operation_id: [u8; 32]) {
         crate::workflow::component_registry::schedule_component_allocation(operation_id);
@@ -387,6 +396,15 @@ impl LifecycleApi {
     ) -> Result<RootComponentChildAllocationResponse, canic_core::dto::error::Error> {
         crate::workflow::component_registry::reserve_child_allocation(request)
             .await
+            .map_err(Into::into)
+    }
+
+    /// Authorize one direct-child command before endpoint workflow dispatch.
+    pub fn authorize_component_child_caller(
+        request: &RootComponentChildAllocationRequest,
+        caller: candid::Principal,
+    ) -> Result<(), canic_core::dto::error::Error> {
+        crate::workflow::component_registry::authorize_child_allocation_caller(request, caller)
             .map_err(Into::into)
     }
 

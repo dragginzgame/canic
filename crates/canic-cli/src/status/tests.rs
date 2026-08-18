@@ -179,6 +179,7 @@ fn fleet_catalog_entry() -> FleetCatalogEntryV1 {
         app: canic_core::ids::AppId::from("shop"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
+        release_build_id: "01".repeat(32).parse().expect("release build"),
         coordinator_principal: "aaaaa-aa".to_string(),
     }
 }

@@ -494,6 +494,9 @@ mod tests {
             output: CanisterArtifactBuildOutput {
                 package_name: format!("{role}-package"),
                 package_version: "0.101.51".to_string(),
+                protocol_release_identity: "0.101.51".to_string(),
+                protocol_role: canic_core::ids::CanisterRole::owned(role.to_string()),
+                protocol_capabilities: std::collections::BTreeSet::new(),
                 wasm_path: artifact_root.join(format!("{role}.wasm")),
                 wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
                 did_path: artifact_root.join(format!("{role}.did")),

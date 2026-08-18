@@ -70,14 +70,10 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 ));
             }
 
-            let recovery_command = matches!(
-                &command,
-                CoordinatorCommand::PrepareAuthoritySnapshot(_)
-                    | CoordinatorCommand::ResumeAuthoritySnapshot(_)
-            );
-            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
-                recovery_command,
-            )?;
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            if matches!(&command, CoordinatorCommand::AcknowledgeRootSnapshot(_)) {
+                $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_snapshot()?;
+            }
             let controller_command = matches!(
                 &command,
                 CoordinatorCommand::ActivateRegistry(_)
@@ -90,11 +86,18 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                     | CoordinatorCommand::ResumeAuthoritySnapshot(_)
             );
             if controller_command {
-                let caller = $crate::__internal::cdk::api::msg_caller();
                 $crate::__internal::core::access::auth::is_controller(caller)
                     .await
                     .map_err(::canic::Error::from)?;
             }
+            let recovery_command = matches!(
+                &command,
+                CoordinatorCommand::PrepareAuthoritySnapshot(_)
+                    | CoordinatorCommand::ResumeAuthoritySnapshot(_)
+            );
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
+                recovery_command,
+            )?;
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::command(
                 command,
             )
@@ -111,6 +114,9 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             };
 
             let caller = $crate::__internal::cdk::api::msg_caller();
+            if matches!(&request, CoordinatorStatusRequest::Registry) {
+                $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_registry_status()?;
+            }
             if !matches!(
                 &request,
                 CoordinatorStatusRequest::Operation(_)

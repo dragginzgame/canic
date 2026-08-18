@@ -21,13 +21,12 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let inputs = orig_sig.inputs.clone();
     let output = orig_sig.output.clone();
     let impl_async = orig_sig.asyncness.is_some();
-    let returns_fallible = returns_fallible(&orig_sig);
 
     let access_plan = match build_access_plan(kind, &args, &orig_sig) {
         Ok(plan) => plan,
         Err(err) => return err.to_compile_error(),
     };
-    if !returns_fallible && !matches!(access_plan, AccessPlan::None) {
+    if !returns_fallible(&orig_sig) && !matches!(access_plan, AccessPlan::None) {
         let message = "access-gated endpoints must return Result<_, Error> to avoid traps";
         return syn::Error::new_spanned(&orig_sig.ident, message).to_compile_error();
     }
@@ -77,6 +76,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let call_ident = format_ident!("__canic_call");
     let exported_method = exported_method(&args, &orig_name);
     let call_decl = call_decl(kind, args.query_mode, &call_ident, &exported_method);
+    let preflight = preflight(&orig_name);
 
     let access_stage = access_stage(&access_plan, &call_ident);
 
@@ -119,7 +119,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
-            ::canic::__internal::core::dispatch::preflight_endpoint(#call_ident);
+            #preflight(#call_ident);
             #access_stage
             #dispatch_call
         }
@@ -136,6 +136,17 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 // helpers
 // ============================================================================
 //
+
+fn preflight(name: &syn::Ident) -> TokenStream2 {
+    if matches!(
+        name.to_string().as_str(),
+        "canic_wasm_store_chunk" | "canic_wasm_store_publish_chunk"
+    ) {
+        quote!(::canic::__internal::core::dispatch::preflight_store_data_endpoint)
+    } else {
+        quote!(::canic::__internal::core::dispatch::preflight_endpoint)
+    }
+}
 
 fn dispatch(kind: EndpointKind, asyncness: bool) -> TokenStream2 {
     match (kind, asyncness) {

@@ -1163,6 +1163,9 @@ mod tests {
         canic_host::canister_build::CanisterArtifactBuildOutput {
             package_name: format!("canister_{role}"),
             package_version: env!("CARGO_PKG_VERSION").to_string(),
+            protocol_release_identity: env!("CARGO_PKG_VERSION").to_string(),
+            protocol_role: canic_core::ids::CanisterRole::owned(role.to_string()),
+            protocol_capabilities: std::collections::BTreeSet::new(),
             artifact_root: artifact_root.clone(),
             wasm_path,
             wasm_gz_path,

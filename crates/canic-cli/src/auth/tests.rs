@@ -475,6 +475,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                     role: Some("issuer".to_string()),
                     parent_pid: None,
                     module_hash: None,
+                    protocol_binding: None,
                 }]
             } else {
                 Vec::new()

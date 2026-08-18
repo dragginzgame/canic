@@ -267,16 +267,16 @@ root query, or client-side provisioning step.
    -> call management canister sign_with_ecdsa
    -> persist signed batch
    -> install issuer-specific proof/witness on issuer canisters
-2. caller/session -> issuer canic_prepare_delegated_token update
-3. caller/session -> issuer canic_get_delegated_token query
+2. caller/session -> issuer `canic_command::PrepareDelegatedToken` update
+3. caller/session -> issuer `canic_status::DelegatedToken` query
 4. caller/session -> endpoint with DelegatedToken
 ```
 
 Lazy repair uses the same proof primitive:
 
 ```text
-1. issuer canic_prepare_delegated_token update sees missing/stale active proof
-2. issuer -> root canic_get_or_create_chain_key_delegation_proof update
+1. issuer `canic_command::PrepareDelegatedToken` update sees missing/stale active proof
+2. issuer -> root `canic_command::GetOrCreateDelegationProof` update
 3. root returns a cached signed proof when possible
 4. root signs at most one in-flight batch when no valid batch exists
 5. issuer verifies and stores the proof
@@ -299,7 +299,7 @@ quota. An exact committed replay remains available at capacity and returns the
 original response. A fresh request over either limit fails closed with typed
 `ResourceExhausted`.
 
-`canic_upsert_root_issuer_policy` is a root controller update that registers
+`canic_command::UpsertIssuerPolicy` is a root controller update that registers
 or updates the issuer policy used by batch prepare. It records the issuer
 principal, enabled state, allowed audiences, allowed grants, maximum
 certificate TTL, and refresh-after ratio.

@@ -272,6 +272,9 @@ fn finish_canister_artifact_output(
     Ok(CanisterArtifactBuildOutput {
         package_name: spec.package_name.clone(),
         package_version: spec.package_version.clone(),
+        protocol_release_identity: spec.canic_version.clone(),
+        protocol_role: canic_core::ids::CanisterRole::owned(spec.role.clone()),
+        protocol_capabilities: spec.capabilities.clone(),
         artifact_root: spec.artifact_root.clone(),
         wasm_path: spec.wasm_path.clone(),
         wasm_gz_path: spec.wasm_gz_path.clone(),

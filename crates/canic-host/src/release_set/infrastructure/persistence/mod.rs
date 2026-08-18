@@ -22,8 +22,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use canic_core::{ids::ReleaseBuildId, role_contract::ProtocolProfileDigest};
+use canic_core::{
+    ids::{CanisterRole, ReleaseBuildId},
+    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
+};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 
 use super::{
@@ -56,6 +60,9 @@ pub struct PersistedCanicInfrastructureArtifactManifest {
 pub struct CanicInfrastructureArtifactBuildOutput {
     pub role: CanicInfrastructureRole,
     pub package: String,
+    pub protocol_release_identity: String,
+    pub protocol_role: CanisterRole,
+    pub protocol_capabilities: BTreeSet<RoleCapabilityKey>,
     pub release_build_id: ReleaseBuildId,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
@@ -153,6 +160,9 @@ pub enum CanicInfrastructureArtifactPersistenceError {
 struct MaterializedBuildOutput {
     role: CanicInfrastructureRole,
     package: String,
+    protocol_release_identity: String,
+    protocol_role: CanisterRole,
+    protocol_capabilities: BTreeSet<RoleCapabilityKey>,
     release_build_id: ReleaseBuildId,
     wasm_relative_path: String,
     wasm: Vec<u8>,
@@ -167,6 +177,9 @@ impl MaterializedBuildOutput {
         CanicInfrastructureArtifactInput {
             role: self.role,
             package: &self.package,
+            protocol_release_identity: &self.protocol_release_identity,
+            protocol_role: &self.protocol_role,
+            protocol_capabilities: &self.protocol_capabilities,
             release_build_id: self.release_build_id,
             wasm_relative_path: &self.wasm_relative_path,
             wasm: &self.wasm,
@@ -287,6 +300,9 @@ fn materialize_build_output(
     Ok(MaterializedBuildOutput {
         role,
         package: output.package.clone(),
+        protocol_release_identity: output.protocol_release_identity.clone(),
+        protocol_role: output.protocol_role.clone(),
+        protocol_capabilities: output.protocol_capabilities.clone(),
         release_build_id: output.release_build_id,
         wasm_relative_path: wasm.relative_path,
         wasm: wasm.bytes,

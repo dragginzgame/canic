@@ -482,6 +482,9 @@ maximum_instances = 1
             output: CanisterArtifactBuildOutput {
                 package_name: format!("{role}-package"),
                 package_version: "0.101.51".to_string(),
+                protocol_release_identity: "0.101.51".to_string(),
+                protocol_role: canic_core::ids::CanisterRole::owned(role.to_string()),
+                protocol_capabilities: std::collections::BTreeSet::new(),
                 artifact_root,
                 wasm_path,
                 wasm_gz_path,
@@ -505,6 +508,9 @@ maximum_instances = 1
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::FleetCoordinator,
                 package: "canic-fleet-coordinator".to_string(),
+                protocol_release_identity: coordinator.output.protocol_release_identity,
+                protocol_role: coordinator.output.protocol_role,
+                protocol_capabilities: coordinator.output.protocol_capabilities,
                 release_build_id,
                 wasm_path: coordinator.output.wasm_path,
                 wasm_gz_path: coordinator.output.wasm_gz_path,
@@ -514,6 +520,9 @@ maximum_instances = 1
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::FleetSubnetRoot,
                 package: "root-package".to_string(),
+                protocol_release_identity: root_output.output.protocol_release_identity.clone(),
+                protocol_role: root_output.output.protocol_role.clone(),
+                protocol_capabilities: root_output.output.protocol_capabilities.clone(),
                 release_build_id,
                 wasm_path: root_output.output.wasm_path.clone(),
                 wasm_gz_path: root_output.output.wasm_gz_path.clone(),
@@ -523,6 +532,9 @@ maximum_instances = 1
             CanicInfrastructureArtifactBuildOutput {
                 role: crate::release_set::CanicInfrastructureRole::WasmStore,
                 package: "canic-wasm-store".to_string(),
+                protocol_release_identity: wasm_store.output.protocol_release_identity,
+                protocol_role: wasm_store.output.protocol_role,
+                protocol_capabilities: wasm_store.output.protocol_capabilities,
                 release_build_id,
                 wasm_path: wasm_store.output.wasm_path,
                 wasm_gz_path: wasm_store.output.wasm_gz_path,

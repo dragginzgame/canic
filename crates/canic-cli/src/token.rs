@@ -501,6 +501,7 @@ mod tests {
             role: Some(role.to_string()),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         }
     }
 }

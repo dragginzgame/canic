@@ -154,34 +154,6 @@ macro_rules! canic_emit_root_command_endpoint {
                 ));
             }
             let caller = $crate::__internal::cdk::api::msg_caller();
-            let recovery_command = matches!(
-                &command,
-                RootCommand::PrepareAuthoritySnapshot(_) | RootCommand::ResumeAuthoritySnapshot(_)
-            );
-            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
-                recovery_command,
-            )?;
-            let prepared_command = matches!(
-                &command,
-                RootCommand::AdoptStore(_)
-                    | RootCommand::BootstrapStore(_)
-                    | RootCommand::HandoffPoolCanister(_)
-                    | RootCommand::ImportPoolCanister(_)
-                    | RootCommand::MaintainPool
-                    | RootCommand::PrepareComponentRegistry(_)
-                    | RootCommand::PrepareFleetActivation
-                    | RootCommand::ProvisionComponent(_)
-                    | RootCommand::ProvisionComponents(_)
-                    | RootCommand::PublishReleaseSet(_)
-                    | RootCommand::ResumeFleetActivation(_)
-                    | RootCommand::RetryPoolRefill
-                    | RootCommand::RetryPoolReset(_)
-                    | RootCommand::SynchronizeComponentDirectories(_)
-                    | RootCommand::SynchronizeRegistry(_)
-            );
-            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_command_variant_allowed(
-                prepared_command,
-            )?;
             let controller_command = matches!(
                 &command,
                 RootCommand::AdoptStore(_)
@@ -240,6 +212,39 @@ macro_rules! canic_emit_root_command_endpoint {
                     .map_err(::canic::Error::from)?;
             }
 
+            #[cfg(canic_capability_role_attestation_signer)]
+            if matches!(&command, RootCommand::PrepareRoleAttestation(_)) {
+                use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
+                let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
+                let context = $crate::__internal::core::access::expr::AccessContext {
+                    caller: identity.transport_caller,
+                    authenticated_caller: identity.authenticated_subject,
+                    identity_source: identity.identity_source,
+                    call: $crate::__internal::core::ids::EndpointCall {
+                        endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
+                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                    },
+                };
+                $crate::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate
+                    .eval(&context)
+                    .await
+                    .map_err(::canic::Error::from)?;
+            }
+
+            match &command {
+                RootCommand::ProvisionChild(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_component_child_caller(request, caller)?;
+                }
+                RootCommand::ProvisionComponents(_)
+                | RootCommand::SynchronizeComponentDirectories(_) => {
+                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::authorize_coordinator_caller(caller)?;
+                }
+                RootCommand::ProvisionPeer(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_peer_component_allocation_caller(request, caller)?;
+                }
+                _ => {}
+            }
+
             if matches!(&command, RootCommand::RespondCapability(_)) {
                 use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
                 let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
@@ -258,6 +263,34 @@ macro_rules! canic_emit_root_command_endpoint {
                     .map_err(::canic::Error::from)?;
             }
 
+            let recovery_command = matches!(
+                &command,
+                RootCommand::PrepareAuthoritySnapshot(_) | RootCommand::ResumeAuthoritySnapshot(_)
+            );
+            $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
+                recovery_command,
+            )?;
+            let prepared_command = matches!(
+                &command,
+                RootCommand::AdoptStore(_)
+                    | RootCommand::BootstrapStore(_)
+                    | RootCommand::HandoffPoolCanister(_)
+                    | RootCommand::ImportPoolCanister(_)
+                    | RootCommand::MaintainPool
+                    | RootCommand::PrepareComponentRegistry(_)
+                    | RootCommand::PrepareFleetActivation
+                    | RootCommand::ProvisionComponent(_)
+                    | RootCommand::ProvisionComponents(_)
+                    | RootCommand::PublishReleaseSet(_)
+                    | RootCommand::ResumeFleetActivation(_)
+                    | RootCommand::RetryPoolRefill
+                    | RootCommand::RetryPoolReset(_)
+                    | RootCommand::SynchronizeComponentDirectories(_)
+                    | RootCommand::SynchronizeRegistry(_)
+            );
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_command_variant_allowed(
+                prepared_command,
+            )?;
             match command {
                 RootCommand::AdoptStore(request) => {
                     let operation_id = request.operation_id;

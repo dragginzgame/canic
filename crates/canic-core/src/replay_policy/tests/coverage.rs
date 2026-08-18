@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 #[test]
 fn endpoint_manifest_entries_are_unique() {
     let mut seen = BTreeSet::new();
-    for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
+    for entry in STORE_ENDPOINT_REPLAY_POLICY_MANIFEST {
         assert!(
             seen.insert(entry.endpoint),
             "duplicate replay policy entry for {}",
@@ -22,7 +22,7 @@ fn endpoint_manifest_entries_are_unique() {
 #[test]
 fn emitted_canic_update_endpoints_have_replay_policy_entries() {
     let emitted = emitted_update_endpoint_names();
-    let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
+    let manifest = STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .filter(|entry| entry.endpoint_kind == EndpointKind::Update)
         .map(|entry| entry.endpoint)
@@ -50,6 +50,7 @@ fn release_candidate_manifests_have_no_release_blockers() {
 fn remaining_release_blockers_are_explicit_endpoint_slices() {
     let blockers = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
+        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
         .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
         .map(|entry| entry.endpoint)
         .collect::<BTreeSet<_>>();
@@ -59,7 +60,10 @@ fn remaining_release_blockers_are_explicit_endpoint_slices() {
 
 #[test]
 fn intentionally_non_idempotent_entries_must_state_reason() {
-    for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
+    for entry in ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
+    {
         if let ReplayPolicy::IntentionallyNonIdempotent { reason, .. } = entry.replay_policy {
             assert!(
                 !reason.trim().is_empty(),

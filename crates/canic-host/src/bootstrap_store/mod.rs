@@ -124,7 +124,10 @@ pub fn build_bootstrap_wasm_store_artifact(
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,
-        package_version: source.package_version,
+        package_version: source.package_version.clone(),
+        protocol_release_identity: source.package_version,
+        protocol_role: canic_core::ids::CanisterRole::new(WASM_STORE_ROLE),
+        protocol_capabilities: capabilities,
         artifact_root,
         wasm_path,
         wasm_gz_path,
@@ -356,7 +359,7 @@ resolver = \"2\"\n\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
 [dependencies]\n\
-canic = {{ path = \"{}\", default-features = false, features = [\"metrics\", \"wasm-store-canister\"] }}\n\
+canic = {{ path = \"{}\", default-features = false, features = [\"wasm-store-canister\"] }}\n\
 ic-cdk = \"={}\"\n\
 candid = {{ version = \"={}\", default-features = false }}\n\n\
 [build-dependencies]\n\

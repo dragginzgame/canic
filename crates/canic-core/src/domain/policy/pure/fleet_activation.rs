@@ -6,9 +6,7 @@
 
 use crate::{
     ids::{EndpointCall, EndpointCallKind},
-    protocol::{
-        CANIC_COMMAND, CANIC_STATUS, CANIC_WASM_STORE_CHUNK, CANIC_WASM_STORE_PUBLISH_CHUNK,
-    },
+    protocol::{CANIC_COMMAND, CANIC_STATUS},
 };
 use thiserror::Error as ThisError;
 
@@ -29,16 +27,17 @@ pub enum FleetActivationEndpointPolicyError {
 pub fn require_prepared_nonroot_endpoint(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
-    if is_query(call, CANIC_STATUS)
-        || is_update(
-            call,
-            &[
-                CANIC_COMMAND,
-                CANIC_WASM_STORE_CHUNK,
-                CANIC_WASM_STORE_PUBLISH_CHUNK,
-            ],
-        )
-    {
+    if is_query(call, CANIC_STATUS) || is_update(call, &[CANIC_COMMAND]) {
+        return Ok(());
+    }
+    fenced(call)
+}
+
+/// Require one compile-selected Store data lane while that Store is Prepared.
+pub fn require_prepared_store_data_endpoint(
+    call: EndpointCall,
+) -> Result<(), FleetActivationEndpointPolicyError> {
+    if call.kind == EndpointCallKind::Update {
         return Ok(());
     }
     fenced(call)
@@ -107,12 +106,10 @@ mod tests {
     }
 
     #[test]
-    fn prepared_nonroot_uses_its_own_exact_recovery_allowlist() {
+    fn prepared_nonroot_uses_the_ordinary_role_recovery_allowlist() {
         for (endpoint, kind) in [
             (CANIC_STATUS, EndpointCallKind::Query),
             (CANIC_COMMAND, EndpointCallKind::Update),
-            (CANIC_WASM_STORE_CHUNK, EndpointCallKind::Update),
-            (CANIC_WASM_STORE_PUBLISH_CHUNK, EndpointCallKind::Update),
         ] {
             assert_eq!(
                 require_prepared_nonroot_endpoint(call(endpoint, kind)),
@@ -131,5 +128,17 @@ mod tests {
                 Err(FleetActivationEndpointPolicyError::Fenced { endpoint, kind })
             );
         }
+    }
+
+    #[test]
+    fn prepared_store_data_policy_is_reachable_only_through_compile_selected_updates() {
+        assert_eq!(
+            require_prepared_store_data_endpoint(call("store_data_lane", EndpointCallKind::Update)),
+            Ok(())
+        );
+        assert!(
+            require_prepared_store_data_endpoint(call("store_data_lane", EndpointCallKind::Query))
+                .is_err()
+        );
     }
 }

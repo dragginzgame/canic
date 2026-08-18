@@ -4,20 +4,21 @@
 //! Does not own: transport execution, endpoint policy, or canister DTO parsing.
 //! Boundary: maps Fleet metadata plus Candid sidecars into call targets.
 
-use crate::{
-    blob_storage::{
-        BlobStorageCommandError,
-        model::{BlobStorageMethodMode, BlobStorageTarget},
-        options::CommonOptions,
-    },
-    support::candid::role_candid_path,
+use crate::blob_storage::{
+    BlobStorageCommandError,
+    model::{BlobStorageMethodMode, BlobStorageTarget},
+    options::CommonOptions,
 };
 use candid::Principal;
 use canic_host::{
     candid_endpoints::{EndpointMode, parse_candid_service_endpoints},
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
+    protocol_binding::{
+        resolve_infrastructure_protocol_binding, resolve_registry_protocol_binding,
+    },
     registry::RegistryEntry,
+    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use std::{
     fs,
@@ -44,6 +45,7 @@ struct ResolvedBlobStorageTarget {
     input: String,
     role: Option<String>,
     canister_id: String,
+    registry_entry: Option<RegistryEntry>,
 }
 
 pub(super) fn resolve_blob_storage_call_target(
@@ -67,14 +69,39 @@ pub(super) fn resolve_blob_storage_call_target(
         &installed.topology.root_canister_id,
         &installed.registry.entries,
     )?;
-    let candid_path = resolved
-        .role
-        .as_deref()
-        .and_then(|role| role_candid_path(Some(&icp_root), &options.environment, role))
-        .ok_or_else(|| BlobStorageCommandError::CandidUnavailable {
+    let binding = if resolved.canister_id == installed.topology.root_canister_id {
+        let manifest = load_persisted_canic_infrastructure_artifact_manifest(
+            &icp_root,
+            installed.fleet.release_build_id,
+        )
+        .map_err(|_| BlobStorageCommandError::CandidUnavailable {
             fleet: fleet.to_string(),
             target: selector.to_string(),
         })?;
+        let artifact = manifest
+            .manifest
+            .entries
+            .iter()
+            .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+            .ok_or_else(|| BlobStorageCommandError::CandidUnavailable {
+                fleet: fleet.to_string(),
+                target: selector.to_string(),
+            })?;
+        resolve_infrastructure_protocol_binding(&icp_root, &options.environment, artifact)
+    } else {
+        let entry = resolved.registry_entry.as_ref().ok_or_else(|| {
+            BlobStorageCommandError::CandidUnavailable {
+                fleet: fleet.to_string(),
+                target: selector.to_string(),
+            }
+        })?;
+        resolve_registry_protocol_binding(&icp_root, &options.environment, entry)
+    }
+    .map_err(|_| BlobStorageCommandError::CandidUnavailable {
+        fleet: fleet.to_string(),
+        target: selector.to_string(),
+    })?;
+    let candid_path = binding.candid_path().to_path_buf();
     let candid =
         fs::read_to_string(&candid_path).map_err(|source| BlobStorageCommandError::CandidRead {
             path: candid_path.clone(),
@@ -105,6 +132,7 @@ fn resolve_blob_storage_target(
             input: selector.to_string(),
             role: Some("root".to_string()),
             canister_id: root_canister_id.to_string(),
+            registry_entry: None,
         });
     }
 
@@ -116,6 +144,7 @@ fn resolve_blob_storage_target(
             input: selector.to_string(),
             role: None,
             canister_id: selector.to_string(),
+            registry_entry: None,
         });
     }
 
@@ -148,6 +177,7 @@ fn resolved_from_entry(selector: &str, entry: &RegistryEntry) -> ResolvedBlobSto
         input: selector.to_string(),
         role: entry.role.clone(),
         canister_id: entry.pid.clone(),
+        registry_entry: Some(entry.clone()),
     }
 }
 
@@ -255,6 +285,7 @@ mod tests {
             role: role.map(str::to_string),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         }
     }
 }

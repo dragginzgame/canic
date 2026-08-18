@@ -105,6 +105,7 @@ pub(super) fn publish_terminal_fleet_catalog(
         app: request.fleet_install_plan.fleet.app.clone(),
         environment: request.environment.to_string(),
         deployed_at_unix_secs: request.deployed_at_unix_secs,
+        release_build_id: request.fleet_install_plan.release_build_id,
         coordinator_principal: request.coordinator.to_text(),
     };
     commit_fleet_catalog_entry(request.workspace_root, entry).map_err(Into::into)

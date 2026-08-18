@@ -156,7 +156,7 @@ scripts or tests.
 profiles. For a terminal Fleet, `canic info metrics <fleet> --kind <tier>`
 queries what a deployed Canister actually exposes.
 
-If a metrics tier reports `empty` or `canic_metrics` is unavailable, check all
+If a metrics tier reports `empty` or the `canic_status::Metrics` variant is unavailable, check all
 three states before changing code:
 
 ```bash

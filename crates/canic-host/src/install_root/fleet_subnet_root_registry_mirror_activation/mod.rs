@@ -17,6 +17,7 @@ use super::{
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
+    protocol_binding::resolve_infrastructure_protocol_binding,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::{CandidType, Principal};
@@ -145,6 +146,11 @@ fn drive_root_mirror_activation(
         .journal
         .fleet_subnet_root
         .ok_or(RootRegistryMirrorActivationError::LiveEvidenceMismatch)?;
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
     let icp = icp_context.cli();
     for _ in 0..MAX_MIRROR_ACTIVATION_TRANSITIONS {
         current = match current.journal.phase {
@@ -154,6 +160,7 @@ fn drive_root_mirror_activation(
             FleetSubnetRootInstallPhase::RegistryMirrorActivationInFlight => {
                 let response = query_registry_synchronization(
                     icp,
+                    &binding,
                     root,
                     super::root_registry_synchronization_operation_id(
                         current.journal.install_operation_id,
@@ -167,6 +174,7 @@ fn drive_root_mirror_activation(
             FleetSubnetRootInstallPhase::RegistryMirrorActivated => {
                 let response = query_registry_synchronization(
                     icp,
+                    &binding,
                     root,
                     super::root_registry_synchronization_operation_id(
                         current.journal.install_operation_id,
@@ -191,6 +199,7 @@ fn drive_root_mirror_activation(
 
 fn query_registry_synchronization(
     icp: &crate::icp::IcpCli,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<
@@ -199,6 +208,7 @@ fn query_registry_synchronization(
 > {
     let response: RootStatusResponseFragment = query_with_arg(
         icp,
+        binding,
         root,
         protocol::CANIC_STATUS,
         &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),

@@ -4178,6 +4178,15 @@ fn assert_snapshot_acknowledgements(
     second_entry: &FleetSubnetRootEntry,
     version: &FleetRegistryVersion,
 ) -> FleetRegistryVersion {
+    FleetCoordinatorWorkflow::authorize_registry_caller(first_entry.fleet_subnet_root, false)
+        .expect("registered Root authorization");
+    let unauthorized_registry =
+        FleetCoordinatorWorkflow::authorize_registry_caller(principal(99), false)
+            .expect_err("unregistered caller must fail before Registry dispatch");
+    assert_eq!(
+        unauthorized_registry.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+    );
     let snapshot =
         FleetCoordinatorWorkflow::registry_for_caller(first_entry.fleet_subnet_root, false)
             .expect("registered root Registry");
@@ -4196,6 +4205,15 @@ fn assert_snapshot_acknowledgements(
     let request = canic_core::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgementRequest {
         version: version.clone(),
     };
+    FleetCoordinatorWorkflow::authorize_root_snapshot_caller(first_entry.fleet_subnet_root)
+        .expect("joining Root authorization");
+    let unauthorized_acknowledgement =
+        FleetCoordinatorWorkflow::authorize_root_snapshot_caller(principal(99))
+            .expect_err("unregistered caller must fail before acknowledgement dispatch");
+    assert_eq!(
+        unauthorized_acknowledgement.public_error().code(),
+        canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+    );
     let first_ack = FleetCoordinatorWorkflow::acknowledge_root_snapshot(
         first_entry.fleet_subnet_root,
         request.clone(),

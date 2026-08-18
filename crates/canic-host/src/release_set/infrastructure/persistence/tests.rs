@@ -107,6 +107,7 @@ fn complete_build_rejects_missing_and_duplicate_roles_before_persistence() {
 
     let mut outputs = build_outputs(&root, release_build_id);
     outputs[0].role = outputs[1].role;
+    outputs[0].protocol_role = outputs[1].protocol_role.clone();
     assert!(matches!(
         compile_and_persist_canic_infrastructure_artifact_manifest(
             &root,
@@ -341,6 +342,9 @@ fn build_output(
     CanicInfrastructureArtifactBuildOutput {
         role,
         package: package.to_string(),
+        protocol_release_identity: "0.103.0".to_string(),
+        protocol_role: canic_core::ids::CanisterRole::owned(role.as_str().to_string()),
+        protocol_capabilities: std::collections::BTreeSet::new(),
         release_build_id,
         wasm_path,
         wasm_gz_path,

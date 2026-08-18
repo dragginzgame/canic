@@ -17,6 +17,7 @@ use crate::{
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet},
     icp::IcpCli,
+    protocol_binding::{ResolvedProtocolBinding, resolve_infrastructure_protocol_binding},
     release_set::{
         AppConfigSnapshot, ApplicationArtifactEntry,
         load_persisted_canic_infrastructure_artifact_manifest, resolve_release_artifact_path,
@@ -236,13 +237,19 @@ fn adopt_store(
         authority: expected_wasm_store_authority(&current.journal)?,
     };
     let icp = icp_context.cli();
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
     let updated = call_with_arg::<_, RootCommandResponseFragment>(
         icp,
+        &binding,
         root,
         protocol::CANIC_COMMAND,
         &RootCommandFragment::AdoptStore(Box::new(request.clone())),
     );
-    let observed = query_root_operation(icp, root, request.operation_id)?;
+    let observed = query_root_operation(icp, &binding, root, request.operation_id)?;
     let RootOperationStatusResponse::AdoptStore(observed) = observed else {
         return Err(RootStoreBootstrapError::LiveEvidenceMismatch.into());
     };
@@ -288,6 +295,11 @@ fn stage_release_set(
         .wasm_store
         .expect("Store staging follows verified Store installation");
     let icp = icp_context.cli();
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.wasm_store_artifact,
+    )?;
     let version = TemplateVersion::owned(release_set.manifest.release_build_id.to_string());
     let manifest_template_id = TemplateId::owned(format!(
         "{ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX}{}",
@@ -295,6 +307,7 @@ fn stage_release_set(
     ));
     stage_chunk_set(
         icp,
+        &binding,
         store,
         manifest_template_id,
         version.clone(),
@@ -309,6 +322,7 @@ fn stage_release_set(
         let payload_hash = wasm_hash(&bytes);
         let response = call_with_arg::<_, StoreCommandResponse>(
             icp,
+            &binding,
             store,
             protocol::CANIC_COMMAND,
             &StoreCommand::StageManifest(TemplateManifestInput {
@@ -329,6 +343,7 @@ fn stage_release_set(
         }
         stage_chunk_set(
             icp,
+            &binding,
             store,
             template_id,
             version.clone(),
@@ -400,6 +415,7 @@ fn load_artifact_bytes(
 
 fn stage_chunk_set(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     store: Principal,
     template_id: TemplateId,
     version: TemplateVersion,
@@ -416,6 +432,7 @@ fn stage_chunk_set(
         .collect::<Vec<_>>();
     let response = call_with_arg::<_, StoreCommandResponse>(
         icp,
+        binding,
         store,
         protocol::CANIC_COMMAND,
         &StoreCommand::PrepareChunkSet(TemplateChunkSetPrepareInput {
@@ -435,8 +452,9 @@ fn stage_chunk_set(
     for (chunk_index, bytes) in chunks.into_iter().enumerate() {
         call_with_arg::<_, ()>(
             icp,
+            binding,
             store,
-            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+            "canic_wasm_store_publish_chunk",
             &TemplateChunkInput {
                 template_id: template_id.clone(),
                 version: version.clone(),
@@ -457,8 +475,14 @@ fn call_store_bootstrap(
         .journal
         .fleet_subnet_root
         .expect("Store bootstrap follows verified root installation");
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
     let response = call_with_arg::<_, RootCommandResponseFragment>(
         icp_context.cli(),
+        &binding,
         root,
         protocol::CANIC_COMMAND,
         &RootCommandFragment::BootstrapStore(request.clone()),
@@ -479,7 +503,12 @@ fn query_store_bootstrap_status(
         .journal
         .fleet_subnet_root
         .expect("Store verification follows verified root installation");
-    let response = query_root_operation(icp_context.cli(), root, request.operation_id)?;
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
+    let response = query_root_operation(icp_context.cli(), &binding, root, request.operation_id)?;
     match response {
         RootOperationStatusResponse::BootstrapStore(response) => Ok(response),
         _ => Err(RootStoreBootstrapError::LiveEvidenceMismatch.into()),
@@ -488,11 +517,13 @@ fn query_store_bootstrap_status(
 
 fn query_root_operation(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<RootOperationStatusResponse, Box<dyn std::error::Error>> {
     let response: RootStatusResponseFragment = query_with_arg(
         icp,
+        binding,
         root,
         protocol::CANIC_STATUS,
         &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),

@@ -14,4 +14,5 @@ pub struct RegistryEntry {
     pub role: Option<String>,
     pub parent_pid: Option<String>,
     pub module_hash: Option<String>,
+    pub protocol_binding: Option<crate::protocol_binding::RegistryProtocolBinding>,
 }

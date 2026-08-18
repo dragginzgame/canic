@@ -303,6 +303,7 @@ fn catalog_entry(plan: &PersistedFleetInstallPlan, time: u64) -> FleetCatalogEnt
         app: plan.plan.fleet.app.clone(),
         environment: "ic".to_string(),
         deployed_at_unix_secs: time,
+        release_build_id: plan.plan.release_build_id,
         coordinator_principal: principal(3).to_text(),
     }
 }

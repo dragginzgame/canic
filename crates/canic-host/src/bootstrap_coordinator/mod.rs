@@ -129,7 +129,10 @@ pub fn build_bootstrap_fleet_coordinator_artifact(
 
     Ok(CanisterArtifactBuildOutput {
         package_name: source.package_name,
-        package_version: source.package_version,
+        package_version: source.package_version.clone(),
+        protocol_release_identity: source.package_version,
+        protocol_role: canic_core::ids::CanisterRole::new(FLEET_COORDINATOR_ROLE),
+        protocol_capabilities: capabilities,
         artifact_root,
         wasm_path,
         wasm_gz_path,

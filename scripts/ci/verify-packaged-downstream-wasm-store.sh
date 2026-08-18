@@ -194,7 +194,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { version = "0.10", default-features = false }
-canic = { path = "$package_root/canic-$VERSION", default-features = false, features = ["metrics"] }
+canic = { path = "$package_root/canic-$VERSION", default-features = false, features = [] }
 ic-cdk = "0.20"
 
 [build-dependencies]
@@ -373,7 +373,7 @@ assert_generated_probe_outputs() {
                 | .dependencies[];
                 .name == "canic"
                     and .kind == null
-                    and (.features | sort) == ["metrics", "wasm-store-canister"]
+                    and .features == ["wasm-store-canister"]
             )
         ' >/dev/null || {
         echo "expected generated wrapper to enable exactly the maintained Canic runtime features" >&2

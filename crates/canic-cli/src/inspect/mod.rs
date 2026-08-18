@@ -25,6 +25,7 @@ use canic_host::{
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
+    protocol_binding::ResolvedProtocolBinding,
 };
 use clap::{Arg, Command as ClapCommand};
 use serde::Serialize;
@@ -124,7 +125,7 @@ struct ResolvedInspectTarget {
     environment: String,
     icp: String,
     source: InspectSource,
-    candid_path: Option<PathBuf>,
+    protocol_binding: ResolvedProtocolBinding,
     icp_root: Option<PathBuf>,
     json: bool,
 }
@@ -255,18 +256,15 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
             environment,
             icp,
             json,
-        } => Ok(ResolvedInspectTarget {
-            command: InspectCommandKind::Canister,
-            fleet: None,
-            role: None,
-            canister_id: canister.clone(),
-            environment: environment.clone(),
-            icp: icp.clone(),
-            source: InspectSource::CliArg,
-            candid_path: None,
-            icp_root: resolve_current_canic_icp_root().ok(),
-            json: *json,
-        }),
+        } => {
+            let command = InspectCommandKind::Canister;
+            let source = InspectSource::CliArg;
+            Err(InspectCommandError::Target(format!(
+                "{} cannot select an exact protected protocol binding from source {}; use `canic inspect fleet <fleet> --role <role>` before querying Canister {canister} (environment {environment}, ICP executable {icp}, json={json})",
+                command.label(),
+                source.label(),
+            )))
+        }
         InspectOptions::Fleet {
             fleet,
             role,
@@ -315,6 +313,8 @@ fn resolve_fleet_target(
     };
     validate_principal(&entry.pid)?;
 
+    let protocol_binding = registry_entry_candid_path(Some(root.as_path()), environment, entry)
+        .map_err(|error| InspectCommandError::Target(error.to_string()))?;
     Ok(ResolvedInspectTarget {
         command: InspectCommandKind::Fleet,
         fleet: Some(fleet.to_string()),
@@ -323,7 +323,7 @@ fn resolve_fleet_target(
         environment: environment.to_string(),
         icp: icp.to_string(),
         source: InspectSource::FleetRegistry,
-        candid_path: registry_entry_candid_path(Some(root.as_path()), environment, entry),
+        protocol_binding,
         icp_root: Some(root),
         json,
     })
@@ -339,7 +339,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         CANIC_STATUS,
         "(variant { Runtime })",
         Some("json"),
-        target.candid_path.as_deref(),
+        Some(target.protocol_binding.candid_path()),
     )?;
     let runtime_status = runtime_response_payload(&output)?;
     let status = runtime_status.status.status;

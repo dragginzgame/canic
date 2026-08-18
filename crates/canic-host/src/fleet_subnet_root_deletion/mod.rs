@@ -11,6 +11,7 @@ mod tests;
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_arg, query_with_arg},
     icp::{IcpCanisterStatusReport, IcpCli, IcpDiagnostic, LocalReplicaTarget},
+    protocol_binding::ResolvedProtocolBinding,
 };
 use candid::{CandidType, Principal};
 use canic_control_plane::dto::{
@@ -53,7 +54,9 @@ pub struct FleetSubnetRootDeletionHostRequest<'a> {
     pub environment: &'a str,
     pub local_replica: Option<&'a LocalReplicaTarget>,
     pub coordinator: Principal,
+    pub coordinator_protocol_binding: &'a ResolvedProtocolBinding,
     pub fleet_subnet_root: Principal,
+    pub root_protocol_binding: &'a ResolvedProtocolBinding,
     pub operation_id: [u8; 32],
 }
 
@@ -185,6 +188,8 @@ trait FleetSubnetRootDeletionAdapter {
 struct IcpFleetSubnetRootDeletionAdapter {
     icp: IcpCli,
     coordinator: Principal,
+    coordinator_protocol_binding: ResolvedProtocolBinding,
+    root_protocol_binding: ResolvedProtocolBinding,
 }
 
 #[derive(CandidType)]
@@ -241,6 +246,8 @@ fn icp_adapter(
     IcpFleetSubnetRootDeletionAdapter {
         icp,
         coordinator: request.coordinator,
+        coordinator_protocol_binding: request.coordinator_protocol_binding.clone(),
+        root_protocol_binding: request.root_protocol_binding.clone(),
     }
 }
 
@@ -697,6 +704,7 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
     ) -> Result<Option<FleetSubnetRootDeletionResponse>, FleetSubnetRootDeletionError> {
         let status = query_optional(
             &self.icp,
+            &self.coordinator_protocol_binding,
             self.coordinator,
             protocol::CANIC_STATUS,
             &CoordinatorStatusRequest::Operation(OperationStatusRequest {
@@ -732,6 +740,7 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
     {
         let status = query_optional(
             &self.icp,
+            &self.coordinator_protocol_binding,
             self.coordinator,
             protocol::CANIC_STATUS,
             &CoordinatorStatusRequest::Operation(OperationStatusRequest {
@@ -756,6 +765,7 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
     {
         let status = query_optional(
             &self.icp,
+            &self.root_protocol_binding,
             root,
             protocol::CANIC_STATUS,
             &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
@@ -776,6 +786,7 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
     ) -> Result<FleetSubnetRootDeletionExecutionResponse, FleetSubnetRootDeletionError> {
         let response = call_protocol(
             &self.icp,
+            &self.coordinator_protocol_binding,
             self.coordinator,
             protocol::CANIC_COMMAND,
             &CoordinatorCommand::PrepareRootDeletionExecution(request),
@@ -796,6 +807,7 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
     ) -> Result<FleetSubnetRootDeletionResponse, FleetSubnetRootDeletionError> {
         let response = call_protocol(
             &self.icp,
+            &self.coordinator_protocol_binding,
             self.coordinator,
             protocol::CANIC_COMMAND,
             &CoordinatorCommand::CompleteRootDeletion(request),
@@ -857,6 +869,7 @@ impl FleetSubnetRootDeletionAdapter for IcpFleetSubnetRootDeletionAdapter {
 
 fn query_optional<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &'static str,
     input: &I,
@@ -866,7 +879,7 @@ where
     I: candid::CandidType,
     O: candid::CandidType + serde::de::DeserializeOwned,
 {
-    match query_with_arg(icp, canister, method, input) {
+    match query_with_arg(icp, binding, canister, method, input) {
         Ok(response) => Ok(Some(response)),
         Err(error) if error.is_rejected_with(codes::STATE_UNAVAILABLE) => Ok(None),
         Err(error) => Err(protocol_error(stage, error)),
@@ -875,6 +888,7 @@ where
 
 fn call_protocol<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &'static str,
     input: &I,
@@ -884,7 +898,8 @@ where
     I: candid::CandidType,
     O: candid::CandidType + serde::de::DeserializeOwned,
 {
-    call_with_arg(icp, canister, method, input).map_err(|error| protocol_error(stage, error))
+    call_with_arg(icp, binding, canister, method, input)
+        .map_err(|error| protocol_error(stage, error))
 }
 
 fn parse_status_report(

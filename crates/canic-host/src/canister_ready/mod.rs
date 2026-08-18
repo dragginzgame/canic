@@ -7,6 +7,7 @@
 use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::IcpConfigError,
+    protocol_binding::ResolvedProtocolBinding,
     replica_query::{self, ReplicaQueryError},
 };
 use candid::{CandidType, Deserialize};
@@ -49,13 +50,13 @@ pub fn query_canister_ready(
     canister_id: &str,
     environment: &str,
     icp_root: Option<&Path>,
-    candid_path: Option<&Path>,
+    binding: &ResolvedProtocolBinding,
 ) -> Result<bool, CanisterReadyQueryError> {
     if replica_query::uses_local_replica_transport(Some(environment), icp_root)? {
         return query_local_canister_ready(environment, canister_id, icp_root).map_err(Into::into);
     }
 
-    query_canister_ready_with_icp(icp, canister_id, candid_path)
+    query_canister_ready_with_icp(icp, canister_id, binding)
 }
 
 /// Query role-owned readiness directly through the local replica API.
@@ -70,14 +71,14 @@ pub fn query_local_canister_ready(
 fn query_canister_ready_with_icp(
     icp: &IcpCli,
     canister_id: &str,
-    candid_path: Option<&Path>,
+    binding: &ResolvedProtocolBinding,
 ) -> Result<bool, CanisterReadyQueryError> {
     let output = icp.canister_query_arg_output_with_candid(
         canister_id,
         CANIC_STATUS,
         "(variant { Readiness })",
         Some(ICP_JSON_OUTPUT),
-        candid_path,
+        Some(&binding.candid_path),
     )?;
     let response = decode_json_result_response::<RoleStatusResponse>(&output)?;
     let RoleStatusResponse::Readiness(response) = response;

@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { path = "../../../crates/canic", default-features = false, features = ["metrics"] }
+canic = { path = "../../../crates/canic", default-features = false, features = [] }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

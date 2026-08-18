@@ -128,7 +128,7 @@ represent only Component or ComponentChild identity, never Root identity.
 
 The status map is deliberately flat: distinct cycle, runtime, auth, directory
 and Registry observations are variants, not second-level family enums. The 78
-retained status appearances yield 22 Root, six Coordinator, 13 managed and
+retained status appearances yield 22 Root, six Coordinator, 12 managed and
 seven Store targets; Coordinator additionally requires `Overview`, which has
 no old-method row. The three unconditional `canic_cycle_topups` appearances in
 the captured Root, managed-auth and Store profiles are deleted. Only an exact
@@ -144,8 +144,8 @@ hide the old phase tree inside two method names:
 
 | Role/profile | Canic methods | Command requests | Command responses | Status requests/responses | Durable operation kinds | Atomic command kinds | Old methods eliminated |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Fleet Subnet Root auth fixture | 2 | 32 | 19 | 22 | 12 | 18 | 48 |
-| managed auth fixture | 2 | 4 | 4 | 13 | 1 | 3 | 3 |
+| Fleet Subnet Root auth fixture | 2 | 32 | 20 | 22 | 12 | 18 | 48 |
+| managed auth fixture | 2 | 4 | 4 | 12 | 1 | 3 | 3 |
 | Fleet Coordinator | 2 | 9 | 8 | 7 | 2 | 7 | 10 |
 | Wasm Store | 4 | 10 | 8 | 7 | 2 | 7 | 3 |
 

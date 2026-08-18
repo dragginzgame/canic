@@ -34,6 +34,7 @@ pub mod install_root;
 pub mod installed_fleet;
 pub mod network;
 pub mod policy_gate;
+pub mod protocol_binding;
 pub mod registry;
 pub mod release_build;
 pub mod release_set;

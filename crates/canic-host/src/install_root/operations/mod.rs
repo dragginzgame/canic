@@ -1,5 +1,6 @@
 mod activation;
 mod artifact;
+mod binding;
 mod creation;
 mod installation;
 mod manifest;
@@ -13,12 +14,13 @@ pub(super) use activation::{
     require_expected_module_hash,
 };
 pub(super) use artifact::{InstallArtifact, resolve_install_artifact};
+pub(super) use binding::resolve_install_protocol_binding;
 pub(super) use creation::{CreationEffectRequest, execute_or_observe_creation};
 pub(super) use installation::{InstallEffectRequest, execute_or_observe_install};
 pub(super) use manifest::EmitRootManifestOperation;
 pub(super) use phase::InstallPhaseLabel;
 pub(super) use preparation::BuildInstallTargetsOperation;
-pub(super) use registry::{LiveRegistryEvidence, query_live_registry};
+pub(super) use registry::{LiveRegistryEvidence, fleet_registry_authority, query_live_registry};
 
 #[derive(Clone, Copy)]
 pub(in crate::install_root) enum EffectAction {

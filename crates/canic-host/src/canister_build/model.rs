@@ -1,6 +1,9 @@
-use std::path::PathBuf;
+use std::{collections::BTreeSet, path::PathBuf};
 
-use canic_core::role_contract::ProtocolProfileDigest;
+use canic_core::{
+    ids::CanisterRole,
+    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
+};
 
 pub(super) const FLEET_COORDINATOR_ROLE: &str = "fleet_coordinator";
 pub(super) const WASM_STORE_ROLE: &str = "wasm_store";
@@ -52,6 +55,9 @@ pub struct CanisterArtifactBuildSpec {
 pub struct CanisterArtifactBuildOutput {
     pub package_name: String,
     pub package_version: String,
+    pub protocol_release_identity: String,
+    pub protocol_role: CanisterRole,
+    pub protocol_capabilities: BTreeSet<RoleCapabilityKey>,
     pub artifact_root: PathBuf,
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,

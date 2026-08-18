@@ -14,7 +14,10 @@ mod tests;
 
 mod types;
 
-pub use endpoint_manifest::{ENDPOINT_REPLAY_POLICY_MANIFEST, endpoint_replay_policy_manifest};
+pub use endpoint_manifest::{
+    ENDPOINT_REPLAY_POLICY_MANIFEST, STORE_ENDPOINT_REPLAY_POLICY_MANIFEST,
+    endpoint_replay_policy_manifest, store_endpoint_replay_policy_manifest,
+};
 pub use role_command_manifest::{
     COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST, MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
     ROOT_COMMAND_REPLAY_POLICY_MANIFEST, STORE_COMMAND_REPLAY_POLICY_MANIFEST,

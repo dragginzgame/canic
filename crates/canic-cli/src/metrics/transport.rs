@@ -35,6 +35,9 @@ const METRICS_WORKER_PANIC: &str = "metrics query worker panicked";
 
 #[derive(Debug, ThisError)]
 enum MetricsQueryError {
+    #[error("protocol binding failed before transport: {0}")]
+    Binding(String),
+
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
@@ -225,7 +228,8 @@ fn query_metrics(
     );
     let mut icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
     let root = resolve_current_canic_icp_root().ok();
-    let candid_path = registry_entry_candid_path(root.as_deref(), &options.environment, entry);
+    let binding = registry_entry_candid_path(root.as_deref(), &options.environment, entry)
+        .map_err(|error| MetricsQueryError::Binding(error.to_string()))?;
     if let Some(root) = root {
         icp = icp.with_cwd(root);
     }
@@ -234,7 +238,7 @@ fn query_metrics(
         canic_core::protocol::CANIC_STATUS,
         &arg,
         Some("json"),
-        candid_path.as_deref(),
+        Some(binding.candid_path()),
     )?;
 
     parse_metrics_page(&output).map_err(MetricsQueryError::Response)
@@ -264,6 +268,7 @@ mod tests {
             role: Some("wasm_store".to_string()),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         }
     }
 

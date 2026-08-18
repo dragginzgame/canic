@@ -22,7 +22,7 @@ fn generated_wasm_store_wrapper_enables_wasm_store_canister_feature() {
 
     assert!(manifest.contains("resolver = \"2\""));
     assert!(manifest.contains("default-features = false"));
-    assert!(manifest.contains("features = [\"metrics\", \"wasm-store-canister\"]"));
+    assert!(manifest.contains("features = [\"wasm-store-canister\"]"));
     assert!(manifest.contains("features = []"));
     assert!(!manifest.contains("features = [\"control-plane\"]"));
     assert!(manifest.contains("ic-cdk = \"=0.20.2\""));

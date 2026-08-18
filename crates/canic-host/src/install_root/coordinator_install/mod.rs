@@ -21,7 +21,7 @@ use super::{
         CreationEffectRequest, EffectAction, InstallArtifact, InstallEffectRequest,
         active_installation_controller, execute_or_observe_creation, execute_or_observe_install,
         query_live_registry, require_expected_controllers, require_expected_module_hash,
-        resolve_install_artifact,
+        resolve_install_artifact, resolve_install_protocol_binding,
     },
 };
 use crate::{
@@ -105,6 +105,11 @@ pub(super) fn install_and_verify_fleet_coordinator(
         CanicInfrastructureRole::FleetCoordinator,
         fleet_install_plan.plan.release_build_id,
     )?;
+    let protocol_binding = resolve_install_protocol_binding(
+        icp_context,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+    )?;
     let mut current = plan_fleet_coordinator_install(PlanFleetCoordinatorInstallRequest {
         fleet_install_plan,
         infrastructure_manifest: &infrastructure_manifest,
@@ -129,14 +134,14 @@ pub(super) fn install_and_verify_fleet_coordinator(
                 recover_or_install_coordinator(icp_context, &artifact, &current)?
             }
             FleetCoordinatorInstallPhase::Installed => {
-                verify_and_record_coordinator(icp_context, &current)?
+                verify_and_record_coordinator(icp_context, &protocol_binding, &current)?
             }
             FleetCoordinatorInstallPhase::Verified => {
                 let coordinator = current
                     .journal
                     .coordinator
                     .expect("validated Verified journal retains its Coordinator");
-                verify_live_coordinator_current(icp_context, &current.journal)?;
+                verify_live_coordinator_current(icp_context, &protocol_binding, &current.journal)?;
                 return Ok(VerifiedFleetCoordinator { coordinator });
             }
         };
@@ -205,14 +210,16 @@ fn recover_or_install_coordinator(
 
 fn verify_and_record_coordinator(
     icp_context: &InstallIcpContext,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
-    let genesis = verify_live_coordinator_genesis(icp_context, &current.journal)?;
+    let genesis = verify_live_coordinator_genesis(icp_context, binding, &current.journal)?;
     record_coordinator_verified(current, genesis.manifest, genesis.version).map_err(Into::into)
 }
 
 fn verify_live_coordinator_genesis(
     icp_context: &InstallIcpContext,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     journal: &FleetCoordinatorInstallJournal,
 ) -> Result<ExpectedCoordinatorGenesis, Box<dyn std::error::Error>> {
     let coordinator = journal
@@ -237,7 +244,7 @@ fn verify_live_coordinator_genesis(
     )?;
 
     let expected = expected_genesis(journal)?;
-    let live = query_live_registry(icp, coordinator)?;
+    let live = query_live_registry(icp, binding, coordinator)?;
     if live.registry != expected.registry {
         return Err(CoordinatorInstallStateError::RegistryMismatch.into());
     }
@@ -252,6 +259,7 @@ fn verify_live_coordinator_genesis(
 
 fn verify_live_coordinator_current(
     icp_context: &InstallIcpContext,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     journal: &FleetCoordinatorInstallJournal,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let coordinator = journal
@@ -276,7 +284,7 @@ fn verify_live_coordinator_current(
     )?;
 
     let expected = expected_genesis(journal)?;
-    let live = query_live_registry(icp, coordinator)?;
+    let live = query_live_registry(icp, binding, coordinator)?;
     FleetRegistryOps::validate(
         &expected.init_args.authority,
         &journal

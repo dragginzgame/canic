@@ -286,18 +286,18 @@ root-managed renewal timer
   -> AuthOps::sign_next_chain_key_root_delegation_batch
   -> management canister sign_with_ecdsa
   -> AuthOps::start_next_chain_key_root_delegation_batch_install
-  -> root broadcasts canic_install_active_delegation_proof to issuers
+  -> root broadcasts canic_command::InstallDelegationProof to issuers
 
 issuer lazy repair
-  -> issuer prepare_delegated_token sees missing/stale active proof
-  -> root canic_get_or_create_chain_key_delegation_proof update
+  -> issuer canic_command::PrepareDelegatedToken sees missing/stale active proof
+  -> root canic_command::GetOrCreateDelegationProof update
   -> root returns cached proof or singleflight creates one signed batch
   -> issuer verifies and stores active proof
 
 root issuer readiness provisioning
   -> app root calls AuthApi::provision_chain_key_delegation_proof_for_issuer_root
   -> root reuses the same cached/singleflight chain-key batch path
-  -> root calls canic_install_active_delegation_proof on the issuer
+  -> root calls canic_command::InstallDelegationProof on the issuer
   -> root records the issuer install outcome
 ```
 
@@ -306,7 +306,7 @@ Root issuance steps:
 1. Require local canister is root.
 2. Require root-controller authorization for the MVP policy upsert and batch
    endpoints.
-3. Register each issuer policy through `canic_upsert_root_issuer_policy`
+3. Register each issuer policy through `canic_command::UpsertIssuerPolicy`
    before preparing root proof material.
 4. Validate each issuer against the root issuer registry.
 5. Load `auth.delegated_tokens` config.

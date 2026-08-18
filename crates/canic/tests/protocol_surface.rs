@@ -852,11 +852,11 @@ fn managed_and_store_activation_variants_are_guarded_by_the_exact_root() {
 fn public_protocol_reexports_only_wasm_store_byte_lanes() {
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_CHUNK,
-        canic_core::protocol::CANIC_WASM_STORE_CHUNK
+        "canic_wasm_store_chunk"
     );
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-        canic_core::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
+        "canic_wasm_store_publish_chunk"
     );
 
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/wasm_store.rs");
@@ -1647,6 +1647,72 @@ fn root_authority_restore_and_cycle_refill_are_variant_guarded() {
     assert!(source.contains("RootCommand::PreviewCycleRefill(_)"));
     assert!(source.contains("RootCommand::RefillCycles(_)"));
     assert!(source.contains("let controller_command = matches!"));
+}
+
+#[test]
+fn root_and_coordinator_commands_authorize_before_state_gates_or_dispatch() {
+    let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
+    let root_command = root
+        .split("async fn canic_command(")
+        .nth(1)
+        .and_then(|tail| tail.split("match command {").next())
+        .expect("Root command admission");
+    let root_state_gate = root_command
+        .find("AuthorityRestoreApi::require_command_variant_allowed")
+        .expect("Root authority-restore gate");
+    for authorization in [
+        "access::auth::is_controller(caller)",
+        "authorize_fleet_subnet_root_removal_caller(",
+        "ActiveComponentMemberPredicate",
+        "authorize_component_child_caller(request, caller)",
+        "authorize_coordinator_caller(caller)",
+        "authorize_peer_component_allocation_caller(request, caller)",
+        "RootCapabilityCallerPredicate",
+    ] {
+        let offset = root_command
+            .find(authorization)
+            .unwrap_or_else(|| panic!("Root admission lacks {authorization}"));
+        assert!(
+            offset < root_state_gate,
+            "Root {authorization} must precede protected state gates"
+        );
+    }
+
+    let coordinator =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/fleet_coordinator.rs"));
+    let coordinator_command = coordinator
+        .split("async fn canic_command(")
+        .nth(1)
+        .and_then(|tail| tail.split("FleetCoordinatorApi::command(").next())
+        .expect("Coordinator command admission");
+    let coordinator_state_gate = coordinator_command
+        .find("AuthorityRestoreApi::require_command_variant_allowed")
+        .expect("Coordinator authority-restore gate");
+    for authorization in [
+        "authorize_calling_root_snapshot()",
+        "access::auth::is_controller(caller)",
+    ] {
+        let offset = coordinator_command
+            .find(authorization)
+            .unwrap_or_else(|| panic!("Coordinator admission lacks {authorization}"));
+        assert!(
+            offset < coordinator_state_gate,
+            "Coordinator {authorization} must precede protected state gates"
+        );
+    }
+    let coordinator_status = coordinator
+        .split("async fn canic_status(")
+        .nth(1)
+        .expect("Coordinator status admission");
+    assert!(
+        coordinator_status
+            .find("authorize_calling_registry_status()")
+            .expect("Coordinator Registry authorization")
+            < coordinator_status
+                .find("match request {")
+                .expect("Coordinator status dispatch"),
+        "Coordinator Registry authority must precede status dispatch"
+    );
 }
 #[test]
 fn root_icp_refill_dto_candid_shapes_are_named() {

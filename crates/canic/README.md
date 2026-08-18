@@ -29,13 +29,12 @@ one direct path to Canic.
 
 ## Feature Contract
 
-The default feature set contains only `metrics`. Disable default features when
-you need a narrower facade dependency, then select every runtime capability
-required by the role.
+The default feature set is empty. Select every Cargo-gated runtime capability
+required by the role; generated metrics are derived from role configuration,
+not selected through a facade feature.
 
 | Feature | Default | Enables |
 | --- | --- | --- |
-| `metrics` | Yes | Metrics collection and the profile-selected `canic_status(Metrics)` variant. |
 | `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs without Store-canister endpoints. |
 | `fleet-coordinator-canister` | No | The dedicated canonical Fleet Coordinator lifecycle and Fleet Registry API. Configured application roles should not enable it. |
 | `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |

@@ -87,6 +87,8 @@ pub(super) fn load_reused_install_build(
                 &target.role,
                 package,
                 &target.spec.package_version,
+                &target.spec.canic_version,
+                &target.spec.capabilities,
                 wasm_relative_path,
                 wasm_gz_relative_path,
                 candid_sha256,
@@ -103,6 +105,9 @@ pub(super) fn load_reused_install_build(
             Ok(CanicInfrastructureArtifactBuildOutput {
                 role: entry.role,
                 package: entry.package.clone(),
+                protocol_release_identity: entry.protocol_release_identity.clone(),
+                protocol_role: entry.protocol_role.clone(),
+                protocol_capabilities: entry.protocol_capabilities.clone(),
                 release_build_id,
                 wasm_path: resolve_release_artifact_path(icp_root, &entry.wasm_relative_path)?,
                 wasm_gz_path: resolve_release_artifact_path(
@@ -130,6 +135,10 @@ fn reused_output(
     role: &str,
     package_name: &str,
     package_version: &str,
+    protocol_release_identity: &str,
+    protocol_capabilities: &std::collections::BTreeSet<
+        canic_core::role_contract::RoleCapabilityKey,
+    >,
     wasm_relative_path: &str,
     wasm_gz_relative_path: &str,
     candid_sha256: [u8; 32],
@@ -144,6 +153,9 @@ fn reused_output(
     Ok(CanisterArtifactBuildOutput {
         package_name: package_name.to_string(),
         package_version: package_version.to_string(),
+        protocol_release_identity: protocol_release_identity.to_string(),
+        protocol_role: CanisterRole::owned(role.to_string()),
+        protocol_capabilities: protocol_capabilities.clone(),
         did_path: artifact_root.join(format!("{role}.did")),
         artifact_root,
         wasm_path,

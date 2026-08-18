@@ -19,7 +19,7 @@ use crate::{
 };
 use canic_core::{
     cdk::types::Principal,
-    ids::{AppId, CanonicalNetworkId, FleetId, FleetName, FleetNameParseError},
+    ids::{AppId, CanonicalNetworkId, FleetId, FleetName, FleetNameParseError, ReleaseBuildId},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -74,6 +74,7 @@ pub struct FleetCatalogEntryV1 {
     /// Non-authoritative environment-profile provenance from installation.
     pub environment: String,
     pub deployed_at_unix_secs: u64,
+    pub release_build_id: ReleaseBuildId,
     pub coordinator_principal: String,
 }
 

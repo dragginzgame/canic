@@ -18,12 +18,18 @@ use super::{
         expected_registry_join_entry, plan_fleet_subnet_root_install,
     },
     icp_context::InstallIcpContext,
-    operations::{LiveRegistryEvidence, call_with_arg, query_live_registry, query_with_arg},
+    operations::{
+        LiveRegistryEvidence, call_with_arg, fleet_registry_authority, query_live_registry,
+        query_with_arg, resolve_install_protocol_binding,
+    },
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::IcpCli,
-    release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
+    release_set::{
+        AppConfigSnapshot, CanicInfrastructureRole,
+        load_persisted_canic_infrastructure_artifact_manifest,
+    },
 };
 use std::path::Path;
 
@@ -38,7 +44,7 @@ use canic_core::{
         FleetComponentSpecEntry, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
         FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
     },
-    ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
+    ids::FleetRegistryAuthority,
     protocol,
 };
 use thiserror::Error as ThisError;
@@ -86,18 +92,12 @@ pub(super) fn activate_and_verify_fleet_registry(
         request.icp.root(),
         request.fleet_install_plan.plan.release_build_id,
     )?;
-    let authority = FleetRegistryAuthority {
-        binding: FleetCoordinatorBinding {
-            fleet: request.fleet_install_plan.plan.fleet.clone(),
-            coordinator_subnet: request
-                .fleet_install_plan
-                .plan
-                .coordinator
-                .coordinator_subnet,
-            coordinator: request.coordinator,
-        },
-        epoch: 1,
-    };
+    let authority = fleet_registry_authority(request.fleet_install_plan, request.coordinator);
+    let protocol_binding = resolve_install_protocol_binding(
+        request.icp,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+    )?;
     let mut joining_registry = FleetRegistryOps::compile_genesis(
         &request.fleet_install_plan.plan.fleet.app,
         authority.clone(),
@@ -159,12 +159,13 @@ pub(super) fn activate_and_verify_fleet_registry(
     let icp = request.icp.cli();
     let current = drive_activation(
         icp,
+        &protocol_binding,
         request.coordinator,
         &component_topology,
         expected_roots,
         planned,
     )?;
-    let live = query_live_registry(icp, request.coordinator)?;
+    let live = query_live_registry(icp, &protocol_binding, request.coordinator)?;
     require_exact_or_service_successor_registry(
         &component_topology,
         &current.journal.active_registry,
@@ -183,6 +184,7 @@ pub(super) fn activate_and_verify_fleet_registry(
 
 fn drive_activation(
     icp: &IcpCli,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     coordinator: Principal,
     component_topology: &ComponentTopology,
     mut expected_roots: Vec<Principal>,
@@ -191,7 +193,7 @@ fn drive_activation(
     for _ in 0..MAX_ACTIVATION_TRANSITIONS {
         current = match current.journal.phase {
             FleetRegistryActivationPhase::Planned => {
-                let live = query_live_registry(icp, coordinator)?;
+                let live = query_live_registry(icp, binding, coordinator)?;
                 require_exact_registry(
                     component_topology,
                     &current.journal.joining_registry,
@@ -200,6 +202,7 @@ fn drive_activation(
                 )?;
                 require_exact_acknowledgements(
                     icp,
+                    binding,
                     coordinator,
                     &mut expected_roots,
                     &current.journal.request.expected_registry,
@@ -209,6 +212,7 @@ fn drive_activation(
             FleetRegistryActivationPhase::ActivationInFlight => {
                 let response: CoordinatorCommandResponse = call_with_arg(
                     icp,
+                    binding,
                     coordinator,
                     protocol::CANIC_COMMAND,
                     &CoordinatorCommand::ActivateRegistry(current.journal.request.clone()),
@@ -222,7 +226,7 @@ fn drive_activation(
                 record_registry_activated(&current, response)?
             }
             FleetRegistryActivationPhase::Activated => {
-                let live = query_live_registry(icp, coordinator)?;
+                let live = query_live_registry(icp, binding, coordinator)?;
                 require_exact_registry(
                     component_topology,
                     &current.journal.active_registry,
@@ -239,12 +243,14 @@ fn drive_activation(
 
 fn require_exact_acknowledgements(
     icp: &IcpCli,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     coordinator: Principal,
     expected_roots: &mut [Principal],
     version: &FleetRegistryVersion,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let live = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RootAcknowledgements,

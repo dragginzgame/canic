@@ -11,10 +11,15 @@ use super::fleet_subnet_root_install_journal::{
     record_registry_join_verified, record_registry_joined,
 };
 use super::icp_context::InstallIcpContext;
-use super::operations::{LiveRegistryEvidence, call_with_arg, query_live_registry};
+use super::operations::{
+    LiveRegistryEvidence, call_with_arg, query_live_registry, resolve_install_protocol_binding,
+};
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
+    release_set::{
+        AppConfigSnapshot, CanicInfrastructureRole,
+        load_persisted_canic_infrastructure_artifact_manifest,
+    },
 };
 use candid::Principal;
 use canic_control_plane::dto::fleet_coordinator::{CoordinatorCommand, CoordinatorCommandResponse};
@@ -68,6 +73,11 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
         },
         epoch: 1,
     };
+    let protocol_binding = resolve_install_protocol_binding(
+        icp_context,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+    )?;
     let mut expected_registry = FleetRegistryOps::compile_genesis(
         &fleet_install_plan.plan.fleet.app,
         authority.clone(),
@@ -92,6 +102,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
         )?;
         drive_registry_join(
             icp_context,
+            &protocol_binding,
             &component_topology,
             current,
             &expected_registry,
@@ -102,7 +113,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
 
     let joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &expected_registry)?;
-    let live = query_live_registry(icp_context.cli(), coordinator)?;
+    let live = query_live_registry(icp_context.cli(), &protocol_binding, coordinator)?;
     if exact_registry_matches(&authority, &component_topology, &expected_registry, &live)? {
         return Ok(joining_version);
     }
@@ -120,6 +131,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
 
 fn drive_registry_join(
     icp_context: &InstallIcpContext,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     component_topology: &ComponentTopology,
     mut current: ResolvedFleetSubnetRootInstall,
     expected_before: &FleetRegistry,
@@ -136,7 +148,7 @@ fn drive_registry_join(
     for _ in 0..MAX_REGISTRY_JOIN_TRANSITIONS {
         current = match current.journal.phase {
             FleetSubnetRootInstallPhase::StoreVerified => {
-                let live = query_live_registry(icp, coordinator)?;
+                let live = query_live_registry(icp, binding, coordinator)?;
                 require_exact_registry(
                     &current.journal.authority,
                     component_topology,
@@ -154,6 +166,7 @@ fn drive_registry_join(
                     .ok_or(RootRegistryJoinError::MissingJoinRequest)?;
                 let response: CoordinatorCommandResponse = call_with_arg(
                     icp,
+                    binding,
                     coordinator,
                     protocol::CANIC_COMMAND,
                     &CoordinatorCommand::JoinRoot(request.clone()),
@@ -167,7 +180,7 @@ fn drive_registry_join(
                 record_registry_joined(&current, response)?
             }
             FleetSubnetRootInstallPhase::RegistryJoined => {
-                let live = query_live_registry(icp, coordinator)?;
+                let live = query_live_registry(icp, binding, coordinator)?;
                 require_exact_registry(
                     &current.journal.authority,
                     component_topology,
