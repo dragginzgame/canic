@@ -88,7 +88,7 @@ amendment and cannot be hidden in implementation.
 | B3 | Compile-time variant pruning | pruned variants, DTOs, public handlers and types; reserved-name failures; thin `start!` | build pass/fail, Candid absence, collision, protocol reachability and role guards | Complete in worktree: exact positive/negative profile builds, native reserved-name collision, incompatible-feature rejection and thin composition pass; [evidence](../../audits/working/0.103-role-owned-candid-surface/b3-profile-pruning.md) |
 | B4 | Root and Coordinator autonomous intent plus atomic caller cut | outcome-named commands, async/durable receipts, typed atomic responses, variant auth/replay, self-advance and private phases; every Root/Coordinator caller, binding, constant, replay row and fixture | property, binding and PocketIC replay/interruption journeys | Complete in worktree: 32 Root and nine Coordinator commands, exact participant observation authority, private reconciliation, caller/binding/replay cleanup, pre-adoption Store staging and autonomous provisioning/removal PocketIC journeys pass |
 | B5 | Managed and Store role surfaces plus atomic caller cut | optional managed command, inert pruning, Store control/byte lanes; every managed/Store caller, binding, constant, replay row and fixture | authority, binding, absence, payload and cross-canister PocketIC tests | Complete in worktree: managed profiles expose only cfg-selected command/status variants; Store exposes command/status plus two admitted byte lanes; exact callers, replay rows, generated Candid and bootstrap/reverification pass |
-| B6 | Cross-cutting presentation and residue | host/CLI help and presentation, remaining application/docs propagation, representative reports and global residue | targeted host/CLI/build/PocketIC checks and residue scans | Complete in worktree: host/CLI fixtures, Skynet presentation, active documentation and seven representative generated profiles use the current role surface; [evidence](../../audits/working/0.103-role-owned-candid-surface/b6-surface-report.md) |
+| B6 | Cross-cutting presentation and residue | host/CLI help and presentation, remaining application/docs propagation, representative reports and global residue | targeted host/CLI/build/PocketIC checks and residue scans | Complete in worktree: host/CLI fixtures, then-current application presentation, active documentation and seven representative generated profiles use the current role surface; the later Prequel Wars planning cut removes the obsolete Skynet App; [evidence](../../audits/working/0.103-role-owned-candid-surface/b6-surface-report.md) |
 | B7 | Removal and measured closeout | old surface deletion, residue guards, count/size report and documentation | generated count, forbidden-method and residue checks | Complete in worktree: legacy emitters and the empty `metrics` Cargo feature are deleted, current-surface guards pass, Store lanes are absent from managed/Coordinator Wasm and 188 representative Canic methods become ten; current Wasm identity is recorded without a causal savings claim; [evidence](../../audits/working/0.103-role-owned-candid-surface/b7-closeout.md) |
 
 B2 emits no temporary all-capabilities status superset. The completed B2/B3
@@ -164,15 +164,17 @@ caller may wait until B6 for its first migration.
 ## Critical-Path Position
 
 1. 0.103 hard-cuts the Candid surface and internalizes orchestration phases.
-2. 0.104 hard-cuts timer mechanics and domain async-job recovery ownership.
-3. 0.105 qualifies platform behavior, costs, balances and bounded lanes.
-4. 0.106 closes replay-safe Coordinator-backed root operating funding.
-5. 0.107 implements reusable Fleet Subnet Canister estates and proves the
+2. 0.104 hard-cuts timer mechanics/domain recovery and adds synchronous
+   lifecycle composition.
+3. 0.105 adds framework-neutral local application authorization.
+4. 0.106 qualifies platform behavior, costs, balances and bounded lanes.
+5. 0.107 closes replay-safe Coordinator-backed root operating funding.
+6. 0.108 implements reusable Fleet Subnet Canister estates and proves the
    10/100/1,000 progression.
-6. 0.108 serves the T2 Fleet observatory from every installed Canister.
+7. 0.109 qualifies one exact stateful predecessor/successor transition.
+8. 0.110 serves the generic Fleet observatory from every installed Canister.
 
-0.109 local application authorization remains the scheduled successor, not a
-reserve-Fleet prerequisite. Unnumbered ideas remain outside the path.
+Unnumbered ideas remain outside the path.
 
 ## Next Action
 

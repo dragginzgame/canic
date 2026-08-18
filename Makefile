@@ -5,7 +5,11 @@
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        check-invariants control-plane-feature-gate \
+        audit-method-catalog-gate check-invariants ci-checks ci-preflight ci-security \
+        control-plane-feature-gate \
+        current-document-semantics-gate dependency-risk-inventory-test layering-gate \
+        lint-workflows recovery-runbooks-gate release-integrity-contract-gate \
+        release-validation-matrix-gate validation-runner-gate \
         dependency-risk-gate gitleaks-scan shellcheck \
         install install-dev install-hooks update-dev test-fleet-install \
         ensure-clean test-unit test-unit-fast test-ordinary test-pocketic workspace-test-inventory-gate \
@@ -17,10 +21,14 @@ include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 GITLEAKS_INSTALL_DIR ?= $(HOME)/.local/bin
+ACTIONLINT_BIN ?= $(ACTIONLINT_INSTALL_DIR)/actionlint
+SHELLCHECK_BIN ?= $(SHELLCHECK_INSTALL_DIR)/shellcheck
+GITLEAKS_BIN ?= $(GITLEAKS_INSTALL_DIR)/gitleaks
 
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
+VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh
 
 # Check for clean git state
 ensure-clean:
@@ -71,7 +79,7 @@ help:
 	@echo "  check            Run cargo check"
 	@echo "  check-invariants Run repository structure and governance invariants"
 	@echo "  clippy           Run clippy checks"
-	@echo "  validate         Run formatting, invariant, feature, check, clippy, and test gates"
+	@echo "  validate         Run staged complete-feedback formatting, policy, compile, and test gates"
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean Cargo artifacts; each test invocation cleans its own scratch"
@@ -232,44 +240,105 @@ test: test-unit
 # PocketIC suite.
 test-wasm: test-unit-fast
 
-# Complete local validation is deliberately explicit. Primitive development
-# targets retain only the operation named by that target.
+# Complete local validation has two sequential barriers. Each barrier collects
+# every independent target failure before returning; expensive compile and test
+# work starts only after the cheap source, policy, and security barrier passes.
+# Primitive development targets retain only the operation named by that target.
 validate:
-	+@$(MAKE) --no-print-directory fmt-check
-	+@$(MAKE) --no-print-directory check-invariants
-	+@$(MAKE) --no-print-directory dependency-risk-gate
-	+@$(MAKE) --no-print-directory gitleaks-scan
-	+@$(MAKE) --no-print-directory shellcheck
-	+@$(MAKE) --no-print-directory control-plane-feature-gate
-	+@$(MAKE) --no-print-directory check
-	+@$(MAKE) --no-print-directory clippy
-	+@$(MAKE) --no-print-directory test
+	+@$(VALIDATION_RUNNER) \
+		fmt-check \
+		check-invariants \
+		dependency-risk-gate \
+		gitleaks-scan \
+		shellcheck \
+		control-plane-feature-gate
+	+@$(VALIDATION_RUNNER) \
+		check \
+		clippy \
+		test
 
 check-invariants:
-	bash scripts/ci/run-layering-guards.sh
-	bash scripts/ci/check-current-document-semantics.sh
-	# Temporary product guards: remove with a promoted standalone blob-service hard cut.
-	+@$(MAKE) --no-print-directory blob-storage-inventory-gate
-	+@$(MAKE) --no-print-directory blob-storage-cashier-inventory-gate
-	bash scripts/ci/test-dependency-risk-inventory.sh
-	bash scripts/ci/check-release-validation-matrix.sh
-	bash scripts/ci/check-release-integrity-contract.sh
+	+@$(VALIDATION_RUNNER) \
+		layering-gate \
+		current-document-semantics-gate \
+		blob-storage-inventory-gate \
+		blob-storage-cashier-inventory-gate \
+		dependency-risk-inventory-test \
+		release-validation-matrix-gate \
+		release-integrity-contract-gate \
+		audit-method-catalog-gate \
+		recovery-runbooks-gate \
+		validation-runner-gate
+
+# CI keeps tool installation as an immediate prerequisite, then collects every
+# independent preflight or security failure before gating expensive jobs.
+ci-preflight:
+	+@$(VALIDATION_RUNNER) \
+		lint-workflows \
+		shellcheck \
+		layering-gate \
+		current-document-semantics-gate \
+		blob-storage-inventory-gate \
+		blob-storage-cashier-inventory-gate \
+		release-validation-matrix-gate \
+		release-integrity-contract-gate \
+		audit-method-catalog-gate \
+		recovery-runbooks-gate \
+		workspace-test-inventory-gate
+
+ci-checks:
+	+@$(VALIDATION_RUNNER) \
+		control-plane-feature-gate \
+		fmt-check \
+		clippy
+
+ci-security:
+	+@$(VALIDATION_RUNNER) \
+		gitleaks-scan \
+		dependency-risk-gate \
+		dependency-risk-inventory-test
+
+audit-method-catalog-gate:
 	bash scripts/ci/check-audit-method-catalog.sh
+
+current-document-semantics-gate:
+	bash scripts/ci/check-current-document-semantics.sh
+
+dependency-risk-inventory-test:
+	bash scripts/ci/test-dependency-risk-inventory.sh
+
+layering-gate:
+	bash scripts/ci/run-layering-guards.sh
+
+lint-workflows:
+	"$(ACTIONLINT_BIN)"
+
+recovery-runbooks-gate:
 	bash scripts/ci/check-recovery-runbooks.sh
+
+release-integrity-contract-gate:
+	bash scripts/ci/check-release-integrity-contract.sh
+
+release-validation-matrix-gate:
+	bash scripts/ci/check-release-validation-matrix.sh
+
+validation-runner-gate:
+	bash scripts/ci/test-validation-target-runner.sh
 
 dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 gitleaks-scan:
-	GITLEAKS_BIN="$(GITLEAKS_INSTALL_DIR)/gitleaks" bash scripts/ci/run-secret-scan.sh
+	GITLEAKS_BIN="$(GITLEAKS_BIN)" bash scripts/ci/run-secret-scan.sh
 
 shellcheck:
-	"$(SHELLCHECK_INSTALL_DIR)/shellcheck" --exclude=SC2001,SC2016 \
+	"$(SHELLCHECK_BIN)" --exclude=SC2001,SC2016 \
 		scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit
 
 control-plane-feature-gate:
 	bash scripts/ci/check-control-plane-feature-matrix.sh
 
+# Temporary product guards: remove with a promoted standalone blob-service hard cut.
 blob-storage-inventory-gate:
 	bash scripts/ci/check-blob-storage-inventory-gate.sh
 
@@ -325,10 +394,10 @@ test-canisters: test-fleet-install
 #
 
 build:
-	$(CARGO_ENV) cargo build --locked --workspace --release
+	$(CARGO_ENV) cargo build --locked --workspace --release --keep-going
 
 check:
-	$(CARGO_ENV) cargo check --locked --workspace
+	$(CARGO_ENV) cargo check --locked --workspace --keep-going
 
 clippy:
 	CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --locked --workspace --all-targets --all-features -- -D warnings

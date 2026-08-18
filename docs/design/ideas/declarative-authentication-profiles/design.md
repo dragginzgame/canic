@@ -16,7 +16,7 @@ Date: 2026-08-03
   the
   [0.101 Component provisioning design](../../0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md),
   the scheduled
-  [0.109 framework-neutral local application authorization design](../../0.109-framework-neutral-local-application-authorization/0.109-design.md),
+  [0.105 framework-neutral local application authorization design](../../0.105-framework-neutral-local-application-authorization/0.105-design.md),
   the
   [direct transport idea](../cross-subnet-data-transport-groundwork/design.md)
   and the proposed
@@ -184,7 +184,7 @@ No maintained runtime or configuration type may name a login provider, wallet
 product, frontend framework or transport library.
 
 An ordinary direct caller uses its transport Principal as the token subject.
-If a valid 0.109 local application session exists, its materialized authority
+If a valid 0.105 local application session exists, its materialized authority
 remains bound to the exact transport caller and verified subject under the
 existing caller-lane separation. A proof-bearing request remains bound to the
 same resolved subject directly. Topology predicates continue to consume the

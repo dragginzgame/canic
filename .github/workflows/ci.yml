@@ -50,41 +50,9 @@ jobs:
           rg --pcre2-version
           "$ACTIONLINT_BIN" -version
           "$SHELLCHECK_BIN" --version
-      - name: Lint GitHub Actions workflows
+      - name: Run preflight validation with complete feedback
         shell: bash
-        run: "$ACTIONLINT_BIN"
-      - name: Lint repository shell automation
-        shell: bash
-        run: >-
-          "$SHELLCHECK_BIN" --exclude=SC2001,SC2016
-          scripts/ci/*.sh scripts/dev/*.sh .githooks/pre-commit
-      - name: Layering guards
-        shell: bash
-        run: bash scripts/ci/run-layering-guards.sh
-      - name: Current document semantics guard
-        shell: bash
-        run: bash scripts/ci/check-current-document-semantics.sh
-      - name: Blob storage inventory gate
-        shell: bash
-        run: bash scripts/ci/check-blob-storage-inventory-gate.sh
-      - name: Blob storage Cashier inventory gate
-        shell: bash
-        run: bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
-      - name: Release validation matrix guard
-        shell: bash
-        run: bash scripts/ci/check-release-validation-matrix.sh
-      - name: Release execution integrity guard
-        shell: bash
-        run: bash scripts/ci/check-release-integrity-contract.sh
-      - name: Audit method catalog guard
-        shell: bash
-        run: bash scripts/ci/check-audit-method-catalog.sh
-      - name: Recovery runbooks guard
-        shell: bash
-        run: bash scripts/ci/check-recovery-runbooks.sh
-      - name: Workspace test inventory guard
-        shell: bash
-        run: bash scripts/ci/check-workspace-test-inventory.sh
+        run: make ci-preflight
 
   security:
     runs-on: ubuntu-24.04
@@ -114,15 +82,9 @@ jobs:
           cargo audit --version
           rg --version
           "$GITLEAKS_BIN" version
-      - name: Scan repository history for secrets
+      - name: Run security validation with complete feedback
         shell: bash
-        run: bash scripts/ci/run-secret-scan.sh
-      - name: Check dependency risk inventory
-        shell: bash
-        run: bash scripts/ci/check-dependency-risk-inventory.sh
-      - name: Check dependency risk rejection cases
-        shell: bash
-        run: bash scripts/ci/test-dependency-risk-inventory.sh
+        run: make ci-security
 
   msrv:
     needs: [preflight, security]
@@ -180,13 +142,9 @@ jobs:
       - name: Check runner disk before Rust checks
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096 --summary-only
-      - name: Control-plane feature matrix
+      - name: Run Rust checks with complete feedback
         shell: bash
-        run: bash scripts/ci/check-control-plane-feature-matrix.sh
-      - run: make fmt-check
-      - run: make clippy
-      - name: Build examples (default)
-        run: cargo build -p canic --examples --locked
+        run: make ci-checks
       - name: Report runner disk after checks failure
         if: ${{ failure() }}
         shell: bash

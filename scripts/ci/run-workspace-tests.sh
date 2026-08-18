@@ -7,6 +7,8 @@ MODE="${1:-full}"
 SUMMARY_LABELS=()
 SUMMARY_DURATIONS=()
 SUMMARY_KINDS=()
+SUMMARY_RESULTS=()
+FAILED_LABELS=()
 HEAVY_BUILD_TARGETS_USED=0
 PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
 STEP_SUMMARY_INITIALIZED=0
@@ -38,6 +40,7 @@ record_summary() {
     SUMMARY_LABELS+=("$1")
     SUMMARY_DURATIONS+=("$2")
     SUMMARY_KINDS+=("$3")
+    SUMMARY_RESULTS+=("$4")
 }
 
 append_step_summary() {
@@ -70,17 +73,31 @@ print_summary() {
 
     echo
     echo "==> workspace timing summary"
-    printf '%-16s %-8s %s\n' "kind" "elapsed" "label"
-    printf '%-16s %-8s %s\n' "----" "-------" "-----"
+    printf '%-16s %-8s %-6s %s\n' "kind" "elapsed" "result" "label"
+    printf '%-16s %-8s %-6s %s\n' "----" "-------" "------" "-----"
 
     local i
     for ((i = 0; i < count; i++)); do
-        printf '%-16s %-8s %s\n' \
+        printf '%-16s %-8s %-6s %s\n' \
             "${SUMMARY_KINDS[$i]}" \
             "${SUMMARY_DURATIONS[$i]}" \
+            "${SUMMARY_RESULTS[$i]}" \
             "${SUMMARY_LABELS[$i]}"
     done
+}
 
+finish_test_run() {
+    print_summary
+    if [[ "$PLAN_ONLY" -eq 1 ]]; then
+        echo "WORKSPACE TEST PLAN RESOLVED: all requested suites were classified."
+        return
+    fi
+    if [[ ${#FAILED_LABELS[@]} -eq 0 ]]; then
+        echo "WORKSPACE TESTS PASSED: all requested suites succeeded."
+        return
+    fi
+    printf 'WORKSPACE TESTS FAILED: %s\n' "${FAILED_LABELS[*]}" >&2
+    return 1
 }
 
 run_test() {
@@ -104,7 +121,7 @@ run_test() {
     done
     echo "==> $label"
     if [ "$PLAN_ONLY" -eq 1 ]; then
-        printf '==> plan: cargo test --locked'
+        printf '==> plan: cargo test --locked --no-fail-fast'
         printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
@@ -115,18 +132,18 @@ run_test() {
             printf ' %q' "${libtest_args[@]}"
         fi
         printf '\n'
-        record_summary "$label" "0s" "$execution"
+        record_summary "$label" "0s" "$execution" "PLAN"
         return
     fi
     local started_at="$SECONDS"
     local status=0
     case "$execution" in
         parallel)
-            cargo test --locked "${cargo_args[@]}" -- --nocapture \
+            cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --nocapture \
                 "${libtest_args[@]}" || status=$?
             ;;
         pocketic-serial)
-            cargo test --locked "${cargo_args[@]}" -- --test-threads=1 --nocapture \
+            cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --test-threads=1 --nocapture \
                 "${libtest_args[@]}" || status=$?
             ;;
         *)
@@ -136,15 +153,17 @@ run_test() {
     esac
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
-    record_summary "$label" "$elapsed" "$execution"
     if [[ "$status" -eq 0 ]]; then
+        record_summary "$label" "$elapsed" "$execution" "PASS"
         echo "==> $label done in $elapsed"
         append_step_summary "$execution" "$elapsed" "$label" "PASS"
         return
     fi
+    record_summary "$label" "$elapsed" "$execution" "FAIL"
+    FAILED_LABELS+=("$label")
     echo "==> $label failed in $elapsed (exit $status)" >&2
     append_step_summary "$execution" "$elapsed" "$label" "FAIL ($status)"
-    return "$status"
+    return 0
 }
 
 run_parallel_test() {
@@ -240,9 +259,9 @@ cleanup_heavy_build_targets() {
 run_pic_inventory_tests() {
     local label="$1"
     local suite="$2"
-    if [ "$PLAN_ONLY" -eq 0 ]; then
+    if [[ "$PLAN_ONLY" -eq 0 && "$HEAVY_BUILD_TARGETS_USED" -eq 0 ]]; then
         HEAVY_BUILD_TARGETS_USED=1
-        clear_pocketic_build_targets "before $label" 1
+        clear_pocketic_build_targets "before PocketIC integration suites" 1
     fi
     run_inventory_tests "$label" canic-tests pocketic-serial "$suite"
 }
@@ -288,7 +307,7 @@ if [[ "$MODE" == "fast" ]]; then
         --lib \
         pic::lifecycle::tests::init_payload_component_spec_matches_embedded_canister_config
     run_inventory_tests "fast release-surface integration tests" canic parallel ordinary
-    print_summary
+    finish_test_run
     exit 0
 fi
 
@@ -306,7 +325,7 @@ if [[ "$MODE" != "pocketic" ]]; then
     run_inventory_tests "canic integration tests" canic parallel ordinary
 
     if [[ "$MODE" == "ordinary" ]]; then
-        print_summary
+        finish_test_run
         exit 0
     fi
 fi
@@ -339,4 +358,4 @@ run_pic_inventory_tests "canic-tests blob-storage PocketIC suite" blob-storage
 run_pic_inventory_tests "canic-tests payload-limit PocketIC suite" payload-limits
 run_pic_inventory_tests "canic-tests instruction-audit PocketIC suite" instruction-audit
 
-print_summary
+finish_test_run

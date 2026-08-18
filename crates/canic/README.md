@@ -146,8 +146,9 @@ that reaches terminal state is removed from the shared inventory, so no final
 status or performance sample survives after removal; retained declarations
 preserve their normally completed samples.
 Authority snapshots currently reject any timer claim outside Canic custody;
-combined-framework snapshot composition requires a separately qualified
-synchronous lifecycle seam.
+scheduled 0.104 owns the synchronous lifecycle participant, direct native
+`ic-timers` adoption guide and combined Canic/IcyDB qualification. The current
+timer macros remain the published surface until that hard cut is implemented.
 
 This crate lives in the Canic workspace. See the workspace guide at
 `../../README.md` for full setup, topology, and example canisters.

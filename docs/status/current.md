@@ -29,11 +29,13 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Scheduled reserve-Fleet path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 `ic-timers` consumer hard cut](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 platform qualification](../design/0.105-fleet-estate-platform-qualification/status.md), [0.106 Coordinator-backed root funding](../design/0.106-coordinator-backed-root-funding/status.md), [0.107 reusable Fleet Subnet Canister estates](../design/0.107-fleet-subnet-canister-estates/status.md) and [0.108 Skynet T2 Fleet observatory](../design/0.108-skynet-fleet-observatory/status.md). The scheduled post-path line is [0.109 framework-neutral local application authorization](../design/0.109-framework-neutral-local-application-authorization/status.md); implementation remains sequenced after accepted 0.108 closeout and ordinary maintainer continuation. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+- Scheduled application-safety and estate path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 Coordinator-backed root funding](../design/0.107-coordinator-backed-root-funding/status.md), [0.108 reusable estates plus application retirement](../design/0.108-fleet-subnet-canister-estates/status.md), [0.109 stateful Fleet release adoption](../design/0.109-stateful-fleet-release-adoption/status.md) and [0.110 generic Fleet observatory](../design/0.110-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
   pre-0.102. Every Canic-owned canister in a Fleet must come from one admitted
   release set before activation. Same-release interruption recovery, exact
-  retry, backup and restore remain required.
+  retry, backup and restore remain required. Scheduled 0.109 is the first
+  explicit one-predecessor-to-one-successor exception; no current release is
+  adoptable until that line is implemented and published.
 
 ## Current Progress
 
@@ -88,8 +90,10 @@ concepts stay flat rather than becoming nested family enums; remote composite
 phase observations collapse into local operation status and update-only
 canister inspection becomes an atomic Root command. DTOs, the exact pruning
 matrix, operation ownership and the no-new-timer 0.104 handoff are frozen.
-Host/CLI fixtures, Skynet presentation and active application documentation
-use the role surface. Legacy shared/non-root/cycle/topology emitters are
+Host/CLI fixtures and then-current application presentation use the role
+surface. The obsolete checked-in Skynet demo is removed in favor of external
+Prequel Wars; frozen B1 source evidence remains historical. Legacy
+shared/non-root/cycle/topology emitters are
 deleted, `start_local!` emits one local status method, and the representative
 Canic count falls from 188 method appearances to ten. Current fast-profile
 Wasm identities are recorded without claiming causal size savings. Raw B1
@@ -110,28 +114,38 @@ Focused all-target compilation, warning-denied Clippy, binding/auth/replay
 tests and four-role artifact scans pass. Only the maintainer-owned package bump
 and complete release gate remain.
 
-Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
-hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its
-final Candid/timer/state inventory must reconcile before B2.
+Scheduled 0.104 owns the `ic-timers` consumer/domain async-job recovery hard
+cut, a maintained native-timer adoption guide/fixture and the synchronous
+framework-neutral lifecycle participant required to compose Canic with IcyDB.
+Repository-only 0.106 B1 evidence may continue, but its final
+Candid/timer/state inventory must reconcile before B2.
 
-The scheduled 0.105 B1 is approved to freeze current pool/platform provenance,
+Scheduled 0.105 now owns framework-neutral caller-bound scoped local
+application sessions directly after 0.104; presentation supplies no semantic
+dependency. No evidence or implementation batch is promoted by the
+resequencing cut.
+
+The scheduled 0.106 B1 is approved to freeze current pool/platform provenance,
 measurement/reset protocol, horizon-qualified standby semantics and production
 reachability for a 1,000-Canister reserve Fleet. B2 execution is held pending
 accepted B1 and separate exact authorization for every external effect.
 
-The scheduled 0.106 line closes replay-safe Coordinator-backed root operating
+The scheduled 0.107 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
-completed 0.103 and 0.104 plus accepted 0.105 B1 ownership/cost evidence, not
-0.105 B2, plus its own proof. Its public work adds Root/Coordinator command and
+completed 0.103 and 0.104 plus accepted 0.106 B1 ownership/cost evidence, not
+0.106 B2, plus its own proof. Its public work adds Root/Coordinator command and
 status variants rather than funding methods.
 
-Scheduled 0.107 owns indexed estates, parallel creation/reset, transfer and
-the 10/100/1,000 proof; 0.108 then serves an evidence-labelled T2 topology and
-Fleet overview from every installed Skynet Fleet Canister. Empty estate assets
-remain visible module-free inventory. Scheduled 0.109 owns framework-neutral
-local application authorization after that path. Framework composition,
-transport, Workers, authentication profiles, blob/archive storage and Motoko
-stay ideas.
+Scheduled 0.108 owns indexed estates, parallel creation/reset, transfer and
+the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
+bounded application retirement acknowledgement before ordinary uninstall;
+forced removal is separately authorized and permanently marked unqualified.
+Scheduled 0.109 then owns one stop-the-world exact predecessor/successor
+adoption before stateful production claims. Scheduled 0.110 publishes generic
+supported observatory views/rendering for downstream Prequel Wars without a
+game dependency. Estate-budget replenishment, a product-frontend delivery
+handoff, transport, Workers, authentication profiles, blob/archive storage and
+Motoko remain ideas.
 
 ## Current Decision
 
@@ -160,11 +174,13 @@ command/status plus its two admitted byte lanes. Cross-cutting presentation,
 legacy-emitter deletion, current-surface residue guards and the count/Wasm
 closeout are complete. The maintainer-owned release/version flow is the
 remaining 0.103 boundary. 0.104 remains sequenced behind the published 0.103
-boundary. 0.105 remains
-evidence-only until accepted B1, 0.103/0.104 reconciliation and an approved run
-plan. 0.106 then requires their outputs and its own proof; 0.107 requires
-completed 0.106; 0.108 requires accepted 0.107 closeout; and 0.109 requires
-accepted 0.108 closeout plus a separate implementation decision. Deferred
+boundary. 0.104 now also owns native downstream timer adoption and synchronous
+lifecycle composition. 0.105 local authorization follows it without an
+observatory dependency. 0.106 remains evidence-only until accepted B1,
+0.103/0.104 reconciliation and an approved external run plan. 0.107 requires
+its accepted inputs and own proof; 0.108 requires completed 0.107 plus
+application-retirement evidence; 0.109 requires accepted 0.108 and an exact
+released predecessor; and 0.110 requires accepted 0.109 closeout. Deferred
 ideas authorize none of these mutations.
 
 ## Validation
@@ -185,7 +201,15 @@ evidence and is not rerun during focused development.
 The open CI-reliability batch removes the contradictory tag-only green signal,
 uses Cargo as the sole live package-version authority, adds a post-bump release
 candidate guard, gates expensive jobs behind preflight/security and reports
-ordinary versus serial PocketIC timing separately. Exact release publication
+ordinary versus serial PocketIC timing separately. Local validation and CI's
+preflight, security and Rust-check jobs now collect every independent failure
+inside their barriers, retain complete logs and do not admit expensive work
+after a cheap failure.
+Workspace tests continue across selected binaries and suites, while the serial
+PocketIC group preserves one warm Wasm build state instead of clearing it
+between suites. Configured deployment builds collect invalid roles before
+compilation and ask Cargo to continue across independent package failures.
+Exact release publication
 also disables implicit followed-tag pushes; the historical-tag deletion helper
 now verifies the remote boundary before removing local refs. A disposable Git
 fixture covers remote rejection, exact local/remote deletion and non-
@@ -216,10 +240,11 @@ status and the autonomous Component-provisioning and Root-removal PocketIC
 journeys pass focused checks.
 
 Focused 0.103 B5-B7 validation covers exact managed/Store caller and Candid
-cuts, Store bootstrap/reverification, host/CLI decoding fixtures, Skynet
-presentation, local-only status emission, the current endpoint allowlist and
-all role replay manifests. Seven representative generated services expose two
-Canic methods per ordinary role and four for Store. The four-profile Canic
+cuts, Store bootstrap/reverification, host/CLI decoding fixtures, the
+then-current application presentation, local-only status emission, the current
+endpoint allowlist and all role replay manifests. Seven representative
+generated services expose two Canic methods per ordinary role and four for
+Store. The four-profile Canic
 total is ten instead of 188; representative fast-profile Wasm hashes and sizes
 are retained only as current artifact identity because no isolated same-source
 pre-cut pair exists. Post-closeout cleanup removes raw pre-cut DID snapshots,

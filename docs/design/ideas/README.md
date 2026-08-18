@@ -14,9 +14,10 @@ Supporting implementation evidence does not belong here.
 - `coordinator-workers/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
-- `framework-neutral-synchronous-lifecycle-composition/`
+- `estate-budget-replenishment/`
 - `language-neutral-managed-guest-feasibility/`
 - `optional-encrypted-canister-snapshot-archives/`
+- `product-frontend-delivery-handoff/`
 - `saltz/`
 - `standalone-blob-service-extraction/`
 

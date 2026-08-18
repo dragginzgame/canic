@@ -20,6 +20,22 @@ Git hooks, format before checking, or invoke unrelated invariant, feature,
 lint, build, or test targets. `make validate` is the explicit composition
 boundary for the complete local workflow.
 
+`make validate` has two sequential barriers. The first runs every independent
+formatting, repository-invariant, dependency, secret, shell and feature check,
+then reports their complete failure set. Expensive workspace checking, Clippy
+and tests start only when that barrier passes. The second likewise runs every
+admitted target before returning one aggregate result. Targets within each
+barrier remain sequential so independent Cargo processes do not contend for
+the same build graph. Complete failed-target logs are retained under
+`target/validation-failures/`; the terminal summary repeats bounded failure
+detail and the exact failed target list.
+
+CI uses the same runner for its preflight, security and Rust-check jobs. Tool
+installation and version verification remain immediate prerequisites, after
+which each job reports every independent policy, security or compile-check
+failure in one run. Every expensive compile and test job still requires both
+cheap gate jobs to pass.
+
 The repository owns one `pre-commit` hook, configured by `make install-dev` or
 `make install-hooks`. It runs only `make fmt`. It never stages files or runs
 tests, Clippy, builds, validation, versioning, commits, or pushes. A partially
@@ -37,6 +53,11 @@ retain libtest's default parallelism; PocketIC suites remain explicitly
 single-threaded and ordered until a measured narrower concurrency policy is
 proven stable. `make test-wasm` is the fast lane and runs only its classified
 release-surface integrations, never the PocketIC suites.
+Cargo continues across independently selected test binaries, and the workspace
+runner records every failed suite before returning one nonzero result. In CI,
+the PocketIC lane clears transient heavy Wasm targets once before its
+integration-suite group and once at invocation cleanup; it retains Cargo
+freshness between the ordered suites.
 CI may run the ordinary and PocketIC lanes in separate jobs; it must not
 parallelize the PocketIC suites themselves without replacing this measured
 policy. Cheap source/governance preflight and security jobs gate every compile

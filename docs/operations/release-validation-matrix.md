@@ -49,9 +49,11 @@ Full release validation, not ordinary slice validation, includes:
 make validate
 ```
 
-`make validate` explicitly and sequentially composes formatting checks,
-repository invariants, dependency and secret gates, the control-plane feature
-matrix, Cargo check, Clippy, and the complete workspace test target. The
+`make validate` explicitly composes formatting checks, repository invariants,
+dependency and secret gates, the control-plane feature matrix, Cargo check,
+Clippy, and the complete workspace test target. It collects every independent
+failure within a cheap preflight barrier before admitting a sequential
+expensive barrier, then collects every failure in that admitted barrier. The
 primitive targets remain independently runnable and do not invoke unrelated
 validation operations.
 

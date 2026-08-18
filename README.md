@@ -114,12 +114,15 @@ The complete feature index is in [docs/features](docs/features/README.md).
 
 ## Demo Fleets
 
-**Skynet** combines Fleet services, multi-Subnet placement, scaling, sharding,
-metrics and protected runtime discovery in a Terminator-themed live network
-console. Its checked-in App starts with eight Authority/Replica nodes and can
-prepare one member on each of up to 32 distinct workload Subnets.
+**[Prequel Wars](https://github.com/dragginzgame/prequel-wars)** is the external
+stateful demonstration and downstream proving ground for Canic. It maps game
+planets to application Subnets and exercises managed IcyDB Components, direct
+scoped ingress, retirement evidence, reusable estates and a bounded Galactic
+War Room Fleet overview.
 
-[Explore the Skynet Fleet demo](apps/skynet/README.md)
+The game stays in its own repository. Canic owns only generic infrastructure,
+lifecycle, authorization, retirement and observatory contracts; it does not
+vendor game code or make canonical infrastructure depend on the demo.
 
 ## Core Vocabulary
 
