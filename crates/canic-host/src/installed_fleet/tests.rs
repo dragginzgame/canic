@@ -61,6 +61,7 @@ fn coordinator_catalog_rejects_the_removed_single_root_topology_resolver() {
             "app": "shop",
             "environment": "staging",
             "deployed_at_unix_secs": 54,
+            "release_build_id": "01".repeat(32),
             "coordinator_principal": "rrkah-fqaaa-aaaaa-aaaaq-cai"
         }]
     });
