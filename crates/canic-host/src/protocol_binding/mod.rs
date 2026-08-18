@@ -134,7 +134,7 @@ pub fn resolve_infrastructure_protocol_binding(
     artifact_environment: &str,
     artifact: &CanicInfrastructureArtifactEntry,
 ) -> Result<ResolvedProtocolBinding, ProtocolBindingError> {
-    if artifact.protocol_role.as_str() != artifact.role.as_str() {
+    if artifact.protocol_role.as_str() != artifact.role.protocol_role_name() {
         return Err(ProtocolBindingError::InfrastructureRoleMismatch {
             artifact_role: artifact.role.as_str().to_string(),
             protocol_role: artifact.protocol_role.to_string(),

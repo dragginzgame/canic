@@ -61,6 +61,16 @@ impl CanicInfrastructureRole {
             Self::WasmStore => "wasm_store",
         }
     }
+
+    /// Return the canonical compiled protocol role selected by this artifact.
+    #[must_use]
+    pub const fn protocol_role_name(self) -> &'static str {
+        match self {
+            Self::FleetCoordinator => "fleet_coordinator",
+            Self::FleetSubnetRoot => "root",
+            Self::WasmStore => "wasm_store",
+        }
+    }
 }
 
 ///
@@ -389,7 +399,7 @@ fn validate_entry(
             },
         );
     }
-    if entry.protocol_role.as_str() != entry.role.as_str() {
+    if entry.protocol_role.as_str() != entry.role.protocol_role_name() {
         return Err(
             CanicInfrastructureArtifactManifestError::ProtocolRoleMismatch {
                 role: entry.role,

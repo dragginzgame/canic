@@ -69,7 +69,7 @@ impl OwnedInput {
         Self {
             role,
             package: package.to_string(),
-            protocol_role: CanisterRole::owned(role.as_str().to_string()),
+            protocol_role: CanisterRole::owned(role.protocol_role_name().to_string()),
             protocol_capabilities: BTreeSet::new(),
             release_build_id,
             wasm_relative_path: format!(".icp/local/canisters/{0}/{0}.wasm", role.as_str()),
@@ -146,7 +146,7 @@ fn compiler_derives_one_canonical_entry_per_infrastructure_role() {
     assert_eq!(manifest.digest().expect("manifest digest"), expected_digest);
     assert_eq!(
         canic_core::cdk::utils::hash::hex_bytes(expected_digest),
-        "4290d136ff7475183d83f1133f98cde75673f6cc27b45c87f378a8ff0a5419f7",
+        "ead80ae4eb586bdb12f42f534570099959aae144508baada3c2c77584e069e93",
     );
 }
 
@@ -162,7 +162,7 @@ fn manifest_rejects_missing_duplicate_and_reordered_roles() {
 
     let mut inputs = owned_inputs(release_build_id);
     inputs[0].role = CanicInfrastructureRole::FleetSubnetRoot;
-    inputs[0].protocol_role = CanisterRole::new("fleet_subnet_root");
+    inputs[0].protocol_role = CanisterRole::new("root");
     assert!(matches!(
         compile(release_build_id, &inputs),
         Err(CanicInfrastructureArtifactManifestError::InfrastructureRoleSet { .. })

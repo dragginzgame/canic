@@ -91,3 +91,38 @@ fn immutable_infrastructure_binding_reproduces_full_profile() {
     assert_eq!(resolved.candid_path(), did);
     fs::remove_dir_all(root).expect("remove temp root");
 }
+
+#[test]
+fn fleet_subnet_root_artifact_selects_the_root_protocol_role() {
+    let root = crate::test_support::temp_dir("canic-host-root-protocol-binding");
+    let candid = b"service : {}\n";
+    let role = CanisterRole::from("root");
+    let capabilities = BTreeSet::from([RoleCapabilityKey::Root]);
+    let profile = derive_protocol_profile_hashes("0.103.0", &role, &capabilities, candid);
+    let did = root.join(".icp/local/canisters/root/root.did");
+    fs::create_dir_all(did.parent().expect("DID parent")).expect("create DID parent");
+    fs::write(&did, candid).expect("write DID");
+    let artifact = crate::release_set::CanicInfrastructureArtifactEntry {
+        role: crate::release_set::CanicInfrastructureRole::FleetSubnetRoot,
+        package: "root-package".to_string(),
+        protocol_release_identity: "0.103.0".to_string(),
+        protocol_role: role,
+        protocol_capabilities: capabilities,
+        release_build_id: "01".repeat(32).parse().expect("release build"),
+        wasm_relative_path: "root.wasm".to_string(),
+        wasm_size_bytes: 1,
+        wasm_sha256_hex: "01".repeat(32),
+        wasm_gz_relative_path: "root.wasm.gz".to_string(),
+        wasm_gz_size_bytes: 1,
+        wasm_gz_sha256_hex: "02".repeat(32),
+        candid_sha256: profile.candid_sha256,
+        protocol_profile_digest: profile.protocol_profile_digest,
+    };
+
+    let resolved = resolve_infrastructure_protocol_binding(&root, "local", &artifact)
+        .expect("resolve root infrastructure binding");
+
+    assert_eq!(resolved.binding().role.as_str(), "root");
+    assert_eq!(resolved.candid_path(), did);
+    fs::remove_dir_all(root).expect("remove temp root");
+}
