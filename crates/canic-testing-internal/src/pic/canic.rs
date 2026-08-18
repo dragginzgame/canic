@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+};
 
 use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic::{
@@ -427,13 +431,8 @@ pub fn install_standalone_canister(
         "standalone helper is for non-root canisters"
     );
 
-    let workspace_root = workspace_root();
-    let target_name = format!("standalone-{crate_name}");
-    let target_dir = test_target_dir(&workspace_root, &target_name);
-    ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
-
     let label = format!("standalone:{crate_name}:{role}");
-    let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
+    let wasm = standalone_canister_wasm(crate_name, profile);
     let pocket_ic = PocketIcBuilder::new().with_application_subnet().build();
     let fixture = StandaloneCanisterFixture::install(
         pocket_ic,
@@ -470,12 +469,7 @@ pub fn install_standalone_canister_on_pic(
         "standalone helper is for non-root canisters"
     );
 
-    let workspace_root = workspace_root();
-    let target_name = format!("standalone-{crate_name}");
-    let target_dir = test_target_dir(&workspace_root, &target_name);
-    ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
-
-    let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
+    let wasm = standalone_canister_wasm(crate_name, profile);
     let canister_id = pic
         .create_and_install(InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()));
     pic.wait_for_ready(
@@ -519,6 +513,39 @@ fn ensure_canister_wasm_ready(
     profile: CanicWasmBuildProfile,
 ) {
     build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
+}
+
+fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile) -> Vec<u8> {
+    type CacheEntry = Arc<OnceLock<Vec<u8>>>;
+    type CacheKey = (PathBuf, String, &'static str);
+
+    static CACHE: OnceLock<Mutex<BTreeMap<CacheKey, CacheEntry>>> = OnceLock::new();
+
+    let workspace_root = workspace_root();
+    let key = (
+        workspace_root.clone(),
+        crate_name.to_owned(),
+        profile.target_dir_name(),
+    );
+    let entry = {
+        let mut cache = CACHE
+            .get_or_init(|| Mutex::new(BTreeMap::new()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Arc::clone(
+            cache
+                .entry(key)
+                .or_insert_with(|| Arc::new(OnceLock::new())),
+        )
+    };
+    entry
+        .get_or_init(|| {
+            let target_name = format!("standalone-{crate_name}");
+            let target_dir = test_target_dir(&workspace_root, &target_name);
+            ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
+            read_wasm(&target_dir, crate_name, profile.target_dir_name())
+        })
+        .clone()
 }
 
 fn local_init_args() -> Vec<u8> {

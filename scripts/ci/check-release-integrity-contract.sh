@@ -323,8 +323,12 @@ rg -F "if: \${{ !cancelled()" <<<"$pocketic_job" >/dev/null ||
 if rg -F 'path: target' <<<"$pocketic_job" | rg -v -F 'path: target/test-artifacts' >/dev/null; then
     fail "PocketIC CI must not cache the complete Cargo target directory"
 fi
+rg -F '"Fleet deployment-restore PocketIC proof"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the serial PocketIC lane does not run Fleet deployment-restore evidence early"
+rg -F -- '--skip "$FLEET_DEPLOYMENT_RESTORE_TEST"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the mixed PocketIC library lane repeats the early Fleet deployment-restore proof"
 rg -F '"autonomous Root-removal PocketIC proof"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the serial PocketIC lane does not run Root-removal evidence first"
+    fail "the serial PocketIC lane does not run Root-removal evidence early"
 rg -F -- '--skip "$ROOT_REMOVAL_TEST"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the mixed PocketIC library lane repeats the early Root-removal proof"
 if rg '^[[:space:]]+tags:' "$CI" >/dev/null; then
