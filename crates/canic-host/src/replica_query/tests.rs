@@ -1,12 +1,16 @@
-use super::{decode_cycle_balance_response, uses_local_replica_transport};
+use super::{RoleStatusResponse, decode_cycle_balance_response, uses_local_replica_transport};
 use crate::test_support::temp_dir;
 use candid::Encode;
-use canic_core::dto::error::Error as CanicError;
+use canic_core::dto::{error::Error as CanicError, role::CycleBalanceStatusResponse};
 use std::fs;
 
 #[test]
 fn decodes_cycle_balance_response_bytes() {
-    let response: Result<u128, CanicError> = Ok(99_999_000_000_000);
+    let response: Result<RoleStatusResponse, CanicError> = Ok(RoleStatusResponse::CycleBalance(
+        CycleBalanceStatusResponse {
+            cycles: 99_999_000_000_000,
+        },
+    ));
     let bytes = Encode!(&response).expect("encode cycle balance response");
 
     assert_eq!(
