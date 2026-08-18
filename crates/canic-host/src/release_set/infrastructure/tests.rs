@@ -49,6 +49,8 @@ fn owned_inputs(release_build_id: ReleaseBuildId) -> Vec<OwnedInput> {
 struct OwnedInput {
     role: CanicInfrastructureRole,
     package: String,
+    protocol_role: CanisterRole,
+    protocol_capabilities: BTreeSet<RoleCapabilityKey>,
     release_build_id: ReleaseBuildId,
     wasm_relative_path: String,
     wasm: Vec<u8>,
@@ -67,6 +69,8 @@ impl OwnedInput {
         Self {
             role,
             package: package.to_string(),
+            protocol_role: CanisterRole::owned(role.as_str().to_string()),
+            protocol_capabilities: BTreeSet::new(),
             release_build_id,
             wasm_relative_path: format!(".icp/local/canisters/{0}/{0}.wasm", role.as_str()),
             wasm_gz_relative_path: format!(".icp/local/canisters/{0}/{0}.wasm.gz", role.as_str()),
@@ -79,6 +83,9 @@ impl OwnedInput {
         CanicInfrastructureArtifactInput {
             role: self.role,
             package: &self.package,
+            protocol_release_identity: "0.103.0",
+            protocol_role: &self.protocol_role,
+            protocol_capabilities: &self.protocol_capabilities,
             release_build_id: self.release_build_id,
             wasm_relative_path: &self.wasm_relative_path,
             wasm: &self.wasm,
@@ -139,7 +146,7 @@ fn compiler_derives_one_canonical_entry_per_infrastructure_role() {
     assert_eq!(manifest.digest().expect("manifest digest"), expected_digest);
     assert_eq!(
         canic_core::cdk::utils::hash::hex_bytes(expected_digest),
-        "e8f06e7a4d6edff1ad9573bcc0b012b9bd689dc7d5b4f34765a475c85280d848",
+        "4290d136ff7475183d83f1133f98cde75673f6cc27b45c87f378a8ff0a5419f7",
     );
 }
 
@@ -155,6 +162,7 @@ fn manifest_rejects_missing_duplicate_and_reordered_roles() {
 
     let mut inputs = owned_inputs(release_build_id);
     inputs[0].role = CanicInfrastructureRole::FleetSubnetRoot;
+    inputs[0].protocol_role = CanisterRole::new("fleet_subnet_root");
     assert!(matches!(
         compile(release_build_id, &inputs),
         Err(CanicInfrastructureArtifactManifestError::InfrastructureRoleSet { .. })

@@ -197,6 +197,25 @@ fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
 }
 
 #[test]
+fn store_data_endpoint_expansion_selects_store_only_preflight() {
+    let args = make_args(Vec::new());
+    let func: ItemFn = syn::parse_quote!(
+        fn canic_wasm_store_publish_chunk(bytes: Vec<u8>) -> Result<(), ::canic::Error> {
+            let _ = bytes;
+            Ok(())
+        }
+    );
+
+    let compact = expand(EndpointKind::Update, args, func)
+        .to_string()
+        .split_whitespace()
+        .collect::<String>();
+
+    assert!(compact.contains("preflight_store_data_endpoint(__canic_call)"));
+    assert!(!compact.contains("preflight_endpoint(__canic_call)"));
+}
+
+#[test]
 fn attested_local_subnet_expands_to_the_local_proof_guard() {
     let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
         BuiltinPredicate::AttestedLocalSubnet,

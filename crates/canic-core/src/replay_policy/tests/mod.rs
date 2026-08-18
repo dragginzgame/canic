@@ -30,6 +30,7 @@ fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
 fn release_candidate_manifest_blockers() -> BTreeSet<String> {
     let endpoint_blockers = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
+        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
         .filter(|entry| entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker)
         .map(|entry| format!("endpoint:{}", entry.endpoint));
 

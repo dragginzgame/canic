@@ -1,6 +1,6 @@
 # Canic 0.103 Implementation Status
 
-Date: 2026-08-17
+Date: 2026-08-18
 
 ## Status
 
@@ -17,7 +17,13 @@ Date: 2026-08-17
   Coordinator now expose only their role-owned command/status methods;
   autonomous Component provisioning and Root removal, both atomic caller cuts,
   the pre-adoption Store staging seam, cross-cutting presentation, legacy-
-  emitter deletion and exact generated Candid all pass their focused checks.
+  emitter deletion, ceremonial `metrics` Cargo feature removal and exact
+  generated Candid all pass their focused checks.
+- Closeout-audit state: the initial 2026-08-18 audit's authorization-order,
+  external profile-binding, Store-pruning and active-document/count findings
+  are corrected and pass focused re-audit. The only open finding is the
+  maintainer-owned package/tag identity boundary; the audit preserves its
+  initial evidence and records the current disposition in section 21.
 - Outcome: one bounded command/status control plane per Canic role. Compiled
   capabilities add variants, command/status authority is variant-specific
   and workflows retain every private phase. Only genuinely asynchronous or
@@ -32,6 +38,9 @@ Date: 2026-08-17
   its variant, and canonical builds bind exact generated Candid to Overview and
   release-artifact metadata. Root Store verification, install/Registry state
   and Component Directory projections preserve the selected profile identity.
+  Generic host transport requires the fully resolved immutable binding, and
+  CLI observation/mutation paths fail before transport when release, role,
+  capabilities, Candid hash or profile digest evidence is absent or conflicts.
   Existing operation owners resolve their exact durable IDs; B4 adds the Root
   and Coordinator operations with the commands that create those identities
   rather than through a universal operation store. Representative Runtime-only,
@@ -80,7 +89,7 @@ amendment and cannot be hidden in implementation.
 | B4 | Root and Coordinator autonomous intent plus atomic caller cut | outcome-named commands, async/durable receipts, typed atomic responses, variant auth/replay, self-advance and private phases; every Root/Coordinator caller, binding, constant, replay row and fixture | property, binding and PocketIC replay/interruption journeys | Complete in worktree: 32 Root and nine Coordinator commands, exact participant observation authority, private reconciliation, caller/binding/replay cleanup, pre-adoption Store staging and autonomous provisioning/removal PocketIC journeys pass |
 | B5 | Managed and Store role surfaces plus atomic caller cut | optional managed command, inert pruning, Store control/byte lanes; every managed/Store caller, binding, constant, replay row and fixture | authority, binding, absence, payload and cross-canister PocketIC tests | Complete in worktree: managed profiles expose only cfg-selected command/status variants; Store exposes command/status plus two admitted byte lanes; exact callers, replay rows, generated Candid and bootstrap/reverification pass |
 | B6 | Cross-cutting presentation and residue | host/CLI help and presentation, remaining application/docs propagation, representative reports and global residue | targeted host/CLI/build/PocketIC checks and residue scans | Complete in worktree: host/CLI fixtures, Skynet presentation, active documentation and seven representative generated profiles use the current role surface; [evidence](../../audits/working/0.103-role-owned-candid-surface/b6-surface-report.md) |
-| B7 | Removal and measured closeout | old surface deletion, residue guards, count/size report and documentation | generated count, forbidden-method and residue checks | Complete in worktree: legacy emitters are deleted, current-surface guards pass and 188 representative Canic methods become ten; current Wasm identity is recorded without a causal savings claim; [evidence](../../audits/working/0.103-role-owned-candid-surface/b7-closeout.md) |
+| B7 | Removal and measured closeout | old surface deletion, residue guards, count/size report and documentation | generated count, forbidden-method and residue checks | Complete in worktree: legacy emitters and the empty `metrics` Cargo feature are deleted, current-surface guards pass, Store lanes are absent from managed/Coordinator Wasm and 188 representative Canic methods become ten; current Wasm identity is recorded without a causal savings claim; [evidence](../../audits/working/0.103-role-owned-candid-surface/b7-closeout.md) |
 
 B2 emits no temporary all-capabilities status superset. The completed B2/B3
 sequence has representative exact variant/type/public-handler/protocol-
@@ -167,7 +176,8 @@ reserve-Fleet prerequisite. Unnumbered ideas remain outside the path.
 
 ## Next Action
 
-Run the maintainer-owned release/version flow after reconciling the existing
-`v0.103.0` tag with the root package-version authority. The open `0.103.0`
-changelog records this completed batch, but no agent-owned version, tag or push
-is authorized. Begin 0.104 only after the 0.103 release boundary is published.
+Run the maintainer-owned minor release flow, which advances the current
+`0.102.2` package authority to the exact `0.103.0` target and owns the complete
+validation gate. No local or remote `v0.103.*` tag remains. The open `0.103.0`
+changelog records this completed batch; no agent-owned version, tag or push is
+authorized. Begin 0.104 only after the 0.103 release boundary is published.

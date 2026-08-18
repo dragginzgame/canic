@@ -19,7 +19,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["control-plane", "metrics"] }
+canic = { workspace = true, features = ["control-plane"] }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

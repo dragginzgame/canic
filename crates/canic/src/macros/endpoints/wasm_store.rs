@@ -26,8 +26,8 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         #[doc(hidden)]
         fn __canic_inspect_wasm_store_update_message() {
             let method = $crate::__internal::core::ingress::payload::current_method_name();
-            if method == $crate::__internal::core::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
-                || method == $crate::__internal::core::protocol::CANIC_WASM_STORE_CHUNK
+            if method == $crate::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK
+                || method == $crate::protocol::CANIC_WASM_STORE_CHUNK
             {
                 $crate::__internal::core::ingress::payload::inspect_update_message();
                 return;

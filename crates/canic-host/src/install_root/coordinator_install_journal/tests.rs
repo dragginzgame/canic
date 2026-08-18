@@ -168,6 +168,9 @@ fn persisted_manifest(
     let artifact = CanicInfrastructureArtifactEntry {
         role: CanicInfrastructureRole::FleetCoordinator,
         package: "canic-coordinator".to_string(),
+        protocol_release_identity: "0.103.0".to_string(),
+        protocol_role: canic_core::ids::CanisterRole::new("fleet_coordinator"),
+        protocol_capabilities: std::collections::BTreeSet::new(),
         release_build_id,
         wasm_relative_path: "coordinator.wasm".to_string(),
         wasm_size_bytes: 8,

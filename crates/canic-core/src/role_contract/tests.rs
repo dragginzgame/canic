@@ -333,7 +333,6 @@ fn feature_implication_closure_is_idempotent() {
     assert!(first.contains(&CanicFeatureKey::AuthChainKeyEcdsa));
     assert!(first.contains(&CanicFeatureKey::AuthIssuerCanisterSigVerify));
     assert!(first.contains(&CanicFeatureKey::BlobStorage));
-    assert!(first.contains(&CanicFeatureKey::Metrics));
 }
 
 #[test]

@@ -10,6 +10,7 @@ mod tests;
 use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::IcpConfigError,
+    protocol_binding::ResolvedProtocolBinding,
     replica_query::{self, ReplicaQueryError},
 };
 use candid::{CandidType, Deserialize};
@@ -51,7 +52,7 @@ pub fn query_cycle_balance(
     canister_id: &str,
     environment: &str,
     icp_root: Option<&Path>,
-    candid_path: Option<&Path>,
+    binding: &ResolvedProtocolBinding,
 ) -> Result<u128, CycleBalanceQueryError> {
     if replica_query::uses_local_replica_transport(Some(environment), icp_root)? {
         return replica_query::query_cycle_balance(Some(environment), canister_id, icp_root)
@@ -63,7 +64,7 @@ pub fn query_cycle_balance(
         protocol::CANIC_STATUS,
         "(variant { CycleBalance })",
         Some(ICP_JSON_OUTPUT),
-        candid_path,
+        Some(&binding.candid_path),
     )?;
     let response = decode_json_result_response::<RoleStatusResponse>(&output)?;
     let RoleStatusResponse::CycleBalance(response) = response;

@@ -52,6 +52,30 @@ pub fn preflight_endpoint(call: EndpointCall) {
     enforce_authority_restore_fence(call);
 }
 
+/// Enforce prerequisites for a compile-selected Store data-lane endpoint.
+pub fn preflight_store_data_endpoint(call: EndpointCall) {
+    ensure_memory_bootstrap();
+    enforce_store_data_fleet_activation_fence(call);
+    enforce_authority_restore_fence(call);
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
+fn enforce_store_data_fleet_activation_fence(call: EndpointCall) {
+    #[cfg(target_arch = "wasm32")]
+    if let Err(error) = crate::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_store_data_endpoint_allowed(call) {
+        panic!(
+            "Fleet activation fence rejected Store data endpoint {}: {error}",
+            call.endpoint.name
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = call;
+        let _ = crate::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_store_data_endpoint_allowed;
+    }
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
 fn enforce_authority_restore_fence(call: EndpointCall) {
     #[cfg(target_arch = "wasm32")]

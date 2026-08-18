@@ -1208,6 +1208,7 @@ fn sample_fleet_catalog_entry() -> FleetCatalogEntryV1 {
         app: AppId::from("demo"),
         environment: "local".to_string(),
         deployed_at_unix_secs: 1,
+        release_build_id: "01".repeat(32).parse().expect("release build"),
         coordinator_principal: "aaaaa-aa".to_string(),
     }
 }
@@ -1269,8 +1270,7 @@ version = "{}"
 edition = "2024"
 
 [features]
-default = ["metrics"]
-metrics = []
+default = []
 control-plane = []
 fleet-coordinator-canister = []
 wasm-store-canister = []

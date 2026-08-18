@@ -206,6 +206,7 @@ fn summarizes_partial_cycle_window() {
         role: Some("root".to_string()),
         parent_pid: None,
         module_hash: None,
+        protocol_binding: None,
     };
     let report = summarize_cycle_tracker(
         &entry,
@@ -251,6 +252,7 @@ fn summarizes_topup_events() {
         role: Some("app".to_string()),
         parent_pid: None,
         module_hash: None,
+        protocol_binding: None,
     };
     let report = summarize_cycle_tracker(
         &entry,
@@ -308,6 +310,7 @@ fn summarizes_burn_and_topup_rates() {
         role: Some("app".to_string()),
         parent_pid: None,
         module_hash: None,
+        protocol_binding: None,
     };
     let report = summarize_cycle_tracker(
         &entry,
@@ -350,6 +353,7 @@ fn summarizes_post_sample_topup_events_against_live_balance() {
         role: Some("app".to_string()),
         parent_pid: None,
         module_hash: None,
+        protocol_binding: None,
     };
     let report = summarize_cycle_tracker(
         &entry,
@@ -391,6 +395,7 @@ fn omits_burn_when_positive_delta_exceeds_topups() {
         role: Some("app".to_string()),
         parent_pid: None,
         module_hash: None,
+        protocol_binding: None,
     };
     let report = summarize_cycle_tracker(
         &entry,

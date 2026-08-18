@@ -8,7 +8,10 @@ use super::*;
 
 #[test]
 fn costed_manifest_entries_declare_guards() {
-    for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
+    for entry in ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .chain(STORE_ENDPOINT_REPLAY_POLICY_MANIFEST)
+    {
         if entry.cost_class == CostClass::None {
             continue;
         }

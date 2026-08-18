@@ -34,14 +34,14 @@ fn common_role_command_dispatch_is_variant_manifest_owned() {
 
 #[test]
 fn store_byte_lanes_keep_their_direct_replay_contracts() {
-    let chunk = ENDPOINT_REPLAY_POLICY_MANIFEST
+    let chunk = STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_wasm_store_chunk")
         .expect("Store chunk lane");
     assert_eq!(chunk.endpoint_kind, EndpointKind::Update);
     assert_eq!(chunk.replay_policy, ReplayPolicy::QueryOrReadOnly);
 
-    let publish = ENDPOINT_REPLAY_POLICY_MANIFEST
+    let publish = STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
         .find(|entry| entry.endpoint == "canic_wasm_store_publish_chunk")
         .expect("Store publish-chunk lane");

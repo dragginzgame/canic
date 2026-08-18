@@ -29,14 +29,14 @@ Root-owned renewal is the active delegated-auth liveness path for issuers with
 enabled renewal templates:
 
 ```text
-controller             -> root canic_upsert_root_issuer_renewal_template update
+controller             -> root canic_command UpsertIssuerRenewalTemplate update
 root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
-root                   -> issuer canic_install_active_delegation_proof update
-operator/medic         -> root canic_root_issuer_renewal_status query
-operator/medic         -> issuer canic_active_delegation_proof_status query
-caller/session         -> issuer canic_prepare_delegated_token update
-caller/session         -> issuer canic_get_delegated_token query
+root                   -> issuer canic_command InstallDelegationProof update
+operator/medic         -> root canic_status IssuerRenewal query
+operator/medic         -> issuer canic_status ActiveDelegationProof query
+caller/session         -> issuer canic_command PrepareDelegatedToken update
+caller/session         -> issuer canic_status DelegatedToken query
 ```
 
 Issuer delegated-token preparation also has a root lazy-repair path. When an
@@ -44,9 +44,9 @@ issuer in `chain_key_batch` mode has no usable active proof, it may request the
 internal root update:
 
 ```text
-issuer                 -> root canic_get_or_create_chain_key_delegation_proof update
+issuer                 -> root canic_command GetOrCreateDelegationProof update
 root                   -> management canister sign_with_ecdsa when no reusable batch exists
-root                   -> issuer canic_install_active_delegation_proof update
+root                   -> issuer canic_command InstallDelegationProof update
 ```
 
 Lazy repair must reuse a valid existing chain-key batch when possible and must
@@ -59,7 +59,7 @@ ready before login through the public Rust facade:
 ```text
 app root               -> AuthApi::provision_chain_key_delegation_proof_for_issuer_root
 Canic root workflow    -> create or reuse issuer proof from chain-key batch state
-Canic root workflow    -> issuer canic_install_active_delegation_proof update
+Canic root workflow    -> issuer canic_command InstallDelegationProof update
 Canic root workflow    -> record install success or failure
 ```
 

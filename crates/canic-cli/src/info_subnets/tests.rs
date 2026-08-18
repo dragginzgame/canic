@@ -260,6 +260,7 @@ fn fixture() -> Fixture {
             app: fleet.app,
             environment: "staging".to_string(),
             deployed_at_unix_secs: 54,
+            release_build_id: "01".repeat(32).parse().expect("release build"),
             coordinator_principal: principal(30).to_text(),
         },
         registry,

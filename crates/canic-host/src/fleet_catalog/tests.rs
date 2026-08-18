@@ -480,6 +480,7 @@ fn entry(
         app: AppId::from(app),
         environment: environment.to_string(),
         deployed_at_unix_secs: 54,
+        release_build_id: "01".repeat(32).parse().expect("release build"),
         coordinator_principal: coordinator_principal.to_string(),
     }
 }

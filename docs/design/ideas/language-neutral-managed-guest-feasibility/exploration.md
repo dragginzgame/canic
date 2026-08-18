@@ -117,7 +117,7 @@ around them, not introduce a second Motoko-only orchestration system.
 | Directory evidence | Rust re-encodes typed Candid values before hashing. | Motoko explicitly does not promise deterministic `to_candid` bytes. | Hash the exact opaque bytes frozen by the root; never hash a Motoko re-encoding. |
 | Runtime endpoints | Rust macros emit prepare, status, synchronize, and activate endpoints backed by `canic-core` stable state. | A Motoko package has no macros and no implementation. | Publish a small Mops runtime state machine plus a generated actor scaffold. |
 | Child provisioning | Rust constructs the complete root capability envelope and decodes the public Rust error. | Motoko has no maintained client binding or durable helper. | Move both Rust and Motoko callers to one compact, versioned guest request/response ABI. |
-| Feature qualification | Cargo features prove auth, metrics, and control-plane capabilities. | Mops has no equivalent feature evidence. | Admit a deliberately small Motoko capability profile first and reject unsupported config. |
+| Feature qualification | Cargo features prove auth and control-plane capabilities; role config proves the metrics profile. | Mops has no equivalent feature evidence. | Admit a deliberately small Motoko capability profile first and reject unsupported config. |
 | Candid checks | Local Rust builds extract Candid from debug Wasm. | Mops already emits `.did` directly. | Require the Mops `.did` and check its managed subset against Canic's canonical ABI. |
 
 Relevant current owners include:

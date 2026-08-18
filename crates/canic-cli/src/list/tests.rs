@@ -527,6 +527,7 @@ fn registry_entry(
         role: Some(role.to_string()),
         parent_pid: parent_pid.map(str::to_string),
         module_hash: Some(module_hash.to_string()),
+        protocol_binding: None,
     }
 }
 

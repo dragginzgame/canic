@@ -29,6 +29,7 @@ fn live_query_worker_panic_is_reported_for_its_canister() {
         role: Some("root".to_string()),
         parent_pid: None,
         module_hash: None,
+        protocol_binding: None,
     }];
 
     let values =

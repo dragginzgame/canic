@@ -13,6 +13,7 @@ use super::icp_context::InstallIcpContext;
 use super::operations::call_with_arg;
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
+    protocol_binding::resolve_infrastructure_protocol_binding,
     release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use candid::{CandidType, Principal};
@@ -100,6 +101,11 @@ fn drive_component_registry_preparation(
         .journal
         .fleet_subnet_root
         .ok_or(RootComponentRegistryPreparationError::LiveEvidenceMismatch)?;
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
     let icp = icp_context.cli();
     for _ in 0..MAX_COMPONENT_REGISTRY_PREPARATION_TRANSITIONS {
         current = match current.journal.phase {
@@ -109,6 +115,7 @@ fn drive_component_registry_preparation(
             FleetSubnetRootInstallPhase::ComponentRegistryPreparationInFlight => {
                 let response: RootCommandResponseFragment = call_with_arg(
                     icp,
+                    &binding,
                     root,
                     protocol::CANIC_COMMAND,
                     &RootCommandFragment::PrepareComponentRegistry(request.clone()),
@@ -119,6 +126,7 @@ fn drive_component_registry_preparation(
             FleetSubnetRootInstallPhase::ComponentRegistryPrepared => {
                 let response: RootCommandResponseFragment = call_with_arg(
                     icp,
+                    &binding,
                     root,
                     protocol::CANIC_COMMAND,
                     &RootCommandFragment::PrepareComponentRegistry(request.clone()),

@@ -733,6 +733,23 @@ pub async fn reserve_peer_allocation(
     allocation_response(reserved)
 }
 
+/// Authorize the exact local or Fleet-service peer caller before endpoint dispatch.
+pub fn authorize_peer_allocation_caller(
+    request: &RootPeerComponentAllocationRequest,
+    caller: candid::Principal,
+) -> Result<(), InternalError> {
+    let (authority, _) = root_authority()?;
+    let topology = ConfigOps::component_topology()?;
+    peer_requester_authority(
+        &authority,
+        authority.initial_release_set,
+        &topology,
+        &request.requester,
+        caller,
+    )?;
+    Ok(())
+}
+
 /// Privately advance one accepted ordinary or peer top-level allocation.
 pub fn schedule_component_allocation(operation_id: [u8; 32]) {
     schedule_component_allocation_after(operation_id, Duration::ZERO);
@@ -1066,9 +1083,6 @@ fn peer_requester_authority(
                 authority,
                 authority.binding.fleet_subnet_root,
             )?;
-            if &mirror.active.snapshot.version != expected_registry.as_ref() {
-                return Err(InternalError::conflict());
-            }
             let resolved = FleetServicePeerOps::resolve(
                 &authority.binding,
                 topology,
@@ -1076,6 +1090,9 @@ fn peer_requester_authority(
                 caller,
                 service,
             )?;
+            if &mirror.active.snapshot.version != expected_registry.as_ref() {
+                return Err(InternalError::conflict());
+            }
             Ok(PeerRequesterAuthority::FleetService {
                 requester: resolved.requester,
                 registry: expected_registry.as_ref().clone(),
@@ -1332,6 +1349,17 @@ pub async fn reserve_child_allocation(
         request.expected_registry,
     )?;
     Ok(child_allocation_response(reserved))
+}
+
+/// Authorize the exact registered parent before endpoint dispatch.
+pub fn authorize_child_allocation_caller(
+    request: &RootComponentChildAllocationRequest,
+    caller: candid::Principal,
+) -> Result<(), InternalError> {
+    ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
+        InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
+    })?;
+    Ok(())
 }
 
 /// Read one durable direct-child reservation for its exact registered parent caller.

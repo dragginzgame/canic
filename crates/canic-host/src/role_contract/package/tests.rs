@@ -183,7 +183,7 @@ fn workspace_canic_declaration_never_owns_features() {
 resolver = "2"
 
 [workspace.dependencies]
-canic = { path = "canic", default-features = false, features = ["metrics"] }
+canic = { path = "canic", default-features = false, features = ["sharding"] }
 "#,
     )
     .expect("workspace manifest");
@@ -201,7 +201,7 @@ fn isolated_role_workspace_rejects_omitted_role_features() {
     let fixture = FixtureWorkspace::materialize("protected_sibling");
     fixture.rewrite(
         "role/Cargo.toml",
-        "canic = { workspace = true, features = [\"metrics\"] }",
+        "canic = { workspace = true, features = [] }",
         "canic = { workspace = true }",
     );
 
@@ -218,8 +218,8 @@ fn isolated_role_workspace_rejects_build_runtime_features() {
     let fixture = FixtureWorkspace::materialize("supported");
     fixture.rewrite(
         "role/Cargo.toml",
-        "canic = { workspace = true, features = [] }",
-        "canic = { workspace = true, features = [\"metrics\"] }",
+        "[build-dependencies]\ncanic = { workspace = true, features = [] }",
+        "[build-dependencies]\ncanic = { workspace = true, features = [\"sharding\"] }",
     );
 
     let reason = fixture.rejection_reason();
@@ -352,7 +352,7 @@ fn direct_dependency_rejects_a_renamed_canic_key() {
         rename: Some("framework".to_string()),
         optional: false,
         uses_default_features: false,
-        features: vec!["metrics".to_string()],
+        features: Vec::new(),
         target: None,
     });
 
@@ -467,7 +467,7 @@ fn selected_canic_features_accept_only_public_cargo_implications() {
         .get_mut("canic@1")
         .expect("Canic graph package")
         .enabled_features
-        .insert("metrics".to_string());
+        .insert("sharding".to_string());
     assert!(
         validate_selected_canic_features(&graph, direct_edge, &packages[1], &declared).is_err()
     );
@@ -688,7 +688,7 @@ fn built_in_wasm_store_uses_the_canonical_role_graph_contract() {
     assert!(!evidence.default_features_enabled);
     assert_eq!(
         evidence.direct_features,
-        BTreeSet::from([CanicFeatureKey::Metrics, CanicFeatureKey::WasmStoreCanister,])
+        BTreeSet::from([CanicFeatureKey::WasmStoreCanister])
     );
 }
 

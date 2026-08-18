@@ -5,7 +5,10 @@
 //! Boundary: domain workflows supply exact Canister, method, and arguments through explicit
 //! query or update operations.
 
-use crate::icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response};
+use crate::{
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
+    protocol_binding::ResolvedProtocolBinding,
+};
 use candid::{CandidType, Principal};
 use canic_core::diagnostics::RegisteredDiagnosticCode;
 use serde::de::DeserializeOwned;
@@ -80,6 +83,7 @@ impl CanisterProtocolError {
 
 pub fn call_with_arg<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &'static str,
     input: &I,
@@ -88,11 +92,19 @@ where
     I: CandidType,
     O: CandidType + DeserializeOwned,
 {
-    invoke_with_arg(icp, canister, method, input, ProtocolCallMode::Update)
+    invoke_with_arg(
+        icp,
+        binding,
+        canister,
+        method,
+        input,
+        ProtocolCallMode::Update,
+    )
 }
 
 pub fn query_with_arg<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &'static str,
     input: &I,
@@ -101,11 +113,19 @@ where
     I: CandidType,
     O: CandidType + DeserializeOwned,
 {
-    invoke_with_arg(icp, canister, method, input, ProtocolCallMode::Query)
+    invoke_with_arg(
+        icp,
+        binding,
+        canister,
+        method,
+        input,
+        ProtocolCallMode::Query,
+    )
 }
 
 fn invoke_with_arg<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &'static str,
     input: &I,
@@ -134,14 +154,14 @@ where
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
-            None,
+            Some(&binding.candid_path),
         ),
         ProtocolCallMode::Update => icp.canister_call_binary_args_output_with_candid(
             &canister_text,
             method,
             &args_path,
             Some(ICP_JSON_OUTPUT),
-            None,
+            Some(&binding.candid_path),
         ),
     };
     let cleanup = fs::remove_file(&args_path);

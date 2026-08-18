@@ -148,13 +148,16 @@ fn check_ready_status(
     entry: &RegistryEntry,
 ) -> ReadyStatus {
     let icp = live_icp(&options.icp, options.environment.clone(), icp_root);
-    let candid_path = registry_entry_candid_path(icp_root, &state_environment(options), entry);
+    let Ok(binding) = registry_entry_candid_path(icp_root, &state_environment(options), entry)
+    else {
+        return ReadyStatus::Error;
+    };
     let Ok(ready) = query_canister_ready(
         &icp,
         &entry.pid,
         &state_environment(options),
         icp_root,
-        candid_path.as_deref(),
+        &binding,
     ) else {
         return ReadyStatus::Error;
     };
@@ -220,16 +223,12 @@ fn cycle_balance_label_endpoint(
     entry: &RegistryEntry,
 ) -> String {
     let environment = environment.unwrap_or_else(local_environment);
-    let candid_path = registry_entry_candid_path(icp_root, &environment, entry);
+    let Ok(binding) = registry_entry_candid_path(icp_root, &environment, entry) else {
+        return OBSERVATION_ERROR.to_string();
+    };
     let icp = live_icp(icp, Some(environment.clone()), icp_root);
-    query_cycle_balance(
-        &icp,
-        &entry.pid,
-        &environment,
-        icp_root,
-        candid_path.as_deref(),
-    )
-    .map_or_else(|_| OBSERVATION_ERROR.to_string(), cycles_tc)
+    query_cycle_balance(&icp, &entry.pid, &environment, icp_root, &binding)
+        .map_or_else(|_| OBSERVATION_ERROR.to_string(), cycles_tc)
 }
 
 fn canic_version_label_endpoint(
@@ -239,9 +238,11 @@ fn canic_version_label_endpoint(
     entry: &RegistryEntry,
 ) -> String {
     let environment = environment.unwrap_or_else(local_environment);
-    let candid_path = registry_entry_candid_path(icp_root, &environment, entry);
+    let Ok(binding) = registry_entry_candid_path(icp_root, &environment, entry) else {
+        return OBSERVATION_ERROR.to_string();
+    };
     let icp = live_icp(icp, Some(environment), icp_root);
-    query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref())
+    query_canic_metadata_version(&icp, &entry.pid, &binding)
         .unwrap_or_else(|_| OBSERVATION_ERROR.to_string())
 }
 

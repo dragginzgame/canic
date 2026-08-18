@@ -19,7 +19,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["metrics", "sharding"] }
+canic = { workspace = true, features = ["sharding"] }
 ic-cdk = { workspace = true }
 skynet_console = { workspace = true }
 

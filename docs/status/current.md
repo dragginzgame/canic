@@ -18,12 +18,10 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   `0.102.2`, the latest published release, at
   `8cf4723cecd7579cbe3304b980c63b1bc3969d68`. The single current changelog
   target is `0.103.0`; it is not published or package-versioned yet.
-- Release-truth warning: Git tag `v0.103.0` resolves to
-  `721783675c2e7dc0981d7fa7639f654b84593df7`, but that commit's authoritative
-  root package version is still `0.102.2`. Treat the tag/package boundary as
-  an unpushed lightweight development tag rather than a release. Do not publish
-  `0.103.0` until the maintainer removes that stray local ref and completes the
-  human-owned minor-version/release flow.
+- Release-truth warning: neither local Git nor `origin` has a `v0.103.*` tag,
+  so the former stray-tag collision is closed. The governed minor-version flow
+  advances the current `0.102.2` package to the exact `0.103.0` target and owns
+  the complete validation gate. Do not publish before that flow completes.
 - The published release owns the completed 161-reason register, typed mappings,
   compact public wire and flat `code + name` release baseline. B1 census/count
   coupling is absent from permanent tests. The open closeout-correction batch
@@ -100,7 +98,17 @@ capture tool derives the immutable normalized register and manifest hashes
 from scratch-generated interfaces so historical contracts cannot be mistaken
 for live ones. The same cleanup removes five unconsumed legacy build cfgs and
 their dead environment/manifest probes; the generated-role cfg catalog is once
-again exact and singly owned.
+again exact and singly owned. The ceremonial default-on `metrics` Cargo
+feature is also removed from the facade catalog, all 38 live manifests and
+generated/package-contract fixtures; metrics profiles remain config-derived.
+The dated 0.103 closeout audit initially found two P0 implementation gaps plus
+Store-pruning and active-document/count drift. The correction now authenticates
+every Root/Coordinator variant before protected work, requires complete
+immutable host/CLI protocol identity before transport, compiles Store lanes
+only for Store and its exact Root caller, and reconciles active names/counts.
+Focused all-target compilation, warning-denied Clippy, binding/auth/replay
+tests and four-role artifact scans pass. Only the maintainer-owned package bump
+and complete release gate remain.
 
 Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
 hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its
@@ -218,7 +226,10 @@ pre-cut pair exists. Post-closeout cleanup removes raw pre-cut DID snapshots,
 regenerates the three still-configured stale local role artifacts and verifies
 all 19 remaining repository/build-local DIDs parse with zero retired Canic
 method declarations. The focused 35-test protocol-surface suite passes. The
-complete suite was not rerun.
+empty `metrics` feature cleanup also passes locked metadata resolution, core
+catalog parity, host package-contract and generated Store-wrapper tests,
+facade manifest/documentation guards and CLI medic role-contract fixtures.
+The complete suite was not rerun.
 
 The standalone cycle-burn waveform idea completed its bounded B0b pulse and
 B0c plateau mainnet calibrations on 2026-08-16. Canister
@@ -332,13 +343,13 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-Run the maintainer-owned release/version flow after reconciling the existing
-`v0.103.0` tag with the root package-version authority. The open `0.103.0`
-changelog records the completed B2-B7 hard cut, but no agent-owned version,
-tag or push is authorized. Begin 0.104 only after that release boundary is
-published. Do not rerun the broad census/full suite or reopen 0.102 with JSON,
-generic handling metadata, observability infrastructure, compatibility
-decoding, B1 test coupling or retired 991 rows.
+Run the maintainer-owned minor release flow to advance the root package
+authority from `0.102.2` to `0.103.0`. The open `0.103.0` changelog records the
+completed B2-B7 hard cut, but no agent-owned version, tag or push is authorized.
+Begin 0.104 only after that release boundary is published. Do not rerun the
+broad census/full suite or reopen 0.102 with JSON, generic handling metadata,
+observability infrastructure, compatibility decoding, B1 test coupling or
+retired 991 rows.
 
 For the standalone waveform idea, retain the terminal canister and its
 approximately `2.590 Pcycles` without further effects. The completed attempt

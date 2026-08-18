@@ -348,13 +348,29 @@ impl FleetCoordinatorOps {
         Ok(current.registry)
     }
 
+    /// Authorize a controller or exact snapshot Root without returning Registry state.
+    pub(crate) fn authorize_registry_caller(
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<(), InternalError> {
+        if caller_is_controller {
+            return Ok(());
+        }
+        require_snapshot_root(&Self::current()?, caller).map(|_| ())
+    }
+
+    /// Authorize an exact joining Root before acknowledgement workflow dispatch.
+    pub(crate) fn authorize_root_snapshot_caller(caller: Principal) -> Result<(), InternalError> {
+        require_joining_root(&Self::current()?, caller).map(|_| ())
+    }
+
     pub(crate) fn acknowledge_root_snapshot(
         caller: Principal,
         request: FleetSubnetRootSnapshotAcknowledgementRequest,
     ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
         let current = Self::current()?;
-        require_all_roots_joining(&current)?;
         require_joining_root(&current, caller)?;
+        require_all_roots_joining(&current)?;
         let current_version = FleetRegistryOps::version(
             &current.authority,
             &current

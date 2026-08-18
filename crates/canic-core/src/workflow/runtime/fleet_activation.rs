@@ -9,7 +9,10 @@ use crate::{
     cdk::types::Principal,
     domain::policy::pure::{
         PolicyError,
-        fleet_activation::{require_prepared_nonroot_endpoint, require_prepared_root_endpoint},
+        fleet_activation::{
+            require_prepared_nonroot_endpoint, require_prepared_root_endpoint,
+            require_prepared_store_data_endpoint,
+        },
     },
     dto::{
         cascade::{StateSnapshotInput, TopologySnapshotInput},
@@ -351,6 +354,22 @@ impl FleetActivationWorkflow {
             .map_err(InternalError::from)?;
 
         require_endpoint_for_phase(is_root, status.phase, call).map_err(InternalError::from)
+    }
+
+    /// Enforce the activation phase for a compile-selected Store data-lane endpoint.
+    pub fn require_store_data_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
+        if FleetActivationRuntimeOps::is_standalone_local() {
+            return Ok(());
+        }
+        let status = FleetActivationOps::status(false)
+            .map_err(StorageOpsError::from)
+            .map_err(InternalError::from)?;
+        match status.phase {
+            FleetActivationPhase::Prepared => require_prepared_store_data_endpoint(call)
+                .map_err(PolicyError::from)
+                .map_err(InternalError::from),
+            FleetActivationPhase::Active => Ok(()),
+        }
     }
 
     /// Preserve the prepared-Root fence after role methods collapse many variants into one name.

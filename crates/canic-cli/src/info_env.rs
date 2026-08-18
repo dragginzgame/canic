@@ -218,6 +218,7 @@ fn normalized_root_entries(
             role: Some("root".to_string()),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         });
     }
     entries
@@ -337,6 +338,7 @@ mod tests {
             role: role.map(str::to_string),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         }
     }
 

@@ -8,20 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Release publication and historical-tag cleanup now avoid implicit followed-
-  tag pushes, verify and fixture-test the remote-first deletion boundary,
-  protect every CI authority through CODEOWNERS and establish CI's required
-  `ripgrep` helper within the consuming job.
-
-## [0.103.x] - 2026-08-17 - Role-Owned Candid Surface
+## [0.103.x] - 2026-08-18 - Role-Owned Candid Surface
 
 Detailed patch breakdown: [docs/changelog/0.103.md](docs/changelog/0.103.md)
 
-- `0.103.0` closes the 0.102 audit findings and hard-cuts Canic to profile-exact
-  role command/status control planes with autonomous durable operations,
-  atomic caller migration and legacy-emitter deletion, reducing the four
-  representative Canic surfaces from 188 method appearances to ten, and
-  updates the transitive HTTP/2 stack to close `RUSTSEC-2026-0258`.
+- `0.103.0` closes the 0.102 and 0.103 audits with profile-exact role control
+  planes, pre-dispatch authorization and immutable caller bindings, reducing
+  188 representative Canic method appearances to ten. It also removes the
+  ceremonial `metrics` feature, closes `RUSTSEC-2026-0258` and hardens atomic
+  release publication.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

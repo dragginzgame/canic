@@ -19,7 +19,6 @@ use crate::{
         globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
-    support::candid::role_candid_path,
     version_text,
 };
 use canic_core::protocol::CANIC_STATUS;
@@ -30,7 +29,11 @@ use canic_host::{
     installed_fleet::{
         InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
     },
+    protocol_binding::{
+        resolve_infrastructure_protocol_binding, resolve_registry_protocol_binding,
+    },
     registry::RegistryEntry,
+    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -609,10 +612,28 @@ fn resolve_auth_root_call_target(
         &icp_root,
     )
     .map_err(AuthCommandError::from)?;
-    let candid_path = role_candid_path(Some(&icp_root), &options.environment, ROOT_ROLE)
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        &icp_root,
+        installed.fleet.release_build_id,
+    )
+    .map_err(|_| AuthCommandError::CandidUnavailable {
+        fleet: fleet.to_string(),
+    })?;
+    let root_artifact = infrastructure_manifest
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
         .ok_or_else(|| AuthCommandError::CandidUnavailable {
             fleet: fleet.to_string(),
         })?;
+    let candid_path =
+        resolve_infrastructure_protocol_binding(&icp_root, &options.environment, root_artifact)
+            .map_err(|_| AuthCommandError::CandidUnavailable {
+                fleet: fleet.to_string(),
+            })?
+            .candid_path()
+            .to_path_buf();
     let candid =
         fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
             path: candid_path.clone(),
@@ -646,14 +667,15 @@ fn resolve_auth_issuer_call_target(
     else {
         return Ok(None);
     };
-    let Some(role) = entry.role.as_deref() else {
+    let Some(_role) = entry.role.as_deref() else {
         return Ok(None);
     };
-    let Some(candid_path) =
-        role_candid_path(Some(&root_target.icp_root), &options.environment, role)
-    else {
-        return Ok(None);
-    };
+    let candid_path =
+        match resolve_registry_protocol_binding(&root_target.icp_root, &options.environment, entry)
+        {
+            Ok(binding) => binding.candid_path().to_path_buf(),
+            Err(_) => return Ok(None),
+        };
     let candid =
         fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
             path: candid_path.clone(),

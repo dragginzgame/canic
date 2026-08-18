@@ -10,12 +10,17 @@ use super::fleet_catalog_publication::{
     validate_terminal_fleet_registry,
 };
 use super::icp_context::InstallIcpContext;
+use super::operations::resolve_install_protocol_binding;
 use crate::{
     canister_protocol::{CanisterProtocolError, query_with_arg},
     fleet_catalog::CommittedFleetCatalog,
     fleet_install_plan::PersistedFleetInstallPlan,
     icp::IcpCli,
-    release_set::AppConfigSnapshot,
+    protocol_binding::ResolvedProtocolBinding,
+    release_set::{
+        AppConfigSnapshot, CanicInfrastructureRole,
+        load_persisted_canic_infrastructure_artifact_manifest,
+    },
 };
 use std::{path::Path, thread};
 
@@ -87,8 +92,22 @@ pub(super) fn publish_installed_fleet_catalog(
 ) -> Result<CommittedFleetCatalog, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(request.config_path)?;
     let component_topology = config.model().compile_component_topology()?;
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        request.icp.root(),
+        request.fleet_install_plan.plan.release_build_id,
+    )?;
+    let coordinator_binding = resolve_install_protocol_binding(
+        request.icp,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+    )?;
+    let root_binding = resolve_install_protocol_binding(
+        request.icp,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetSubnetRoot,
+    )?;
     let icp = request.icp.cli();
-    let registry = query_registry(icp, request.coordinator)?;
+    let registry = query_registry(icp, &coordinator_binding, request.coordinator)?;
 
     validate_terminal_fleet_registry(
         &request.fleet_install_plan.plan,
@@ -99,7 +118,7 @@ pub(super) fn publish_installed_fleet_catalog(
     if &registry.version != request.terminal_fleet_registry {
         return Err(FleetCatalogCloseoutError::TerminalRegistryMismatch.into());
     }
-    let root_summaries = query_root_summaries(icp, &registry)?;
+    let root_summaries = query_root_summaries(icp, &root_binding, &registry)?;
 
     publish_terminal_fleet_catalog(TerminalFleetCatalogPublicationRequest {
         workspace_root: request.icp.root(),
@@ -117,22 +136,26 @@ pub(super) fn publish_installed_fleet_catalog(
 
 fn query_registry(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<FleetRegistrySnapshotResponse, FleetCatalogCloseoutError> {
     let registry = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::Registry,
     )?;
     let manifest = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RegistryManifest,
     )?;
     let version = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RegistryVersion,
@@ -155,15 +178,18 @@ fn query_registry(
 
 fn query_root_summaries(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     registry: &FleetRegistrySnapshotResponse,
 ) -> Result<Vec<FleetSubnetRootCanisterSummary>, FleetCatalogCloseoutError> {
     let mut workers = Vec::with_capacity(registry.registry.fleet_subnet_roots.len());
     for registered in &registry.registry.fleet_subnet_roots {
         let root = registered.fleet_subnet_root;
         let worker_icp = icp.clone();
+        let worker_binding = binding.clone();
         let worker = thread::spawn(move || {
             query_with_arg::<_, RootStatusResponseFragment>(
                 &worker_icp,
+                &worker_binding,
                 root,
                 protocol::CANIC_STATUS,
                 &RootStatusRequestFragment::Inventory,

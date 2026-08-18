@@ -22,6 +22,20 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only("canic_status"),
+];
+
+/// Exact replay-policy rows for the Store role, including its two data lanes.
+pub const STORE_ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
+    update_command_dispatch(
+        "canic_command",
+        command_kind("role.command.v1"),
+        command_manifest("role.command.variant_manifest.v1"),
+        ReplayImplementationStatus::Implemented,
+        CostClass::None,
+        None,
+        None,
+    ),
+    query_read_only("canic_status"),
     update_read_only("canic_wasm_store_chunk"),
     update_monotonic_transition(
         "canic_wasm_store_publish_chunk",
@@ -33,6 +47,12 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
 #[must_use]
 pub const fn endpoint_replay_policy_manifest() -> &'static [EndpointReplayPolicy] {
     ENDPOINT_REPLAY_POLICY_MANIFEST
+}
+
+/// Returns the exact Store endpoint replay-policy manifest.
+#[must_use]
+pub const fn store_endpoint_replay_policy_manifest() -> &'static [EndpointReplayPolicy] {
+    STORE_ENDPOINT_REPLAY_POLICY_MANIFEST
 }
 
 const fn command_kind(label: &'static str) -> ReplayCommandKindLabel {

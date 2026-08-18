@@ -5,15 +5,33 @@
 //! Boundary: every workflow receives the same snapshot, manifest, and version projection.
 
 use super::query_with_arg;
-use crate::icp::IcpCli;
+use crate::{
+    fleet_install_plan::PersistedFleetInstallPlan, icp::IcpCli,
+    protocol_binding::ResolvedProtocolBinding,
+};
 use candid::Principal;
 use canic_control_plane::dto::fleet_coordinator::{
     CoordinatorStatusRequest, CoordinatorStatusResponse,
 };
 use canic_core::{
     dto::fleet_registry::{FleetRegistry, FleetRegistryManifest, FleetRegistryVersion},
+    ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
 };
+
+pub(in crate::install_root) fn fleet_registry_authority(
+    fleet_install_plan: &PersistedFleetInstallPlan,
+    coordinator: Principal,
+) -> FleetRegistryAuthority {
+    FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: fleet_install_plan.plan.fleet.clone(),
+            coordinator_subnet: fleet_install_plan.plan.coordinator.coordinator_subnet,
+            coordinator,
+        },
+        epoch: 1,
+    }
+}
 
 pub(in crate::install_root) struct LiveRegistryEvidence {
     pub(in crate::install_root) registry: FleetRegistry,
@@ -23,22 +41,26 @@ pub(in crate::install_root) struct LiveRegistryEvidence {
 
 pub(in crate::install_root) fn query_live_registry(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<LiveRegistryEvidence, Box<dyn std::error::Error>> {
     let registry = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::Registry,
     )?;
     let manifest = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RegistryManifest,
     )?;
     let version = query_with_arg::<_, CoordinatorStatusResponse>(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RegistryVersion,

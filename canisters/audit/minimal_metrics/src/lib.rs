@@ -1,6 +1,6 @@
 //!
-//! Minimal metrics demo canister used to compare the metrics-enabled Canic
-//! reference baseline against `canister_minimal`.
+//! Minimal metrics demo canister used to compare a configured leaf metrics
+//! profile against the unconfigured `canister_minimal` reference baseline.
 //!
 //! Test-only helper: this canister is intended for local/dev flows and is not
 //! a public-facing deployment target.

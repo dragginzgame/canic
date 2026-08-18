@@ -271,6 +271,9 @@ fn qualify_infrastructure_outputs(
         CanicInfrastructureArtifactBuildOutput {
             role: CanicInfrastructureRole::FleetCoordinator,
             package: coordinator.package_name,
+            protocol_release_identity: coordinator.protocol_release_identity,
+            protocol_role: coordinator.protocol_role,
+            protocol_capabilities: coordinator.protocol_capabilities,
             release_build_id,
             wasm_path: coordinator.wasm_path,
             wasm_gz_path: coordinator.wasm_gz_path,
@@ -280,6 +283,9 @@ fn qualify_infrastructure_outputs(
         CanicInfrastructureArtifactBuildOutput {
             role: CanicInfrastructureRole::FleetSubnetRoot,
             package: root_output.output.package_name.clone(),
+            protocol_release_identity: root_output.output.protocol_release_identity.clone(),
+            protocol_role: root_output.output.protocol_role.clone(),
+            protocol_capabilities: root_output.output.protocol_capabilities.clone(),
             release_build_id,
             wasm_path: root_output.output.wasm_path.clone(),
             wasm_gz_path: root_output.output.wasm_gz_path.clone(),
@@ -289,6 +295,9 @@ fn qualify_infrastructure_outputs(
         CanicInfrastructureArtifactBuildOutput {
             role: CanicInfrastructureRole::WasmStore,
             package: wasm_store.package_name,
+            protocol_release_identity: wasm_store.protocol_release_identity,
+            protocol_role: wasm_store.protocol_role,
+            protocol_capabilities: wasm_store.protocol_capabilities,
             release_build_id,
             wasm_path: wasm_store.wasm_path,
             wasm_gz_path: wasm_store.wasm_gz_path,

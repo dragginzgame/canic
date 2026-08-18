@@ -13,11 +13,18 @@ use super::{
     },
     fleet_subnet_root_store_bootstrap::canonical_manifest_bytes,
     icp_context::InstallIcpContext,
-    operations::{call_with_arg, query_live_registry, query_with_arg},
+    operations::{
+        call_with_arg, fleet_registry_authority, query_live_registry, query_with_arg,
+        resolve_install_protocol_binding,
+    },
 };
 use crate::{
     fleet_install_plan::PersistedFleetInstallPlan,
-    release_set::{AppConfigSnapshot, load_persisted_canic_infrastructure_artifact_manifest},
+    protocol_binding::resolve_infrastructure_protocol_binding,
+    release_set::{
+        AppConfigSnapshot, CanicInfrastructureRole,
+        load_persisted_canic_infrastructure_artifact_manifest,
+    },
 };
 use candid::{CandidType, Principal};
 use canic_control_plane::dto::fleet_coordinator::{
@@ -32,7 +39,6 @@ use canic_core::{
     },
     dto::role::{OperationReceipt, OperationStatusRequest},
     dto::root_store::RootStoreBootstrapRequest,
-    ids::{FleetCoordinatorBinding, FleetRegistryAuthority},
     protocol,
 };
 use serde::Deserialize;
@@ -102,14 +108,12 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
         icp.root(),
         fleet_install_plan.plan.release_build_id,
     )?;
-    let authority = FleetRegistryAuthority {
-        binding: FleetCoordinatorBinding {
-            fleet: fleet_install_plan.plan.fleet.clone(),
-            coordinator_subnet: fleet_install_plan.plan.coordinator.coordinator_subnet,
-            coordinator,
-        },
-        epoch: 1,
-    };
+    let authority = fleet_registry_authority(fleet_install_plan, coordinator);
+    let coordinator_binding = resolve_install_protocol_binding(
+        icp,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+    )?;
     let mut joining_registry = FleetRegistryOps::compile_genesis(
         &fleet_install_plan.plan.fleet.app,
         authority.clone(),
@@ -162,6 +166,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     let coordinator_icp = icp.cli();
     let live = query_with_arg::<_, CoordinatorStatusResponse>(
         coordinator_icp,
+        &coordinator_binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RootAcknowledgements,
@@ -174,7 +179,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     }
     let active_registry =
         FleetRegistryOps::compile_active(&authority, &component_topology, &joining_registry)?;
-    let live_registry = query_live_registry(coordinator_icp, coordinator)?;
+    let live_registry = query_live_registry(coordinator_icp, &coordinator_binding, coordinator)?;
     let expected_manifest =
         FleetRegistryOps::manifest(&authority, &component_topology, &active_registry)?;
     let expected_version =
@@ -211,6 +216,11 @@ fn drive_root_sync(
         .journal
         .fleet_subnet_root
         .expect("Registry synchronization follows root verification");
+    let binding = resolve_infrastructure_protocol_binding(
+        icp_context.root(),
+        icp_context.environment(),
+        &current.journal.root_artifact,
+    )?;
     let icp = icp_context.cli();
     for _ in 0..MAX_SYNC_TRANSITIONS {
         current = match current.journal.phase {
@@ -220,6 +230,7 @@ fn drive_root_sync(
             FleetSubnetRootInstallPhase::RegistrySyncInFlight => {
                 let response: RootCommandResponseFragment = call_with_arg(
                     icp,
+                    &binding,
                     root,
                     protocol::CANIC_COMMAND,
                     &RootCommandFragment::SynchronizeRegistry(request.clone()),
@@ -229,12 +240,12 @@ fn drive_root_sync(
                     return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
                 }
                 let response =
-                    query_root_registry_synchronization(icp, root, request.operation_id)?;
+                    query_root_registry_synchronization(icp, &binding, root, request.operation_id)?;
                 record_registry_synchronized(&current, response.synchronization)?
             }
             FleetSubnetRootInstallPhase::RegistrySynchronized => {
                 let response =
-                    query_root_registry_synchronization(icp, root, request.operation_id)?;
+                    query_root_registry_synchronization(icp, &binding, root, request.operation_id)?;
                 record_registry_sync_verified(&current, response.synchronization)?
             }
             FleetSubnetRootInstallPhase::RegistrySyncVerified
@@ -252,6 +263,7 @@ fn drive_root_sync(
 
 fn query_root_registry_synchronization(
     icp: &crate::icp::IcpCli,
+    binding: &crate::protocol_binding::ResolvedProtocolBinding,
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<
@@ -260,6 +272,7 @@ fn query_root_registry_synchronization(
 > {
     let response: RootStatusResponseFragment = query_with_arg(
         icp,
+        binding,
         root,
         protocol::CANIC_STATUS,
         &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),

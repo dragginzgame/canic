@@ -141,6 +141,12 @@ pub async fn accept(
     ))
 }
 
+/// Authorize the protected Coordinator before a Root provisioning workflow is entered.
+pub fn authorize_coordinator_caller(caller: Principal) -> Result<(), InternalError> {
+    let (authority, _) = validated_root_authority()?;
+    require_coordinator(caller, authority.binding.authority.binding.coordinator)
+}
+
 /// Accept one high-level root batch and privately schedule its local provisioning work.
 pub async fn accept_and_schedule(
     caller: Principal,

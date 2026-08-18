@@ -12,8 +12,8 @@ use std::{collections::BTreeSet, io::Read};
 
 use canic_core::{
     cdk::utils::hash::{decode_hex, sha256_hex},
-    ids::ReleaseBuildId,
-    role_contract::ProtocolProfileDigest,
+    ids::{CanisterRole, ReleaseBuildId},
+    role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
@@ -73,6 +73,9 @@ impl CanicInfrastructureRole {
 pub struct CanicInfrastructureArtifactInput<'a> {
     pub role: CanicInfrastructureRole,
     pub package: &'a str,
+    pub protocol_release_identity: &'a str,
+    pub protocol_role: &'a CanisterRole,
+    pub protocol_capabilities: &'a BTreeSet<RoleCapabilityKey>,
     pub release_build_id: ReleaseBuildId,
     pub wasm_relative_path: &'a str,
     pub wasm: &'a [u8],
@@ -170,6 +173,9 @@ impl CanicInfrastructureArtifactManifest {
 pub struct CanicInfrastructureArtifactEntry {
     pub role: CanicInfrastructureRole,
     pub package: String,
+    pub protocol_release_identity: String,
+    pub protocol_role: CanisterRole,
+    pub protocol_capabilities: BTreeSet<RoleCapabilityKey>,
     pub release_build_id: ReleaseBuildId,
     pub wasm_relative_path: String,
     pub wasm_size_bytes: u64,
@@ -222,6 +228,17 @@ pub enum CanicInfrastructureArtifactManifestError {
     InvalidPackage {
         role: CanicInfrastructureRole,
         package: String,
+    },
+
+    #[error("infrastructure artifact {role:?} has an empty protocol release identity")]
+    MissingProtocolReleaseIdentity { role: CanicInfrastructureRole },
+
+    #[error(
+        "infrastructure artifact {role:?} protocol role {protocol_role} does not match its artifact role"
+    )]
+    ProtocolRoleMismatch {
+        role: CanicInfrastructureRole,
+        protocol_role: CanisterRole,
     },
 
     #[error("infrastructure artifact {role:?} has invalid {kind} path: {path}")]
@@ -329,6 +346,9 @@ fn compile_entry(
     let entry = CanicInfrastructureArtifactEntry {
         role: input.role,
         package: input.package.to_string(),
+        protocol_release_identity: input.protocol_release_identity.to_string(),
+        protocol_role: input.protocol_role.clone(),
+        protocol_capabilities: input.protocol_capabilities.clone(),
         release_build_id: input.release_build_id,
         wasm_relative_path: input.wasm_relative_path.to_string(),
         wasm_size_bytes,
@@ -361,6 +381,21 @@ fn validate_entry(
             role: entry.role,
             package: entry.package.clone(),
         });
+    }
+    if entry.protocol_release_identity.trim().is_empty() {
+        return Err(
+            CanicInfrastructureArtifactManifestError::MissingProtocolReleaseIdentity {
+                role: entry.role,
+            },
+        );
+    }
+    if entry.protocol_role.as_str() != entry.role.as_str() {
+        return Err(
+            CanicInfrastructureArtifactManifestError::ProtocolRoleMismatch {
+                role: entry.role,
+                protocol_role: entry.protocol_role.clone(),
+            },
+        );
     }
     validate_path(entry.role, "raw Wasm", &entry.wasm_relative_path)?;
     validate_path(entry.role, "gzip Wasm", &entry.wasm_gz_relative_path)?;

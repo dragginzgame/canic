@@ -4,22 +4,20 @@ Date: 2026-08-18
 
 ## 1. Verdict
 
-**HOLD 0.103 CLOSEOUT**
+**IMPLEMENTATION CLOSEOUT PASS**
 
 Publication boundary:
 
-**NOT RELEASE-READY FOR ADDITIONAL REASONS**
+**HOLD UNTIL THE MAINTAINER-OWNED RELEASE-IDENTITY FLOW**
 
-Highest unresolved severity: **P0**. Two accepted security/correctness
-boundaries are not implemented:
+Highest unresolved severity: **P1**. The remediation worktree closes both P0
+findings, the Store-pruning P1 and the documentation P2. The sole remaining
+finding is P1-2: package authority is still `0.102.2`, while the release target
+is `0.103.0`.
 
-- several Root and Coordinator variants enter protected workflows, inspect
-  durable state, or issue a Store query before establishing the variant's
-  caller authority; and
-- ordinary host/CLI calls do not require or verify the exact Candid/profile
-  binding before transport.
-
-There are additional P1 blockers in compile-time pruning and release identity.
+Section 21 is the current remediation result and supersedes the initial
+failure matrix retained below. No version, tag, push or broad release gate was
+performed.
 
 ## 2. Audited Source Identity
 
@@ -101,7 +99,11 @@ Authorization is sometimes delayed until after protected work begins,
 ordinary operator calls lack exact pre-call profile binding, and Store-only
 protocol constants/replay material remain in non-Store Wasm.
 
-## 4. Findings
+The remainder of sections 4 through 20 records the initial clean-commit audit
+and is retained as the reproducible source of each correction. Section 21
+records the post-audit worktree recheck.
+
+## 4. Initial Findings
 
 ### P0
 
@@ -277,7 +279,7 @@ Changes: docs only.
 
 No P3 findings.
 
-## 5. Acceptance Matrix
+## 5. Initial Acceptance Matrix
 
 | # | Criterion | Result | Evidence |
 | ---: | --- | --- | --- |
@@ -765,3 +767,89 @@ Repository changes made by the audit itself: none.
 
 This file was added afterward at the maintainer's request to preserve the audit
 result.
+
+## 21. Remediation Follow-up
+
+Date: 2026-08-18
+
+This is unreleased worktree evidence on top of the audited commit. It does not
+replace the immutable source identity in section 2 and does not create a
+release identity.
+
+### 21.1 Finding disposition
+
+| Finding | Current result | Correction |
+| --- | --- | --- |
+| P0-1 authorization ordering | **RESOLVED** | Root and Coordinator decode first, then enforce the selected variant's exact caller before activation gates, protected state, Store traffic or workflow dispatch. Peer/child helpers and Coordinator participant checks preserve the same order defensively. |
+| P0-2 external profile binding | **RESOLVED** | One `ResolvedProtocolBinding` is selected from immutable infrastructure or protected Registry metadata and is required by generic host transport. The resolver reproduces release identity, role, ordered capabilities, Candid SHA-256 and profile digest before a call; `Overview` verifies that selected identity afterward. |
+| P1-1 Store pruning | **RESOLVED** | Store lanes have a Store-only preflight and replay manifest. Ordinary core/runtime constants no longer retain them; only Store and its exact Root caller compile the lane names. |
+| P1-2 release identity | **OPEN** | Root package authority remains `0.102.2` while the target is `0.103.0`. No local or remote `v0.103.*` tag remains; the maintainer-owned minor release flow must run its complete gate and establish the exact package/tag identity. |
+| P2-1 documentation/counts | **RESOLVED** | Active docs use current selectors; the accepted disposition is `49 / 78 / 2 / 59`; Root/issuer response/status counts match generated Candid. |
+
+The immutable infrastructure manifest now retains the complete protocol
+identity for Coordinator, Root and Store artifacts. Fleet catalog rows retain
+the exact release-build ID needed to select those manifests, while managed
+Registry entries carry their complete protected binding or fail closed when it
+is absent. Inspect, list/readiness, metrics, cycles, auth, blob-storage,
+Subnet-info, install/recovery and Root-retirement transports all use the exact
+resolver; the resolved type's fields are not publicly constructible.
+
+### 21.2 Current acceptance matrix
+
+All criteria that failed in the initial matrix now pass in the remediation
+worktree:
+
+| Criterion | Current result | Evidence |
+| --- | --- | --- |
+| 8 Authorization before workflow/state | **PASS** | endpoint/source ordering guard plus exact-caller negative paths |
+| 11 Capability pruning/reserved names/timer boundary | **PASS** | Store-only macro/preflight/replay tests and post-build Wasm string scan |
+| 14 No old endpoint/help/fallback residue | **PASS** | active-doc and current-source scans return no obsolete callable name or optional Candid fallback |
+| 20 External pre-call profile binding | **PASS** | immutable resolver, transport type boundary, manifest/Registry mismatch tests and verification-only Overview test |
+| 23 Complete generated quantitative report | **PASS** | `49 / 78 / 2 / 59`, Root responses 20, issuer statuses 12 |
+
+Criteria 1-7, 9-10, 12-13, 15-19 and 21-26 retain their initial PASS result.
+
+### 21.3 Focused validation
+
+Warning-denied Clippy and all-target compilation pass for `canic-core`,
+`canic-control-plane`, `canic-macros`, `canic`, `canic-host` and `canic-cli`.
+Focused passing evidence includes:
+
+```text
+cargo test -p canic --test protocol_surface root_and_coordinator_commands_authorize_before_state_gates_or_dispatch
+cargo test -p canic --test protocol_surface public_protocol_reexports_only_wasm_store_byte_lanes
+cargo test -p canic-control-plane root_join_compare_and_commit_retains_exact_response_receipts --lib
+cargo test -p canic-core domain::policy::pure::fleet_activation --lib
+cargo test -p canic-core replay_policy --lib
+cargo test -p canic-macros endpoint::expand --lib
+cargo test -p canic-host protocol_binding --lib
+cargo test -p canic-host canic_metadata --lib
+cargo test -p canic-host release_set::infrastructure --lib
+cargo test -p canic-host fleet_catalog --lib
+cargo test -p canic-host fleet_registry_activation --lib
+cargo test -p canic-host fleet_subnet_root_install --lib
+cargo test -p canic-host fleet_subnet_root_deletion --lib
+cargo test -p canic-cli support::candid --lib
+cargo test -p canic-cli info_subnets --lib
+cargo test -p canic-cli cycles::transport --lib
+```
+
+The canonical fast builder regenerated managed Component, Root, Coordinator
+and Store artifacts. String scans for
+`canic_wasm_store_(chunk|publish_chunk)` produced:
+
+| Artifact | Lane names | Meaning |
+| --- | --- | --- |
+| managed Component | absent | negative profile pruned |
+| Fleet Coordinator | absent | negative profile pruned |
+| Fleet Subnet Root | present, not exported | exact Store caller literals retained |
+| Wasm Store | present and exported | exact lane owner retained |
+
+The refreshed identities are recorded in `b7-closeout.md`. The ceremonial
+`metrics` feature/default scan, runtime feature-gate scan, optional-Candid
+fallback scan and active-document old-name scan are all empty.
+
+Broad workspace/release/PocketIC gates remain intentionally unrun under the
+repository testing policy. The implementation batch and changelog are ready
+for the maintainer-owned release flow; publication is not ready until P1-2 is
+resolved and that flow runs its complete validation gate.

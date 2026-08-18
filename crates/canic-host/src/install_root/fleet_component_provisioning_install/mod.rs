@@ -21,11 +21,18 @@ use super::{
         CompileFleetComponentProvisioningPlanRequest, compile_fleet_component_provisioning_plan,
     },
     icp_context::InstallIcpContext,
-    operations::{call_with_arg, query_with_arg},
+    operations::{call_with_arg, query_with_arg, resolve_install_protocol_binding},
 };
 use crate::{
-    canister_protocol::CanisterProtocolError, fleet_catalog::FleetCatalogEntryV1,
-    fleet_install_plan::PersistedFleetInstallPlan, icp::IcpCli, release_set::AppConfigSnapshot,
+    canister_protocol::CanisterProtocolError,
+    fleet_catalog::FleetCatalogEntryV1,
+    fleet_install_plan::PersistedFleetInstallPlan,
+    icp::IcpCli,
+    protocol_binding::ResolvedProtocolBinding,
+    release_set::{
+        AppConfigSnapshot, CanicInfrastructureRole,
+        load_persisted_canic_infrastructure_artifact_manifest,
+    },
 };
 use std::path::Path;
 
@@ -86,6 +93,15 @@ pub(super) fn install_fleet_components_and_publish_catalog(
     request: InstallFleetComponentsRequest<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(request.config_path)?;
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        request.icp.root(),
+        request.fleet_install_plan.plan.release_build_id,
+    )?;
+    let binding = resolve_install_protocol_binding(
+        request.icp,
+        &infrastructure_manifest,
+        CanicInfrastructureRole::FleetCoordinator,
+    )?;
     let compiled =
         compile_fleet_component_provisioning_plan(CompileFleetComponentProvisioningPlanRequest {
             config: config.model(),
@@ -111,7 +127,7 @@ pub(super) fn install_fleet_components_and_publish_catalog(
                 begin_component_provisioning_preparation(&current)?
             }
             FleetComponentProvisioningInstallPhase::PreparationInFlight => {
-                let status = query_or_prepare(icp, request.coordinator, &current)?;
+                let status = query_or_prepare(icp, &binding, request.coordinator, &current)?;
                 record_component_provisioning_prepared(&current, status)?
             }
             FleetComponentProvisioningInstallPhase::Prepared => {
@@ -124,7 +140,7 @@ pub(super) fn install_fleet_components_and_publish_catalog(
                 if remote_advances > advance_limit {
                     return Err(FleetComponentProvisioningInstallError::AdvanceBoundExceeded.into());
                 }
-                let status = reconcile_or_advance(icp, request.coordinator, &current)?;
+                let status = reconcile_or_advance(icp, &binding, request.coordinator, &current)?;
                 record_component_provisioning_advanced(&current, status)?
             }
             FleetComponentProvisioningInstallPhase::RuntimesActivated => {
@@ -147,14 +163,16 @@ pub(super) fn install_fleet_components_and_publish_catalog(
 
 fn query_or_prepare(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
     current: &ResolvedFleetComponentProvisioningInstall,
 ) -> Result<FleetComponentProvisioningStatusResponse, Box<dyn std::error::Error>> {
-    match query_status_response(icp, coordinator, current) {
+    match query_status_response(icp, binding, coordinator, current) {
         Ok(response) => correlate_status(response, current).map_err(Into::into),
         Err(error) if error.is_rejected_with(codes::STATE_UNAVAILABLE) => {
             let response: CoordinatorCommandResponse = call_with_arg(
                 icp,
+                binding,
                 coordinator,
                 protocol::CANIC_COMMAND,
                 &CoordinatorCommand::ProvisionComponents(current.journal.prepare_request.clone()),
@@ -167,8 +185,11 @@ fn query_or_prepare(
             if operation_id != current.journal.prepare_request.operation_id {
                 return Err(FleetComponentProvisioningInstallError::ResponseCorrelation.into());
             }
-            correlate_status(query_status_response(icp, coordinator, current)?, current)
-                .map_err(Into::into)
+            correlate_status(
+                query_status_response(icp, binding, coordinator, current)?,
+                current,
+            )
+            .map_err(Into::into)
         }
         Err(error) => Err(FleetComponentProvisioningInstallError::StatusQuery(error).into()),
     }
@@ -176,19 +197,26 @@ fn query_or_prepare(
 
 fn reconcile_or_advance(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
     current: &ResolvedFleetComponentProvisioningInstall,
 ) -> Result<FleetComponentProvisioningStatusResponse, Box<dyn std::error::Error>> {
-    correlate_status(query_status_response(icp, coordinator, current)?, current).map_err(Into::into)
+    correlate_status(
+        query_status_response(icp, binding, coordinator, current)?,
+        current,
+    )
+    .map_err(Into::into)
 }
 
 fn query_status_response(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
     current: &ResolvedFleetComponentProvisioningInstall,
 ) -> Result<CoordinatorStatusResponse, CanisterProtocolError> {
     query_with_arg(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::Operation(OperationStatusRequest {
@@ -257,6 +285,7 @@ fn catalog_entry(
         app: fleet.app.clone(),
         environment: request.icp.environment().to_string(),
         deployed_at_unix_secs,
+        release_build_id: request.fleet_install_plan.plan.release_build_id,
         coordinator_principal: request.coordinator.to_text(),
     }
 }

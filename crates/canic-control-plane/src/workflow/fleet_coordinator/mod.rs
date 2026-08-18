@@ -96,6 +96,17 @@ enum RemoteRootOperationStatusResponse {
 pub struct FleetCoordinatorWorkflow;
 
 impl FleetCoordinatorWorkflow {
+    pub(crate) fn authorize_registry_caller(
+        caller: Principal,
+        caller_is_controller: bool,
+    ) -> Result<(), InternalError> {
+        FleetCoordinatorOps::authorize_registry_caller(caller, caller_is_controller)
+    }
+
+    pub(crate) fn authorize_root_snapshot_caller(caller: Principal) -> Result<(), InternalError> {
+        FleetCoordinatorOps::authorize_root_snapshot_caller(caller)
+    }
+
     #[cfg(test)]
     pub(crate) fn operation_status(
         operation_id: [u8; 32],

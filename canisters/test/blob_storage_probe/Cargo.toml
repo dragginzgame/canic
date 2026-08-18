@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["blob-storage-billing", "metrics"] }
+canic = { workspace = true, features = ["blob-storage-billing"] }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

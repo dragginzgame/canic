@@ -4,15 +4,16 @@ mod pending;
 mod request;
 mod response;
 
-use crate::{
-    cycles::{
-        CyclesCommandError,
-        wallet::{ResolvedCanisterTarget, resolve_fleet},
-    },
-    support::candid::role_candid_path,
+use crate::cycles::{
+    CyclesCommandError,
+    wallet::{ResolvedCanisterTarget, resolve_fleet},
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use canic_host::icp_config::resolve_current_canic_icp_root;
+use canic_host::{
+    icp_config::resolve_current_canic_icp_root,
+    protocol_binding::resolve_infrastructure_protocol_binding,
+    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
+};
 use operation::{
     OperationIdSource, current_unix_nanos, mark_pending_operation_completed,
     pending_operation_input, resolve_operation_id, write_generated_operation_id_notice,
@@ -20,10 +21,7 @@ use operation::{
 use options::ConvertOptions;
 use request::{root_refill_command_arg, root_refill_status_arg};
 use response::{decode_icp_refill_command_response, decode_icp_refill_status_response};
-use std::{
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::ffi::OsString;
 
 fn extend_hash_part(bytes: &mut Vec<u8>, part: &[u8]) {
     bytes.extend_from_slice(&(part.len() as u64).to_be_bytes());
@@ -58,15 +56,31 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     )?;
     let request_arg =
         root_refill_command_arg(operation_id, options.source_subaccount, options.amount_e8s);
-    let root_candid_path =
-        canister_target_candid_path(&root, &options.target.environment, &root_target);
+    let infrastructure_manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        &root,
+        installed.fleet.release_build_id,
+    )
+    .map_err(|error| CyclesCommandError::Usage(error.to_string()))?;
+    let root_artifact = infrastructure_manifest
+        .manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == CanicInfrastructureRole::FleetSubnetRoot)
+        .ok_or_else(|| {
+            CyclesCommandError::Usage(
+                "installed release is missing root protocol metadata".to_string(),
+            )
+        })?;
+    let root_binding =
+        resolve_infrastructure_protocol_binding(&root, &options.target.environment, root_artifact)
+            .map_err(|error| CyclesCommandError::Usage(error.to_string()))?;
     if options.dry_run {
         let command = icp.canister_call_arg_output_display_with_candid(
             &root_target.canister_id,
             canic_core::protocol::CANIC_COMMAND,
             &request_arg,
             Some("hex"),
-            root_candid_path.as_deref(),
+            Some(root_binding.candid_path()),
         );
         write_dry_run(
             options,
@@ -86,7 +100,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
             canic_core::protocol::CANIC_COMMAND,
             &request_arg,
             Some("hex"),
-            root_candid_path.as_deref(),
+            Some(root_binding.candid_path()),
         )
         .map_err(CyclesCommandError::from)?;
     decode_icp_refill_command_response(&output, operation_id)?;
@@ -96,7 +110,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
             canic_core::protocol::CANIC_STATUS,
             &root_refill_status_arg(operation_id),
             Some("hex"),
-            root_candid_path.as_deref(),
+            Some(root_binding.candid_path()),
         )
         .map_err(CyclesCommandError::from)?;
     let response = decode_icp_refill_status_response(&status_output, operation_id)?;
@@ -108,14 +122,6 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         println!("{output}");
     }
     Ok(())
-}
-
-fn canister_target_candid_path(
-    root: &Path,
-    environment: &str,
-    target: &ResolvedCanisterTarget,
-) -> Option<PathBuf> {
-    role_candid_path(Some(root), environment, target.role.as_deref()?)
 }
 
 fn write_dry_run(

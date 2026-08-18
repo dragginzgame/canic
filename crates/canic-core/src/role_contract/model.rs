@@ -5,6 +5,7 @@
 //! Boundary: host/build consumers provide typed feature evidence to pure core policy.
 
 use crate::{config::schema::ConfigModel, ids::CanisterRole};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 ///
@@ -26,7 +27,6 @@ pub enum CanicFeatureKey {
     BlobStorageBilling,
     ControlPlane,
     FleetCoordinatorCanister,
-    Metrics,
     Sharding,
     WasmStoreCanister,
 }
@@ -49,7 +49,7 @@ pub enum CanicFeatureEffect {
 /// Typed behavior derived from validated role configuration or built-in identity.
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum RoleCapabilityKey {
     AutomaticTopup,
     DelegatedTokenIssuer,

@@ -4,8 +4,6 @@
 
 pub const CANIC_COMMAND: &str = "canic_command";
 pub const CANIC_STATUS: &str = "canic_status";
-pub const CANIC_WASM_STORE_CHUNK: &str = "canic_wasm_store_chunk";
-pub const CANIC_WASM_STORE_PUBLISH_CHUNK: &str = "canic_wasm_store_publish_chunk";
 
 pub const BLOB_STORAGE_BLOBS_ARE_LIVE: &str = "_immutableObjectStorageBlobsAreLive";
 pub const BLOB_STORAGE_BLOBS_TO_DELETE: &str = "_immutableObjectStorageBlobsToDelete";

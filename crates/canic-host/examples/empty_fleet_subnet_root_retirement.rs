@@ -17,18 +17,21 @@ use canic_host::{
         prepare_fleet_subnet_root_deletion_execution,
     },
     icp::{IcpCli, decode_json_result_response},
+    protocol_binding::{ResolvedProtocolBinding, resolve_infrastructure_protocol_binding},
+    release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
 use serde::de::DeserializeOwned;
 use std::{env, fs, path::PathBuf};
 
 const USAGE: &str = "usage: cargo run -p canic-host --example empty_fleet_subnet_root_retirement -- \
     --confirm-disposable-empty-root <icp-executable> <icp-root> <environment> \
-    <coordinator-principal> <fleet-subnet-root-principal> <operation-id-hex>";
+    <release-build-id> <coordinator-principal> <fleet-subnet-root-principal> <operation-id-hex>";
 
 struct RetirementContext {
     icp_executable: String,
     icp_root: PathBuf,
     environment: String,
+    release_build_id: canic_core::ids::ReleaseBuildId,
     coordinator: Principal,
     fleet_subnet_root: Principal,
     operation_id: [u8; 32],
@@ -41,7 +44,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(context.environment.clone()),
     )
     .with_cwd(&context.icp_root);
-    let registry = coordinator_registry(&icp, context.coordinator)?;
+    let manifest = load_persisted_canic_infrastructure_artifact_manifest(
+        &context.icp_root,
+        context.release_build_id,
+    )?;
+    let artifact = |role| {
+        manifest
+            .manifest
+            .entries
+            .iter()
+            .find(|entry| entry.role == role)
+            .ok_or("infrastructure artifact role is missing")
+    };
+    let coordinator_protocol_binding = resolve_infrastructure_protocol_binding(
+        &context.icp_root,
+        &context.environment,
+        artifact(CanicInfrastructureRole::FleetCoordinator)?,
+    )?;
+    let root_protocol_binding = resolve_infrastructure_protocol_binding(
+        &context.icp_root,
+        &context.environment,
+        artifact(CanicInfrastructureRole::FleetSubnetRoot)?,
+    )?;
+    let registry = coordinator_registry(&icp, &coordinator_protocol_binding, context.coordinator)?;
     let expected_root = registry
         .fleet_subnet_roots
         .iter()
@@ -50,6 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("Fleet Subnet Root is absent from the Coordinator Registry")?;
     let CoordinatorStatusResponse::RegistryVersion(expected_registry) = query(
         &icp,
+        &coordinator_protocol_binding,
         context.coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::RegistryVersion,
@@ -59,6 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let response: CoordinatorCommandResponse = call(
         &icp,
+        &coordinator_protocol_binding,
         context.coordinator,
         protocol::CANIC_COMMAND,
         &CoordinatorCommand::RemoveRoot(FleetSubnetRootDrainingReservationRequest {
@@ -81,7 +108,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         environment: &context.environment,
         local_replica: None,
         coordinator: context.coordinator,
+        coordinator_protocol_binding: &coordinator_protocol_binding,
         fleet_subnet_root: context.fleet_subnet_root,
+        root_protocol_binding: &root_protocol_binding,
         operation_id: context.operation_id,
     };
     let execution = prepare_fleet_subnet_root_deletion_execution(host_request())?;
@@ -103,10 +132,12 @@ fn parse_context() -> Result<RetirementContext, Box<dyn std::error::Error>> {
         Some(icp_executable),
         Some(icp_root),
         Some(environment),
+        Some(release_build_id),
         Some(coordinator),
         Some(fleet_subnet_root),
         Some(operation_id_hex),
     ) = (
+        args.next(),
         args.next(),
         args.next(),
         args.next(),
@@ -132,6 +163,7 @@ fn parse_context() -> Result<RetirementContext, Box<dyn std::error::Error>> {
         icp_executable,
         icp_root: PathBuf::from(icp_root).canonicalize()?,
         environment,
+        release_build_id: release_build_id.parse()?,
         coordinator: Principal::from_text(coordinator)?,
         fleet_subnet_root: Principal::from_text(fleet_subnet_root)?,
         operation_id,
@@ -140,10 +172,12 @@ fn parse_context() -> Result<RetirementContext, Box<dyn std::error::Error>> {
 
 fn coordinator_registry(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<FleetRegistry, Box<dyn std::error::Error>> {
     match query(
         icp,
+        binding,
         coordinator,
         protocol::CANIC_STATUS,
         &CoordinatorStatusRequest::Registry,
@@ -155,6 +189,7 @@ fn coordinator_registry(
 
 fn query<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &str,
     input: &I,
@@ -163,11 +198,12 @@ where
     I: CandidType,
     O: CandidType + DeserializeOwned,
 {
-    invoke(icp, canister, method, input, true)
+    invoke(icp, binding, canister, method, input, true)
 }
 
 fn call<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &str,
     input: &I,
@@ -176,11 +212,12 @@ where
     I: CandidType,
     O: CandidType + DeserializeOwned,
 {
-    invoke(icp, canister, method, input, false)
+    invoke(icp, binding, canister, method, input, false)
 }
 
 fn invoke<I, O>(
     icp: &IcpCli,
+    binding: &ResolvedProtocolBinding,
     canister: Principal,
     method: &str,
     input: &I,
@@ -203,7 +240,7 @@ where
             method,
             &path,
             Some("json"),
-            None,
+            Some(binding.candid_path()),
         )
     } else {
         icp.canister_call_binary_args_output_with_candid(
@@ -211,7 +248,7 @@ where
             method,
             &path,
             Some("json"),
-            None,
+            Some(binding.candid_path()),
         )
     };
     let cleanup = fs::remove_file(path);

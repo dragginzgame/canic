@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-framework = { package = "canic", path = "../../../../../../canic", default-features = false, features = ["metrics"] }
+framework = { package = "canic", path = "../../../../../../canic", default-features = false, features = [] }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }

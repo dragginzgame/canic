@@ -617,6 +617,9 @@ fn fixture(root: &Path) -> Fixture {
     let root_artifact = CanicInfrastructureArtifactEntry {
         role: CanicInfrastructureRole::FleetSubnetRoot,
         package: "canic-fleet-subnet-root".to_string(),
+        protocol_release_identity: "0.103.0".to_string(),
+        protocol_role: canic_core::ids::CanisterRole::new("fleet_subnet_root"),
+        protocol_capabilities: std::collections::BTreeSet::new(),
         release_build_id,
         wasm_relative_path: "root.wasm".to_string(),
         wasm_size_bytes: 8,
@@ -632,6 +635,9 @@ fn fixture(root: &Path) -> Fixture {
     let wasm_store_artifact = CanicInfrastructureArtifactEntry {
         role: CanicInfrastructureRole::WasmStore,
         package: "canic-wasm-store".to_string(),
+        protocol_release_identity: "0.103.0".to_string(),
+        protocol_role: canic_core::ids::CanisterRole::new("wasm_store"),
+        protocol_capabilities: std::collections::BTreeSet::new(),
         release_build_id,
         wasm_relative_path: "wasm_store.wasm".to_string(),
         wasm_size_bytes: 8,

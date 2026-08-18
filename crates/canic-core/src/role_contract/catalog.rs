@@ -121,11 +121,6 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::StateBearing,
     ),
     feature(
-        CanicFeatureKey::Metrics,
-        "metrics",
-        CanicFeatureEffect::NoState,
-    ),
-    feature(
         CanicFeatureKey::Sharding,
         "sharding",
         CanicFeatureEffect::StateBearing,
@@ -137,7 +132,7 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
     ),
 ];
 
-const DEFAULT_FEATURES: &[CanicFeatureKey] = &[CanicFeatureKey::Metrics];
+const DEFAULT_FEATURES: &[CanicFeatureKey] = &[];
 
 const FEATURE_IMPLICATIONS: &[FeatureImplication] = &[
     FeatureImplication {
@@ -525,7 +520,6 @@ impl CanicFeatureKey {
         Self::BlobStorageBilling,
         Self::ControlPlane,
         Self::FleetCoordinatorCanister,
-        Self::Metrics,
         Self::Sharding,
         Self::WasmStoreCanister,
     ];

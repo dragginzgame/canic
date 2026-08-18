@@ -24,6 +24,11 @@ use canic_core::{
 pub struct RootComponentProvisioningApi;
 
 impl RootComponentProvisioningApi {
+    /// Authorize the protected Coordinator before endpoint workflow dispatch.
+    pub fn authorize_coordinator_caller(caller: candid::Principal) -> Result<(), Error> {
+        component_provisioning::authorize_coordinator_caller(caller).map_err(Into::into)
+    }
+
     pub async fn accept(
         request: RootComponentProvisioningAcceptanceRequest,
     ) -> Result<OperationReceipt, Error> {

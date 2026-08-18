@@ -1,6 +1,6 @@
 # Canic Metrics Reference
 
-`canic_metrics(kind, page)` returns a paginated `Page<MetricEntry>`.
+`canic_status::Metrics { kind, page }` returns a paginated `Page<MetricEntry>`.
 Rows are sorted by `labels`, then `principal`, before pagination.
 
 Each row has:
@@ -35,7 +35,7 @@ async fn audit_env_probe() -> Result<QueryPerfSample<EnvSnapshotResponse>, Error
 
 `QueryPerfSample::local_instructions` is the local call-context instruction
 counter observed before the query response is returned. Use this for explicit
-audit/probe endpoints; use `canic_metrics(MetricsKind::Runtime, ...)` for
+audit/probe endpoints; use `canic_status::Metrics(MetricsKind::Runtime, ...)` for
 persisted update and timer rows.
 
 Audit reports should treat a zero `local_instructions` value as unobservable
@@ -43,8 +43,8 @@ rather than as a successful zero-cost query measurement.
 
 ## Metric Tiers
 
-Canic keeps metrics enabled by default for generated canisters, but each
-canister compiles only the tiers needed by its inferred metrics profile:
+Canic generates metrics from role configuration rather than a facade Cargo
+feature. Each canister compiles only the tiers needed by its inferred profile:
 
 | Profile | Selected by default | Enabled tiers |
 | ------- | ------------------- | ------------- |

@@ -65,6 +65,9 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
         CanisterArtifactBuildOutput {
             package_name: "app-package".to_string(),
             package_version: "0.101.51".to_string(),
+            protocol_release_identity: "0.101.51".to_string(),
+            protocol_role: canic_core::ids::CanisterRole::new("app"),
+            protocol_capabilities: std::collections::BTreeSet::new(),
             artifact_root,
             wasm_path,
             wasm_gz_path,
@@ -276,6 +279,9 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
     CanisterArtifactBuildOutput {
         package_name: format!("canister_demo_{role}"),
         package_version: "0.101.51".to_string(),
+        protocol_release_identity: "0.101.51".to_string(),
+        protocol_role: canic_core::ids::CanisterRole::owned(role.to_string()),
+        protocol_capabilities: std::collections::BTreeSet::new(),
         artifact_root,
         wasm_path,
         wasm_gz_path,

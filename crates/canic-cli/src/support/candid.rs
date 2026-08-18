@@ -1,21 +1,25 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use canic_host::{icp::existing_local_canister_candid_path, registry::RegistryEntry};
-
-pub fn role_candid_path(
-    icp_root: Option<&Path>,
-    artifact_environment: &str,
-    role: &str,
-) -> Option<PathBuf> {
-    existing_local_canister_candid_path(icp_root?, artifact_environment, role)
-}
+use canic_host::{
+    protocol_binding::{
+        ProtocolBindingError, ResolvedProtocolBinding, resolve_registry_protocol_binding,
+    },
+    registry::RegistryEntry,
+};
 
 pub fn registry_entry_candid_path(
     icp_root: Option<&Path>,
     artifact_environment: &str,
     entry: &RegistryEntry,
-) -> Option<PathBuf> {
-    role_candid_path(icp_root, artifact_environment, entry.role.as_deref()?)
+) -> Result<ResolvedProtocolBinding, ProtocolBindingError> {
+    let root = icp_root.ok_or_else(|| ProtocolBindingError::MissingCandid {
+        canister: entry.pid.clone(),
+        role: entry
+            .role
+            .clone()
+            .unwrap_or_else(|| "<missing>".to_string()),
+    })?;
+    resolve_registry_protocol_binding(root, artifact_environment, entry)
 }
 
 // -----------------------------------------------------------------------------
@@ -26,38 +30,12 @@ pub fn registry_entry_candid_path(
 mod tests {
     use super::*;
     use crate::test_support::temp_dir;
-    use std::fs;
-
     #[test]
-    fn role_candid_path_returns_existing_sidecar() {
-        let root = temp_dir("canic-cli-support-candid-existing");
-        let did_path = root.join(".icp/local/canisters/root/root.did");
-        fs::create_dir_all(did_path.parent().expect("did parent")).expect("create did parent");
-        fs::write(&did_path, "service : {}").expect("write did");
-
-        assert_eq!(
-            role_candid_path(Some(root.as_path()), "local", "root").as_deref(),
-            Some(did_path.as_path())
-        );
-        assert_eq!(role_candid_path(Some(root.as_path()), "ic", "root"), None);
-
-        fs::remove_dir_all(root).expect("remove temp root");
-    }
-
-    #[test]
-    fn role_candid_path_without_root_returns_none() {
-        assert_eq!(role_candid_path(None, "local", "root"), None);
-    }
-
-    #[test]
-    fn registry_entry_candid_path_requires_entry_role() {
+    fn registry_entry_candid_path_requires_exact_binding() {
         let root = temp_dir("canic-cli-support-candid-missing-role");
         let entry = registry_entry(None);
 
-        assert_eq!(
-            registry_entry_candid_path(Some(root.as_path()), "local", &entry),
-            None
-        );
+        assert!(registry_entry_candid_path(Some(root.as_path()), "local", &entry).is_err());
     }
 
     fn registry_entry(role: Option<&str>) -> RegistryEntry {
@@ -66,6 +44,7 @@ mod tests {
             role: role.map(str::to_string),
             parent_pid: None,
             module_hash: None,
+            protocol_binding: None,
         }
     }
 }
