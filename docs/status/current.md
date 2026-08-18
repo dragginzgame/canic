@@ -98,7 +98,9 @@ Wasm identities are recorded without claiming causal size savings. Raw B1
 pre-cut Candid snapshots are no longer retained in the current worktree; the
 capture tool derives the immutable normalized register and manifest hashes
 from scratch-generated interfaces so historical contracts cannot be mistaken
-for live ones.
+for live ones. The same cleanup removes five unconsumed legacy build cfgs and
+their dead environment/manifest probes; the generated-role cfg catalog is once
+again exact and singly owned.
 
 Scheduled 0.104 owns the `ic-timers` consumer and domain async-job recovery
 hard cut after 0.103. Repository-only 0.105 B1 evidence may continue, but its

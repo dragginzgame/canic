@@ -8,10 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::{
     CanicPicExt, CanicWasmBuildProfile,
-    artifacts::{
-        INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
-        build_internal_test_wasm_canisters_with_env,
-    },
+    artifacts::{INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters_with_env},
     install_standalone_canister,
 };
 
@@ -77,7 +74,6 @@ fn ensure_probe_wasm_ready(
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
             config_path,
         ),
-        INTERNAL_TEST_ENDPOINTS_ENV,
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ];
     build_internal_test_wasm_canisters_with_env(

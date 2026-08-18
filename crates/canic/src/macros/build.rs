@@ -60,7 +60,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
         println!("cargo:rerun-if-env-changed={__canic_config_path_env}");
-        println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
         let __canic_release_build_id_env =
             $crate::__internal::core::ids::RELEASE_BUILD_ID_ENV;
         println!("cargo:rerun-if-env-changed={__canic_release_build_id_env}");
@@ -123,18 +122,7 @@ macro_rules! __canic_build_internal {
         if std::env::var("ICP_ENVIRONMENT").as_deref().unwrap_or("local") == "local" {
             println!("cargo:rustc-cfg=canic_export_candid");
         }
-        if std::env::var_os("CANIC_INTERNAL_TEST_ENDPOINTS").is_none() {
-            // Default builds ship the slimmer demo/reference surface; internal
-            // observability and topology test endpoints opt back in explicitly.
-            println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
-        }
-        if !$crate::__build::role_normal_dependency_metrics_enabled(std::path::Path::new(
-            &manifest_dir,
-        )) {
-            println!("cargo:rustc-cfg=canic_disable_bundle_metrics");
-        }
         let role_name = __canic_role_name.as_str();
-        let mut memory_ledger = false;
         let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
         let mut app_name = __canic_app_name.as_str();
         let __canic_wasm_store_special = role_name == "wasm_store";
@@ -162,12 +150,6 @@ macro_rules! __canic_build_internal {
         let metrics_security = metrics_tier_mask & $crate::__build::METRICS_TIER_SECURITY != 0;
         let metrics_storage = metrics_tier_mask & $crate::__build::METRICS_TIER_STORAGE != 0;
 
-        for component_spec in $cfg.component_specs.values() {
-            if let Some(canister_cfg) = component_spec.get_canister(&role_id) {
-                memory_ledger |= canister_cfg.diagnostics.memory_ledger;
-            }
-        }
-
         let __canic_capabilities = if __canic_wasm_store_special {
             let kind = $crate::__internal::core::role_contract::BuiltInRoleKind::WasmStore;
             $crate::__internal::core::role_contract::built_in_role_capabilities(kind)
@@ -184,11 +166,6 @@ macro_rules! __canic_build_internal {
         );
         let has_icrc21 = __canic_capabilities
             .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
-        let has_scaling = __canic_capabilities
-            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Scaling);
-        let has_sharding = __canic_capabilities
-            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Sharding);
-
         for capability in &__canic_capabilities {
             match capability {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::AutomaticTopup => {
@@ -248,18 +225,6 @@ macro_rules! __canic_build_internal {
 
         if delegated_token_issuer {
             println!("cargo:rustc-cfg=canic_delegated_token_issuer");
-        }
-
-        if memory_ledger {
-            println!("cargo:rustc-cfg=canic_memory_ledger_enabled");
-        }
-
-        if has_scaling {
-            println!("cargo:rustc-cfg=canic_has_scaling");
-        }
-
-        if has_sharding {
-            println!("cargo:rustc-cfg=canic_has_sharding");
         }
 
         if metrics_core {

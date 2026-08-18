@@ -25,9 +25,8 @@ use std::{
 };
 
 use crate::pic::artifacts::{
-    INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
-    internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
-    report_artifact_cache_maintenance, run_icp_all_with_env,
+    INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
+    internal_test_artifact_prune_policy, report_artifact_cache_maintenance, run_icp_all_with_env,
 };
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
@@ -297,8 +296,7 @@ fn root_release_artifact_outputs(spec: &RootBaselineSpec<'_>) -> BTreeMap<String
     outputs
 }
 
-// Ensure internal PocketIC root baselines retain their explicit qualified-build
-// identity and extra introspection surface.
+// Ensure internal PocketIC root baselines retain their explicit qualified-build identity.
 fn effective_build_env<'a>(spec: &'a RootBaselineSpec<'a>) -> Vec<(&'a str, &'a str)> {
     let mut env = spec
         .build_extra_env
@@ -306,12 +304,6 @@ fn effective_build_env<'a>(spec: &'a RootBaselineSpec<'a>) -> Vec<(&'a str, &'a 
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect::<Vec<_>>();
 
-    if env
-        .iter()
-        .all(|(key, _)| *key != INTERNAL_TEST_ENDPOINTS_ENV.0)
-    {
-        env.push(INTERNAL_TEST_ENDPOINTS_ENV);
-    }
     if env
         .iter()
         .all(|(key, _)| *key != INTERNAL_TEST_RELEASE_BUILD_ID.0)
