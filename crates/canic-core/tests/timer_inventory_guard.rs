@@ -106,6 +106,26 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
             "crates/canic-control-plane/src/workflow/canister_pool/mod.rs".to_string(),
             7,
         ),
+        (
+            "crates/canic-control-plane/src/workflow/component_provisioning.rs".to_string(),
+            1,
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/component_registry/mod.rs".to_string(),
+            4,
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs".to_string(),
+            2,
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs".to_string(),
+            1,
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/fleet_subnet_root.rs".to_string(),
+            1,
+        ),
         ("crates/canic-core/src/api/runtime/mod.rs".to_string(), 1),
         ("crates/canic-core/src/api/timer.rs".to_string(), 15),
         (
@@ -155,6 +175,10 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
         (
             "crates/canic-core/src/workflow/runtime/timer/mod.rs".to_string(),
             7,
+        ),
+        (
+            "crates/canic/src/macros/endpoints/wasm_store.rs".to_string(),
+            1,
         ),
     ])
 }
