@@ -85,7 +85,7 @@ fn lifecycle_boundary_traps_are_phase_correct() {
 fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
     let fixture = install_lifecycle_boundary_fixture();
     let canic_id = fixture.install_canic_canister();
-    assert_prepared_and_not_ready(&fixture.pic, canic_id);
+    assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
     fixture
         .pic
         .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
@@ -103,18 +103,18 @@ fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
             })
             .unwrap_or_else(|err| panic!("upgrade attempt {attempt} should succeed: {err}"));
 
-        assert_prepared_and_not_ready(&fixture.pic, canic_id);
+        assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
         fixture
             .pic
             .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     }
 }
 
-fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal) {
+fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
     let status: Result<CanisterStatusResponse, Error> = pic
         .query_candid_as(
             canister_id,
-            Principal::from_slice(&[1; 29]),
+            root,
             CANIC_STATUS,
             (CanisterStatusRequest::Operation(OperationStatusRequest {
                 operation_id: [0x43; 32],

@@ -47,8 +47,7 @@ mod tests {
     use ic_testkit::{
         artifacts::workspace_root_for,
         pic::{
-            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcCapturedSnapshotExt,
-            PocketIcSnapshotExt, SnapshotRestoreFunding,
+            CandidCallExt, PocketIc, PocketIcBuilder, PocketIcSnapshotExt, SnapshotRestoreFunding,
         },
     };
 

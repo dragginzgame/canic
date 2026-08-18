@@ -39,6 +39,7 @@ static BUILD_ONCE: Once = Once::new();
 
 pub struct LifecycleBoundaryFixture {
     pub pic: PocketIc,
+    pub root: Principal,
     pub canic_wasm: Vec<u8>,
     pub runtime_probe_wasm: Vec<u8>,
     pub authority_wasm: Vec<u8>,
@@ -53,7 +54,7 @@ impl LifecycleBoundaryFixture {
         self.pic.install_canister(
             canister_id,
             self.canic_wasm.clone(),
-            encode_init_args(init_payload(canister_id)),
+            encode_init_args(init_payload(canister_id, self.root)),
             None,
         );
         canister_id
@@ -104,6 +105,7 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     build_canisters_once(&workspace_root);
 
     LifecycleBoundaryFixture {
+        root: Fake::principal(1),
         canic_wasm: read_wasm(
             &target_dir,
             "canister_test",
@@ -126,7 +128,7 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
 /// Encode the intentionally invalid init payload used by lifecycle boundary checks.
 #[must_use]
 pub fn invalid_init_args() -> Vec<u8> {
-    encode_init_args(init_payload(Fake::principal(9)))
+    encode_init_args(init_payload(Fake::principal(9), Fake::principal(1)))
 }
 
 /// Encode the empty tuple argument used for no-payload upgrades.
@@ -153,8 +155,7 @@ fn build_canisters_once(workspace_root: &Path) {
 }
 
 // Encode the standard valid non-root init payload for the lifecycle-boundary test canister.
-fn init_payload(canister_id: Principal) -> CanisterInitPayload {
-    let root_pid = Fake::principal(1);
+fn init_payload(canister_id: Principal, root_pid: Principal) -> CanisterInitPayload {
     let identity = managed_test_init_identity();
     let component_spec =
         ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID");
@@ -251,7 +252,7 @@ mod tests {
 
     #[test]
     fn init_payload_component_spec_matches_embedded_canister_config() {
-        let payload = init_payload(Fake::principal(3));
+        let payload = init_payload(Fake::principal(3), Fake::principal(1));
         let CanisterInitAuthority::Component { root, binding } = payload.authority else {
             panic!("managed lifecycle Component authority");
         };

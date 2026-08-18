@@ -90,7 +90,7 @@ ic-query = { version = "0.40.1", default-features = false, features = [
 ] }
 ic-signature-verification = "0.3.0"
 ic-stable-structures = "0.7.2"
-ic-testkit = "0.7.6"
+ic-testkit = "0.8.0"
 ic-timers = "=0.6.1"
 ic0 = "1.1.0"
 k256 = { version = "0.14", default-features = false, features = ["ecdsa"] }
