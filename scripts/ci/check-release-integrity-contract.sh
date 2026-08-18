@@ -207,7 +207,7 @@ for primitive_target in "${!primitive_commands[@]}"; do
             ;;
     esac
 done
-rg -F 'cargo test --locked "$@"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+rg -F 'cargo test --locked "${cargo_args[@]}"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "workspace test execution does not freeze Cargo.lock"
 
 [ -x "$PRE_COMMIT_HOOK" ] || fail "formatting pre-commit hook is not executable"
@@ -248,6 +248,21 @@ if rg --multiline 'test(-wasm)?:[^\n]*(\\\n[^\n]*)?workspace-test-inventory-gate
 fi
 rg -F 'run: cargo build -p canic --examples --locked' "$CI" >/dev/null ||
     fail "CI omits the default example build"
+rg -F 'path: target/test-artifacts' <<<"$pocketic_job" >/dev/null ||
+    fail "PocketIC CI does not retain its validated test-artifact cache"
+rg -F 'uses: actions/cache/restore@' <<<"$pocketic_job" >/dev/null ||
+    fail "PocketIC CI does not restore its validated test-artifact cache"
+rg -F 'uses: actions/cache/save@' <<<"$pocketic_job" >/dev/null ||
+    fail "PocketIC CI does not save validated artifacts after a failed test run"
+rg -F "if: \${{ !cancelled()" <<<"$pocketic_job" >/dev/null ||
+    fail "PocketIC CI discards validated artifacts whenever a test fails"
+if rg -F 'path: target' <<<"$pocketic_job" | rg -v -F 'path: target/test-artifacts' >/dev/null; then
+    fail "PocketIC CI must not cache the complete Cargo target directory"
+fi
+rg -F '"autonomous Root-removal PocketIC proof"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the serial PocketIC lane does not run Root-removal evidence first"
+rg -F -- '--skip "$ROOT_REMOVAL_TEST"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the mixed PocketIC library lane repeats the early Root-removal proof"
 if rg '^[[:space:]]+tags:' "$CI" >/dev/null; then
     fail "primary CI must not create a second tag-only release signal"
 fi

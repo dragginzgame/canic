@@ -87,14 +87,32 @@ run_test() {
     local execution="$1"
     local label="$2"
     shift 2
+    local cargo_args=()
+    local libtest_args=()
+    local parsing_libtest=0
+    local argument
+    for argument in "$@"; do
+        if [[ "$argument" = "--" && "$parsing_libtest" -eq 0 ]]; then
+            parsing_libtest=1
+            continue
+        fi
+        if [[ "$parsing_libtest" -eq 0 ]]; then
+            cargo_args+=("$argument")
+        else
+            libtest_args+=("$argument")
+        fi
+    done
     echo "==> $label"
     if [ "$PLAN_ONLY" -eq 1 ]; then
         printf '==> plan: cargo test --locked'
-        printf ' %q' "$@"
+        printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
         else
             printf ' -- --nocapture'
+        fi
+        if [[ "${#libtest_args[@]}" -gt 0 ]]; then
+            printf ' %q' "${libtest_args[@]}"
         fi
         printf '\n'
         record_summary "$label" "0s" "$execution"
@@ -104,10 +122,12 @@ run_test() {
     local status=0
     case "$execution" in
         parallel)
-            cargo test --locked "$@" -- --nocapture || status=$?
+            cargo test --locked "${cargo_args[@]}" -- --nocapture \
+                "${libtest_args[@]}" || status=$?
             ;;
         pocketic-serial)
-            cargo test --locked "$@" -- --test-threads=1 --nocapture || status=$?
+            cargo test --locked "${cargo_args[@]}" -- --test-threads=1 --nocapture \
+                "${libtest_args[@]}" || status=$?
             ;;
         *)
             echo "unknown test execution class: $execution" >&2
@@ -292,11 +312,23 @@ if [[ "$MODE" != "pocketic" ]]; then
 fi
 
 # The internal library owns several PocketIC journeys in its adjacent unit
-# tests. Keep only this mixed harness serial.
+# tests. Run the destructive autonomous-removal proof first so a regression is
+# reported without waiting for the rest of the mixed harness. The remaining
+# serial lane skips that exact test rather than paying for the journey twice.
+ROOT_REMOVAL_TEST="pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness"
+run_serial_pocketic_test \
+    "autonomous Root-removal PocketIC proof" \
+    -p canic-testing-internal \
+    --lib \
+    "$ROOT_REMOVAL_TEST" \
+    -- \
+    --exact
 run_serial_pocketic_test \
     "canic-testing-internal lib tests" \
     -p canic-testing-internal \
-    --lib
+    --lib \
+    -- \
+    --skip "$ROOT_REMOVAL_TEST"
 
 # PocketIC-backed integration suites.
 # Receipt, timer and lifecycle use the same internal-test build environment and

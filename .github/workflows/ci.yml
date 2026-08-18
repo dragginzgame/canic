@@ -267,6 +267,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/pocket-ic-server-*
           key: pocket-ic-${{ hashFiles('tool-versions.env') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Restore validated PocketIC test artifacts
+        id: pocketic-test-artifacts
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: target/test-artifacts
+          key: >-
+            pocketic-test-artifacts-${{ runner.os }}-${{ runner.arch }}-${{
+            hashFiles('tool-versions.env', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            pocketic-test-artifacts-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tool-versions.env', 'Cargo.lock') }}-
       - name: Install PocketIC server
         shell: bash
         run: |
@@ -277,6 +287,14 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC tests before run" --min-free-mib 4096 --summary-only
       - name: Run serial PocketIC tests
         run: make test-pocketic
+      - name: Save validated PocketIC test artifacts
+        if: ${{ !cancelled() && steps.pocketic-test-artifacts.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: target/test-artifacts
+          key: >-
+            pocketic-test-artifacts-${{ runner.os }}-${{ runner.arch }}-${{
+            hashFiles('tool-versions.env', 'Cargo.lock') }}-${{ github.sha }}
       - name: Report runner disk after PocketIC-test failure
         if: ${{ failure() }}
         shell: bash
