@@ -18,9 +18,11 @@ Detailed patch breakdown: [docs/changelog/0.103.md](docs/changelog/0.103.md)
   ceremonial `metrics` feature, closes `RUSTSEC-2026-0258` and hardens atomic
   release publication plus staged complete-feedback validation. Test Wasm
   acquisition adopts `ic-testkit` 0.8.0 collect-all batches and shared input
-  resolution. The checked-in Skynet demo is removed in favor of external
-  Prequel Wars, and future work is resequenced around lifecycle, authorization,
-  retirement and stateful adoption safety before generic presentation.
+  resolution, retains repeated standalone artifacts per test process and keeps
+  pooled readiness failures recoverable. The checked-in Skynet demo is removed
+  in favor of external Prequel Wars, and future work is resequenced around
+  lifecycle, authorization, retirement and stateful adoption safety before
+  generic presentation.
 
 ## [0.102.x] - 2026-08-13 - Compact Diagnostic Codes
 

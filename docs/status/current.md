@@ -229,6 +229,15 @@ one compatible input snapshot: only the first spec resolved Cargo inputs, the
 two later specs reported zero input-resolution time, and the focused lifecycle
 test passed.
 
+The follow-up test-harness correction retains standalone package/profile Wasm
+bytes once per test process and returns typed, named role-overview observations
+from pooled readiness. The formerly failing restored Component Registry proof
+now passes with an 835 ms warm baseline restore. The five-test blob-storage
+suite acquires its two distinct Wasm packages once each and completes in 15.95
+seconds, down from the retained 22.98-second run that performed eight
+acquisitions; the two-test payload-limit suite likewise performs one acquisition
+instead of two.
+
 Separate timer-recovery checks remain useful pre-0.104 evidence but do not
 establish completion of the 0.104 ownership hard cut.
 

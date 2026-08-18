@@ -78,7 +78,8 @@ command inventory here. The maintained outcome categories are:
   feature, dependency, secret, audit, release-contract, and current-document
   checks for pull requests and `main`;
 - separately reported ordinary and ordered serial PocketIC test lanes for pull
-  requests and `main`; and
+  requests and `main`, including an early exact Fleet deployment-restore proof;
+  and
 - the locked release workspace build for a `Release ...` commit on `main`.
 
 CI also validates workflow syntax, installs ICP/Wasm helpers only in the lane

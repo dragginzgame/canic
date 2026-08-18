@@ -55,9 +55,12 @@ proven stable. `make test-wasm` is the fast lane and runs only its classified
 release-surface integrations, never the PocketIC suites.
 Cargo continues across independently selected test binaries, and the workspace
 runner records every failed suite before returning one nonzero result. In CI,
-the PocketIC lane clears transient heavy Wasm targets once before its
-integration-suite group and once at invocation cleanup; it retains Cargo
-freshness between the ordered suites.
+the serial PocketIC lane runs the exact Fleet deployment-restore proof before
+the broader mixed library harness and skips that proof from the later harness.
+This keeps stateful deployment recovery isolated and locally attributable while
+retaining the full mixed-role coverage. The PocketIC lane clears transient
+heavy Wasm targets once before its integration-suite group and once at
+invocation cleanup; it retains Cargo freshness between the ordered suites.
 CI may run the ordinary and PocketIC lanes in separate jobs; it must not
 parallelize the PocketIC suites themselves without replacing this measured
 policy. Cheap source/governance preflight and security jobs gate every compile

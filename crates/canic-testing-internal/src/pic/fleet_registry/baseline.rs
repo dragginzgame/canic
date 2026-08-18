@@ -41,7 +41,10 @@ mod tests {
                 FleetSubnetRootAuthority, FleetSubnetRootCanisterSummary, FleetSubnetRootInitArgs,
                 FleetSubnetWasmStoreInitArgs,
             },
-            role::{ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest},
+            role::{
+                ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest,
+                RoleOverviewResponse,
+            },
             root_store::{
                 ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX, ROOT_STORE_RELEASE_SET_TEMPLATE_PREFIX,
                 RootStoreArtifact, RootStoreBootstrapRequest, RootStoreBootstrapResponse,
@@ -57,9 +60,8 @@ mod tests {
     };
     use canic_control_plane::{
         dto::template::{
-            StoreCommand, StoreCommandResponse, StoreStatusRequest, StoreStatusResponse,
-            TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
-            TemplateManifestInput,
+            StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetInfoResponse,
+            TemplateChunkSetPrepareInput, TemplateManifestInput,
         },
         dto::{
             fleet_coordinator::{
@@ -105,7 +107,6 @@ mod tests {
         ValidationReceipt, is_dead_pocket_ic_transport_error,
     };
 
-    use crate::pic::CanicPicExt;
     #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
@@ -187,6 +188,47 @@ mod tests {
         ConfigureRuntime(ComponentRuntimeOperationStatus),
     }
 
+    #[derive(CandidType)]
+    enum RoleOverviewStatusRequestFragment {
+        Overview,
+    }
+
+    #[derive(CandidType, Deserialize)]
+    enum RoleOverviewStatusResponseFragment {
+        Overview(RoleOverviewResponse),
+    }
+
+    #[derive(Debug)]
+    enum RoleOverviewReadinessObservation {
+        Pending {
+            phase: String,
+            last_error: Option<String>,
+        },
+        Ready,
+        Rejected(Error),
+    }
+
+    impl RoleOverviewReadinessObservation {
+        const fn is_ready(&self) -> bool {
+            matches!(self, Self::Ready)
+        }
+    }
+
+    impl fmt::Display for RoleOverviewReadinessObservation {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::Pending { phase, last_error } => {
+                    write!(
+                        formatter,
+                        "pending phase={phase:?} last_error={last_error:?}"
+                    )
+                }
+                Self::Ready => formatter.write_str("ready"),
+                Self::Rejected(error) => write!(formatter, "rejected error={error:?}"),
+            }
+        }
+    }
+
     fn root_command(
         pic: &PocketIc,
         root: Principal,
@@ -220,27 +262,76 @@ mod tests {
         status
     }
 
-    fn wait_for_store_ready(pic: &PocketIc, store: Principal, tick_limit: usize) {
+    fn wait_for_role_overviews_ready<I, L>(
+        pic: &PocketIc,
+        targets: I,
+        tick_limit: usize,
+        context: &str,
+    ) -> Result<(), ActiveComponentRegistryBaselineError>
+    where
+        I: IntoIterator<Item = (L, Principal)>,
+        L: Into<String>,
+    {
+        let targets = targets
+            .into_iter()
+            .map(|(label, canister_id)| (label.into(), canister_id))
+            .collect::<Vec<_>>();
+        let mut observations = Vec::with_capacity(targets.len());
         for _ in 0..tick_limit {
-            match pic.query_candid::<Result<StoreStatusResponse, Error>, _>(
-                store,
-                canic::protocol::CANIC_STATUS,
-                (StoreStatusRequest::Overview,),
-            ) {
-                Ok(Ok(StoreStatusResponse::Overview(overview))) if overview.bootstrap.ready => {
-                    return;
-                }
-                Ok(Ok(StoreStatusResponse::Overview(_)) | Err(_)) => pic.tick(),
-                Ok(Ok(_)) => panic!("Store returned a differently correlated overview status"),
-                Err(err) => {
-                    pic.dump_canister_debug(store, "query Store overview readiness failed");
-                    panic!("query Store overview readiness failed: {err:?}");
-                }
+            observations.clear();
+            for (label, canister_id) in &targets {
+                let observation = fetch_role_overview_readiness(pic, *canister_id)?;
+                observations.push((label, *canister_id, observation));
             }
+            if observations
+                .iter()
+                .all(|(_, _, observation)| observation.is_ready())
+            {
+                return Ok(());
+            }
+            pic.tick();
         }
 
-        pic.dump_canister_debug(store, "restored Store bootstrap");
-        panic!("Store {store} did not become ready after {tick_limit} ticks");
+        for (_, canister_id, observation) in &observations {
+            if !observation.is_ready() {
+                pic.dump_canister_debug(*canister_id, context);
+            }
+        }
+        let detail = observations
+            .iter()
+            .filter(|(_, _, observation)| !observation.is_ready())
+            .map(|(label, canister_id, observation)| {
+                format!("{label}({canister_id})={observation}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        Err(ActiveComponentRegistryBaselineError::Invariant(format!(
+            "{context}: role overviews did not become ready after {tick_limit} ticks: {detail}"
+        )))
+    }
+
+    fn fetch_role_overview_readiness(
+        pic: &PocketIc,
+        canister_id: Principal,
+    ) -> Result<RoleOverviewReadinessObservation, CandidCallError> {
+        match pic.query_candid::<Result<RoleOverviewStatusResponseFragment, Error>, _>(
+            canister_id,
+            canic::protocol::CANIC_STATUS,
+            (RoleOverviewStatusRequestFragment::Overview,),
+        ) {
+            Ok(Ok(RoleOverviewStatusResponseFragment::Overview(overview))) => {
+                if overview.bootstrap.ready {
+                    Ok(RoleOverviewReadinessObservation::Ready)
+                } else {
+                    Ok(RoleOverviewReadinessObservation::Pending {
+                        phase: overview.bootstrap.phase,
+                        last_error: overview.bootstrap.last_error,
+                    })
+                }
+            }
+            Ok(Err(error)) => Ok(RoleOverviewReadinessObservation::Rejected(error)),
+            Err(error) => Err(error),
+        }
     }
 
     fn coordinator_command(
@@ -456,16 +547,18 @@ mod tests {
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<ReadinessReceipt, Self::Error> {
             let metadata = baseline.metadata();
-            baseline.pocket_ic().wait_for_all_ready(
+            wait_for_role_overviews_ready(
+                baseline.pocket_ic(),
                 [
-                    metadata.root,
-                    metadata.issuer.canister_id,
-                    metadata.verifier.canister_id,
+                    ("coordinator", metadata.coordinator),
+                    ("root", metadata.root),
+                    ("wasm_store", metadata.wasm_store),
+                    ("issuer", metadata.issuer.canister_id),
+                    ("verifier", metadata.verifier.canister_id),
                 ],
                 60,
                 "restored active Component Registry baseline",
-            );
-            wait_for_store_ready(baseline.pocket_ic(), metadata.wasm_store, 60);
+            )?;
             ReadinessReceipt::try_new("active-fleet-ready").map_err(Into::into)
         }
 
@@ -956,6 +1049,8 @@ mod tests {
     )]
     fn restored_root_preserves_its_inventory_but_cannot_allocate() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let initial = acquire_active_component_registry();
+        drop(initial);
         let fixture = acquire_active_component_registry();
         let RootStatusResponseFragment::Inventory(before) = root_status(
             fixture.pic(),

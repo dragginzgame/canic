@@ -331,10 +331,19 @@ if [[ "$MODE" != "pocketic" ]]; then
 fi
 
 # The internal library owns several PocketIC journeys in its adjacent unit
-# tests. Run the destructive autonomous-removal proof first so a regression is
-# reported without waiting for the rest of the mixed harness. The remaining
-# serial lane skips that exact test rather than paying for the journey twice.
+# tests. Run the deployment-restore and destructive autonomous-removal proofs
+# first so either regression is reported without waiting for the rest of the
+# mixed harness. The remaining serial lane skips those exact tests rather than
+# paying for either journey twice.
+FLEET_DEPLOYMENT_RESTORE_TEST="pic::fleet_registry::baseline::tests::restored_root_preserves_its_inventory_but_cannot_allocate"
 ROOT_REMOVAL_TEST="pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness"
+run_serial_pocketic_test \
+    "Fleet deployment-restore PocketIC proof" \
+    -p canic-testing-internal \
+    --lib \
+    "$FLEET_DEPLOYMENT_RESTORE_TEST" \
+    -- \
+    --exact
 run_serial_pocketic_test \
     "autonomous Root-removal PocketIC proof" \
     -p canic-testing-internal \
@@ -347,6 +356,7 @@ run_serial_pocketic_test \
     -p canic-testing-internal \
     --lib \
     -- \
+    --skip "$FLEET_DEPLOYMENT_RESTORE_TEST" \
     --skip "$ROOT_REMOVAL_TEST"
 
 # PocketIC-backed integration suites.
