@@ -412,6 +412,16 @@ changes no shipped product role. Locked affected-package compilation,
 warning-denied Clippy, the lifecycle payload unit check and the workspace-test
 inventory guard also pass. The complete suite was not rerun.
 
+The focused B7 closeout follow-up queries the controller-authorized runtime
+status and freezes complete sorted logical timer inventories at six Prepared
+and Active install/upgrade checkpoints. Prepared contains Canic log retention
+and IcyDB recovery; Active additionally contains Canic intent cleanup. Settled
+Prepared recovery is retained idle and unregistered, while newly Prepared and
+Active recovery is scheduled and active. Exact equality rejects extra,
+duplicate or missing rows and scheduling-state drift. The locked PocketIC
+journey passes in 11.59 seconds and warning-denied targeted Clippy passes; no
+product canister source or interface changed.
+
 Focused 0.104 B8 validation now parses the 45-file Rust ownership set, freezes
 exact native-capability callsites and rejects aliases, public re-exports,
 unclassified files and duplicate custody. It closes the exact one-provider
