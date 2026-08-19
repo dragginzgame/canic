@@ -7,6 +7,7 @@
 )]
 
 use candid::CandidType;
+use canic::{Error, prelude::*};
 use std::cell::{Cell, RefCell};
 
 icydb::start!(participant);
@@ -193,10 +194,10 @@ fn database_ready() -> bool {
     icydb::db::with_request_execution(|| db().map(|_| ())).is_ok()
 }
 
-#[ic_cdk::query]
-fn lifecycle_composition_snapshot() -> LifecycleCompositionSnapshot {
+#[canic_query(public)]
+fn lifecycle_composition_snapshot() -> Result<LifecycleCompositionSnapshot, Error> {
     let record = COMPOSITION.with_borrow(|record| *record);
-    LifecycleCompositionSnapshot {
+    Ok(LifecycleCompositionSnapshot {
         hook: record.hook,
         participant_runs: record.participant_runs,
         icydb_row_observed_after_participant: ProbeEvidence::from_observation(
@@ -216,7 +217,7 @@ fn lifecycle_composition_snapshot() -> LifecycleCompositionSnapshot {
         canic_upgrade_runs: record.canic_upgrade_runs,
         database_startup: database_startup(),
         database_access: ProbeEvidence::from_observation(database_ready()),
-    }
+    })
 }
 
 canic::finish!();

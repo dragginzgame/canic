@@ -439,7 +439,15 @@ current-document semantics also pass. The complete suite was not rerun.
 The human release gate subsequently exposed one inline async-job workflow test
 that reset stable storage directly. Its fixture reset now crosses the test-only
 `AsyncJobRecoveryOps` boundary; the exact test and repository layering guard
-pass. The complete release suite was not rerun after this correction.
+pass. The subsequent complete gate passed every serial PocketIC lane but
+exposed four lifecycle-fixture integration failures plus warning-denied Clippy
+on that test-only reset helper. The reset now names its exact stable data type;
+the lifecycle probe owns a unique App identity, inherits its schema dependency
+from the workspace and exports its public snapshot through Canic's managed
+endpoint boundary. The checked-in config inventory now includes all 18
+configurations. Each previously failing test, all-target core/probe Clippy and
+warning-denied compilation of the affected lifecycle integration target pass.
+The complete release suite was not rerun after these corrections.
 
 The follow-up test-harness correction retains standalone package/profile Wasm
 bytes once per test process and returns typed, named role-overview observations
