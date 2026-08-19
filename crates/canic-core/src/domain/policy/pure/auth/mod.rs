@@ -10,6 +10,14 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "B2 pure decisions are consumed by the sequenced B3-B5 runtime batches"
+    )
+)]
+pub mod application_authorization;
 mod root_provisioning;
 
 pub use root_provisioning::{
@@ -92,9 +100,6 @@ pub enum AuthPolicyError {
 
     #[error("enabled root issuer renewal template must include at least one grant")]
     RootIssuerRenewalGrantRequired,
-
-    #[error("delegated token prepare subject must match caller")]
-    SubjectCallerMismatch,
 }
 
 /// Validate the public delegated-token prepare surface.
@@ -103,14 +108,8 @@ pub enum AuthPolicyError {
 /// an issuer-authorized path that computes grants instead of trusting request
 /// payloads supplied by the caller.
 pub fn validate_public_delegated_token_prepare(
-    caller: Principal,
-    subject: Principal,
     grants: &[DelegatedRoleGrantPolicy],
 ) -> Result<(), AuthPolicyError> {
-    if subject != caller {
-        return Err(AuthPolicyError::SubjectCallerMismatch);
-    }
-
     for grant in grants {
         for scope in &grant.scopes {
             if !public_delegated_token_prepare_scope(scope) {
@@ -135,10 +134,6 @@ fn public_delegated_token_prepare_scope(scope: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
     fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrantPolicy {
         DelegatedRoleGrantPolicy {
             target: CanisterRole::owned(role.to_string()),
@@ -148,38 +143,19 @@ mod tests {
 
     #[test]
     fn public_prepare_allows_login_scopes_for_fleet_wide_tokens() {
-        validate_public_delegated_token_prepare(
-            p(7),
-            p(7),
-            &[
-                grant("user_shard", &[cap::SESSION]),
-                grant("project_instance", &[cap::VERIFY]),
-            ],
-        )
+        validate_public_delegated_token_prepare(&[
+            grant("user_shard", &[cap::SESSION]),
+            grant("project_instance", &[cap::VERIFY]),
+        ])
         .expect("login scopes should be public-issuable");
-    }
-
-    #[test]
-    fn public_prepare_rejects_subject_mismatch() {
-        let err = validate_public_delegated_token_prepare(
-            p(7),
-            p(8),
-            &[grant("project_instance", &[cap::SESSION])],
-        )
-        .expect_err("subject must bind to caller");
-
-        assert_eq!(err, AuthPolicyError::SubjectCallerMismatch);
     }
 
     #[test]
     fn public_prepare_rejects_privileged_or_custom_scopes() {
         for denied in [cap::READ, cap::WRITE, cap::ADMIN, "toko.admin"] {
-            let err = validate_public_delegated_token_prepare(
-                p(7),
-                p(7),
-                &[grant("project_instance", &[denied])],
-            )
-            .expect_err("privileged scope must not be self-grantable");
+            let err =
+                validate_public_delegated_token_prepare(&[grant("project_instance", &[denied])])
+                    .expect_err("privileged scope must not be self-grantable");
 
             assert_eq!(
                 err,

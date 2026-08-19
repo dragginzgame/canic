@@ -386,7 +386,6 @@ fn execute_delegated_token_prepare(
                         request_id: [92; 32],
                         ttl_ns: 60_000_000_000,
                     }),
-                    subject,
                     aud: DelegationAudience::Fleet(test_fleet()),
                     grants: vec![role_grant(
                         verifier_role.clone(),

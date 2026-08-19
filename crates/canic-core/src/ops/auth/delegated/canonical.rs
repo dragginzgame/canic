@@ -14,6 +14,7 @@ use crate::{
         IssuerProof, IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1, RootProof,
     },
     ids::{BuildNetwork, CanisterRole, FleetKey},
+    model::auth::application_authorization::ApplicationScopeRef,
 };
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -157,6 +158,7 @@ pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> 
 fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalAuthError> {
     let mut out = domain_bytes(CanonicalDomain::DelegatedTokenClaims);
 
+    encode_principal(&mut out, claims.presenter);
     encode_principal(&mut out, claims.subject);
     encode_principal(&mut out, claims.issuer_pid);
     encode_fixed_32(&mut out, claims.cert_hash);
@@ -512,7 +514,7 @@ fn validate_role(role: &CanisterRole) -> Result<(), CanonicalAuthError> {
     if role.is_empty() {
         return Err(CanonicalAuthError::EmptyRole);
     }
-    if !role.bytes().all(is_canonical_label_byte) {
+    if !role.bytes().all(is_canonical_role_byte) {
         return Err(CanonicalAuthError::InvalidRole {
             role: role.to_string(),
         });
@@ -524,7 +526,7 @@ pub fn validate_scope_label(scope: &str) -> Result<(), CanonicalAuthError> {
     if scope.is_empty() {
         return Err(CanonicalAuthError::EmptyScope);
     }
-    if !scope.bytes().all(is_canonical_label_byte) {
+    if ApplicationScopeRef::parse(scope).is_err() {
         return Err(CanonicalAuthError::InvalidScope {
             scope: scope.to_string(),
         });
@@ -532,7 +534,7 @@ pub fn validate_scope_label(scope: &str) -> Result<(), CanonicalAuthError> {
     Ok(())
 }
 
-const fn is_canonical_label_byte(byte: u8) -> bool {
+const fn is_canonical_role_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b':' | b'-')
 }
 
@@ -749,6 +751,7 @@ mod tests {
     #[test]
     fn claims_hash_rejects_noncanonical_scopes() {
         let claims = DelegatedTokenClaims {
+            presenter: p(10),
             subject: p(10),
             issuer_pid: p(11),
             cert_hash: [12; 32],
@@ -774,6 +777,7 @@ mod tests {
     #[test]
     fn claims_hash_rejects_noncanonical_scope_order() {
         let left = DelegatedTokenClaims {
+            presenter: p(10),
             subject: p(10),
             issuer_pid: p(11),
             cert_hash: [12; 32],
@@ -788,6 +792,29 @@ mod tests {
         assert_eq!(
             claims_hash(&left),
             Err(CanonicalAuthError::NonCanonicalScopes)
+        );
+    }
+
+    #[test]
+    fn claims_hash_binds_signed_presenter() {
+        let claims = DelegatedTokenClaims {
+            presenter: p(10),
+            subject: p(10),
+            issuer_pid: p(11),
+            cert_hash: [12; 32],
+            issued_at_ns: 100,
+            expires_at_ns: 120,
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
+            grants: vec![grant("project_instance", &["read"])],
+            nonce: [14; 16],
+            ext: None,
+        };
+        let mut changed_presenter = claims.clone();
+        changed_presenter.presenter = p(9);
+
+        assert_ne!(
+            claims_hash(&claims).unwrap(),
+            claims_hash(&changed_presenter).unwrap()
         );
     }
 
@@ -965,6 +992,7 @@ mod tests {
     #[test]
     fn claims_hash_binds_ext_bytes() {
         let mut left = DelegatedTokenClaims {
+            presenter: p(10),
             subject: p(10),
             issuer_pid: p(11),
             cert_hash: [12; 32],
@@ -986,6 +1014,7 @@ mod tests {
     #[test]
     fn claims_hash_rejects_oversized_ext() {
         let claims = DelegatedTokenClaims {
+            presenter: p(10),
             subject: p(10),
             issuer_pid: p(11),
             cert_hash: [12; 32],

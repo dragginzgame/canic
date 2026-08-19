@@ -16,6 +16,10 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{DelegatedToken, DelegationCert, IssuerProof, RootProof},
     ids::{CanisterRole, FleetKey},
+    model::auth::application_authorization::{
+        ApplicationAuthorityModelError, ApplicationScope, CanonicalApplicationScopes,
+        VerifiedApplicationAuthority,
+    },
     ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
 use thiserror::Error;
@@ -28,25 +32,12 @@ use thiserror::Error;
 
 pub struct VerifyDelegatedTokenInput<'a> {
     pub token: &'a DelegatedToken,
+    pub expected_presenter: Principal,
     pub local_fleet: FleetKey,
     pub local_role: Option<&'a CanisterRole>,
     pub ttl_limits: DelegatedAuthTtlLimits,
     pub required_scopes: &'a [String],
     pub now_ns: u64,
-}
-
-///
-/// VerifiedDelegatedToken
-///
-/// Verified delegated-token subject, issuer, scopes, and certificate hash.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedDelegatedToken {
-    pub subject: Principal,
-    pub issuer_pid: Principal,
-    pub scopes: Vec<String>,
-    pub cert_hash: [u8; 32],
 }
 
 ///
@@ -57,6 +48,12 @@ pub struct VerifiedDelegatedToken {
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum VerifyDelegatedTokenError<RootProofError = String, IssuerProofError = String> {
+    #[error(transparent)]
+    ApplicationAuthority(#[from] ApplicationAuthorityModelError),
+    #[error("delegated auth token presenter does not match the current caller")]
+    PresenterCallerMismatch,
+    #[error("delegated auth token presenter and subject differ")]
+    PresenterSubjectMismatch,
     #[error("delegated auth cert hash mismatch")]
     CertHashMismatch,
     #[error("delegated auth issuer proof unavailable")]
@@ -109,7 +106,7 @@ pub fn verify_delegated_token<R, S, RootProofError, IssuerProofError>(
     input: VerifyDelegatedTokenInput<'_>,
     mut verify_root_proof: R,
     mut verify_issuer_proof: S,
-) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError<RootProofError, IssuerProofError>>
+) -> Result<VerifiedApplicationAuthority, VerifyDelegatedTokenError<RootProofError, IssuerProofError>>
 where
     R: FnMut(&DelegationCert, &RootProof) -> Result<(), RootProofError>,
     S: FnMut([u8; 32], &IssuerProof, Principal) -> Result<(), IssuerProofError>,
@@ -131,12 +128,12 @@ where
 
 pub fn verify_delegated_token_cached_proof_identity(
     input: VerifyDelegatedTokenInput<'_>,
-) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError> {
+) -> Result<VerifiedApplicationAuthority, VerifyDelegatedTokenError> {
     verify_delegated_token_material(&input, false).map(|material| material.verified)
 }
 
-struct VerifiedDelegatedTokenMaterial {
-    verified: VerifiedDelegatedToken,
+struct VerifiedApplicationAuthorityMaterial {
+    verified: VerifiedApplicationAuthority,
     claims_hash: [u8; 32],
 }
 
@@ -144,7 +141,7 @@ fn verify_delegated_token_material<RootProofError, IssuerProofError>(
     input: &VerifyDelegatedTokenInput<'_>,
     require_issuer_proof_bytes: bool,
 ) -> Result<
-    VerifiedDelegatedTokenMaterial,
+    VerifiedApplicationAuthorityMaterial,
     VerifyDelegatedTokenError<RootProofError, IssuerProofError>,
 > {
     let cert = &input.token.proof.cert;
@@ -167,13 +164,24 @@ fn verify_delegated_token_material<RootProofError, IssuerProofError>(
         return Err(VerifyDelegatedTokenError::IssuerProofUnavailable);
     }
 
-    Ok(VerifiedDelegatedTokenMaterial {
-        verified: VerifiedDelegatedToken {
-            subject: claims.subject,
-            issuer_pid: claims.issuer_pid,
-            scopes: local_scopes,
-            cert_hash: actual_cert_hash,
-        },
+    let local_role = input
+        .local_role
+        .ok_or(VerifyDelegatedTokenError::MissingLocalRole)?;
+    let verified = VerifiedApplicationAuthority::new(
+        claims.presenter,
+        claims.subject,
+        claims.issuer_pid,
+        input.local_fleet,
+        local_role.clone(),
+        local_scopes,
+        claims.issued_at_ns,
+        cert.not_before_ns.max(claims.issued_at_ns),
+        claims.expires_at_ns,
+        actual_claims_hash,
+    )?;
+
+    Ok(VerifiedApplicationAuthorityMaterial {
+        verified,
         claims_hash: actual_claims_hash,
     })
 }
@@ -195,10 +203,17 @@ const fn verify_cert_time<RootProofError, IssuerProofError>(
 fn verify_claims<RootProofError, IssuerProofError>(
     input: &VerifyDelegatedTokenInput<'_>,
     actual_cert_hash: [u8; 32],
-) -> Result<Vec<String>, VerifyDelegatedTokenError<RootProofError, IssuerProofError>> {
+) -> Result<CanonicalApplicationScopes, VerifyDelegatedTokenError<RootProofError, IssuerProofError>>
+{
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
+    if claims.presenter != input.expected_presenter {
+        return Err(VerifyDelegatedTokenError::PresenterCallerMismatch);
+    }
+    if claims.presenter != claims.subject {
+        return Err(VerifyDelegatedTokenError::PresenterSubjectMismatch);
+    }
     if claims.issuer_pid != cert.issuer_pid {
         return Err(VerifyDelegatedTokenError::IssuerPidMismatch);
     }
@@ -234,7 +249,14 @@ fn verify_claims<RootProofError, IssuerProofError>(
 
     let local_scopes = verify_audience_and_grants(input)?;
     verify_scopes(input.required_scopes, &local_scopes)?;
-    Ok(local_scopes)
+    let scopes = local_scopes
+        .into_iter()
+        .map(ApplicationScope::parse)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ApplicationAuthorityModelError::from)?;
+    CanonicalApplicationScopes::for_verified_grant(scopes)
+        .map_err(ApplicationAuthorityModelError::from)
+        .map_err(Into::into)
 }
 
 fn verify_audience_and_grants<RootProofError, IssuerProofError>(
@@ -348,6 +370,7 @@ mod tests {
         let cert = cert();
         let cert_hash = cert_hash(&cert).unwrap();
         let claims = DelegatedTokenClaims {
+            presenter: p(9),
             subject: p(9),
             issuer_pid: cert.issuer_pid,
             cert_hash,
@@ -381,6 +404,7 @@ mod tests {
     ) -> VerifyDelegatedTokenInput<'a> {
         VerifyDelegatedTokenInput {
             token,
+            expected_presenter: token.claims.presenter,
             local_fleet: crate::test::support::fleet_key(1),
             local_role,
             ttl_limits: ttl_limits(),
@@ -451,7 +475,7 @@ mod tests {
         token: &DelegatedToken,
         local_role: Option<&CanisterRole>,
         required_scopes: &[String],
-    ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError> {
+    ) -> Result<VerifiedApplicationAuthority, VerifyDelegatedTokenError> {
         verify_delegated_token(
             input(token, local_role, required_scopes),
             verify_root_ok(),
@@ -467,9 +491,44 @@ mod tests {
 
         let verified = verify_root_and_issuer(&token, Some(&role), &required_scopes).unwrap();
 
-        assert_eq!(verified.subject, p(9));
-        assert_eq!(verified.issuer_pid, p(2));
-        assert_eq!(verified.scopes, vec!["read".to_string()]);
+        assert_eq!(verified.presenter(), p(9));
+        assert_eq!(verified.subject(), p(9));
+        assert_eq!(verified.issuer(), p(2));
+        assert_eq!(verified.fleet(), crate::test::support::fleet_key(1));
+        assert_eq!(verified.role(), &role);
+        assert_eq!(
+            verified.proof_fingerprint(),
+            claims_hash(&token.claims).unwrap()
+        );
+        assert!(verified.scopes().contains(
+            crate::model::auth::application_authorization::ApplicationScopeRef::from_static("read")
+        ));
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_presenter_that_differs_from_current_caller() {
+        let token = token();
+        let role = role();
+        let mut input = input(&token, Some(&role), &[]);
+        input.expected_presenter = p(8);
+
+        assert_eq!(
+            verify_delegated_token_cached_proof_identity(input),
+            Err(VerifyDelegatedTokenError::PresenterCallerMismatch)
+        );
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_subject_that_differs_from_presenter() {
+        let mut token = token();
+        token.claims.subject = p(8);
+        token.issuer_proof = issuer_proof_for_claims(&token.claims);
+        let role = role();
+
+        assert_eq!(
+            verify_delegated_token_cached_proof_identity(input(&token, Some(&role), &[])),
+            Err(VerifyDelegatedTokenError::PresenterSubjectMismatch)
+        );
     }
 
     #[test]
@@ -490,9 +549,11 @@ mod tests {
         ))
         .expect("cache-hit local checks should not re-run cryptographic verification");
 
-        assert_eq!(verified.subject, p(9));
-        assert_eq!(verified.issuer_pid, p(2));
-        assert_eq!(verified.scopes, vec!["read".to_string()]);
+        assert_eq!(verified.subject(), p(9));
+        assert_eq!(verified.issuer(), p(2));
+        assert!(verified.scopes().contains(
+            crate::model::auth::application_authorization::ApplicationScopeRef::from_static("read")
+        ));
     }
 
     #[test]
@@ -510,7 +571,7 @@ mod tests {
         ))
         .expect("issuer clock within skew allowance should verify");
 
-        assert_eq!(verified.subject, p(9));
+        assert_eq!(verified.subject(), p(9));
     }
 
     #[test]

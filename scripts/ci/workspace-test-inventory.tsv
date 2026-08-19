@@ -33,6 +33,7 @@ canic-tests	pic_receipt_backed_intent	full	pocketic-serial	runtime
 canic-tests	timer_authority	full	pocketic-serial	runtime
 canic-tests	lifecycle_boundary	full	pocketic-serial	runtime
 canic-tests	icydb_lifecycle_composition	full	pocketic-serial	runtime
+canic-tests	native_agent_delegation	full	pocketic-serial	runtime
 canic-tests	pic_blob_storage	full	pocketic-serial	blob-storage
 canic-tests	pic_ingress_payload_limits	full	pocketic-serial	payload-limits
 canic-tests	instruction_audit	full	pocketic-serial	instruction-audit

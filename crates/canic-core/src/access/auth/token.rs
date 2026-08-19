@@ -2,7 +2,7 @@
 //!
 //! Responsibility: decode and verify delegated tokens for endpoint access.
 //! Does not own: replay receipts, endpoint payload decoding, or public response mapping.
-//! Boundary: `access::auth` calls this after resolving the authenticated subject.
+//! Boundary: `access::auth` supplies the raw transport caller for presenter binding.
 
 use super::dependency_unavailable;
 use crate::{
@@ -60,10 +60,18 @@ fn verify_token(
     })
     .map_err(access_error_from_verification)?;
 
-    enforce_subject_binding(verified.subject, caller)?;
-    enforce_required_scope(required_scope, &verified.scopes)?;
+    if let Some(required_scope) = required_scope {
+        let required_scope =
+            crate::model::auth::application_authorization::ApplicationScopeRef::parse(
+                required_scope,
+            )
+            .map_err(|_| AccessError::RequiredScopeMissing)?;
+        if !verified.scopes().contains(required_scope) {
+            return Err(AccessError::RequiredScopeMissing);
+        }
+    }
 
-    Ok(verified.issuer_pid)
+    Ok(verified.issuer())
 }
 
 fn access_error_from_verification(err: InternalError) -> AccessError {
@@ -75,32 +83,6 @@ fn access_error_from_verification(err: InternalError) -> AccessError {
             AccessError::DelegatedAuthTokenExpired
         }
         _ => AccessError::Internal(err),
-    }
-}
-
-pub(super) fn enforce_subject_binding(
-    sub: Principal,
-    caller: Principal,
-) -> Result<(), AccessError> {
-    if sub == caller {
-        Ok(())
-    } else {
-        Err(AccessError::DelegatedTokenSubjectMismatch)
-    }
-}
-
-pub(super) fn enforce_required_scope(
-    required_scope: Option<&str>,
-    token_scopes: &[String],
-) -> Result<(), AccessError> {
-    let Some(required_scope) = required_scope else {
-        return Ok(());
-    };
-
-    if token_scopes.iter().any(|scope| scope == required_scope) {
-        Ok(())
-    } else {
-        Err(AccessError::RequiredScopeMissing)
     }
 }
 
@@ -215,28 +197,24 @@ mod tests {
     }
 
     #[test]
-    fn delegated_auth_guard_preserves_verify_bind_scope_order() {
+    fn delegated_auth_guard_verifies_presenter_before_local_scope_check() {
         let source = include_str!("token.rs");
         let start = source
             .find("fn verify_token(")
             .expect("verify_token exists");
         let end = source[start..]
-            .find("pub(super) fn enforce_subject_binding")
+            .find("fn access_error_from_verification")
             .map_or(source.len(), |offset| start + offset);
         let body = &source[start..end];
 
         let verify = body
             .find("AuthOps::verify_token")
             .expect("verifier call exists");
-        let bind = body
-            .find("enforce_subject_binding")
-            .expect("subject binding exists");
         let scope = body
-            .find("enforce_required_scope")
+            .find("verified.scopes().contains")
             .expect("scope check exists");
 
-        assert!(verify < bind);
-        assert!(bind < scope);
+        assert!(verify < scope);
     }
 
     #[test]
@@ -263,6 +241,7 @@ mod tests {
 
         DelegatedToken {
             claims: DelegatedTokenClaims {
+                presenter: p(1),
                 subject: p(1),
                 issuer_pid: p(2),
                 cert_hash: [3; 32],

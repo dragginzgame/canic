@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- 0.105 B1 freezes the released auth/session ownership and resource baseline,
+  proves browser-neutral delegated-token acquisition with a PEM-backed native
+  agent, accepts caller-derived signed presenter/subject identity and
+  target-local typed replay-capacity denial, and hard-cuts canonical application
+  scopes, the presenter-bearing token/verifier projection and pure closed
+  authorization/admission policy.
+
 ## [0.104.x] - 2026-08-19 - Timer Ownership And Lifecycle Composition
 
 Detailed patch breakdown: [docs/changelog/0.104.md](docs/changelog/0.104.md)

@@ -20,7 +20,7 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   changelog section is an open draft or a published patch.
 - The completed role-owned Candid release owns the 161-reason register, typed mappings,
   compact public wire and flat `code + name` release baseline. B1 census/count
-  coupling is absent from permanent tests. The open closeout-correction batch
+  coupling is absent from permanent tests. Its published closeout correction
   makes that released baseline tamper-evident, preserves the four genuine
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
@@ -141,8 +141,14 @@ Candid/timer/state inventory must reconcile before its next source batch.
 
 Scheduled 0.105 now owns framework-neutral caller-bound scoped local
 application sessions directly after 0.104; presentation supplies no semantic
-dependency. No evidence or implementation batch is promoted by the
-resequencing cut.
+dependency. B1 is captured against exact released `v0.104.1`. Its complete
+producer/consumer inventory, stable/resource baseline and real PEM-backed
+native-agent prepare/retrieve/present journey are retained under
+`docs/audits/working/0.105-local-application-authorization/`. The maintainer
+accepted caller-derived signed presenter/subject identity and target-local
+typed replay-capacity denial on 2026-08-19. B2 now owns the presenter-bearing
+token hard cut, canonical application scopes, one verified-authority model and
+pure closed policy. B3 is active; B4-B7 remain held on their predecessor gates.
 
 The scheduled 0.106 B1 is approved to freeze current pool/platform provenance,
 measurement/reset protocol, horizon-qualified standby semantics and production
@@ -640,13 +646,10 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-Published `v0.104.0` contains the runtime hard cut. The bounded 0.104.1
-closeout correction strengthens structural ownership proof, adds failed-init
-rollback/retry evidence and replaces unsupported phase measurements with exact
-release-tree footprints. The maintainer-owned complete validation and release
-flow remain separate. Scheduled 0.105 B1 still requires explicit maintainer
-promotion after accepted 0.104 closeout and is not authorized by ordinary
-continuation.
+Published `v0.104.0` contains the runtime hard cut and published `v0.104.1`
+contains its bounded closeout correction. For 0.105, implement B3's canonical
+scoped session/replay state and remove the predecessor subject-only session. The
+maintainer-owned complete validation and release flow remain separate.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

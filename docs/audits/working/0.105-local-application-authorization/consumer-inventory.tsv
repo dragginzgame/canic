@@ -1,0 +1,85 @@
+kind	path	current authority or consumer	0.105 hard-cut disposition	owning batch
+production	crates/canic-core/src/dto/auth/token.rs	Token claims, prepare request/response, retrieval request and bearer token DTOs	Add required presenter to claims; remove both identities from the request; hard-cut old claims decoding	B2/B4
+production	crates/canic-core/src/dto/auth/mod.rs	Auth DTO export owner	Export current token and application-session DTOs only	B2/B4
+production	crates/canic-core/src/ids/capability.rs	Broad built-in read/write/verify/session/admin scope constants	Retain only intentionally current generic constants; application scopes come from protected role configuration	B2
+production	crates/canic-core/src/dto/role.rs	Shared role boundary DTOs	Add no session method; role macros own cfg-pruned variants	B4
+production	crates/canic-core/src/workflow/runtime/auth/prepare/mod.rs	Reads caller, reserves replay, prepares token and commits exact response	Propagate derived presenter through preparation and exact retry	B2
+production	crates/canic-core/src/workflow/runtime/auth/prepare/admission.rs	Limits self-grantable scopes after caller identity is derived by workflow	Delete caller/subject equality input; admit declared application scopes through issuer policy	B2
+production	crates/canic-core/src/workflow/runtime/auth/prepare/replay.rs	Hashes caller actor plus caller-supplied token payload	Use the caller actor as the sole identity binding and hash exact grants/audience/token inputs	B2
+production	crates/canic-core/src/domain/policy/pure/auth/mod.rs	Public self-issuance policy	Retain pure issuance decision and delete caller-nominated-subject equality semantics	B2
+production	crates/canic-core/src/domain/policy/pure/auth/root_provisioning.rs	Root issuer policy and renewal grant narrowing	Remain the issuer grant authority; intersect role-declared application scopes	B2
+production	crates/canic-core/src/model/auth/mod.rs	Current root issuer and chain-key auth model exports	Add the single application-authorization model module	B2
+production	crates/canic-core/src/model/auth/root_issuer.rs	Protected issuer policies and grant templates	Remain issuer/scope authority; do not own sessions or local generation	B2
+production	crates/canic-core/src/ops/auth/delegated/delegation_cert.rs	Constructs issuer certificate audience and role grants	Commit the exact role-declared and issuer-policy-admitted application scopes	B2
+production	crates/canic-core/src/ops/auth/delegated/prepare.rs	Builds claims, nonce and canonical claims hash from prepared_by and subject	Write presenter from prepared_by and bind presenter before subject in canonical material	B2
+production	crates/canic-core/src/ops/auth/delegated/canonical.rs	Canonical cert, claims, proof, role and scope encoding	Hard-cut claims encoding to presenter-bearing shape and replace scope grammar with model parser	B2
+production	crates/canic-core/src/ops/auth/delegated/audience.rs	Role-grant count, canonical order and scope subset	Import canonical application scope validation; retain 16 grants and 32 scopes per role grant	B2
+production	crates/canic-core/src/ops/auth/delegated/verify.rs	Verifies issuer, cert, Fleet audience, role, scope and time; returns subject/issuer/scopes	Return the one verified application authority including signed presenter and exact proof time/identity	B2
+production	crates/canic-core/src/ops/auth/delegated/cache.rs	Positive proof cache keyed by proof, claims, issuer proof and runtime caller	Keep cache subordinate to signed presenter equality; no cache-only caller authority	B2
+production	crates/canic-core/src/ops/auth/token/mod.rs	Issuer-local prepare/retrieve and verifier orchestration	Derive presenter and subject from prepared_by with no duplicate request equality; retain caller-bound retrieval	B2
+production	crates/canic-core/src/ops/auth/token/retention/mod.rs	Heap retention 64 per caller and 512 per issuer for 60 seconds	Retain preparation custody; do not mistake per-issuer bounds for target tombstone capacity	B2
+production	crates/canic-core/src/ops/auth/token/verification.rs	Resolves protected Fleet/role/verifier context and cached/full verification	Project protected local authority once; require presenter on cached and cold paths	B2
+production	crates/canic-core/src/ops/auth/token/verifier_config.rs	Resolves root and chain-key trust anchors	Remain proof trust owner; no session authority	B2
+production	crates/canic-core/src/ops/auth/issuer_canister_sig.rs	Prepares and retrieves the canister signature over claims hash	Continue signing only the presenter-bearing canonical claims hash	B2
+production	crates/canic-core/src/ops/auth/delegation/root_issuer_policy.rs	Persists root issuer policy and advances root registry epoch	Remain issuer/grant authority; do not reuse registry epoch as local session generation	B2
+production	crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/mod.rs	Persists renewal templates and advances root registry epoch	Carry canonical application grants through the one issuer-policy owner	B2
+production	crates/canic-core/src/ops/auth/delegation/chain_key_registry.rs	Builds certified issuer registry and registry epoch	Remain proof trust inventory; no local session generation	B2
+production	crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs	Selects up to 64 due issuers per signing batch	Retain proof provisioning; do not treat batch width as a Fleet-wide issuer quota	B2
+production	crates/canic-core/src/ops/auth/types.rs	Runtime prepare and verify input/output shapes	Use model verified-authority type; remove duplicate subject-only projection	B2
+production	crates/canic-core/src/ops/auth/boundary.rs	Current token-clamped delegated-session expiry	Delete old clamp; local session TTL is independent of proof remaining lifetime	B3
+production	crates/canic-core/src/access/auth/token.rs	Decodes argument-zero token, verifies it and checks scope	Require signed presenter==subject==raw caller in the verifier and delete the duplicated access-layer subject check	B2/B5
+production	crates/canic-core/src/access/auth/identity.rs	Resolves subject-only session, mutates stale state and falls back to raw caller	Delete fallback and old session identity resolution; local application decision is explicit and closed	B3/B5
+production	crates/canic-core/src/access/auth/mod.rs	Public access types, predicates and delegated-session subject validation	Own caller/time acquisition and re-export model authorization values without redeclaration	B5
+production	crates/canic-core/src/access/expr/evaluators.rs	Runs authenticated endpoint access expressions	Converge proof-bearing authority on the common verified projection	B5
+production	crates/canic-core/src/access/expr/mod.rs	Declares authenticated access expression and context	Retain endpoint expression surface; do not add session syntax or a second policy engine	B5
+production	crates/canic-macros/src/endpoint/expand/access.rs	Expands authenticated endpoint guards	Use common proof-bearing access boundary; no local-session wrapper generation	B5
+production	crates/canic-macros/src/endpoint/parse/mod.rs	Parses authenticated endpoint access declarations	No new grammar; current scope declarations must use canonical model validation	B5
+production	crates/canic-macros/src/endpoint/validate/mod.rs	Validates endpoint access declarations	Reject invalid canonical scopes at expansion; no compatibility spellings	B5
+production	crates/canic-core/src/api/auth/mod.rs	Auth API helper owner and 24-hour predecessor TTL default	Delete subject-only session helpers/default and expose role workflow adapters only	B3/B4
+production	crates/canic-core/src/api/auth/session/mod.rs	Test-consumed subject-only set/clear/status, proof replay and stable write	Delete completely; role-owned application-session workflow replaces it without aliases	B3/B4
+production	crates/canic-core/src/api/auth/token.rs	Issuer prepare/retrieve endpoint adapters	Retain current role variant delegation and caller-bound retrieval	B2
+production	crates/canic-core/src/workflow/runtime/auth/root_issuer/mod.rs	Root issuer policy/template command orchestration	Propagate canonical application grant authority and current diagnostics	B2/B4
+production	crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs	Builds and installs active issuer proofs	Carry canonical grant set; no application session authority	B2
+production	crates/canic-core/src/workflow/runtime/auth/renewal.rs	Reconstructs and renews issuer proof demand	Carry canonical grant set; no application session authority	B2
+production	crates/canic-core/src/storage/stable/auth/records.rs	Memory-ID-34 auth records including subject-only sessions/bindings and root epochs	Replace old two records in current v1 cell; add one local generation; no migration or second generation owner	B3
+production	crates/canic-core/src/storage/stable/auth/sessions.rs	Linear lookup, mutation, capacity, replay binding and full-vector cleanup	Replace with canonical records plus exact indexes and bounded 128-entry cleanup	B3
+production	crates/canic-core/src/storage/stable/auth/mod.rs	Auth stable cell, capacities and record operations	Retain cell ID/key; hard-cut members and restore derived indexes synchronously	B3
+production	crates/canic-core/src/ops/storage/auth/mod.rs	Stable/model conversion and auth state API	Own conversions and exact state operations; policy never constructs records	B3
+production	crates/canic-core/src/config/schema/component_spec/mod.rs	Per-role issuer/verifier/cache booleans	Add optional local_application_authorization table under role auth	B2/B4
+production	crates/canic-core/src/config/schema/mod.rs	Global delegated-token trust and TTL configuration	Retain proof verifier configuration; do not reuse global token TTL as session TTL	B2/B4
+production	crates/canic-core/src/config/validation/auth.rs	Global auth validation	Validate protected local role capability through topology-aware validation	B4
+production	crates/canic-core/src/config/topology/mod.rs	Hashes role auth configuration into deployment identity	Bind local capability, scopes and TTLs into canonical role identity	B4
+production	crates/canic-core/src/bootstrap/mod.rs	Validates/materializes auth build configuration	Propagate current protected local authorization configuration	B4
+production	crates/canic-core/src/bootstrap/render.rs	Renders compiled auth and per-role capability state	Render scopes/TTLs once; no env enablement	B4
+production	crates/canic-core/src/ops/config/mod.rs	Runtime compiled-config access	Return one protected local authority snapshot input	B4
+production	crates/canic/src/macros/build.rs	Emits role capability cfgs	Emit one cfg for local application authorization only on admitted managed roles	B4
+production	crates/canic/src/build_support/cfg_catalog.rs	Canonical generated cfg catalogue	Add exact local capability cfg and no aliases	B4
+production	crates/canic/src/macros/endpoints/role.rs	Cfg-pruned managed command/status Candid and dispatch	Add nested ApplicationSession command/status variants; infrastructure roles remain pruned	B4
+production	crates/canic/src/macros/endpoints/root.rs	Root issuer policy, renewal and proof role variants	Retain issuer/grant authority; add no application-session variant to Root	B2/B4
+production	crates/canic/src/access/mod.rs	Facade re-export of core access types and helpers	Re-export the single model-backed local authorization facade and types	B5
+production	crates/canic/src/api/mod.rs	Facade re-export of AuthApi	Remove subject-only session API exposure; retain token/root workflow helpers	B3/B4
+production	crates/canic/src/prelude/mod.rs	Convenience re-export of DelegatedToken	Expose only the presenter-bearing current token; do not prelude-export session authority	B2
+production	crates/canic-core/src/role_contract/catalog.rs	Role capability catalogue	Declare local authorization capability for managed application roles only	B4
+production	crates/canic-core/src/role_contract/model.rs	Role capability/protocol model	Bind exact command/status variant presence	B4
+production	crates/canic-core/src/role_contract/policy.rs	Role capability admission policy	Reject Root, Coordinator, Store, runtime-only and verifier-only misuse	B4
+production	crates/canic-core/src/role_contract/profile.rs	Canonical profile digest inputs	Include exact local authorization capability identity	B4
+production	crates/canic-host/src/canic_metadata/mod.rs	Host projection of package/config metadata	Carry protected capability metadata without token/session secrets	B4/B6
+production	crates/canic-host/src/release_set/config/mod.rs	Release-set config loading and projection	Validate exact current local authorization config on one release set	B4
+production	crates/canic-host/src/release_set/config/projection/details.rs	Detailed role config projection	Expose non-secret declared capability/scopes/TTL policy for inspection	B4/B6
+production	crates/canic-core/src/ops/runtime/metrics/auth/sessions.rs	Subject-only session creation/fallback/prune metrics	Replace with bounded aggregate establishment/clear/denial/capacity metrics; no identities or scopes	B6
+production	crates/canic-core/src/ops/runtime/metrics/delegated_auth.rs	Proof verification metrics	Retain proof lane metrics; do not duplicate session policy decisions	B6
+test	canisters/test/delegation_root_stub/src/lib.rs	Custom subject-only session bootstrap/clear/status test endpoints	Remove old methods when B3/B4 role variants exist; retain proof/root fixtures only	B3/B4
+test	canisters/test/delegation_issuer_stub/src/lib.rs	Custom subject-only clear/status plus token issuer/verifier probes	Remove old methods; retain exact prepare/retrieve/verify qualification	B3/B4
+test	canisters/test/runtime_probe/src/lib.rs	Access/session behavior fixture	Hard-cut to current local decision and role protocol	B4/B5
+test	crates/canic-testing-internal/src/pic/delegation.rs	PocketIC issuer, verifier, session and grant helpers	Propagate presenter, canonical scopes and new role variants without old helpers	B2-B7
+test	crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs	Shared/fresh active issuer-verifier Fleet fixture	Retain fresh exclusive HTTP-gateway path for native-agent qualification	B1/B7
+test	crates/canic-tests/tests/native_agent_delegation.rs	PEM-backed native prepare/retrieve/present journey	Retain as B1 acquisition proof; extend to target-local establishment only in B7	B1/B7
+test	crates/canic-tests/tests/instruction_audit_support/execution.rs	Prepare and verifier instruction scenarios	Add cold/warm establishment and local authorization/denial measurements	B6
+test	crates/canic-tests/tests/instruction_audit_support/scenarios.rs	Fixed instruction scenario roster	Version the method when 0.105 E/A/D scenarios are added	B6
+test	crates/canic-macros/src/endpoint/expand/tests.rs	Generated authenticated guard tests	Hard-cut presenter and common projection expectations	B5
+test	crates/canic-macros/src/endpoint/parse/tests.rs	Authenticated annotation parse tests	Add exact scope grammar acceptance/rejection	B2/B5
+test	crates/canic-macros/src/endpoint/validate/tests.rs	Authenticated annotation validation tests	Reject noncanonical application scopes	B2/B5
+test	crates/canic-host/src/release_set/tests/roles/capabilities.rs	Role capability validation fixtures	Prove admitted managed roles and rejected infrastructure combinations	B4
+test	crates/canic-host/src/release_set/tests/roles/catalog.rs	Generated role catalogue fixtures	Prove exact variant/profile propagation	B4
+test	crates/canic-cli/src/build.rs	Configured build propagation	Build enabled/disabled exact role artifacts	B4/B6
+test	crates/canic-cli/src/scaffold/mod.rs	Generated canic.toml examples	Teach current protected local authorization table only	B4

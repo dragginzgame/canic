@@ -4,6 +4,7 @@
 //! Does not own: endpoint response mapping, workflow authorization, or runtime metrics storage.
 //! Boundary: endpoint macros call access predicates before delegating to workflow.
 
+pub mod application_authorization;
 pub mod auth;
 pub mod deployment;
 pub mod env;
@@ -48,9 +49,6 @@ pub enum AccessError {
 
     #[error("access denied: delegated token is malformed")]
     DelegatedTokenMalformed,
-
-    #[error("access denied: delegated token subject does not match caller")]
-    DelegatedTokenSubjectMismatch,
 
     #[error("access denied: a direct child is required")]
     DirectChildRequired,
@@ -138,7 +136,7 @@ impl AccessError {
             Self::DelegatedTokenMalformed | Self::RoleAttestationMalformed => {
                 AccessDiagnosticCodes::public(codes::SECURITY_INVALID_STATE)
             }
-            Self::DelegatedTokenSubjectMismatch | Self::RoleAttestationSubjectMismatch => {
+            Self::RoleAttestationSubjectMismatch => {
                 AccessDiagnosticCodes::public(codes::AUTHORITY_CONFLICT)
             }
             Self::FleetDisabled => AccessDiagnosticCodes::public(codes::AUTHORITY_INACTIVE),
@@ -226,10 +224,6 @@ mod tests {
             (
                 AccessError::DelegatedTokenMalformed,
                 codes::SECURITY_INVALID_STATE,
-            ),
-            (
-                AccessError::DelegatedTokenSubjectMismatch,
-                codes::AUTHORITY_CONFLICT,
             ),
             (
                 AccessError::DirectChildRequired,

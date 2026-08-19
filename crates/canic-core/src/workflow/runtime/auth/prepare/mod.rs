@@ -70,7 +70,7 @@ impl RuntimeAuthWorkflow {
     ) -> Result<DelegatedTokenPrepareResponse, InternalError> {
         let metadata = token_replay_metadata(request.metadata)?;
         let caller = IcOps::msg_caller();
-        validate_token_prepare_public_request(caller, &request)?;
+        validate_token_prepare_public_request(&request)?;
         let command_kind = token_prepare_replay_command_kind();
         let actor = ReplayActor::direct_caller(caller);
         let payload_hash = token_prepare_replay_payload_hash(&command_kind, &actor, &request);
@@ -106,7 +106,6 @@ impl RuntimeAuthWorkflow {
         crate::perf!("delegated_token_reserve_replay");
 
         let prepare_input = PrepareDelegatedTokenIssuerProofInput {
-            subject: request.subject,
             audience: request.aud,
             grants: request.grants,
             ttl_ns: request.ttl_ns,
@@ -402,7 +401,6 @@ mod tests {
     fn token_prepare_request(metadata_id: u8) -> DelegatedTokenPrepareRequest {
         DelegatedTokenPrepareRequest {
             metadata: Some(meta(metadata_id, 60_000_000_000)),
-            subject: p(8),
             aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["canic.verify"])],
             ttl_ns: 30_000_000_000,
@@ -413,7 +411,6 @@ mod tests {
     fn token_prepare_input() -> PrepareDelegatedTokenIssuerProofInput {
         let request = token_prepare_request(1);
         PrepareDelegatedTokenIssuerProofInput {
-            subject: request.subject,
             audience: request.aud,
             grants: request.grants,
             ttl_ns: request.ttl_ns,
@@ -434,7 +431,6 @@ mod tests {
             operation_id,
             prepared_by,
             |observed, observed_operation_id, observed_prepared_by| {
-                assert_eq!(observed.subject, input.subject);
                 assert_eq!(observed.ttl_ns, input.ttl_ns);
                 assert_eq!(observed_operation_id, operation_id);
                 assert_eq!(observed_prepared_by, prepared_by);
@@ -607,26 +603,11 @@ mod tests {
     }
 
     #[test]
-    fn delegated_token_public_prepare_rejects_subject_mismatch_before_replay() {
-        let mut request = token_prepare_request(1);
-        request.subject = p(9);
-        request.grants = vec![grant("project_instance", &[cap::SESSION])];
-
-        let err = validate_token_prepare_public_request(p(8), &request)
-            .expect_err("subject mismatch must fail");
-
-        assert_eq!(
-            err.public_error().code(),
-            crate::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
-        );
-    }
-
-    #[test]
     fn delegated_token_public_prepare_rejects_privileged_self_grants_before_replay() {
         let mut request = token_prepare_request(1);
         request.grants = vec![grant("project_instance", &[cap::WRITE])];
 
-        let err = validate_token_prepare_public_request(p(8), &request)
+        let err = validate_token_prepare_public_request(&request)
             .expect_err("privileged self-grant must fail");
 
         assert_eq!(
@@ -643,7 +624,7 @@ mod tests {
             grant("project_instance", &[cap::VERIFY]),
         ];
 
-        validate_token_prepare_public_request(p(8), &request).expect("login scopes");
+        validate_token_prepare_public_request(&request).expect("login scopes");
     }
 
     #[test]

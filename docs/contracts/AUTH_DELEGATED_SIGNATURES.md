@@ -140,6 +140,7 @@ pub struct DelegationProof {
 }
 
 pub struct DelegatedTokenClaims {
+    pub presenter: Principal,
     pub subject: Principal,
     pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
@@ -179,7 +180,7 @@ Expiry remains strict. Verifiers must not add grace after `expires_at_ns`.
 material. It is not secret, not a replay key, and not an authorization input.
 `prepare_delegated_token` must not call the management canister, including
 `raw_rand`, to produce it. The nonce derivation hashes caller, prepare
-operation id, subject, issuer, and selected cert hash under
+operation id, issuer, and selected cert hash under
 `"canic-token-nonce-v1"` and takes the first 16 bytes.
 
 ## Canonical Hashes
@@ -284,8 +285,9 @@ Lazy repair uses the same proof primitive:
 ```
 
 The public delegated-token prepare endpoint is a login/session materialization
-surface. It rejects requests where `subject` does not match the update caller
-and only self-issues public login scopes: `session` and `verify`. Privileged
+surface. Its request contains no presenter or subject; it derives both signed
+claims from the authenticated update caller and only self-issues public login
+scopes: `session` and `verify`. Privileged
 application scopes such as `read`, `write`, `admin`, or application-specific
 admin labels must be issued by a separate caller-authorized path instead of
 being accepted from open caller-supplied prepare payloads.
@@ -383,13 +385,14 @@ Checks before authorization:
 - `claims.aud` is a subset of `cert.aud`
 - the protected Fleet accepts both token and cert audiences
 - `claims.grants` is a subset of `cert.grants`
-- `claims.subject` equals the transport caller
+- `claims.presenter` equals `claims.subject`
+- `claims.presenter` equals the transport caller
 - configured local role is present in `claims.grants`
 - endpoint-required scopes are present in the grant for the local role
 - delegated session subject binding is enforced before replacing caller identity
 
 No verification step checks for local proof presence, fetches root key material,
-or calls root. Forwarded user tokens fail with subject/caller mismatch because
+or calls root. Forwarded user tokens fail with presenter/caller mismatch because
 the downstream verifier sees the forwarding canister as caller.
 
 ## Configuration Contract

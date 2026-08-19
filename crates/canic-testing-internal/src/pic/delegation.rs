@@ -97,7 +97,6 @@ pub fn issue_delegated_token_from_active_proof_with_request_nonce(
             token_ttl_ns,
             request_nonce,
         )),
-        subject,
         aud,
         grants,
         ttl_ns: token_ttl_ns,

@@ -46,7 +46,6 @@ fn prepared_token(prepared_by: Principal, operation: u8) -> PreparedDelegatedTok
         proof: &proof,
         operation_id: [operation; 32],
         prepared_by,
-        subject: prepared_by,
         audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
         grants: vec![grant],
         ttl_ns: 50,

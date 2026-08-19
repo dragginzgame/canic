@@ -92,6 +92,7 @@ const fn delegated_token_verify_input<'a>(
 ) -> VerifyDelegatedTokenInput<'a> {
     VerifyDelegatedTokenInput {
         token: input.token,
+        expected_presenter: input.caller,
         local_fleet: ctx.local_fleet,
         local_role: Some(&ctx.local_role),
         ttl_limits: DelegatedAuthTtlLimits {
@@ -107,7 +108,7 @@ pub(super) fn verify_from_positive_cache<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenLocalContext,
     cache_key: [u8; 32],
-) -> Result<Option<VerifiedDelegatedToken>, InternalError> {
+) -> Result<Option<VerifiedApplicationAuthority>, InternalError> {
     if positive_cache_get(cache_key, input.now_ns).is_none() {
         return Ok(None);
     }
@@ -127,7 +128,7 @@ pub(super) fn verify_with_embedded_proofs<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenLocalContext,
     verifier_cfg: &'a AuthProofVerifierConfig,
-) -> Result<VerifiedDelegatedToken, InternalError> {
+) -> Result<VerifiedApplicationAuthority, InternalError> {
     validate_build_network_root_key_pair(
         verifier_cfg.build_network,
         &verifier_cfg.ic_root_public_key_raw,
