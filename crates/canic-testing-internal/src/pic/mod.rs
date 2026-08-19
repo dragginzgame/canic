@@ -28,7 +28,10 @@ pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,
     issue_delegated_token_from_active_proof_with_request_nonce, role_grant,
 };
-pub use fleet_registry::{ActiveComponentRegistryFixture, setup_active_component_registry};
+pub use fleet_registry::{
+    ActiveComponentRegistryFixture, setup_active_component_registry,
+    setup_fresh_active_component_registry,
+};
 pub use lifecycle::{
     CanicIcydbLifecycleFixture, LifecycleBoundaryFixture, UninstalledCanicFixture,
     icydb_participant_trap_wasm, install_canic_icydb_lifecycle_fixture,

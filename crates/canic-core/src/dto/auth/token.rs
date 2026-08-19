@@ -15,6 +15,7 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedTokenClaims {
+    pub presenter: Principal,
     pub subject: Principal,
     pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
@@ -44,7 +45,6 @@ pub struct DelegatedToken {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedTokenPrepareRequest {
     pub metadata: Option<AuthRequestMetadata>,
-    pub subject: Principal,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,

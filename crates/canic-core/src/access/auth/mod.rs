@@ -153,7 +153,7 @@ const fn dependency_unavailable(error: crate::InternalError) -> AccessError {
 mod tests {
     use super::*;
     use crate::{
-        ids::{CanisterRole, cap},
+        ids::CanisterRole,
         ops::runtime::metrics::auth::{
             AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
             AuthMetrics,
@@ -180,42 +180,6 @@ mod tests {
                 }
             })
             .unwrap_or(0)
-    }
-
-    #[test]
-    fn subject_binding_allows_matching_subject_and_caller() {
-        let sub = p(1);
-        let caller = p(1);
-        assert!(token::enforce_subject_binding(sub, caller).is_ok());
-    }
-
-    #[test]
-    fn subject_binding_rejects_mismatched_subject_and_caller() {
-        let sub = p(1);
-        let caller = p(2);
-        let err =
-            token::enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
-        assert!(matches!(err, AccessError::DelegatedTokenSubjectMismatch));
-    }
-
-    #[test]
-    fn required_scope_allows_when_scope_present() {
-        let scopes = vec![cap::READ.to_string(), cap::VERIFY.to_string()];
-        assert!(token::enforce_required_scope(Some(cap::VERIFY), &scopes).is_ok());
-    }
-
-    #[test]
-    fn required_scope_rejects_when_scope_missing() {
-        let scopes = vec![cap::READ.to_string()];
-        let err =
-            token::enforce_required_scope(Some(cap::VERIFY), &scopes).expect_err("expected denial");
-        assert!(matches!(err, AccessError::RequiredScopeMissing));
-    }
-
-    #[test]
-    fn required_scope_none_is_allowed() {
-        let scopes = vec![cap::READ.to_string()];
-        assert!(token::enforce_required_scope(None, &scopes).is_ok());
     }
 
     #[test]

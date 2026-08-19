@@ -454,6 +454,19 @@ mod tests {
                 ActiveComponentRegistryRuntime::Pooled(baseline) => baseline.pocket_ic(),
             }
         }
+
+        /// Start the HTTP gateway for a fresh, exclusively owned fixture.
+        ///
+        /// # Panics
+        ///
+        /// Panics when called for an immutable pooled fixture.
+        #[must_use]
+        pub fn start_http_gateway(&mut self) -> String {
+            let ActiveComponentRegistryRuntime::Fresh(pic) = &mut self.runtime else {
+                panic!("the HTTP gateway requires a fresh Component Registry fixture")
+            };
+            pic.make_live(None).to_string()
+        }
     }
 
     enum ActiveComponentRegistryRuntime {
@@ -1490,6 +1503,33 @@ mod tests {
     #[must_use]
     pub fn setup_active_component_registry() -> ActiveComponentRegistryFixture {
         acquire_active_component_registry()
+    }
+
+    /// Build a fresh active Component Registry fixture for exclusive native-agent use.
+    ///
+    /// This deliberately bypasses the immutable shared baseline so its caller
+    /// can finish setup before starting an authenticated HTTP ingress gateway.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the fresh fixture cannot be prepared.
+    #[must_use]
+    pub fn setup_fresh_active_component_registry() -> ActiveComponentRegistryFixture {
+        let fixture = setup_active_component_registry_fresh();
+        wait_for_role_overviews_ready(
+            fixture.pic(),
+            [
+                ("coordinator", fixture.coordinator, Principal::anonymous()),
+                ("root", fixture.root, Principal::anonymous()),
+                ("wasm_store", fixture.wasm_store, fixture.root),
+                ("issuer", fixture.issuer.canister_id, fixture.root),
+                ("verifier", fixture.verifier.canister_id, fixture.root),
+            ],
+            60,
+            "fresh active Component Registry fixture",
+        )
+        .expect("fresh active Component Registry roles must become ready");
+        fixture
     }
 
     #[cfg(test)]
@@ -2773,4 +2813,7 @@ mod tests {
     }
 }
 
-pub use tests::{ActiveComponentRegistryFixture, setup_active_component_registry};
+pub use tests::{
+    ActiveComponentRegistryFixture, setup_active_component_registry,
+    setup_fresh_active_component_registry,
+};

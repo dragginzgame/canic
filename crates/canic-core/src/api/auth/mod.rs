@@ -81,7 +81,7 @@ impl AuthApi {
             required_scopes,
             now_ns,
         })
-        .map(|verified| verified.subject)
+        .map(|verified| verified.subject())
         .map_err(Self::map_auth_error)
     }
 

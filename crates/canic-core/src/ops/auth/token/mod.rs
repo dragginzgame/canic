@@ -29,8 +29,8 @@ use super::{
             verify_chain_key_ecdsa_signature,
         },
         verify::{
-            VerifiedDelegatedToken, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
-            verify_delegated_token, verify_delegated_token_cached_proof_identity,
+            VerifyDelegatedTokenError, VerifyDelegatedTokenInput, verify_delegated_token,
+            verify_delegated_token_cached_proof_identity,
         },
     },
 };
@@ -44,6 +44,7 @@ use crate::{
         DelegationCert, RootKeyPolicyV1, RootProof,
     },
     ids::{BuildNetwork, CanisterRole, FleetKey},
+    model::auth::application_authorization::VerifiedApplicationAuthority,
     ops::{
         auth::{AuthScopeError, AuthValidationError},
         config::ConfigOps,
@@ -84,13 +85,6 @@ impl AuthOps {
         operation_id: [u8; 32],
         prepared_by: Principal,
     ) -> Result<PreparedDelegatedTokenIssuerProof, InternalError> {
-        if input.subject != prepared_by {
-            return Err(AuthValidationError::Auth(
-                "delegated token prepare subject must match caller".to_string(),
-            )
-            .into());
-        }
-
         let local = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
         retention::prune_and_admit(prepared_by, now_ns)?;
@@ -112,7 +106,6 @@ impl AuthOps {
             proof: &active_proof.proof,
             operation_id,
             prepared_by,
-            subject: input.subject,
             audience: input.audience,
             grants: input.grants,
             ttl_ns: input.ttl_ns,
@@ -164,7 +157,7 @@ impl AuthOps {
     /// Verify a self-contained delegated token without local proof lookup.
     pub fn verify_token(
         input: VerifyDelegatedTokenRuntimeInput<'_>,
-    ) -> Result<VerifiedDelegatedToken, InternalError> {
+    ) -> Result<VerifiedApplicationAuthority, InternalError> {
         DelegatedAuthMetrics::record_verify_started();
 
         let cfg = delegated_tokens_config_for_verification()?;

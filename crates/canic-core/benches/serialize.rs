@@ -110,6 +110,7 @@ fn self_describing_cbor<T: serde::Serialize>(value: &T) -> Vec<u8> {
 fn sample_delegated_token() -> DelegatedToken {
     let cert = sample_cert();
     let claims = DelegatedTokenClaims {
+        presenter: p(9),
         subject: p(9),
         issuer_pid: cert.issuer_pid,
         cert_hash: [8; 32],

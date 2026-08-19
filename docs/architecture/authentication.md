@@ -20,7 +20,8 @@ Canic has three auth surfaces:
    - registry role checks
 2. Delegated-token endpoint auth:
    - caller supplies a `DelegatedToken`
-   - endpoint guard validates token and binds `claims.subject == msg_caller`
+   - endpoint guard validates token and binds
+     `claims.presenter == claims.subject == msg_caller`
    - endpoint-required scope must appear in the token grant for the local role
 3. Role-attestation endpoint auth:
    - caller supplies a `SignedRoleAttestation`
@@ -192,6 +193,7 @@ pub struct DelegationProof {
 }
 
 pub struct DelegatedTokenClaims {
+    pub presenter: Principal,
     pub subject: Principal,
     pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
@@ -230,8 +232,10 @@ may use seconds; protocol DTOs and canonical encodings use `_ns` fields.
   ECDSA through the management canister.
 - `ChainKeyDelegationCertV1`: set by root as the issuer leaf and checked for
   coherence with `DelegationCert`.
-- `claims.subject`, `claims.aud`, `claims.grants`, token time fields, and
-  `nonce`: set by the issuer and signed by the issuer.
+- `claims.presenter`, `claims.subject`, `claims.aud`, `claims.grants`, token
+  time fields, and `nonce`: set by the issuer and signed by the issuer. The
+  presenter and subject are both derived from the authenticated preparation
+  caller.
 - `claims.ext`: opaque application data set by the issuer, signed as part of
   `DelegatedTokenClaims`, and interpreted only by application endpoints.
 - `claims.cert_hash`: hash of canonical `DelegationCert`; set by issuer and
@@ -240,8 +244,8 @@ may use seconds; protocol DTOs and canonical encodings use `_ns` fields.
 
 `nonce` is deterministic issuer-generated uniqueness material. It is not
 secret, not a replay key, and not an authorization input. The issuer derives it
-from caller, prepare operation id, subject, issuer, and selected cert hash
-without `raw_rand` or any management-canister call.
+from caller, prepare operation id, issuer, and selected cert hash without
+`raw_rand` or any management-canister call.
 
 ## 4. Canonical Encoding
 
@@ -404,7 +408,7 @@ Issuer issuance steps:
 6. Require an installed `ActiveDelegationProof` whose cert issuer is this
    canister.
 7. Prepare `DelegatedTokenClaims`, including deterministic issuer-generated
-   nonce material.
+   nonce material and caller-derived presenter/subject identity.
 8. Enforce:
    - root proof verifies
    - cert is currently valid
@@ -469,6 +473,8 @@ Verifier steps:
    - raw secp256k1 ECDSA signature is well formed, low-s, and verifies over
      `sha256(canonical_bytes(ChainKeyBatchHeaderV1))`
 5. Verify claims:
+   - `claims.presenter == claims.subject`
+   - `claims.presenter == msg_caller`
    - `claims.issuer_pid == cert.issuer_pid`
    - `claims.cert_hash == cert_hash`
    - token window is valid
@@ -489,13 +495,14 @@ Verifier steps:
 8. Verify transport caller binding:
 
 ```rust
-claims.subject == ic_cdk::caller()
+claims.presenter == claims.subject && claims.presenter == ic_cdk::caller()
 ```
 
 If all checks pass, the endpoint receives a delegated subject identity.
 
 `DelegatedToken` is not an on-behalf-of delegation mechanism. A user token is
-valid only when presented by `claims.subject` as `msg.caller()`.
+valid only when its signed presenter and subject are the same principal and
+that principal presents it as `msg.caller()`.
 Canister-to-canister forwarding intentionally fails because the downstream
 verifier sees the forwarding canister as `msg.caller()`. Service-to-service
 calls use `SignedRoleAttestation` or a future explicit on-behalf-of protocol.
@@ -702,7 +709,8 @@ Security boundaries:
 - token issuers must set `delegated_token_issuer = true`; only those canisters
   expose delegated-token prepare/get/install provisioning endpoints.
 - public delegated-token prepare self-issues only login/session material
-  (`session` and `verify` scopes) for the caller subject. Privileged
+  (`session` and `verify` scopes) for its authenticated caller, which becomes
+  both signed presenter and subject. Privileged
   application scopes must be issued through a caller-authorized path or checked
   against verifier-local application state after authentication.
 - protected endpoint verifiers must set `delegated_token_verifier = true`; the

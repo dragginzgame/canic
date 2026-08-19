@@ -105,7 +105,6 @@ fn role_attestation_max_ttl_ns() -> Result<u64, InternalError> {
 }
 
 pub(super) fn validate_token_prepare_public_request(
-    caller: Principal,
     request: &DelegatedTokenPrepareRequest,
 ) -> Result<(), InternalError> {
     let grants = request
@@ -113,8 +112,7 @@ pub(super) fn validate_token_prepare_public_request(
         .iter()
         .map(delegated_role_grant_policy)
         .collect::<Vec<_>>();
-    validate_public_delegated_token_prepare(caller, request.subject, &grants)
-        .map_err(map_token_prepare_policy_error)
+    validate_public_delegated_token_prepare(&grants).map_err(map_token_prepare_policy_error)
 }
 
 fn delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> DelegatedRoleGrantPolicy {

@@ -173,6 +173,7 @@ mod tests {
         let cert_hash = cert_hash(&cert).expect("cert hash");
         DelegatedToken {
             claims: DelegatedTokenClaims {
+                presenter: p(9),
                 subject: p(9),
                 issuer_pid: p(2),
                 cert_hash,

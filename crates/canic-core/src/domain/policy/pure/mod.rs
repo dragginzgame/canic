@@ -56,8 +56,9 @@ impl From<PolicyError> for InternalError {
                     codes::AUTHORITY_UNAUTHORIZED
                 }
                 auth::AuthPolicyError::RootIssuerFleetMismatch
-                | auth::AuthPolicyError::RootIssuerPolicyMismatch { .. }
-                | auth::AuthPolicyError::SubjectCallerMismatch => codes::AUTHORITY_CONFLICT,
+                | auth::AuthPolicyError::RootIssuerPolicyMismatch { .. } => {
+                    codes::AUTHORITY_CONFLICT
+                }
                 auth::AuthPolicyError::RootIssuerAudienceRequired
                 | auth::AuthPolicyError::RootIssuerGrantRequired
                 | auth::AuthPolicyError::RootIssuerRenewalGrantRequired => {

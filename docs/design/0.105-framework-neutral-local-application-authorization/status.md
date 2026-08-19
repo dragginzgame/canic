@@ -1,20 +1,21 @@
 # Canic 0.105 Implementation Status
 
-Date: 2026-08-18
+Date: 2026-08-19
 
 ## Status
 
-- State: accepted and resequenced directly after 0.104 as the third scheduled
-  application-safety prerequisite.
+- State: B1 accepted and B2 complete; B3 is active.
 - Outcome: one framework-neutral bridge from verified Canic token authority to
   a bounded synchronous local application decision.
-- Review state: the retained lifetime, client-access, predecessor,
-  lifecycle-composition and revocation decisions remain approved design
-  direction; B1 must refresh them against the exact released 0.104
-  predecessor.
-- Runtime impact: none from this scheduling cut.
-- Implementation approval: none. B1 requires accepted 0.104 closeout and
-  explicit maintainer promotion.
+- Review state: the lifetime, client-access, predecessor,
+  lifecycle-composition and revocation decisions are reproduced in the
+  retained B1 evidence. The maintainer accepted caller-derived presenter and
+  subject identity plus target-local typed replay-capacity denial.
+- Runtime impact: B2 hard-cuts the presenter-bearing token, canonical
+  application scope, verified authority projection and pure authorization
+  decisions. B1 itself added only test qualification and evidence.
+- Implementation approval: B3. B4-B7 remain blocked on their named
+  predecessors.
 - Surface posture: enabled managed roles add establish/clear command variants
   and one application-session status variant to the fixed 0.103 role surface.
   Infrastructure roles cannot enable the capability; no session-specific
@@ -26,9 +27,11 @@ Design:
 
 ## Scheduled Boundary
 
-0.105 is scheduled immediately after accepted 0.104 closeout. The scheduling decision
-introduces no IcyDB dependency and authorizes no evidence, runtime, public API,
-Candid, persisted state, package-version or release mutation.
+0.105 is scheduled immediately after accepted 0.104 closeout. B1 is now
+captured against exact released tag `v0.104.1`, peeled commit
+`464c186d9d82112d1ea4c7bdb1f47bcd5e5224a5`. It introduces no IcyDB
+dependency and makes no runtime, public API, Candid, persisted-state,
+package-version or release mutation.
 
 The retained 0.101.53 evidence recorded this predecessor shape:
 
@@ -40,9 +43,10 @@ The retained 0.101.53 evidence recorded this predecessor shape:
 - session lookup is bounded but is not yet the proposed read-only indexed
   foreign-guard contract.
 
-That evidence is historical input only. B1 must reproduce the inventory,
-contract and resource baseline against the exact released 0.104 source before
-any 0.105 runtime mutation.
+That evidence is historical input only. The current
+[B1 inventory and decision record](../../audits/working/0.105-local-application-authorization/README.md)
+and [resource baseline](../../audits/working/0.105-local-application-authorization/resource-baseline.md)
+replace it for 0.105 promotion review.
 
 The read-only IcyDB 0.226 design and Explorer feedback are requirements evidence
 only. Canic will not modify IcyDB, import it or name its SQL/schema surfaces in
@@ -86,9 +90,9 @@ B1 must complete seven evidence gates before B2:
 1. inventory and freeze complete propagation of the selected hard cut that adds
    a required signed presenter to token claims, binds it into the canonical
    claims hash and proof, requires it to equal the current caller in both
-   authorization lanes and removes the old presenter-less and
-   subject-equals-caller meanings; the authorized mutating batches perform the
-   propagation, not B1;
+   authorization lanes, derives subject from the same caller and removes the
+   old presenter-less and caller-nominated-subject meanings; the authorized
+   mutating batches perform the propagation, not B1;
 2. inventory and approve the canonical scope hard cut and application-scope
    issuance path;
 3. prove the 60-second establishment-proof limit and admitted issuance burst
@@ -116,9 +120,9 @@ repository and is not a 0.105 promotion dependency.
 
 | Batch | Outcome | Owner | Included evidence | Validation | State |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Current auth/session inventory and frozen generic contract | auth model/ops/access and host inventory | seven mandatory decisions, complete presenter-propagation inventory, authority-generation transition table, separate proof/session capacity evidence, exact predecessor inventory and duplicate-flow report; no runtime mutation | reproducible `E/A/D/B/H/R/C/M` baseline, native-agent acquisition journey and explicit decision record | Blocked on 0.104 and promotion |
-| B2 | Canonical scope, verified-authority projection and pure denial policy | model and policy | scope hard cut, narrowing, binding, replay and replacement policy | focused pure-policy and canonical-scope tests | Blocked on B1 |
-| B3 | Hard-cut scoped session state, index, bounds and lifecycle | model, ops and workflow | atomic state, proof-expiry-independent active sessions, exact-retry receipt, tombstones, capacity, cleanup and synchronous restore | focused state, proof/session-expiry, corruption, retry and reconstruction tests | Blocked on B2 |
+| B1 | Current auth/session inventory and frozen generic contract | auth model/ops/access and host inventory | seven mandatory decisions, complete presenter-propagation inventory, authority-generation transition table, separate proof/session capacity evidence, exact predecessor inventory and duplicate-flow report; no runtime mutation | reproducible `E/A/D/B/H/R/C/M` baseline, native-agent acquisition journey and explicit decision record | Accepted 2026-08-19 |
+| B2 | Canonical scope, verified-authority projection and pure denial policy | model and policy | scope hard cut, narrowing, binding, replay and replacement policy | focused pure-policy and canonical-scope tests | Completed 2026-08-19 |
+| B3 | Hard-cut scoped session state, index, bounds and lifecycle | model, ops and workflow | atomic state, proof-expiry-independent active sessions, exact-retry receipt, tombstones, capacity, cleanup and synchronous restore | focused state, proof/session-expiry, corruption, retry and reconstruction tests | Active |
 | B4 | Standard establish, clear and self-status variants | DTO, managed-role dispatch/macros and host configuration | enablement, protected default/maximum TTL, current role Candid and compact diagnostics descended from 0.102 | exact variant/surface checks and focused PocketIC operation tests | Blocked on B3 |
 | B5 | Public synchronous facade, generic consumer and native guard convergence | access and facade | unchanged-ABI fixture, pure local decision and duplicate removal | focused facade and generic PocketIC consumer tests | Blocked on B4 |
 | B6 | Operator inspection, security and performance gates | host/CLI, metrics and audit workflows | protected audit, generation invalidation, bounds and no-secret evidence | inspection, memory, instruction, restore and Wasm measurements | Blocked on B5 |
@@ -157,10 +161,22 @@ B1 must answer:
     raw-Wasm costs; and
 13. the precise declarative-authentication-profile reconciliation.
 
+## Accepted B1 Decisions
+
+The request no longer nominates a subject. Preparation derives both signed
+`presenter` and signed `subject` from the authenticated caller. Verification
+requires `subject == presenter == current transport caller`; no bearer,
+different-subject or compatibility lane remains.
+
+Replay admission is target-local. The target retains every live consumed proof
+and denies fresh growth with a typed capacity result at 256 live proofs per
+subject or 4,096 per Canister. It never evicts live authority and does not
+misrepresent issuer-local preparation limits as a Fleet-wide quota.
+
 ## Next Authorized Action
 
-No 0.105 evidence or implementation work is authorized by this resequencing
-cut. After accepted 0.104 closeout, explicit maintainer promotion may authorize
-B1 to reproduce the current surface and return the seven mandatory decisions
-for review. B2-B7 remain blocked on their named predecessors and separate
-mutation approval.
+Hard-cut B3's canonical scoped session and replay state in memory ID 34,
+including exact indexes, atomic replacement, durable exact receipt, tombstoned
+clear, bounded cleanup and synchronous reconstruction. B4-B7 remain blocked on
+their named predecessors. Do not add compatibility records, live tombstone
+eviction or a second authority generation.

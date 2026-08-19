@@ -120,7 +120,6 @@ pub(super) fn token_prepare_replay_payload_hash(
     request: &DelegatedTokenPrepareRequest,
 ) -> [u8; 32] {
     let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
-    hasher.hash_principal(&request.subject);
     hash_delegation_audience(&mut hasher, &request.aud);
     hash_delegated_role_grants(&mut hasher, &request.grants);
     hasher.hash_u64(request.ttl_ns);
@@ -365,6 +364,7 @@ mod tests {
         };
         let response = DelegatedTokenPrepareResponse {
             claims: DelegatedTokenClaims {
+                presenter: p(2),
                 subject: p(2),
                 issuer_pid: p(3),
                 cert_hash: [4; 32],

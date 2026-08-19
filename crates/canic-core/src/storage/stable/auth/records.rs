@@ -353,3 +353,68 @@ pub struct AuthStateData {
 impl AuthStateData {
     pub const STATE_CONTRACT_NAME: &'static str = "AuthStateData";
 }
+
+#[cfg(test)]
+mod released_resource_baseline {
+    use super::*;
+
+    fn encoded<T: Serialize>(value: &T) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(value, &mut bytes).expect("CBOR encoding");
+        bytes
+    }
+
+    fn principal(id: u64) -> Principal {
+        let mut bytes = [0_u8; 29];
+        bytes[..8].copy_from_slice(&id.to_be_bytes());
+        Principal::from_slice(&bytes)
+    }
+
+    fn session(id: u64) -> DelegatedSessionRecord {
+        DelegatedSessionRecord {
+            wallet_pid: principal(id),
+            delegated_pid: principal(id % 128),
+            issued_at: 1,
+            expires_at: 1_801,
+            bootstrap_token_fingerprint: Some([1; 32]),
+        }
+    }
+
+    fn binding(id: u64) -> DelegatedSessionBootstrapBindingRecord {
+        let mut token_fingerprint = [0_u8; 32];
+        token_fingerprint[..8].copy_from_slice(&id.to_be_bytes());
+        DelegatedSessionBootstrapBindingRecord {
+            wallet_pid: principal(id % 2_048),
+            delegated_pid: principal(id % 128),
+            token_fingerprint,
+            bound_at: 1,
+            expires_at: 61,
+        }
+    }
+
+    #[test]
+    fn released_session_and_replay_cbor_footprint_is_exact() {
+        let empty = AuthStateRecord::default();
+        let one_session = AuthStateRecord {
+            delegated_sessions: vec![session(1)],
+            ..AuthStateRecord::default()
+        };
+        let one_binding = AuthStateRecord {
+            delegated_session_bootstrap_bindings: vec![binding(1)],
+            ..AuthStateRecord::default()
+        };
+        let maximum = AuthStateRecord {
+            delegated_sessions: (0..2_048).map(session).collect(),
+            delegated_session_bootstrap_bindings: (0..4_096).map(binding).collect(),
+            ..AuthStateRecord::default()
+        };
+
+        let empty_bytes = encoded(&empty).len();
+        assert_eq!(empty_bytes, 257);
+        assert_eq!(encoded(&session(1)).len(), 176);
+        assert_eq!(encoded(&binding(1)).len(), 163);
+        assert_eq!(encoded(&one_session).len() - empty_bytes, 176);
+        assert_eq!(encoded(&one_binding).len() - empty_bytes, 163);
+        assert_eq!(encoded(&maximum).len(), 1_032_069);
+    }
+}

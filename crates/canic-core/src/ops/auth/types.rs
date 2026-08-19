@@ -22,7 +22,6 @@ use crate::{
 
 #[derive(Clone)]
 pub struct PrepareDelegatedTokenIssuerProofInput {
-    pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,

@@ -89,7 +89,12 @@ where
         VerifyDelegatedTokenError::IssuerPidMismatch => {
             InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
         }
-        VerifyDelegatedTokenError::TokenInvalidWindow
+        VerifyDelegatedTokenError::PresenterCallerMismatch
+        | VerifyDelegatedTokenError::PresenterSubjectMismatch => {
+            InternalError::public(crate::diagnostics::codes::AUTHORITY_CONFLICT)
+        }
+        VerifyDelegatedTokenError::ApplicationAuthority(_)
+        | VerifyDelegatedTokenError::TokenInvalidWindow
         | VerifyDelegatedTokenError::Canonical(_)
         | VerifyDelegatedTokenError::CertRules(_)
         | VerifyDelegatedTokenError::Audience(_) => {
@@ -129,7 +134,8 @@ pub(super) const fn delegated_auth_reason_from_verify_error<RootProofError, Issu
         VerifyDelegatedTokenError::AudienceNotSubset => {
             DelegatedAuthMetricReason::AudienceNotSubset
         }
-        VerifyDelegatedTokenError::Canonical(_) => DelegatedAuthMetricReason::Canonical,
+        VerifyDelegatedTokenError::ApplicationAuthority(_)
+        | VerifyDelegatedTokenError::Canonical(_) => DelegatedAuthMetricReason::Canonical,
         VerifyDelegatedTokenError::CertAudienceRejected => {
             DelegatedAuthMetricReason::CertAudienceRejected
         }
@@ -148,6 +154,12 @@ pub(super) const fn delegated_auth_reason_from_verify_error<RootProofError, Issu
             DelegatedAuthMetricReason::IssuerPidMismatch
         }
         VerifyDelegatedTokenError::MissingLocalRole => DelegatedAuthMetricReason::MissingLocalRole,
+        VerifyDelegatedTokenError::PresenterCallerMismatch => {
+            DelegatedAuthMetricReason::PresenterCallerMismatch
+        }
+        VerifyDelegatedTokenError::PresenterSubjectMismatch => {
+            DelegatedAuthMetricReason::PresenterSubjectMismatch
+        }
         VerifyDelegatedTokenError::RootProofInvalid(_) => {
             DelegatedAuthMetricReason::RootProofInvalid
         }

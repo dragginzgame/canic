@@ -650,10 +650,12 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "canic-testing-internal",
+ "ic-agent",
  "ic-testkit",
  "ic-timers",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -2255,6 +2257,7 @@ dependencies = [
  "k256 0.13.4",
  "leb128",
  "p256",
+ "pem",
  "pkcs8",
  "rand 0.10.2",
  "rangemap",

@@ -30,7 +30,6 @@ pub struct PrepareDelegatedTokenInput<'a> {
     pub proof: &'a DelegationProof,
     pub operation_id: [u8; 32],
     pub prepared_by: Principal,
-    pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
@@ -140,13 +139,13 @@ pub fn prepare_delegated_token(
     let nonce = delegated_token_nonce(
         input.prepared_by,
         input.operation_id,
-        input.subject,
         cert.issuer_pid,
         cert_hash,
     );
 
     let claims = DelegatedTokenClaims {
-        subject: input.subject,
+        presenter: input.prepared_by,
+        subject: input.prepared_by,
         issuer_pid: cert.issuer_pid,
         cert_hash,
         issued_at_ns: input.now_ns,
@@ -168,7 +167,6 @@ pub fn prepare_delegated_token(
 pub fn delegated_token_nonce(
     prepared_by: Principal,
     operation_id: [u8; 32],
-    subject: Principal,
     issuer_pid: Principal,
     cert_hash: [u8; 32],
 ) -> [u8; 16] {
@@ -176,7 +174,6 @@ pub fn delegated_token_nonce(
     hasher.update(TOKEN_NONCE_DOMAIN);
     hasher.update(prepared_by.as_slice());
     hasher.update(operation_id);
-    hasher.update(subject.as_slice());
     hasher.update(issuer_pid.as_slice());
     hasher.update(cert_hash);
     let digest: [u8; 32] = hasher.finalize().into();
@@ -260,7 +257,6 @@ mod tests {
             proof,
             operation_id: [4; 32],
             prepared_by: p(9),
-            subject: p(9),
             audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read"])],
             ttl_ns: 60,
@@ -308,6 +304,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(token.claims.subject, p(9));
+        assert_eq!(token.claims.presenter, p(9));
         assert_eq!(token.claims.issuer_pid, proof.cert.issuer_pid);
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 180);
@@ -316,7 +313,6 @@ mod tests {
             delegated_token_nonce(
                 p(9),
                 [4; 32],
-                p(9),
                 proof.cert.issuer_pid,
                 cert_hash(&proof.cert).unwrap()
             )
@@ -363,6 +359,7 @@ mod tests {
         verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: &token,
+                expected_presenter: token.claims.presenter,
                 local_fleet: crate::test::support::fleet_key(1),
                 local_role: Some(&role),
                 ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
@@ -401,6 +398,7 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token,
+                    expected_presenter: token.claims.presenter,
                     local_fleet: crate::test::support::fleet_key(1),
                     local_role: Some(&role),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
@@ -431,6 +429,7 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
+                    expected_presenter: token.claims.presenter,
                     local_fleet: crate::test::support::fleet_key(1),
                     local_role: Some(&role),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
@@ -467,6 +466,7 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
+                    expected_presenter: token.claims.presenter,
                     local_fleet: crate::test::support::fleet_key(1),
                     local_role: Some(&role),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {

@@ -463,6 +463,7 @@ verification. Conceptually, claims add profile identity:
 
 ~~~rust
 pub struct DelegatedTokenClaims {
+    pub presenter: Principal,
     pub subject: Principal,
     pub issuer_pid: Principal,
     pub profile: AuthProfileId,
