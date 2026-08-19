@@ -12,12 +12,13 @@ use canic::{
     protocol,
 };
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
-use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcStartupError, prelude::*};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, prelude::*};
 use std::{collections::HashMap, fs, time::Instant};
 
 use crate::pic::{
     CanicPicExt,
     canic::{adopt_sibling_wasm_store, create_and_install_pre_adoption_root},
+    startup::{PocketIcHarnessStartupError, try_start_pocket_ic},
 };
 
 #[derive(CandidType)]
@@ -124,7 +125,7 @@ pub fn setup_root_topology(
 
         progress(spec, "waiting for child canisters ready");
         let child_wait_started_at = Instant::now();
-        wait_for_children_ready(spec, &pic, &component_canisters);
+        wait_for_children_ready(spec, &pic, root_id, &component_canisters);
         progress_elapsed(spec, "child canisters ready", child_wait_started_at);
 
         progress(spec, "fetching root child snapshots");
@@ -133,7 +134,7 @@ pub fn setup_root_topology(
             .iter()
             .map(|entry| entry.pid)
             .collect::<Vec<_>>();
-        wait_for_snapshot_pids_ready(spec, &pic, &snapshot_pids);
+        wait_for_snapshot_pids_ready(spec, &pic, root_id, &snapshot_pids);
         progress_elapsed(spec, "root child snapshots ready", snapshot_started_at);
 
         let managed_store_pids = fetch_managed_store_pids(&pic, root_id);
@@ -154,17 +155,26 @@ pub fn setup_root_topology(
 
 // Wait until root reports `canic_status(Readiness)`.
 pub(super) fn wait_for_bootstrap(spec: &RootBaselineSpec<'_>, pic: &PocketIc, root_id: Principal) {
-    pic.wait_for_ready(root_id, spec.bootstrap_tick_limit, "root bootstrap");
+    pic.wait_for_ready(
+        root_id,
+        Principal::anonymous(),
+        spec.bootstrap_tick_limit,
+        "root bootstrap",
+    );
 }
 
 // Wait until every child canister reports `canic_status(Readiness)`.
 pub(super) fn wait_for_children_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &PocketIc,
+    root_id: Principal,
     component_canisters: &HashMap<CanisterRole, Principal>,
 ) {
     pic.wait_for_all_ready(
-        component_canisters.values().copied(),
+        component_canisters
+            .values()
+            .copied()
+            .map(|canister_id| (canister_id, root_id)),
         spec.bootstrap_tick_limit,
         "root children bootstrap",
     );
@@ -174,21 +184,26 @@ pub(super) fn wait_for_children_ready(
 pub(super) fn wait_for_snapshot_pids_ready(
     spec: &RootBaselineSpec<'_>,
     pic: &PocketIc,
+    root_id: Principal,
     snapshot_pids: &[Principal],
 ) {
     pic.wait_for_all_ready(
-        snapshot_pids.iter().copied(),
+        snapshot_pids
+            .iter()
+            .copied()
+            .map(|canister_id| (canister_id, root_id)),
         spec.bootstrap_tick_limit,
         "root registered child bootstrap",
     );
 }
 
 // Start one root baseline through the testkit's typed fallible builder boundary.
-fn try_start_root_pic() -> Result<PocketIc, PocketIcStartupError> {
-    PocketIcBuilder::new()
-        .with_ii_subnet()
-        .with_application_subnet()
-        .try_build()
+fn try_start_root_pic() -> Result<PocketIc, PocketIcHarnessStartupError> {
+    try_start_pocket_ic(
+        PocketIcBuilder::new()
+            .with_ii_subnet()
+            .with_application_subnet(),
+    )
 }
 
 const fn should_retry_root_pic_start(spec: &RootBaselineSpec<'_>, attempt: usize) -> bool {

@@ -2,11 +2,33 @@
 // Start macros
 // -----------------------------------------------------------------------------
 
+// Enforce the exact synchronous lifecycle-participant function type in the
+// destination crate. This remains separate so compile-fail documentation can
+// exercise the same coercion without expanding a complete canister lifecycle.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_typecheck_lifecycle_participant_pair {
+    ($lifecycle_init:path, $lifecycle_post_upgrade:path) => {
+        #[doc(hidden)]
+        const _: () = {
+            let _: fn() -> () = $lifecycle_init;
+            let _: fn() -> () = $lifecycle_post_upgrade;
+        };
+    };
+}
+
 // Lifecycle core for non-root Canic canisters.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_start_nonroot_lifecycle_core {
-    ($canister_role:expr $(, $init:block)?) => {
+    (
+        $canister_role:expr
+        $(, lifecycle_participant(
+            init = $lifecycle_init:path,
+            post_upgrade = $lifecycle_post_upgrade:path,
+        ))?
+        $(, init = $init:block)?
+    ) => {
         ::std::thread_local! {
             static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
                 ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
@@ -18,6 +40,11 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         const _: () = {
             let _ = canic_install;
         };
+
+        $($crate::__canic_typecheck_lifecycle_participant_pair!(
+            $lifecycle_init,
+            $lifecycle_post_upgrade
+        );)?
 
         #[doc(hidden)]
         fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>) {
@@ -35,7 +62,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                             canic_setup().await;
                             canic_install(args).await;
                         },
-                    ).detach();
+                    );
                 }
                 $(, $init)?
             );
@@ -66,6 +93,8 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 config_source,
                 config_path,
             );
+
+            $(($lifecycle_init)();)?
         }
 
         #[$crate::__internal::cdk::post_upgrade]
@@ -79,6 +108,8 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 config_path,
             );
 
+            $(($lifecycle_post_upgrade)();)?
+
             if active {
                 $crate::__canic_after_optional_start_init_hook!(
                     "canic:user:post_upgrade_block",
@@ -91,7 +122,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                                 canic_setup().await;
                                 canic_upgrade().await;
                             },
-                        ).detach();
+                        );
                     }
                     $(, $init)?
                 );
@@ -131,7 +162,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
                             canic_setup().await;
                             canic_install(args).await;
                         },
-                    ).detach();
+                    );
                 }
                 $(, $init)?
             );
@@ -183,7 +214,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
                                 canic_setup().await;
                                 canic_upgrade().await;
                             },
-                        ).detach();
+                        );
                     }
                     $(, $init)?
                 );
@@ -196,7 +227,19 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_start_local_lifecycle_core {
-    ($canister_role:expr $(, $init:block)?) => {
+    (
+        $canister_role:expr
+        $(, lifecycle_participant(
+            init = $lifecycle_init:path,
+            post_upgrade = $lifecycle_post_upgrade:path,
+        ))?
+        $(, init = $init:block)?
+    ) => {
+        $($crate::__canic_typecheck_lifecycle_participant_pair!(
+            $lifecycle_init,
+            $lifecycle_post_upgrade
+        );)?
+
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
             $crate::__internal::core::bootstrap::compiled::ConfigModel,
@@ -249,6 +292,8 @@ macro_rules! __canic_start_local_lifecycle_core {
                 config_path,
             );
 
+            $(($lifecycle_init)();)?
+
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:init_block",
                 {
@@ -260,7 +305,7 @@ macro_rules! __canic_start_local_lifecycle_core {
                             canic_setup().await;
                             canic_install(args).await;
                         },
-                    ).detach();
+                    );
                 }
                 $(, $init)?
             );
@@ -277,6 +322,8 @@ macro_rules! __canic_start_local_lifecycle_core {
                 config_path,
             );
 
+            $(($lifecycle_post_upgrade)();)?
+
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:post_upgrade_block",
                 {
@@ -288,7 +335,7 @@ macro_rules! __canic_start_local_lifecycle_core {
                             canic_setup().await;
                             canic_upgrade().await;
                         },
-                    ).detach();
+                    );
                 }
                 $(, $init)?
             );
@@ -300,7 +347,13 @@ macro_rules! __canic_start_local_lifecycle_core {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_root_lifecycle_core {
-    ($( $init:block )?) => {
+    (
+        $(lifecycle_participant(
+            init = $lifecycle_init:path,
+            post_upgrade = $lifecycle_post_upgrade:path,
+        ))?
+        $(, init = $init:block)?
+    ) => {
         ::std::thread_local! {
             static __CANIC_PREPARED_ROOT_INIT_COMPLETED:
                 ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
@@ -314,6 +367,11 @@ macro_rules! __canic_root_lifecycle_core {
         const _: () = {
             let _ = canic_install;
         };
+
+        $($crate::__canic_typecheck_lifecycle_participant_pair!(
+            $lifecycle_init,
+            $lifecycle_post_upgrade
+        );)?
 
         #[doc(hidden)]
         async fn __canic_run_prepared_root_init_block() {
@@ -335,7 +393,7 @@ macro_rules! __canic_root_lifecycle_core {
                     canic_setup().await;
                     canic_install().await;
                 },
-            ).detach();
+            );
         }
 
         #[doc(hidden)]
@@ -361,6 +419,8 @@ macro_rules! __canic_root_lifecycle_core {
                 config_source,
                 config_path,
             );
+
+            $(($lifecycle_init)();)?
         }
 
         #[$crate::__internal::cdk::post_upgrade]
@@ -372,6 +432,8 @@ macro_rules! __canic_root_lifecycle_core {
                 config_source,
                 config_path,
             );
+
+            $(($lifecycle_post_upgrade)();)?
 
             if active {
                 $crate::__canic_after_optional_start_init_hook!(
@@ -385,7 +447,7 @@ macro_rules! __canic_root_lifecycle_core {
                                 canic_setup().await;
                                 canic_upgrade().await;
                             },
-                        ).detach();
+                        );
                     }
                     $(, $init)?
                 );
@@ -409,7 +471,7 @@ macro_rules! __canic_after_optional_start_init_hook {
                 $init
                 $after
             },
-        ).detach();
+        );
     }};
 }
 
@@ -508,9 +570,35 @@ macro_rules! finish {
 /// - It may schedule async hooks via timers, but must never await them
 ///
 /// Its sole responsibility is to bridge IC lifecycle hooks to runtime code.
+///
+/// A lifecycle participant is an all-or-nothing pair of safe synchronous
+/// `fn() -> ()` paths. Partial declarations do not compile:
+///
+/// ```compile_fail
+/// fn after_init() {}
+/// canic::start!(lifecycle_participant(init = after_init,));
+/// ```
+///
+/// Async functions do not satisfy the participant type:
+///
+/// ```compile_fail
+/// async fn after_init() {}
+/// fn after_post_upgrade() {}
+/// canic::__canic_typecheck_lifecycle_participant_pair!(
+///     after_init,
+///     after_post_upgrade
+/// );
+/// ```
 #[macro_export]
 macro_rules! start {
-    ($(init = $init:block)? $(,)?) => {
+    (
+        $(lifecycle_participant(
+            init = $lifecycle_init:path,
+            post_upgrade = $lifecycle_post_upgrade:path $(,)?
+        ),)?
+        $(init = $init:block)?
+        $(,)?
+    ) => {
         $crate::__canic_require_finish!();
 
         #[doc(hidden)]
@@ -522,12 +610,22 @@ macro_rules! start {
             };
 
         #[cfg(canic_is_root)]
-        $crate::__canic_root_lifecycle_core!($($init)?);
+        $crate::__canic_root_lifecycle_core!(
+            $(lifecycle_participant(
+                init = $lifecycle_init,
+                post_upgrade = $lifecycle_post_upgrade,
+            ))?
+            $(, init = $init)?
+        );
 
         #[cfg(not(canic_is_root))]
         $crate::__canic_start_nonroot_lifecycle_core!(
             $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
-            $(, $init)?
+            $(, lifecycle_participant(
+                init = $lifecycle_init,
+                post_upgrade = $lifecycle_post_upgrade,
+            ))?
+            $(, init = $init)?
         );
 
         #[cfg(canic_is_root)]
@@ -564,13 +662,24 @@ macro_rules! start {
 /// metadata. Those should use [`start!`] and receive explicit lifecycle args.
 #[macro_export]
 macro_rules! start_local {
-    ($(init = $init:block)? $(,)?) => {
+    (
+        $(lifecycle_participant(
+            init = $lifecycle_init:path,
+            post_upgrade = $lifecycle_post_upgrade:path $(,)?
+        ),)?
+        $(init = $init:block)?
+        $(,)?
+    ) => {
         $crate::__canic_require_finish!();
         #[cfg(canic_is_root)]
         compile_error!("canic::start_local!() cannot be used for root canisters; use canic::start!()");
         $crate::__canic_start_local_lifecycle_core!(
             $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
-            $(, $init)?
+            $(, lifecycle_participant(
+                init = $lifecycle_init,
+                post_upgrade = $lifecycle_post_upgrade,
+            ))?
+            $(, init = $init)?
         );
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_emit_local_status_endpoint!();

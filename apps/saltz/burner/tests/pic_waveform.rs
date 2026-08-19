@@ -9,7 +9,7 @@ use std::{fs, time::Duration};
 use candid::{Principal, encode_one};
 use ic_testkit::{
     artifacts::{WasmBuildSpec, build_wasm_canisters_cached, test_target_dir},
-    pic::{CandidCallExt, PocketIc, PocketIcBuilder},
+    pic::{CandidCallExt, PocketIc, PocketIcBuilder, PocketIcBuilderExt, PocketIcStartupConfig},
 };
 use pocket_ic::CreateCanisterParams;
 use saltz_burner::{
@@ -20,17 +20,32 @@ use saltz_burner::{
 const BILLION: u128 = 1_000_000_000;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const PACKAGE: &str = "saltz_burner";
+const POCKET_IC_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[test]
 fn immutable_waveform_burns_exact_steps_and_abort_stops_future_burns() {
     let wasm = build_wasm();
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic();
 
     assert_arm_rejects_insufficient_funding(&pic, &wasm);
     assert_abort_stops_future_burns(&pic, &wasm);
     assert_fully_funded_waveform_completes_exactly(&pic, &wasm);
     assert_partially_funded_waveform_stops_at_balance_limit(&pic, &wasm);
     assert_unauthorized_trial_window_cannot_burn_a_waveform_step(&pic, &wasm);
+}
+
+fn start_pocket_ic() -> PocketIc {
+    let server_url = std::env::var("CANIC_POCKET_IC_SERVER_URL")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .expect("CANIC_POCKET_IC_SERVER_URL must name the governed PocketIC server");
+    PocketIcBuilder::new()
+        .with_application_subnet()
+        .try_build(PocketIcStartupConfig::connect(
+            server_url,
+            POCKET_IC_STARTUP_TIMEOUT,
+        ))
+        .unwrap_or_else(|error| panic!("start bounded PocketIC: {error}"))
 }
 
 fn assert_fully_funded_waveform_completes_exactly(pic: &PocketIc, wasm: &[u8]) {

@@ -20,7 +20,7 @@ use crate::{
         runtime::env::EnvOps,
         storage::authority_restore::AuthorityRestoreFenceOps,
     },
-    workflow::runtime::timer::{TimerError, TimerWorkflow},
+    workflow::runtime::timer::{TimerAuthorityWorkflow, TimerError},
 };
 
 /// Runtime coordinator for Fleet authority snapshot sealing and live resume.
@@ -40,70 +40,48 @@ impl AuthorityRestoreWorkflow {
         AuthorityRestoreFenceOps::status()
     }
 
-    /// Seal mutation and suspend Canic timers before the host stops and captures the Canister.
-    pub async fn prepare_snapshot(
+    /// Seal Root mutation after suspending its exact native timer owners.
+    pub async fn prepare_root_snapshot(
         request: AuthoritySnapshotRequest,
     ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
-        require_authority_runtime()?;
-        let authority = IcOps::canister_self();
-        let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
-        require_resumable_timer_state()?;
-        AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
-        TimerWorkflow::suspend_all().unwrap_or_else(|error| {
-            trap_timer_transition("suspend timers before sealing authority", error)
-        });
-        let status = AuthorityRestoreFenceOps::prepare(
-            request,
-            authority,
-            history_total_num_changes,
-            IcOps::now_nanos(),
-        )
-        .unwrap_or_else(|error| {
-            trap_authority_transition("commit sealed authority after timer suspension", error)
-        });
-        Ok(status)
+        require_root_authority_runtime()?;
+        prepare_snapshot_with(request, TimerAuthorityWorkflow::suspend_root).await
     }
 
-    /// Resume only the live Canister whose independent management history still matches the seal.
-    pub async fn resume_snapshot(
+    /// Seal Coordinator mutation only when it has no private lifecycle work in flight.
+    pub async fn prepare_coordinator_snapshot(
         request: AuthoritySnapshotRequest,
     ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
-        require_authority_runtime()?;
-        require_resumable_timer_state()?;
-        let authority = IcOps::canister_self();
-        let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
-        AuthorityRestoreFenceOps::validate_resume(request, authority, history_total_num_changes)?;
-        TimerWorkflow::resume_all().unwrap_or_else(|error| {
-            trap_timer_transition(
-                "restore timer participants while authority remains sealed",
-                error,
-            )
-        });
-        if EnvOps::is_root() {
-            crate::workflow::runtime::RuntimeWorkflow::start_all_root().unwrap_or_else(|error| {
-                trap_authority_transition(
-                    "reconcile root timer owners while authority remains sealed",
-                    error,
-                )
-            });
-        } else if !EnvOps::is_fleet_coordinator_runtime() {
-            crate::workflow::runtime::RuntimeWorkflow::start_all().unwrap_or_else(|error| {
-                trap_authority_transition(
-                    "reconcile non-root timer owners while authority remains sealed",
-                    error,
-                )
-            });
-        }
-        let status = AuthorityRestoreFenceOps::resume(
+        require_coordinator_authority_runtime()?;
+        prepare_snapshot_with(request, TimerAuthorityWorkflow::suspend_coordinator).await
+    }
+
+    /// Resume the live Root and reconstruct exact core-owned demand before opening mutation.
+    pub async fn resume_root_snapshot(
+        request: AuthoritySnapshotRequest,
+    ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+        require_root_authority_runtime()?;
+        resume_snapshot_with(
             request,
-            authority,
-            history_total_num_changes,
-            IcOps::now_nanos(),
+            TimerAuthorityWorkflow::resume_root,
+            crate::workflow::runtime::RuntimeWorkflow::start_all_root,
+            "reconcile root timer owners while authority remains sealed",
         )
-        .unwrap_or_else(|error| {
-            trap_authority_transition("open authority after timer reconstruction", error)
-        });
-        Ok(status)
+        .await
+    }
+
+    /// Resume the live Coordinator, which owns no fixed background timer claims.
+    pub async fn resume_coordinator_snapshot(
+        request: AuthoritySnapshotRequest,
+    ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+        require_coordinator_authority_runtime()?;
+        resume_snapshot_with(
+            request,
+            TimerAuthorityWorkflow::resume_coordinator,
+            || Ok(()),
+            "reconcile Coordinator timer owners while authority remains sealed",
+        )
+        .await
     }
 
     /// Apply the durable mutation fence before access evaluation on authority updates.
@@ -141,8 +119,63 @@ fn trap_authority_transition(context: &str, error: InternalError) -> ! {
     ))
 }
 
-fn require_resumable_timer_state() -> Result<(), InternalError> {
-    TimerWorkflow::require_resumable().map_err(|_error| InternalError::invariant())
+async fn prepare_snapshot_with(
+    request: AuthoritySnapshotRequest,
+    suspend: impl FnOnce() -> Result<(), TimerError>,
+) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+    let authority = IcOps::canister_self();
+    let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
+    AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
+    suspend().unwrap_or_else(|error| {
+        trap_timer_transition("suspend timers before sealing authority", error)
+    });
+    let status = AuthorityRestoreFenceOps::prepare(
+        request,
+        authority,
+        history_total_num_changes,
+        IcOps::now_nanos(),
+    )
+    .unwrap_or_else(|error| {
+        trap_authority_transition("commit sealed authority after timer suspension", error)
+    });
+    Ok(status)
+}
+
+async fn resume_snapshot_with(
+    request: AuthoritySnapshotRequest,
+    resume: impl FnOnce(),
+    reconcile: impl FnOnce() -> Result<(), InternalError>,
+    reconcile_context: &str,
+) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+    let authority = IcOps::canister_self();
+    let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
+    AuthorityRestoreFenceOps::validate_resume(request, authority, history_total_num_changes)?;
+    resume();
+    reconcile().unwrap_or_else(|error| trap_authority_transition(reconcile_context, error));
+    let status = AuthorityRestoreFenceOps::resume(
+        request,
+        authority,
+        history_total_num_changes,
+        IcOps::now_nanos(),
+    )
+    .unwrap_or_else(|error| {
+        trap_authority_transition("open authority after timer reconstruction", error)
+    });
+    Ok(status)
+}
+
+fn require_root_authority_runtime() -> Result<(), InternalError> {
+    if EnvOps::is_root() {
+        return Ok(());
+    }
+    Err(InternalError::forbidden())
+}
+
+fn require_coordinator_authority_runtime() -> Result<(), InternalError> {
+    if EnvOps::is_fleet_coordinator_runtime() {
+        return Ok(());
+    }
+    Err(InternalError::forbidden())
 }
 
 fn require_authority_runtime() -> Result<(), InternalError> {

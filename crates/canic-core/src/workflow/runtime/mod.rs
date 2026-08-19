@@ -4,6 +4,7 @@
 //! Does not own: lifecycle adapters, endpoint authorization, or stable schemas.
 //! Boundary: lifecycle workflows call runtime startup after environment restore.
 
+pub mod async_job;
 pub mod auth;
 pub mod authority_restore;
 pub mod cycles;

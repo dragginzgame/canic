@@ -112,11 +112,13 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         wait_for_children_ready(
             &self.spec,
             baseline.pocket_ic(),
+            baseline.metadata().root_id,
             &baseline.metadata().component_canisters,
         );
         wait_for_snapshot_pids_ready(
             &self.spec,
             baseline.pocket_ic(),
+            baseline.metadata().root_id,
             &baseline.metadata().snapshot_pids,
         );
         ReadinessReceipt::try_new("root-and-managed-children-ready").map_err(Into::into)
@@ -225,11 +227,13 @@ pub fn restore_root_cached_baseline(
     wait_for_children_ready(
         spec,
         baseline.pocket_ic(),
+        baseline.metadata().root_id,
         &baseline.metadata().component_canisters,
     );
     wait_for_snapshot_pids_ready(
         spec,
         baseline.pocket_ic(),
+        baseline.metadata().root_id,
         &baseline.metadata().snapshot_pids,
     );
     progress_elapsed(

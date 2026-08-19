@@ -18,7 +18,7 @@ use canic::{
 };
 use canic_testing_internal::pic::{
     CanicPicExt, CanicWasmBuildProfile, install_standalone_canister,
-    install_standalone_canister_on_pic, upgrade_args,
+    install_standalone_canister_on_pic, start_pocket_ic, upgrade_args,
 };
 use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
 use ic_testkit::pic::{
@@ -93,7 +93,7 @@ fn blob_storage_gateway_lifecycle_round_trips_under_pocketic() {
 // Verify the billing wrappers against a mock Cashier canister.
 #[test]
 fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let (cashier_id, probe_id) = install_billing_canisters(&pic);
     let gateway = principal(0x55);
 
@@ -121,7 +121,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
 // Verify status reports endpoint-visible billing readiness blockers.
 #[test]
 fn blob_storage_billing_status_matrix_reports_readiness_blockers_under_pocketic() {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let (cashier_id, probe_id) = install_billing_canisters(&pic);
     let gateway = principal(0x59);
 
@@ -146,7 +146,7 @@ fn blob_storage_billing_status_matrix_reports_readiness_blockers_under_pocketic(
 // Verify billing config, synced gateways, and sync metadata persist across upgrade.
 #[test]
 fn blob_storage_billing_state_survives_upgrade_under_pocketic() {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let (cashier_id, probe_id) = install_billing_canisters(&pic);
     let gateway = principal(0x56);
 
@@ -198,7 +198,7 @@ fn blob_storage_billing_state_survives_upgrade_under_pocketic() {
 // Verify missing billing config stays explicit and read-only across upgrade.
 #[test]
 fn blob_storage_missing_billing_config_status_survives_upgrade_under_pocketic() {
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let probe_id = install_probe_canister(&pic);
     let gateway = principal(0x58);
 
@@ -1627,7 +1627,12 @@ fn upgrade_probe_canister_on_pic(pic: &PocketIc, canister_id: Principal) {
         pic.upgrade_canister(canister_id, wasm.clone(), upgrade_args(), None)
     })
     .expect("probe upgrade should succeed");
-    pic.wait_for_ready(canister_id, READY_TICK_LIMIT, "blob storage post_upgrade");
+    pic.wait_for_ready(
+        canister_id,
+        Principal::anonymous(),
+        READY_TICK_LIMIT,
+        "blob storage post_upgrade",
+    );
 }
 
 fn install_retry_policy() -> RetryPolicy {

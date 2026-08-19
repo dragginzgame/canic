@@ -6,18 +6,18 @@ Date: 2026-08-18
 
 **IMPLEMENTATION CLOSEOUT PASS**
 
-Publication boundary:
+Initial publication boundary at audit time:
 
 **HOLD UNTIL THE MAINTAINER-OWNED RELEASE-IDENTITY FLOW**
 
-Highest unresolved severity: **P1**. The remediation worktree closes both P0
+Highest unresolved severity at audit time: **P1**. The remediation worktree closes both P0
 findings, the Store-pruning P1 and the documentation P2. The sole remaining
 finding is P1-2: package authority is still `0.102.2`, while the release target
 is `0.103.0`.
 
-Section 21 is the current remediation result and supersedes the initial
-failure matrix retained below. No version, tag, push or broad release gate was
-performed.
+Section 21 is the remediation result and supersedes the initial failure matrix
+retained below. The later maintainer-owned publication is recorded in section
+22 without rewriting the immutable audit identity.
 
 ## 2. Audited Source Identity
 
@@ -853,3 +853,18 @@ Broad workspace/release/PocketIC gates remain intentionally unrun under the
 repository testing policy. The implementation batch and changelog are ready
 for the maintainer-owned release flow; publication is not ready until P1-2 is
 resolved and that flow runs its complete validation gate.
+
+## 22. Publication Follow-up
+
+Date: 2026-08-18
+
+The maintainer-owned release flow resolved P1-2 after the audit and remediation
+evidence above. `v0.103.0` is an annotated tag object
+`b571f51a1e599677752b61b1f7ad1fae9e455186` peeled to release commit
+`89be28f8edf0d55035ddac0c864d6c99771fc49c`; remote `main` resolves to the
+same commit. Package authority at that commit is `0.103.0`.
+
+The historical HOLD and OPEN statements above describe their exact audit-time
+state. Their current disposition is **RESOLVED / PUBLISHED**. The successor
+boundary is the immutable `v0.103.0` tree, and 0.104 may now inventory and
+hard-cut timer ownership without reopening the released 0.103 protocol.

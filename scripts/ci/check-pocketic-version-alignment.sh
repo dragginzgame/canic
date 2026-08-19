@@ -43,4 +43,13 @@ if [ "$locked_version" != "$CANIC_POCKET_IC_VERSION" ]; then
     exit 1
 fi
 
+if [ -n "${POCKET_IC_BIN:-}" ]; then
+    if [ ! -f "$POCKET_IC_BIN" ] || [ ! -x "$POCKET_IC_BIN" ]; then
+        echo "PocketIC version alignment failed: POCKET_IC_BIN must be an executable file: $POCKET_IC_BIN" >&2
+        exit 1
+    fi
+    bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
+        sha256 "$CANIC_POCKET_IC_BINARY_SHA256_LINUX_X86_64" "$POCKET_IC_BIN"
+fi
+
 echo "PocketIC version alignment passed ($locked_version)"

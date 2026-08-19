@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use crate::role_contract::allocation::memory::{
     application_receipt::{APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID},
-    async_recovery::ASYNC_TIMER_RECOVERY_ID,
+    async_job_recovery::ASYNC_JOB_RECOVERY_ID,
     auth::AUTH_STATE_ID,
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
     blob_storage::{
@@ -254,8 +254,8 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreAsyncTimerRecovery,
-            async_timer_recovery_domains(),
+            StateAllocationKey::CoreAsyncJobRecovery,
+            async_job_recovery_domains(),
             Vec::new(),
         ),
     ]
@@ -508,18 +508,18 @@ fn authority_restore_fence_domains() -> Vec<StateDomainManifest> {
     )]
 }
 
-fn async_timer_recovery_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::async_recovery::{
-        AsyncTimerRecoveryData, AsyncTimerRecoveryRecord,
+fn async_job_recovery_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::async_job_recovery::{
+        AsyncJobRecoveryData, AsyncJobRecoveryRecord,
     };
 
     vec![state_domain(
-        "async_timer_recovery",
-        ASYNC_TIMER_RECOVERY_ID,
-        AsyncTimerRecoveryRecord::STATE_CONTRACT_NAME,
-        AsyncTimerRecoveryData::STATE_CONTRACT_NAME,
+        "async_job_recovery",
+        ASYNC_JOB_RECOVERY_ID,
+        AsyncJobRecoveryRecord::STATE_CONTRACT_NAME,
+        AsyncJobRecoveryData::STATE_CONTRACT_NAME,
         58,
-        "async_timer_recovery_restores_exact_serial_attempt_fences",
+        "async_job_recovery_restores_exact_serial_attempt_fences",
     )]
 }
 

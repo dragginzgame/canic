@@ -1,5 +1,5 @@
 // Category C - Artifact / deployment test (embedded config).
-// This test exercises the maintained application timer surface in PocketIC.
+// This test exercises direct application-owned native timer custody in PocketIC.
 
 use candid::{CandidType, Deserialize, Principal};
 use canic::{
@@ -36,12 +36,39 @@ enum RoleStatusResponse {
 }
 
 #[test]
+fn lifecycle_participant_reconstructs_native_timers_before_deferred_hooks() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let canister_id = fixture.install_runtime_probe_canister();
+
+    assert_application_timer_rows(&fixture.pic, canister_id);
+
+    wait_for_fixture_ready(&fixture.pic, canister_id, "install");
+
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture
+        .pic
+        .retry_install_code(install_retry_policy(), || {
+            fixture.pic.upgrade_canister(
+                canister_id,
+                fixture.runtime_probe_wasm.clone(),
+                upgrade_args(),
+                None,
+            )
+        })
+        .expect("runtime probe upgrade should succeed");
+
+    assert_application_timer_rows(&fixture.pic, canister_id);
+
+    wait_for_fixture_ready(&fixture.pic, canister_id, "post_upgrade");
+}
+
+#[test]
 fn application_timers_cancel_and_recur_only_after_completion() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
-    fixture
-        .pic
-        .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
+    wait_for_fixture_ready(&fixture.pic, canister_id, "install");
 
     fixture.pic.advance_time(Duration::from_secs(6));
     tick(&fixture.pic, 4);
@@ -67,13 +94,14 @@ fn application_timers_cancel_and_recur_only_after_completion() {
 
     let status = runtime_status(&fixture.pic, canister_id);
     assert_eq!(status.timer_inventory.status, RuntimeCheckStatus::Pass);
+    report_timer_inventory(&status);
     let interval = status
         .timers
         .iter()
         .find(|timer| {
-            timer.owner == "canic"
-                && timer.subsystem.starts_with("application-")
-                && timer.name.ends_with("::timer_interval")
+            timer.owner == "runtime-probe"
+                && timer.subsystem == "application"
+                && timer.name == "timer-interval"
         })
         .expect("live interval registration");
     assert_eq!(interval.registration, TimerRegistrationStatus::Scheduled);
@@ -84,9 +112,10 @@ fn application_timers_cancel_and_recur_only_after_completion() {
     );
     assert_interval_performance(interval);
     assert!(
-        status.timers.iter().all(|timer| {
-            !timer.name.ends_with("::timer_once") && !timer.name.ends_with("::timer_cancelled")
-        }),
+        status
+            .timers
+            .iter()
+            .all(|timer| { timer.name != "timer-once" && timer.name != "timer-cancelled" }),
         "terminal RemoveWhenStopped timers and their observations must leave inventory"
     );
     assert!(
@@ -100,7 +129,8 @@ fn application_timers_cancel_and_recur_only_after_completion() {
         status
             .timers
             .iter()
-            .any(|timer| { timer.subsystem == "placement" && timer.name == "receipt_ack" })
+            .all(|timer| { timer.subsystem != "placement" || timer.name != "receipt_ack" }),
+        "an empty receipt index must not declare placement acknowledgement"
     );
     assert!(status.timers.iter().any(|timer| {
         timer.owner == "companion-framework"
@@ -128,21 +158,44 @@ fn application_timers_cancel_and_recur_only_after_completion() {
     assert_eq!(log_retention.condition, TimerProcessCondition::Idle);
     assert_eq!(log_retention.next_due_at_ns, None);
     assert_eq!(log_retention.executions_since_runtime_start, 0);
-    let cycle_topup = status
+    assert!(
+        status
+            .timers
+            .iter()
+            .all(|timer| timer.subsystem != "cycles" || timer.name != "topup"),
+        "a profile without AutomaticTopup must not declare the top-up registration"
+    );
+}
+
+fn report_timer_inventory(status: &CanicRuntimeStatus) {
+    let scheduled = status
         .timers
         .iter()
-        .find(|timer| timer.subsystem == "cycles" && timer.name == "topup")
-        .expect("cycle top-up runtime status");
-    assert_eq!(
-        cycle_topup.registration,
-        TimerRegistrationStatus::Unregistered
+        .filter(|timer| timer.registration == TimerRegistrationStatus::Scheduled)
+        .count();
+    eprintln!(
+        "runtime-probe timer inventory: declared={} scheduled={scheduled}",
+        status.timers.len()
     );
-    assert_eq!(cycle_topup.condition, TimerProcessCondition::Idle);
-    assert_eq!(cycle_topup.next_due_at_ns, None);
-    assert_eq!(cycle_topup.executions_since_runtime_start, 0);
 }
 
 fn assert_interval_performance(interval: &canic::dto::runtime::CanisterTimerStatus) {
+    eprintln!(
+        "runtime-probe interval performance: scheduler_samples={} work_samples={} latest={:?} maximum={:?} total={} max_wasm_growth={:?} max_stable_growth={:?}",
+        interval
+            .scheduler_performance
+            .instruction_samples_since_runtime_start,
+        interval
+            .work_performance
+            .instruction_samples_since_runtime_start,
+        interval.work_performance.instructions_latest,
+        interval.work_performance.instructions_maximum,
+        interval
+            .work_performance
+            .instructions_total_since_runtime_start,
+        interval.work_performance.maximum_wasm_memory_growth_pages,
+        interval.work_performance.maximum_stable_memory_growth_pages,
+    );
     assert_eq!(
         interval
             .scheduler_performance
@@ -179,9 +232,7 @@ fn assert_interval_performance(interval: &canic::dto::runtime::CanisterTimerStat
 fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
-    fixture
-        .pic
-        .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
+    wait_for_fixture_ready(&fixture.pic, canister_id, "install");
 
     let before_invalid = runtime_status(&fixture.pic, canister_id).timers.len();
     let invalid: Result<bool, Error> = fixture
@@ -212,66 +263,10 @@ fn timer_registration_capacity_and_invalid_identity_are_leak_free() {
 }
 
 #[test]
-fn async_recovery_watchdog_rekicks_an_expired_durable_attempt() {
-    let fixture = install_lifecycle_boundary_fixture();
-    let canister_id = fixture.install_runtime_probe_canister();
-    fixture
-        .pic
-        .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
-
-    let started: Result<(), Error> = fixture
-        .pic
-        .update_candid(canister_id, "begin_trapped_async_recovery_probe", ())
-        .expect("begin trapped async recovery attempt");
-    started.expect("start async recovery probe");
-
-    fixture.pic.advance_time(Duration::from_secs(31));
-    tick(&fixture.pic, 12);
-    let first: Result<(u64, bool, Vec<[u8; 32]>), Error> = fixture
-        .pic
-        .query_candid(canister_id, "trapped_async_recovery_probe_status", ())
-        .expect("query first trapped async recovery attempt");
-    assert_eq!(first.expect("first recovery status").0, 1);
-
-    fixture.pic.advance_time(Duration::from_secs(31));
-    tick(&fixture.pic, 12);
-    let recovered: Result<(u64, bool, Vec<[u8; 32]>), Error> = fixture
-        .pic
-        .query_candid(canister_id, "trapped_async_recovery_probe_status", ())
-        .expect("query recovered async attempt");
-    let (continuations, cleared, operation_ids) = recovered.expect("recovered async status");
-    assert_eq!(
-        continuations, 2,
-        "watchdog must dispatch one exact takeover"
-    );
-    assert_eq!(operation_ids.len(), 2);
-    assert_ne!(operation_ids[0], [0; 32]);
-    assert_eq!(
-        operation_ids[0], operation_ids[1],
-        "bounded takeover must reuse the exact durable operation identity"
-    );
-    assert!(
-        cleared,
-        "watchdog must re-kick the owner and clear its exact expired attempt"
-    );
-
-    let status = runtime_status(&fixture.pic, canister_id);
-    let watchdog = status
-        .timers
-        .iter()
-        .find(|timer| timer.subsystem == "async_recovery" && timer.name == "watchdog")
-        .expect("async recovery watchdog status");
-    assert_eq!(watchdog.registration, TimerRegistrationStatus::Scheduled);
-    assert_eq!(watchdog.condition, TimerProcessCondition::Active);
-}
-
-#[test]
 fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() {
     let fixture = install_lifecycle_boundary_fixture();
     let canister_id = fixture.install_runtime_probe_canister();
-    fixture
-        .pic
-        .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
+    wait_for_fixture_ready(&fixture.pic, canister_id, "install");
 
     let idle = intent_cleanup_status(&fixture.pic, canister_id);
     assert_eq!(idle.registration, TimerRegistrationStatus::Unregistered);
@@ -305,9 +300,7 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
             )
         })
         .expect("upgrade should succeed");
-    fixture
-        .pic
-        .wait_for_ready(canister_id, READY_TICK_LIMIT, "post_upgrade");
+    wait_for_fixture_ready(&fixture.pic, canister_id, "post_upgrade");
 
     let rebuilt = intent_cleanup_status(&fixture.pic, canister_id);
     assert_eq!(rebuilt.registration, TimerRegistrationStatus::Scheduled);
@@ -393,6 +386,21 @@ fn counts(pic: &PocketIc, canister_id: Principal) -> (u64, u64, u64) {
     result.expect("timer probe counts application result")
 }
 
+fn assert_application_timer_rows(pic: &PocketIc, canister_id: Principal) {
+    let status = runtime_status(pic, canister_id);
+    for (owner, subsystem, name) in [
+        ("companion-framework", "inventory", "visible"),
+        ("runtime-probe", "application", "timer-interval"),
+    ] {
+        assert!(
+            status.timers.iter().any(|timer| {
+                timer.owner == owner && timer.subsystem == subsystem && timer.name == name
+            }),
+            "missing synchronously reconstructed native timer {owner}:{subsystem}:{name}"
+        );
+    }
+}
+
 fn timer_metrics(pic: &PocketIc, canister_id: Principal) -> Vec<MetricEntry> {
     let response: Result<RoleStatusResponse, Error> = pic
         .query_candid(
@@ -436,6 +444,15 @@ fn tick(pic: &PocketIc, count: usize) {
     for _ in 0..count {
         pic.tick();
     }
+}
+
+fn wait_for_fixture_ready(pic: &PocketIc, canister_id: Principal, context: &str) {
+    pic.wait_for_ready(
+        canister_id,
+        Principal::anonymous(),
+        READY_TICK_LIMIT,
+        context,
+    );
 }
 
 fn install_retry_policy() -> RetryPolicy {

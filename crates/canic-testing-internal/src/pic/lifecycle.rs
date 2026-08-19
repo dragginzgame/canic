@@ -4,6 +4,14 @@ use canic::{
     dto::{
         abi::v1::{CanisterInitAuthority, CanisterInitPayload},
         component_deployment::ProtectedComponentDeployment,
+        component_registry::{
+            ComponentDirectoryHead, ComponentDirectoryProvenance,
+            ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
+        },
+        fleet_registry::{
+            FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
+            FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
+        },
     },
     ids::{
         ComponentBinding, ComponentInstanceId, ComponentSpecAdmission, ComponentSpecId,
@@ -20,18 +28,27 @@ use ic_testkit::{
 };
 use std::{
     path::{Path, PathBuf},
-    sync::Once,
+    sync::{Once, OnceLock},
 };
 
 use super::{
-    artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters},
+    artifacts::{
+        CanicWasmBuildProfile, build_internal_test_wasm_canisters,
+        build_internal_test_wasm_canisters_with_env,
+    },
     canic::managed_test_init_identity,
+    startup::start_pocket_ic,
 };
 
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 3] = ["canister_test", "intent_authority", "runtime_probe"];
 const LIFECYCLE_CANISTER_CONFIG_PATH: &str = "apps/test/test-configs/root-sharding.toml";
+const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
+    "canisters/test/canic_icydb_lifecycle_probe/canic.toml";
 static BUILD_ONCE: Once = Once::new();
+static COMBINED_BUILD_ONCE: Once = Once::new();
+const LIFECYCLE_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP", "1");
+const ICYDB_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_ICYDB_PARTICIPANT_TRAP", "1");
 
 ///
 /// LifecycleBoundaryFixture
@@ -43,6 +60,37 @@ pub struct LifecycleBoundaryFixture {
     pub canic_wasm: Vec<u8>,
     pub runtime_probe_wasm: Vec<u8>,
     pub authority_wasm: Vec<u8>,
+}
+
+///
+/// CanicIcydbLifecycleFixture
+///
+
+pub struct CanicIcydbLifecycleFixture {
+    pub pic: PocketIc,
+    pub root: Principal,
+    pub wasm: Vec<u8>,
+}
+
+impl CanicIcydbLifecycleFixture {
+    /// Install the exact managed Canic/IcyDB composition probe while it remains Prepared.
+    #[must_use]
+    pub fn install_composed_canister(
+        &self,
+    ) -> (Principal, ComponentRuntimeDirectoryPreparationRequest) {
+        let canister_id = self.pic.create_canister();
+        self.pic.add_cycles(canister_id, INSTALL_CYCLES);
+        let payload =
+            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
+        let directory_request = directory_request(&payload);
+        self.pic.install_canister(
+            canister_id,
+            self.wasm.clone(),
+            encode_init_args(payload),
+            None,
+        );
+        (canister_id, directory_request)
+    }
 }
 
 impl LifecycleBoundaryFixture {
@@ -121,7 +169,25 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
             "intent_authority",
             CanicWasmBuildProfile::Fast.target_dir_name(),
         ),
-        pic: PocketIcBuilder::new().with_application_subnet().build(),
+        pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
+    }
+}
+
+/// Build the exact published-IcyDB composition probe and start one fresh PocketIC.
+#[must_use]
+pub fn install_canic_icydb_lifecycle_fixture() -> CanicIcydbLifecycleFixture {
+    let workspace_root = workspace_root();
+    let target_dir = test_target_dir(&workspace_root, "pic-canic-icydb-lifecycle-wasm");
+    build_combined_canister_once(&workspace_root);
+
+    CanicIcydbLifecycleFixture {
+        root: Fake::principal(1),
+        wasm: read_wasm(
+            &target_dir,
+            "canic_icydb_lifecycle_probe",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        ),
+        pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
     }
 }
 
@@ -141,6 +207,52 @@ pub fn upgrade_args() -> Vec<u8> {
     encode_one(()).expect("encode upgrade")
 }
 
+/// Build the managed lifecycle fixture whose post-upgrade participant traps.
+#[must_use]
+pub fn lifecycle_participant_trap_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let target_dir = test_target_dir(&workspace_root, "pic-lifecycle-participant-trap-wasm");
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[LIFECYCLE_PARTICIPANT_TRAP_ENV],
+        );
+        read_wasm(
+            &target_dir,
+            "canister_test",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        )
+    })
+    .clone()
+}
+
+/// Build the combined lifecycle fixture whose IcyDB participant path traps after restoration.
+#[must_use]
+pub fn icydb_participant_trap_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let target_dir = test_target_dir(&workspace_root, "pic-icydb-participant-trap-wasm");
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &["canic_icydb_lifecycle_probe"],
+            CanicWasmBuildProfile::Fast,
+            &[ICYDB_PARTICIPANT_TRAP_ENV],
+        );
+        read_wasm(
+            &target_dir,
+            "canic_icydb_lifecycle_probe",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        )
+    })
+    .clone()
+}
+
 // Build the dedicated lifecycle-boundary canisters once into the shared test target dir.
 fn build_canisters_once(workspace_root: &Path) {
     BUILD_ONCE.call_once(|| {
@@ -154,12 +266,34 @@ fn build_canisters_once(workspace_root: &Path) {
     });
 }
 
+// Build the combined framework lifecycle probe once into its dedicated test target dir.
+fn build_combined_canister_once(workspace_root: &Path) {
+    COMBINED_BUILD_ONCE.call_once(|| {
+        let target_dir = test_target_dir(workspace_root, "pic-canic-icydb-lifecycle-wasm");
+        build_internal_test_wasm_canisters(
+            workspace_root,
+            &target_dir,
+            &["canic_icydb_lifecycle_probe"],
+            CanicWasmBuildProfile::Fast,
+        );
+    });
+}
+
 // Encode the standard valid non-root init payload for the lifecycle-boundary test canister.
 fn init_payload(canister_id: Principal, root_pid: Principal) -> CanisterInitPayload {
+    init_payload_for_config(canister_id, root_pid, LIFECYCLE_CANISTER_CONFIG_PATH)
+}
+
+// Construct one exact managed init payload from the fixture's embedded Canic config.
+fn init_payload_for_config(
+    canister_id: Principal,
+    root_pid: Principal,
+    config_path: &str,
+) -> CanisterInitPayload {
     let identity = managed_test_init_identity();
     let component_spec =
         ComponentSpecId::try_from(String::from("test")).expect("test Component Spec ID");
-    let config = AppConfigSnapshot::load(&workspace_root().join(LIFECYCLE_CANISTER_CONFIG_PATH))
+    let config = AppConfigSnapshot::load(&workspace_root().join(config_path))
         .expect("load lifecycle fixture config");
     let spec = config
         .component_topology()
@@ -225,6 +359,46 @@ fn init_payload(canister_id: Principal, root_pid: Principal) -> CanisterInitPayl
             binding: binding.clone(),
         }),
         authority: CanisterInitAuthority::Component { root, binding },
+    }
+}
+
+// Derive the exact root-issued Directory authority for the just-installed managed binding.
+fn directory_request(payload: &CanisterInitPayload) -> ComponentRuntimeDirectoryPreparationRequest {
+    let CanisterInitAuthority::Component { root, binding } = &payload.authority else {
+        panic!("combined lifecycle fixture requires Component authority");
+    };
+    ComponentRuntimeDirectoryPreparationRequest {
+        operation_id: payload.install_id,
+        authority: ComponentRuntimeDirectoryAuthority {
+            fleet: FleetDirectorySnapshot {
+                provenance: FleetDirectoryProvenance {
+                    registry: FleetRegistryVersion {
+                        authority: root.authority.clone(),
+                        revision: 1,
+                        content_hash: [0x71; 32],
+                    },
+                    source_fleet_subnet_root: root.fleet_subnet_root,
+                },
+                fleet_subnet_roots: vec![FleetSubnetRootDirectoryEntry {
+                    placement_subnet: root.placement_subnet,
+                    fleet_subnet_root: root.fleet_subnet_root,
+                    status: FleetSubnetRootStatus::Active,
+                }],
+                services: Vec::new(),
+            },
+            component: ComponentDirectoryHead {
+                provenance: ComponentDirectoryProvenance {
+                    component: binding.clone(),
+                    source_fleet_subnet_root: root.fleet_subnet_root,
+                    component_registry_revision: 1,
+                    component_registry_content_hash: [0x72; 32],
+                    synchronized_at_ns: 1,
+                },
+                descendant_count: 0,
+            },
+            component_group: None,
+        },
+        direct_children: Vec::new(),
     }
 }
 

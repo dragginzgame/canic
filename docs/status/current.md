@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-18
+Last updated: 2026-08-19
 
 ## Purpose
 
@@ -14,15 +14,11 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Release
 
-- Workspace package-version authority is the root `Cargo.toml`. It remains
-  `0.102.2`, the latest published release, at
-  `8cf4723cecd7579cbe3304b980c63b1bc3969d68`. The single current changelog
-  target is `0.103.0`; it is not published or package-versioned yet.
-- Release-truth warning: neither local Git nor `origin` has a `v0.103.*` tag,
-  so the former stray-tag collision is closed. The governed minor-version flow
-  advances the current `0.102.2` package to the exact `0.103.0` target and owns
-  the complete validation gate. Do not publish before that flow completes.
-- The published release owns the completed 161-reason register, typed mappings,
+- The root `Cargo.toml` is the sole live workspace package-version authority;
+  this handoff deliberately does not mirror its value. Immutable local and
+  remote tag refs own publication truth, and tag presence determines whether a
+  changelog section is an open draft or a published patch.
+- The completed role-owned Candid release owns the 161-reason register, typed mappings,
   compact public wire and flat `code + name` release baseline. B1 census/count
   coupling is absent from permanent tests. The open closeout-correction batch
   makes that released baseline tamper-evident, preserves the four genuine
@@ -30,25 +26,25 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
 - Scheduled application-safety and estate path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 Coordinator-backed root funding](../design/0.107-coordinator-backed-root-funding/status.md), [0.108 reusable estates plus application retirement](../design/0.108-fleet-subnet-canister-estates/status.md), [0.109 stateful Fleet release adoption](../design/0.109-stateful-fleet-release-adoption/status.md) and [0.110 generic Fleet observatory](../design/0.110-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
-- Release boundary: 0.102 is reinstall-only and is not rolling-compatible with
-  pre-0.102. Every Canic-owned canister in a Fleet must come from one admitted
-  release set before activation. Same-release interruption recovery, exact
-  retry, backup and restore remain required. Scheduled 0.109 is the first
-  explicit one-predecessor-to-one-successor exception; no current release is
-  adoptable until that line is implemented and published.
+- Release boundary: every pre-1.0 transition is reinstall-only. Every
+  Canic-owned canister in a Fleet must come from one admitted release set
+  before activation. Same-release interruption recovery, exact retry, backup
+  and restore remain required. Scheduled 0.109 is the first explicit
+  one-predecessor-to-one-successor exception; no current release is adoptable
+  until that line is implemented and published.
 
 ## Current Progress
 
-0.102.2 is published. Its read-only closeout audit confirmed the compact wire,
-typed runtime, host-only catalogue and Wasm boundary, then found one dynamic
-data-loss defect plus released-baseline, ordinary-rendering and release-truth
-closeout defects. The bounded correction is implemented before any 0.103 B2
-mutation: one typed cycles-funding preflight response owns the four genuine
-caller-continuation values; the other 64 provisional B1 owner proposals are
+The compact diagnostic and role-owned Candid lines are published. Their
+read-only closeout audit confirmed the compact wire, typed runtime, host-only
+catalogue and Wasm boundary, then closed one dynamic data-loss defect plus
+released-baseline, ordinary-rendering and release-reliability defects. One
+typed cycles-funding preflight response owns the four genuine caller-
+continuation values; the other 64 provisional B1 owner proposals are
 reconciled as local typed state, caller-derived data, existing authority or
 deliberately dropped operator convenience. The release guard reads the exact
-0.102.2 reason ledger Git object, including retirement state, and the central
-host decoder now renders known diagnostics automatically.
+released reason-ledger Git object, including retirement state, and the central
+host decoder renders known diagnostics automatically.
 
 B1's 2,895 labels exposed the rejected unreleased 991-row
 tuple taxonomy. The accepted frontier is 161 registered causes and ten local
@@ -59,11 +55,11 @@ codes, producer-only registered codes, `Error { code: u16 }`, code-first
 released `code + name`; it neither reads B1 evidence nor freezes row counts,
 and the ledger rejects fields beyond its six maintained fields.
 
-Scheduled 0.103 owns role methods and autonomous operations. Its B1 evidence
+The completed 0.103 line owns role methods and autonomous operations. Its B1 evidence
 was accepted on 2026-08-17: the immutable `v0.102.2` baseline freezes 207 methods across
 representative Root/managed profiles and canonical Coordinator/Store
 interfaces, separated into 188 Canic-owned, three external-standard and 16
-fixture-owned methods. B2-B7 are complete in the unreleased worktree: the closed
+fixture-owned methods. B2-B7 are complete in the published source: the closed
 capability boundary, immutable Overview and bounded shared-request DTOs now
 drive the exact managed, Root, Coordinator and Store status dispatchers. Exact
 Candid/profile identity survives release metadata, verified Root Store
@@ -111,14 +107,39 @@ every Root/Coordinator variant before protected work, requires complete
 immutable host/CLI protocol identity before transport, compiles Store lanes
 only for Store and its exact Root caller, and reconciles active names/counts.
 Focused all-target compilation, warning-denied Clippy, binding/auth/replay
-tests and four-role artifact scans pass. Only the maintainer-owned package bump
-and complete release gate remain.
+tests and four-role artifact scans pass. The human-owned package bump, complete
+release gate, annotated tag and atomic push are complete.
 
 Scheduled 0.104 owns the `ic-timers` consumer/domain async-job recovery hard
 cut, a maintained native-timer adoption guide/fixture and the synchronous
 framework-neutral lifecycle participant required to compose Canic with IcyDB.
+Its exact 0.103.0 source/provider baseline, consumer and native-claim census,
+memory-ID-60 disposition and downstream propagation contract are complete as
+B1 evidence and were accepted on 2026-08-18. B2 was accepted the same day: the
+public application timer macros, facade, handle and transient claims are
+deleted without aliases, callbacks consume native provider vocabulary, and
+the runtime probe owns its application registrations directly. B3 is accepted.
+Memory ID 60 now contains only checked domain
+attempt leases and cycle-top-up's exact retry generation; pending timer
+commands, schedule ownership, generic recovery deadlines, copied retry streaks
+and terminal provider state are deleted. The exact worst-case record encoding
+is 589 bytes. B4 is implementation-complete: auth renewal, automatic cycle
+top-up and placement acknowledgement now own lazy native registrations and
+exact domain recovery. The representative provider inventory falls from seven
+rows to five and its measured interval path uses about 5.1% fewer instructions.
+Same-builder product Wasm is 18,030 raw and 5,457 gzip bytes larger than B3,
+so no B4 size win is claimed. B5 is accepted: the remaining central claim and
+participant registries are deleted, pool/lifecycle/snapshot owners retain
+exact native custody, the representative interval path falls another 1.9514%
+and the four-role product total falls to 19,123,973 raw and 4,959,574 gzip
+bytes. B6 is accepted on locked `ic-testkit 0.8.8`: the maintained native
+guide and direct-provider fixture replace the removed facade examples, and
+ordinary managed, Root and local start macros accept one safe paired
+synchronous lifecycle participant after Canic restoration and before deferred
+work. Exact product raw bytes remain unchanged from B5; deterministic gzip
+falls one byte and the measured interval differences remain noise-scale.
 Repository-only 0.106 B1 evidence may continue, but its final
-Candid/timer/state inventory must reconcile before B2.
+Candid/timer/state inventory must reconcile before its next source batch.
 
 Scheduled 0.105 now owns framework-neutral caller-bound scoped local
 application sessions directly after 0.104; presentation supplies no semantic
@@ -172,12 +193,29 @@ and exact operation authority now pass focused evidence. Managed profiles
 expose only their cfg-selected command/status variants; Store exposes
 command/status plus its two admitted byte lanes. Cross-cutting presentation,
 legacy-emitter deletion, current-surface residue guards and the count/Wasm
-closeout are complete. The maintainer-owned release/version flow is the
-remaining 0.103 boundary. 0.104 remains sequenced behind the published 0.103
-boundary. 0.104 now also owns native downstream timer adoption and synchronous
-lifecycle composition. 0.105 local authorization follows it without an
-observatory dependency. 0.106 remains evidence-only until accepted B1,
-0.103/0.104 reconciliation and an approved external run plan. 0.107 requires
+closeout and human-owned release flow are complete. The maintainer accepted
+0.104 B1 and B2, then continuation accepted B3-B8. B3 hard-cuts
+generic timer recovery into four closed
+domain async-job fences, retains a generated exact retry identity only for
+cycle top-up and removes every stable provider mirror. Its bounded-state,
+property, interruption and exact Wasm/provider evidence is accepted. B4 moves
+auth, cycles and placement out of central fixed-job selection while preserving
+snapshot custody and exact recovery; its current-graph evidence passes on
+the then-locked `ic-testkit` 0.8.7. B5 deletes the remaining pool/lifecycle/
+snapshot registries, restores role-pruned authority linkage and passes on
+`ic-testkit` 0.8.8. B6 publishes direct native adoption and adds the paired
+synchronous lifecycle participant with exact restore-before-participant-before-
+defer ordering, Prepared/inactive execution and trap rollback. B7 composes that
+participant with exact published IcyDB 0.230.2 and proves one timer provider,
+one lifecycle export pair, separate reconstructed rows, rollback and corrected
+retry. B8 replaces lexical counts with semantic ownership classification
+across applications, crates and executable fixtures, then closes the graph,
+inventory, documents and measurements. The 0.104 implementation batch is
+complete.
+0.105 local authorization
+follows it without an observatory dependency. 0.106 remains evidence-only
+until accepted B1, 0.103/0.104 reconciliation and an approved external run
+plan. 0.107 requires
 its accepted inputs and own proof; 0.108 requires completed 0.107 plus
 application-retirement evidence; 0.109 requires accepted 0.108 and an exact
 released predecessor; and 0.110 requires accepted 0.109 closeout. Deferred
@@ -198,16 +236,16 @@ Coordinator/Store build and warning-denied package checks pass. The complete
 2026-08-16 `make validate` remains historical push
 evidence and is not rerun during focused development.
 
-The open CI-reliability batch removes the contradictory tag-only green signal,
-uses Cargo as the sole live package-version authority, adds a post-bump release
-candidate guard, gates expensive jobs behind preflight/security and reports
-ordinary versus serial PocketIC timing separately. Local validation and CI's
-preflight, security and Rust-check jobs now collect every independent failure
-inside their barriers, retain complete logs and do not admit expensive work
-after a cheap failure.
+The release-reliability foundation removes the contradictory tag-only green
+signal, uses Cargo as the sole live package-version authority, adds a post-bump
+release candidate guard, gates expensive jobs behind preflight/security and
+reports ordinary versus serial PocketIC timing separately. Local validation
+and CI's preflight, security and Rust-check jobs now collect every independent
+failure inside their barriers, retain complete logs and do not admit expensive
+work after a cheap failure.
 Workspace tests continue across selected binaries and suites, while the serial
 PocketIC group preserves one warm Wasm build state instead of clearing it
-between suites. The internal harness now consumes `ic-testkit` 0.8.0's
+between suites. The internal harness now consumes `ic-testkit` 0.8.8's
 collect-all Wasm batch report and compatible-spec input snapshot reuse, so one
 bad package no longer prevents later independent Wasm acquisitions. Configured
 deployment builds collect invalid roles before compilation and ask Cargo to
@@ -221,7 +259,7 @@ CI ownership are guarded. Targeted actionlint, ShellCheck, release/current-
 document guards, release-flow tests and plan-only test-lane checks pass; the
 complete suite has not been rerun.
 
-Focused `ic-testkit` 0.8.0 adoption checks compile the internal harness,
+Focused `ic-testkit` adoption checks compile the internal harness,
 integration package and Saltz test target under the locked dependency graph.
 The payload-limit PocketIC suite passes with structured standalone-pool
 outcomes and exact cache paths. A warm three-spec lifecycle acquisition reused
@@ -229,17 +267,195 @@ one compatible input snapshot: only the first spec resolved Cargo inputs, the
 two later specs reported zero input-resolution time, and the focused lifecycle
 test passed.
 
+The current follow-up locks `ic-testkit` 0.8.8, hard-cuts the removed anonymous
+diagnostic printer, passes exact controllers into labeled collect-all bounded
+status/log reports and aggregates same-tick readiness query failures across
+deployment targets. The compact failure report now exposes each diagnostic
+target's elapsed time and the total sequential batch time. Failed Wasm entries
+provide their caller label, index, typed error, primary phase, partial phase
+timings and elapsed time directly to Canic's aggregate error. Wasm progress,
+success and failure reporting no longer
+depend on a parallel package-label slice, and selected-graph semantic identity
+permits reuse across unrelated host-only workspace dependency changes. Version
+0.8.8 makes the optional cross-call session's source-immutability assertion
+explicit; Canic deliberately stays on ordinary per-call validation because it
+does not hold a genuine repository write-exclusion guard. Every
+repository PocketIC builder now uses bounded instance construction against one
+runner-owned server shared across the serial lane. The runner verifies the
+exact binary checksum, bounds port readiness, retains startup output in its
+private scratch and owns cleanup; a cheap source guard rejects direct unbounded
+startup.
+The underlying 0.8.4 migration passed isolated affected-package compile,
+warning-denied Clippy, three artifact tests and the two-test payload-limit
+PocketIC suite; that cold run finished in 38.99 seconds. After advancing the
+lock to 0.8.5, all three direct consumers pass live all-target compilation and
+warning-denied Clippy, and the focused artifact tests pass. An isolated
+payload-limit rerun compiled and completed its 34.98-second cold Wasm build,
+but a concurrently owned PocketIC process prevented a new server from binding;
+the run was stopped without claiming runtime evidence. After advancing to
+0.8.6, all three direct consumers pass all-target compilation in 36.03 seconds;
+warning-denied Clippy passes for the complete internal/Saltz targets and the
+three directly affected Canic integration targets, and all three artifact
+tests pass. The wider Canic integration Clippy command reaches a separately
+owned 0.104 timer test that is 103 lines against its 100-line lint limit, which
+this dependency batch does not alter. The payload-limit suite built its new
+semantic-key artifact in 28.52 seconds, and the immediate rerun reused it in
+436.6 milliseconds. An intermediate use of 0.8.6's managed spawn path then
+failed in about 21 milliseconds because the upstream helper
+pre-created its `--port-file`; the exact PocketIC 15 binary exits zero and
+silently when that path already exists, while a genuinely absent path proceeds
+to bind. `ic-testkit` 0.8.7 repairs that upstream spawn boundary with a private
+startup directory and absent server-owned port path. The final Canic flow
+starts one runner-owned server with a new port path and uses bounded testkit
+`connect` calls. All three direct consumers compile on the locked graph, the
+four timer-authority journeys pass in 6.89 seconds with one shared server, and
+the runner retains and terminates that exact child on every handled exit before
+the scratch cleanup fallback runs. Its numeric direct-child port path also
+keeps forced cleanup invocation-scoped after an abrupt runner failure. Exact
+and deliberately mismatched server binaries are
+accepted and rejected respectively, and PocketIC alignment, locked offline
+metadata, the workspace inventory/startup guard, release-integrity contract,
+cheap current-document guard, focused ShellCheck, formatting and diff hygiene
+pass. The complete suite was not rerun.
+
+Focused 0.104 B2 validation removes the public timer facade and compiles the
+runtime probe as a direct `ic-timers` consumer. Warning-denied affected-package
+Clippy, 1,122 core unit tests, timer inventory guards, pool ownership tests,
+facade/endpoint tests and the four-test timer-authority PocketIC journey pass.
+The 24-hour simulated window records zero callbacks for idle capability-pruned
+cycle top-up, intent cleanup and log retention. The native application
+interval reports two work samples, 25,145 latest/maximum and 50,248 total
+instructions with zero Wasm or stable-memory page growth; the retained B1
+evidence has no numeric pre-cut sample, so this is not presented as a causal
+performance delta. The same canonical fast builder produces a four-role total
+of 19,416,477 raw and 5,030,322 gzip bytes, increases of 2.7225% and 3.4326%
+from `v0.103.0`. The isolated direct-native runtime probe instead shrinks by
+9,782 raw and 736 deterministic-gzip bytes. The complete suite was not rerun.
+
+Focused 0.104 B3 validation passes 1,118 core library tests, exact state and
+role contract checks, timer workflow and pool tests, warning-denied affected-
+package Clippy, both source-inventory guards and all four timer-authority
+PocketIC journeys. The expired-business-lease fixture commits one trapped
+continuation, admits one takeover after expiry and clears only the successor's
+exact attempt. The interval remains at two work samples with 50,179 total
+instructions and zero memory-page growth; its sub-percent differences from B2
+are not a causal performance claim. The watchdog takeover records one 21,503-
+instruction scheduler sample and one 51,476-instruction work sample with zero
+memory-page growth, for which no B2 numeric baseline exists. The canonical
+four-role product total is 19,398,431 raw and 5,021,151 gzip bytes: 0.0929% and
+0.1823% smaller than B2, but 2.6270% and 3.2440% larger than `v0.103.0`. All
+four product builds and the final instrumentation-free interruption journey
+pass. The complete suite was not rerun.
+
+Focused 0.104 B4 validation passes 1,118 of 1,119 core library tests with one
+ignored, both source-inventory guards, warning-denied Clippy for core, control
+plane, facade, runtime probe and the timer-authority target, the real restored-
+Root snapshot/resume journey and all four canonical product builds. All four
+timer-authority PocketIC journeys passed on the B4 source. The representative
+inventory falls from seven rows to five because an absent `AutomaticTopup`
+capability and empty receipt index reserve no native declarations. Its two-
+callback interval path falls from 50,179 to 47,607 instructions. The watchdog
+records 21,515 scheduler and 51,221 work instructions, both noise-scale against
+B3. The four-role total is 19,416,461 raw and 5,026,608 gzip bytes, 0.0929% and
+0.1087% larger than B3 but still 16 raw and 3,714 gzip bytes smaller than B2.
+The current `ic-testkit` 0.8.7 graph reruns all four journeys successfully in
+6.89 seconds through one runner-owned shared server. The complete suite was
+not rerun.
+
+Focused 0.104 B5 validation deletes the remaining central native-claim union
+and snapshot/recovery participant registries. Intent cleanup, log retention
+and Root Canister-pool maintenance retain exact native custody; one Root
+watchdog dispatches expired core and pool attempts. Lifecycle deferrals are
+direct remove-when-stopped claims, while Root and Coordinator authority
+snapshots use distinct exact paths so Coordinator does not link Root owners.
+The three timer-authority journeys pass in 6.04 seconds on locked
+`ic-testkit 0.8.8`; exact Coordinator snapshot/restore passes in 11.49 seconds,
+and the real restored-Root journey proves the pool/watchdog rows are scheduled
+live, unregistered while sealed, reconstructed after live resume and absent
+from a restored sealed snapshot. Its two-sample application interval falls
+from 47,607 to 46,678 total instructions with zero memory-page growth. The
+canonical four-role total falls 292,488 raw and 67,034 gzip bytes from B4 to
+19,123,973 raw and 4,959,574 gzip bytes. Coordinator falls about 6.0% from B4
+after a first measurement exposed and the role split removed accidental Root
+workflow linkage. The total remains 1.1750% raw and 1.9779% gzip above
+published `v0.103.0`. Targeted compilation, warning-denied Clippy, source
+guards, pool/protocol tests and all nine canonical fast artifacts pass. The
+complete suite was not rerun.
+
+Focused 0.104 B6 validation passes both public compile-fail examples, the six
+lifecycle-boundary guards, the managed endpoint and protocol-surface guards,
+and warning-denied Clippy for every touched facade, fixture, harness and
+integration target. Managed Prepared/repeated-upgrade behavior, participant
+trap rollback with an unchanged committed module hash, corrected retry and the
+real Root participant path pass focused PocketIC checks. The final four-test
+timer-authority journey passes in 7.86 seconds on locked `ic-testkit 0.8.8` and
+PocketIC 15. The managed, Root and runtime-probe artifacts retain exact B5
+Candid and normalized canister-export sets with one `canister_init` and one
+`canister_post_upgrade` each. The canonical product total is 19,123,973 raw
+and 4,959,573 gzip bytes: raw is exactly unchanged from B5 and gzip is one byte
+smaller. Its two-sample interval records 46,593 total instructions with zero
+memory-page growth; the sub-percent B5 differences are noise-scale. The
+complete suite was not rerun.
+
+Focused 0.104 B7 validation resolves one `ic-timers 0.6.1` package for Canic
+and exact published `icydb = "=0.230.2"`. Normal and trapping composition
+artifacts retain identical Candid and exactly one lifecycle export pair. The
+focused PocketIC journey passes in 19.74 seconds, proving Prepared and Active
+same-release reconstruction, distinct Canic/IcyDB rows, participant rollback
+with an unchanged committed module hash and corrected retry. The final
+test-only probe is 5,959,481 raw and 1,519,923 deterministic-gzip bytes; it
+changes no shipped product role. Locked affected-package compilation,
+warning-denied Clippy, the lifecycle payload unit check and the workspace-test
+inventory guard also pass. The complete suite was not rerun.
+
+Focused 0.104 B8 validation replaces the lexical call-count guard with a
+45-file semantic ownership contract and closes the exact one-provider lock and
+nine-manifest declaration set. All six semantic provider, ownership,
+documentation, raw-access, wait and snapshot guards pass. The four
+timer-authority journeys pass in 14.01 seconds, and the exact isolated
+measurement journey passes warm in 3.24 seconds. It reports four managed rows,
+one scheduled, no top-up row and the exact B6 interval result: two work
+samples, 46,593 total instructions and zero memory-page growth. The focused
+Root restore journey passes in 47.50 seconds and reports four declared rows,
+two scheduled while active and zero while sealed, with no top-up row. The
+fresh-target four-role product total remains 19,123,973 raw bytes exactly and
+moves by seven compression-noise bytes to 4,959,566 gzip. Targeted
+warning-denied Clippy passes for the semantic guard, timer target and internal
+Root harness. The six lifecycle-boundary guards, changelog governance and
+current-document semantics also pass. The complete suite was not rerun.
+
 The follow-up test-harness correction retains standalone package/profile Wasm
 bytes once per test process and returns typed, named role-overview observations
 from pooled readiness. The formerly failing restored Component Registry proof
-now passes with an 835 ms warm baseline restore. The five-test blob-storage
-suite acquires its two distinct Wasm packages once each and completes in 15.95
-seconds, down from the retained 22.98-second run that performed eight
-acquisitions; the two-test payload-limit suite likewise performs one acquisition
-instead of two.
+now passes with an 835 ms warm baseline restore. With the then-locked
+`ic-testkit` 0.8.2 graph warm, the five-test blob-storage suite completes in
+12.45 seconds;
+its two Wasm acquisitions take 824 ms in total and report zero builds plus two
+reuses. This is an observed 3.50-second, 21.9% reduction from the retained
+15.95-second warm run, not an isolated causal benchmark. Its separate cold run
+completes in 45.42 seconds, including 32.258 seconds of artifact acquisition.
+The four-test timer-authority suite completes warm in 7.18 seconds with 414 ms
+of artifact acquisition, zero builds and three reuses; its cold artifact build
+is retained separately from that runtime signal.
 
-Separate timer-recovery checks remain useful pre-0.104 evidence but do not
-establish completion of the 0.104 ownership hard cut.
+The exact previously failing active-Registry deployment proof passes in 30.81
+seconds warm. Store, Root and issuer Wasm reuse take 956, 731 and 475 ms,
+respectively. Its 268.25-second cold run includes approximately 165.995 seconds
+of one-time artifact builds. This directly exercises controller-bound,
+multi-canister readiness diagnostics without conflating the warm deployment
+path with compilation.
+
+No production Canic canister source changed in this follow-up, so there is no
+product-role Wasm size delta to claim. The touched `runtime_probe` test fixture
+remains exactly 3,673,361 raw bytes; deterministic gzip moves from 910,593 to
+910,615 bytes, a 22-byte or approximately 0.0024% increase, while the artifact
+hash changes with the build-input fingerprint. That is test-fixture compression
+noise rather than a shipped-role size regression.
+
+The completed B2-B8 timer checks establish the public surface, stable domain
+recovery, fixed-owner custody, pool/lifecycle/snapshot propagation, downstream
+adoption, synchronous lifecycle composition and exact IcyDB qualification.
+Semantic ownership and measured closeout are complete.
 
 Focused 0.103 B3 validation builds Runtime-only, Sharding/AutomaticTopup,
 Root signer/non-signer and Store profiles through the canonical artifact
@@ -388,11 +604,15 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-Run the maintainer-owned minor release flow to advance the root package
-authority from `0.102.2` to `0.103.0`. The open `0.103.0` changelog records the
-completed B2-B7 hard cut, but no agent-owned version, tag or push is authorized.
-Begin 0.104 only after that release boundary is published. Do not rerun the
-broad census/full suite or reopen 0.102 with JSON, generic handling metadata,
+The bounded CI/test-harness feedback batch is implementation-complete with
+targeted compilation, warning-denied Clippy, artifact checks, deployment and
+timer PocketIC evidence, changelog governance, shell lint and document checks.
+The maintainer-owned complete validation and release flow remain separate. No
+further 0.104 implementation batch remains. Keep the open 0.104.0 changelog
+entry and workspace version under that human-owned flow. Scheduled 0.105 B1
+still requires explicit maintainer promotion after accepted 0.104 closeout and
+is not authorized by ordinary continuation.
+Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.
 

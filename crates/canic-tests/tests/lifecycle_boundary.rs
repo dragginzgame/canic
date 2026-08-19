@@ -12,7 +12,8 @@ use canic::{
     protocol::CANIC_STATUS,
 };
 use canic_testing_internal::pic::{
-    install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
+    install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_trap_wasm,
+    upgrade_args,
 };
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
 use std::time::Duration;
@@ -108,6 +109,55 @@ fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
             .pic
             .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     }
+}
+
+#[test]
+fn lifecycle_participant_trap_rolls_back_before_corrected_retry() {
+    let trap_wasm = lifecycle_participant_trap_wasm();
+    let fixture = install_lifecycle_boundary_fixture();
+    let canic_id = fixture.install_canic_canister();
+    let committed_module_hash = fixture
+        .pic
+        .canister_status(canic_id, None)
+        .expect("query committed managed Wasm before failed upgrade")
+        .module_hash;
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+
+    let error = fixture
+        .pic
+        .upgrade_canister(canic_id, trap_wasm, upgrade_args(), None)
+        .expect_err("the test lifecycle participant must trap");
+    assert!(
+        error
+            .to_string()
+            .contains("managed lifecycle participant requested a test trap"),
+        "unexpected lifecycle participant failure: {error}"
+    );
+    assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
+    assert_eq!(
+        fixture
+            .pic
+            .canister_status(canic_id, None)
+            .expect("query managed Wasm after failed upgrade")
+            .module_hash,
+        committed_module_hash,
+        "failed post-upgrade must retain the previously committed Wasm"
+    );
+
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture
+        .pic
+        .retry_install_code(install_retry_policy(), || {
+            fixture
+                .pic
+                .upgrade_canister(canic_id, fixture.canic_wasm.clone(), upgrade_args(), None)
+        })
+        .expect("corrected lifecycle participant retry should succeed");
+    assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
 }
 
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {

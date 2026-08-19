@@ -4,7 +4,7 @@
 //! Does not own: stable record schemas, workflow orchestration, or endpoint DTOs.
 //! Boundary: ops layer between workflows and stable storage facades.
 
-pub mod async_recovery;
+pub mod async_job_recovery;
 pub mod auth;
 pub mod authority_restore;
 mod canister;

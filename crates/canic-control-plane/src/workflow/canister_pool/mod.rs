@@ -7,13 +7,12 @@ use crate::ops::{
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
 use canic_core::{
-    api::timer::{TimerApi, TimerDirective, TimerHandle, TimerRunResult},
+    api::timer::{TimerApi, TimerError as AuthorityTimerError},
     cdk::types::{Cycles, Principal},
     control_plane_support::{
         error::InternalError,
-        ops::async_recovery::{
-            AsyncRecoveryAttempt, AsyncRecoveryClaim, AsyncRecoveryCompletion, AsyncRecoveryOwner,
-            AsyncTimerRecoveryOps,
+        ops::async_job_recovery::{
+            AsyncJobAttempt, AsyncJobClaim, AsyncJobCompletion, AsyncJobOwner, AsyncJobRecoveryOps,
         },
         ops::ic::{
             IcOps,
@@ -31,75 +30,70 @@ use canic_core::{
     },
     ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
 };
-use std::{cell::RefCell, time::Duration};
+use ic_timers::{
+    AfterCompletionRegistration, TimerCadence, TimerCompletion, TimerCompletionOutcome,
+    TimerDirective, TimerIdentity, TimerReconcileState, TimerRunResult, WatchdogDecision,
+    WatchdogRegistration, WatchdogRunResult, reconcile_after_completion, reconcile_watchdog,
+};
+use std::{
+    cell::{Cell, RefCell},
+    time::Duration,
+};
 
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
 const MAINTENANCE_LEASE_NS: u64 = 5 * 60 * 1_000_000_000;
 const MAX_STATUS_PAGE_ENTRIES: u16 = 256;
 
 thread_local! {
-    static MAINTENANCE_TIMER: RefCell<Option<TimerHandle>> = const { RefCell::new(None) };
+    static MAINTENANCE_TIMER: RefCell<Option<AfterCompletionRegistration>> = const { RefCell::new(None) };
+    static RECOVERY_WATCHDOG: RefCell<Option<WatchdogRegistration>> = const { RefCell::new(None) };
+    static MAINTENANCE_ENABLED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Reserve inactive maintenance in the shared inventory before application hooks run.
 pub fn declare() {
-    let handle = TimerApi::declare_canister_pool_maintenance(MAINTENANCE_INTERVAL, || async {
-        run_maintenance_timer().await
-    })
-    .unwrap_or_else(|error| {
+    reconcile_native_timers(TimerReconcileState::Inactive).unwrap_or_else(|error| {
         ic_cdk::trap(format!(
             "canister-pool maintenance declaration rejected: {error}"
         ))
     });
-    MAINTENANCE_TIMER.with_borrow_mut(|current| *current = Some(handle));
+    MAINTENANCE_ENABLED.set(true);
 }
 
 /// Start one non-overlapping root-owned maintenance loop.
 pub fn start() -> Result<(), InternalError> {
-    MAINTENANCE_TIMER.with_borrow_mut(|current| -> Result<(), InternalError> {
-        if let Some(existing) = current.take() {
-            TimerApi::cancel(existing)?;
-        }
-        *current = Some(
-            TimerApi::set_canister_pool_maintenance(MAINTENANCE_INTERVAL, || async {
-                run_maintenance_timer().await
-            })
-            .map_err(InternalError::from)?,
-        );
-        Ok(())
-    })?;
+    TimerApi::require_active().map_err(|_error| InternalError::invariant())?;
+    reconcile_native_timers(TimerReconcileState::Scheduled)
+        .map_err(|_error| InternalError::invariant())?;
+    MAINTENANCE_ENABLED.set(true);
     TimerApi::defer_lifecycle_result_required(
         Duration::ZERO,
         "canic:canister_pool:maintain_initial",
         async { run_maintenance_timer().await },
-    )
-    .detach();
+    );
     Ok(())
 }
 
 /// Re-arm maintenance after snapshot resume only when the domain still owns it.
-pub fn resume_after_authority_snapshot() -> Result<(), canic_core::api::timer::TimerError> {
-    MAINTENANCE_TIMER.with_borrow_mut(|current| {
-        if current.is_none() {
-            return Ok(());
-        }
-        *current = Some(TimerApi::set_canister_pool_maintenance(
-            MAINTENANCE_INTERVAL,
-            || async { run_maintenance_timer().await },
-        )?);
-        Ok(())
-    })
+pub fn resume_after_authority_snapshot() -> Result<(), AuthorityTimerError> {
+    if !MAINTENANCE_ENABLED.get() {
+        return Ok(());
+    }
+    TimerApi::require_active()?;
+    reconcile_native_timers(TimerReconcileState::Scheduled)
+}
+
+/// Cancel Root-owned claims before core authority owners are suspended.
+pub fn suspend_for_authority_snapshot() -> Result<(), AuthorityTimerError> {
+    cancel_native_timers()
 }
 
 /// Stop proactive maintenance once root draining has fenced new allocations.
 pub fn stop() -> Result<(), InternalError> {
-    MAINTENANCE_TIMER.with_borrow_mut(|current| -> Result<(), InternalError> {
-        if let Some(existing) = current.take() {
-            TimerApi::cancel(existing)?;
-        }
-        Ok(())
-    })?;
-    AsyncTimerRecoveryOps::abandon(AsyncRecoveryOwner::CanisterPoolMaintenance);
+    if MAINTENANCE_ENABLED.replace(false) {
+        cancel_native_timers().map_err(|_error| InternalError::invariant())?;
+    }
+    AsyncJobRecoveryOps::abandon(AsyncJobOwner::CanisterPoolMaintenance);
     Ok(())
 }
 
@@ -140,8 +134,8 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
 /// Reconcile one bounded reset or automatic refill operation.
 pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
     let attempt = match claim_maintenance()? {
-        AsyncRecoveryClaim::Acquired(attempt) => attempt,
-        AsyncRecoveryClaim::Busy { .. } => {
+        AsyncJobClaim::Acquired(attempt) => attempt,
+        AsyncJobClaim::Busy { .. } => {
             return Ok(PoolAdminResponse::MaintenancePaused {
                 reason: "another Canister pool maintenance pass is still in flight".to_string(),
             });
@@ -149,8 +143,9 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
     };
     let result = maintain_once_inner().await;
     let completion = maintenance_result_completion(&result);
-    let recovery_due_at_ns = maintenance_recovery_deadline(completion)?;
-    AsyncTimerRecoveryOps::finish(attempt, completion, recovery_due_at_ns)?;
+    if !AsyncJobRecoveryOps::finish(attempt, completion)? {
+        return Err(InternalError::invariant());
+    }
     result
 }
 
@@ -203,132 +198,200 @@ async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
 
 async fn run_maintenance_timer() -> TimerRunResult {
     let attempt = match claim_maintenance() {
-        Ok(AsyncRecoveryClaim::Acquired(attempt)) => attempt,
-        Ok(AsyncRecoveryClaim::Busy { retry_at_ns }) => {
-            return TimerRunResult {
-                outcome: canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure,
-                work_count: 0,
-                directive: TimerDirective::ScheduleAt(retry_at_ns),
-            };
+        Ok(AsyncJobClaim::Acquired(attempt)) => attempt,
+        Ok(AsyncJobClaim::Busy { retry_at_ns }) => {
+            return TimerRunResult::new(
+                TimerCompletion::retryable_failure(0),
+                TimerDirective::ScheduleAt(retry_at_ns),
+            );
         }
-        Err(_) => return TimerRunResult::invariant_failure(),
+        Err(_) => {
+            return TimerRunResult::new(
+                TimerCompletion::invariant_failure(0),
+                TimerDirective::Stop,
+            );
+        }
     };
     finish_maintenance_timer(attempt, maintain_once_inner().await)
 }
 
 /// Dispatch one watchdog-owned takeover without awaiting fallible work.
-pub fn dispatch_async_recovery() -> bool {
+pub fn dispatch_async_job_recovery() -> bool {
     let attempt = match claim_maintenance() {
-        Ok(AsyncRecoveryClaim::Acquired(attempt)) => attempt,
-        Ok(AsyncRecoveryClaim::Busy { .. }) | Err(_) => return false,
+        Ok(AsyncJobClaim::Acquired(attempt)) => attempt,
+        Ok(AsyncJobClaim::Busy { .. }) | Err(_) => return false,
     };
     spawn_maintenance(attempt);
     true
 }
 
-fn spawn_maintenance(attempt: AsyncRecoveryAttempt) {
+fn run_recovery_watchdog() -> WatchdogRunResult {
+    let now_ns = IcOps::now_nanos();
+    let mut recovered = TimerApi::recover_expired_async_jobs(now_ns);
+    if AsyncJobRecoveryOps::expired_deadline(AsyncJobOwner::CanisterPoolMaintenance, now_ns)
+        .is_some()
+        && dispatch_async_job_recovery()
+    {
+        recovered = recovered.saturating_add(1);
+    }
+    let completion = if recovered == 0 {
+        TimerCompletion::no_work()
+    } else {
+        TimerCompletion::success(recovered)
+    };
+    WatchdogRunResult::new(completion, WatchdogDecision::Continue)
+}
+
+fn reconcile_native_timers(desired: TimerReconcileState) -> Result<(), AuthorityTimerError> {
+    reconcile_maintenance_timer(desired)?;
+    if let Err(primary) = reconcile_recovery_watchdog(desired) {
+        return match cancel_maintenance_timer() {
+            Ok(()) => Err(primary),
+            Err(cleanup) => Err(AuthorityTimerError::RegistrationRollback {
+                primary: Box::new(primary),
+                cleanup: Box::new(cleanup),
+            }),
+        };
+    }
+    Ok(())
+}
+
+fn reconcile_maintenance_timer(desired: TimerReconcileState) -> Result<(), AuthorityTimerError> {
+    let identity = TimerIdentity::try_new("canic", "canister_pool", "maintain")?;
+    let cadence = TimerCadence::new(MAINTENANCE_INTERVAL)?;
+    MAINTENANCE_TIMER
+        .try_with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| AuthorityTimerError::CustodyBusy)?;
+            reconcile_after_completion(
+                &mut registration,
+                &identity,
+                cadence,
+                desired,
+                |_context| async {
+                    let result = run_maintenance_timer().await;
+                    TimerRunResult::new(result.completion(), TimerDirective::RecurAfterCompletion)
+                },
+            )
+            .map_err(AuthorityTimerError::from)
+        })
+        .map_err(|_| AuthorityTimerError::CustodyBusy)?
+}
+
+fn reconcile_recovery_watchdog(desired: TimerReconcileState) -> Result<(), AuthorityTimerError> {
+    let identity = TimerApi::recovery_watchdog_identity()?;
+    let cadence = TimerCadence::new(MAINTENANCE_INTERVAL)?;
+    RECOVERY_WATCHDOG
+        .try_with(|registration| {
+            let mut registration = registration
+                .try_borrow_mut()
+                .map_err(|_| AuthorityTimerError::CustodyBusy)?;
+            reconcile_watchdog(&mut registration, &identity, cadence, desired, |_context| {
+                run_recovery_watchdog()
+            })
+            .map_err(AuthorityTimerError::from)
+        })
+        .map_err(|_| AuthorityTimerError::CustodyBusy)?
+}
+
+fn cancel_native_timers() -> Result<(), AuthorityTimerError> {
+    cancel_maintenance_timer()?;
+    RECOVERY_WATCHDOG
+        .try_with(|registration| {
+            let registration = registration
+                .try_borrow()
+                .map_err(|_| AuthorityTimerError::CustodyBusy)?;
+            if let Some(registration) = registration.as_ref() {
+                registration.cancel()?;
+            }
+            Ok(())
+        })
+        .map_err(|_| AuthorityTimerError::CustodyBusy)?
+}
+
+fn cancel_maintenance_timer() -> Result<(), AuthorityTimerError> {
+    MAINTENANCE_TIMER
+        .try_with(|registration| {
+            let registration = registration
+                .try_borrow()
+                .map_err(|_| AuthorityTimerError::CustodyBusy)?;
+            if let Some(registration) = registration.as_ref() {
+                registration.cancel()?;
+            }
+            Ok(())
+        })
+        .map_err(|_| AuthorityTimerError::CustodyBusy)?
+}
+
+fn spawn_maintenance(attempt: AsyncJobAttempt) {
     ic_cdk::futures::spawn(async move {
         let _result = finish_maintenance_timer(attempt, maintain_once_inner().await);
     });
 }
 
-fn claim_maintenance() -> Result<AsyncRecoveryClaim, InternalError> {
+fn claim_maintenance() -> Result<AsyncJobClaim, InternalError> {
     let now_ns = IcOps::now_nanos();
     let lease_expires_at_ns = now_ns
         .checked_add(MAINTENANCE_LEASE_NS)
         .ok_or_else(InternalError::invariant)?;
-    AsyncTimerRecoveryOps::claim(
-        AsyncRecoveryOwner::CanisterPoolMaintenance,
+    AsyncJobRecoveryOps::claim(
+        AsyncJobOwner::CanisterPoolMaintenance,
         now_ns,
         lease_expires_at_ns,
     )
 }
 
 fn finish_maintenance_timer(
-    attempt: AsyncRecoveryAttempt,
+    attempt: AsyncJobAttempt,
     result: Result<PoolAdminResponse, InternalError>,
 ) -> TimerRunResult {
     let timer_result = maintenance_timer_result(result);
-    let completion = timer_result_completion(timer_result.outcome);
-    let recovery_due_at_ns = maintenance_recovery_deadline(completion).ok().flatten();
-    let Ok(exact) = AsyncTimerRecoveryOps::finish(attempt, completion, recovery_due_at_ns) else {
-        return TimerRunResult::invariant_failure();
+    let completion = timer_result_completion(timer_result.completion().outcome());
+    let Ok(exact) = AsyncJobRecoveryOps::finish(attempt, completion) else {
+        return TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop);
     };
-    if exact && completion == AsyncRecoveryCompletion::InvariantFailure {
-        MAINTENANCE_TIMER.with_borrow_mut(|current| {
-            if let Some(handle) = current.take() {
-                let _ = TimerApi::cancel(handle);
-            }
-        });
+    if exact && completion == AsyncJobCompletion::InvariantFailure {
+        MAINTENANCE_ENABLED.set(false);
+        let _ = cancel_native_timers();
     }
     if exact {
         timer_result
     } else {
-        TimerRunResult::no_work(TimerDirective::Stop)
+        TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
     }
 }
 
 const fn maintenance_result_completion(
     result: &Result<PoolAdminResponse, InternalError>,
-) -> AsyncRecoveryCompletion {
+) -> AsyncJobCompletion {
     match result {
-        Ok(_) => AsyncRecoveryCompletion::Success,
-        Err(error) if is_retryable_maintenance_error(error) => {
-            AsyncRecoveryCompletion::RetryableFailure
-        }
-        Err(_) => AsyncRecoveryCompletion::InvariantFailure,
+        Ok(_) => AsyncJobCompletion::Success,
+        Err(error) if is_retryable_maintenance_error(error) => AsyncJobCompletion::RetryableFailure,
+        Err(_) => AsyncJobCompletion::InvariantFailure,
     }
 }
 
-const fn timer_result_completion(
-    outcome: canic_core::dto::runtime::TimerExecutionOutcome,
-) -> AsyncRecoveryCompletion {
+const fn timer_result_completion(outcome: TimerCompletionOutcome) -> AsyncJobCompletion {
     match outcome {
-        canic_core::dto::runtime::TimerExecutionOutcome::Success
-        | canic_core::dto::runtime::TimerExecutionOutcome::NoWork => {
-            AsyncRecoveryCompletion::Success
+        TimerCompletionOutcome::Success | TimerCompletionOutcome::NoWork => {
+            AsyncJobCompletion::Success
         }
-        canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure => {
-            AsyncRecoveryCompletion::RetryableFailure
-        }
-        canic_core::dto::runtime::TimerExecutionOutcome::InvariantFailure
-        | canic_core::dto::runtime::TimerExecutionOutcome::Unacknowledged => {
-            AsyncRecoveryCompletion::InvariantFailure
-        }
+        TimerCompletionOutcome::RetryableFailure => AsyncJobCompletion::RetryableFailure,
+        TimerCompletionOutcome::InvariantFailure => AsyncJobCompletion::InvariantFailure,
     }
-}
-
-fn maintenance_recovery_deadline(
-    completion: AsyncRecoveryCompletion,
-) -> Result<Option<u64>, InternalError> {
-    if completion == AsyncRecoveryCompletion::InvariantFailure
-        || !AsyncTimerRecoveryOps::recovery_owned(AsyncRecoveryOwner::CanisterPoolMaintenance)
-    {
-        return Ok(None);
-    }
-    IcOps::now_nanos()
-        .checked_add(
-            MAINTENANCE_INTERVAL
-                .as_nanos()
-                .try_into()
-                .map_err(|_| InternalError::invariant())?,
-        )
-        .map(Some)
-        .ok_or_else(InternalError::invariant)
 }
 
 fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> TimerRunResult {
     match result {
         Ok(PoolAdminResponse::MaintenancePaused { .. }) => {
-            TimerRunResult::no_work(TimerDirective::Stop)
+            TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
         }
-        Ok(_) => TimerRunResult::success(1, TimerDirective::Stop),
-        Err(error) if is_retryable_maintenance_error(&error) => TimerRunResult {
-            outcome: canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure,
-            work_count: 0,
-            directive: TimerDirective::Stop,
-        },
-        Err(_) => TimerRunResult::invariant_failure(),
+        Ok(_) => TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop),
+        Err(error) if is_retryable_maintenance_error(&error) => {
+            TimerRunResult::new(TimerCompletion::retryable_failure(0), TimerDirective::Stop)
+        }
+        Err(_) => TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop),
     }
 }
 
@@ -550,20 +613,20 @@ mod tests {
             reason: "not active".to_string(),
         }));
         assert_eq!(
-            paused.outcome,
-            canic_core::dto::runtime::TimerExecutionOutcome::NoWork
+            paused.completion().outcome(),
+            TimerCompletionOutcome::NoWork
         );
 
         let retryable = maintenance_timer_result(Err(InternalError::platform_failure()));
         assert_eq!(
-            retryable.outcome,
-            canic_core::dto::runtime::TimerExecutionOutcome::RetryableFailure
+            retryable.completion().outcome(),
+            TimerCompletionOutcome::RetryableFailure
         );
 
         let invariant = maintenance_timer_result(Err(InternalError::invariant()));
         assert_eq!(
-            invariant.outcome,
-            canic_core::dto::runtime::TimerExecutionOutcome::InvariantFailure
+            invariant.completion().outcome(),
+            TimerCompletionOutcome::InvariantFailure
         );
     }
 }

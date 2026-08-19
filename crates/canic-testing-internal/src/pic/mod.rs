@@ -12,6 +12,7 @@ mod fleet_coordinator;
 mod fleet_registry;
 mod lifecycle;
 mod root;
+mod startup;
 
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 pub use audit::{
@@ -20,7 +21,8 @@ pub use audit::{
 };
 pub use canic::{
     CanicPicExt, install_standalone_canister, install_standalone_canister_on_pic,
-    managed_test_init_identity, wait_until_ready,
+    managed_test_init_identity, report_canister_diagnostics, report_canister_diagnostics_batch,
+    wait_until_ready,
 };
 pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,
@@ -28,13 +30,16 @@ pub use delegation::{
 };
 pub use fleet_registry::{ActiveComponentRegistryFixture, setup_active_component_registry};
 pub use lifecycle::{
-    LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
+    CanicIcydbLifecycleFixture, LifecycleBoundaryFixture, icydb_participant_trap_wasm,
+    install_canic_icydb_lifecycle_fixture, install_lifecycle_boundary_fixture, invalid_init_args,
+    lifecycle_participant_trap_wasm, upgrade_args,
 };
 pub use root::{
     RootBaselineMetadata, RootBaselineRecipe, RootBaselineRecipeError, RootBaselineSpec,
     build_root_cached_baseline, ensure_root_release_artifacts_built, load_root_wasm,
     restore_root_cached_baseline, setup_root_topology,
 };
+pub use startup::start_pocket_ic;
 
 pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
 

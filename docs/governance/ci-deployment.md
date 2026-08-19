@@ -67,6 +67,23 @@ policy. Cheap source/governance preflight and security jobs gate every compile
 and test lane so a deterministic repository-policy failure does not leave an
 expensive PocketIC job running.
 
+The governed PocketIC runner resolves one repository-pinned server binary,
+verifies its exact checksum even when `POCKET_IC_BIN` was supplied by the
+caller, then starts one shared server in the invocation-owned private scratch
+immediately before the serial PocketIC lane. The runner admits a numeric port
+within 30 seconds, retains bounded stdout/stderr for startup failure and gives
+the process a two-hour idle and hard lifetime. It retains the exact child PID,
+stops and waits for it on every handled exit, and leaves invocation-scratch
+cleanup as a crash-safety fallback bound to the numeric direct-child port path.
+A failed suite prints bounded tails from both server streams next to its own
+retained log. `ic-testkit` 0.8.8 owns the corrected bounded managed-server
+primitive for one Rust process; Canic keeps a runner-owned server because the
+serial lane crosses several Cargo test processes. Repository fixtures use
+testkit connect mode with their own 30-second instance-construction deadline.
+Direct PocketIC test commands outside the governed runner must supply
+`CANIC_POCKET_IC_SERVER_URL`; they fail immediately when it is absent rather
+than spawning an implicit or unobservable child process.
+
 ## Development Slices and Validation Tiers
 
 A code slice is a small, focused implementation unit chosen for reviewability
@@ -166,7 +183,10 @@ The root `Cargo.toml` is the sole live workspace package-version authority;
 status and planning documents must not duplicate a version whose release-only
 commit they cannot update. Current and committed version queries must use the
 shared pinned `cargo-get` reader; release scripts must not maintain parallel
-manifest parsers. After staging, `make release-commit` runs the fast
+manifest parsers. The cheap current-document semantics gate rejects volatile
+"latest published" and manual release-truth prose in current status and
+detailed changelogs so a version-only release commit cannot make those
+documents false. After staging, `make release-commit` runs the fast
 post-bump `make release-candidate` guard before committing or tagging. That
 guard verifies locked offline Cargo metadata, uniform workspace package
 versions and the installed-CLI default without repeating the already completed

@@ -123,11 +123,161 @@ fn root_post_upgrade_schedules_services_and_hooks_only_when_active() {
     );
     assert!(
         runtime.contains("FleetActivationOps::status(true)")
-            && runtime.contains("TimerWorkflow::is_suspended()")
+            && runtime.contains("TimerAuthorityWorkflow::is_suspended()")
             && runtime.contains("if active && !timers_suspended {")
             && runtime.contains("RuntimeWorkflow::start_all_root()")
             && runtime.contains("Ok(active && !timers_suspended)"),
         "root runtime restoration must gate service startup on protected Active and unsealed state"
+    );
+}
+
+#[test]
+fn lifecycle_participant_is_paired_safe_and_ordered_before_deferred_work() {
+    let source = read_source("crates/canic/src/macros/start.rs");
+    let nonroot = macro_section(
+        &source,
+        "macro_rules! __canic_start_nonroot_lifecycle_core",
+        "// Lifecycle core for the host-installed sibling Wasm Store.",
+    );
+    let local = macro_section(
+        &source,
+        "macro_rules! __canic_start_local_lifecycle_core",
+        "// Lifecycle core for the root Canic canister.",
+    );
+    let root = macro_section(
+        &source,
+        "macro_rules! __canic_root_lifecycle_core",
+        "// Run the optional init block from a lifecycle timer",
+    );
+
+    assert_lifecycle_participant_grammar(&source, nonroot, local, root);
+    assert_lifecycle_participant_ordering(nonroot, local, root);
+    assert_specialized_start_macros_reject_participants(&source);
+}
+
+fn assert_lifecycle_participant_grammar(source: &str, nonroot: &str, local: &str, root: &str) {
+    for (name, section) in [("managed", nonroot), ("local", local), ("Root", root)] {
+        assert!(
+            section.contains("init = $lifecycle_init:path,")
+                && section.contains("post_upgrade = $lifecycle_post_upgrade:path,")
+                && section.contains("__canic_typecheck_lifecycle_participant_pair!"),
+            "{name} lifecycle must accept one paired path declaration and coerce both paths to safe fn() -> ()"
+        );
+    }
+    let typecheck = macro_section(
+        source,
+        "macro_rules! __canic_typecheck_lifecycle_participant_pair",
+        "// Lifecycle core for non-root Canic canisters.",
+    );
+    assert_eq!(
+        typecheck.matches("let _: fn() -> ()").count(),
+        2,
+        "the shared destination-crate type check must require two safe synchronous functions"
+    );
+
+    for (name, section) in [
+        (
+            "managed/Root",
+            macro_section(
+                source,
+                "macro_rules! start",
+                "/// Configure a local-only non-root Canic canister",
+            ),
+        ),
+        (
+            "local",
+            macro_section(
+                source,
+                "macro_rules! start_local",
+                "/// Configure lifecycle hooks and the canonical endpoint bundle",
+            ),
+        ),
+    ] {
+        let matcher = section
+            .split("$crate::__canic_require_finish!();")
+            .next()
+            .expect("public start matcher");
+        assert_eq!(
+            matcher.matches("lifecycle_participant(").count(),
+            1,
+            "{name} start grammar must accept at most one lifecycle participant pair"
+        );
+        assert!(
+            matcher.contains("init = $lifecycle_init:path,")
+                && matcher.contains("post_upgrade = $lifecycle_post_upgrade:path"),
+            "{name} start grammar must reject closures and partial participant declarations"
+        );
+    }
+}
+
+fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str, root: &str) {
+    assert_ordered(
+        function_body(nonroot, "init"),
+        &[
+            "init_nonroot_canister_before_bootstrap(",
+            "$(($lifecycle_init)();)?",
+        ],
+        "managed init participant ordering",
+    );
+    assert_ordered(
+        function_body(nonroot, "post_upgrade"),
+        &[
+            "post_upgrade_nonroot_canister_before_bootstrap(",
+            "$(($lifecycle_post_upgrade)();)?",
+            "if active {",
+        ],
+        "managed post-upgrade participant ordering",
+    );
+    assert_ordered(
+        function_body(local, "init"),
+        &[
+            "init_local_nonroot_canister_before_bootstrap(",
+            "$(($lifecycle_init)();)?",
+            "$crate::__canic_after_optional_start_init_hook!",
+        ],
+        "local init participant ordering",
+    );
+    assert_ordered(
+        function_body(local, "post_upgrade"),
+        &[
+            "post_upgrade_local_nonroot_canister_before_bootstrap(",
+            "$(($lifecycle_post_upgrade)();)?",
+            "$crate::__canic_after_optional_start_init_hook!",
+        ],
+        "local post-upgrade participant ordering",
+    );
+    assert_ordered(
+        function_body(root, "init"),
+        &[
+            "init_root_canister_before_bootstrap(",
+            "$(($lifecycle_init)();)?",
+        ],
+        "Root init participant ordering",
+    );
+    assert_ordered(
+        function_body(root, "post_upgrade"),
+        &[
+            "post_upgrade_root_canister_before_bootstrap(",
+            "$(($lifecycle_post_upgrade)();)?",
+            "if active {",
+        ],
+        "Root post-upgrade participant ordering",
+    );
+}
+
+fn assert_specialized_start_macros_reject_participants(source: &str) {
+    let wasm_store = macro_section(
+        source,
+        "macro_rules! start_wasm_store",
+        "/// Configure the dedicated built-in Fleet Coordinator canister surface.",
+    );
+    let coordinator = &source[source
+        .find("macro_rules! start_fleet_coordinator")
+        .expect("Fleet Coordinator start macro")..];
+    assert!(
+        !wasm_store.contains("lifecycle_participant")
+            && !coordinator.contains("lifecycle_participant"),
+        "specialized infrastructure start macros must reject application lifecycle participants"
     );
 }
 
@@ -255,6 +405,16 @@ fn macro_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
         .map(|offset| start + offset)
         .expect("macro section end");
     &source[start..end]
+}
+
+fn assert_ordered(source: &str, fragments: &[&str], context: &str) {
+    let mut cursor = 0usize;
+    for fragment in fragments {
+        let offset = source[cursor..]
+            .find(fragment)
+            .unwrap_or_else(|| panic!("{context} is missing `{fragment}`"));
+        cursor = cursor.saturating_add(offset).saturating_add(fragment.len());
+    }
 }
 
 fn workspace_root() -> PathBuf {

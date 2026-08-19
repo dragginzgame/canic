@@ -251,7 +251,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,
-        StateAllocationKey::CoreAsyncTimerRecovery,
+        StateAllocationKey::CoreAsyncJobRecovery,
     ),
     capability_allocation(
         RoleCapabilityKey::Runtime,

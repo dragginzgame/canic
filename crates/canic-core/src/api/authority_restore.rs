@@ -33,20 +33,38 @@ impl AuthorityRestoreApi {
             .map_err(Into::into)
     }
 
-    /// Seal ordinary mutation before an external authority snapshot is captured.
-    pub async fn prepare_snapshot(
+    #[doc(hidden)]
+    pub async fn prepare_root_snapshot(
         request: AuthoritySnapshotRequest,
     ) -> Result<AuthorityRestoreFenceStatusResponse, Error> {
-        AuthorityRestoreWorkflow::prepare_snapshot(request)
+        AuthorityRestoreWorkflow::prepare_root_snapshot(request)
             .await
             .map_err(Into::into)
     }
 
-    /// Resume the live authority only when its independent history still matches the seal.
-    pub async fn resume_snapshot(
+    #[doc(hidden)]
+    pub async fn prepare_coordinator_snapshot(
         request: AuthoritySnapshotRequest,
     ) -> Result<AuthorityRestoreFenceStatusResponse, Error> {
-        AuthorityRestoreWorkflow::resume_snapshot(request)
+        AuthorityRestoreWorkflow::prepare_coordinator_snapshot(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[doc(hidden)]
+    pub async fn resume_root_snapshot(
+        request: AuthoritySnapshotRequest,
+    ) -> Result<AuthorityRestoreFenceStatusResponse, Error> {
+        AuthorityRestoreWorkflow::resume_root_snapshot(request)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[doc(hidden)]
+    pub async fn resume_coordinator_snapshot(
+        request: AuthoritySnapshotRequest,
+    ) -> Result<AuthorityRestoreFenceStatusResponse, Error> {
+        AuthorityRestoreWorkflow::resume_coordinator_snapshot(request)
             .await
             .map_err(Into::into)
     }

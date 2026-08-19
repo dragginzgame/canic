@@ -12,6 +12,8 @@ FAILED_LABELS=()
 HEAVY_BUILD_TARGETS_USED=0
 PLAN_ONLY="${CANIC_TEST_PLAN_ONLY:-0}"
 STEP_SUMMARY_INITIALIZED=0
+POCKET_IC_SERVER_TTL_SECONDS=7200
+POCKET_IC_SERVER_PID=""
 
 case "$MODE" in
     fast | full | ordinary | pocketic) ;;
@@ -34,6 +36,80 @@ esac
 elapsed_seconds() {
     local started_at="$1"
     echo "$((SECONDS - started_at))s"
+}
+
+report_owned_pocketic_server_output() {
+    if [[ -z "${CANIC_TEST_SCRATCH:-}" ]]; then
+        return
+    fi
+    echo "==> shared PocketIC server stderr (last 40 lines)" >&2
+    tail -40 "$CANIC_TEST_SCRATCH/pocketic.stderr" >&2 || true
+    echo "==> shared PocketIC server stdout (last 40 lines)" >&2
+    tail -40 "$CANIC_TEST_SCRATCH/pocketic.stdout" >&2 || true
+}
+
+stop_owned_pocketic_server() {
+    local server_pid="$POCKET_IC_SERVER_PID"
+    if [[ -z "$server_pid" ]]; then
+        return
+    fi
+    POCKET_IC_SERVER_PID=""
+    if kill -0 "$server_pid" 2>/dev/null; then
+        kill -KILL "$server_pid" 2>/dev/null || true
+    fi
+    wait "$server_pid" 2>/dev/null || true
+}
+
+start_owned_pocketic_server() {
+    if [[ "$PLAN_ONLY" -eq 1 ]]; then
+        return
+    fi
+    if [[ -z "${CANIC_TEST_SCRATCH:-}" || ! -d "$CANIC_TEST_SCRATCH" ]]; then
+        echo "PocketIC startup requires the governed private test scratch" >&2
+        return 1
+    fi
+
+    local port_file="$CANIC_TEST_SCRATCH/pocket_ic_${BASHPID}.port"
+    local stdout_file="$CANIC_TEST_SCRATCH/pocketic.stdout"
+    local stderr_file="$CANIC_TEST_SCRATCH/pocketic.stderr"
+    if [[ -e "$port_file" || -e "$stdout_file" || -e "$stderr_file" ]]; then
+        echo "PocketIC startup files already exist in the governed scratch" >&2
+        return 1
+    fi
+
+    "$POCKET_IC_BIN" \
+        --ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
+        --hard-ttl "$POCKET_IC_SERVER_TTL_SECONDS" \
+        --port-file "$port_file" \
+        >"$stdout_file" 2>"$stderr_file" &
+    POCKET_IC_SERVER_PID="$!"
+    local attempt server_port
+    for ((attempt = 0; attempt < 150; attempt++)); do
+        if ! kill -0 "$POCKET_IC_SERVER_PID" 2>/dev/null; then
+            local server_status=0
+            wait "$POCKET_IC_SERVER_PID" || server_status="$?"
+            POCKET_IC_SERVER_PID=""
+            echo "PocketIC server exited before readiness (status $server_status)" >&2
+            report_owned_pocketic_server_output
+            return 1
+        fi
+        server_port=""
+        if [[ -f "$port_file" ]]; then
+            IFS= read -r server_port <"$port_file" || true
+        fi
+        if [[ "$server_port" =~ ^[0-9]+$ ]] &&
+            ((server_port >= 1 && server_port <= 65535)); then
+            export CANIC_POCKET_IC_SERVER_URL="http://127.0.0.1:$server_port/"
+            echo "==> shared PocketIC server ready: $CANIC_POCKET_IC_SERVER_URL"
+            return
+        fi
+        sleep 0.2
+    done
+
+    echo "PocketIC server did not publish a valid port within 30 seconds" >&2
+    stop_owned_pocketic_server
+    report_owned_pocketic_server_output
+    return 1
 }
 
 record_summary() {
@@ -162,6 +238,9 @@ run_test() {
     record_summary "$label" "$elapsed" "$execution" "FAIL"
     FAILED_LABELS+=("$label")
     echo "==> $label failed in $elapsed (exit $status)" >&2
+    if [[ "$execution" = "pocketic-serial" ]]; then
+        report_owned_pocketic_server_output
+    fi
     append_step_summary "$execution" "$elapsed" "$label" "FAIL ($status)"
     return 0
 }
@@ -256,6 +335,19 @@ cleanup_heavy_build_targets() {
     fi
 }
 
+cleanup_workspace_test_run() {
+    local run_status="$?"
+    local cleanup_status=0
+
+    trap - EXIT INT TERM
+    stop_owned_pocketic_server || cleanup_status="$?"
+    cleanup_heavy_build_targets || cleanup_status="$?"
+    if [[ "$run_status" -ne 0 ]]; then
+        exit "$run_status"
+    fi
+    exit "$cleanup_status"
+}
+
 run_pic_inventory_tests() {
     local label="$1"
     local suite="$2"
@@ -266,7 +358,9 @@ run_pic_inventory_tests() {
     run_inventory_tests "$label" canic-tests pocketic-serial "$suite"
 }
 
-trap cleanup_heavy_build_targets EXIT
+trap cleanup_workspace_test_run EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 bash scripts/ci/check-workspace-test-inventory.sh
 
@@ -277,7 +371,7 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     if [[ ("$MODE" == "full" || "$MODE" == "pocketic") && -z "${POCKET_IC_BIN:-}" ]]; then
         POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"
         export POCKET_IC_BIN
-        echo "==> using persistent PocketIC server: $POCKET_IC_BIN"
+        echo "==> using pinned PocketIC server binary: $POCKET_IC_BIN"
     else
         bash scripts/ci/check-pocketic-version-alignment.sh
     fi
@@ -329,6 +423,8 @@ if [[ "$MODE" != "pocketic" ]]; then
         exit 0
     fi
 fi
+
+start_owned_pocketic_server
 
 # The internal library owns several PocketIC journeys in its adjacent unit
 # tests. Run the deployment-restore and destructive autonomous-removal proofs

@@ -25,11 +25,20 @@ use crate::{
         runtime::recent_failure::{RecentFailureInput, RecentFailureOps},
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
-    workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+    workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
+use ic_timers::{
+    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
+    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+};
+use std::cell::RefCell;
 
 const CLEANUP_BATCH_SIZE: usize = 32;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
+
+thread_local! {
+    static INTENT_CLEANUP_TIMER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct IntentCleanupBatch {
@@ -297,6 +306,23 @@ fn ensure_canic_owned_resource_key(
 pub struct IntentCleanupWorkflow;
 
 impl IntentCleanupWorkflow {
+    pub(crate) fn timer_identity() -> Result<TimerIdentity, TimerError> {
+        TimerIdentity::try_new("canic", "intent_cleanup", "run").map_err(Into::into)
+    }
+
+    pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
+        with_owned_once(&INTENT_CLEANUP_TIMER, |registration| {
+            registration.identity().clone()
+        })
+    }
+
+    pub(crate) fn cancel_timer() -> Result<(), TimerError> {
+        if let Some(result) = with_owned_once(&INTENT_CLEANUP_TIMER, OnceRegistration::cancel)? {
+            result?;
+        }
+        Ok(())
+    }
+
     /// Reconstruct the sole live cleanup deadline from the stable expiry index.
     pub fn start() -> Result<(), InternalError> {
         Self::reconcile()
@@ -318,7 +344,10 @@ impl IntentCleanupWorkflow {
                     IntentMetricReason::StorageFailed,
                 );
                 log!(Topic::Memory, Warn, "intent cleanup batch failed: {err}");
-                return TimerRunResult::invariant_failure();
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    TimerDirective::Stop,
+                );
             }
         };
 
@@ -331,11 +360,10 @@ impl IntentCleanupWorkflow {
                     Warn,
                     "intent cleanup deadline reconciliation failed: {err}"
                 );
-                return TimerRunResult {
-                    outcome: crate::domain::runtime::TimerExecutionOutcome::InvariantFailure,
-                    work_count: batch.work_count().unwrap_or(u64::MAX),
-                    directive: TimerDirective::Stop,
-                };
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(batch.work_count().unwrap_or(u64::MAX)),
+                    TimerDirective::Stop,
+                );
             }
         };
 
@@ -344,7 +372,10 @@ impl IntentCleanupWorkflow {
             Err(err) => {
                 record_cleanup_failure(&err);
                 log!(Topic::Memory, Warn, "intent cleanup count failed: {err}");
-                return TimerRunResult::invariant_failure();
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    TimerDirective::Stop,
+                );
             }
         };
         if work_count == 0 {
@@ -353,7 +384,7 @@ impl IntentCleanupWorkflow {
                 IntentMetricOutcome::Completed,
                 IntentMetricReason::NoExpired,
             );
-            TimerRunResult::no_work(directive)
+            TimerRunResult::new(TimerCompletion::no_work(), directive)
         } else {
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
@@ -367,7 +398,7 @@ impl IntentCleanupWorkflow {
                 batch.application_receipts_removed,
                 batch.local_intents_aborted,
             );
-            TimerRunResult::success(work_count, directive)
+            TimerRunResult::new(TimerCompletion::success(work_count), directive)
         }
     }
 
@@ -436,14 +467,38 @@ impl IntentCleanupWorkflow {
 
     fn reconcile() -> Result<(), InternalError> {
         let deadline_ns = Self::next_cleanup_deadline_ns()?;
-        TimerWorkflow::reconcile_at(TimerKey::IntentCleanup, deadline_ns)?;
+        Self::ensure_declared()?;
+        require_active()?;
+        with_owned_once(&INTENT_CLEANUP_TIMER, |registration| {
+            registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
+        })?
+        .ok_or(TimerError::MissingClaim)?
+        .map_err(TimerError::from)?;
         Ok(())
     }
 
     fn schedule_at(due_at_secs: u64) -> Result<(), InternalError> {
         let deadline_ns = Self::deadline_ns(due_at_secs)?;
-        TimerWorkflow::schedule_at(TimerKey::IntentCleanup, deadline_ns)?;
+        Self::ensure_declared()?;
+        require_active()?;
+        with_owned_once(&INTENT_CLEANUP_TIMER, |registration| {
+            registration.ensure_scheduled(TimerSchedule::At(deadline_ns))
+        })?
+        .ok_or(TimerError::MissingClaim)?
+        .map_err(TimerError::from)?;
         Ok(())
+    }
+
+    fn ensure_declared() -> Result<(), TimerError> {
+        if with_owned_once(&INTENT_CLEANUP_TIMER, |_| ())?.is_some() {
+            return Ok(());
+        }
+        let registration = register_once(
+            Self::timer_identity()?,
+            DeclarationLifetime::Retained,
+            |_context: OnceContext| async { Self::run_due_batch() },
+        )?;
+        retain_owned_once(&INTENT_CLEANUP_TIMER, registration)
     }
 
     fn next_directive(now_ns: u64) -> Result<TimerDirective, InternalError> {
@@ -800,10 +855,10 @@ mod tests {
 
         let result = IntentCleanupWorkflow::run_due_batch_at(11 * NANOS_PER_SECOND);
         assert_eq!(
-            result.outcome,
-            crate::domain::runtime::TimerExecutionOutcome::InvariantFailure
+            result.completion().outcome(),
+            ic_timers::TimerCompletionOutcome::InvariantFailure
         );
-        assert_eq!(result.directive, TimerDirective::Stop);
+        assert_eq!(result.directive(), TimerDirective::Stop);
         let failure = RecentFailureOps::snapshot()
             .into_iter()
             .next()

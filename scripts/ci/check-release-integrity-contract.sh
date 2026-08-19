@@ -303,7 +303,21 @@ bash "$WORKSPACE_TEST_INVENTORY_GATE" >/dev/null ||
 rg -F 'bash scripts/ci/check-workspace-test-inventory.sh' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not enforce its integration-test inventory"
 rg -F 'POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the full workspace test runner does not resolve one explicit PocketIC server"
+    fail "the full workspace test runner does not resolve one explicit PocketIC server binary"
+rg -F 'start_owned_pocketic_server' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the serial PocketIC lane does not start its invocation-owned shared server"
+rg -F 'export CANIC_POCKET_IC_SERVER_URL=' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the shared PocketIC server URL is not exported to bounded testkit clients"
+rg -F 'POCKET_IC_SERVER_PID="$!"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the shared PocketIC server process is not retained for exact cleanup"
+rg -F 'stop_owned_pocketic_server' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the workspace test runner does not stop its shared PocketIC server"
+rg -F 'trap cleanup_workspace_test_run EXIT' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the shared PocketIC server is not stopped on every handled runner exit"
+rg -F 'pocket_ic_${BASHPID}.port' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the shared PocketIC server port does not match the cleanup ownership contract"
+rg -F -- '--port-file "$port_file"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the shared PocketIC server does not publish readiness inside owned scratch"
 rg -F 'CANIC_POCKET_IC_CACHE_DIR' "$ROOT/scripts/ci/install-pocketic.sh" >/dev/null ||
     fail "the PocketIC installer does not expose its persistent local cache boundary"
 if rg -F '${TMPDIR' "$ROOT/scripts/ci/install-pocketic.sh" >/dev/null; then

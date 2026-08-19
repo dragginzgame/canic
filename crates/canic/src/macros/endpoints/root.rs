@@ -412,7 +412,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     Ok(RootCommandResponse::MaintainPool(response))
                 }
                 RootCommand::PrepareAuthoritySnapshot(request) => {
-                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::prepare_snapshot(request)
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_authority_snapshot(request)
                         .await
                         .map(RootCommandResponse::PrepareAuthoritySnapshot)
                 }
@@ -536,7 +536,7 @@ macro_rules! canic_emit_root_command_endpoint {
                         .map(RootCommandResponse::RespondCapability)
                 }
                 RootCommand::ResumeAuthoritySnapshot(request) => {
-                    $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::resume_snapshot(request)
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_authority_snapshot(request)
                         .await
                         .map(RootCommandResponse::ResumeAuthoritySnapshot)
                 }

@@ -42,14 +42,32 @@ use crate::{
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
+    /// Return the exact root issuer-renewal native identity.
+    pub(crate) fn root_issuer_renewal_timer_identity()
+    -> Result<ic_timers::TimerIdentity, crate::workflow::runtime::timer::TimerError> {
+        renewal::RootIssuerRenewalWorkflow::timer_identity()
+    }
+
+    /// Return the claimed root issuer-renewal identity, when declared.
+    pub(crate) fn claimed_root_issuer_renewal_timer_identity()
+    -> Result<Option<ic_timers::TimerIdentity>, crate::workflow::runtime::timer::TimerError> {
+        renewal::RootIssuerRenewalWorkflow::claimed_timer_identity()
+    }
+
+    /// Cancel the retained root issuer-renewal registration for snapshot suspension.
+    pub(crate) fn cancel_root_issuer_renewal_timer()
+    -> Result<(), crate::workflow::runtime::timer::TimerError> {
+        renewal::RootIssuerRenewalWorkflow::cancel_timer()
+    }
+
+    /// Recover one expired root issuer-renewal attempt from authoritative auth demand.
+    pub(crate) fn recover_expired_root_issuer_renewal(now_ns: u64) -> bool {
+        renewal::RootIssuerRenewalWorkflow::recover_expired(now_ns)
+    }
+
     /// Reconstruct or update the root issuer renewal deadline from durable authority.
     pub fn reconcile_root_issuer_renewal() -> Result<(), InternalError> {
         renewal::RootIssuerRenewalWorkflow::reconcile()
-    }
-
-    /// Run one bounded issuer-renewal timer invocation.
-    pub(crate) async fn run_root_issuer_renewal_timer() -> super::timer::TimerRunResult {
-        renewal::RootIssuerRenewalWorkflow::run_scheduled().await
     }
 
     /// Fail fast when root delegated-auth config requires missing crypto support.
