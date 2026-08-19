@@ -5,18 +5,19 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use syn::visit::Visit;
 
 #[test]
 fn receipt_backed_authority_and_consumer_inventory_is_explicit() {
     let root = workspace_root();
 
     assert_eq!(
-        source_paths_containing(&root, "ReceiptBackedIntentApi::"),
+        source_paths_using(&root, "ReceiptBackedIntentApi"),
         BTreeSet::from(["canisters/test/intent_authority/src/lib.rs".to_string()]),
         "the public application facade has an unreviewed in-repository consumer",
     );
     assert_eq!(
-        source_paths_containing(&root, "ReceiptBackedIntentWorkflow::"),
+        source_paths_using(&root, "ReceiptBackedIntentWorkflow"),
         BTreeSet::from([
             "crates/canic-core/src/api/intent/mod.rs".to_string(),
             "crates/canic-core/src/workflow/placement/allocation.rs".to_string(),
@@ -25,7 +26,7 @@ fn receipt_backed_authority_and_consumer_inventory_is_explicit() {
         "receipt workflow ownership changed without updating the 0.96 inventory",
     );
     assert_eq!(
-        source_paths_containing(&root, "ReceiptBackedIntentOps::"),
+        source_paths_using(&root, "ReceiptBackedIntentOps"),
         BTreeSet::from([
             "crates/canic-core/src/api/runtime/mod.rs".to_string(),
             "crates/canic-core/src/ops/storage/intent/tests.rs".to_string(),
@@ -37,7 +38,7 @@ fn receipt_backed_authority_and_consumer_inventory_is_explicit() {
         "receipt storage ops gained an unreviewed caller",
     );
     assert_eq!(
-        source_paths_containing(&root, "ReceiptBackedIntentStore::"),
+        source_paths_using(&root, "ReceiptBackedIntentStore"),
         BTreeSet::from([
             "crates/canic-core/src/ops/storage/intent/mod.rs".to_string(),
             "crates/canic-core/src/ops/storage/intent/tests.rs".to_string(),
@@ -87,19 +88,48 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
     assert!(allocations.contains("pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 48;"));
 }
 
-fn source_paths_containing(root: &Path, needle: &str) -> BTreeSet<String> {
+fn source_paths_using(root: &Path, symbol: &str) -> BTreeSet<String> {
     let mut paths = BTreeSet::new();
     for source_root in ["crates", "canisters", "apps"] {
         collect_rust_sources(&root.join(source_root), root, &mut |path, source| {
-            if path == "crates/canic-core/tests/receipt_reclamation_inventory_guard.rs" {
-                return;
-            }
-            if source.contains(needle) {
+            let syntax = syn::parse_file(source)
+                .unwrap_or_else(|err| panic!("parse Rust source {path}: {err}"));
+            let mut visitor = SymbolUseVisitor::new(symbol);
+            visitor.visit_file(&syntax);
+            if visitor.found {
                 paths.insert(path.to_string());
             }
         });
     }
     paths
+}
+
+struct SymbolUseVisitor<'a> {
+    symbol: &'a str,
+    found: bool,
+}
+
+impl<'a> SymbolUseVisitor<'a> {
+    const fn new(symbol: &'a str) -> Self {
+        Self {
+            symbol,
+            found: false,
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for SymbolUseVisitor<'_> {
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        if path
+            .segments
+            .iter()
+            .enumerate()
+            .any(|(index, segment)| segment.ident == self.symbol && index + 1 < path.segments.len())
+        {
+            self.found = true;
+        }
+        syn::visit::visit_path(self, path);
+    }
 }
 
 fn collect_rust_sources(directory: &Path, root: &Path, visit: &mut impl FnMut(&str, &str)) {
