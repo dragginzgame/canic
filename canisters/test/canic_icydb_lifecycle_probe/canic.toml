@@ -1,5 +1,5 @@
 [app]
-name = "test"
+name = "canic_icydb_lifecycle_probe"
 init_mode = "enabled"
 
 [roles.root]

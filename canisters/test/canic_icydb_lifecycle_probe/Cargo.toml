@@ -9,7 +9,7 @@ publish = false
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
-app = "test"
+app = "canic_icydb_lifecycle_probe"
 role = "test"
 
 [lib]
@@ -18,14 +18,14 @@ crate-type = ["cdylib"]
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = [] }
-canic-icydb-lifecycle-schema = { path = "schema" }
+canic-icydb-lifecycle-schema = { workspace = true }
 ic-cdk = { workspace = true }
 ic-timers = { workspace = true }
 icydb = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
-canic-icydb-lifecycle-schema = { path = "schema" }
+canic-icydb-lifecycle-schema = { workspace = true }
 icydb = { workspace = true }
 
 [lints]

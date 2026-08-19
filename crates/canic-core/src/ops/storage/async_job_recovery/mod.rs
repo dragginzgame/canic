@@ -7,6 +7,8 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+use crate::storage::stable::async_job_recovery::AsyncJobRecoveryData;
 use crate::{
     InternalError,
     model::replay::OperationId,
@@ -185,7 +187,7 @@ impl AsyncJobRecoveryOps {
 
     #[cfg(test)]
     pub(crate) fn reset_for_tests() {
-        AsyncJobRecoveryStore::import(Default::default());
+        AsyncJobRecoveryStore::import(AsyncJobRecoveryData::default());
     }
 }
 

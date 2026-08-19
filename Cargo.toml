@@ -73,6 +73,7 @@ canic-control-plane = { version = "0.103.0", path = "crates/canic-control-plane"
 canic-core = { version = "0.103.0", path = "crates/canic-core" }
 canic-fleet-coordinator = { version = "0.103.0", path = "crates/canic-fleet-coordinator" }
 canic-host = { version = "0.103.0", path = "crates/canic-host" }
+canic-icydb-lifecycle-schema = { version = "0.103.0", path = "canisters/test/canic_icydb_lifecycle_probe/schema" }
 canic-macros = { version = "0.103.0", path = "crates/canic-macros" }
 canic-testing-internal = { version = "0.103.0", path = "crates/canic-testing-internal" }
 canic-wasm-store = { version = "0.103.0", path = "crates/canic-wasm-store" }

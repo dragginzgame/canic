@@ -214,8 +214,10 @@ fn prove_prepared_reconstruction_and_retry(
 }
 
 fn composition_snapshot(pic: &PocketIc, canister_id: Principal) -> LifecycleCompositionSnapshot {
-    pic.query_candid(canister_id, "lifecycle_composition_snapshot", ())
-        .expect("query Canic/IcyDB lifecycle composition snapshot")
+    let result: Result<LifecycleCompositionSnapshot, Error> = pic
+        .query_candid(canister_id, "lifecycle_composition_snapshot", ())
+        .expect("query Canic/IcyDB lifecycle composition snapshot");
+    result.expect("read Canic/IcyDB lifecycle composition snapshot")
 }
 
 fn assert_inactive_participant_reconstructed(snapshot: &LifecycleCompositionSnapshot) {
