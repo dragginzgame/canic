@@ -12,11 +12,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.104.md](docs/changelog/0.104.md)
 
+- `0.104.1` strengthens the timer-ownership contract from lexical hits to
+  parsed Rust authority plus exact native callsites, adds failed-install
+  lifecycle-participant rollback and corrected retry on the same canister, and
+  replaces unsupported phase deltas with reproducible exact-release footprint
+  evidence while aligning the complete closeout record.
+
 - `0.104.0` hard-cuts application and framework scheduling to direct native
   timer custody, replaces generic durable recovery with exact domain attempt
   fences, adds synchronous lifecycle composition after Canic restoration and
-  qualifies that seam against exact published IcyDB. Semantic ownership guards
-  now cover applications, crates and executable canister fixtures. The line
+  qualifies that seam against exact published IcyDB. Its ownership inventory
+  covers applications, crates and executable canister fixtures. The line
   also adopts bounded `ic-testkit` 0.8.9 diagnostics and shared PocketIC
   startup for faster attributable deployment failures.
 

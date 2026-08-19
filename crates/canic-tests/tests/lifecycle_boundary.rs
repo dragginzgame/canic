@@ -12,11 +12,11 @@ use canic::{
     protocol::CANIC_STATUS,
 };
 use canic_testing_internal::pic::{
-    install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_trap_wasm,
-    upgrade_args,
+    install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
+    lifecycle_participant_trap_wasm, upgrade_args,
 };
 use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
@@ -160,6 +160,59 @@ fn lifecycle_participant_trap_rolls_back_before_corrected_retry() {
     assert_prepared_and_not_ready(&fixture.pic, canic_id, fixture.root);
 }
 
+#[test]
+fn init_participant_trap_leaves_empty_canister_before_corrected_retry() {
+    let trap_wasm = lifecycle_participant_init_trap_wasm();
+    let fixture = install_lifecycle_boundary_fixture();
+    let uninstalled = fixture.create_uninstalled_canic_canister();
+
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        fixture.pic.install_canister(
+            uninstalled.canister_id,
+            trap_wasm,
+            uninstalled.init_args.clone(),
+            None,
+        );
+    }))
+    .expect_err("the init lifecycle participant must trap");
+    let failure = panic_message(failure.as_ref());
+    assert!(
+        failure.contains("managed init lifecycle participant requested a test trap"),
+        "unexpected init lifecycle participant failure: {failure}"
+    );
+    assert_eq!(
+        fixture
+            .pic
+            .canister_status(uninstalled.canister_id, None)
+            .expect("query empty canister after failed install")
+            .module_hash,
+        None,
+        "failed init must leave the canister without a committed module"
+    );
+
+    fixture.pic.tick();
+    assert_eq!(
+        fixture
+            .pic
+            .canister_status(uninstalled.canister_id, None)
+            .expect("query empty canister after a later round")
+            .module_hash,
+        None,
+        "deferred work must not commit after a failed init"
+    );
+
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture.pic.install_canister(
+        uninstalled.canister_id,
+        fixture.canic_wasm.clone(),
+        uninstalled.init_args,
+        None,
+    );
+    assert_prepared_and_not_ready(&fixture.pic, uninstalled.canister_id, fixture.root);
+}
+
 fn assert_prepared_and_not_ready(pic: &PocketIc, canister_id: Principal, root: Principal) {
     let status: Result<CanisterStatusResponse, Error> = pic
         .query_candid_as(
@@ -233,4 +286,16 @@ fn assert_phase_error(phase: &str, err: &impl ToString) {
         !message.contains("Internal"),
         "unexpected internal error: {message}"
     );
+}
+
+fn panic_message(payload: &(dyn Any + Send)) -> String {
+    payload
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| {
+            payload
+                .downcast_ref::<&str>()
+                .map(|message| (*message).to_string())
+        })
+        .unwrap_or_else(|| "non-string panic payload".to_string())
 }

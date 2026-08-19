@@ -25,10 +25,9 @@ The hard-cut decisions are:
 
 The mechanically reviewable inputs are:
 
-- [consumer inventory](consumer-inventory.tsv), covering all 26 files and 80
-  lexical scheduling hits frozen by the current production guard, plus the
-  three executable sources that guard excludes and the direct metrics
-  projection that is semantically relevant without scheduling;
+- [consumer inventory](consumer-inventory.tsv), covering the 45 production
+  Rust files discovered from parsed timer/recovery types, imports, paths and
+  macro tokens across applications, canisters and crates;
 - [native claim inventory](native-claims.tsv), classifying every provider
   registration family and its target custody;
 - [durable state inventory](durable-state.tsv), classifying every field in the
@@ -37,15 +36,77 @@ The mechanically reviewable inputs are:
   lifecycle grammar, IcyDB boundary and B2-B8 work map.
 
 The accepted [B2 native-provider surface report](b2-native-provider-surface.md)
-records the public hard cut, direct-provider fixture, targeted validation and
-same-builder Wasm/provider measurements. The accepted
+records the public hard cut, direct-provider fixture and targeted validation.
+Its phase measurements are historical observations, not closeout evidence.
+The accepted
 [B3 domain async-job recovery report](b3-domain-async-job-recovery.md) records
 the memory-ID-60 hard cut and exact business-attempt invariants. The completed
 [B4 domain-native custody report](b4-domain-native-custody.md) records lazy
-auth/cycle/placement registration ownership, snapshot propagation and the
-accepted exact Wasm/provider comparison. The accepted B5 completion evidence
-is retained below because the working-audit directory is already at its
-bounded eight-file limit.
+auth/cycle/placement registration ownership and snapshot propagation. Its
+phase measurements have the same historical status. The accepted B5
+completion evidence is retained below because the working-audit directory is
+already at its bounded eight-file limit.
+
+## Closeout Evidence Correction
+
+The independent closeout audit found that the exact B2-B6 phase source states
+were not retained in Git. Their size and instruction tables cannot therefore
+be rebuilt independently and are not acceptance evidence. They remain in these
+working notes only as explicitly historical development observations. No
+closeout or release-size conclusion depends on them.
+
+The release comparison was rerun from the immutable `v0.103.0` and `v0.104.0`
+trees in equal-length source directories with equal-length isolated Cargo
+targets, `CARGO_NET_OFFLINE=true`, `CARGO_INCREMENTAL=0`, locked Cargo, the
+`fast` profile and the same `app`, `root`, `fleet_coordinator` and `wasm_store`
+roles from `apps/test/canic.toml`. Each tree used the canonical
+`canic-host --example build_artifact` executable built from that exact tree.
+The toolchain was `rustc 1.97.1 (8bab26f4f 2026-07-14)`. For each role the
+locked offline command shape was:
+
+```text
+cargo run --offline --locked -q --profile fast -p canic-host \
+  --example build_artifact -- \
+  <role> fast <release-root> <release-root> \
+  <release-root>/apps/test/canic.toml
+```
+
+The 0.103.0 builder SHA-256 was
+`6add9d7d3edce7fcc03eaf9462813130dcdc8289d832c47178e685ab3e939d7d`;
+the 0.104.0 builder SHA-256 was
+`4ccba956cfd3b03c9bf70ab8904788a7e378dbd88a2646baec10599c25d4632e`.
+
+| Role | 0.103.0 raw | 0.103.0 gzip | 0.104.0 raw | 0.104.0 gzip |
+| --- | ---: | ---: | ---: | ---: |
+| managed Component | 3,571,984 | 944,397 | 3,560,554 | 941,683 |
+| Fleet Subnet Root | 8,424,621 | 2,183,333 | 8,406,365 | 2,183,574 |
+| Fleet Coordinator | 4,071,122 | 1,013,961 | 3,818,092 | 950,589 |
+| Wasm Store | 3,357,121 | 889,005 | 3,339,306 | 883,883 |
+| **Four-role total** | **19,424,848** | **5,030,696** | **19,124,317** | **4,959,729** |
+
+| Release | Role | Raw SHA-256 | Builder-gzip SHA-256 |
+| --- | --- | --- | --- |
+| 0.103.0 | managed Component | `28d664a4a1753e9cc5f86a19a3abd11f3da38fc101af647510cf1cdb522e94be` | `3516c5a93c87df8a135ba138242dbe42f4432c82833031200a61d4fe01865258` |
+| 0.103.0 | Fleet Subnet Root | `3081ed485224d009147e142c4b94d59018c720fcc5ba3182489e6c2fa4725638` | `7cfc4fb0a8ff0b5cd2f4ba2673462246902ccd7c490f70f7a2d8d9d6d42c1c18` |
+| 0.103.0 | Fleet Coordinator | `18f5401cbd3926fe95e8c2e2ff6b04d6e795a0562c67089ec262618436e80a3d` | `36e1e08a668cd5bedf12a7ea157857813a4d9065543eafec216bb5bd24df1793` |
+| 0.103.0 | Wasm Store | `dbad8e83d796f3ff22653cd2947fa4467331b8cf12cea6fe94c848a61b7c192a` | `708ed0b7a1b8fe5b689d83b91e53d49ccfa7ba12b286180e42f08e28be406bd0` |
+| 0.104.0 | managed Component | `26b7bb0ca8e4f63715fb9caf892d9234ac6a61cd8c88db200c8fbe4da8a0da53` | `32fdc8094a0b1a53076a7d6eac8f74aa294f3c785793ce99daa855b226e32fc3` |
+| 0.104.0 | Fleet Subnet Root | `efbee3f577f40780636ed2a3a49033d53c6e95ea8aaede4280b36451f7e09b42` | `d31c2304d5d4203e81377980196fd6aff0c7cea4d539c60854925ca4bc09542a` |
+| 0.104.0 | Fleet Coordinator | `6ccef1a9c85818300d3fe075521e3271495f818256ddd511a8a54ff6310e76f5` | `2d5cde42c14f7d781196bb5fde34375f2f65ad3e0739adabce9a65a36c6ac77a` |
+| 0.104.0 | Wasm Store | `30fc82a6ac91c42f6a03c6a50b17e420f2e9eb0be16e82dd02400f730f521de9` | `b1b7f293e92002cc640ce9e8c5ca66e1c96f89cfa2d37ce3fd8ab9aa3077bd14` |
+
+These are reproducible absolute release footprints. The builders have different
+source identities and the current builder correctly refuses to build a
+different Canic version. The arithmetic difference is not presented as a
+controlled causal percentage. This supersedes the former 0.103 baseline and
+B8 candidate tables below. The current runtime observation remains directly
+reproducible: two work samples total 46,593 instructions with no Wasm- or
+stable-memory-page growth.
+
+The closeout correction touches only tests, the managed test fixture, a
+development-only parser dependency, guards and documentation. It changes no
+shipped product-role source or runtime dependency; no new product Wasm delta is
+claimed beyond the exact `v0.104.0` release-tree footprint above.
 
 ## B5 Pool, Lifecycle And Snapshot Completion
 
@@ -74,10 +135,11 @@ resume, and unregistered in the restored sealed snapshot. The exact
 Coordinator snapshot/restore journey also passes with no fixed background
 claims.
 
-### Provider Performance
+### Historical Provider Performance Observation
 
-The same application after-completion journey used for B3 and B4 reports two
-work samples and no separate scheduler callback:
+The original development run reported two work samples and no separate
+scheduler callback. The B4/B5 source states were not retained, so this table
+is not independently reproducible and is not closeout evidence:
 
 | Observation | B4 | B5 | B5 minus B4 |
 | --- | ---: | ---: | ---: |
@@ -89,15 +151,14 @@ work samples and no separate scheduler callback:
 | Maximum Wasm-memory growth | 0 pages | 0 pages | 0 pages |
 | Maximum stable-memory growth | 0 pages | 0 pages | 0 pages |
 
-This is a directly comparable provider observation: removing the last central
-dispatch/custody path reduces the complete measured interval callback path by
-about 2.0% from B4 and about 7.0% from B3.
+This historical observation motivated the cleanup, but no causal B4-to-B5
+performance improvement is claimed at closeout.
 
-### Fast-Profile Wasm Comparison
+### Historical Fast-Profile Wasm Observation
 
-The canonical host builder rebuilt the same `apps/test/canic.toml` fast
-profile. The first signed delta compares B5 with B4; the second compares B5
-with published `v0.103.0`.
+The development run recorded the following phase table. Neither the B4 nor B5
+source state was retained, so the values cannot be rebuilt independently and
+are not release acceptance evidence:
 
 | Role | B5 raw bytes | Delta from B4 | Delta from 0.103.0 | Raw SHA-256 | B5 gzip bytes | Delta from B4 | Delta from 0.103.0 | Gzip SHA-256 |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
@@ -107,11 +168,8 @@ with published `v0.103.0`.
 | Wasm Store | 3,339,170 | -10,519 (-0.3140%) | +8,980 (+0.2697%) | `42b8eb226d54afe3be8792e361c6c42afab2a829ef030ef9179881dc058508b5` | 883,868 | -1,310 (-0.1480%) | +4,235 (+0.4815%) | `67d977d7b986a4a98690a29e08f5257828813ae9ed9b1a31ab44be2c4780ffcb` |
 | **Four-role total** | **19,123,973** | **-292,488 (-1.5064%)** | **+222,101 (+1.1750%)** | — | **4,959,574** | **-67,034 (-1.3336%)** | **+96,191 (+1.9779%)** | — |
 
-Every product role is smaller than B4. Coordinator is also about 6.2% smaller
-than `v0.103.0`; the product total remains 1.1750% raw and 1.9779% gzip above
-that published baseline. B5 therefore recovers more than the owner-local glue
-added in B4, but does not claim that the whole 0.104 candidate is smaller than
-0.103.
+The exact release-tree footprints in the closeout correction supersede every
+comparison to `v0.103.0` in this historical phase table.
 
 ### Focused Validation
 
@@ -157,9 +215,12 @@ or deferred application hook. It adds no registry, stable state, Candid
 method, readiness claim or lifecycle export.
 
 The managed Prepared fixture proves init and repeated post-upgrade
-participation without activation. A trapping post-upgrade participant leaves
-the prior module hash and Prepared state committed; rebuilding without the
-test trap then succeeds from that exact boundary. The Root fixture observes
+participation without activation. A trapping init participant leaves the same
+funded canister without a committed module; a later round cannot commit
+deferred work, and corrected installation succeeds on that exact canister. A
+trapping post-upgrade participant leaves the prior module hash and Prepared
+state committed; rebuilding without the test trap then succeeds from that
+exact boundary. The Root fixture observes
 restored Root authority plus the exact
 `canic/async_job_recovery/watchdog` and
 `canic/canister_pool/maintain` claims before participation. The local runtime
@@ -167,10 +228,17 @@ probe reconstructs both application-owned rows synchronously; its deferred
 setup/install/upgrade hooks independently assert that reconstruction already
 occurred.
 
-### Provider Performance
+The normal, init-trapping and post-upgrade-trapping managed artifacts have the
+same extracted Candid SHA-256
+`b7b1bd43d8fecab0da1d06396f3d3b4dbc7dee59d2dc762298cd0f780f250a0d`
+and normalized export SHA-256
+`22d4829a03a3651ff28f2b252021fd05d337b75d5f5839d2871fff635f34c593`.
+Each contains exactly one `canister_init` and one `canister_post_upgrade`.
 
-The directly comparable application after-completion journey still reports
-two work samples and no separate scheduler callback:
+### Current Provider Performance
+
+The final application after-completion journey reports two work samples and no
+separate scheduler callback:
 
 | Observation | B5 | B6 | B6 minus B5 |
 | --- | ---: | ---: | ---: |
@@ -182,16 +250,15 @@ two work samples and no separate scheduler callback:
 | Maximum Wasm-memory growth | 0 pages | 0 pages | 0 pages |
 | Maximum stable-memory growth | 0 pages | 0 pages | 0 pages |
 
-These sub-percent movements are noise-scale. B6 makes no causal performance
-claim.
+The B5 source state was not retained, so the signed B5/B6 cells are historical
+only. The B6/current absolute result of 46,593 total instructions is the
+reproducible closeout observation; no causal phase improvement is claimed.
 
-### Fast-Profile Wasm Comparison
+### Historical Fast-Profile Wasm Observation
 
-The canonical host builder rebuilt the same four product roles. Every raw
-size is exactly unchanged from B5. Managed and Root hashes change because
-their ordinary `start!` expansion contains the new optional grammar; the
-specialized Coordinator and Store artifacts remain byte-identical. The
-one-byte total gzip movement is compression noise.
+The development run recorded the following B5/B6 phase table. The B5 source
+state was not retained, so exact equality and the one-byte gzip movement are
+not independently reproducible and are not closeout evidence.
 
 | Role | B6 raw bytes | Delta from B5 | Raw SHA-256 | B6 gzip bytes | Delta from B5 | Gzip SHA-256 |
 | --- | ---: | ---: | --- | ---: | ---: | --- |
@@ -274,21 +341,28 @@ PocketIC suites were not run.
 
 ## B8 Semantic Ownership And Closeout
 
-B8 was accepted by maintainer continuation on 2026-08-19. The former lexical
-call-site count is replaced by an executable semantic ownership contract. Its
+B8 was accepted by maintainer continuation on 2026-08-19 and structurally
+strengthened by the closeout correction. The former lexical call-site count is
+replaced by a parsed Rust ownership contract. Its
 45-file [shared inventory](consumer-inventory.tsv) covers `apps/`, shipped
 crates and every executable canister fixture, while excluding ordinary test
 modules and the dedicated internal test-harness crate. Each discovered file
 must be classified as fixed Canic consumption, private lifecycle consumption,
 native registration custody, domain async-job recovery, DTO/metrics
 projection or independent application custody; the prohibited scheduling-
-authority class must remain empty.
+authority class must remain empty. An exact per-file native registration
+capability map makes a new or duplicated scheduling call fail even inside an
+already classified file.
 
 Class-specific checks prevent recovery records and projections from acquiring
 native registrations, private lifecycle consumers from retaining registration
-custody, and independent applications from claiming the `canic` owner. Global
-checks reject the removed generic claim/key/workflow/handle vocabulary and any
-direct `ic-cdk-timers` or `cdk::timers` access. Maintained runtime documents
+custody, and independent applications from claiming the `canic` owner. Parsed
+imports reject scheduling-capability aliases and public re-exports; self-tests
+prove comments and strings do not classify a file while unclassified and
+duplicate native calls remain observable. Global checks reject the removed
+generic claim/key/workflow/handle vocabulary and any direct `ic-cdk-timers` or
+`cdk::timers` access, including aliased imports and raw global-timer mechanics.
+Maintained runtime documents
 may name the removed surface only as migration history and do not advertise a
 callable facade.
 
@@ -317,7 +391,8 @@ application-owned after-completion interval. The active Root scheduled rows
 are pool maintenance and the closed async-job recovery watchdog; sealing
 unregisters both without copying provider state.
 
-The directly comparable managed interval is exactly unchanged from B6:
+The B6 column is historical; the B8/current column is the reproducible final
+observation:
 
 | Observation | B6 | B8 | B8 minus B6 |
 | --- | ---: | ---: | ---: |
@@ -329,14 +404,12 @@ The directly comparable managed interval is exactly unchanged from B6:
 | Maximum Wasm-memory growth | 0 pages | 0 pages | 0 pages |
 | Maximum stable-memory growth | 0 pages | 0 pages | 0 pages |
 
-### Final Fast-Profile Wasm Comparison
+### Superseded B8 Fast-Profile Wasm Observation
 
-The canonical host builder repeated all four roles with the same Rust
-toolchain, `fast` profile and `apps/test/canic.toml` configuration in one fresh
-isolated Cargo target. B8 changes only guards, test diagnostics and documents,
-so every raw size is exactly unchanged. Fresh-target codegen identity changes
-some hashes and moves deterministic gzip by seven bytes in total; that is
-compression/build-identity noise, not product behavior or performance.
+The development run recorded the following B6/B8 phase table. The B6 source
+state was not retained, so exact equality and compression-noise claims are not
+independently reproducible. The immutable release-tree table in the closeout
+correction is the final quantitative evidence.
 
 | Role | B8 raw bytes | Delta from B6 | Raw SHA-256 | B8 gzip bytes | Delta from B6 | Gzip SHA-256 |
 | --- | ---: | ---: | --- | ---: | ---: | --- |
@@ -348,9 +421,9 @@ compression/build-identity noise, not product behavior or performance.
 
 ### Focused Validation
 
-The six semantic timer-ownership/provider/document/wait/snapshot guards pass.
+The thirteen structural timer-ownership/provider/document/wait/snapshot guards pass.
 Warning-denied Clippy passes for the semantic guard, timer-authority target and
-internal Root harness; all six lifecycle-boundary guards, changelog governance
+internal Root harness; all five lifecycle-boundary journeys, changelog governance
 and current-document semantics also pass.
 All four timer-authority PocketIC journeys pass in 14.01 seconds after their
 three artifacts were rebuilt; the isolated measurement journey then passes
@@ -359,7 +432,7 @@ snapshot and resume journey passes in 47.50 seconds. B7's exact IcyDB
 composition journey remains the accepted lifecycle-composition proof. The
 complete workspace, release matrix and broad PocketIC suites were not run.
 
-## Immutable 0.103.0 Source Baseline
+## Immutable 0.103.0 Source Identity
 
 | Identity | Exact value |
 | --- | --- |
@@ -463,11 +536,12 @@ current domain demand and dispatch one fenced takeover. It may not own ordinary
 deadlines, persist scheduling commands or generate a new paid operation after
 uncertainty.
 
-## Wasm And Performance Baseline
+## Superseded Wasm And Performance Baseline
 
-B1 is evidence-only, so the 0.104 delta is exactly zero at this point. These
-tagged 0.103.0 fast-profile artifacts are the comparison baseline for later
-source batches:
+B1 was evidence-only. The following development artifacts were originally
+used as the phase baseline, but the later independent release-tree rebuild did
+not reproduce them. They are retained as historical observations and are
+superseded by the closeout-correction table above:
 
 | Role | Raw bytes | Raw SHA-256 | Gzip bytes | Gzip SHA-256 |
 | --- | ---: | --- | ---: | --- |

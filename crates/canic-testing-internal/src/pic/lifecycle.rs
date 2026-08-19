@@ -48,6 +48,8 @@ const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
 static BUILD_ONCE: Once = Once::new();
 static COMBINED_BUILD_ONCE: Once = Once::new();
 const LIFECYCLE_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP", "1");
+const LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV: (&str, &str) =
+    ("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP", "1");
 const ICYDB_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_ICYDB_PARTICIPANT_TRAP", "1");
 
 ///
@@ -60,6 +62,12 @@ pub struct LifecycleBoundaryFixture {
     pub canic_wasm: Vec<u8>,
     pub runtime_probe_wasm: Vec<u8>,
     pub authority_wasm: Vec<u8>,
+}
+
+/// A funded empty canister and the identity-bound arguments for its Canic install.
+pub struct UninstalledCanicFixture {
+    pub canister_id: Principal,
+    pub init_args: Vec<u8>,
 }
 
 ///
@@ -94,18 +102,28 @@ impl CanicIcydbLifecycleFixture {
 }
 
 impl LifecycleBoundaryFixture {
+    /// Create one funded but uninstalled canister with its valid Canic init arguments.
+    #[must_use]
+    pub fn create_uninstalled_canic_canister(&self) -> UninstalledCanicFixture {
+        let canister_id = self.pic.create_canister();
+        self.pic.add_cycles(canister_id, INSTALL_CYCLES);
+        UninstalledCanicFixture {
+            canister_id,
+            init_args: encode_init_args(init_payload(canister_id, self.root)),
+        }
+    }
+
     /// Install one fresh non-root Canic test canister with the standard valid init payload.
     #[must_use]
     pub fn install_canic_canister(&self) -> Principal {
-        let canister_id = self.pic.create_canister();
-        self.pic.add_cycles(canister_id, INSTALL_CYCLES);
+        let uninstalled = self.create_uninstalled_canic_canister();
         self.pic.install_canister(
-            canister_id,
+            uninstalled.canister_id,
             self.canic_wasm.clone(),
-            encode_init_args(init_payload(canister_id, self.root)),
+            uninstalled.init_args,
             None,
         );
-        canister_id
+        uninstalled.canister_id
     }
 
     /// Install the standalone-local runtime probe used by timer behavior tests.
@@ -220,6 +238,30 @@ pub fn lifecycle_participant_trap_wasm() -> Vec<u8> {
             &["canister_test"],
             CanicWasmBuildProfile::Fast,
             &[LIFECYCLE_PARTICIPANT_TRAP_ENV],
+        );
+        read_wasm(
+            &target_dir,
+            "canister_test",
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        )
+    })
+    .clone()
+}
+
+/// Build the managed lifecycle fixture whose init participant traps.
+#[must_use]
+pub fn lifecycle_participant_init_trap_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
+    WASM.get_or_init(|| {
+        let workspace_root = workspace_root();
+        let target_dir =
+            test_target_dir(&workspace_root, "pic-lifecycle-participant-init-trap-wasm");
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &["canister_test"],
+            CanicWasmBuildProfile::Fast,
+            &[LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV],
         );
         read_wasm(
             &target_dir,

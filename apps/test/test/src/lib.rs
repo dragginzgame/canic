@@ -30,6 +30,9 @@ fn lifecycle_participant_init() {
         (0, 0),
         "the managed init participant must run exactly once"
     );
+    if option_env!("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP").is_some() {
+        ic_cdk::trap("managed init lifecycle participant requested a test trap");
+    }
     LIFECYCLE_INIT_EXECUTIONS.set(LIFECYCLE_INIT_EXECUTIONS.get().saturating_add(1));
 }
 

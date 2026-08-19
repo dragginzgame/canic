@@ -14,6 +14,10 @@ ARCHITECTURE="$ROOT/docs/contracts/ARCHITECTURE.md"
 HYGIENE="$ROOT/docs/governance/code-hygiene/README.md"
 AUTH_DESIGN="$ROOT/docs/architecture/authentication.md"
 AUTH_CONTRACT="$ROOT/docs/contracts/AUTH_DELEGATED_SIGNATURES.md"
+TIMER_DESIGN="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/0.104-design.md"
+TIMER_STATUS="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/status.md"
+TIMER_EVIDENCE="$ROOT/docs/audits/working/0.104-timer-ownership/README.md"
+TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
 
 operator_docs=(
     "$ROOT/INSTALLING.md"
@@ -35,6 +39,10 @@ require_files "$GUARD_LABEL" \
     "$HYGIENE" \
     "$AUTH_DESIGN" \
     "$AUTH_CONTRACT" \
+    "$TIMER_DESIGN" \
+    "$TIMER_STATUS" \
+    "$TIMER_EVIDENCE" \
+    "$TIMER_CHANGELOG" \
     "${operator_docs[@]}"
 
 for design_entry in "$ROOT"/docs/design/*; do
@@ -156,6 +164,27 @@ forbid_texts "$STATUS" "$GUARD_LABEL" \
     "latest published package" \
     "Release-truth warning:" \
     "not published or package-versioned"
+
+forbid_texts "$TIMER_DESIGN" "$GUARD_LABEL" \
+    "B7 is authorized" \
+    "B8 remains blocked" \
+    "Blocked on B7"
+forbid_texts "$TIMER_STATUS" "$GUARD_LABEL" \
+    "Keep the open 0.104.0" \
+    "1.1750% raw" \
+    "1.9779% gzip"
+forbid_texts "$STATUS" "$GUARD_LABEL" \
+    "Keep the open 0.104.0" \
+    "1.1750% raw" \
+    "1.9779% gzip"
+require_texts "$TIMER_EVIDENCE" "$GUARD_LABEL" \
+    "not acceptance evidence" \
+    "19,424,848" \
+    "19,124,317" \
+    "controlled causal percentage"
+require_text "$TIMER_CHANGELOG" \
+    "## [0.104.1] - 2026-08-19 - Closeout Evidence Correction" \
+    "$GUARD_LABEL"
 
 for detailed_changelog in "$ROOT"/docs/changelog/*.md; do
     forbid_text "$detailed_changelog" "Release truth:" "$GUARD_LABEL"

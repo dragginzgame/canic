@@ -35,11 +35,12 @@ cuts, so B2 uses current-surface evidence instead: the direct native consumer
 compiles, public facade references are absent, and the maintained source
 inventory guard accepts only the current provider call sites.
 
-## Fast-Profile Wasm Comparison
+## Historical Fast-Profile Wasm Observation
 
-The same canonical host builder, `fast` profile and `apps/test/canic.toml`
-configuration used for the accepted `v0.103.0` baseline rebuilt all four
-roles. Raw and gzip hashes identify the exact current outputs.
+This development-phase table is retained for provenance only. The exact B2
+source state was not preserved, and the alleged 0.103 baseline was not
+reproduced by the independent closeout build. These values are not closeout
+or release acceptance evidence.
 
 | Role | Current raw bytes | Raw delta | Raw delta % | Raw SHA-256 | Current gzip bytes | Gzip delta | Gzip delta % | Gzip SHA-256 |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
@@ -49,13 +50,9 @@ roles. Raw and gzip hashes identify the exact current outputs.
 | Wasm Store | 3,356,397 | +26,207 | +0.7870% | `1a25fffa500bba7ca1458e43365c519dd864f8195e621aec6469b53ea0282e39` | 889,486 | +9,853 | +1.1201% | `e38c6b9f2f749cd6977598563680c353d2efa27787f08f818da3e52ed61ac024` |
 | **Four-role total** | **19,416,477** | **+514,605** | **+2.7225%** | — | **5,030,322** | **+166,939** | **+3.4326%** | — |
 
-The result is a size regression for this intermediate batch, not a saving.
-Managed Component and Root carry the material growth; Coordinator is flat
-within 0.05%, while Store has a smaller positive delta. B3-B5 must measure
-whether distributing fixed registration custody and deleting the remaining
-generic scheduler state recovers this cost. B2 is not a release boundary, so
-the intermediate increase is recorded rather than hidden or treated as a
-reason to restore the removed facade.
+This table was originally interpreted as an intermediate regression. Because
+the phase and baseline cannot be rebuilt, that interpretation is withdrawn;
+the hard cut remains justified by ownership rather than size.
 
 The direct-native `runtime_probe` fixture moved from 3,673,361 to 3,663,579
 raw bytes, a reduction of 9,782 bytes or 0.2663%. Deterministic gzip moved

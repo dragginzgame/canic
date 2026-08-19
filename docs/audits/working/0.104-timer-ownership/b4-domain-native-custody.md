@@ -29,7 +29,7 @@ retention, root Canister-pool maintenance, lifecycle deferrals and the one
 recovery watchdog. Pool, lifecycle and snapshot-registry dissolution remains
 B5 work.
 
-## Provider Inventory And Cost
+## Provider Inventory And Historical Cost Observation
 
 The representative runtime probe's ordinary inventory falls from seven B3
 rows to five B4 rows:
@@ -48,7 +48,9 @@ longer declared. The existing 24-hour authority journey continues to assert
 zero idle callbacks for capability-pruned cycle top-up, intent cleanup and log
 retention.
 
-After two direct application interval callbacks, the provider reported:
+The source and tests still prove the seven-to-five inventory reduction. The
+following B3/B4 instruction table is a historical observation because those
+phase source states were not retained; it is not closeout evidence:
 
 | Observation | B3 | B4 | B4 minus B3 |
 | --- | ---: | ---: | ---: |
@@ -58,20 +60,15 @@ After two direct application interval callbacks, the provider reported:
 | Maximum work instructions | 25,162 | 23,898 | -1,264 (-5.0234%) |
 | Total work instructions | 50,179 | 47,607 | -2,572 (-5.1257%) |
 
-The exact recovery journey recorded one watchdog scheduler sample at 21,515
-instructions and one work sample at 51,221 instructions. Against B3 that is
-+12 scheduler instructions (+0.0558%) and -255 work instructions (-0.4954%):
-noise-scale movement rather than a watchdog performance claim. The meaningful
-B4 runtime result is the removal of two unused provider declarations and the
-roughly 5.1% reduction in the measured application interval's complete shared-
-runtime callback path.
+The watchdog values and signed B3 differences are historical for the same
+reason. The closeout claim is limited to removal of the two unused provider
+declarations; no causal B3-to-B4 performance improvement is claimed.
 
-## Fast-Profile Wasm Comparison
+## Historical Fast-Profile Wasm Observation
 
-The same canonical host builder, `fast` profile and `apps/test/canic.toml`
-configuration rebuilt all four product roles. The B4 column is the current
-output. The first signed delta compares B4 with B3; the second compares B4
-with published `v0.103.0`.
+This development-phase table is retained for provenance only. The B3 and B4
+source states were not preserved, so neither the phase deltas nor the alleged
+0.103 comparison are closeout or release acceptance evidence.
 
 | Role | B4 raw bytes | Delta from B3 | Delta from 0.103.0 | Raw SHA-256 | B4 gzip bytes | Delta from B3 | Delta from 0.103.0 | Gzip SHA-256 |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
@@ -81,13 +78,8 @@ with published `v0.103.0`.
 | Wasm Store | 3,349,689 | 0 | +19,499 (+0.5855%) | `3a824d06fab11f15ffcaf19b12abe51800fe97b7e415d7f4be3058869f1a7071` | 885,178 | 0 | +5,545 (+0.6304%) | `591b5db2e999639749b6bcfd30eea09b0c1149d2d1bfbfe0d31c540fdbdf9d35` |
 | **Four-role total** | **19,416,461** | **+18,030 (+0.0929%)** | **+514,589 (+2.7224%)** | — | **5,026,608** | **+5,457 (+0.1087%)** | **+163,225 (+3.3562%)** | — |
 
-B4 does not make the product set smaller than B3. Moving native claims into
-three exact owners duplicates enough ownership glue to add 18,030 raw and
-5,457 gzip bytes, although the total remains 16 raw and 3,714 gzip bytes below
-B2. Coordinator and Store remain byte-identical to B3, which confines the
-change to the Component and Root consumers that own these jobs. B5 must
-separately measure whether deleting the remaining central pool/lifecycle and
-snapshot registries recovers that cost; B4 makes no such assumption.
+No B3-to-B4 or B4-to-0.103 size conclusion is used at closeout. The immutable
+release-tree footprints in the working README supersede this table.
 
 The current `runtime_probe` fixture is 3,659,738 raw bytes with SHA-256
 `21be5d7bf67dbab0d5dbc21a2413b2a52592d1e4a2ddd2ae60837a698a7f87db`.
@@ -121,6 +113,6 @@ runner-owned shared server with all three Wasm artifacts reused. The exact
 cleanup helper also recognizes and terminates that shared server before its
 private scratch is removed.
 
-The complete workspace, release matrix and broad PocketIC suites were not run.
-They remain maintainer-owned release validation. B4 is accepted, but the
-complete 0.104 B1-B8 release batch is not ready to push or publish.
+The complete workspace, release matrix and broad PocketIC suites were not run
+for this historical phase. Later batches completed B1-B8 and `v0.104.0` was
+published; current closeout authority is recorded in the design status.

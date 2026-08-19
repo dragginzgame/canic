@@ -11,10 +11,9 @@ Date: 2026-08-18
 - External effects: none authorized. B2 remains blocked until accepted B1
   freezes the protocol and an exact maintainer-approved run plan names network,
   identity, count, concurrency, cycle ceiling and terminal asset disposition.
-- Predecessor reconciliation: repository-only B1 may continue while 0.103 and
-  0.104 are pending, but B2 and the final current baseline require accepted
-  0.103 Candid/operation ownership plus accepted 0.104 timer, recovery and
-  stable-state ownership.
+- Predecessor reconciliation: `v0.103.0` and `v0.104.0` are published and the
+  0.104 implementation is complete. B2 and the final current baseline still
+  require accepted 0.104 closeout after its bounded evidence correction.
 - Successors: 0.107 consumes the accepted B1 root-ownership/current-cost
   boundary and is not gated on B2. Accepted B2 evidence is mandatory for
   mutating 0.108 Fleet-estate work.

@@ -60,6 +60,7 @@ candid = { workspace = true }
 criterion = { workspace = true }
 futures = { workspace = true }
 k256 = { workspace = true }
+syn = { workspace = true, features = ["full", "visit"] }
 
 [[bench]]
 name = "serialize"
