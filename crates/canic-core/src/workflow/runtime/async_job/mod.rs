@@ -95,11 +95,10 @@ const fn invariant_failure() -> TimerRunResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::stable::async_job_recovery::{AsyncJobRecoveryData, AsyncJobRecoveryStore};
 
     #[test]
     fn expired_abandonment_clears_only_expired_domain_work() {
-        AsyncJobRecoveryStore::import(AsyncJobRecoveryData::default());
+        AsyncJobRecoveryOps::reset_for_tests();
         let owner = AsyncJobOwner::AuthRenewal;
         assert!(matches!(
             AsyncJobRecoveryOps::claim(owner, 10, 20),

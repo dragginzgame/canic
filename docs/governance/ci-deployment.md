@@ -76,7 +76,7 @@ the process a two-hour idle and hard lifetime. It retains the exact child PID,
 stops and waits for it on every handled exit, and leaves invocation-scratch
 cleanup as a crash-safety fallback bound to the numeric direct-child port path.
 A failed suite prints bounded tails from both server streams next to its own
-retained log. `ic-testkit` 0.8.8 owns the corrected bounded managed-server
+retained log. `ic-testkit` 0.8.9 owns the corrected bounded managed-server
 primitive for one Rust process; Canic keeps a runner-owned server because the
 serial lane crosses several Cargo test processes. Repository fixtures use
 testkit connect mode with their own 30-second instance-construction deadline.
