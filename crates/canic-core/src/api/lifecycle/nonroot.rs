@@ -15,6 +15,17 @@ use crate::{
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    #[doc(hidden)]
+    pub fn configure_component_runtime_with_automatic_topup(
+        request: crate::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
+    ) -> Result<
+        crate::view::fleet_activation::ComponentRuntimeActivationTransition,
+        crate::dto::error::Error,
+    > {
+        crate::workflow::component_runtime::configure_with_automatic_topup(request)
+            .map_err(Into::into)
+    }
+
     /// Return the immutable Registry-issued identity retained by this application Canister.
     pub fn managed_binding() -> Result<ManagedCanisterBinding, crate::dto::error::Error> {
         crate::ops::runtime::env::EnvOps::managed_binding().map_err(Into::into)
@@ -76,6 +87,23 @@ impl LifecycleApi {
         );
     }
 
+    #[doc(hidden)]
+    pub fn init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+        role: CanisterRole,
+        env: EnvBootstrapArgs,
+        config: ConfigModel,
+        config_source: &str,
+        config_path: &str,
+    ) {
+        lifecycle::init::nonroot::init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+            role,
+            env,
+            config,
+            config_source,
+            config_path,
+        );
+    }
+
     #[must_use]
     pub fn post_upgrade_nonroot_canister_before_bootstrap(
         role: CanisterRole,
@@ -84,6 +112,22 @@ impl LifecycleApi {
         config_path: &str,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(
+            role,
+            config,
+            config_source,
+            config_path,
+        )
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
+        role: CanisterRole,
+        config: ConfigModel,
+        config_source: &str,
+        config_path: &str,
+    ) -> bool {
+        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
             role,
             config,
             config_source,
@@ -103,6 +147,22 @@ impl LifecycleApi {
         config_path: &str,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_local_nonroot_canister_before_bootstrap(
+            role,
+            config,
+            config_source,
+            config_path,
+        )
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+        role: CanisterRole,
+        config: ConfigModel,
+        config_source: &str,
+        config_path: &str,
+    ) -> bool {
+        lifecycle::upgrade::nonroot::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
             role,
             config,
             config_source,

@@ -28,9 +28,12 @@ use crate::{
 };
 
 pub use nonroot::{
-    init_local_nonroot_canister, init_nonroot_canister, init_wasm_store_canister,
+    init_local_nonroot_canister, init_local_nonroot_canister_with_automatic_topup,
+    init_nonroot_canister, init_wasm_store_canister,
     post_upgrade_local_nonroot_canister_after_memory_init,
+    post_upgrade_local_nonroot_canister_with_automatic_topup_after_memory_init,
     post_upgrade_nonroot_canister_after_memory_init,
+    post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init,
 };
 pub use root::{init_root_canister, post_upgrade_root_canister_after_memory_init};
 
@@ -42,12 +45,17 @@ pub use root::{init_root_canister, post_upgrade_root_canister_after_memory_init}
 pub struct RuntimeWorkflow;
 
 impl RuntimeWorkflow {
-    /// Start timers that should run on all non-root canisters.
+    /// Start fixed runtime consumers shared by non-root profiles.
     pub fn start_all() -> Result<(), InternalError> {
         workflow::runtime::log::LogRetentionWorkflow::start()?;
-        workflow::runtime::cycles::CycleWorkflow::start()?;
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
         Ok(())
+    }
+
+    /// Start the shared consumers plus the compile-selected automatic top-up owner.
+    pub fn start_all_with_automatic_topup() -> Result<(), InternalError> {
+        Self::start_all()?;
+        workflow::runtime::cycles::CycleWorkflow::start()
     }
 
     /// Start timers that should run only on root canisters.
@@ -56,7 +64,6 @@ impl RuntimeWorkflow {
 
         // Start shared runtime owners before root-only services.
         workflow::runtime::log::LogRetentionWorkflow::start()?;
-        workflow::runtime::cycles::CycleWorkflow::start()?;
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
 
         // root-only services

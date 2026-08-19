@@ -132,6 +132,54 @@ fn root_post_upgrade_schedules_services_and_hooks_only_when_active() {
 }
 
 #[test]
+fn automatic_topup_reachability_requires_the_compiled_capability() {
+    let start = read_source("crates/canic/src/macros/start.rs");
+    let nonroot = macro_section(
+        &start,
+        "macro_rules! __canic_start_nonroot_lifecycle_core",
+        "// Lifecycle core for the host-installed sibling Wasm Store.",
+    );
+    let local = macro_section(
+        &start,
+        "macro_rules! __canic_start_local_lifecycle_core",
+        "// Lifecycle core for the root Canic canister.",
+    );
+    for lifecycle in [nonroot, local] {
+        assert!(
+            lifecycle.contains("#[cfg(canic_capability_automatic_topup)]")
+                && lifecycle.contains("#[cfg(not(canic_capability_automatic_topup))]"),
+            "non-root lifecycle must select its runtime owner from the compiled capability"
+        );
+    }
+
+    let endpoints = read_source("crates/canic/src/macros/endpoints/role.rs");
+    assert!(
+        endpoints.contains("LifecycleApi::configure_component_runtime_with_automatic_topup")
+            && endpoints.contains("ComponentRuntimeApi::configure;"),
+        "managed activation must select the exact capability-pruned runtime path"
+    );
+
+    let runtime = read_source("crates/canic-core/src/workflow/runtime/mod.rs");
+    assert!(!function_body(&runtime, "start_all").contains("CycleWorkflow"));
+    assert!(function_body(&runtime, "start_all_with_automatic_topup").contains("CycleWorkflow"));
+    assert!(!function_body(&runtime, "start_all_root").contains("CycleWorkflow"));
+
+    let timer = read_source("crates/canic-core/src/workflow/runtime/timer/mod.rs");
+    assert!(!function_body(&timer, "suspend_root").contains("CycleWorkflow"));
+    assert!(!function_body(&timer, "recover_expired_async_jobs").contains("CycleWorkflow"));
+    assert!(
+        function_body(&timer, "recover_expired_async_jobs_with_automatic_topup")
+            .contains("CycleWorkflow")
+    );
+
+    let topology = read_source("crates/canic-core/src/workflow/cascade/topology.rs");
+    assert!(
+        !topology.contains("CycleWorkflow"),
+        "topology linkage alone must not grant automatic top-up custody"
+    );
+}
+
+#[test]
 fn lifecycle_participant_is_paired_safe_and_ordered_before_deferred_work() {
     let source = read_source("crates/canic/src/macros/start.rs");
     let nonroot = macro_section(
@@ -222,7 +270,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str, root: &str)
     assert_ordered(
         function_body(nonroot, "post_upgrade"),
         &[
-            "post_upgrade_nonroot_canister_before_bootstrap(",
+            "let active = restore_runtime(",
             "$(($lifecycle_post_upgrade)();)?",
             "if active {",
         ],
@@ -231,7 +279,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str, root: &str)
     assert_ordered(
         function_body(local, "init"),
         &[
-            "init_local_nonroot_canister_before_bootstrap(",
+            "initialize_runtime(",
             "$(($lifecycle_init)();)?",
             "$crate::__canic_after_optional_start_init_hook!",
         ],
@@ -240,7 +288,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str, root: &str)
     assert_ordered(
         function_body(local, "post_upgrade"),
         &[
-            "post_upgrade_local_nonroot_canister_before_bootstrap(",
+            "let _active = restore_runtime(",
             "$(($lifecycle_post_upgrade)();)?",
             "$crate::__canic_after_optional_start_init_hook!",
         ],

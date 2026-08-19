@@ -124,7 +124,11 @@ The returned registration is a non-clone owner capability:
 - dropping the Rust value only detaches the caller's control capability. It
   does not cancel or unregister the timer.
 
-Inventory and `has_armed_wakeup()` are observations, not durable authority.
+Provider inventory is volatile.
+Provider inventory is not durable business demand.
+Provider inventory is not an application recovery record.
+`timer_inventory()` and `has_armed_wakeup()` are observations, not durable
+authority.
 When authoritative application state requires a wake-up, reconcile or ensure
 it directly instead of using a check-then-schedule decision.
 
@@ -171,6 +175,12 @@ fn reconstruct_application_timers() -> Result<(), Box<dyn std::error::Error>> {
 construct retained declarations on a fresh heap and then reconcile their
 desired state. Use direct registration for transient `RemoveWhenStopped`
 work.
+
+When a callback can trigger a paid or externally mutating effect, persist the
+application operation or receipt identity before the effect. A response lost
+after the effect must retry that same operation identity; a provider callback
+generation or `RetryAfter` directive is not an application idempotency key and
+must not be copied into a generic recovery record.
 
 ## Compose Synchronous Lifecycle Work
 

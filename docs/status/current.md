@@ -72,8 +72,8 @@ corrected B1 protocol is actually pruned:
 external artifact metadata selects the exact profile-specific binding before
 the first call, `Overview` only verifies it, and
 config-derived `AutomaticTopup` rather than mandatory `Runtime` owns top-up
-history and public handler reachability. Private automatic-top-up timer and
-callback pruning remains the explicit 0.104 owner. Endpoint
+history and public handler reachability. Private automatic-top-up timer,
+callback and workflow pruning remains the explicit 0.104 owner. Endpoint
 source, authorization/payload attributes, immediate delegates and replay
 policy are frozen; existing typed config derivation remains the capability
 authority. The corrected six-way review disposes all 188 Canic-owned appearances: 49
@@ -123,10 +123,10 @@ Memory ID 60 now contains only checked domain
 attempt leases and cycle-top-up's exact retry generation; pending timer
 commands, schedule ownership, generic recovery deadlines, copied retry streaks
 and terminal provider state are deleted. The exact worst-case record encoding
-is 589 bytes. B4 is implementation-complete: auth renewal, automatic cycle
-top-up and placement acknowledgement now own lazy native registrations and
-exact domain recovery. The representative provider inventory falls from seven
-rows to five. B5 is accepted: the remaining central claim and participant
+is 589 bytes. B4 moved auth renewal, automatic cycle top-up and placement
+acknowledgement to lazy native registrations and exact domain recovery. Its
+seven-to-five provider result is a historical B3/B4 development observation;
+the final inventory is role-specific. B5 is accepted: the remaining central claim and participant
 registries are deleted and pool/lifecycle/snapshot owners retain exact native
 custody. The intermediate B2-B6 size and instruction deltas are historical
 development observations only because their exact source states were not
@@ -134,10 +134,16 @@ preserved. B6 is accepted on locked `ic-testkit 0.8.8`: the maintained native
 guide and direct-provider fixture replace the removed facade examples, and
 ordinary managed, Root and local start macros accept one safe paired
 synchronous lifecycle participant after Canic restoration and before deferred
-work. The current final-tree interval observation is 46,593 instructions with
-zero Wasm- or stable-memory-page growth.
-Repository-only 0.106 B1 evidence may continue, but its final
-Candid/timer/state inventory must reconcile before its next source batch.
+work. The 46,593-instruction result with zero Wasm- or stable-memory-page
+growth is one current two-work-sample observation.
+
+The 2026-08-19 independent closeout audit reopened the line: published
+`v0.104.1` freezes native constructors but not registration method actions;
+capability-disabled product artifacts retain automatic-top-up callback and
+workflow code; and the exact release-build-ID inputs behind the recorded byte
+table were not retained. The working tree contains the open `0.104.2`
+corrective candidate for those defects. It is not published, so existing 0.105
+and 0.106 work must not consume it as an accepted predecessor.
 
 Scheduled 0.105 now owns framework-neutral caller-bound scoped local
 application sessions directly after 0.104; presentation supplies no semantic
@@ -148,7 +154,8 @@ native-agent prepare/retrieve/present journey are retained under
 accepted caller-derived signed presenter/subject identity and target-local
 typed replay-capacity denial on 2026-08-19. B2 now owns the presenter-bearing
 token hard cut, canonical application scopes, one verified-authority model and
-pure closed policy. B3 is active; B4-B7 remain held on their predecessor gates.
+pure closed policy. Existing B3 work is paused; B3-B7 remain held on the
+reopened 0.104 predecessor gate.
 
 The scheduled 0.106 B1 is approved to freeze current pool/platform provenance,
 measurement/reset protocol, horizon-qualified standby semantics and production
@@ -213,14 +220,14 @@ synchronous lifecycle participant with exact restore-before-participant-before-
 defer ordering, Prepared/inactive execution and trap rollback. B7 composes that
 participant with exact published IcyDB 0.230.2 and proves one timer provider,
 one lifecycle export pair, separate reconstructed rows, rollback and corrected
-retry. B8 parses the complete Rust ownership set, freezes exact native
-registration callsites and rejects disguised or duplicated authority across
-applications, crates and executable fixtures. The 0.104 implementation batch
-and bounded closeout correction are complete.
-0.105 local authorization
-follows it without an observatory dependency. 0.106 remains evidence-only
-until accepted B1, 0.103/0.104 reconciliation and an approved external run
-plan. 0.107 requires
+retry. Published B8 parses the complete Rust ownership set and freezes native
+constructors. The `0.104.2` candidate also freezes registration method
+actions and rejects their disguised or duplicated use across applications,
+crates and executable fixtures. Existing 0.105 local-authorization work
+remains preserved without an observatory dependency, but further successor
+mutation is held on the reopened 0.104 closeout. 0.106 remains evidence-only
+until accepted B1, final 0.103/0.104 reconciliation and an approved external
+run plan. 0.107 requires
 its accepted inputs and own proof; 0.108 requires completed 0.107 plus
 application-retirement evidence; 0.109 requires accepted 0.108 and an exact
 released predecessor; and 0.110 requires accepted 0.109 closeout. Deferred
@@ -366,13 +373,14 @@ Focused 0.104 B4 validation passes 1,118 of 1,119 core library tests with one
 ignored, both source-inventory guards, warning-denied Clippy for core, control
 plane, facade, runtime probe and the timer-authority target, the real restored-
 Root snapshot/resume journey and all four canonical product builds. All four
-timer-authority PocketIC journeys passed on the B4 source. The representative
-inventory falls from seven rows to five because an absent `AutomaticTopup`
-capability and empty receipt index reserve no native declarations. The
+timer-authority PocketIC journeys passed on the B4 source. The historical
+B3/B4 run recorded a representative inventory change from seven rows to five
+because an absent `AutomaticTopup` capability and empty receipt index reserved
+no native declarations. The
 instruction and size tables are historical only because the exact B3 and B4
 source states were not retained; no phase improvement is claimed.
-The current `ic-testkit` 0.8.7 graph reruns all four journeys successfully in
-6.89 seconds through one runner-owned shared server. The complete suite was
+The then-current `ic-testkit` 0.8.7 graph reran all four journeys successfully
+in 6.89 seconds through one runner-owned shared server. The complete suite was
 not rerun.
 
 Focused 0.104 B5 validation deletes the remaining central native-claim union
@@ -428,10 +436,11 @@ duplicate or missing rows and scheduling-state drift. The locked PocketIC
 journey passes in 11.59 seconds and warning-denied targeted Clippy passes; no
 product canister source or interface changed.
 
-Focused 0.104 B8 validation now parses the 45-file Rust ownership set, freezes
-exact native-capability callsites and rejects aliases, public re-exports,
-unclassified files and duplicate custody. It closes the exact one-provider
-lock and nine-manifest declaration set. All thirteen structural provider,
+Focused 0.104 B8 validation parses the 45-file Rust ownership set. The
+`0.104.2` candidate freezes native constructors and registration method
+actions and rejects aliases, public re-exports, unclassified files and
+duplicate custody. It closes the exact one-provider lock and nine-manifest
+declaration set. All sixteen structural provider,
 ownership, documentation, raw-access, wait and snapshot guards pass. The four
 timer-authority journeys pass in 14.01 seconds, and the exact isolated
 measurement journey passes warm in 3.24 seconds. It reports four managed rows,
@@ -439,9 +448,14 @@ one scheduled, no top-up row and the exact B6 interval result: two work
 samples, 46,593 total instructions and zero memory-page growth. The focused
 Root restore journey passes in 47.50 seconds and reports four declared rows,
 two scheduled while active and zero while sealed, with no top-up row. Exact
-release-tree builds produce 19,424,848 raw / 5,030,696 gzip bytes for 0.103.0
-and 19,124,317 raw / 4,959,729 gzip bytes for 0.104.0. Each release uses its
-own canonical builder, so no controlled causal percentage is claimed.
+release-identity-bearing observations recorded 19,424,848 raw / 5,030,696
+gzip bytes for 0.103.0 and 19,124,317 raw / 4,959,729 gzip bytes for 0.104.0,
+but their exact release-build-ID inputs were not retained. They are not
+independently reproducible closeout authority. The documented no-ID command
+produces 19,424,589 / 5,030,663 for 0.103.0, 19,123,930 / 4,959,656 for
+0.104.0 and 19,123,917 / 4,959,773 for 0.104.1; those results are not
+canonical release-identity evidence. No controlled causal percentage is
+claimed.
 Targeted warning-denied Clippy passes for the semantic guard, timer target and
 internal Root harness. The lifecycle-boundary journeys, changelog governance
 and current-document semantics also pass. The complete suite was not rerun.
@@ -646,10 +660,12 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-Published `v0.104.0` contains the runtime hard cut and published `v0.104.1`
-contains its bounded closeout correction. For 0.105, implement B3's canonical
-scoped session/replay state and remove the predecessor subject-only session. The
-maintainer-owned complete validation and release flow remain separate.
+Finish targeted validation of the bounded `0.104.2` corrective candidate and
+preserve the existing 0.105 B1/B2 work without extending successor mutation.
+The maintainer must run the complete validation and release flow and publish a
+new immutable `v0.104.2` tag. Before release verification, the maintainer must
+also remove/refetch the incorrect local lightweight
+`v0.103.0` shadow; do not move either published tag.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

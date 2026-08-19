@@ -101,7 +101,11 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
+            #[cfg(canic_capability_automatic_topup)]
+            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap;
+            #[cfg(not(canic_capability_automatic_topup))]
+            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap;
+            let active = restore_runtime(
                 $canister_role,
                 config,
                 config_source,
@@ -284,7 +288,11 @@ macro_rules! __canic_start_local_lifecycle_core {
                 .expect("local bootstrap role must belong to exactly one Component Spec");
             let env = __canic_local_env(role.clone(), component_spec);
 
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap(
+            #[cfg(canic_capability_automatic_topup)]
+            let initialize_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_with_automatic_topup_before_bootstrap;
+            #[cfg(not(canic_capability_automatic_topup))]
+            let initialize_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap;
+            initialize_runtime(
                 role,
                 env,
                 config,
@@ -315,7 +323,11 @@ macro_rules! __canic_start_local_lifecycle_core {
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            let _active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_before_bootstrap(
+            #[cfg(canic_capability_automatic_topup)]
+            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap;
+            #[cfg(not(canic_capability_automatic_topup))]
+            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_before_bootstrap;
+            let _active = restore_runtime(
                 $canister_role,
                 config,
                 config_source,

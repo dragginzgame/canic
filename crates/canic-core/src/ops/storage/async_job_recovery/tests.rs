@@ -17,6 +17,7 @@ fn acquired(claim: AsyncJobClaim) -> AsyncJobAttempt {
 
 #[test]
 fn live_attempts_coalesce_and_expired_minimal_takeover_advances_only_the_attempt() {
+    let _guard = crate::test::seams::lock();
     reset();
     let owner = AsyncJobOwner::AuthRenewal;
     let first = acquired(AsyncJobRecoveryOps::claim(owner, 10, 20).expect("claim first attempt"));
@@ -33,6 +34,7 @@ fn live_attempts_coalesce_and_expired_minimal_takeover_advances_only_the_attempt
 
 #[test]
 fn cycle_takeover_and_retry_reuse_only_the_exact_cycle_operation() {
+    let _guard = crate::test::seams::lock();
     reset();
     let owner = AsyncJobOwner::CycleTopup;
     let first = acquired(AsyncJobRecoveryOps::claim(owner, 10, 20).expect("claim first operation"));
@@ -58,6 +60,7 @@ fn cycle_takeover_and_retry_reuse_only_the_exact_cycle_operation() {
 
 #[test]
 fn non_cycle_retry_completion_retains_no_generated_operation_identity() {
+    let _guard = crate::test::seams::lock();
     reset();
     let owner = AsyncJobOwner::PlacementReceiptAcknowledgement;
     let first = acquired(AsyncJobRecoveryOps::claim(owner, 1, 3).expect("claim placement job"));
@@ -72,6 +75,7 @@ fn non_cycle_retry_completion_retains_no_generated_operation_identity() {
 
 #[test]
 fn stale_completion_cannot_clear_a_takeover_attempt() {
+    let _guard = crate::test::seams::lock();
     reset();
     let owner = AsyncJobOwner::CanisterPoolMaintenance;
     let first = acquired(AsyncJobRecoveryOps::claim(owner, 1, 2).expect("claim first attempt"));
@@ -93,6 +97,7 @@ fn stale_completion_cannot_clear_a_takeover_attempt() {
 
 #[test]
 fn abandon_clears_only_active_and_cycle_retry_authority() {
+    let _guard = crate::test::seams::lock();
     reset();
     let cycle = acquired(
         AsyncJobRecoveryOps::claim(AsyncJobOwner::CycleTopup, 1, 2).expect("claim cycle operation"),
@@ -121,6 +126,7 @@ fn abandon_clears_only_active_and_cycle_retry_authority() {
 
 #[test]
 fn invalid_lease_and_generation_exhaustion_fail_without_mutation() {
+    let _guard = crate::test::seams::lock();
     reset();
     assert!(AsyncJobRecoveryOps::claim(AsyncJobOwner::AuthRenewal, 2, 2).is_err());
 
@@ -142,4 +148,81 @@ fn invalid_lease_and_generation_exhaustion_fail_without_mutation() {
     assert!(AsyncJobRecoveryOps::claim(AsyncJobOwner::AuthRenewal, 1, 2).is_err());
     assert!(AsyncJobRecoveryOps::claim(AsyncJobOwner::CycleTopup, 1, 2).is_err());
     assert_eq!(AsyncJobRecoveryStore::export().record, record);
+}
+
+#[test]
+fn every_closed_owner_survives_response_loss_restart_and_one_fenced_takeover() {
+    let _guard = crate::test::seams::lock();
+    let journeys = [
+        (AsyncJobOwner::AuthRenewal, "issuer-template-and-proof"),
+        (
+            AsyncJobOwner::CanisterPoolMaintenance,
+            "pool-record-and-maintenance-journal",
+        ),
+        (AsyncJobOwner::CycleTopup, "parent-funding-operation"),
+        (
+            AsyncJobOwner::PlacementReceiptAcknowledgement,
+            "terminal-placement-receipt",
+        ),
+    ];
+
+    for (owner, authoritative_domain_identity) in journeys {
+        reset();
+        let first = acquired(
+            AsyncJobRecoveryOps::claim(owner, 10, 20)
+                .expect("record demand and claim the first external-effect attempt"),
+        );
+        let first_operation_id = first.operation_id();
+        let committed_boundary = AsyncJobRecoveryStore::export();
+
+        // Simulate a lost response and same-release heap restart. Domain demand lives in
+        // its owner; memory ID 60 restores only the exact attempt fence.
+        AsyncJobRecoveryStore::import(committed_boundary);
+        assert!(!authoritative_domain_identity.is_empty());
+        assert_eq!(
+            AsyncJobRecoveryOps::claim(owner, 19, 30).expect("reject overlap before lease expiry"),
+            AsyncJobClaim::Busy { retry_at_ns: 20 }
+        );
+
+        let takeover = acquired(
+            AsyncJobRecoveryOps::claim(owner, 20, 40)
+                .expect("claim the single fenced takeover at lease expiry"),
+        );
+        assert_eq!(takeover.attempt_generation, first.attempt_generation + 1);
+        assert_eq!(
+            AsyncJobRecoveryOps::claim(owner, 21, 50).expect("coalesce every competing takeover"),
+            AsyncJobClaim::Busy { retry_at_ns: 40 }
+        );
+        assert!(
+            !AsyncJobRecoveryOps::finish(first, AsyncJobCompletion::Success)
+                .expect("reject a late completion from the lost response")
+        );
+        assert_eq!(AsyncJobRecoveryOps::active_lease_deadline(owner), Some(40));
+
+        if owner == AsyncJobOwner::CycleTopup {
+            assert_eq!(takeover.operation_id(), first_operation_id);
+            assert!(
+                AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::RetryableFailure)
+                    .expect("retain exact uncertain funding identity")
+            );
+            let retry = acquired(
+                AsyncJobRecoveryOps::claim(owner, 41, 60)
+                    .expect("retry the same parent-funding operation"),
+            );
+            assert_eq!(retry.operation_id(), first_operation_id);
+            assert!(
+                AsyncJobRecoveryOps::finish(retry, AsyncJobCompletion::Success)
+                    .expect("commit the exact funding retry")
+            );
+        } else {
+            assert_eq!(first_operation_id, None);
+            assert_eq!(takeover.operation_id(), None);
+            assert!(
+                AsyncJobRecoveryOps::finish(takeover, AsyncJobCompletion::Success)
+                    .expect("commit the owner-bound domain operation")
+            );
+        }
+
+        assert_eq!(AsyncJobRecoveryOps::active_lease_deadline(owner), None);
+    }
 }

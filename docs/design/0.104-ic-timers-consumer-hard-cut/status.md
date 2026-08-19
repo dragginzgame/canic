@@ -4,20 +4,21 @@ Date: 2026-08-19
 
 ## Status
 
-- State: implementation-complete as application-safety step 2. The 2026-08-18
-  Prequel Wars review promotes downstream native-timer adoption and the
-  synchronous lifecycle-participant seam into this line. The maintainer
-  accepted the complete B1 evidence on 2026-08-18 and accepted B2 on the same
-  date with its intermediate Wasm observation retained. Continuation accepted
-  B3-B8 after their behavioral evidence and current-graph PocketIC checks.
-  Published `v0.104.0` contains that runtime boundary. A bounded 0.104.1
-  closeout correction replaces the lexical B8 census, completes failed-install
-  participant rollback evidence and corrects the quantitative record.
+- State: closeout reopened by the 2026-08-19 independent audit. Published
+  `v0.104.0` contains the accepted runtime hard cut and published `v0.104.1`
+  contains its first bounded evidence correction. The audit then found that
+  the B8 guard froze native constructors but not registration method actions,
+  capability-disabled artifacts retained the automatic-top-up callback and
+  workflow, and the recorded release-size command omitted a release-build-ID
+  input needed to reproduce its byte table. The working tree contains a
+  bounded `0.104.2` corrective candidate; it is not part of either published tag
+  and does not close the line until the maintainer publishes that release.
 - Runtime impact: B2 removes the public timer facade and transient claim
   machinery. B3 hard-cuts memory ID 60 to minimal domain attempt fences and
   cycle-only exact retry identity. B4 moves auth, cycles and placement to lazy
-  owner-native registrations, reducing the representative provider inventory
-  from seven rows to five. It changes no Candid. B5 deletes the remaining
+  owner-native registrations. The seven-to-five result is a historical B3/B4
+  development observation; the final inventory is role-specific rather than a
+  five-row universal runtime. It changes no Candid. B5 deletes the remaining
   central claim and participant registries, gives pool maintenance and the one
   Root watchdog direct native
   custody, and splits Root/Coordinator snapshot linkage. The original B2-B6
@@ -29,15 +30,24 @@ Date: 2026-08-19
   that seam with exact published IcyDB, proving one resolved provider, one lifecycle
   export pair and complete phase-specific shared inventories with separately
   reconstructed owner rows. Its artifact is
-  test-only and changes no shipped product role. B8 parses the 45-file Rust
-  ownership set, freezes exact native-capability callsites and rejects renamed,
-  re-exported, unclassified or duplicate scheduling authority. The current
-  interval observation is 46,593 instructions with no memory-page growth.
-- Quantitative boundary: exact locked release-tree builds report 19,424,848
-  raw / 5,030,696 gzip bytes for 0.103.0 and 19,124,317 raw / 4,959,729 gzip
-  bytes for 0.104.0. Each release uses its own version-enforcing canonical
-  builder, so no controlled causal percentage is claimed. Intermediate phase
-  tables are historical only.
+  test-only and changes no shipped product role. Published B8 parses the
+  45-file Rust ownership set and freezes native constructors. The corrective
+  `0.104.2` candidate additionally freezes exact registration actions and
+  rejects their aliased, unclassified or duplicate use. The 46,593-instruction, zero-page
+  result is one current two-work-sample observation, not a threshold or causal
+  performance claim. The `0.104.2` candidate adds doc-hidden macro plumbing
+  for capability-specific internal selection but no supported facade/prelude
+  item, lifecycle grammar or Candid method.
+- Quantitative boundary: the recorded 19,424,848 raw / 5,030,696 gzip bytes
+  for 0.103.0 and 19,124,317 raw / 4,959,729 gzip bytes for 0.104.0 are retained
+  as historical release-identity-bearing observations. Their exact
+  release-build-ID inputs were not retained, so they are not independently
+  reproducible closeout authority. Rerunning the documented no-ID command
+  produces 19,424,589 / 5,030,663 for 0.103.0, 19,123,930 / 4,959,656 for
+  0.104.0 and 19,123,917 / 4,959,773 for 0.104.1.
+  These no-ID results are not canonical release-identity evidence.
+  No controlled causal percentage is claimed. Intermediate phase tables are
+  historical only.
 - Baseline finding: Canic resolves one `ic-timers 0.6.1` runtime and has no raw
   production `ic-cdk-timers` path, but duplicate provider vocabulary, a public
   application facade and generic stable shadow scheduling remain in published
@@ -46,10 +56,10 @@ Date: 2026-08-19
   or compatibility surface is permitted.
 - Predecessor: `v0.103.0` publishes the completed role-owned Candid and
   autonomous-operation hard cut. B1 inventories that exact tagged result.
-- Successors: 0.105 local application authorization follows directly. 0.106
-  platform B1 may continue as evidence-only work but must reconcile its final
-  timer inventory against 0.104. No 0.107 root-funding or 0.108 estate
-  mutation begins before 0.104 closeout.
+- Successors: existing 0.105 work remains preserved, but no new successor
+  mutation should consume the reopened boundary. 0.106 B1 evidence may remain
+  preserved, but its final timer inventory must reconcile against the eventual
+  published `v0.104.2` correction rather than published `v0.104.1`.
 
 ## Release-Batch Tracker
 
@@ -100,9 +110,11 @@ designs and deferred drafts retain their truthful old identities.
 
 ## Next Authorized Action
 
-Published `v0.104.0` remains the runtime release. The bounded closeout
-correction is recorded in the open 0.104.1 changelog. Versioning, tagging and
-publication remain part of the separately owned maintainer release flow. After
-its targeted checks, the only remaining action is maintainer closeout review.
-Scheduled 0.105 B1 still requires explicit maintainer promotion and is not
-authorized by this completion.
+Finish targeted validation of the bounded `0.104.2` corrective candidate and
+preserve the existing 0.105 work without extending it. The maintainer must then
+run the complete release gate and publish a new immutable `v0.104.2` tag. The
+local lightweight `v0.103.0` shadow must also be removed and refetched
+by the maintainer before release verification; it currently resolves to
+`721783675c2e7dc0981d7fa7639f654b84593df7`, while the published annotated tag
+object `b571f51a1e599677752b61b1f7ad1fae9e455186` peels to
+`89be28f8edf0d55035ddac0c864d6c99771fc49c`. Do not move either published tag.

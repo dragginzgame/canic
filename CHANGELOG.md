@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.104.md](docs/changelog/0.104.md)
 
+- `0.104.2` closes the reopened timer-ownership audit by freezing native
+  registration actions, pruning automatic-top-up code from capability-disabled
+  artifacts, proving closed-owner takeover and correcting quantitative evidence
+  authority without changing Candid or stable state.
+
 - `0.104.1` strengthens the timer-ownership contract from lexical hits to
   parsed Rust authority plus exact native callsites, adds failed-install
   lifecycle-participant rollback and corrected retry on the same canister,

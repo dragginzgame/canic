@@ -96,6 +96,25 @@ pub fn prepare_directory(
 pub fn configure(
     request: ComponentRuntimeDirectoryPreparationRequest,
 ) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
+    configure_with_runtime(
+        request,
+        crate::workflow::runtime::RuntimeWorkflow::start_all,
+    )
+}
+
+pub fn configure_with_automatic_topup(
+    request: ComponentRuntimeDirectoryPreparationRequest,
+) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
+    configure_with_runtime(
+        request,
+        crate::workflow::runtime::RuntimeWorkflow::start_all_with_automatic_topup,
+    )
+}
+
+fn configure_with_runtime(
+    request: ComponentRuntimeDirectoryPreparationRequest,
+    start_runtime: fn() -> Result<(), InternalError>,
+) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
     let current = status()?;
     match current.phase {
         ComponentRuntimePhase::AwaitingDirectory | ComponentRuntimePhase::DirectoryPrepared => {
@@ -103,10 +122,13 @@ pub fn configure(
             let directory_authority_hash = prepared
                 .authority_hash
                 .ok_or_else(InternalError::invariant)?;
-            activate(ComponentRuntimeActivationRequest {
-                operation_id: request.operation_id,
-                directory_authority_hash,
-            })
+            activate_with_runtime(
+                ComponentRuntimeActivationRequest {
+                    operation_id: request.operation_id,
+                    directory_authority_hash,
+                },
+                start_runtime,
+            )
         }
         ComponentRuntimePhase::Active => {
             let status = synchronize_directory(ComponentRuntimeDirectorySynchronizationRequest {
@@ -246,6 +268,16 @@ fn active_service_authority_matches(
 pub fn activate(
     request: ComponentRuntimeActivationRequest,
 ) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
+    activate_with_runtime(
+        request,
+        crate::workflow::runtime::RuntimeWorkflow::start_all,
+    )
+}
+
+fn activate_with_runtime(
+    request: ComponentRuntimeActivationRequest,
+    start_runtime: fn() -> Result<(), InternalError>,
+) -> Result<crate::view::fleet_activation::ComponentRuntimeActivationTransition, InternalError> {
     let current = status()?;
     let expected_authority_hash = match current.phase {
         ComponentRuntimePhase::AwaitingDirectory | ComponentRuntimePhase::DirectoryPrepared => {
@@ -265,7 +297,7 @@ pub fn activate(
         .map_err(StorageOpsError::from)
         .map_err(InternalError::from)?;
     if transition.transitioned
-        && let Err(error) = crate::workflow::runtime::RuntimeWorkflow::start_all()
+        && let Err(error) = start_runtime()
     {
         IcOps::trap(format!(
             "Component runtime activation could not establish runtime services: {error}"

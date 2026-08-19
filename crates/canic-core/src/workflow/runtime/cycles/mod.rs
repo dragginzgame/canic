@@ -33,8 +33,7 @@ use crate::{
 };
 use ic_timers::{
     DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerProcessCondition, TimerRunResult, TimerSchedule, register_once,
-    timer_snapshot,
+    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -47,7 +46,6 @@ const RETRY_INITIAL: Duration = Duration::from_mins(1);
 const RETRY_MAX: Duration = Duration::from_mins(30);
 
 thread_local! {
-    static INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED: Cell<bool> = const { Cell::new(false) };
     static RESOURCE_EXHAUSTION_RECOVERY_CONSUMED: Cell<bool> = const { Cell::new(false) };
     static TOPUP_TIMER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
 }
@@ -75,19 +73,6 @@ impl CycleWorkflow {
     /// Return the exact automatic-top-up native identity.
     pub(crate) fn timer_identity() -> Result<TimerIdentity, TimerError> {
         TimerIdentity::try_new("canic", "cycles", "topup").map_err(Into::into)
-    }
-
-    /// Return the claimed automatic-top-up identity, when the capability is configured.
-    pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
-        with_owned_once(&TOPUP_TIMER, |registration| registration.identity().clone())
-    }
-
-    /// Cancel the retained automatic-top-up registration for snapshot suspension.
-    pub(crate) fn cancel_timer() -> Result<(), TimerError> {
-        if let Some(result) = with_owned_once(&TOPUP_TIMER, OnceRegistration::cancel)? {
-            result?;
-        }
-        Ok(())
     }
 
     /// Recover one expired automatic-top-up attempt from current capability demand.
@@ -121,20 +106,6 @@ impl CycleWorkflow {
         if config.is_none() && !EnvOps::is_root() {
             CyclesTopupMetrics::record_policy_missing();
         }
-        Self::reconcile_from_sample(config.as_ref(), &sample, previous)
-    }
-
-    /// Reconcile automatic funding after authoritative topology reaches this canister.
-    pub(crate) fn reconcile_after_topology_change() -> Result<(), InternalError> {
-        let should_reconcile = INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED
-            .with(|consumed| !consumed.replace(true) && Self::timer_is_failed());
-        if !should_reconcile {
-            return Ok(());
-        }
-
-        let config = Self::automatic_topup_config()?;
-        let previous = Self::latest_observation();
-        let sample = Self::read_sample();
         Self::reconcile_from_sample(config.as_ref(), &sample, previous)
     }
 
@@ -389,7 +360,7 @@ impl CycleWorkflow {
         }
         if deadline_ns.is_some() || AsyncJobWorkflow::has_active_attempt(AsyncJobOwner::CycleTopup)
         {
-            TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog()?;
+            TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog_with_automatic_topup()?;
         }
         if let Some(result) = with_owned_once(&TOPUP_TIMER, |registration| {
             registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
@@ -418,14 +389,6 @@ impl CycleWorkflow {
             .ok()
             .flatten()
             .unwrap_or_default()
-    }
-
-    fn timer_is_failed() -> bool {
-        Self::timer_identity()
-            .and_then(|identity| Ok(timer_snapshot(&identity)?))
-            .ok()
-            .flatten()
-            .is_some_and(|snapshot| snapshot.process_condition() == TimerProcessCondition::Failed)
     }
 
     fn read_sample() -> CycleBalanceSample {
