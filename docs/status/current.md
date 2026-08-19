@@ -267,7 +267,7 @@ one compatible input snapshot: only the first spec resolved Cargo inputs, the
 two later specs reported zero input-resolution time, and the focused lifecycle
 test passed.
 
-The current follow-up locks `ic-testkit` 0.8.8, hard-cuts the removed anonymous
+The current follow-up locks `ic-testkit` 0.8.9, hard-cuts the removed anonymous
 diagnostic printer, passes exact controllers into labeled collect-all bounded
 status/log reports and aggregates same-tick readiness query failures across
 deployment targets. The compact failure report now exposes each diagnostic
@@ -278,13 +278,25 @@ success and failure reporting no longer
 depend on a parallel package-label slice, and selected-graph semantic identity
 permits reuse across unrelated host-only workspace dependency changes. Version
 0.8.8 makes the optional cross-call session's source-immutability assertion
-explicit; Canic deliberately stays on ordinary per-call validation because it
-does not hold a genuine repository write-exclusion guard. Every
+explicit. Version 0.8.9 adds a prepared snapshot for concurrent readers, but
+that snapshot is process-local while Canic's governed PocketIC lane crosses
+several Cargo test processes. Both optional reuse paths require a genuine guard
+over every source, manifest, tool and declared input; Canic does not hold one
+and deliberately stays on ordinary per-call validation. A deferred
+[immutable cross-process test checkout lease](../design/ideas/immutable-test-checkout-lease/design.md)
+now owns the possible runner snapshot, read-only process-tree boundary,
+external output roots and future upstream prepared-input service. It is a
+performance idea, not a 0.104 release gate or implementation authority. Every
 repository PocketIC builder now uses bounded instance construction against one
 runner-owned server shared across the serial lane. The runner verifies the
 exact binary checksum, bounds port readiness, retains startup output in its
 private scratch and owns cleanup; a cheap source guard rejects direct unbounded
 startup.
+On the locked 0.8.9 graph, all-target checks and warning-denied Clippy pass for
+the three direct consumers. The focused artifact-policy tests, locked offline
+metadata, release-integrity and current-document guards, changelog governance
+and the seven-suite PocketIC plan all pass. No broad workspace or PocketIC
+runtime suite was rerun for this dependency-only follow-up.
 The underlying 0.8.4 migration passed isolated affected-package compile,
 warning-denied Clippy, three artifact tests and the two-test payload-limit
 PocketIC suite; that cold run finished in 38.99 seconds. After advancing the
@@ -423,6 +435,11 @@ moves by seven compression-noise bytes to 4,959,566 gzip. Targeted
 warning-denied Clippy passes for the semantic guard, timer target and internal
 Root harness. The six lifecycle-boundary guards, changelog governance and
 current-document semantics also pass. The complete suite was not rerun.
+
+The human release gate subsequently exposed one inline async-job workflow test
+that reset stable storage directly. Its fixture reset now crosses the test-only
+`AsyncJobRecoveryOps` boundary; the exact test and repository layering guard
+pass. The complete release suite was not rerun after this correction.
 
 The follow-up test-harness correction retains standalone package/profile Wasm
 bytes once per test process and returns typed, named role-overview observations

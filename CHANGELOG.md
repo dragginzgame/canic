@@ -17,7 +17,7 @@ Detailed patch breakdown: [docs/changelog/0.104.md](docs/changelog/0.104.md)
   fences, adds synchronous lifecycle composition after Canic restoration and
   qualifies that seam against exact published IcyDB. Semantic ownership guards
   now cover applications, crates and executable canister fixtures. The line
-  also adopts bounded `ic-testkit` 0.8.8 diagnostics and shared PocketIC
+  also adopts bounded `ic-testkit` 0.8.9 diagnostics and shared PocketIC
   startup for faster attributable deployment failures.
 
 ## [0.103.x] - 2026-08-18 - Role-Owned Candid Surface

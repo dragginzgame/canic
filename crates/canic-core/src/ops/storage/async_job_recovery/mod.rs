@@ -182,6 +182,11 @@ impl AsyncJobRecoveryOps {
         }
         AsyncJobRecoveryStore::replace(state);
     }
+
+    #[cfg(test)]
+    pub(crate) fn reset_for_tests() {
+        AsyncJobRecoveryStore::import(Default::default());
+    }
 }
 
 fn claim_attempt(

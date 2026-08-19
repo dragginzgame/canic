@@ -110,6 +110,24 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
 done
 
 design_ideas="$ROOT/docs/design/ideas"
+idea_index="$design_ideas/README.md"
+require_files "$GUARD_LABEL" "$idea_index"
+
+actual_idea_topics="$(
+    find "$design_ideas" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+)"
+indexed_idea_topics="$(
+    sed -n '/^## Current Topics$/,/^## /p' "$idea_index" |
+        sed -n 's/^- `\([^`]*\)\/`$/\1/p' |
+        sort
+)"
+if [[ "$actual_idea_topics" != "$indexed_idea_topics" ]]; then
+    echo "design-idea index does not match its topic directories" >&2
+    printf 'indexed:\n%s\nactual:\n%s\n' \
+        "$indexed_idea_topics" "$actual_idea_topics" >&2
+    exit 1
+fi
+
 for idea_dir in "$design_ideas"/*; do
     [ -d "$idea_dir" ] || continue
 
