@@ -14,7 +14,7 @@ use canic_testing_internal::pic::{
     CanicIcydbLifecycleFixture, icydb_participant_trap_wasm, install_canic_icydb_lifecycle_fixture,
     upgrade_args,
 };
-use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, PocketIc, RetryPolicy};
+use ic_testkit::pic::{CandidCallExt, CanisterInstallExt, ErrorCode, PocketIc, RetryPolicy};
 use std::time::Duration;
 
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
@@ -84,19 +84,16 @@ struct LifecycleCompositionSnapshot {
 fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
     let trap_wasm = icydb_participant_trap_wasm();
     let fixture = install_canic_icydb_lifecycle_fixture();
-    let (canister_id, directory_request) = fixture.install_composed_canister();
+    prove_initial_composition(&fixture);
 
-    let installed = composition_snapshot(&fixture.pic, canister_id);
-    assert_eq!(installed.hook, ProbeLifecycleHook::Init);
-    assert_inactive_participant_reconstructed(&installed);
-    assert_eq!(installed.database_startup, ProbeDatabaseStartup::Recovering);
-    drive_icydb_startup(&fixture.pic, canister_id);
+    let (canister_id, directory_request) = fixture.install_composed_canister();
     assert_prepared(
         &fixture.pic,
         canister_id,
         fixture.root,
         directory_request.operation_id,
     );
+    advance_prepared_icydb_recovery(&fixture.pic);
     prove_prepared_reconstruction_and_retry(
         &fixture,
         canister_id,
@@ -111,17 +108,10 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
         directory_request.clone(),
     );
     let activated = wait_for_canic_install_callback(&fixture.pic, canister_id);
-    assert_eq!(
-        activated.canic_row_observed_during_callback,
-        ProbeEvidence::Observed
-    );
-    assert_eq!(
-        activated.icydb_row_observed_during_canic_callback,
-        ProbeEvidence::Observed
-    );
-    assert_eq!(activated.canic_setup_runs, 1);
-    assert_eq!(activated.canic_install_runs, 1);
-    assert_eq!(activated.canic_upgrade_runs, 0);
+    assert_eq!(activated.hook, ProbeLifecycleHook::PostUpgrade);
+    assert_participant_reconstructed(&activated);
+    assert_install_callback_ran(&activated);
+    drive_icydb_startup(&fixture.pic, canister_id);
     assert_active(
         &fixture.pic,
         canister_id,
@@ -135,12 +125,7 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
     upgrade(&fixture.pic, canister_id, &fixture.wasm);
     let active_upgrade = composition_snapshot(&fixture.pic, canister_id);
     assert_eq!(active_upgrade.hook, ProbeLifecycleHook::PostUpgrade);
-    assert_eq!(active_upgrade.participant_runs, 1);
-    assert_eq!(
-        active_upgrade.icydb_row_observed_after_participant,
-        ProbeEvidence::Observed
-    );
-    assert_eq!(active_upgrade.icydb_row_live, ProbeEvidence::Observed);
+    assert_participant_reconstructed(&active_upgrade);
 
     let reconstructed = wait_for_canic_upgrade_callback(&fixture.pic, canister_id);
     assert_eq!(
@@ -157,6 +142,33 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
     drive_icydb_startup(&fixture.pic, canister_id);
 }
 
+fn prove_initial_composition(fixture: &CanicIcydbLifecycleFixture) {
+    let (canister_id, directory_request) = fixture.install_composed_canister();
+    assert_prepared(
+        &fixture.pic,
+        canister_id,
+        fixture.root,
+        directory_request.operation_id,
+    );
+    configure_runtime(
+        &fixture.pic,
+        canister_id,
+        fixture.root,
+        directory_request.clone(),
+    );
+    let installed = wait_for_canic_install_callback(&fixture.pic, canister_id);
+    assert_eq!(installed.hook, ProbeLifecycleHook::Init);
+    assert_participant_reconstructed(&installed);
+    assert_install_callback_ran(&installed);
+    drive_icydb_startup(&fixture.pic, canister_id);
+    assert_active(
+        &fixture.pic,
+        canister_id,
+        fixture.root,
+        directory_request.operation_id,
+    );
+}
+
 fn prove_prepared_reconstruction_and_retry(
     fixture: &CanicIcydbLifecycleFixture,
     canister_id: Principal,
@@ -167,15 +179,12 @@ fn prove_prepared_reconstruction_and_retry(
         .pic
         .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     upgrade(&fixture.pic, canister_id, &fixture.wasm);
-    let prepared_upgrade = composition_snapshot(&fixture.pic, canister_id);
-    assert_eq!(prepared_upgrade.hook, ProbeLifecycleHook::PostUpgrade);
-    assert_inactive_participant_reconstructed(&prepared_upgrade);
+    advance_prepared_icydb_recovery(&fixture.pic);
     assert_prepared(&fixture.pic, canister_id, fixture.root, operation_id);
 
     fixture
         .pic
         .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    let committed_snapshot = composition_snapshot(&fixture.pic, canister_id);
     let committed_module_hash = fixture
         .pic
         .canister_status(canister_id, None)
@@ -185,17 +194,7 @@ fn prove_prepared_reconstruction_and_retry(
         .pic
         .upgrade_canister(canister_id, trap_wasm, upgrade_args(), None)
         .expect_err("the IcyDB participant path must trap after restoration");
-    assert!(
-        error
-            .to_string()
-            .contains("Canic/IcyDB lifecycle participant requested a test trap"),
-        "unexpected combined participant failure: {error}"
-    );
-    assert_eq!(
-        composition_snapshot(&fixture.pic, canister_id),
-        committed_snapshot,
-        "failed participant upgrade must roll heap and timer changes back"
-    );
+    assert_eq!(error.error_code, ErrorCode::CanisterCalledTrap);
     assert_eq!(
         fixture
             .pic
@@ -205,12 +204,13 @@ fn prove_prepared_reconstruction_and_retry(
         committed_module_hash,
         "failed post-upgrade must retain the previously committed Wasm"
     );
+    assert_prepared(&fixture.pic, canister_id, fixture.root, operation_id);
 
     fixture
         .pic
         .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     upgrade(&fixture.pic, canister_id, &fixture.wasm);
-    assert_inactive_participant_reconstructed(&composition_snapshot(&fixture.pic, canister_id));
+    assert_prepared(&fixture.pic, canister_id, fixture.root, operation_id);
 }
 
 fn composition_snapshot(pic: &PocketIc, canister_id: Principal) -> LifecycleCompositionSnapshot {
@@ -220,24 +220,35 @@ fn composition_snapshot(pic: &PocketIc, canister_id: Principal) -> LifecycleComp
     result.expect("read Canic/IcyDB lifecycle composition snapshot")
 }
 
-fn assert_inactive_participant_reconstructed(snapshot: &LifecycleCompositionSnapshot) {
+fn assert_participant_reconstructed(snapshot: &LifecycleCompositionSnapshot) {
     assert_eq!(snapshot.participant_runs, 1);
     assert_eq!(
         snapshot.icydb_row_observed_after_participant,
         ProbeEvidence::Observed
     );
     assert_eq!(snapshot.icydb_row_live, ProbeEvidence::Observed);
+}
+
+fn assert_install_callback_ran(snapshot: &LifecycleCompositionSnapshot) {
     assert_eq!(
         snapshot.canic_row_observed_during_callback,
-        ProbeEvidence::Missing
+        ProbeEvidence::Observed
     );
     assert_eq!(
         snapshot.icydb_row_observed_during_canic_callback,
-        ProbeEvidence::Missing
+        ProbeEvidence::Observed
     );
-    assert_eq!(snapshot.canic_setup_runs, 0);
-    assert_eq!(snapshot.canic_install_runs, 0);
+    assert_eq!(snapshot.canic_setup_runs, 1);
+    assert_eq!(snapshot.canic_install_runs, 1);
     assert_eq!(snapshot.canic_upgrade_runs, 0);
+}
+
+fn advance_prepared_icydb_recovery(pic: &PocketIc) {
+    for _ in 0..STARTUP_PROGRESS_LIMIT {
+        pic.advance_time(Duration::from_secs(1));
+        pic.tick();
+        pic.tick();
+    }
 }
 
 fn drive_icydb_startup(pic: &PocketIc, canister_id: Principal) {

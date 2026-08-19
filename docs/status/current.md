@@ -447,7 +447,14 @@ from the workspace and exports its public snapshot through Canic's managed
 endpoint boundary. The checked-in config inventory now includes all 18
 configurations. Each previously failing test, all-target core/probe Clippy and
 warning-denied compilation of the affected lifecycle integration target pass.
-The complete release suite was not rerun after these corrections.
+A later complete gate passed Clippy, every ordinary target and every other
+PocketIC lane, then exposed that the newly managed fixture query was correctly
+fenced while the Component remained Prepared. The proof now observes Init on
+one legitimately activated Canister, uses only role-owned status and module-
+hash evidence through a second Canister's Prepared upgrade/trap/retry sequence,
+and reads its application snapshot only after activation. The exact focused
+PocketIC journey passes warm in 9.77 seconds with both Wasm artifacts reused.
+The complete release suite was not rerun after this correction.
 
 The follow-up test-harness correction retains standalone package/profile Wasm
 bytes once per test process and returns typed, named role-overview observations
