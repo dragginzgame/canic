@@ -12,7 +12,7 @@ Date: 2026-08-18
   accepted later that day: 32 Root and nine Coordinator command variants retain
   four independently required authority/evidence outcomes without restoring
   phase methods.
-- Implementation state: B2 through B7 are complete in the unreleased worktree.
+- Implementation state: B2 through B7 are published in `v0.103.0`.
   The maintainer explicitly authorized B4 mutation on 2026-08-17. Root and
   Coordinator now expose only their role-owned command/status methods;
   autonomous Component provisioning and Root removal, both atomic caller cuts,
@@ -21,9 +21,9 @@ Date: 2026-08-18
   generated Candid all pass their focused checks.
 - Closeout-audit state: the initial 2026-08-18 audit's authorization-order,
   external profile-binding, Store-pruning and active-document/count findings
-  are corrected and pass focused re-audit. The only open finding is the
-  maintainer-owned package/tag identity boundary; the audit preserves its
-  initial evidence and records the current disposition in section 21.
+  are corrected and pass focused re-audit. The package/tag identity boundary
+  closed when the maintainer published `v0.103.0`; the audit preserves its
+  initial evidence and records the publication follow-up separately.
 - Outcome: one bounded command/status control plane per Canic role. Compiled
   capabilities add variants, command/status authority is variant-specific
   and workflows retain every private phase. Only genuinely asynchronous or
@@ -32,7 +32,7 @@ Date: 2026-08-18
   freezes all 207 methods across representative Root and managed profiles plus
   canonical Coordinator and Store interfaces. It separates 188 Canic-owned,
   three external-standard and 16 fixture-owned methods.
-- Runtime impact: the unreleased B2-B7 worktree adds the exact managed,
+- Runtime impact: the published B2-B7 source adds the exact managed,
   Root, Coordinator and Store `canic_status` DTOs and dispatchers plus typed
   compile-time capability derivation. Config-derived `AutomaticTopup` prunes
   its variant, and canonical builds bind exact generated Candid to Overview and
@@ -53,10 +53,10 @@ Date: 2026-08-18
   dual protocol, migration or mixed-version release set is permitted.
 - Implementation approval: B1 was explicitly accepted against the completed
   0.102 diagnostic boundary on 2026-08-17. B2 through B7 are complete. The
-  implementation batch is ready for the maintainer-owned release flow; no
-  additional protocol mutation is authorized by closeout.
+  implementation batch is published in `v0.103.0`; no additional 0.103
+  protocol mutation is authorized by closeout.
 - Successor: 0.104 timer ownership begins from the completed autonomous-
-  operation surface after the 0.103 release boundary is published. No later
+  operation surface at the published 0.103 release boundary. No later
   production protocol may restore the removed phase methods.
 
 Design:
@@ -178,8 +178,6 @@ Unnumbered ideas remain outside the path.
 
 ## Next Action
 
-Run the maintainer-owned minor release flow, which advances the current
-`0.102.2` package authority to the exact `0.103.0` target and owns the complete
-validation gate. No local or remote `v0.103.*` tag remains. The open `0.103.0`
-changelog records this completed batch; no agent-owned version, tag or push is
-authorized. Begin 0.104 only after the 0.103 release boundary is published.
+Treat `v0.103.0` as the immutable timer-ownership baseline and continue the
+sequenced 0.104 evidence/implementation batches. Do not reopen removed 0.103
+methods, aliases, compatibility paths or the ceremonial `metrics` feature.

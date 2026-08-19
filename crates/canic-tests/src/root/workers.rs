@@ -12,8 +12,8 @@ use canic::{
     },
     protocol,
 };
-use canic_testing_internal::pic::CanicPicExt;
-use ic_testkit::pic::{CandidCallExt, PocketIc, PocketIcDiagnosticsExt};
+use canic_testing_internal::pic::{CanicPicExt, report_canister_diagnostics};
+use ic_testkit::pic::{CandidCallExt, PocketIc};
 
 const TC: u128 = 1_000_000_000_000;
 const DEFAULT_FUNDING_COOLDOWN_SECS: u64 = 60;
@@ -29,11 +29,15 @@ enum CanisterStatusResponse {
 }
 
 /// Create a worker canister via the given hub canister.
-pub fn create_worker(pic: &PocketIc, hub_pid: Principal) -> Result<Principal, Error> {
+pub fn create_worker(
+    pic: &PocketIc,
+    root_pid: Principal,
+    hub_pid: Principal,
+) -> Result<Principal, Error> {
     let worker_pid: Result<Principal, Error> =
         pic.update_candid_or_panic(hub_pid, "create_worker", ());
     let worker_pid = worker_pid?;
-    wait_for_worker_sync(pic, hub_pid, worker_pid);
+    wait_for_worker_sync(pic, root_pid, hub_pid, worker_pid);
     Ok(worker_pid)
 }
 
@@ -46,8 +50,13 @@ pub fn prepare_worker_for_explicit_parent_funding(pic: &PocketIc, worker_pid: Pr
 }
 
 /// Wait until the parent's local child view includes the newly created worker.
-fn wait_for_worker_sync(pic: &PocketIc, hub_pid: Principal, worker_pid: Principal) {
-    pic.wait_for_ready(worker_pid, 50, "scale replica bootstrap");
+fn wait_for_worker_sync(
+    pic: &PocketIc,
+    root_pid: Principal,
+    hub_pid: Principal,
+    worker_pid: Principal,
+) {
+    pic.wait_for_ready(worker_pid, hub_pid, 50, "scale replica bootstrap");
 
     for _ in 0..50 {
         pic.tick();
@@ -72,6 +81,6 @@ fn wait_for_worker_sync(pic: &PocketIc, hub_pid: Principal, worker_pid: Principa
         }
     }
 
-    pic.dump_canister_debug(hub_pid, "scale replica sync");
+    report_canister_diagnostics(pic, hub_pid, root_pid, "scale replica sync");
     panic!("parent {hub_pid} did not observe worker {worker_pid} in time");
 }

@@ -1,7 +1,9 @@
 // Category C - Artifact test (built wasm; no runtime config).
 
 use candid::{CandidType, Deserialize, Principal, encode_one};
-use canic_testing_internal::pic::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
+use canic_testing_internal::pic::{
+    CanicWasmBuildProfile, build_internal_test_wasm_canisters, start_pocket_ic,
+};
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*},
@@ -110,7 +112,7 @@ fn receipt_backed_intent_conformance() {
         authority_wasm.len()
     );
 
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     println!("receipt_backed_intent: PocketIC ready");
 
     let authority_id = pic.create_and_install(

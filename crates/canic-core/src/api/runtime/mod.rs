@@ -30,7 +30,7 @@ use crate::{
         storage::intent::{RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD, ReceiptBackedIntentOps},
     },
     state_contract::{STATE_MANIFEST_SCHEMA_VERSION, canic_state_descriptors},
-    workflow::runtime::timer::TimerWorkflow,
+    workflow::runtime::timer::TimerAuthorityWorkflow,
 };
 const RUNTIME_FEATURE_SOURCE: &str = "compile_feature";
 const RUNTIME_FEATURE_FLAGS: [(&str, bool); 10] = [
@@ -193,7 +193,8 @@ impl RuntimeIntrospectionApi {
             .as_ref()
             .ok()
             .map(|capacity| capacity.status);
-        let timer_observation = timer_status_observation(TimerWorkflow::statuses(), observed_at_ns);
+        let timer_observation =
+            timer_status_observation(TimerAuthorityWorkflow::statuses(), observed_at_ns);
         let status = aggregate_runtime_status(
             readiness.status,
             receipt_capacity_status,

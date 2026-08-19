@@ -103,9 +103,11 @@ impl FleetCoordinatorApi {
                 Self::join_root(request).map(CoordinatorCommandResponse::JoinRoot)
             }
             CoordinatorCommand::PrepareAuthoritySnapshot(request) => {
-                canic_core::api::authority_restore::AuthorityRestoreApi::prepare_snapshot(request)
-                    .await
-                    .map(CoordinatorCommandResponse::PrepareAuthoritySnapshot)
+                canic_core::api::authority_restore::AuthorityRestoreApi::prepare_coordinator_snapshot(
+                    request,
+                )
+                .await
+                .map(CoordinatorCommandResponse::PrepareAuthoritySnapshot)
             }
             CoordinatorCommand::PrepareRootDeletionExecution(request) => {
                 Self::begin_root_deletion_execution(request)
@@ -123,9 +125,11 @@ impl FleetCoordinatorApi {
                     .map_err(Into::into)
             }
             CoordinatorCommand::ResumeAuthoritySnapshot(request) => {
-                canic_core::api::authority_restore::AuthorityRestoreApi::resume_snapshot(request)
-                    .await
-                    .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
+                canic_core::api::authority_restore::AuthorityRestoreApi::resume_coordinator_snapshot(
+                    request,
+                )
+                .await
+                .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
             }
         }
     }

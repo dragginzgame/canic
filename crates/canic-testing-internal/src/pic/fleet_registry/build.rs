@@ -18,6 +18,7 @@ use super::super::artifacts::{
     build_internal_test_wasm_canisters_with_env, internal_test_artifact_maintenance_interval,
     internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
 };
+use super::super::startup::start_pocket_ic;
 use super::fixture::progress;
 
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
@@ -79,10 +80,11 @@ pub(super) fn build_test_wasm_store_wasm() -> Vec<u8> {
 // Build one independent PocketIC instance for a Fleet Registry fixture.
 pub(super) fn build_pic() -> PocketIc {
     progress("starting PocketIC instance");
-    let pic = PocketIcBuilder::new()
-        .with_ii_subnet()
-        .with_application_subnet()
-        .build();
+    let pic = start_pocket_ic(
+        PocketIcBuilder::new()
+            .with_ii_subnet()
+            .with_application_subnet(),
+    );
     progress("PocketIC instance ready");
     pic
 }

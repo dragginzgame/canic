@@ -11,7 +11,7 @@ use crate::{
     cdk::types::Cycles,
     config::schema::TopupPolicy,
     diagnostics::codes,
-    domain::{policy::pure as policy, runtime::TimerExecutionOutcome},
+    domain::policy::pure as policy,
     dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse},
     log,
     log::Topic,
@@ -21,11 +21,25 @@ use crate::{
         ic::IcOps,
         rpc::request::RequestOps,
         runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics},
+        storage::async_job_recovery::AsyncJobOwner,
         storage::cycles::{CycleTopupEventOps, CycleTrackerOps},
     },
-    workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+    workflow::runtime::{
+        async_job::AsyncJobWorkflow,
+        timer::{
+            TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once, with_owned_once,
+        },
+    },
 };
-use std::{cell::Cell, time::Duration};
+use ic_timers::{
+    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
+    TimerIdentity, TimerProcessCondition, TimerRunResult, TimerSchedule, register_once,
+    timer_snapshot,
+};
+use std::{
+    cell::{Cell, RefCell},
+    time::Duration,
+};
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const RETENTION_BATCH_SIZE: usize = 128;
@@ -35,6 +49,7 @@ const RETRY_MAX: Duration = Duration::from_mins(30);
 thread_local! {
     static INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED: Cell<bool> = const { Cell::new(false) };
     static RESOURCE_EXHAUSTION_RECOVERY_CONSUMED: Cell<bool> = const { Cell::new(false) };
+    static TOPUP_TIMER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
 }
 
 struct AutomaticTopupConfig {
@@ -57,6 +72,45 @@ enum ParentFundingOutcome {
 pub struct CycleWorkflow;
 
 impl CycleWorkflow {
+    /// Return the exact automatic-top-up native identity.
+    pub(crate) fn timer_identity() -> Result<TimerIdentity, TimerError> {
+        TimerIdentity::try_new("canic", "cycles", "topup").map_err(Into::into)
+    }
+
+    /// Return the claimed automatic-top-up identity, when the capability is configured.
+    pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
+        with_owned_once(&TOPUP_TIMER, |registration| registration.identity().clone())
+    }
+
+    /// Cancel the retained automatic-top-up registration for snapshot suspension.
+    pub(crate) fn cancel_timer() -> Result<(), TimerError> {
+        if let Some(result) = with_owned_once(&TOPUP_TIMER, OnceRegistration::cancel)? {
+            result?;
+        }
+        Ok(())
+    }
+
+    /// Recover one expired automatic-top-up attempt from current capability demand.
+    pub(crate) fn recover_expired_timer(now_ns: u64) -> bool {
+        let owner = AsyncJobOwner::CycleTopup;
+        if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {
+            return false;
+        }
+        match Self::automatic_topup_config() {
+            Ok(Some(_)) => {}
+            Ok(None) => return AsyncJobWorkflow::abandon_expired(owner, now_ns),
+            Err(_) => return false,
+        }
+        let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
+            return false;
+        };
+        ic_cdk::futures::spawn(async move {
+            let result = Self::run_attempt(attempt).await;
+            let _ = AsyncJobWorkflow::finish(attempt, result);
+        });
+        true
+    }
+
     /// Record the lifecycle balance and reconcile the sole top-up safety deadline.
     pub fn start() -> Result<(), InternalError> {
         let config = Self::automatic_topup_config()?;
@@ -72,9 +126,8 @@ impl CycleWorkflow {
 
     /// Reconcile automatic funding after authoritative topology reaches this canister.
     pub(crate) fn reconcile_after_topology_change() -> Result<(), InternalError> {
-        let should_reconcile = INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED.with(|consumed| {
-            !consumed.replace(true) && TimerWorkflow::is_failed(TimerKey::CycleTopup)
-        });
+        let should_reconcile = INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED
+            .with(|consumed| !consumed.replace(true) && Self::timer_is_failed());
         if !should_reconcile {
             return Ok(());
         }
@@ -103,18 +156,44 @@ impl CycleWorkflow {
                 )
             })
             .transpose()?;
-        TimerWorkflow::reconcile_at(TimerKey::CycleTopup, deadline)?;
+        Self::reconcile_timer(deadline)?;
         Ok(())
     }
 
-    pub(crate) async fn run_topup(operation_id: OperationId) -> TimerRunResult {
+    async fn run_registered() -> TimerRunResult {
+        let attempt = match AsyncJobWorkflow::claim(AsyncJobOwner::CycleTopup) {
+            Ok(attempt) => attempt,
+            Err(result) => return result,
+        };
+        let result = Self::run_attempt(attempt).await;
+        AsyncJobWorkflow::finish(attempt, result)
+    }
+
+    async fn run_attempt(
+        attempt: crate::ops::storage::async_job_recovery::AsyncJobAttempt,
+    ) -> TimerRunResult {
+        let Some(operation_id) = attempt.operation_id() else {
+            return TimerRunResult::new(
+                TimerCompletion::invariant_failure(0),
+                TimerDirective::Stop,
+            );
+        };
+        Self::run_topup(operation_id).await
+    }
+
+    async fn run_topup(operation_id: OperationId) -> TimerRunResult {
         let config = match Self::automatic_topup_config() {
             Ok(Some(config)) => config,
-            Ok(None) => return TimerRunResult::no_work(TimerDirective::Stop),
+            Ok(None) => {
+                return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
+            }
             Err(err) => {
                 CyclesTopupMetrics::record_config_error();
                 log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                return TimerRunResult::invariant_failure();
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    TimerDirective::Stop,
+                );
             }
         };
         let previous = Self::latest_observation();
@@ -130,10 +209,10 @@ impl CycleWorkflow {
         if !matches!(timing, policy::cycles::CycleTopupTiming::Due) {
             CyclesTopupMetrics::record_above_threshold();
             return match Self::directive(IcOps::now_nanos(), timing) {
-                Ok(directive) => TimerRunResult::no_work(directive),
+                Ok(directive) => TimerRunResult::new(TimerCompletion::no_work(), directive),
                 Err(err) => {
                     log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                    TimerRunResult::invariant_failure()
+                    TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
                 }
             };
         }
@@ -184,10 +263,10 @@ impl CycleWorkflow {
             Self::directive(IcOps::now_nanos(), timing)
         };
         match directive {
-            Ok(directive) => TimerRunResult::success(1, directive),
+            Ok(directive) => TimerRunResult::new(TimerCompletion::success(1), directive),
             Err(err) => {
                 log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                TimerRunResult::invariant_failure()
+                TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
             }
         }
     }
@@ -208,7 +287,7 @@ impl CycleWorkflow {
                     Warn,
                     "automatic top-up is waiting for parent funding capacity (approved_cycles={approved_cycles})"
                 );
-                let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::CycleTopup);
+                let streak = Self::consecutive_expected_failures();
                 retryable_topup_after(retry_delay(streak))
             }
             CyclesFundingPreflightResponse::ChildBudgetExhausted {
@@ -220,7 +299,7 @@ impl CycleWorkflow {
                     Warn,
                     "automatic top-up stopped at the parent child-budget limit (remaining_child_budget={remaining_child_budget}, max_per_child={max_per_child})"
                 );
-                TimerRunResult::no_work(TimerDirective::Stop)
+                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
             }
         }
     }
@@ -233,7 +312,7 @@ impl CycleWorkflow {
                 "automatic top-up will retry: {}",
                 failure
             );
-            let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::CycleTopup);
+            let streak = Self::consecutive_expected_failures();
             return retryable_topup_after(retry_delay(streak));
         }
         if claim_resource_exhaustion_recovery(&failure) {
@@ -251,7 +330,7 @@ impl CycleWorkflow {
             "automatic top-up stopped: {}",
             failure
         );
-        TimerRunResult::invariant_failure()
+        TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
     }
 
     async fn request_parent_funding(
@@ -301,6 +380,52 @@ impl CycleWorkflow {
             canister.topup,
             canister.cycles_funding.cooldown_secs,
         ))
+    }
+
+    fn reconcile_timer(deadline_ns: Option<u64>) -> Result<(), TimerError> {
+        require_active()?;
+        if deadline_ns.is_some() {
+            Self::declare_timer()?;
+        }
+        if deadline_ns.is_some() || AsyncJobWorkflow::has_active_attempt(AsyncJobOwner::CycleTopup)
+        {
+            TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog()?;
+        }
+        if let Some(result) = with_owned_once(&TOPUP_TIMER, |registration| {
+            registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
+        })? {
+            result?;
+        }
+        Ok(())
+    }
+
+    fn declare_timer() -> Result<(), TimerError> {
+        require_active()?;
+        if with_owned_once(&TOPUP_TIMER, |_| ())?.is_some() {
+            return Ok(());
+        }
+        let registration = register_once(
+            Self::timer_identity()?,
+            DeclarationLifetime::Retained,
+            |_context: OnceContext| async { Self::run_registered().await },
+        )?;
+        retain_owned_once(&TOPUP_TIMER, registration)
+    }
+
+    fn consecutive_expected_failures() -> u64 {
+        Self::timer_identity()
+            .and_then(|identity| Ok(ic_timers::consecutive_expected_failures(&identity)?))
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    }
+
+    fn timer_is_failed() -> bool {
+        Self::timer_identity()
+            .and_then(|identity| Ok(timer_snapshot(&identity)?))
+            .ok()
+            .flatten()
+            .is_some_and(|snapshot| snapshot.process_condition() == TimerProcessCondition::Failed)
     }
 
     fn read_sample() -> CycleBalanceSample {
@@ -408,11 +533,10 @@ fn reset_resource_exhaustion_recovery() {
 }
 
 const fn retryable_topup_after(delay: Duration) -> TimerRunResult {
-    TimerRunResult {
-        outcome: TimerExecutionOutcome::RetryableFailure,
-        work_count: 0,
-        directive: TimerDirective::RetryAfter(delay),
-    }
+    TimerRunResult::new(
+        TimerCompletion::retryable_failure(0),
+        TimerDirective::RetryAfter(delay),
+    )
 }
 
 fn retry_delay(streak: u64) -> Duration {

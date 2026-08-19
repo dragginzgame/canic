@@ -1,22 +1,44 @@
 # Canic 0.104 Implementation Status
 
-Date: 2026-08-18
+Date: 2026-08-19
 
 ## Status
 
-- State: accepted and scheduled as application-safety step 2. The 2026-08-18
+- State: implementation-complete as application-safety step 2. The 2026-08-18
   Prequel Wars review promotes downstream native-timer adoption and the
-  synchronous lifecycle-participant seam into this line. No implementation
-  batch is promoted by this planning cut.
-- Runtime impact: none from this design/resequencing change.
+  synchronous lifecycle-participant seam into this line. The maintainer
+  accepted the complete B1 evidence on 2026-08-18 and accepted B2 on the same
+  date with its intermediate Wasm regression retained. Continuation accepted
+  B3-B8 after their exact evidence and current-graph PocketIC checks.
+- Runtime impact: B2 removes the public timer facade and transient claim
+  machinery. B3 hard-cuts memory ID 60 to minimal domain attempt fences and
+  cycle-only exact retry identity. B4 moves auth, cycles and placement to lazy
+  owner-native registrations, reducing the representative provider inventory
+  from seven rows to five and its measured interval path by about 5.1%. It
+  changes no Candid. B5 deletes the remaining central claim and participant
+  registries, gives pool maintenance and the one Root watchdog direct native
+  custody, and splits Root/Coordinator snapshot linkage. The same measured
+  interval path falls another 1.9514%; four-role Wasm falls 292,488 raw and
+  67,034 gzip bytes from B4, while remaining 1.1750% raw and 1.9779% gzip
+  above published `v0.103.0`. B6 publishes the direct-native adoption guide
+  and adds one safe paired synchronous participant after Canic restoration
+  and before deferred work for ordinary managed, Root and local lifecycles.
+  Exact product raw bytes remain unchanged from B5; gzip falls one byte and
+  the measured interval differences remain noise-scale. B7 composes that seam
+  with exact published IcyDB, proving one resolved provider, one lifecycle
+  export pair and separately reconstructed owner rows. Its artifact is
+  test-only and changes no shipped product role. B8 replaces lexical counts
+  with a 45-file semantic ownership contract and closes the dependency,
+  inventory, document, Wasm and provider-performance evidence. Product raw
+  bytes and the comparable interval metrics remain exactly unchanged from B6.
 - Baseline finding: Canic resolves one `ic-timers 0.6.1` runtime and has no raw
   production `ic-cdk-timers` path, but duplicate provider vocabulary, a public
-  application facade and generic stable shadow scheduling remain in the
-  current untagged candidate.
+  application facade and generic stable shadow scheduling remain in published
+  `v0.103.0`.
 - Release boundary: reinstall only; no timer or async-recovery state migration
   or compatibility surface is permitted.
-- Predecessor: completed 0.103 role-owned Candid and autonomous-
-  operation hard cut. B1 must inventory its exact resulting timer consumers.
+- Predecessor: `v0.103.0` publishes the completed role-owned Candid and
+  autonomous-operation hard cut. B1 inventories that exact tagged result.
 - Successors: 0.105 local application authorization follows directly. 0.106
   platform B1 may continue as evidence-only work but must reconcile its final
   timer inventory against 0.104. No 0.107 root-funding or 0.108 estate
@@ -26,14 +48,14 @@ Date: 2026-08-18
 
 | Batch | Outcome | Direct evidence and fallout | Focused validation | Status |
 | --- | --- | --- | --- | --- |
-| B1 | Frozen timer/recovery ownership | Complete call-site, type, claim and stable-field dispositions; exact provider graph; domain-demand map | Source/dependency guards and reviewable inventory | Pending promotion |
-| B2 | Native provider surface hard cut | Public timer API removal, native results/directives, typed registration custody and compile fallout | Core/facade tests, compile-fail guard and targeted Clippy | Blocked on accepted B1 |
-| B3 | Domain-owned async-job recovery | Minimal stable state, exact retry, leases, takeover and deletion of shadow scheduling fields | State/property and interruption tests | Blocked on B2 |
-| B4 | Core fixed-owner reconstruction | Auth, capability-pruned automatic top-up and placement native schedules plus owner-specific retry/stop behavior | Targeted unit and PocketIC recovery journeys | Blocked on B3 |
-| B5 | Pool/lifecycle/snapshot propagation | Native pool custody, one watchdog, zero-delay lifecycle work, suspension/resume and fixtures | Control-plane, lifecycle, snapshot and runtime-probe checks | Blocked on B4 |
-| B6 | Native downstream adoption and lifecycle participant | Maintained migration guide, direct-provider fixture, paired compile-time participant, exact ordering and rollback | Compile pass/fail, symbols and PocketIC lifecycle checks | Blocked on B5 |
-| B7 | Combined Canic/IcyDB qualification | One provider, one lifecycle export pair, both owner rows, progress, inactive reconstruction and corrected-cause retry | Dependency, artifact and focused PocketIC composition proof | Blocked on B6 |
-| B8 | Semantic ownership proof and closeout | One-provider graph, shared inventory, ownership guards and complete docs/changelog cleanup | Targeted repository guards and PocketIC timer/lifecycle suites | Blocked on B7 |
+| B1 | Frozen timer/recovery ownership | Complete call-site, type, claim and stable-field dispositions; exact provider graph; domain-demand map | Source/dependency guards and [reviewable inventory](../../audits/working/0.104-timer-ownership/README.md) | Accepted 2026-08-18 |
+| B2 | Native provider surface hard cut | Public timer API removal, native results/directives, typed registration custody and compile fallout | Core/facade tests, current-surface guard, targeted Clippy, PocketIC and [Wasm/performance evidence](../../audits/working/0.104-timer-ownership/b2-native-provider-surface.md) | Accepted 2026-08-18 |
+| B3 | Domain-owned async-job recovery | Minimal stable state, exact retry, leases, takeover and deletion of shadow scheduling fields | State/property, interruption and [Wasm/performance evidence](../../audits/working/0.104-timer-ownership/b3-domain-async-job-recovery.md) | Accepted 2026-08-18 |
+| B4 | Core fixed-owner reconstruction | Auth, capability-pruned automatic top-up and placement native schedules plus owner-specific retry/stop behavior | Targeted unit, snapshot, [Wasm/performance evidence](../../audits/working/0.104-timer-ownership/b4-domain-native-custody.md) and PocketIC recovery journeys | Accepted 2026-08-18 |
+| B5 | Pool/lifecycle/snapshot propagation | Native pool custody, one watchdog, zero-delay lifecycle work, suspension/resume and [exact evidence](../../audits/working/0.104-timer-ownership/README.md#b5-pool-lifecycle-and-snapshot-completion) | Control-plane, lifecycle, snapshot, runtime-probe and role-pruned Wasm checks | Accepted 2026-08-18 |
+| B6 | Native downstream adoption and lifecycle participant | Maintained migration guide, direct-provider fixture, paired compile-time participant, exact ordering and [rollback evidence](../../audits/working/0.104-timer-ownership/README.md#b6-native-adoption-and-lifecycle-participant) | Compile pass/fail, exact Candid/exports and PocketIC lifecycle checks | Accepted 2026-08-18 |
+| B7 | Combined Canic/IcyDB qualification | One provider, one lifecycle export pair, both owner rows, progress, inactive reconstruction and [corrected-cause retry](../../audits/working/0.104-timer-ownership/README.md#b7-combined-canic-and-icydb-qualification) | Dependency, artifact and focused PocketIC composition proof | Accepted 2026-08-19 |
+| B8 | Semantic ownership proof and closeout | One-provider graph, [shared inventory](../../audits/working/0.104-timer-ownership/consumer-inventory.tsv), ownership guards and [complete measured closeout](../../audits/working/0.104-timer-ownership/README.md#b8-semantic-ownership-and-closeout) | Targeted repository guards and PocketIC timer/lifecycle suites | Accepted 2026-08-19 |
 
 ## B1 Completion Contract
 
@@ -71,6 +93,8 @@ designs and deferred drafts retain their truthful old identities.
 
 ## Next Authorized Action
 
-No source mutation is authorized. Review and explicitly promote B1, then
-freeze the exact ownership, durable-field, downstream-adoption and lifecycle
-inventory before removing or reshaping any timer or recovery surface.
+No further 0.104 implementation batch remains. Keep the open 0.104.0
+changelog entry and workspace version under the maintainer-owned release flow;
+the complete validation, versioning, tag and push gates remain separate. The
+scheduled 0.105 B1 still requires explicit maintainer promotion after 0.104
+closeout and is not authorized by this completion.

@@ -8,12 +8,72 @@ use canic::{
     dto::auth::{DelegatedToken, SignedRoleAttestation},
     prelude::*,
 };
+use std::cell::Cell;
 
-canic::start!();
+thread_local! {
+    static LIFECYCLE_INIT_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
+    static LIFECYCLE_POST_UPGRADE_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
+}
+
+canic::start!(lifecycle_participant(
+    init = lifecycle_participant_init,
+    post_upgrade = lifecycle_participant_post_upgrade,
+),);
 
 async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
+
+fn lifecycle_participant_init() {
+    assert_restored_root_lifecycle_context();
+    assert_eq!(
+        (
+            LIFECYCLE_INIT_EXECUTIONS.get(),
+            LIFECYCLE_POST_UPGRADE_EXECUTIONS.get()
+        ),
+        (0, 0),
+        "the Root init participant must run exactly once"
+    );
+    LIFECYCLE_INIT_EXECUTIONS.set(LIFECYCLE_INIT_EXECUTIONS.get().saturating_add(1));
+}
+
+fn lifecycle_participant_post_upgrade() {
+    assert_restored_root_lifecycle_context();
+    assert_eq!(
+        (
+            LIFECYCLE_INIT_EXECUTIONS.get(),
+            LIFECYCLE_POST_UPGRADE_EXECUTIONS.get()
+        ),
+        (0, 0),
+        "the Root post-upgrade participant must run exactly once on the fresh heap"
+    );
+    LIFECYCLE_POST_UPGRADE_EXECUTIONS
+        .set(LIFECYCLE_POST_UPGRADE_EXECUTIONS.get().saturating_add(1));
+}
+
+fn assert_restored_root_lifecycle_context() {
+    let role = canic::api::env::EnvQuery::snapshot()
+        .canister_role
+        .expect("Canic must restore the Root role before the lifecycle participant");
+    assert_eq!(role, canic::api::canister::CanisterRole::ROOT);
+
+    let inventory = ic_timers::timer_inventory()
+        .expect("Canic must initialize the shared timer provider before the lifecycle participant");
+    for (subsystem, name) in [
+        ("async_job_recovery", "watchdog"),
+        ("canister_pool", "maintain"),
+    ] {
+        assert!(
+            inventory.timers().iter().any(|timer| {
+                let identity = timer.identity();
+                identity.owner() == "canic"
+                    && identity.subsystem() == subsystem
+                    && identity.name() == name
+            }),
+            "Canic must declare Root timer canic:{subsystem}:{name} before the lifecycle participant"
+        );
+    }
+}
 
 #[canic_update(public)]
 async fn root_verify_role_attestation(

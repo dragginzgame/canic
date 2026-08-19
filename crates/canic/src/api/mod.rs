@@ -104,14 +104,3 @@ pub mod metrics {
 pub mod ops {
     pub use crate::__internal::core::{log, perf};
 }
-
-/// Timers and scheduling helpers
-pub mod timer {
-    pub use crate::__internal::core::api::timer::{TimerError, TimerHandle};
-    pub use crate::{timer, timer_interval};
-
-    /// Consume a timer handle and suppress any future invocation.
-    pub fn cancel(handle: TimerHandle) -> Result<(), TimerError> {
-        crate::__internal::core::api::timer::TimerApi::cancel(handle)
-    }
-}

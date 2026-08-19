@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests {
     use crate::pic::artifacts::build_canonical_fleet_coordinator_wasm;
+    use crate::pic::startup::start_pocket_ic;
     use candid::{Principal, encode_one};
     use canic_control_plane::dto::fleet_coordinator::{
         CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
@@ -151,7 +152,7 @@ placement.minimum_distinct_roots = 2
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
-        let pic = PocketIcBuilder::new().with_application_subnet().build();
+        let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, INSTALL_CYCLES);
         let args = init_args(coordinator);
@@ -245,7 +246,7 @@ placement.minimum_distinct_roots = 2
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
-        let pic = PocketIcBuilder::new().with_application_subnet().build();
+        let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, INSTALL_CYCLES);
         let args = init_args(coordinator);

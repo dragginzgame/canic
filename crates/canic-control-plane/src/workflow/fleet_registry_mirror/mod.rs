@@ -187,7 +187,7 @@ pub fn schedule_registry_synchronization(operation_id: [u8; 32]) {
 }
 
 fn schedule_registry_synchronization_after(operation_id: [u8; 32], delay: Duration) {
-    let _ = TimerApi::defer_lifecycle_required(
+    TimerApi::defer_lifecycle_required(
         delay,
         "Fleet Subnet Root Registry synchronization",
         async move {

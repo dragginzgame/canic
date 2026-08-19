@@ -281,7 +281,7 @@ fn prepare_scenario(
                 .component_canisters
                 .get(&SCALE_HUB)
                 .expect("scale_hub must exist for scale child scenario");
-            let worker_pid = root::workers::create_worker(&setup.pic, scale_hub_pid)
+            let worker_pid = root::workers::create_worker(&setup.pic, setup.root_id, scale_hub_pid)
                 .expect("scale_hub must create a scale child for instruction audit");
             root::workers::prepare_worker_for_explicit_parent_funding(&setup.pic, worker_pid);
             worker_pid

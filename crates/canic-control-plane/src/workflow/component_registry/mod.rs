@@ -756,7 +756,7 @@ pub fn schedule_component_allocation(operation_id: [u8; 32]) {
 }
 
 fn schedule_component_allocation_after(operation_id: [u8; 32], delay: Duration) {
-    let _ = TimerApi::defer_lifecycle_required(
+    TimerApi::defer_lifecycle_required(
         delay,
         "Fleet Subnet Root Component allocation",
         async move {
@@ -893,7 +893,7 @@ fn schedule_component_child_allocation_after(
     operation_id: [u8; 32],
     delay: Duration,
 ) {
-    let _ = TimerApi::defer_lifecycle_required(
+    TimerApi::defer_lifecycle_required(
         delay,
         "Fleet Subnet Root Component child allocation",
         async move {
@@ -1781,23 +1781,17 @@ fn schedule_component_removal_after(
     operation_id: [u8; 32],
     delay: Duration,
 ) {
-    let _ = TimerApi::defer_lifecycle_required(
-        delay,
-        "Fleet Subnet Root Component removal",
-        async move {
-            match Box::pin(advance_component_removal_once(component, operation_id)).await {
-                Ok(true) => {}
-                Ok(false) => {
-                    schedule_component_removal_after(component, operation_id, Duration::ZERO);
-                }
-                Err(_) => schedule_component_removal_after(
-                    component,
-                    operation_id,
-                    Duration::from_secs(1),
-                ),
+    TimerApi::defer_lifecycle_required(delay, "Fleet Subnet Root Component removal", async move {
+        match Box::pin(advance_component_removal_once(component, operation_id)).await {
+            Ok(true) => {}
+            Ok(false) => {
+                schedule_component_removal_after(component, operation_id, Duration::ZERO);
             }
-        },
-    );
+            Err(_) => {
+                schedule_component_removal_after(component, operation_id, Duration::from_secs(1));
+            }
+        }
+    });
 }
 
 pub(super) async fn advance_component_removal_once(
@@ -2688,7 +2682,7 @@ fn schedule_subtree_removal_after(
     operation_id: [u8; 32],
     delay: Duration,
 ) {
-    let _ = TimerApi::defer_lifecycle_required(
+    TimerApi::defer_lifecycle_required(
         delay,
         "Fleet Subnet Root Component subtree removal",
         async move {

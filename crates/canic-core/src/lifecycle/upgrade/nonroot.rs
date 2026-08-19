@@ -157,6 +157,5 @@ pub fn schedule_post_upgrade_nonroot_bootstrap() {
                 LifecycleMetricOutcome::Completed,
             );
         },
-    )
-    .detach();
+    );
 }

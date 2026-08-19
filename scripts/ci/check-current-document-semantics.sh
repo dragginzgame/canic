@@ -133,6 +133,15 @@ require_texts "$STATUS" "$GUARD_LABEL" \
     "## Next Action"
 
 forbid_text "$STATUS" "## Historical Release Detail" "$GUARD_LABEL"
+forbid_texts "$STATUS" "$GUARD_LABEL" \
+    "latest published release" \
+    "latest published package" \
+    "Release-truth warning:" \
+    "not published or package-versioned"
+
+for detailed_changelog in "$ROOT"/docs/changelog/*.md; do
+    forbid_text "$detailed_changelog" "Release truth:" "$GUARD_LABEL"
+done
 
 for layer_doc in "$AGENTS" "$ARCHITECTURE" "$HYGIENE"; do
     forbid_text "$layer_doc" \

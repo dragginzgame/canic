@@ -114,27 +114,34 @@ operations.
 
 ## Application Timers
 
-`timer!` schedules one asynchronous invocation. `timer_interval!` schedules
-the next invocation only after the current future completes, so interval work
-cannot overlap itself. Both return a typed `Result` containing an opaque,
-single-owner handle:
+Application canisters depend on the exact workspace-compatible `ic-timers`
+release and own their native registrations directly. Canic intentionally
+provides no timer macro, handle or cancellation facade:
 
 ```rust
-use canic::prelude::*;
+use ic_timers::{
+    DeclarationLifetime, OnceContext, TimerCompletion, TimerDirective,
+    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+};
 use std::time::Duration;
 
-let handle = timer_interval!(Duration::from_secs(30), refresh_cache)
-    .expect("schedule cache refresh");
-canic::api::timer::cancel(handle).expect("cancel cache refresh");
+let timer = register_once(
+    TimerIdentity::try_new("my-app", "cache", "refresh")?,
+    DeclarationLifetime::RemoveWhenStopped,
+    |_context: OnceContext| async {
+        refresh_cache().await;
+        TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop)
+    },
+)?;
+timer.ensure_scheduled(TimerSchedule::After(Duration::from_secs(30)))?;
 ```
 
-Cancellation consumes the handle. A pending invocation is cleared; a running
-invocation is allowed to finish but cannot rearm. Guarded timer macros and raw
-CDK timer access are not part of the maintained facade. Labels are validated
-by the shared `ic-timers` runtime and are limited to 64 UTF-8 bytes. Dropping a
-handle deliberately detaches caller control and does not cancel the timer.
-Call `handle.detach()` when that loss of control is intentional and should be
-visible in the source.
+Keep the native registration when later cancellation or reconciliation is
+required. Dropping it detaches caller control without cancelling the timer.
+Provider inventory is volatile observation, not durable application demand.
+Use the paired `lifecycle_participant(init = ..., post_upgrade = ...)`
+declaration on `canic::start!` to reconstruct application-owned volatile
+registrations synchronously after Canic restoration and before deferred hooks.
 
 Every linked owner must resolve the same exact `ic-timers` package ID; two
 versions create two canister-local registries rather than one inventory.
@@ -145,10 +152,11 @@ application-function benchmarks. A transient `RemoveWhenStopped` declaration
 that reaches terminal state is removed from the shared inventory, so no final
 status or performance sample survives after removal; retained declarations
 preserve their normally completed samples.
-Authority snapshots currently reject any timer claim outside Canic custody;
-scheduled 0.104 owns the synchronous lifecycle participant, direct native
-`ic-timers` adoption guide and combined Canic/IcyDB qualification. The current
-timer macros remain the published surface until that hard cut is implemented.
+Authority snapshots currently reject any timer claim outside Canic custody.
+See the maintained
+[native timer adoption guide](../../docs/features/runtime/native-timers.md)
+for exact dependency, custody, lifecycle reconstruction and qualification
+rules. Combined Canic/IcyDB qualification remains a separate 0.104 proof.
 
 This crate lives in the Canic workspace. See the workspace guide at
 `../../README.md` for full setup, topology, and example canisters.

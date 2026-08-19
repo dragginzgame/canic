@@ -84,4 +84,13 @@ if [ "$inventoried" != "$discovered" ]; then
     fail "every top-level integration test must appear exactly once"
 fi
 
+if rg -n -U \
+    '(?s)PocketIcBuilder::new\(\).{0,250}\.build\(\)' \
+    "$ROOT/crates/canic-testing-internal" \
+    "$ROOT/crates/canic-tests" \
+    "$ROOT/apps/saltz" \
+    --glob '*.rs'; then
+    fail "PocketIC builders must use the bounded explicit startup helper"
+fi
+
 echo "workspace test inventory guard passed ($entry_count targets: $parallel_count parallel, $pocketic_count serial PocketIC)"

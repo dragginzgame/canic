@@ -131,7 +131,7 @@ pub enum StateAllocationKey {
     BlobStorageGatewayPrincipals,
     BlobStorageBilling,
     CoreAuthorityRestoreFence,
-    CoreAsyncTimerRecovery,
+    CoreAsyncJobRecovery,
 }
 
 ///

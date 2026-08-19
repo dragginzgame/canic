@@ -407,16 +407,15 @@ impl FleetCoordinatorWorkflow {
 }
 
 fn schedule_coordinator_root_removal(operation_id: [u8; 32], delay: Duration) {
-    let _ =
-        TimerApi::defer_lifecycle_required(delay, "Fleet Coordinator root removal", async move {
-            match advance_coordinator_root_removal_once(operation_id).await {
-                Ok(true) => {}
-                Ok(false) => schedule_coordinator_root_removal(operation_id, Duration::ZERO),
-                Err(_) => {
-                    schedule_coordinator_root_removal(operation_id, Duration::from_secs(1));
-                }
+    TimerApi::defer_lifecycle_required(delay, "Fleet Coordinator root removal", async move {
+        match advance_coordinator_root_removal_once(operation_id).await {
+            Ok(true) => {}
+            Ok(false) => schedule_coordinator_root_removal(operation_id, Duration::ZERO),
+            Err(_) => {
+                schedule_coordinator_root_removal(operation_id, Duration::from_secs(1));
             }
-        });
+        }
+    });
 }
 
 async fn advance_coordinator_root_removal_once(
@@ -503,7 +502,7 @@ async fn query_root_removal(
 }
 
 fn schedule_component_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
-    let _ = TimerApi::defer_lifecycle_required(
+    TimerApi::defer_lifecycle_required(
         delay,
         "Fleet Coordinator Component provisioning",
         async move {

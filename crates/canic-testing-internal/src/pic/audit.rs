@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use super::{
     CanicPicExt, CanicWasmBuildProfile,
     artifacts::{INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters_with_env},
-    install_standalone_canister,
+    install_standalone_canister, start_pocket_ic,
 };
 
 pub struct RootAuditProbeFixture {
@@ -48,7 +48,7 @@ pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProb
         "canister_wasm_store",
         profile.target_dir_name(),
     );
-    let pic = PocketIcBuilder::new().with_application_subnet().build();
+    let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let canister_id = pic
         .create_and_install_root_canister(
             root_wasm,

@@ -26,6 +26,8 @@ members = [
     "canisters/sandbox/blank",
     "canisters/test/blob_storage_cashier_mock",
     "canisters/test/blob_storage_probe",
+    "canisters/test/canic_icydb_lifecycle_probe",
+    "canisters/test/canic_icydb_lifecycle_probe/schema",
     "canisters/test/cycle_burn_probe",
     "canisters/test/cycles_ledger_stub",
     "canisters/test/delegation_issuer_stub",
@@ -90,9 +92,11 @@ ic-query = { version = "0.40.1", default-features = false, features = [
 ] }
 ic-signature-verification = "0.3.0"
 ic-stable-structures = "0.7.2"
-ic-testkit = "0.8.0"
+ic-testkit = "0.8.8"
 ic-timers = "=0.6.1"
 ic0 = "1.1.0"
+icydb = { version = "=0.230.2", default-features = false }
+icydb-model = "=0.230.2"
 k256 = { version = "0.14", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 quote = "1.0"

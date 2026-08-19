@@ -115,7 +115,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::BlobStorageGatewayPrincipals, vec![57]),
         (StateAllocationKey::BlobStorageBilling, vec![58]),
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
-        (StateAllocationKey::CoreAsyncTimerRecovery, vec![60]),
+        (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -159,7 +159,7 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     assert_eq!(
         ids(AllocationOwner::CanicCore),
         (allocation::CANIC_CORE_MIN_ID
-            ..=allocation::memory::async_recovery::ASYNC_TIMER_RECOVERY_ID)
+            ..=allocation::memory::async_job_recovery::ASYNC_JOB_RECOVERY_ID)
             .collect::<Vec<_>>()
     );
 }

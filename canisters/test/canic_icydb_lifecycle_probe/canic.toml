@@ -1,0 +1,20 @@
+[app]
+name = "test"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+package = "../../audit/root_probe"
+
+[roles.test]
+kind = "canister"
+package = "."
+
+[app.whitelist]
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.test]
+component_role = "test"
+maximum_instances = 1

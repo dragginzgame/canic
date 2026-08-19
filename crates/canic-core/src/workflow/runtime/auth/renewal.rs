@@ -7,7 +7,7 @@ use crate::{
     InternalError,
     config::schema::DelegatedTokenConfig,
     diagnostics::codes,
-    domain::runtime::{FailureSeverity, TimerExecutionOutcome},
+    domain::runtime::FailureSeverity,
     log,
     log::Topic,
     ops::{
@@ -19,19 +19,31 @@ use crate::{
             metrics::delegated_auth::DelegatedAuthMetrics,
             recent_failure::{RecentFailureInput, RecentFailureOps},
         },
+        storage::async_job_recovery::AsyncJobOwner,
     },
     workflow::runtime::{
+        async_job::AsyncJobWorkflow,
         auth::{provisioning, root_delegation_batch},
-        timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+        timer::{
+            TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once, with_owned_once,
+        },
     },
 };
-use std::time::Duration;
+use ic_timers::{
+    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
+    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+};
+use std::{cell::RefCell, time::Duration};
 
 const DEFAULT_DELEGATED_TOKEN_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const PROOF_VALIDITY_RETRY_FLOOR: Duration = Duration::from_secs(1);
 const RETRY_INITIAL: Duration = Duration::from_mins(1);
 const RETRY_MAX: Duration = Duration::from_mins(30);
+
+thread_local! {
+    static RENEWAL_TIMER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
+}
 
 struct RenewalSweepFailure {
     cause: InternalError,
@@ -41,6 +53,47 @@ struct RenewalSweepFailure {
 pub(super) struct RootIssuerRenewalWorkflow;
 
 impl RootIssuerRenewalWorkflow {
+    pub(super) fn timer_identity() -> Result<TimerIdentity, TimerError> {
+        TimerIdentity::try_new("canic", "auth_renewal", "run").map_err(Into::into)
+    }
+
+    pub(super) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
+        with_owned_once(&RENEWAL_TIMER, |registration| {
+            registration.identity().clone()
+        })
+    }
+
+    pub(super) fn cancel_timer() -> Result<(), TimerError> {
+        if let Some(result) = with_owned_once(&RENEWAL_TIMER, OnceRegistration::cancel)? {
+            result?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn recover_expired(now_ns: u64) -> bool {
+        let owner = AsyncJobOwner::AuthRenewal;
+        if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {
+            return false;
+        }
+        if !AuthOps::has_enabled_root_issuer_renewal_templates() {
+            return AsyncJobWorkflow::abandon_expired(owner, now_ns);
+        }
+        let Ok(config) = ConfigOps::delegated_tokens_config() else {
+            return false;
+        };
+        if !config.enabled {
+            return AsyncJobWorkflow::abandon_expired(owner, now_ns);
+        }
+        let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
+            return false;
+        };
+        ic_cdk::futures::spawn(async move {
+            let result = Self::run_scheduled().await;
+            let _ = AsyncJobWorkflow::finish(attempt, result);
+        });
+        true
+    }
+
     pub(super) fn reconcile() -> Result<(), InternalError> {
         if !EnvOps::is_root() {
             return Ok(());
@@ -67,6 +120,15 @@ impl RootIssuerRenewalWorkflow {
             Ok(work_count) => Self::completed_result(now_ns, work_count),
             Err(failure) => Self::failed_result(now_ns, failure),
         }
+    }
+
+    async fn run_registered() -> TimerRunResult {
+        let attempt = match AsyncJobWorkflow::claim(AsyncJobOwner::AuthRenewal) {
+            Ok(attempt) => attempt,
+            Err(result) => return result,
+        };
+        let result = Self::run_scheduled().await;
+        AsyncJobWorkflow::finish(attempt, result)
     }
 
     async fn sweep() -> Result<u64, RenewalSweepFailure> {
@@ -145,11 +207,10 @@ impl RootIssuerRenewalWorkflow {
             Ok(timing) => timing,
             Err(err) => {
                 Self::record_timer_failure(&err);
-                return TimerRunResult {
-                    outcome: TimerExecutionOutcome::InvariantFailure,
-                    work_count,
-                    directive: TimerDirective::Stop,
-                };
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(work_count),
+                    TimerDirective::Stop,
+                );
             }
         };
         let directive = match timing.next_deadline_ns {
@@ -159,48 +220,48 @@ impl RootIssuerRenewalWorkflow {
             Some(_) => {
                 let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
-                return TimerRunResult::invariant_failure();
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    TimerDirective::Stop,
+                );
             }
         };
 
         if work_count == 0 {
-            TimerRunResult::no_work(directive)
+            TimerRunResult::new(TimerCompletion::no_work(), directive)
         } else {
-            TimerRunResult::success(work_count, directive)
+            TimerRunResult::new(TimerCompletion::success(work_count), directive)
         }
     }
 
     fn failed_result(now_ns: u64, failure: RenewalSweepFailure) -> TimerRunResult {
         Self::record_timer_failure(&failure.cause);
         if !is_retryable_renewal_error(&failure.cause) {
-            return TimerRunResult {
-                outcome: TimerExecutionOutcome::InvariantFailure,
-                work_count: failure.work_count,
-                directive: TimerDirective::Stop,
-            };
+            return TimerRunResult::new(
+                TimerCompletion::invariant_failure(failure.work_count),
+                TimerDirective::Stop,
+            );
         }
 
         let active_proof_expires_at_ns = match AuthOps::root_issuer_renewal_timing(now_ns) {
             Ok(timing) => timing.earliest_active_proof_expires_at_ns,
             Err(err) => {
                 Self::record_timer_failure(&err);
-                return TimerRunResult {
-                    outcome: TimerExecutionOutcome::InvariantFailure,
-                    work_count: failure.work_count,
-                    directive: TimerDirective::Stop,
-                };
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(failure.work_count),
+                    TimerDirective::Stop,
+                );
             }
         };
-        let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::AuthRenewal);
+        let streak = Self::consecutive_expected_failures();
         let mut delay = retry_delay(streak, now_ns, active_proof_expires_at_ns);
         let Some(retry_after_ns) = retry_deadline_ns(now_ns, delay) else {
             let err = InternalError::invariant();
             Self::record_timer_failure(&err);
-            return TimerRunResult {
-                outcome: TimerExecutionOutcome::InvariantFailure,
-                work_count: failure.work_count,
-                directive: TimerDirective::Stop,
-            };
+            return TimerRunResult::new(
+                TimerCompletion::invariant_failure(failure.work_count),
+                TimerDirective::Stop,
+            );
         };
         let deferred = match AuthOps::defer_retryable_chain_key_root_delegation_batch(
             now_ns,
@@ -209,11 +270,10 @@ impl RootIssuerRenewalWorkflow {
             Ok(deferred) => deferred,
             Err(err) => {
                 Self::record_timer_failure(&err);
-                return TimerRunResult {
-                    outcome: TimerExecutionOutcome::InvariantFailure,
-                    work_count: failure.work_count,
-                    directive: TimerDirective::Stop,
-                };
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(failure.work_count),
+                    TimerDirective::Stop,
+                );
             }
         };
         if deferred {
@@ -221,43 +281,72 @@ impl RootIssuerRenewalWorkflow {
                 Ok(timing) => timing,
                 Err(err) => {
                     Self::record_timer_failure(&err);
-                    return TimerRunResult {
-                        outcome: TimerExecutionOutcome::InvariantFailure,
-                        work_count: failure.work_count,
-                        directive: TimerDirective::Stop,
-                    };
+                    return TimerRunResult::new(
+                        TimerCompletion::invariant_failure(failure.work_count),
+                        TimerDirective::Stop,
+                    );
                 }
             };
             let Some(exact_deadline_ns) = exact_timing.next_deadline_ns else {
                 let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
-                return TimerRunResult {
-                    outcome: TimerExecutionOutcome::InvariantFailure,
-                    work_count: failure.work_count,
-                    directive: TimerDirective::Stop,
-                };
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(failure.work_count),
+                    TimerDirective::Stop,
+                );
             };
             let Some(exact_delay_ns) = exact_deadline_ns.checked_sub(now_ns) else {
                 let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
-                return TimerRunResult {
-                    outcome: TimerExecutionOutcome::InvariantFailure,
-                    work_count: failure.work_count,
-                    directive: TimerDirective::Stop,
-                };
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(failure.work_count),
+                    TimerDirective::Stop,
+                );
             };
             delay = Duration::from_nanos(exact_delay_ns);
         }
-        TimerRunResult {
-            outcome: TimerExecutionOutcome::RetryableFailure,
-            work_count: failure.work_count,
-            directive: TimerDirective::RetryAfter(delay),
-        }
+        TimerRunResult::new(
+            TimerCompletion::retryable_failure(failure.work_count),
+            TimerDirective::RetryAfter(delay),
+        )
     }
 
     fn reconcile_deadline(deadline_ns: Option<u64>) -> Result<(), InternalError> {
-        TimerWorkflow::reconcile_at(TimerKey::AuthRenewal, deadline_ns)?;
+        require_active()?;
+        if deadline_ns.is_some() {
+            Self::declare_timer()?;
+        }
+        if deadline_ns.is_some() || AsyncJobWorkflow::has_active_attempt(AsyncJobOwner::AuthRenewal)
+        {
+            TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog()?;
+        }
+        if let Some(result) = with_owned_once(&RENEWAL_TIMER, |registration| {
+            registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
+        })? {
+            result.map_err(TimerError::from)?;
+        }
         Ok(())
+    }
+
+    fn declare_timer() -> Result<(), TimerError> {
+        require_active()?;
+        if with_owned_once(&RENEWAL_TIMER, |_| ())?.is_some() {
+            return Ok(());
+        }
+        let registration = register_once(
+            Self::timer_identity()?,
+            DeclarationLifetime::Retained,
+            |_context: OnceContext| async { Self::run_registered().await },
+        )?;
+        retain_owned_once(&RENEWAL_TIMER, registration)
+    }
+
+    fn consecutive_expected_failures() -> u64 {
+        Self::timer_identity()
+            .and_then(|identity| Ok(ic_timers::consecutive_expected_failures(&identity)?))
+            .ok()
+            .flatten()
+            .unwrap_or_default()
     }
 
     fn record_timer_failure(err: &InternalError) {

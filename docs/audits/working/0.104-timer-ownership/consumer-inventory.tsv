@@ -1,0 +1,46 @@
+path	classification	current_authority	closeout
+apps/saltz/burner/src/lib.rs	independent application custody	Standalone waveform owner holds its native once registration	Retained as separately owned direct-provider evidence
+apps/test/test/src/lib.rs	independent application custody	Executable application fixture observes the shared inventory	Retained without Canic scheduling authority
+canisters/test/canic_icydb_lifecycle_probe/src/lib.rs	independent application custody	Published IcyDB participant reconstructs its own provider row	Retained as exact B7 composition evidence
+canisters/test/delegation_root_stub/src/lib.rs	independent application custody	Executable Root participant observes exact Canic provider rows	Retained without Canic scheduling authority
+canisters/test/intent_authority/src/lib.rs	private lifecycle consumer	Executable authority fixture initializes the exact nonroot runtime	Retained as lifecycle evidence, not excluded as test source
+canisters/test/runtime_probe/src/lib.rs	independent application custody	Application holds direct native once, interval and capacity registrations	Retained as the maintained downstream adoption fixture
+crates/canic-cli/src/inspect/mod.rs	DTO/metrics projection	CLI renders neutral timer status projections	Retained without registration capability
+crates/canic-control-plane/src/api/fleet_coordinator.rs	private lifecycle consumer	Coordinator initializes the shared runtime and exact snapshot path	Retained without Root or application timer custody
+crates/canic-control-plane/src/api/lifecycle.rs	private lifecycle consumer	Root lifecycle invokes exact pool/snapshot owners and private deferral	Retained without participant registries
+crates/canic-control-plane/src/workflow/canister_pool/mod.rs	native registration custody	Pool owns maintenance and recovery-watchdog registrations	Retained with demand derived from pool journals and Fleet state
+crates/canic-control-plane/src/workflow/component_provisioning.rs	private lifecycle consumer	Provisioning schedules a bounded private continuation	Retained with the operation journal as authority
+crates/canic-control-plane/src/workflow/component_registry/mod.rs	private lifecycle consumer	Registry schedules bounded private continuations	Retained with registry operations as authority
+crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs	private lifecycle consumer	Coordinator removal schedules bounded private continuations	Retained with removal state as authority
+crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs	private lifecycle consumer	Mirror schedules one bounded private continuation	Retained with mirror state as authority
+crates/canic-control-plane/src/workflow/fleet_subnet_root.rs	private lifecycle consumer	Root removal schedules one bounded private continuation	Retained with removal state as authority
+crates/canic-core/src/api/runtime/mod.rs	DTO/metrics projection	Runtime API converts atomic provider snapshots to neutral status	Retained without registration capability
+crates/canic-core/src/api/timer.rs	private lifecycle consumer	Internal API exposes only required initialization, deferral and authority transitions	Retained as a private boundary; public application facade remains absent
+crates/canic-core/src/control_plane_support.rs	domain async-job recovery	Control-plane support reexports exact recovery operations	Retained without timer provider state
+crates/canic-core/src/domain/runtime.rs	DTO/metrics projection	Domain types name neutral timer observation outcomes	Retained without registration capability
+crates/canic-core/src/dto/runtime.rs	DTO/metrics projection	Boundary DTOs carry read-only timer observations	Retained without registration capability
+crates/canic-core/src/lifecycle/init/nonroot.rs	private lifecycle consumer	Nonroot init reconstructs exact profile claims before private bootstrap	Retained with synchronous restore ordering
+crates/canic-core/src/lifecycle/init/root.rs	private lifecycle consumer	Root init reconstructs only Root claims	Retained with synchronous restore ordering
+crates/canic-core/src/lifecycle/upgrade/nonroot.rs	private lifecycle consumer	Nonroot upgrade reconstructs exact profile claims before private bootstrap	Retained with synchronous restore ordering
+crates/canic-core/src/lifecycle/upgrade/root.rs	private lifecycle consumer	Root upgrade restores authority state before exact claim reconstruction	Retained with synchronous restore ordering
+crates/canic-core/src/ops/runtime/metrics/mod.rs	DTO/metrics projection	Metrics reads the atomic native inventory	Retained without registration capability
+crates/canic-core/src/ops/storage/async_job_recovery/mod.rs	domain async-job recovery	Ops owns checked attempt leases and cycle-only replay identity	Retained without provider scheduling fields
+crates/canic-core/src/ops/storage/mod.rs	domain async-job recovery	Storage ops router exposes the exact recovery module	Retained without provider scheduling fields
+crates/canic-core/src/role_contract/allocation.rs	domain async-job recovery	Role contract allocates memory ID 60 to the exact recovery record	Retained without provider scheduling fields
+crates/canic-core/src/role_contract/catalog.rs	domain async-job recovery	Role catalogue includes the exact recovery allocation	Retained without provider scheduling fields
+crates/canic-core/src/role_contract/model.rs	domain async-job recovery	Role model names the exact recovery allocation key	Retained without provider scheduling fields
+crates/canic-core/src/state_contract.rs	domain async-job recovery	State contract publishes the exact bounded recovery domain	Retained without provider scheduling fields
+crates/canic-core/src/storage/stable/async_job_recovery/mod.rs	domain async-job recovery	Stable storage holds attempt fences and cycle-only replay generation	Retained without provider handles, snapshots or pending commands
+crates/canic-core/src/storage/stable/mod.rs	domain async-job recovery	Stable storage router exposes the exact recovery record	Retained without provider scheduling fields
+crates/canic-core/src/workflow/placement/acknowledgement.rs	fixed Canic consumer	Placement owns one native once registration	Retained with terminal receipts as demand and retry identity
+crates/canic-core/src/workflow/runtime/async_job/mod.rs	domain async-job recovery	Workflow maps native callback outcomes to exact attempt completion	Retained without registration custody
+crates/canic-core/src/workflow/runtime/auth/mod.rs	fixed Canic consumer	Auth boundary exposes its exact renewal claim operations	Retained with renewal as the custody owner
+crates/canic-core/src/workflow/runtime/auth/renewal.rs	fixed Canic consumer	Auth renewal owns one native once registration	Retained with delegation facts as demand and retry identity
+crates/canic-core/src/workflow/runtime/authority_restore.rs	private lifecycle consumer	Authority restore suspends and resumes exact role-owned claims	Retained without copied provider state
+crates/canic-core/src/workflow/runtime/cycles/mod.rs	fixed Canic consumer	Automatic top-up owns one capability-pruned native once registration	Retained with exact cycle retry generation
+crates/canic-core/src/workflow/runtime/intent.rs	fixed Canic consumer	Intent cleanup owns one native once registration	Retained with the expiry index as demand
+crates/canic-core/src/workflow/runtime/log.rs	fixed Canic consumer	Log retention owns one native once registration	Retained with log policy and index as demand
+crates/canic-core/src/workflow/runtime/root.rs	private lifecycle consumer	Root restore starts exact owners and the closed recovery watchdog	Retained without a generic scheduler registry
+crates/canic-core/src/workflow/runtime/timer/mod.rs	native registration custody	Runtime owns shared-provider initialization, one recovery watchdog and private deferrals	Retained without central claim union or application scheduling surface
+crates/canic/src/macros/endpoints/wasm_store.rs	private lifecycle consumer	Store schedules one private bootstrap through the internal boundary	Retained with participant grammar closed
+crates/canic/src/macros/start.rs	private lifecycle consumer	Managed, Root and local macros invoke paired participants then private deferrals	Retained with one lifecycle export pair and no application timer facade

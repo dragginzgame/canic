@@ -1,0 +1,24 @@
+type_or_field	current_scope	classification	0.104_decision	target_owner_or_shape	reason
+ASYNC_TIMER_RECOVERY_ID = 60	core stable memory	business allocation	RETAIN AND RESHAPE	ASYNC_JOB_RECOVERY_ID = 60	All four async owners need serial attempt fencing and not all have an equivalent durable lease owner
+canic.core.async_timer_recovery.v1	stable memory key	current schema identity	HARD CUT	canic.core.async_job_recovery.v1	Reinstall-only release; one current v1 meaning with no old-key reader migration or fallback
+AsyncTimerRecoveryRecord	four uniform owner rows	mixed domain/provider record	RENAME AND RESHAPE	AsyncJobRecoveryRecord	Uniform rows over-retain cycle-only operation generations and provider scheduling mirrors
+auth_renewal owner row	closed job identity	business authority	RETAIN MINIMAL	AsyncAttemptFenceRecord	Delegation batch owns retry identity; shared row needs only attempt fence/lease
+canister_pool_maintenance owner row	closed job identity	business authority	RETAIN MINIMAL	AsyncAttemptFenceRecord	Pool journals own platform operation identities; shared row needs only attempt fence/lease
+cycle_topup owner row	closed job identity and replay owner	business authority	RETAIN EXTENDED	ReplaySafeAsyncAttemptFenceRecord	Parent funding retry requires one exact operation generation across uncertainty
+placement_receipt_acknowledgement owner row	closed job identity	business authority	RETAIN MINIMAL	AsyncAttemptFenceRecord	Durable receipt rows own exact operation IDs; shared row needs only attempt fence/lease
+last_attempt_generation	all current owner rows	business attempt fence	RETAIN PER OWNER	checked last_attempt_generation	Creates unique stale-completion token after restart/takeover
+last_operation_generation	all current owner rows	mixed; business only for cycles	RETAIN ONLY FOR CYCLE TOP-UP	checked last_operation_generation in ReplaySafeAsyncAttemptFenceRecord	Only cycle code consumes AsyncRecoveryAttempt::operation_id; other owners already own exact domain identities
+active.attempt_generation	all current owner rows	business active-lease identity	RETAIN PER OWNER	AsyncAttemptLeaseRecord.attempt_generation	Exact token must own completion
+active.operation_generation	all current owner rows	mixed; business only for cycles	RETAIN ONLY FOR CYCLE TOP-UP	ReplaySafeAsyncAttemptLeaseRecord.operation_generation	Only cycle funding derives its replay ID from the shared attempt
+active.lease_expires_at_ns	all current owner rows	business lease	RETAIN PER OWNER	AsyncAttemptLeaseRecord.lease_expires_at_ns	Bounds overlap and permits one takeover after uncertainty
+pending_operation_generation	all current owner rows	mixed; business only for cycles	RETAIN ONLY FOR CYCLE TOP-UP	ReplaySafeAsyncAttemptFenceRecord.pending_operation_generation	Exact retry of uncertain parent funding must reuse the same operation ID
+AsyncRecoveryPendingScheduleRecord::Ensure	all current owner rows	provider command mirror	DELETE	none	Domain owners derive current demand; no pending timer command is durable authority
+AsyncRecoveryPendingScheduleRecord::Reconcile	all current owner rows	provider command mirror	DELETE	none	Reconcile is a native registration capability not stable business state
+recovery_due_at_ns	all current owner rows	generic next timer deadline	DELETE	none or semantically named domain retry fact	A callback/watchdog deadline is not independent business authority
+recovery_owned	all current owner rows	provider-lane ownership flag	DELETE	none	Scheduling may not move durably between ordinary and watchdog lanes
+retry_streak	all current owner rows	copied process/provider counter	DELETE	native provider observation or domain-specific volatile backoff	It is not replay identity or durable demand
+terminal_failure	all current owner rows	copied process condition	DELETE	native provider status plus domain failure evidence	Provider process condition must not become stable Canic state
+MAX_ASYNC_TIMER_RECOVERY_RECORD_BYTES = 2048	current stable bound	derived encoding bound	RECOMPUTE	MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES	B3 measures the new worst-case encoding rather than retaining ceremonial capacity
+AsyncTimerRecoveryData/Store/Ops/Attempt/Claim/Completion/Owner	internal model/ops/test vocabulary	mixed timer/domain naming	RENAME AND NARROW	AsyncJobRecoveryData/Store/Ops/Attempt/Claim/Completion/Owner	Names business interruption recovery and removes scheduling authority from the abstraction
+canic-async-recovery-operation:v1	operation-ID derivation domain	cycle business replay identity hidden behind generic name	HARD CUT	canic-async-job-recovery-operation:v1 used only by cycle top-up	One current reinstall-only contract; no compatibility derivation lane
+

@@ -161,7 +161,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                             async move {
                                 let _ = ::canic::api::canister::template::WasmStoreCanisterApi::run_gc(operation_id).await;
                             },
-                        ).detach();
+                        );
                     }
                     Ok(StoreCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },

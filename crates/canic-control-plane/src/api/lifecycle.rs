@@ -75,6 +75,56 @@ use std::time::Duration;
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    /// Suspend the exact Root control-plane owners before core authority sealing.
+    pub async fn prepare_authority_snapshot(
+        request: canic_core::dto::authority_restore::AuthoritySnapshotRequest,
+    ) -> Result<
+        canic_core::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+        canic_core::dto::error::Error,
+    > {
+        canic_core::api::timer::TimerApi::require_root_authority_snapshot_resumable().map_err(
+            |_error| canic_core::control_plane_support::error::InternalError::invariant(),
+        )?;
+        crate::workflow::canister_pool::suspend_for_authority_snapshot().map_err(|_error| {
+            canic_core::control_plane_support::error::InternalError::invariant()
+        })?;
+        match canic_core::api::authority_restore::AuthorityRestoreApi::prepare_root_snapshot(
+            request,
+        )
+        .await
+        {
+            Ok(status) => Ok(status),
+            Err(error) => {
+                crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(
+                    |resume_error| {
+                        ic_cdk::trap(format!(
+                            "Root timer rollback failed after snapshot rejection: {resume_error}"
+                        ))
+                    },
+                );
+                Err(error)
+            }
+        }
+    }
+
+    /// Resume core authority and then reconstruct exact Root control-plane demand.
+    pub async fn resume_authority_snapshot(
+        request: canic_core::dto::authority_restore::AuthoritySnapshotRequest,
+    ) -> Result<
+        canic_core::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
+        canic_core::dto::error::Error,
+    > {
+        let status =
+            canic_core::api::authority_restore::AuthorityRestoreApi::resume_root_snapshot(request)
+                .await?;
+        crate::workflow::canister_pool::resume_after_authority_snapshot().unwrap_or_else(|error| {
+            ic_cdk::trap(format!(
+                "Root timer reconstruction failed while authority remained sealed: {error}"
+            ))
+        });
+        Ok(status)
+    }
+
     /// Resolve one indexed Root-owned durable operation for the consolidated status lane.
     pub fn root_operation_status(
         operation_id: [u8; 32],
@@ -93,12 +143,6 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
     ) {
-        canic_core::api::timer::TimerApi::register_snapshot_resume_participant(
-            crate::workflow::canister_pool::resume_after_authority_snapshot,
-        );
-        canic_core::api::timer::TimerApi::register_async_recovery_participant(
-            crate::workflow::canister_pool::dispatch_async_recovery,
-        );
         let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
         let canister_pool_imports = args.canister_pool_imports.clone();
         let wasm_store = args.authority.wasm_store_authority.wasm_store;
@@ -746,12 +790,6 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
     ) -> bool {
-        canic_core::api::timer::TimerApi::register_snapshot_resume_participant(
-            crate::workflow::canister_pool::resume_after_authority_snapshot,
-        );
-        canic_core::api::timer::TimerApi::register_async_recovery_participant(
-            crate::workflow::canister_pool::dispatch_async_recovery,
-        );
         crate::runtime::install::register_template_module_source_resolver();
         let active =
             canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
@@ -782,7 +820,6 @@ impl LifecycleApi {
             async {
                 crate::workflow::bootstrap::root::bootstrap_post_upgrade_root_canister().await;
             },
-        )
-        .detach();
+        );
     }
 }

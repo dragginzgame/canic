@@ -549,7 +549,7 @@ pub fn schedule_root_removal(operation_id: [u8; 32]) {
 }
 
 fn schedule_root_removal_after(operation_id: [u8; 32], delay: Duration) {
-    let _ = TimerApi::defer_lifecycle_required(delay, "Fleet Subnet Root removal", async move {
+    TimerApi::defer_lifecycle_required(delay, "Fleet Subnet Root removal", async move {
         match Box::pin(advance_root_removal_once(operation_id)).await {
             Ok(true) => {}
             Ok(false) => schedule_root_removal_after(operation_id, Duration::ZERO),

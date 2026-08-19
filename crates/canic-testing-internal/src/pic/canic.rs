@@ -35,7 +35,8 @@ use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{
-        CandidCallExt, CanisterInstallExt, InstallSpec, PocketIc, PocketIcBuilder,
+        CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt,
+        InstallSpec, LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder,
         PocketIcDiagnosticsExt, StandaloneCanisterFixture,
     },
 };
@@ -43,6 +44,7 @@ use ic_testkit::{
 use super::artifacts::{
     CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, build_internal_test_wasm_canisters,
 };
+use super::startup::start_pocket_ic;
 
 const INSTALL_CYCLES: u128 = 500_000_000_000_000;
 const STANDALONE_READY_TICK_LIMIT: usize = 60;
@@ -183,12 +185,18 @@ pub trait CanicPicExt {
     ) -> Result<Principal, Error>;
 
     /// Wait until one Canic canister reports `canic_status(Readiness)`.
-    fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str);
+    fn wait_for_ready(
+        &self,
+        canister_id: Principal,
+        diagnostic_sender: Principal,
+        tick_limit: usize,
+        context: &str,
+    );
 
     /// Wait until all provided Canic canisters report `canic_status(Readiness)`.
-    fn wait_for_all_ready<I>(&self, canister_ids: I, tick_limit: usize, context: &str)
+    fn wait_for_all_ready<I>(&self, targets: I, tick_limit: usize, context: &str)
     where
-        I: IntoIterator<Item = Principal>;
+        I: IntoIterator<Item = (Principal, Principal)>;
 }
 
 impl CanicPicExt for PocketIc {
@@ -204,39 +212,111 @@ impl CanicPicExt for PocketIc {
         Ok(prepared.root_id)
     }
 
-    fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str) {
+    fn wait_for_ready(
+        &self,
+        canister_id: Principal,
+        diagnostic_sender: Principal,
+        tick_limit: usize,
+        context: &str,
+    ) {
         for _ in 0..tick_limit {
             self.tick();
-            if fetch_ready(self, canister_id) {
-                return;
+            match fetch_ready(self, canister_id) {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(error) => {
+                    report_canister_diagnostics(self, canister_id, diagnostic_sender, context);
+                    panic!("{context}: canister {canister_id} readiness query failed: {error:?}");
+                }
             }
         }
 
-        self.dump_canister_debug(canister_id, context);
+        report_canister_diagnostics(self, canister_id, diagnostic_sender, context);
         panic!("{context}: canister {canister_id} did not become ready after {tick_limit} ticks");
     }
 
-    fn wait_for_all_ready<I>(&self, canister_ids: I, tick_limit: usize, context: &str)
+    fn wait_for_all_ready<I>(&self, targets: I, tick_limit: usize, context: &str)
     where
-        I: IntoIterator<Item = Principal>,
+        I: IntoIterator<Item = (Principal, Principal)>,
     {
-        let canister_ids = canister_ids.into_iter().collect::<Vec<_>>();
+        let targets = targets.into_iter().collect::<Vec<_>>();
 
         for _ in 0..tick_limit {
             self.tick();
-            if canister_ids
-                .iter()
-                .copied()
-                .all(|canister_id| fetch_ready(self, canister_id))
-            {
+            let mut all_ready = true;
+            let mut failures = Vec::new();
+            for (canister_id, _) in &targets {
+                match fetch_ready(self, *canister_id) {
+                    Ok(ready) => all_ready &= ready,
+                    Err(error) => failures.push(format!("{canister_id}: {error:?}")),
+                }
+            }
+            if !failures.is_empty() {
+                report_canister_diagnostic_targets(self, &targets, context);
+                panic!(
+                    "{context}: readiness queries failed:\n{}",
+                    failures.join("\n")
+                );
+            }
+            if all_ready {
                 return;
             }
         }
 
-        for canister_id in &canister_ids {
-            self.dump_canister_debug(*canister_id, context);
-        }
+        report_canister_diagnostic_targets(self, &targets, context);
         panic!("{context}: canisters did not become ready after {tick_limit} ticks");
+    }
+}
+
+/// Print bounded status and log diagnostics using the canister's exact controller.
+pub fn report_canister_diagnostics(
+    pic: &PocketIc,
+    canister_id: Principal,
+    diagnostic_sender: Principal,
+    context: &str,
+) {
+    let report = pic.collect_canister_diagnostics(CanisterDiagnosticsRequest::new(
+        canister_id,
+        diagnostic_sender,
+        diagnostic_sender,
+    ));
+    eprintln!("{context}: {report}");
+}
+
+fn report_canister_diagnostic_targets(
+    pic: &PocketIc,
+    targets: &[(Principal, Principal)],
+    context: &str,
+) {
+    report_canister_diagnostics_batch(
+        pic,
+        targets.iter().map(|(canister_id, diagnostic_sender)| {
+            (canister_id.to_string(), *canister_id, *diagnostic_sender)
+        }),
+        context,
+    );
+}
+
+/// Print a labeled collect-all diagnostic batch with exact controllers.
+pub fn report_canister_diagnostics_batch<I, L>(pic: &PocketIc, targets: I, context: &str)
+where
+    I: IntoIterator<Item = (L, Principal, Principal)>,
+    L: Into<String>,
+{
+    let requests = targets
+        .into_iter()
+        .map(|(label, canister_id, diagnostic_sender)| {
+            LabeledCanisterDiagnosticsRequest::new(
+                label,
+                CanisterDiagnosticsRequest::new(canister_id, diagnostic_sender, diagnostic_sender),
+            )
+        })
+        .collect::<Vec<_>>();
+    match pic.collect_canister_diagnostics_batch(&requests) {
+        Ok(report) => eprintln!("{context}: {report}"),
+        Err(error) => {
+            eprintln!("{context}: diagnostic batch rejected before collection: {error}");
+        }
     }
 }
 
@@ -332,7 +412,12 @@ pub(super) fn activate_managed_fleet(
     let RootCommandResponseFragment::OperationAccepted(receipt) =
         root_command(pic, root_id, RootCommandFragment::PrepareFleetActivation).unwrap_or_else(
             |error| {
-                pic.dump_canister_debug(root_id, "Fleet activation preparation application");
+                report_canister_diagnostics(
+                    pic,
+                    root_id,
+                    Principal::anonymous(),
+                    "Fleet activation preparation application",
+                );
                 panic!("Fleet activation preparation application: {error:?}");
             },
         );
@@ -433,7 +518,7 @@ pub fn install_standalone_canister(
 
     let label = format!("standalone:{crate_name}:{role}");
     let wasm = standalone_canister_wasm(crate_name, profile);
-    let pocket_ic = PocketIcBuilder::new().with_application_subnet().build();
+    let pocket_ic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let fixture = StandaloneCanisterFixture::install(
         pocket_ic,
         InstallSpec::new(wasm, local_init_args(), 0).label(label),
@@ -442,6 +527,7 @@ pub fn install_standalone_canister(
     let pic = fixture.pocket_ic();
     pic.wait_for_ready(
         canister_id,
+        Principal::anonymous(),
         STANDALONE_READY_TICK_LIMIT,
         "standalone canister bootstrap",
     );
@@ -474,6 +560,7 @@ pub fn install_standalone_canister_on_pic(
         .create_and_install(InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()));
     pic.wait_for_ready(
         canister_id,
+        Principal::anonymous(),
         STANDALONE_READY_TICK_LIMIT,
         "standalone canister bootstrap",
     );
@@ -481,21 +568,18 @@ pub fn install_standalone_canister_on_pic(
     canister_id
 }
 
-fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> bool {
+fn fetch_ready(pic: &PocketIc, canister_id: Principal) -> Result<bool, CandidCallError> {
     match pic.query_candid::<Result<RootStatusResponseFragment, Error>, _>(
         canister_id,
         protocol::CANIC_STATUS,
         (RootStatusRequestFragment::Readiness,),
     ) {
         Ok(Ok(RootStatusResponseFragment::Readiness(readiness))) => {
-            readiness.status == ReadinessStatus::Ready
+            Ok(readiness.status == ReadinessStatus::Ready)
         }
         Ok(Ok(_)) => panic!("role returned a differently correlated readiness status"),
-        Ok(Err(_)) => false,
-        Err(err) => {
-            pic.dump_canister_debug(canister_id, "query canic_status readiness failed");
-            panic!("query canic_status readiness failed: {err:?}");
-        }
+        Ok(Err(_)) => Ok(false),
+        Err(error) => Err(error),
     }
 }
 

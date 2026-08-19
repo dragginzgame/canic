@@ -1,0 +1,14 @@
+[package]
+name = "canic-icydb-lifecycle-schema"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+description = "IcyDB schema fixture for Canic lifecycle composition tests"
+
+[dependencies]
+icydb = { workspace = true }
+icydb-model = { workspace = true }
+
+[lints]
+workspace = true

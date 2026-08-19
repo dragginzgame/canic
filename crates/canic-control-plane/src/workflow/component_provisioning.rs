@@ -163,7 +163,7 @@ pub async fn accept_and_schedule(
 }
 
 fn schedule_provisioning(operation_id: [u8; 32], plan_hash: [u8; 32], delay: Duration) {
-    let _ = TimerApi::defer_lifecycle_required(
+    TimerApi::defer_lifecycle_required(
         delay,
         "Fleet Subnet Root Component provisioning",
         async move {

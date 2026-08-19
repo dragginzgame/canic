@@ -15,6 +15,7 @@ const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
 mod tests {
     use super::*;
+    use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
     use candid::{CandidType, Deserialize, decode_one, encode_one};
     #[cfg(test)]
     use canic::dto::authority_restore::{
@@ -25,6 +26,8 @@ mod tests {
     use canic::dto::pool::{
         CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
     };
+    #[cfg(test)]
+    use canic::dto::runtime::{CanicRuntimeStatus, TimerRegistrationStatus};
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
@@ -101,10 +104,10 @@ mod tests {
         BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
         CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
-        FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PocketIcDiagnosticsExt,
-        PreparedBaseline, ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt,
-        ResetRequirement, ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy,
-        ValidationReceipt, is_dead_pocket_ic_transport_error,
+        FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
+        ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
+        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
+        is_dead_pocket_ic_transport_error,
     };
 
     #[cfg(test)]
@@ -157,6 +160,8 @@ mod tests {
         Inventory,
         Operation(OperationStatusRequest),
         Pool(CanisterPoolStatusRequest),
+        #[cfg(test)]
+        Runtime,
     }
 
     #[derive(CandidType, Deserialize)]
@@ -171,6 +176,8 @@ mod tests {
         Inventory(FleetSubnetRootCanisterSummary),
         Operation(RootOperationStatusResponse),
         Pool(CanisterPoolResponse),
+        #[cfg(test)]
+        Runtime(Box<CanicRuntimeStatus>),
     }
 
     #[derive(CandidType)]
@@ -269,19 +276,43 @@ mod tests {
         context: &str,
     ) -> Result<(), ActiveComponentRegistryBaselineError>
     where
-        I: IntoIterator<Item = (L, Principal)>,
+        I: IntoIterator<Item = (L, Principal, Principal)>,
         L: Into<String>,
     {
         let targets = targets
             .into_iter()
-            .map(|(label, canister_id)| (label.into(), canister_id))
+            .map(|(label, canister_id, diagnostic_sender)| {
+                (label.into(), canister_id, diagnostic_sender)
+            })
             .collect::<Vec<_>>();
         let mut observations = Vec::with_capacity(targets.len());
         for _ in 0..tick_limit {
             observations.clear();
-            for (label, canister_id) in &targets {
-                let observation = fetch_role_overview_readiness(pic, *canister_id)?;
-                observations.push((label, *canister_id, observation));
+            let mut query_failures = Vec::new();
+            for (label, canister_id, _) in &targets {
+                match fetch_role_overview_readiness(pic, *canister_id) {
+                    Ok(observation) => observations.push((label, *canister_id, observation)),
+                    Err(error) => query_failures.push(RoleOverviewQueryFailure {
+                        label: label.clone(),
+                        canister_id: *canister_id,
+                        error,
+                    }),
+                }
+            }
+            if !query_failures.is_empty() {
+                report_canister_diagnostics_batch(
+                    pic,
+                    targets
+                        .iter()
+                        .map(|(label, canister_id, diagnostic_sender)| {
+                            (label.clone(), *canister_id, *diagnostic_sender)
+                        }),
+                    context,
+                );
+                return Err(ActiveComponentRegistryBaselineError::Calls {
+                    context: context.to_string(),
+                    failures: query_failures,
+                });
             }
             if observations
                 .iter()
@@ -292,11 +323,17 @@ mod tests {
             pic.tick();
         }
 
-        for (_, canister_id, observation) in &observations {
-            if !observation.is_ready() {
-                pic.dump_canister_debug(*canister_id, context);
-            }
-        }
+        report_canister_diagnostics_batch(
+            pic,
+            targets
+                .iter()
+                .zip(&observations)
+                .filter(|(_, (_, _, observation))| !observation.is_ready())
+                .map(|((label, canister_id, diagnostic_sender), _)| {
+                    (label.clone(), *canister_id, *diagnostic_sender)
+                }),
+            context,
+        );
         let detail = observations
             .iter()
             .filter(|(_, _, observation)| !observation.is_ready())
@@ -445,9 +482,20 @@ mod tests {
     #[derive(Debug)]
     enum ActiveComponentRegistryBaselineError {
         Call(CandidCallError),
+        Calls {
+            context: String,
+            failures: Vec<RoleOverviewQueryFailure>,
+        },
         Contract(BaselinePoolContractError),
         Invariant(String),
         Snapshot(ControllerSnapshotError),
+    }
+
+    #[derive(Debug)]
+    struct RoleOverviewQueryFailure {
+        label: String,
+        canister_id: Principal,
+        error: CandidCallError,
     }
 
     impl ActiveComponentRegistryBaselineRecipe {
@@ -550,11 +598,11 @@ mod tests {
             wait_for_role_overviews_ready(
                 baseline.pocket_ic(),
                 [
-                    ("coordinator", metadata.coordinator),
-                    ("root", metadata.root),
-                    ("wasm_store", metadata.wasm_store),
-                    ("issuer", metadata.issuer.canister_id),
-                    ("verifier", metadata.verifier.canister_id),
+                    ("coordinator", metadata.coordinator, Principal::anonymous()),
+                    ("root", metadata.root, Principal::anonymous()),
+                    ("wasm_store", metadata.wasm_store, metadata.root),
+                    ("issuer", metadata.issuer.canister_id, metadata.root),
+                    ("verifier", metadata.verifier.canister_id, metadata.root),
                 ],
                 60,
                 "restored active Component Registry baseline",
@@ -607,6 +655,17 @@ mod tests {
         fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 Self::Call(error) => error.fmt(formatter),
+                Self::Calls { context, failures } => {
+                    write!(formatter, "{context}: role overview queries failed")?;
+                    for failure in failures {
+                        write!(
+                            formatter,
+                            "\n{}({})={:?}",
+                            failure.label, failure.canister_id, failure.error
+                        )?;
+                    }
+                    Ok(())
+                }
                 Self::Contract(error) => error.fmt(formatter),
                 Self::Invariant(message) => formatter.write_str(message),
                 Self::Snapshot(error) => error.fmt(formatter),
@@ -618,6 +677,9 @@ mod tests {
         fn source(&self) -> Option<&(dyn StdError + 'static)> {
             match self {
                 Self::Call(error) => Some(error),
+                Self::Calls { failures, .. } => failures
+                    .first()
+                    .map(|failure| &failure.error as &(dyn StdError + 'static)),
                 Self::Contract(error) => Some(error),
                 Self::Invariant(_) => None,
                 Self::Snapshot(error) => Some(error),
@@ -1060,6 +1122,11 @@ mod tests {
         .expect("query root inventory before snapshot") else {
             panic!("Root returned a differently correlated inventory status");
         };
+        assert_root_native_timer_state(
+            fixture.pic(),
+            fixture.root,
+            TimerRegistrationStatus::Scheduled,
+        );
 
         let snapshot_request = AuthoritySnapshotRequest {
             operation_id: [0xb4; 32],
@@ -1075,6 +1142,11 @@ mod tests {
             panic!("Root returned a differently correlated authority status");
         };
         assert_eq!(restored_fence.phase, AuthorityRestoreFencePhase::Sealed);
+        assert_root_native_timer_state(
+            fixture.pic(),
+            fixture.root,
+            TimerRegistrationStatus::Unregistered,
+        );
         let RootStatusResponseFragment::Inventory(after) = root_status(
             fixture.pic(),
             fixture.root,
@@ -1127,6 +1199,11 @@ mod tests {
             panic!("Root returned a differently correlated authority response");
         };
         assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
+        assert_root_native_timer_state(
+            fixture.pic(),
+            fixture.root,
+            TimerRegistrationStatus::Unregistered,
+        );
         let snapshots = fixture
             .pic()
             .capture_controller_snapshots(fixture.root, [fixture.root])
@@ -1140,6 +1217,11 @@ mod tests {
             panic!("Root returned a differently correlated authority response");
         };
         assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
+        assert_root_native_timer_state(
+            fixture.pic(),
+            fixture.root,
+            TimerRegistrationStatus::Scheduled,
+        );
 
         fixture
             .pic()
@@ -1150,6 +1232,54 @@ mod tests {
                 },
             )
             .expect("root authority snapshot restore");
+    }
+
+    #[cfg(test)]
+    fn assert_root_native_timer_state(
+        pic: &PocketIc,
+        root: Principal,
+        expected: TimerRegistrationStatus,
+    ) {
+        let RootStatusResponseFragment::Runtime(status) =
+            root_status(pic, root, RootStatusRequestFragment::Runtime)
+                .expect("query Root timer inventory")
+        else {
+            panic!("Root returned a differently correlated Runtime status");
+        };
+        let scheduled = status
+            .timers
+            .iter()
+            .filter(|timer| timer.registration == TimerRegistrationStatus::Scheduled)
+            .count();
+        eprintln!(
+            "Root timer inventory: declared={} scheduled={scheduled} expected_pool_state={expected:?}",
+            status.timers.len()
+        );
+        assert!(
+            status
+                .timers
+                .iter()
+                .all(|timer| timer.subsystem != "cycles" || timer.name != "topup"),
+            "Root without AutomaticTopup must not declare the top-up registration"
+        );
+        for (subsystem, name) in [
+            ("async_job_recovery", "watchdog"),
+            ("canister_pool", "maintain"),
+        ] {
+            let matching = status
+                .timers
+                .iter()
+                .filter(|timer| timer.subsystem == subsystem && timer.name == name)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                matching.len(),
+                1,
+                "exactly one Root-native {subsystem}/{name}"
+            );
+            let timer = matching[0];
+            assert_eq!(timer.owner, "canic");
+            assert_eq!(timer.registration, expected);
+        }
     }
 
     #[test]
@@ -1240,11 +1370,16 @@ mod tests {
             fixture.pic().advance_time(Duration::from_secs(1));
         }
         let terminal = terminal.unwrap_or_else(|| {
-            fixture
-                .pic()
-                .dump_canister_debug(fixture.root, "autonomous Root removal timeout");
-            fixture.pic().dump_canister_debug(
+            report_canister_diagnostics(
+                fixture.pic(),
+                fixture.root,
+                Principal::anonymous(),
+                "autonomous Root removal timeout",
+            );
+            report_canister_diagnostics(
+                fixture.pic(),
                 fixture.coordinator,
+                Principal::anonymous(),
                 "autonomous Coordinator Root-removal timeout",
             );
             let coordinator = coordinator_status(
@@ -1970,7 +2105,12 @@ mod tests {
             pic.tick();
         }
 
-        pic.dump_canister_debug(fixture.root_id, "autonomous Component provisioning");
+        report_canister_diagnostics(
+            pic,
+            fixture.root_id,
+            Principal::anonymous(),
+            "autonomous Component provisioning",
+        );
         panic!(
             "Root did not autonomously complete Component provisioning; last allocation: {last_allocation:?}"
         );
@@ -2046,7 +2186,12 @@ mod tests {
             pic.tick();
         }
 
-        pic.dump_canister_debug(root, "autonomous root Fleet activation");
+        report_canister_diagnostics(
+            pic,
+            root,
+            Principal::anonymous(),
+            "autonomous root Fleet activation",
+        );
         panic!("Root did not autonomously complete Fleet activation");
     }
 

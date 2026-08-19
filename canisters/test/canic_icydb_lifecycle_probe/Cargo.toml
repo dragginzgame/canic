@@ -1,0 +1,32 @@
+[package]
+name = "canic_icydb_lifecycle_probe"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+app = "test"
+role = "test"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = [] }
+canic-icydb-lifecycle-schema = { path = "schema" }
+ic-cdk = { workspace = true }
+ic-timers = { workspace = true }
+icydb = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true, features = [] }
+canic-icydb-lifecycle-schema = { path = "schema" }
+icydb = { workspace = true }
+
+[lints]
+workspace = true

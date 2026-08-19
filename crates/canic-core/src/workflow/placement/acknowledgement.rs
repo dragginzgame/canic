@@ -9,20 +9,35 @@ use crate::{
     log::Topic,
     model::replay::OperationId,
     ops::{
-        rpc::request::RequestOps, runtime::env::EnvOps, storage::intent::ReceiptBackedIntentOps,
+        rpc::request::RequestOps, runtime::env::EnvOps, storage::async_job_recovery::AsyncJobOwner,
+        storage::intent::ReceiptBackedIntentOps,
     },
     workflow::{
         placement::allocation::remove_exact_terminal_intent,
-        runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+        runtime::{
+            async_job::AsyncJobWorkflow,
+            timer::{
+                TimerAuthorityWorkflow, TimerError, require_active, retain_owned_once,
+                with_owned_once,
+            },
+        },
     },
 };
-use std::{cell::Cell, time::Duration};
+use ic_timers::{
+    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
+    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+};
+use std::{
+    cell::{Cell, RefCell},
+    time::Duration,
+};
 
 const ACKNOWLEDGEMENT_BATCH_SIZE: usize = 32;
 const RETRY_INITIAL: Duration = Duration::from_mins(1);
 const RETRY_MAX: Duration = Duration::from_mins(30);
 
 thread_local! {
+    static ACKNOWLEDGEMENT_TIMER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
     static CURSOR: Cell<Option<OperationId>> = const { Cell::new(None) };
     static RETRY_STREAK: Cell<u8> = const { Cell::new(0) };
 }
@@ -49,6 +64,47 @@ struct DrainResult {
 pub struct PlacementAcknowledgementWorkflow;
 
 impl PlacementAcknowledgementWorkflow {
+    /// Return the exact placement-acknowledgement native identity.
+    pub(crate) fn timer_identity() -> Result<TimerIdentity, TimerError> {
+        TimerIdentity::try_new("canic", "placement", "receipt_ack").map_err(Into::into)
+    }
+
+    /// Return the claimed placement-acknowledgement identity, when declared.
+    pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
+        with_owned_once(&ACKNOWLEDGEMENT_TIMER, |registration| {
+            registration.identity().clone()
+        })
+    }
+
+    /// Cancel the retained placement-acknowledgement registration for suspension.
+    pub(crate) fn cancel_timer() -> Result<(), TimerError> {
+        if let Some(result) = with_owned_once(&ACKNOWLEDGEMENT_TIMER, OnceRegistration::cancel)? {
+            result?;
+        }
+        Ok(())
+    }
+
+    /// Recover one expired acknowledgement attempt from the durable receipt index.
+    pub(crate) fn recover_expired_timer(now_ns: u64) -> bool {
+        let owner = AsyncJobOwner::PlacementReceiptAcknowledgement;
+        if !AsyncJobWorkflow::has_expired_attempt(owner, now_ns) {
+            return false;
+        }
+        match ReceiptBackedIntentOps::has_placement_acknowledgements() {
+            Ok(true) => {}
+            Ok(false) => return AsyncJobWorkflow::abandon_expired(owner, now_ns),
+            Err(_) => return false,
+        }
+        let Some(attempt) = AsyncJobWorkflow::claim_expired(owner, now_ns) else {
+            return false;
+        };
+        ic_cdk::futures::spawn(async move {
+            let result = Self::run_scheduled().await;
+            let _ = AsyncJobWorkflow::finish(attempt, result);
+        });
+        true
+    }
+
     /// Reconstruct scheduling from the lifecycle-rebuilt durable index.
     pub fn start() -> Result<(), InternalError> {
         Self::schedule_if_pending()
@@ -59,17 +115,34 @@ impl PlacementAcknowledgementWorkflow {
         if ReceiptBackedIntentOps::has_placement_acknowledgements()? {
             Self::schedule(Duration::ZERO)?;
         } else {
-            TimerWorkflow::reconcile_at(TimerKey::PlacementReceiptAcknowledgement, None)?;
+            Self::reconcile_timer(None)?;
         }
         Ok(())
     }
 
     fn schedule(delay: Duration) -> Result<(), InternalError> {
-        TimerWorkflow::schedule(TimerKey::PlacementReceiptAcknowledgement, delay)?;
+        require_active()?;
+        Self::declare_timer()?;
+        TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog()?;
+        let result = with_owned_once(&ACKNOWLEDGEMENT_TIMER, |registration| {
+            registration.ensure_scheduled(TimerSchedule::After(delay))
+        })?
+        .ok_or(TimerError::MissingClaim)?;
+        result.map_err(TimerError::from)?;
         Ok(())
     }
 
-    pub(crate) async fn run_scheduled() -> TimerRunResult {
+    async fn run_registered() -> TimerRunResult {
+        let attempt = match AsyncJobWorkflow::claim(AsyncJobOwner::PlacementReceiptAcknowledgement)
+        {
+            Ok(attempt) => attempt,
+            Err(result) => return result,
+        };
+        let result = Self::run_scheduled().await;
+        AsyncJobWorkflow::finish(attempt, result)
+    }
+
+    async fn run_scheduled() -> TimerRunResult {
         let result = match Self::drain_batch().await {
             Ok(result) => result,
             Err(err) => {
@@ -79,7 +152,10 @@ impl PlacementAcknowledgementWorkflow {
                     Warn,
                     "placement receipt acknowledgement stopped after invariant failure: {err}"
                 );
-                return TimerRunResult::invariant_failure();
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    TimerDirective::Stop,
+                );
             }
         };
 
@@ -88,26 +164,29 @@ impl PlacementAcknowledgementWorkflow {
         }
 
         match result.directive {
-            DrainDirective::Continue => {
-                TimerRunResult::success(result.work_count, TimerDirective::ContinueImmediately)
-            }
+            DrainDirective::Continue => TimerRunResult::new(
+                TimerCompletion::success(result.work_count),
+                TimerDirective::ContinueImmediately,
+            ),
             DrainDirective::Retry => {
                 let streak = RETRY_STREAK.get();
                 let delay = retry_delay(streak);
                 RETRY_STREAK.set(streak.saturating_add(1));
-                TimerRunResult {
-                    outcome: crate::domain::runtime::TimerExecutionOutcome::RetryableFailure,
-                    work_count: result.work_count,
-                    directive: TimerDirective::RetryAfter(delay),
-                }
+                TimerRunResult::new(
+                    TimerCompletion::retryable_failure(result.work_count),
+                    TimerDirective::RetryAfter(delay),
+                )
             }
             DrainDirective::Stop if result.work_count == 0 => {
                 RETRY_STREAK.set(0);
-                TimerRunResult::no_work(TimerDirective::Stop)
+                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
             }
             DrainDirective::Stop => {
                 RETRY_STREAK.set(0);
-                TimerRunResult::success(result.work_count, TimerDirective::Stop)
+                TimerRunResult::new(
+                    TimerCompletion::success(result.work_count),
+                    TimerDirective::Stop,
+                )
             }
         }
     }
@@ -162,6 +241,37 @@ impl PlacementAcknowledgementWorkflow {
             work_count,
             directive,
         })
+    }
+
+    fn reconcile_timer(deadline_ns: Option<u64>) -> Result<(), TimerError> {
+        require_active()?;
+        if deadline_ns.is_some() {
+            Self::declare_timer()?;
+        }
+        if deadline_ns.is_some()
+            || AsyncJobWorkflow::has_active_attempt(AsyncJobOwner::PlacementReceiptAcknowledgement)
+        {
+            TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog()?;
+        }
+        if let Some(result) = with_owned_once(&ACKNOWLEDGEMENT_TIMER, |registration| {
+            registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
+        })? {
+            result?;
+        }
+        Ok(())
+    }
+
+    fn declare_timer() -> Result<(), TimerError> {
+        require_active()?;
+        if with_owned_once(&ACKNOWLEDGEMENT_TIMER, |_| ())?.is_some() {
+            return Ok(());
+        }
+        let registration = register_once(
+            Self::timer_identity()?,
+            DeclarationLifetime::Retained,
+            |_context: OnceContext| async { Self::run_registered().await },
+        )?;
+        retain_owned_once(&ACKNOWLEDGEMENT_TIMER, registration)
     }
 }
 

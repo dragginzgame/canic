@@ -1,4 +1,4 @@
-pub mod async_recovery;
+pub mod async_job_recovery;
 pub mod auth;
 pub mod authority_restore;
 pub mod blob_storage;

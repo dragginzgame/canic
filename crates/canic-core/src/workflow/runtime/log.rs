@@ -10,16 +10,42 @@ use crate::{
     domain::policy::pure as policy,
     log::{Level, Topic},
     ops::{config::ConfigOps, ic::IcOps, runtime::log::LogOps},
-    workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+    workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
+use ic_timers::{
+    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
+    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+};
+use std::cell::RefCell;
 
 const RETENTION_BATCH_SIZE: usize = 256;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
+
+thread_local! {
+    static LOG_RETENTION_TIMER: RefCell<Option<OnceRegistration>> = const { RefCell::new(None) };
+}
 
 /// Canonical append and age-retention owner for runtime logs.
 pub struct LogRetentionWorkflow;
 
 impl LogRetentionWorkflow {
+    pub(crate) fn timer_identity() -> Result<TimerIdentity, TimerError> {
+        TimerIdentity::try_new("canic", "log_retention", "run").map_err(Into::into)
+    }
+
+    pub(crate) fn claimed_timer_identity() -> Result<Option<TimerIdentity>, TimerError> {
+        with_owned_once(&LOG_RETENTION_TIMER, |registration| {
+            registration.identity().clone()
+        })
+    }
+
+    pub(crate) fn cancel_timer() -> Result<(), TimerError> {
+        if let Some(result) = with_owned_once(&LOG_RETENTION_TIMER, OnceRegistration::cancel)? {
+            result?;
+        }
+        Ok(())
+    }
+
     /// Reconstruct the sole live age deadline from retained log state.
     pub fn start() -> Result<(), InternalError> {
         let config = ConfigOps::log_config()?;
@@ -52,8 +78,26 @@ impl LogRetentionWorkflow {
             Some(max_age_secs) => Self::next_deadline_ns(max_age_secs)?,
             None => None,
         };
-        TimerWorkflow::reconcile_at(TimerKey::LogRetention, deadline)?;
+        Self::ensure_declared()?;
+        require_active()?;
+        with_owned_once(&LOG_RETENTION_TIMER, |registration| {
+            registration.reconcile_schedule(deadline.map(TimerSchedule::At))
+        })?
+        .ok_or(TimerError::MissingClaim)?
+        .map_err(TimerError::from)?;
         Ok(())
+    }
+
+    fn ensure_declared() -> Result<(), TimerError> {
+        if with_owned_once(&LOG_RETENTION_TIMER, |_| ())?.is_some() {
+            return Ok(());
+        }
+        let registration = register_once(
+            Self::timer_identity()?,
+            DeclarationLifetime::Retained,
+            |_context: OnceContext| async { Self::run_due_batch() },
+        )?;
+        retain_owned_once(&LOG_RETENTION_TIMER, registration)
     }
 
     pub(crate) fn run_due_batch() -> TimerRunResult {
@@ -61,11 +105,14 @@ impl LogRetentionWorkflow {
             Ok(config) => config,
             Err(err) => {
                 IcOps::println(&format!("log retention stopped: {err}"));
-                return TimerRunResult::invariant_failure();
+                return TimerRunResult::new(
+                    TimerCompletion::invariant_failure(0),
+                    TimerDirective::Stop,
+                );
             }
         };
         let Some(max_age_secs) = config.max_age_secs else {
-            return TimerRunResult::no_work(TimerDirective::Stop);
+            return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
         };
 
         let now_secs = IcOps::now_secs();
@@ -85,14 +132,17 @@ impl LogRetentionWorkflow {
                 Ok(directive) => directive,
                 Err(err) => {
                     IcOps::println(&format!("log retention stopped: {err}"));
-                    return TimerRunResult::invariant_failure();
+                    return TimerRunResult::new(
+                        TimerCompletion::invariant_failure(0),
+                        TimerDirective::Stop,
+                    );
                 }
             }
         };
         if batch.dropped == 0 {
-            TimerRunResult::no_work(directive)
+            TimerRunResult::new(TimerCompletion::no_work(), directive)
         } else {
-            TimerRunResult::success(batch.dropped, directive)
+            TimerRunResult::new(TimerCompletion::success(batch.dropped), directive)
         }
     }
 

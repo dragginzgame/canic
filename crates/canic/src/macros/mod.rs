@@ -2,7 +2,6 @@
 mod build;
 mod endpoints;
 mod start;
-mod timer;
 
 // -----------------------------------------------------------------------------
 // Log macro

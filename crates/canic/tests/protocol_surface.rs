@@ -1647,6 +1647,8 @@ fn root_authority_restore_and_cycle_refill_are_variant_guarded() {
     assert!(source.contains("RootCommand::PreviewCycleRefill(_)"));
     assert!(source.contains("RootCommand::RefillCycles(_)"));
     assert!(source.contains("let controller_command = matches!"));
+    assert!(source.contains("LifecycleApi::prepare_authority_snapshot(request)"));
+    assert!(source.contains("LifecycleApi::resume_authority_snapshot(request)"));
 }
 
 #[test]

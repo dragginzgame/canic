@@ -145,6 +145,5 @@ pub fn schedule_init_nonroot_bootstrap() {
                 LifecycleMetricOutcome::Completed,
             );
         },
-    )
-    .detach();
+    );
 }

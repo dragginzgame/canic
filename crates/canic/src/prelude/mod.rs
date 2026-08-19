@@ -10,7 +10,6 @@ pub use crate::{
         call::Call,
         canister::CanisterRole,
         ops::{log, perf},
-        timer::{timer, timer_interval},
     },
     dto::auth::DelegatedToken,
 };
