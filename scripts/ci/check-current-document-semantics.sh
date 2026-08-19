@@ -18,6 +18,7 @@ TIMER_DESIGN="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/0.104-design.m
 TIMER_STATUS="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/status.md"
 TIMER_EVIDENCE="$ROOT/docs/audits/working/0.104-timer-ownership/README.md"
 TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
+TIMER_GUIDE="$ROOT/docs/features/runtime/native-timers.md"
 
 operator_docs=(
     "$ROOT/INSTALLING.md"
@@ -43,6 +44,7 @@ require_files "$GUARD_LABEL" \
     "$TIMER_STATUS" \
     "$TIMER_EVIDENCE" \
     "$TIMER_CHANGELOG" \
+    "$TIMER_GUIDE" \
     "${operator_docs[@]}"
 
 for design_entry in "$ROOT"/docs/design/*; do
@@ -171,17 +173,37 @@ forbid_texts "$TIMER_DESIGN" "$GUARD_LABEL" \
     "Blocked on B7"
 forbid_texts "$TIMER_STATUS" "$GUARD_LABEL" \
     "Keep the open 0.104.0" \
+    "open 0.104.1 changelog" \
+    "only remaining action is maintainer closeout review" \
+    'Published `v0.104.1` contains that correction and closes the line.' \
     "1.1750% raw" \
     "1.9779% gzip"
+require_texts "$TIMER_STATUS" "$GUARD_LABEL" \
+    "closeout reopened by the 2026-08-19 independent audit" \
+    "not part of either published tag" \
+    'bounded `0.104.2` corrective candidate' \
+    "not canonical release-identity evidence"
 forbid_texts "$STATUS" "$GUARD_LABEL" \
     "Keep the open 0.104.0" \
+    "bounded closeout correction are complete" \
     "1.1750% raw" \
     "1.9779% gzip"
 require_texts "$TIMER_EVIDENCE" "$GUARD_LABEL" \
     "not acceptance evidence" \
     "19,424,848" \
     "19,124,317" \
+    "19,424,589" \
+    "19,123,930" \
+    "19,123,917" \
+    "not canonical release-identity evidence" \
     "controlled causal percentage"
+require_texts "$TIMER_GUIDE" "$GUARD_LABEL" \
+    "Provider inventory is volatile." \
+    "Provider inventory is not durable business demand." \
+    "Provider inventory is not an application recovery record."
+require_text "$TIMER_CHANGELOG" \
+    "## [0.104.2] - 2026-08-19 - Closeout Audit Correction" \
+    "$GUARD_LABEL"
 require_text "$TIMER_CHANGELOG" \
     "## [0.104.1] - 2026-08-19 - Closeout Evidence Correction" \
     "$GUARD_LABEL"

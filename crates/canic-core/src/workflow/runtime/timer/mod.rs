@@ -111,7 +111,23 @@ impl TimerAuthorityWorkflow {
         if EnvOps::is_root() {
             return Ok(());
         }
-        reconcile_core_recovery_watchdog(TimerReconcileState::Scheduled)
+        reconcile_core_recovery_watchdog(
+            TimerReconcileState::Scheduled,
+            Self::recover_expired_async_jobs,
+        )
+    }
+
+    /// Arm the same watchdog with the compile-selected automatic top-up recovery owner.
+    pub(crate) fn ensure_async_job_recovery_watchdog_with_automatic_topup() -> Result<(), TimerError>
+    {
+        require_active()?;
+        if EnvOps::is_root() {
+            return Err(TimerError::WrongPolicy);
+        }
+        reconcile_core_recovery_watchdog(
+            TimerReconcileState::Scheduled,
+            Self::recover_expired_async_jobs_with_automatic_topup,
+        )
     }
 
     /// Prove that every Root-owned timer and business attempt can be suspended.
@@ -123,7 +139,6 @@ impl TimerAuthorityWorkflow {
         ]);
         for identity in [
             runtime::auth::RuntimeAuthWorkflow::claimed_root_issuer_renewal_timer_identity()?,
-            runtime::cycles::CycleWorkflow::claimed_timer_identity()?,
             runtime::intent::IntentCleanupWorkflow::claimed_timer_identity()?,
             runtime::log::LogRetentionWorkflow::claimed_timer_identity()?,
             PlacementAcknowledgementWorkflow::claimed_timer_identity()?,
@@ -160,7 +175,6 @@ impl TimerAuthorityWorkflow {
         TIMERS_SUSPENDED.with(|suspended| suspended.set(true));
 
         runtime::auth::RuntimeAuthWorkflow::cancel_root_issuer_renewal_timer()?;
-        runtime::cycles::CycleWorkflow::cancel_timer()?;
         runtime::intent::IntentCleanupWorkflow::cancel_timer()?;
         runtime::log::LogRetentionWorkflow::cancel_timer()?;
         PlacementAcknowledgementWorkflow::cancel_timer()?;
@@ -212,11 +226,17 @@ impl TimerAuthorityWorkflow {
         if runtime::auth::RuntimeAuthWorkflow::recover_expired_root_issuer_renewal(now_ns) {
             recovered = recovered.saturating_add(1);
         }
-        if runtime::cycles::CycleWorkflow::recover_expired_timer(now_ns) {
-            recovered = recovered.saturating_add(1);
-        }
         if PlacementAcknowledgementWorkflow::recover_expired_timer(now_ns) {
             recovered = recovered.saturating_add(1);
+        }
+        recovered
+    }
+
+    /// Recover the base set plus automatic top-up for a capability-bearing non-root.
+    pub(crate) fn recover_expired_async_jobs_with_automatic_topup(now_ns: u64) -> u64 {
+        let recovered = Self::recover_expired_async_jobs(now_ns);
+        if runtime::cycles::CycleWorkflow::recover_expired_timer(now_ns) {
+            return recovered.saturating_add(1);
         }
         recovered
     }
@@ -232,10 +252,6 @@ fn require_no_active_async_job_attempts() -> Result<(), TimerError> {
         (
             AsyncJobOwner::AuthRenewal,
             runtime::auth::RuntimeAuthWorkflow::root_issuer_renewal_timer_identity()?,
-        ),
-        (
-            AsyncJobOwner::CycleTopup,
-            runtime::cycles::CycleWorkflow::timer_identity()?,
         ),
         (
             AsyncJobOwner::PlacementReceiptAcknowledgement,
@@ -254,7 +270,10 @@ fn require_no_active_async_job_attempts() -> Result<(), TimerError> {
     Ok(())
 }
 
-fn reconcile_core_recovery_watchdog(desired: TimerReconcileState) -> Result<(), TimerError> {
+fn reconcile_core_recovery_watchdog(
+    desired: TimerReconcileState,
+    recover: fn(u64) -> u64,
+) -> Result<(), TimerError> {
     let identity = recovery_watchdog_identity()?;
     let cadence = TimerCadence::new(RECOVERY_WATCHDOG_CADENCE)?;
     CORE_RECOVERY_WATCHDOG
@@ -262,9 +281,13 @@ fn reconcile_core_recovery_watchdog(desired: TimerReconcileState) -> Result<(), 
             let mut registration = registration
                 .try_borrow_mut()
                 .map_err(|_| TimerError::CustodyBusy)?;
-            reconcile_watchdog(&mut registration, &identity, cadence, desired, |_context| {
-                run_core_recovery_watchdog()
-            })
+            reconcile_watchdog(
+                &mut registration,
+                &identity,
+                cadence,
+                desired,
+                move |_context| run_core_recovery_watchdog(recover),
+            )
             .map_err(TimerError::from)
         })
         .map_err(|_| TimerError::CustodyBusy)?
@@ -297,8 +320,8 @@ fn cancel_core_recovery_watchdog() -> Result<(), TimerError> {
         .map_err(|_| TimerError::CustodyBusy)?
 }
 
-fn run_core_recovery_watchdog() -> WatchdogRunResult {
-    let recovered = TimerAuthorityWorkflow::recover_expired_async_jobs(IcOps::now_nanos());
+fn run_core_recovery_watchdog(recover: fn(u64) -> u64) -> WatchdogRunResult {
+    let recovered = recover(IcOps::now_nanos());
     let completion = if recovered == 0 {
         TimerCompletion::no_work()
     } else {

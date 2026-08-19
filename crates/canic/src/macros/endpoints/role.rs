@@ -448,7 +448,11 @@ macro_rules! __canic_emit_managed_command_endpoint {
                         .await
                         .map_err(::canic::Error::from)?;
                     let operation_id = request.operation_id;
-                    let transition = $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::configure(request)?;
+                    #[cfg(canic_capability_automatic_topup)]
+                    let configure_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::configure_component_runtime_with_automatic_topup;
+                    #[cfg(not(canic_capability_automatic_topup))]
+                    let configure_runtime = $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::configure;
+                    let transition = configure_runtime(request)?;
                     if transition.transitioned {
                         __canic_schedule_prepared_activation_init(
                             transition.application_init_args,

@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use syn::{
-    Expr, ExprCall, ExprPath, ItemUse, Macro, UseTree, Visibility,
+    Expr, ExprCall, ExprMethodCall, ExprPath, ItemUse, Macro, UseTree, Visibility,
     visit::{self, Visit},
 };
 
@@ -38,6 +38,14 @@ const NATIVE_REGISTRATION_CAPABILITIES: [&str; 5] = [
     "reconcile_once",
     "reconcile_watchdog",
 ];
+const NATIVE_REGISTRATION_ACTIONS: [&str; 6] = [
+    "cancel",
+    "ensure_scheduled",
+    "reconcile_schedule",
+    "resume",
+    "suspend",
+    "unregister",
+];
 const RAW_TIMER_MECHANICS: [&str; 5] = [
     "clear_timer",
     "global_timer_set",
@@ -53,6 +61,7 @@ struct TimerSyntax {
     raw_provider_accesses: BTreeSet<String>,
     native_registration_references: BTreeMap<String, usize>,
     native_registration_calls: BTreeMap<String, usize>,
+    native_registration_actions: BTreeMap<String, usize>,
     violations: Vec<String>,
 }
 
@@ -115,21 +124,44 @@ impl<'ast> Visit<'ast> for TimerSyntaxVisitor {
 
     fn visit_expr_call(&mut self, call: &'ast ExprCall) {
         if let Expr::Path(function) = call.func.as_ref()
-            && let Some(capability) = function
+            && let Some(function_name) = function
                 .path
                 .segments
                 .last()
                 .map(|segment| segment.ident.to_string())
-            && NATIVE_REGISTRATION_CAPABILITIES.contains(&capability.as_str())
         {
+            if NATIVE_REGISTRATION_CAPABILITIES.contains(&function_name.as_str()) {
+                self.analysis.has_timer_semantics = true;
+                *self
+                    .analysis
+                    .native_registration_calls
+                    .entry(function_name)
+                    .or_default() += 1;
+            } else if NATIVE_REGISTRATION_ACTIONS.contains(&function_name.as_str())
+                && qualified_native_registration_action(&function.path)
+            {
+                self.analysis.has_timer_semantics = true;
+                *self
+                    .analysis
+                    .native_registration_actions
+                    .entry(function_name)
+                    .or_default() += 1;
+            }
+        }
+        visit::visit_expr_call(self, call);
+    }
+
+    fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
+        let action = call.method.to_string();
+        if NATIVE_REGISTRATION_ACTIONS.contains(&action.as_str()) {
             self.analysis.has_timer_semantics = true;
             *self
                 .analysis
-                .native_registration_calls
-                .entry(capability)
+                .native_registration_actions
+                .entry(action)
                 .or_default() += 1;
         }
-        visit::visit_expr_call(self, call);
+        visit::visit_expr_method_call(self, call);
     }
 
     fn visit_expr_path(&mut self, expression: &'ast ExprPath) {
@@ -170,6 +202,7 @@ impl<'ast> Visit<'ast> for TimerSyntaxVisitor {
                     .any(|part| RAW_TIMER_MECHANICS.contains(&part.as_str()));
             let is_authority = import.path.iter().any(|part| {
                 NATIVE_REGISTRATION_CAPABILITIES.contains(&part.as_str())
+                    || NATIVE_REGISTRATION_ACTIONS.contains(&part.as_str())
                     || matches!(
                         part.as_str(),
                         "AfterCompletionRegistration"
@@ -218,6 +251,20 @@ impl<'ast> Visit<'ast> for TimerSyntaxVisitor {
         visit_token_stream(&macro_invocation.tokens, &mut self.analysis);
         visit::visit_macro(self, macro_invocation);
     }
+}
+
+fn qualified_native_registration_action(path: &syn::Path) -> bool {
+    path.segments.len() > 1
+        && (path
+            .segments
+            .first()
+            .is_some_and(|segment| segment.ident == "ic_timers")
+            || path.segments.iter().any(|segment| {
+                matches!(
+                    segment.ident.to_string().as_str(),
+                    "AfterCompletionRegistration" | "OnceRegistration" | "WatchdogRegistration"
+                )
+            }))
 }
 
 struct UseImport {
@@ -315,6 +362,12 @@ fn visit_token_stream(tokens: &proc_macro2::TokenStream, analysis: &mut TimerSyn
                         .entry(identifier.clone())
                         .or_default() += 1;
                 }
+                if NATIVE_REGISTRATION_ACTIONS.contains(&identifier.as_str()) {
+                    *analysis
+                        .native_registration_actions
+                        .entry(identifier.clone())
+                        .or_default() += 1;
+                }
                 if identifier == "ic_cdk_timers" {
                     analysis.raw_provider_accesses.insert(identifier.clone());
                 }
@@ -358,6 +411,7 @@ fn timer_ownership_inventory_is_semantically_classified() {
     let expected = expected_ownership_inventory();
     let mut observed = BTreeSet::new();
     let mut observed_native_calls = BTreeMap::new();
+    let mut observed_native_actions = BTreeMap::new();
 
     for source_root in PRODUCTION_SOURCE_ROOTS {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
@@ -377,6 +431,10 @@ fn timer_ownership_inventory_is_semantically_classified() {
             if !syntax.native_registration_calls.is_empty() {
                 observed_native_calls.insert(path.to_string(), syntax.native_registration_calls);
             }
+            if !syntax.native_registration_actions.is_empty() {
+                observed_native_actions
+                    .insert(path.to_string(), syntax.native_registration_actions);
+            }
         });
     }
 
@@ -386,6 +444,11 @@ fn timer_ownership_inventory_is_semantically_classified() {
         observed_native_calls,
         expected_native_registration_calls(),
         "native timer registration custody changed"
+    );
+    assert_eq!(
+        observed_native_actions,
+        expected_native_registration_actions(),
+        "native timer registration actions changed"
     );
     let prohibited = OwnershipClass::ProhibitedSchedulingAuthority;
     assert!(expected.values().all(|class| *class != prohibited));
@@ -457,6 +520,37 @@ fn semantic_inventory_observes_unclassified_and_duplicate_native_calls() {
 
     assert!(syntax.has_timer_semantics);
     assert_eq!(syntax.native_registration_calls["register_once"], 2);
+}
+
+#[test]
+fn semantic_inventory_observes_native_registration_method_actions() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        r"
+            fn mutate(first: &Registration, second: &Registration) {
+                first.ensure_scheduled(schedule());
+                first.cancel();
+                second.cancel();
+                second.unregister();
+            }
+        ",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert_eq!(syntax.native_registration_actions["ensure_scheduled"], 1);
+    assert_eq!(syntax.native_registration_actions["cancel"], 2);
+    assert_eq!(syntax.native_registration_actions["unregister"], 1);
+}
+
+#[test]
+fn semantic_inventory_rejects_aliased_native_registration_actions() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        "use ic_timers::OnceRegistration::cancel as cancel_later;",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert_eq!(syntax.violations.len(), 1);
 }
 
 #[test]
@@ -676,6 +770,74 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
     }
 }
 
+#[test]
+fn recovery_takeovers_recheck_each_owners_authoritative_domain_demand() {
+    let root = workspace_root();
+    let cases = [
+        (
+            "root issuer renewal",
+            "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
+            [
+                "AsyncJobWorkflow::has_expired_attempt(owner, now_ns)",
+                "AuthOps::has_enabled_root_issuer_renewal_templates()",
+                "ConfigOps::delegated_tokens_config()",
+                "AsyncJobWorkflow::claim_expired(owner, now_ns)",
+                "Self::run_scheduled().await",
+            ],
+        ),
+        (
+            "automatic cycle top-up",
+            "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
+            [
+                "AsyncJobWorkflow::has_expired_attempt(owner, now_ns)",
+                "Self::automatic_topup_config()",
+                "AsyncJobWorkflow::claim_expired(owner, now_ns)",
+                "Self::run_attempt(attempt).await",
+                "attempt.operation_id()",
+            ],
+        ),
+        (
+            "placement receipt acknowledgement",
+            "crates/canic-core/src/workflow/placement/acknowledgement.rs",
+            [
+                "AsyncJobWorkflow::has_expired_attempt(owner, now_ns)",
+                "ReceiptBackedIntentOps::has_placement_acknowledgements()",
+                "AsyncJobWorkflow::claim_expired(owner, now_ns)",
+                "Self::run_scheduled().await",
+                "let operation_id = intent.operation_id;",
+            ],
+        ),
+    ];
+
+    for (owner, path, required) in cases {
+        let source = read_source(&root, path);
+        for fragment in required {
+            assert!(
+                source.contains(fragment),
+                "{owner} recovery lost authoritative binding `{fragment}`"
+            );
+        }
+    }
+
+    let pool = read_source(
+        &root,
+        "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+    );
+    for required in [
+        "AsyncJobRecoveryOps::expired_deadline(AsyncJobOwner::CanisterPoolMaintenance, now_ns)",
+        "dispatch_async_job_recovery()",
+        "finish_maintenance_timer(attempt, maintain_once_inner().await)",
+        "CanisterPoolOps::pending_creation()",
+        "CanisterPoolOps::pending_reset_canisters()",
+        "CanisterPoolOps::ready_count()",
+    ] {
+        assert!(
+            pool.contains(required),
+            "pool recovery lost authoritative binding `{required}`"
+        );
+    }
+}
+
 fn assert_semantic_class(path: &str, source: &str, syntax: &TimerSyntax, class: OwnershipClass) {
     for forbidden in PROHIBITED_AUTHORITY_FRAGMENTS {
         assert!(
@@ -689,6 +851,10 @@ fn assert_semantic_class(path: &str, source: &str, syntax: &TimerSyntax, class: 
             assert!(
                 syntax.native_registration_calls.is_empty(),
                 "domain recovery file {path} owns a native registration capability"
+            );
+            assert!(
+                syntax.native_registration_actions.is_empty(),
+                "domain recovery file {path} performs a native registration action"
             );
             for forbidden in [
                 "AfterCompletionRegistration",
@@ -712,6 +878,10 @@ fn assert_semantic_class(path: &str, source: &str, syntax: &TimerSyntax, class: 
             assert!(
                 syntax.native_registration_calls.is_empty(),
                 "projection file {path} owns a native registration capability"
+            );
+            assert!(
+                syntax.native_registration_actions.is_empty(),
+                "projection file {path} performs a native registration action"
             );
             for forbidden in NATIVE_REGISTRATION_FRAGMENTS {
                 assert!(
@@ -746,6 +916,10 @@ fn assert_semantic_class(path: &str, source: &str, syntax: &TimerSyntax, class: 
             assert!(
                 syntax.native_registration_calls.is_empty(),
                 "private lifecycle consumer {path} retains native registration custody"
+            );
+            assert!(
+                syntax.native_registration_actions.is_empty(),
+                "private lifecycle consumer {path} performs a native registration action"
             );
             for forbidden in NATIVE_REGISTRATION_FRAGMENTS {
                 assert!(
@@ -817,6 +991,58 @@ fn expected_native_registration_calls() -> BTreeMap<String, BTreeMap<String, usi
             calls
                 .iter()
                 .map(|(capability, count)| (capability.to_string(), *count))
+                .collect(),
+        )
+    })
+    .collect()
+}
+
+fn expected_native_registration_actions() -> BTreeMap<String, BTreeMap<String, usize>> {
+    [
+        (
+            "apps/saltz/burner/src/lib.rs",
+            [("cancel", 1), ("ensure_scheduled", 1)].as_slice(),
+        ),
+        (
+            "canisters/test/runtime_probe/src/lib.rs",
+            [("cancel", 1), ("ensure_scheduled", 4)].as_slice(),
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+            [("cancel", 2)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/placement/acknowledgement.rs",
+            [("ensure_scheduled", 1), ("reconcile_schedule", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
+            [("reconcile_schedule", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
+            [("reconcile_schedule", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/intent.rs",
+            [("ensure_scheduled", 1), ("reconcile_schedule", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/log.rs",
+            [("reconcile_schedule", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/timer/mod.rs",
+            [("cancel", 1), ("ensure_scheduled", 1), ("unregister", 2)].as_slice(),
+        ),
+    ]
+    .into_iter()
+    .map(|(path, actions)| {
+        (
+            path.to_string(),
+            actions
+                .iter()
+                .map(|(action, count)| (action.to_string(), *count))
                 .collect(),
         )
     })

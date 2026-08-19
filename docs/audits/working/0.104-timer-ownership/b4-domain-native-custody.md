@@ -48,9 +48,11 @@ longer declared. The existing 24-hour authority journey continues to assert
 zero idle callbacks for capability-pruned cycle top-up, intent cleanup and log
 retention.
 
-The source and tests still prove the seven-to-five inventory reduction. The
-following B3/B4 instruction table is a historical observation because those
-phase source states were not retained; it is not closeout evidence:
+The seven-to-five table is a historical B3/B4 observation, not a universal
+final inventory claim. The exact phase source states were not retained. The
+final role-specific provider matrix in the B8 closeout evidence supersedes it.
+The following instruction table is likewise historical and is not closeout
+evidence:
 
 | Observation | B3 | B4 | B4 minus B3 |
 | --- | ---: | ---: | ---: |

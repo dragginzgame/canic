@@ -55,14 +55,26 @@ be rebuilt independently and are not acceptance evidence. They remain in these
 working notes only as explicitly historical development observations. No
 closeout or release-size conclusion depends on them.
 
-The release comparison was rerun from the immutable `v0.103.0` and `v0.104.0`
-trees in equal-length source directories with equal-length isolated Cargo
-targets, `CARGO_NET_OFFLINE=true`, `CARGO_INCREMENTAL=0`, locked Cargo, the
-`fast` profile and the same `app`, `root`, `fleet_coordinator` and `wasm_store`
-roles from `apps/test/canic.toml`. Each tree used the canonical
+The first closeout correction recorded release-identity-bearing builds from
+the immutable `v0.103.0` and `v0.104.0` trees. Its command record omitted the
+exact `--release-build-id` input used for each tree. Because that input is
+embedded in product artifacts, the recorded byte totals and hashes cannot be
+independently regenerated from the retained command. They are historical
+observations, not acceptance evidence:
+
+| Release | Recorded raw | Recorded gzip |
+| --- | ---: | ---: |
+| 0.103.0 | 19,424,848 | 5,030,696 |
+| 0.104.0 | 19,124,317 | 4,959,729 |
+
+The 2026-08-19 audit reran all three immutable release trees in equal-length
+source directories with equal-length isolated Cargo targets,
+`CARGO_NET_OFFLINE=true`, `CARGO_INCREMENTAL=0`, locked Cargo, the `fast`
+profile and the same `app`, `root`, `fleet_coordinator` and `wasm_store` roles
+from `apps/test/canic.toml`. Each tree used the
 `canic-host --example build_artifact` executable built from that exact tree.
-The toolchain was `rustc 1.97.1 (8bab26f4f 2026-07-14)`. For each role the
-locked offline command shape was:
+The toolchain was `rustc 1.97.1 (8bab26f4f 2026-07-14)`. The exact retained
+no-release-ID command shape was:
 
 ```text
 cargo run --offline --locked -q --profile fast -p canic-host \
@@ -71,42 +83,54 @@ cargo run --offline --locked -q --profile fast -p canic-host \
   <release-root>/apps/test/canic.toml
 ```
 
-The 0.103.0 builder SHA-256 was
-`6add9d7d3edce7fcc03eaf9462813130dcdc8289d832c47178e685ab3e939d7d`;
-the 0.104.0 builder SHA-256 was
-`4ccba956cfd3b03c9bf70ab8904788a7e378dbd88a2646baec10599c25d4632e`.
+| Role | 0.103.0 raw | 0.103.0 gzip | 0.104.0 raw | 0.104.0 gzip | 0.104.1 raw | 0.104.1 gzip |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| managed Component | 3,571,855 | 944,431 | 3,560,425 | 941,610 | 3,560,438 | 941,666 |
+| Fleet Subnet Root | 8,424,492 | 2,183,281 | 8,406,236 | 2,183,599 | 8,406,217 | 2,183,595 |
+| Fleet Coordinator | 4,071,122 | 1,013,961 | 3,818,092 | 950,589 | 3,818,092 | 950,543 |
+| Wasm Store | 3,357,120 | 888,990 | 3,339,177 | 883,858 | 3,339,170 | 883,969 |
+| **Four-role total** | **19,424,589** | **5,030,663** | **19,123,930** | **4,959,656** | **19,123,917** | **4,959,773** |
 
-| Role | 0.103.0 raw | 0.103.0 gzip | 0.104.0 raw | 0.104.0 gzip |
-| --- | ---: | ---: | ---: | ---: |
-| managed Component | 3,571,984 | 944,397 | 3,560,554 | 941,683 |
-| Fleet Subnet Root | 8,424,621 | 2,183,333 | 8,406,365 | 2,183,574 |
-| Fleet Coordinator | 4,071,122 | 1,013,961 | 3,818,092 | 950,589 |
-| Wasm Store | 3,357,121 | 889,005 | 3,339,306 | 883,883 |
-| **Four-role total** | **19,424,848** | **5,030,696** | **19,124,317** | **4,959,729** |
+These totals reproduce the command that is actually documented, but they are
+not canonical release-identity evidence because they deliberately omit the
+release build ID. They prove only the no-ID build shape. The different
+version-enforcing builders also prevent treating their arithmetic differences
+as controlled causal percentages.
 
-| Release | Role | Raw SHA-256 | Builder-gzip SHA-256 |
-| --- | --- | --- | --- |
-| 0.103.0 | managed Component | `28d664a4a1753e9cc5f86a19a3abd11f3da38fc101af647510cf1cdb522e94be` | `3516c5a93c87df8a135ba138242dbe42f4432c82833031200a61d4fe01865258` |
-| 0.103.0 | Fleet Subnet Root | `3081ed485224d009147e142c4b94d59018c720fcc5ba3182489e6c2fa4725638` | `7cfc4fb0a8ff0b5cd2f4ba2673462246902ccd7c490f70f7a2d8d9d6d42c1c18` |
-| 0.103.0 | Fleet Coordinator | `18f5401cbd3926fe95e8c2e2ff6b04d6e795a0562c67089ec262618436e80a3d` | `36e1e08a668cd5bedf12a7ea157857813a4d9065543eafec216bb5bd24df1793` |
-| 0.103.0 | Wasm Store | `dbad8e83d796f3ff22653cd2947fa4467331b8cf12cea6fe94c848a61b7c192a` | `708ed0b7a1b8fe5b689d83b91e53d49ccfa7ba12b286180e42f08e28be406bd0` |
-| 0.104.0 | managed Component | `26b7bb0ca8e4f63715fb9caf892d9234ac6a61cd8c88db200c8fbe4da8a0da53` | `32fdc8094a0b1a53076a7d6eac8f74aa294f3c785793ce99daa855b226e32fc3` |
-| 0.104.0 | Fleet Subnet Root | `efbee3f577f40780636ed2a3a49033d53c6e95ea8aaede4280b36451f7e09b42` | `d31c2304d5d4203e81377980196fd6aff0c7cea4d539c60854925ca4bc09542a` |
-| 0.104.0 | Fleet Coordinator | `6ccef1a9c85818300d3fe075521e3271495f818256ddd511a8a54ff6310e76f5` | `2d5cde42c14f7d781196bb5fde34375f2f65ad3e0739adabce9a65a36c6ac77a` |
-| 0.104.0 | Wasm Store | `30fc82a6ac91c42f6a03c6a50b17e420f2e9eb0be16e82dd02400f730f521de9` | `b1b7f293e92002cc640ce9e8c5ca66e1c96f89cfa2d37ce3fd8ab9aa3077bd14` |
+The 46,593-instruction result with no Wasm- or stable-memory-page growth is a
+single two-work-sample current observation. It is not a median, maximum or
+threshold guard and supports no broader causal performance claim.
 
-These are reproducible absolute release footprints. The builders have different
-source identities and the current builder correctly refuses to build a
-different Canic version. The arithmetic difference is not presented as a
-controlled causal percentage. This supersedes the former 0.103 baseline and
-B8 candidate tables below. The current runtime observation remains directly
-reproducible: two work samples total 46,593 instructions with no Wasm- or
-stable-memory-page growth.
+The published `v0.104.1` correction changed tests, fixtures, a development-only
+parser dependency, guards and documentation, but no shipped product-role
+source. The open `0.104.2` corrective candidate does change shipped runtime
+reachability:
+it prunes automatic-top-up callback/workflow code from capability-disabled
+managed, Root, Coordinator and Store artifacts while retaining it in the
+enabled managed artifact. It adds doc-hidden `LifecycleApi` selectors used only
+by macro expansion to choose the capability-specific internal path; it does
+not add a supported facade/prelude item, lifecycle grammar or Candid method.
+It changes no stable-state schema.
 
-The closeout correction touches only tests, the managed test fixture, a
-development-only parser dependency, guards and documentation. It changes no
-shipped product-role source or runtime dependency; no new product Wasm delta is
-claimed beyond the exact `v0.104.0` release-tree footprint above.
+### 0.104.2 Candidate Capability Artifacts
+
+The 2026-08-19 targeted current-tree rebuild used locked offline `fast`
+artifacts without a release build ID. These are working-tree reachability
+evidence, not release measurements:
+
+| Profile | Raw bytes | Gzip bytes | Raw SHA-256 | Candid SHA-256 | Top-up strings | Lifecycle exports |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| AutomaticTopup managed | 3,559,123 | 941,835 | `03f4258626cbd89cb49979e0a9122f45768938644d3f96c6e54b6a240f747ede` | `6e4e224e4a493178a4e44f7220187dbef3a7a42b9695085c5d5b496780bdad7d` | present | one `init`, one `post_upgrade` |
+| Runtime-only managed probe | 3,315,388 | 891,044 | `4576a9e58bdfb7dc7a92e5b0c0536c29de10195fae67ac233db24e270c71ce23` | `39b18ad0b2589f36dd6b46cb1ae6704d83e6893fb224bda2daf189d952e1f96b` | absent | one `init`, one `post_upgrade` |
+| Fleet Subnet Root | 8,372,722 | 2,172,878 | `05c899df09f9c3207d6a16b1ce52677fa333be907342f829633a39f0713ee699` | `0fa86d62bb335ee6289aa9836ab9a2a9d15d3cb254855c0ee6fc8a4fc00af892` | absent | one `init`, one `post_upgrade` |
+| Fleet Coordinator | 3,816,760 | 950,357 | `12d9e1942b65a5cf98d0a03a35e1d02afccdafddb64a05f24472b38eda15f1c7` | `84f147a87bda5c5a359a575de57a7584af070f5a7784f982122f698ebff9f98f` | absent | one `init`; no supported `post_upgrade` |
+| Wasm Store | 3,305,809 | 875,296 | `4053d13b406cc1df016315c337b92218c8061bafeaf62f50d97f9596dd657a9d` | `fbf6250a7bbf5fb9d064e36127b4e373f6fef6cc409d3e507fddde8875abdad4` | absent | one `init`, one `post_upgrade` |
+
+`wasm-objdump` provided the lifecycle-export count and a binary string scan
+found automatic-top-up implementation text only in the enabled managed
+artifact. The source diff changes no Candid-generating DTO or endpoint shape;
+the maintainer-owned release gate must still perform the exact predecessor and
+release-target Candid comparison.
 
 ## B5 Pool, Lifecycle And Snapshot Completion
 
@@ -251,8 +275,9 @@ separate scheduler callback:
 | Maximum stable-memory growth | 0 pages | 0 pages | 0 pages |
 
 The B5 source state was not retained, so the signed B5/B6 cells are historical
-only. The B6/current absolute result of 46,593 total instructions is the
-reproducible closeout observation; no causal phase improvement is claimed.
+only. The B6/current absolute result of 46,593 total instructions is one
+retained two-work-sample observation; no threshold or causal phase improvement
+is claimed.
 
 ### Historical Fast-Profile Wasm Observation
 
@@ -311,7 +336,7 @@ Canic retains the only `canister_init` and `canister_post_upgrade` exports;
 IcyDB supplies the paired synchronous participant invoked after Canic restores
 its invariants and before deferred application work. Normal and deliberately
 trapping fixture builds expose identical Candid with SHA-256
-`18516eda125afbf9291e03146ca99cf5204180fc92f877413437f5467556a0a6`
+`ec7bb8959a48bd4d687ba6ccb68c39cca8dbd6dc114d1b6299fe46919a8582a3`
 and exactly one lifecycle export pair.
 
 The focused PocketIC journey proves all of the following on real stable state:
@@ -326,18 +351,24 @@ The focused PocketIC journey proves all of the following on real stable state:
 - an Active same-release upgrade reconstructs both rows and preserves the
   participant-before-deferred-callback ordering.
 
-The final normal fast artifact is 5,959,481 raw bytes with SHA-256
-`acfd53e545f52bdf5353be5083431549aed65aaad07c9a888852673d8e118f34`
-and 1,519,923 deterministic-gzip bytes with SHA-256
-`0df708d65462a6cec76f0422e02d5928155707599ecababdefc534f30d8eb8d4`.
-This is a test-only composition artifact, not a product-role size or
-performance change.
+The `0.104.2` candidate normal fast artifact is 5,887,951 raw bytes with
+SHA-256
+`329b7d07adc7b51d2083e28e3d22c398678f68f0562f45dcde8a174690095bda`
+and 1,502,217 deterministic-gzip bytes with SHA-256
+`ce9fed7bd731b616b49c8f3f5e611bad022937f7ff8231fb1abb4fca087d39bc`.
+The deliberately trapping artifact is 5,882,633 raw / 1,500,922 gzip bytes,
+with raw SHA-256
+`0c75de1e81e3d3ee76462819277ac86ac6101ccad88f1c4d551a009eccceabeb`
+and gzip SHA-256
+`0c00e4954558904c891ca7457f2e645315425180d118eec6810594de9754ea0c`.
+These are test-only composition artifacts, not product-role size or
+performance changes.
 
 Locked affected-package compilation, warning-denied Clippy, the lifecycle
 payload unit check and the 37-target workspace-test inventory guard pass. The
-single focused PocketIC composition test passes in 19.74 seconds against the
-pinned PocketIC 15 server. The complete workspace, release matrix and broad
-PocketIC suites were not run.
+single focused PocketIC composition test passes in 7.76 seconds against the
+pinned PocketIC 15 server after rebuilding both artifacts. The complete
+workspace, release matrix and broad PocketIC suites were not run.
 
 ## B8 Semantic Ownership And Closeout
 
@@ -350,9 +381,10 @@ modules and the dedicated internal test-harness crate. Each discovered file
 must be classified as fixed Canic consumption, private lifecycle consumption,
 native registration custody, domain async-job recovery, DTO/metrics
 projection or independent application custody; the prohibited scheduling-
-authority class must remain empty. An exact per-file native registration
-capability map makes a new or duplicated scheduling call fail even inside an
-already classified file.
+authority class must remain empty. The `0.104.2` candidate's exact per-file
+native registration map covers constructors and registration method actions,
+so a new, moved, aliased or duplicated scheduling/custody action fails even
+inside an already classified file.
 
 Class-specific checks prevent recovery records and projections from acquiring
 native registrations, private lifecycle consumers from retaining registration
@@ -391,8 +423,8 @@ application-owned after-completion interval. The active Root scheduled rows
 are pool maintenance and the closed async-job recovery watchdog; sealing
 unregisters both without copying provider state.
 
-The B6 column is historical; the B8/current column is the reproducible final
-observation:
+The B6 column is historical; the B8/current column is a retained single
+two-work-sample observation:
 
 | Observation | B6 | B8 | B8 minus B6 |
 | --- | ---: | ---: | ---: |
@@ -421,7 +453,7 @@ correction is the final quantitative evidence.
 
 ### Focused Validation
 
-The thirteen structural timer-ownership/provider/document/wait/snapshot guards pass.
+The sixteen structural timer-ownership/provider/document/wait/snapshot guards pass.
 Warning-denied Clippy passes for the semantic guard, timer-authority target and
 internal Root harness; all five lifecycle-boundary journeys, changelog governance
 and current-document semantics also pass.
@@ -443,10 +475,13 @@ complete workspace, release matrix and broad PocketIC suites were not run.
 | `Cargo.lock` SHA-256 | `38eb123df77ee35603af1b395c979f075a601469dae1c3b92da2f310e6208327` |
 | Package version | `0.103.0` |
 
-The remote `main`, annotated tag and peeled tag were checked on 2026-08-18 and
-all resolve to the same release commit. The local working tree's separate
-`ic-testkit 0.8.2` manifest edit is not part of this baseline; the hashes above
-come from Git objects at the immutable tag.
+The published annotated tag object peels to the release commit above. The
+2026-08-19 audit also found an incorrect local lightweight `v0.103.0` shadow at
+`721783675c2e7dc0981d7fa7639f654b84593df7` (package 0.102.2). It must not be
+used as release evidence. Removing/refetching that local shadow is a
+maintainer-owned repository-reconciliation action; the audit did not move the
+published tag. All immutable-baseline hashes above use the published annotated
+tag object rather than the local shadow.
 
 ## Exact Provider Graph
 

@@ -64,6 +64,18 @@ pub fn init_local_nonroot_canister_before_bootstrap(
     });
 }
 
+pub fn init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+    role: CanisterRole,
+    env: EnvBootstrapArgs,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) {
+    init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
+        workflow::runtime::init_local_nonroot_canister_with_automatic_topup(role, env)
+    });
+}
+
 fn init_nonroot_before_bootstrap(
     role: CanisterRole,
     config: ConfigModel,

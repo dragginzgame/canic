@@ -132,12 +132,32 @@ pub fn init_local_nonroot_canister(
     canister_role: CanisterRole,
     env: EnvBootstrapArgs,
 ) -> Result<(), InternalError> {
+    init_local_nonroot_canister_with_runtime(canister_role, env, RuntimeWorkflow::start_all)
+}
+
+/// Initialize one standalone-local profile with compile-selected automatic top-up custody.
+pub fn init_local_nonroot_canister_with_automatic_topup(
+    canister_role: CanisterRole,
+    env: EnvBootstrapArgs,
+) -> Result<(), InternalError> {
+    init_local_nonroot_canister_with_runtime(
+        canister_role,
+        env,
+        RuntimeWorkflow::start_all_with_automatic_topup,
+    )
+}
+
+fn init_local_nonroot_canister_with_runtime(
+    canister_role: CanisterRole,
+    env: EnvBootstrapArgs,
+    start_runtime: fn() -> Result<(), InternalError>,
+) -> Result<(), InternalError> {
     initialize_nonroot_base(&canister_role)?;
     FleetActivationRuntimeOps::set_standalone_local();
     EnvWorkflow::init_env_from_args(env, canister_role.clone())
         .map_err(|_err| InternalError::invariant())?;
     register_nonroot_runtime_contract(&canister_role)?;
-    RuntimeWorkflow::start_all()
+    start_runtime()
 }
 
 fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalError> {
@@ -182,6 +202,23 @@ fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(),
 pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
 ) -> Result<bool, InternalError> {
+    post_upgrade_nonroot_canister_with_runtime(canister_role, RuntimeWorkflow::start_all)
+}
+
+/// Restore one managed profile with compile-selected automatic top-up custody.
+pub fn post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init(
+    canister_role: CanisterRole,
+) -> Result<bool, InternalError> {
+    post_upgrade_nonroot_canister_with_runtime(
+        canister_role,
+        RuntimeWorkflow::start_all_with_automatic_topup,
+    )
+}
+
+fn post_upgrade_nonroot_canister_with_runtime(
+    canister_role: CanisterRole,
+    start_runtime: fn() -> Result<(), InternalError>,
+) -> Result<bool, InternalError> {
     FleetActivationRuntimeOps::set_managed();
     restore_nonroot_after_upgrade(canister_role)?;
     let active = FleetActivationOps::status(false)
@@ -189,7 +226,7 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
         .phase
         == FleetActivationPhase::Active;
     if active {
-        RuntimeWorkflow::start_all()?;
+        start_runtime()?;
     }
     Ok(active)
 }
@@ -198,9 +235,26 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
 pub fn post_upgrade_local_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
 ) -> Result<bool, InternalError> {
+    post_upgrade_local_nonroot_canister_with_runtime(canister_role, RuntimeWorkflow::start_all)
+}
+
+/// Restore one standalone-local profile with compile-selected automatic top-up custody.
+pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_after_memory_init(
+    canister_role: CanisterRole,
+) -> Result<bool, InternalError> {
+    post_upgrade_local_nonroot_canister_with_runtime(
+        canister_role,
+        RuntimeWorkflow::start_all_with_automatic_topup,
+    )
+}
+
+fn post_upgrade_local_nonroot_canister_with_runtime(
+    canister_role: CanisterRole,
+    start_runtime: fn() -> Result<(), InternalError>,
+) -> Result<bool, InternalError> {
     FleetActivationRuntimeOps::set_standalone_local();
     restore_nonroot_after_upgrade(canister_role)?;
-    RuntimeWorkflow::start_all()?;
+    start_runtime()?;
     Ok(true)
 }
 

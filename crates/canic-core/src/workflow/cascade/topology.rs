@@ -22,15 +22,12 @@ use crate::{
         },
         storage::{children::CanisterChildrenOps, fleet_activation::FleetActivationOps},
     },
-    workflow::{
-        cascade::{
-            snapshot::{
-                TopologyDirectChild, TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
-                adapter::TopologySnapshotAdapter,
-            },
-            warn_if_large,
+    workflow::cascade::{
+        snapshot::{
+            TopologyDirectChild, TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
+            adapter::TopologySnapshotAdapter,
         },
-        runtime::cycles::CycleWorkflow,
+        warn_if_large,
     },
 };
 use std::collections::HashMap;
@@ -151,8 +148,6 @@ impl TopologyCascadeWorkflow {
             MetricOutcome::Completed,
             MetricReason::Ok,
         );
-
-        CycleWorkflow::reconcile_after_topology_change()?;
 
         if let Some(next_pid) = next {
             let next_snapshot = match Self::slice_snapshot_for_child(next_pid, &snapshot) {

@@ -31,6 +31,21 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
     )
 }
 
+pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
+    role: CanisterRole,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) -> bool {
+    post_upgrade_nonroot_before_bootstrap(
+        role,
+        config,
+        config_source,
+        config_path,
+        workflow::runtime::post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init,
+    )
+}
+
 pub fn post_upgrade_local_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     config: ConfigModel,
@@ -43,6 +58,21 @@ pub fn post_upgrade_local_nonroot_canister_before_bootstrap(
         config_source,
         config_path,
         workflow::runtime::post_upgrade_local_nonroot_canister_after_memory_init,
+    )
+}
+
+pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+    role: CanisterRole,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) -> bool {
+    post_upgrade_nonroot_before_bootstrap(
+        role,
+        config,
+        config_source,
+        config_path,
+        workflow::runtime::post_upgrade_local_nonroot_canister_with_automatic_topup_after_memory_init,
     )
 }
 
