@@ -16,3 +16,4 @@ daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/
 8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:483
 8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:515
 c9b4eb1aa17c39340dec087052a97daf95e8e8e5:crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/tests.rs:generic-api-key:103
+36f18fd6a1ba75f0a758290274c6cf64e7cb5bc8:crates/canic-tests/tests/native_agent_delegation.rs:private-key:21
