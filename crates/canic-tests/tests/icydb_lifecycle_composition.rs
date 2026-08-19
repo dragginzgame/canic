@@ -7,6 +7,10 @@ use canic::{
     dto::{
         component_registry::{ComponentRuntimeDirectoryPreparationRequest, ComponentRuntimePhase},
         role::{ComponentRuntimeOperationStatus, OperationReceipt, OperationStatusRequest},
+        runtime::{
+            CanicRuntimeStatus, RuntimeCheckStatus, TimerProcessCondition, TimerRegistrationStatus,
+            TimerSchedulingMode,
+        },
     },
     protocol::{CANIC_COMMAND, CANIC_STATUS},
 };
@@ -34,11 +38,30 @@ enum CanisterCommandResponse {
 #[derive(CandidType)]
 enum CanisterStatusRequest {
     Operation(OperationStatusRequest),
+    Runtime,
 }
 
 #[derive(CandidType, Deserialize)]
 enum CanisterStatusResponse {
     Operation(Box<CanisterOperationStatusResponse>),
+    Runtime(Box<CanicRuntimeStatus>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct LogicalTimerRow {
+    owner: String,
+    subsystem: String,
+    name: String,
+    scheduling_mode: TimerSchedulingMode,
+    registration: TimerRegistrationStatus,
+    condition: TimerProcessCondition,
+    enabled: bool,
+}
+
+#[derive(Clone, Copy)]
+enum IcydbRecoveryExpectation {
+    Quiescent,
+    Scheduled,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -94,6 +117,12 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
         directory_request.operation_id,
     );
     advance_prepared_icydb_recovery(&fixture.pic);
+    assert_timer_inventory(
+        &fixture.pic,
+        canister_id,
+        "prepared before upgrade",
+        expected_prepared_inventory(IcydbRecoveryExpectation::Quiescent),
+    );
     prove_prepared_reconstruction_and_retry(
         &fixture,
         canister_id,
@@ -118,6 +147,12 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
         fixture.root,
         directory_request.operation_id,
     );
+    assert_timer_inventory(
+        &fixture.pic,
+        canister_id,
+        "active before upgrade",
+        expected_active_inventory(),
+    );
 
     fixture
         .pic
@@ -140,6 +175,12 @@ fn managed_canic_and_published_icydb_share_lifecycle_and_timer_custody() {
     assert_eq!(reconstructed.canic_install_runs, 0);
     assert_eq!(reconstructed.canic_upgrade_runs, 1);
     drive_icydb_startup(&fixture.pic, canister_id);
+    assert_timer_inventory(
+        &fixture.pic,
+        canister_id,
+        "active after upgrade",
+        expected_active_inventory(),
+    );
 }
 
 fn prove_initial_composition(fixture: &CanicIcydbLifecycleFixture) {
@@ -149,6 +190,12 @@ fn prove_initial_composition(fixture: &CanicIcydbLifecycleFixture) {
         canister_id,
         fixture.root,
         directory_request.operation_id,
+    );
+    assert_timer_inventory(
+        &fixture.pic,
+        canister_id,
+        "prepared after install",
+        expected_prepared_inventory(IcydbRecoveryExpectation::Scheduled),
     );
     configure_runtime(
         &fixture.pic,
@@ -167,6 +214,12 @@ fn prove_initial_composition(fixture: &CanicIcydbLifecycleFixture) {
         fixture.root,
         directory_request.operation_id,
     );
+    assert_timer_inventory(
+        &fixture.pic,
+        canister_id,
+        "active after install",
+        expected_active_inventory(),
+    );
 }
 
 fn prove_prepared_reconstruction_and_retry(
@@ -181,6 +234,12 @@ fn prove_prepared_reconstruction_and_retry(
     upgrade(&fixture.pic, canister_id, &fixture.wasm);
     advance_prepared_icydb_recovery(&fixture.pic);
     assert_prepared(&fixture.pic, canister_id, fixture.root, operation_id);
+    assert_timer_inventory(
+        &fixture.pic,
+        canister_id,
+        "prepared after upgrade",
+        expected_prepared_inventory(IcydbRecoveryExpectation::Quiescent),
+    );
 
     fixture
         .pic
@@ -376,9 +435,140 @@ fn assert_runtime_phase(
         )
         .expect("query combined managed runtime status");
     let CanisterStatusResponse::Operation(operation) =
-        result.expect("combined managed runtime operation status");
+        result.expect("combined managed runtime operation status")
+    else {
+        panic!("canic_status returned a non-Operation response")
+    };
     let CanisterOperationStatusResponse::ConfigureRuntime(status) = *operation;
     assert_eq!(status.runtime.phase, expected);
+}
+
+fn assert_timer_inventory(
+    pic: &PocketIc,
+    canister_id: Principal,
+    checkpoint: &str,
+    expected: Vec<LogicalTimerRow>,
+) {
+    let status = runtime_status(pic, canister_id);
+    assert_eq!(status.timer_inventory.status, RuntimeCheckStatus::Pass);
+    let rows = logical_timer_inventory(status);
+    eprintln!("Canic/IcyDB timer inventory at {checkpoint}:");
+    for row in &rows {
+        eprintln!("  {row:?}");
+    }
+    assert_eq!(rows, expected, "unexpected timer inventory at {checkpoint}");
+}
+
+fn runtime_status(pic: &PocketIc, canister_id: Principal) -> CanicRuntimeStatus {
+    let result: Result<CanisterStatusResponse, Error> = pic
+        .query_candid(canister_id, CANIC_STATUS, (CanisterStatusRequest::Runtime,))
+        .expect("query combined Canic/IcyDB timer inventory");
+    let CanisterStatusResponse::Runtime(status) =
+        result.expect("combined Canic/IcyDB runtime status")
+    else {
+        panic!("canic_status returned a non-Runtime response")
+    };
+    *status
+}
+
+fn logical_timer_inventory(status: CanicRuntimeStatus) -> Vec<LogicalTimerRow> {
+    let mut rows = status
+        .timers
+        .into_iter()
+        .map(|timer| LogicalTimerRow {
+            owner: timer.owner,
+            subsystem: timer.subsystem,
+            name: timer.name,
+            scheduling_mode: timer.scheduling_mode,
+            registration: timer.registration,
+            condition: timer.condition,
+            enabled: timer.enabled,
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        (&left.owner, &left.subsystem, &left.name).cmp(&(
+            &right.owner,
+            &right.subsystem,
+            &right.name,
+        ))
+    });
+    rows
+}
+
+fn expected_prepared_inventory(icydb_recovery: IcydbRecoveryExpectation) -> Vec<LogicalTimerRow> {
+    vec![
+        logical_timer_row(
+            "canic",
+            "log_retention",
+            "run",
+            TimerSchedulingMode::Once,
+            TimerRegistrationStatus::Unregistered,
+            TimerProcessCondition::Idle,
+        ),
+        expected_icydb_recovery_row(icydb_recovery),
+    ]
+}
+
+fn expected_active_inventory() -> Vec<LogicalTimerRow> {
+    vec![
+        logical_timer_row(
+            "canic",
+            "intent_cleanup",
+            "run",
+            TimerSchedulingMode::Once,
+            TimerRegistrationStatus::Unregistered,
+            TimerProcessCondition::Idle,
+        ),
+        logical_timer_row(
+            "canic",
+            "log_retention",
+            "run",
+            TimerSchedulingMode::Once,
+            TimerRegistrationStatus::Unregistered,
+            TimerProcessCondition::Idle,
+        ),
+        expected_icydb_recovery_row(IcydbRecoveryExpectation::Scheduled),
+    ]
+}
+
+fn expected_icydb_recovery_row(expectation: IcydbRecoveryExpectation) -> LogicalTimerRow {
+    let (registration, condition) = match expectation {
+        IcydbRecoveryExpectation::Quiescent => (
+            TimerRegistrationStatus::Unregistered,
+            TimerProcessCondition::Idle,
+        ),
+        IcydbRecoveryExpectation::Scheduled => (
+            TimerRegistrationStatus::Scheduled,
+            TimerProcessCondition::Active,
+        ),
+    };
+    logical_timer_row(
+        "icydb",
+        "startup",
+        "recovery",
+        TimerSchedulingMode::Watchdog,
+        registration,
+        condition,
+    )
+}
+
+fn logical_timer_row(
+    owner: &str,
+    subsystem: &str,
+    name: &str,
+    scheduling_mode: TimerSchedulingMode,
+    registration: TimerRegistrationStatus,
+    condition: TimerProcessCondition,
+) -> LogicalTimerRow {
+    LogicalTimerRow {
+        owner: owner.to_owned(),
+        subsystem: subsystem.to_owned(),
+        name: name.to_owned(),
+        scheduling_mode,
+        registration,
+        condition,
+        enabled: true,
+    }
 }
 
 fn install_retry_policy() -> RetryPolicy {

@@ -27,7 +27,8 @@ Date: 2026-08-19
   one safe paired synchronous participant after Canic restoration and before
   deferred work for ordinary managed, Root and local lifecycles. B7 composes
   that seam with exact published IcyDB, proving one resolved provider, one lifecycle
-  export pair and separately reconstructed owner rows. Its artifact is
+  export pair and complete phase-specific shared inventories with separately
+  reconstructed owner rows. Its artifact is
   test-only and changes no shipped product role. B8 parses the 45-file Rust
   ownership set, freezes exact native-capability callsites and rejects renamed,
   re-exported, unclassified or duplicate scheduling authority. The current
@@ -60,7 +61,7 @@ Date: 2026-08-19
 | B4 | Core fixed-owner reconstruction | Auth, capability-pruned automatic top-up and placement native schedules plus owner-specific retry/stop behavior | Targeted unit, snapshot, [Wasm/performance evidence](../../audits/working/0.104-timer-ownership/b4-domain-native-custody.md) and PocketIC recovery journeys | Accepted 2026-08-18 |
 | B5 | Pool/lifecycle/snapshot propagation | Native pool custody, one watchdog, zero-delay lifecycle work, suspension/resume and [exact evidence](../../audits/working/0.104-timer-ownership/README.md#b5-pool-lifecycle-and-snapshot-completion) | Control-plane, lifecycle, snapshot, runtime-probe and role-pruned Wasm checks | Accepted 2026-08-18 |
 | B6 | Native downstream adoption and lifecycle participant | Maintained migration guide, direct-provider fixture, paired compile-time participant, exact ordering and [rollback evidence](../../audits/working/0.104-timer-ownership/README.md#b6-native-adoption-and-lifecycle-participant) | Compile pass/fail, exact Candid/exports and PocketIC lifecycle checks | Accepted 2026-08-18 |
-| B7 | Combined Canic/IcyDB qualification | One provider, one lifecycle export pair, both owner rows, progress, inactive reconstruction and [corrected-cause retry](../../audits/working/0.104-timer-ownership/README.md#b7-combined-canic-and-icydb-qualification) | Dependency, artifact and focused PocketIC composition proof | Accepted 2026-08-19 |
+| B7 | Combined Canic/IcyDB qualification | One provider, one lifecycle export pair, complete shared inventories, progress, inactive reconstruction and [corrected-cause retry](../../audits/working/0.104-timer-ownership/README.md#b7-combined-canic-and-icydb-qualification) | Dependency, artifact and focused PocketIC composition proof | Accepted 2026-08-19 |
 | B8 | Semantic ownership proof and closeout | One-provider graph, [shared inventory](../../audits/working/0.104-timer-ownership/consumer-inventory.tsv), ownership guards and [complete measured closeout](../../audits/working/0.104-timer-ownership/README.md#b8-semantic-ownership-and-closeout) | Targeted repository guards and PocketIC timer/lifecycle suites | Accepted 2026-08-19 |
 
 ## B1 Completion Contract

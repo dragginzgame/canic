@@ -111,6 +111,23 @@ inventory rows, progress for both owners, reconstruction after same-release
 upgrade while Prepared/inactive, participant-trap rollback and successful
 corrected-cause retry. Shipped Canic crates import no IcyDB type.
 
+The focused journey also queries the controller-authorized Canic runtime status
+and freezes the complete sorted logical inventory rather than checking only one
+row per owner. It compares owner, subsystem, name, scheduling mode,
+registration, process condition and enabled state while excluding volatile
+deadlines, generations and counters. The qualified inventories are:
+
+- newly Prepared: idle Canic `log_retention/run` plus scheduled active IcyDB
+  `startup/recovery`;
+- settled Prepared, before and after same-release upgrade: idle Canic
+  `log_retention/run` plus idle unregistered IcyDB `startup/recovery`; and
+- Active, after install and before and after same-release upgrade: idle Canic
+  `intent_cleanup/run` and `log_retention/run` plus scheduled active IcyDB
+  `startup/recovery`.
+
+Every retained row is enabled. Exact list equality rejects an unexpected owner,
+duplicate row, missing row or scheduling-state change.
+
 ## B2-B8 Propagation Map
 
 | Batch | Required mutation | Direct fallout | Focused evidence |
@@ -120,7 +137,7 @@ corrected-cause retry. Shipped Canic crates import no IcyDB type.
 | B4 | Move auth/cycles/placement/intent/log registrations and schedule reconstruction to exact owners | lifecycle profile pruning, metrics/status mapping, owner tests | positive/negative profile builds and owner-specific interruption/retry/stop journeys |
 | B5 | Move pool custody, watchdog, snapshot suspend/resume and every private deferral to native claims | control-plane lifecycle/workflows, start macros, Store/Coordinator paths, intent-authority fixture | pool/lifecycle/snapshot tests, runtime probe and exact role inventory |
 | B6 | Publish native guide and paired lifecycle participant grammar | scaffolds, macro parser/expansion, runtime docs and fixtures | compile pass/fail matrix, one export pair, unchanged Candid, exact ordering/rollback PocketIC proof |
-| B7 | Add exact published-IcyDB composition fixture | test-only workspace/package graph and focused artifact acquisition | one provider package, both inventory owners, progress, inactive restore, trap/retry proof |
+| B7 | Add exact published-IcyDB composition fixture | test-only workspace/package graph and focused artifact acquisition | one provider package, complete phase-specific shared inventories, progress, inactive restore, trap/retry proof |
 | B8 | Replace lexical count guard with semantic ownership guard and close docs/changelog | source roots include apps/crates/executable canister fixtures; active docs contain no facade vocabulary | semantic classification, dependency graph, residue scan, targeted timer/lifecycle suites and measured closeout |
 
 The semantic guard may exclude ordinary unit/integration test modules from its
