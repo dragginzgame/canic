@@ -126,18 +126,16 @@ and terminal provider state are deleted. The exact worst-case record encoding
 is 589 bytes. B4 is implementation-complete: auth renewal, automatic cycle
 top-up and placement acknowledgement now own lazy native registrations and
 exact domain recovery. The representative provider inventory falls from seven
-rows to five and its measured interval path uses about 5.1% fewer instructions.
-Same-builder product Wasm is 18,030 raw and 5,457 gzip bytes larger than B3,
-so no B4 size win is claimed. B5 is accepted: the remaining central claim and
-participant registries are deleted, pool/lifecycle/snapshot owners retain
-exact native custody, the representative interval path falls another 1.9514%
-and the four-role product total falls to 19,123,973 raw and 4,959,574 gzip
-bytes. B6 is accepted on locked `ic-testkit 0.8.8`: the maintained native
+rows to five. B5 is accepted: the remaining central claim and participant
+registries are deleted and pool/lifecycle/snapshot owners retain exact native
+custody. The intermediate B2-B6 size and instruction deltas are historical
+development observations only because their exact source states were not
+preserved. B6 is accepted on locked `ic-testkit 0.8.8`: the maintained native
 guide and direct-provider fixture replace the removed facade examples, and
 ordinary managed, Root and local start macros accept one safe paired
 synchronous lifecycle participant after Canic restoration and before deferred
-work. Exact product raw bytes remain unchanged from B5; deterministic gzip
-falls one byte and the measured interval differences remain noise-scale.
+work. The current final-tree interval observation is 46,593 instructions with
+zero Wasm- or stable-memory-page growth.
 Repository-only 0.106 B1 evidence may continue, but its final
 Candid/timer/state inventory must reconcile before its next source batch.
 
@@ -198,7 +196,8 @@ closeout and human-owned release flow are complete. The maintainer accepted
 generic timer recovery into four closed
 domain async-job fences, retains a generated exact retry identity only for
 cycle top-up and removes every stable provider mirror. Its bounded-state,
-property, interruption and exact Wasm/provider evidence is accepted. B4 moves
+property and interruption evidence is accepted; its phase measurements are
+historical rather than closeout proof. B4 moves
 auth, cycles and placement out of central fixed-job selection while preserving
 snapshot custody and exact recovery; its current-graph evidence passes on
 the then-locked `ic-testkit` 0.8.7. B5 deletes the remaining pool/lifecycle/
@@ -208,10 +207,10 @@ synchronous lifecycle participant with exact restore-before-participant-before-
 defer ordering, Prepared/inactive execution and trap rollback. B7 composes that
 participant with exact published IcyDB 0.230.2 and proves one timer provider,
 one lifecycle export pair, separate reconstructed rows, rollback and corrected
-retry. B8 replaces lexical counts with semantic ownership classification
-across applications, crates and executable fixtures, then closes the graph,
-inventory, documents and measurements. The 0.104 implementation batch is
-complete.
+retry. B8 parses the complete Rust ownership set, freezes exact native
+registration callsites and rejects disguised or duplicated authority across
+applications, crates and executable fixtures. The 0.104 implementation batch
+and bounded closeout correction are complete.
 0.105 local authorization
 follows it without an observatory dependency. 0.106 remains evidence-only
 until accepted B1, 0.103/0.104 reconciliation and an approved external run
@@ -339,10 +338,9 @@ cycle top-up, intent cleanup and log retention. The native application
 interval reports two work samples, 25,145 latest/maximum and 50,248 total
 instructions with zero Wasm or stable-memory page growth; the retained B1
 evidence has no numeric pre-cut sample, so this is not presented as a causal
-performance delta. The same canonical fast builder produces a four-role total
-of 19,416,477 raw and 5,030,322 gzip bytes, increases of 2.7225% and 3.4326%
-from `v0.103.0`. The isolated direct-native runtime probe instead shrinks by
-9,782 raw and 736 deterministic-gzip bytes. The complete suite was not rerun.
+performance delta. Its phase-size table is historical only because the exact
+B2 source state was not retained and its alleged baseline was not reproduced.
+The complete suite was not rerun.
 
 Focused 0.104 B3 validation passes 1,118 core library tests, exact state and
 role contract checks, timer workflow and pool tests, warning-denied affected-
@@ -353,11 +351,10 @@ exact attempt. The interval remains at two work samples with 50,179 total
 instructions and zero memory-page growth; its sub-percent differences from B2
 are not a causal performance claim. The watchdog takeover records one 21,503-
 instruction scheduler sample and one 51,476-instruction work sample with zero
-memory-page growth, for which no B2 numeric baseline exists. The canonical
-four-role product total is 19,398,431 raw and 5,021,151 gzip bytes: 0.0929% and
-0.1823% smaller than B2, but 2.6270% and 3.2440% larger than `v0.103.0`. All
-four product builds and the final instrumentation-free interruption journey
-pass. The complete suite was not rerun.
+memory-page growth, for which no B2 numeric baseline exists. The phase-size
+table is historical only because the B2 and B3 source states were not retained.
+All four product builds and the final instrumentation-free interruption
+journey pass. The complete suite was not rerun.
 
 Focused 0.104 B4 validation passes 1,118 of 1,119 core library tests with one
 ignored, both source-inventory guards, warning-denied Clippy for core, control
@@ -365,11 +362,9 @@ plane, facade, runtime probe and the timer-authority target, the real restored-
 Root snapshot/resume journey and all four canonical product builds. All four
 timer-authority PocketIC journeys passed on the B4 source. The representative
 inventory falls from seven rows to five because an absent `AutomaticTopup`
-capability and empty receipt index reserve no native declarations. Its two-
-callback interval path falls from 50,179 to 47,607 instructions. The watchdog
-records 21,515 scheduler and 51,221 work instructions, both noise-scale against
-B3. The four-role total is 19,416,461 raw and 5,026,608 gzip bytes, 0.0929% and
-0.1087% larger than B3 but still 16 raw and 3,714 gzip bytes smaller than B2.
+capability and empty receipt index reserve no native declarations. The
+instruction and size tables are historical only because the exact B3 and B4
+source states were not retained; no phase improvement is claimed.
 The current `ic-testkit` 0.8.7 graph reruns all four journeys successfully in
 6.89 seconds through one runner-owned shared server. The complete suite was
 not rerun.
@@ -384,30 +379,27 @@ The three timer-authority journeys pass in 6.04 seconds on locked
 `ic-testkit 0.8.8`; exact Coordinator snapshot/restore passes in 11.49 seconds,
 and the real restored-Root journey proves the pool/watchdog rows are scheduled
 live, unregistered while sealed, reconstructed after live resume and absent
-from a restored sealed snapshot. Its two-sample application interval falls
-from 47,607 to 46,678 total instructions with zero memory-page growth. The
-canonical four-role total falls 292,488 raw and 67,034 gzip bytes from B4 to
-19,123,973 raw and 4,959,574 gzip bytes. Coordinator falls about 6.0% from B4
-after a first measurement exposed and the role split removed accidental Root
-workflow linkage. The total remains 1.1750% raw and 1.9779% gzip above
-published `v0.103.0`. Targeted compilation, warning-denied Clippy, source
-guards, pool/protocol tests and all nine canonical fast artifacts pass. The
-complete suite was not rerun.
+from a restored sealed snapshot. Targeted compilation, warning-denied Clippy,
+source guards, pool/protocol tests and all nine canonical fast artifacts pass.
+The original B4/B5 measurement table is historical only because neither exact
+phase source state was retained. The complete suite was not rerun.
 
 Focused 0.104 B6 validation passes both public compile-fail examples, the six
 lifecycle-boundary guards, the managed endpoint and protocol-surface guards,
 and warning-denied Clippy for every touched facade, fixture, harness and
 integration target. Managed Prepared/repeated-upgrade behavior, participant
 trap rollback with an unchanged committed module hash, corrected retry and the
-real Root participant path pass focused PocketIC checks. The final four-test
-timer-authority journey passes in 7.86 seconds on locked `ic-testkit 0.8.8` and
+real Root participant path pass focused PocketIC checks. The closeout
+correction also proves an init-participant trap leaves the same canister empty
+through a later round before corrected installation succeeds on that exact
+principal. The final four-test timer-authority journey passes in 7.86 seconds
+on locked `ic-testkit 0.8.8` and
 PocketIC 15. The managed, Root and runtime-probe artifacts retain exact B5
 Candid and normalized canister-export sets with one `canister_init` and one
-`canister_post_upgrade` each. The canonical product total is 19,123,973 raw
-and 4,959,573 gzip bytes: raw is exactly unchanged from B5 and gzip is one byte
-smaller. Its two-sample interval records 46,593 total instructions with zero
-memory-page growth; the sub-percent B5 differences are noise-scale. The
-complete suite was not rerun.
+`canister_post_upgrade` each. Its two-sample interval records 46,593 total
+instructions with zero memory-page growth. The original B5/B6 Wasm comparison
+is historical only because the B5 source state was not retained. The complete
+suite was not rerun.
 
 Focused 0.104 B7 validation resolves one `ic-timers 0.6.1` package for Canic
 and exact published `icydb = "=0.230.2"`. Normal and trapping composition
@@ -420,21 +412,23 @@ changes no shipped product role. Locked affected-package compilation,
 warning-denied Clippy, the lifecycle payload unit check and the workspace-test
 inventory guard also pass. The complete suite was not rerun.
 
-Focused 0.104 B8 validation replaces the lexical call-count guard with a
-45-file semantic ownership contract and closes the exact one-provider lock and
-nine-manifest declaration set. All six semantic provider, ownership,
-documentation, raw-access, wait and snapshot guards pass. The four
+Focused 0.104 B8 validation now parses the 45-file Rust ownership set, freezes
+exact native-capability callsites and rejects aliases, public re-exports,
+unclassified files and duplicate custody. It closes the exact one-provider
+lock and nine-manifest declaration set. All thirteen structural provider,
+ownership, documentation, raw-access, wait and snapshot guards pass. The four
 timer-authority journeys pass in 14.01 seconds, and the exact isolated
 measurement journey passes warm in 3.24 seconds. It reports four managed rows,
 one scheduled, no top-up row and the exact B6 interval result: two work
 samples, 46,593 total instructions and zero memory-page growth. The focused
 Root restore journey passes in 47.50 seconds and reports four declared rows,
-two scheduled while active and zero while sealed, with no top-up row. The
-fresh-target four-role product total remains 19,123,973 raw bytes exactly and
-moves by seven compression-noise bytes to 4,959,566 gzip. Targeted
-warning-denied Clippy passes for the semantic guard, timer target and internal
-Root harness. The six lifecycle-boundary guards, changelog governance and
-current-document semantics also pass. The complete suite was not rerun.
+two scheduled while active and zero while sealed, with no top-up row. Exact
+release-tree builds produce 19,424,848 raw / 5,030,696 gzip bytes for 0.103.0
+and 19,124,317 raw / 4,959,729 gzip bytes for 0.104.0. Each release uses its
+own canonical builder, so no controlled causal percentage is claimed.
+Targeted warning-denied Clippy passes for the semantic guard, timer target and
+internal Root harness. The lifecycle-boundary journeys, changelog governance
+and current-document semantics also pass. The complete suite was not rerun.
 
 The human release gate subsequently exposed one inline async-job workflow test
 that reset stable storage directly. Its fixture reset now crosses the test-only
@@ -636,14 +630,13 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-The bounded CI/test-harness feedback batch is implementation-complete with
-targeted compilation, warning-denied Clippy, artifact checks, deployment and
-timer PocketIC evidence, changelog governance, shell lint and document checks.
-The maintainer-owned complete validation and release flow remain separate. No
-further 0.104 implementation batch remains. Keep the open 0.104.0 changelog
-entry and workspace version under that human-owned flow. Scheduled 0.105 B1
-still requires explicit maintainer promotion after accepted 0.104 closeout and
-is not authorized by ordinary continuation.
+Published `v0.104.0` contains the runtime hard cut. The bounded 0.104.1
+closeout correction strengthens structural ownership proof, adds failed-init
+rollback/retry evidence and replaces unsupported phase measurements with exact
+release-tree footprints. The maintainer-owned complete validation and release
+flow remain separate. Scheduled 0.105 B1 still requires explicit maintainer
+promotion after accepted 0.104 closeout and is not authorized by ordinary
+continuation.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

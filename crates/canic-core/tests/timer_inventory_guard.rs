@@ -5,20 +5,12 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use syn::{
+    Expr, ExprCall, ExprPath, ItemUse, Macro, UseTree, Visibility,
+    visit::{self, Visit},
+};
 
 const PRODUCTION_SOURCE_ROOTS: [&str; 3] = ["apps", "canisters", "crates"];
-const TIMER_OWNERSHIP_SIGNALS: [&str; 10] = [
-    "AsyncJobOwner",
-    "AsyncJobRecovery",
-    "AsyncJobWorkflow",
-    "CanisterTimerStatus",
-    "CoreAsyncJobRecovery",
-    "TimerApi",
-    "TimerAuthorityWorkflow",
-    "TimerExecutionOutcome",
-    "async_job_recovery",
-    "ic_timers",
-];
 const PROHIBITED_AUTHORITY_FRAGMENTS: [&str; 10] = [
     "ClaimKey::Transient",
     "NEXT_TRANSIENT_ID",
@@ -39,6 +31,301 @@ const NATIVE_REGISTRATION_FRAGMENTS: [&str; 6] = [
     "reconcile_watchdog(",
     "Registration>",
 ];
+const NATIVE_REGISTRATION_CAPABILITIES: [&str; 5] = [
+    "register_after_completion",
+    "register_once",
+    "reconcile_after_completion",
+    "reconcile_once",
+    "reconcile_watchdog",
+];
+const RAW_TIMER_MECHANICS: [&str; 5] = [
+    "clear_timer",
+    "global_timer_set",
+    "set_global_timer",
+    "set_timer",
+    "set_timer_interval",
+];
+
+#[derive(Debug, Default, Eq, PartialEq)]
+struct TimerSyntax {
+    has_timer_semantics: bool,
+    uses_native_provider: bool,
+    raw_provider_accesses: BTreeSet<String>,
+    native_registration_references: BTreeMap<String, usize>,
+    native_registration_calls: BTreeMap<String, usize>,
+    violations: Vec<String>,
+}
+
+#[derive(Default)]
+struct TimerSyntaxVisitor {
+    analysis: TimerSyntax,
+}
+
+impl<'ast> Visit<'ast> for TimerSyntaxVisitor {
+    fn visit_ident(&mut self, identifier: &'ast proc_macro2::Ident) {
+        if timer_semantic_identifier(identifier.to_string().as_str()) {
+            self.analysis.has_timer_semantics = true;
+        }
+        visit::visit_ident(self, identifier);
+    }
+
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        let segments = path
+            .segments
+            .iter()
+            .map(|segment| segment.ident.to_string())
+            .collect::<Vec<_>>();
+        if segments.iter().any(|segment| segment == "ic_cdk_timers") {
+            self.analysis
+                .raw_provider_accesses
+                .insert("ic_cdk_timers".to_string());
+        }
+        if segments
+            .windows(2)
+            .any(|window| window == ["cdk", "timers"])
+        {
+            self.analysis
+                .raw_provider_accesses
+                .insert("cdk::timers".to_string());
+        }
+        for mechanic in segments
+            .iter()
+            .filter(|segment| RAW_TIMER_MECHANICS.contains(&segment.as_str()))
+        {
+            self.analysis
+                .raw_provider_accesses
+                .insert((*mechanic).clone());
+        }
+        if path
+            .segments
+            .first()
+            .is_some_and(|segment| segment.ident == "ic_timers")
+        {
+            self.analysis.uses_native_provider = true;
+        }
+        if path
+            .segments
+            .iter()
+            .any(|segment| timer_semantic_identifier(segment.ident.to_string().as_str()))
+        {
+            self.analysis.has_timer_semantics = true;
+        }
+        visit::visit_path(self, path);
+    }
+
+    fn visit_expr_call(&mut self, call: &'ast ExprCall) {
+        if let Expr::Path(function) = call.func.as_ref()
+            && let Some(capability) = function
+                .path
+                .segments
+                .last()
+                .map(|segment| segment.ident.to_string())
+            && NATIVE_REGISTRATION_CAPABILITIES.contains(&capability.as_str())
+        {
+            self.analysis.has_timer_semantics = true;
+            *self
+                .analysis
+                .native_registration_calls
+                .entry(capability)
+                .or_default() += 1;
+        }
+        visit::visit_expr_call(self, call);
+    }
+
+    fn visit_expr_path(&mut self, expression: &'ast ExprPath) {
+        if let Some(capability) = expression
+            .path
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string())
+            && NATIVE_REGISTRATION_CAPABILITIES.contains(&capability.as_str())
+        {
+            *self
+                .analysis
+                .native_registration_references
+                .entry(capability)
+                .or_default() += 1;
+        }
+        visit::visit_expr_path(self, expression);
+    }
+
+    fn visit_item_use(&mut self, item: &'ast ItemUse) {
+        let mut imports = Vec::new();
+        flatten_use_tree(&item.tree, &mut Vec::new(), &mut imports);
+        let public = !matches!(item.vis, Visibility::Inherited);
+
+        for import in imports {
+            let is_provider = import.path.first().is_some_and(|part| part == "ic_timers");
+            let is_raw_provider = import
+                .path
+                .first()
+                .is_some_and(|part| part == "ic_cdk_timers")
+                || import
+                    .path
+                    .windows(2)
+                    .any(|window| window == ["cdk", "timers"])
+                || import
+                    .path
+                    .iter()
+                    .any(|part| RAW_TIMER_MECHANICS.contains(&part.as_str()));
+            let is_authority = import.path.iter().any(|part| {
+                NATIVE_REGISTRATION_CAPABILITIES.contains(&part.as_str())
+                    || matches!(
+                        part.as_str(),
+                        "AfterCompletionRegistration"
+                            | "OnceRegistration"
+                            | "TimerApi"
+                            | "TimerAuthorityWorkflow"
+                            | "TimerIdentity"
+                            | "TimerSchedule"
+                            | "TimerSnapshot"
+                            | "WatchdogRegistration"
+                    )
+            });
+            let aliases_provider_module = is_provider
+                && import
+                    .path
+                    .last()
+                    .is_some_and(|part| matches!(part.as_str(), "ic_timers" | "self"));
+
+            if is_provider {
+                self.analysis.has_timer_semantics = true;
+                self.analysis.uses_native_provider = true;
+            }
+            if is_raw_provider {
+                self.analysis.has_timer_semantics = true;
+                self.analysis
+                    .raw_provider_accesses
+                    .insert(import.path.join("::"));
+            }
+            if import.rename.is_some() && (aliases_provider_module || is_authority) {
+                self.analysis.violations.push(format!(
+                    "timer scheduling authority is renamed in `{}`",
+                    import.path.join("::")
+                ));
+            }
+            if public && (is_provider || is_authority) {
+                self.analysis.violations.push(format!(
+                    "timer scheduling authority is publicly re-exported from `{}`",
+                    import.path.join("::")
+                ));
+            }
+        }
+        visit::visit_item_use(self, item);
+    }
+
+    fn visit_macro(&mut self, macro_invocation: &'ast Macro) {
+        visit_token_stream(&macro_invocation.tokens, &mut self.analysis);
+        visit::visit_macro(self, macro_invocation);
+    }
+}
+
+struct UseImport {
+    path: Vec<String>,
+    rename: Option<String>,
+}
+
+fn analyze_timer_syntax(path: &str, source: &str) -> TimerSyntax {
+    let file = syn::parse_file(source).unwrap_or_else(|error| panic!("parse {path}: {error}"));
+    let mut visitor = TimerSyntaxVisitor::default();
+    visitor.visit_file(&file);
+    let mut analysis = visitor.analysis;
+    if analysis.native_registration_references != analysis.native_registration_calls {
+        analysis.violations.push(format!(
+            "native scheduling capability references are not direct calls: references={:?}, calls={:?}",
+            analysis.native_registration_references, analysis.native_registration_calls
+        ));
+    }
+    analysis
+}
+
+fn flatten_use_tree(tree: &UseTree, prefix: &mut Vec<String>, imports: &mut Vec<UseImport>) {
+    match tree {
+        UseTree::Path(path) => {
+            prefix.push(path.ident.to_string());
+            flatten_use_tree(&path.tree, prefix, imports);
+            prefix.pop();
+        }
+        UseTree::Name(name) => {
+            let mut path = prefix.clone();
+            path.push(name.ident.to_string());
+            imports.push(UseImport { path, rename: None });
+        }
+        UseTree::Rename(rename) => {
+            let mut path = prefix.clone();
+            path.push(rename.ident.to_string());
+            imports.push(UseImport {
+                path,
+                rename: Some(rename.rename.to_string()),
+            });
+        }
+        UseTree::Glob(_) => imports.push(UseImport {
+            path: prefix.clone(),
+            rename: None,
+        }),
+        UseTree::Group(group) => {
+            for tree in &group.items {
+                flatten_use_tree(tree, prefix, imports);
+            }
+        }
+    }
+}
+
+fn timer_semantic_identifier(identifier: &str) -> bool {
+    let lowercase = identifier.to_ascii_lowercase();
+    lowercase.contains("async_job_recovery")
+        || identifier.starts_with("AsyncJob")
+        || matches!(
+            identifier,
+            "AfterCompletionRegistration"
+                | "CanisterTimerStatus"
+                | "CoreAsyncJobRecovery"
+                | "OnceRegistration"
+                | "TimerApi"
+                | "TimerAuthorityWorkflow"
+                | "TimerExecutionOutcome"
+                | "TimerIdentity"
+                | "TimerRegistrationStatus"
+                | "TimerSchedule"
+                | "TimerSnapshot"
+                | "WatchdogRegistration"
+                | "ic_cdk_timers"
+                | "ic_timers"
+        )
+        || NATIVE_REGISTRATION_CAPABILITIES.contains(&identifier)
+        || RAW_TIMER_MECHANICS.contains(&identifier)
+}
+
+fn visit_token_stream(tokens: &proc_macro2::TokenStream, analysis: &mut TimerSyntax) {
+    for token in tokens.clone() {
+        match token {
+            proc_macro2::TokenTree::Group(group) => visit_token_stream(&group.stream(), analysis),
+            proc_macro2::TokenTree::Ident(identifier) => {
+                let identifier = identifier.to_string();
+                if timer_semantic_identifier(identifier.as_str()) {
+                    analysis.has_timer_semantics = true;
+                }
+                if NATIVE_REGISTRATION_CAPABILITIES.contains(&identifier.as_str()) {
+                    *analysis
+                        .native_registration_references
+                        .entry(identifier.clone())
+                        .or_default() += 1;
+                    *analysis
+                        .native_registration_calls
+                        .entry(identifier.clone())
+                        .or_default() += 1;
+                }
+                if identifier == "ic_cdk_timers" {
+                    analysis.raw_provider_accesses.insert(identifier.clone());
+                }
+                if RAW_TIMER_MECHANICS.contains(&identifier.as_str()) {
+                    analysis.raw_provider_accesses.insert(identifier);
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OwnershipClass {
@@ -70,21 +357,36 @@ fn timer_ownership_inventory_is_semantically_classified() {
     let root = workspace_root();
     let expected = expected_ownership_inventory();
     let mut observed = BTreeSet::new();
+    let mut observed_native_calls = BTreeMap::new();
 
     for source_root in PRODUCTION_SOURCE_ROOTS {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
-            if !excluded_test_source(path)
-                && TIMER_OWNERSHIP_SIGNALS
-                    .iter()
-                    .any(|signal| source.contains(signal))
-            {
+            if excluded_test_source(path) {
+                return;
+            }
+
+            let syntax = analyze_timer_syntax(path, source);
+            assert!(
+                syntax.violations.is_empty(),
+                "{path} contains disguised or exported scheduling authority: {:?}",
+                syntax.violations
+            );
+            if syntax.has_timer_semantics {
                 observed.insert(path.to_string());
+            }
+            if !syntax.native_registration_calls.is_empty() {
+                observed_native_calls.insert(path.to_string(), syntax.native_registration_calls);
             }
         });
     }
 
     let classified = expected.keys().copied().map(str::to_string).collect();
     assert_eq!(observed, classified, "timer ownership inventory changed");
+    assert_eq!(
+        observed_native_calls,
+        expected_native_registration_calls(),
+        "native timer registration custody changed"
+    );
     let prohibited = OwnershipClass::ProhibitedSchedulingAuthority;
     assert!(expected.values().all(|class| *class != prohibited));
     let documented_source = read_source(
@@ -100,8 +402,95 @@ fn timer_ownership_inventory_is_semantically_classified() {
 
     for (path, class) in expected {
         let source = read_source(&root, path);
-        assert_semantic_class(path, source.as_str(), class);
+        let syntax = analyze_timer_syntax(path, source.as_str());
+        assert_semantic_class(path, source.as_str(), &syntax, class);
     }
+}
+
+#[test]
+fn semantic_inventory_ignores_comments_and_string_literals() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        r#"
+            const NOTE: &str = "ic_timers::register_once";
+            // TimerApi::set was removed.
+            fn ordinary_business_logic() {}
+        "#,
+    );
+
+    assert_eq!(syntax, TimerSyntax::default());
+}
+
+#[test]
+fn semantic_inventory_rejects_aliased_provider_authority() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        "use ic_timers::register_once as schedule_later;",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert_eq!(syntax.violations.len(), 1);
+}
+
+#[test]
+fn semantic_inventory_rejects_value_aliased_provider_authority() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        "fn alias() { let schedule = ic_timers::register_once; schedule(); }",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert_eq!(syntax.violations.len(), 1);
+}
+
+#[test]
+fn semantic_inventory_observes_unclassified_and_duplicate_native_calls() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        r"
+            fn duplicate_custody() {
+                ic_timers::register_once(first());
+                ic_timers::register_once(second());
+            }
+        ",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert_eq!(syntax.native_registration_calls["register_once"], 2);
+}
+
+#[test]
+fn semantic_inventory_counts_macro_generated_native_calls() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        r"
+            macro_rules! schedule {
+                () => { ic_timers::register_once(identity(), lifetime(), callback()) };
+            }
+        ",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert_eq!(syntax.native_registration_calls["register_once"], 1);
+}
+
+#[test]
+fn semantic_inventory_detects_raw_timer_mechanics() {
+    let syntax = analyze_timer_syntax(
+        "synthetic.rs",
+        "fn bypass() { ic_cdk::api::set_global_timer(1); }",
+    );
+
+    assert!(syntax.has_timer_semantics);
+    assert!(syntax.raw_provider_accesses.contains("set_global_timer"));
+}
+
+#[test]
+fn semantic_inventory_detects_aliased_raw_provider_imports() {
+    let syntax = analyze_timer_syntax("synthetic.rs", "use ic_cdk_timers as raw;");
+
+    assert!(syntax.has_timer_semantics);
+    assert!(syntax.raw_provider_accesses.contains("ic_cdk_timers"));
 }
 
 #[test]
@@ -181,10 +570,8 @@ fn direct_raw_timer_provider_access_is_absent_from_production() {
             if excluded_test_source(path) {
                 return;
             }
-            for forbidden in ["ic_cdk_timers", "cdk::timers"] {
-                if source.contains(forbidden) {
-                    violations.push(format!("{path}: {forbidden}"));
-                }
+            for forbidden in analyze_timer_syntax(path, source).raw_provider_accesses {
+                violations.push(format!("{path}: {forbidden}"));
             }
         });
     }
@@ -289,7 +676,7 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
     }
 }
 
-fn assert_semantic_class(path: &str, source: &str, class: OwnershipClass) {
+fn assert_semantic_class(path: &str, source: &str, syntax: &TimerSyntax, class: OwnershipClass) {
     for forbidden in PROHIBITED_AUTHORITY_FRAGMENTS {
         assert!(
             !source.contains(forbidden),
@@ -299,6 +686,10 @@ fn assert_semantic_class(path: &str, source: &str, class: OwnershipClass) {
 
     match class {
         OwnershipClass::DomainAsyncJobRecovery => {
+            assert!(
+                syntax.native_registration_calls.is_empty(),
+                "domain recovery file {path} owns a native registration capability"
+            );
             for forbidden in [
                 "AfterCompletionRegistration",
                 "OnceRegistration",
@@ -318,6 +709,10 @@ fn assert_semantic_class(path: &str, source: &str, class: OwnershipClass) {
             }
         }
         OwnershipClass::DtoOrMetricsProjection => {
+            assert!(
+                syntax.native_registration_calls.is_empty(),
+                "projection file {path} owns a native registration capability"
+            );
             for forbidden in NATIVE_REGISTRATION_FRAGMENTS {
                 assert!(
                     !source.contains(forbidden),
@@ -333,7 +728,7 @@ fn assert_semantic_class(path: &str, source: &str, class: OwnershipClass) {
         }
         OwnershipClass::IndependentApplicationCustody => {
             assert!(
-                source.contains("ic_timers"),
+                syntax.uses_native_provider,
                 "independent application {path} does not use the shared provider"
             );
             assert!(
@@ -343,13 +738,15 @@ fn assert_semantic_class(path: &str, source: &str, class: OwnershipClass) {
         }
         OwnershipClass::NativeRegistrationCustody => {
             assert!(
-                NATIVE_REGISTRATION_FRAGMENTS
-                    .iter()
-                    .any(|fragment| source.contains(fragment)),
+                !syntax.native_registration_calls.is_empty(),
                 "native custody file {path} lacks a native registration capability"
             );
         }
         OwnershipClass::PrivateLifecycleConsumer => {
+            assert!(
+                syntax.native_registration_calls.is_empty(),
+                "private lifecycle consumer {path} retains native registration custody"
+            );
             for forbidden in NATIVE_REGISTRATION_FRAGMENTS {
                 assert!(
                     !source.contains(forbidden),
@@ -372,6 +769,58 @@ fn expected_ownership_inventory() -> BTreeMap<&'static str, OwnershipClass> {
         .chain(core_consumer_ownership())
         .chain(facade_ownership())
         .collect()
+}
+
+fn expected_native_registration_calls() -> BTreeMap<String, BTreeMap<String, usize>> {
+    [
+        (
+            "apps/saltz/burner/src/lib.rs",
+            [("register_once", 1)].as_slice(),
+        ),
+        (
+            "canisters/test/runtime_probe/src/lib.rs",
+            [("register_after_completion", 1), ("register_once", 4)].as_slice(),
+        ),
+        (
+            "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+            [("reconcile_after_completion", 1), ("reconcile_watchdog", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/placement/acknowledgement.rs",
+            [("register_once", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/auth/renewal.rs",
+            [("register_once", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/cycles/mod.rs",
+            [("register_once", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/intent.rs",
+            [("register_once", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/log.rs",
+            [("register_once", 1)].as_slice(),
+        ),
+        (
+            "crates/canic-core/src/workflow/runtime/timer/mod.rs",
+            [("reconcile_watchdog", 1), ("register_once", 1)].as_slice(),
+        ),
+    ]
+    .into_iter()
+    .map(|(path, calls)| {
+        (
+            path.to_string(),
+            calls
+                .iter()
+                .map(|(capability, count)| (capability.to_string(), *count))
+                .collect(),
+        )
+    })
+    .collect()
 }
 
 const fn application_ownership() -> [(&'static str, OwnershipClass); 7] {

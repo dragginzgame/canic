@@ -8,29 +8,35 @@ Date: 2026-08-19
   Prequel Wars review promotes downstream native-timer adoption and the
   synchronous lifecycle-participant seam into this line. The maintainer
   accepted the complete B1 evidence on 2026-08-18 and accepted B2 on the same
-  date with its intermediate Wasm regression retained. Continuation accepted
-  B3-B8 after their exact evidence and current-graph PocketIC checks.
+  date with its intermediate Wasm observation retained. Continuation accepted
+  B3-B8 after their behavioral evidence and current-graph PocketIC checks.
+  Published `v0.104.0` contains that runtime boundary. A bounded 0.104.1
+  closeout correction replaces the lexical B8 census, completes failed-install
+  participant rollback evidence and corrects the quantitative record.
 - Runtime impact: B2 removes the public timer facade and transient claim
   machinery. B3 hard-cuts memory ID 60 to minimal domain attempt fences and
   cycle-only exact retry identity. B4 moves auth, cycles and placement to lazy
   owner-native registrations, reducing the representative provider inventory
-  from seven rows to five and its measured interval path by about 5.1%. It
-  changes no Candid. B5 deletes the remaining central claim and participant
-  registries, gives pool maintenance and the one Root watchdog direct native
-  custody, and splits Root/Coordinator snapshot linkage. The same measured
-  interval path falls another 1.9514%; four-role Wasm falls 292,488 raw and
-  67,034 gzip bytes from B4, while remaining 1.1750% raw and 1.9779% gzip
-  above published `v0.103.0`. B6 publishes the direct-native adoption guide
-  and adds one safe paired synchronous participant after Canic restoration
-  and before deferred work for ordinary managed, Root and local lifecycles.
-  Exact product raw bytes remain unchanged from B5; gzip falls one byte and
-  the measured interval differences remain noise-scale. B7 composes that seam
-  with exact published IcyDB, proving one resolved provider, one lifecycle
+  from seven rows to five. It changes no Candid. B5 deletes the remaining
+  central claim and participant registries, gives pool maintenance and the one
+  Root watchdog direct native
+  custody, and splits Root/Coordinator snapshot linkage. The original B2-B6
+  phase-size and phase-performance deltas are retained only as historical
+  observations because their source states were not preserved; they are not
+  closeout evidence. B6 publishes the direct-native adoption guide and adds
+  one safe paired synchronous participant after Canic restoration and before
+  deferred work for ordinary managed, Root and local lifecycles. B7 composes
+  that seam with exact published IcyDB, proving one resolved provider, one lifecycle
   export pair and separately reconstructed owner rows. Its artifact is
-  test-only and changes no shipped product role. B8 replaces lexical counts
-  with a 45-file semantic ownership contract and closes the dependency,
-  inventory, document, Wasm and provider-performance evidence. Product raw
-  bytes and the comparable interval metrics remain exactly unchanged from B6.
+  test-only and changes no shipped product role. B8 parses the 45-file Rust
+  ownership set, freezes exact native-capability callsites and rejects renamed,
+  re-exported, unclassified or duplicate scheduling authority. The current
+  interval observation is 46,593 instructions with no memory-page growth.
+- Quantitative boundary: exact locked release-tree builds report 19,424,848
+  raw / 5,030,696 gzip bytes for 0.103.0 and 19,124,317 raw / 4,959,729 gzip
+  bytes for 0.104.0. Each release uses its own version-enforcing canonical
+  builder, so no controlled causal percentage is claimed. Intermediate phase
+  tables are historical only.
 - Baseline finding: Canic resolves one `ic-timers 0.6.1` runtime and has no raw
   production `ic-cdk-timers` path, but duplicate provider vocabulary, a public
   application facade and generic stable shadow scheduling remain in published
@@ -93,8 +99,9 @@ designs and deferred drafts retain their truthful old identities.
 
 ## Next Authorized Action
 
-No further 0.104 implementation batch remains. Keep the open 0.104.0
-changelog entry and workspace version under the maintainer-owned release flow;
-the complete validation, versioning, tag and push gates remain separate. The
-scheduled 0.105 B1 still requires explicit maintainer promotion after 0.104
-closeout and is not authorized by this completion.
+Published `v0.104.0` remains the runtime release. The bounded closeout
+correction is recorded in the open 0.104.1 changelog. Versioning, tagging and
+publication remain part of the separately owned maintainer release flow. After
+its targeted checks, the only remaining action is maintainer closeout review.
+Scheduled 0.105 B1 still requires explicit maintainer promotion and is not
+authorized by this completion.

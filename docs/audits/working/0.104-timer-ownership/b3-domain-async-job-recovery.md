@@ -42,12 +42,11 @@ longer reads copied provider deadlines, activates a durable scheduling lane or
 translates callback directives into generic recovery deadlines. Healthy
 schedule and reconciliation requests go directly to the native registration.
 
-## Fast-Profile Wasm Comparison
+## Historical Fast-Profile Wasm Observation
 
-The same canonical host builder, `fast` profile and `apps/test/canic.toml`
-configuration used for B1 and B2 rebuilt all four roles. The B3 column is the
-current output; the first signed delta compares B3 with B2 and the second
-compares B3 with published `v0.103.0`.
+This development-phase table is retained for provenance only. The exact B2
+and B3 source states were not preserved, so the phase deltas cannot be rebuilt
+independently and are not closeout or release acceptance evidence.
 
 | Role | B3 raw bytes | Delta from B2 | Delta from 0.103.0 | Raw SHA-256 | B3 gzip bytes | Delta from B2 | Delta from 0.103.0 | Gzip SHA-256 |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
@@ -57,11 +56,8 @@ compares B3 with published `v0.103.0`.
 | Wasm Store | 3,349,689 | -6,708 (-0.1999%) | +19,499 (+0.5855%) | `3a824d06fab11f15ffcaf19b12abe51800fe97b7e415d7f4be3058869f1a7071` | 885,178 | -4,308 (-0.4843%) | +5,545 (+0.6304%) | `591b5db2e999639749b6bcfd30eea09b0c1149d2d1bfbfe0d31c540fdbdf9d35` |
 | **Four-role total** | **19,398,431** | **-18,046 (-0.0929%)** | **+496,559 (+2.6270%)** | — | **5,021,151** | **-9,171 (-0.1823%)** | **+157,768 (+3.2440%)** | — |
 
-B3 does make the product set smaller than B2, but only modestly. It recovers
-18,046 raw and 9,171 gzip bytes while leaving most of the intermediate B2
-regression against `v0.103.0`. B4 and B5 must separately measure whether
-deleting the remaining central fixed-owner custody recovers more; this result
-does not assume that it will.
+The original B2-to-B3 size interpretation is withdrawn. The immutable
+release-tree footprints in the working README supersede this phase table.
 
 The current `runtime_probe` fixture is 3,655,413 raw bytes with SHA-256
 `bdcb8d6d61e482655f77de15d8fbea12bdd0d9c00e3c71cf8cb4f1a4629954d0`.
@@ -70,7 +66,11 @@ Deterministic gzip is 900,167 bytes with SHA-256
 That is 8,166 raw bytes and 9,712 gzip bytes smaller than B2, and 17,948 raw
 bytes and 10,448 gzip bytes smaller than the immediate pre-B2 fixture.
 
-## Provider Performance And Recovery
+## Historical Provider Performance And Recovery
+
+The phase-to-phase cells below are historical observations because the B2 and
+B3 source states were not retained. Only final-tree measurements are used for
+closeout.
 
 After two direct application interval callbacks, the provider reported:
 
@@ -114,6 +114,6 @@ Passed on 2026-08-18:
   interruption journey after measurement instrumentation was removed; and
 - all four canonical fast product-role builds.
 
-The complete workspace, release matrix and broad PocketIC suites were not run.
-They remain maintainer-owned release validation. The complete 0.104 B1-B8
-release batch is not yet ready to push or publish.
+The complete workspace, release matrix and broad PocketIC suites were not run
+for this historical phase. Later batches completed B1-B8 and `v0.104.0` was
+published; current closeout authority is recorded in the design status.

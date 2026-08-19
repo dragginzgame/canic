@@ -574,6 +574,7 @@ dependencies = [
  "serde_bytes",
  "serde_path_to_error",
  "sha2 0.10.9",
+ "syn 3.0.3",
  "thiserror 2.0.20",
  "toml 1.1.4+spec-1.1.0",
 ]

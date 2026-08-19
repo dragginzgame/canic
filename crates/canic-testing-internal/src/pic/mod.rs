@@ -30,8 +30,9 @@ pub use delegation::{
 };
 pub use fleet_registry::{ActiveComponentRegistryFixture, setup_active_component_registry};
 pub use lifecycle::{
-    CanicIcydbLifecycleFixture, LifecycleBoundaryFixture, icydb_participant_trap_wasm,
-    install_canic_icydb_lifecycle_fixture, install_lifecycle_boundary_fixture, invalid_init_args,
+    CanicIcydbLifecycleFixture, LifecycleBoundaryFixture, UninstalledCanicFixture,
+    icydb_participant_trap_wasm, install_canic_icydb_lifecycle_fixture,
+    install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
     lifecycle_participant_trap_wasm, upgrade_args,
 };
 pub use root::{
