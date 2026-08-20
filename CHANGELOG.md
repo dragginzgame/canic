@@ -8,21 +8,25 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The 0.105 authorization state path now composes pure binding and admission
-  policy in workflow while storage ops expose only neutral occupancy and exact
-  mutations; workflow tests use an ops-owned state seam instead of importing
-  stable records. Managed-command replay policy, role-feature fixtures and
-  documentation, and frozen canonical identities now propagate the accepted
-  application-session config and test-only feature contract.
+- The test-only 0.107 B1 capture freezes target-complete plan/install inputs,
+  one canonical plan digest, bounded Root-or-controller runtime-whitelist
+  authority and the exact upstream catalog-provenance requirement for
+  maintainer acceptance before production or stable-state work begins.
 
-- The formatting pre-commit hook now refreshes the staged snapshot after
-  `make fmt`, so the ordinary `git add .` then `git commit` flow does not fail
-  solely because formatting changed staged files; partially staged files and
-  pre-existing unstaged edits remain protected.
+- The test-only 0.108 B1 attached-cycles probe proves exact caller-bound root
+  acceptance, intent/call/receipt interruption and zero-accept replay with
+  automatic principal return, while retaining measured PocketIC call-cost and
+  operating-headroom inputs for maintainer acceptance before production work.
 
-- CI ordinary tests now retain the immutable Git history used by release
-  guards and provision the pinned workspace-version reader in their owning
-  job.
+## [0.106.x] - 2026-08-20 - Fleet Estate Qualification Baseline
+
+Detailed patch breakdown: [docs/changelog/0.106.md](docs/changelog/0.106.md)
+
+- `0.106.0` freezes the accepted repository-local Fleet-estate qualification
+  baseline, current Root pool authority, exact Cycles Ledger provenance and
+  protocol-bound creation/reset/controller evidence without changing shipped
+  runtime surfaces; this draft remains open until the separately authorized B2
+  platform observations are executed, reconciled and accepted.
 
 ## [0.105.x] - 2026-08-20 - Framework-Neutral Local Application Authorization
 
@@ -38,6 +42,8 @@ Detailed patch breakdown: [docs/changelog/0.105.md](docs/changelog/0.105.md)
   protected operator audit, bounded metrics and instruction/memory/Wasm gates
   plus Canic-only multi-target recovery, controller separation, same-release
   reconstruction and residue qualification are complete.
+  Release tooling also stages formatter output safely and ordinary CI retains
+  release-guard history plus its pinned version authority.
 
 ## [0.104.x] - 2026-08-19 - Timer Ownership And Lifecycle Composition
 

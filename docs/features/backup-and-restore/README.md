@@ -27,7 +27,7 @@ canic restore prepare <backup> --require-verified --require-restore-ready
 Canisters do not read or write backup files. Filesystem access, ICP CLI calls,
 credentials, manifests, journals, and restore runners remain on the operator
 host. Current releases use backup and restore for same-release recovery rather
-than cross-release state migration. Scheduled 0.109 defines the first bounded
+than cross-release state migration. Scheduled 0.110 defines the first bounded
 exception: a verified backup and dry run for one exact whole-Fleet
 predecessor-to-successor adoption.
 

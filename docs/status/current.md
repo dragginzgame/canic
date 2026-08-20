@@ -25,11 +25,11 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Scheduled application-safety and estate path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 Coordinator-backed root funding](../design/0.107-coordinator-backed-root-funding/status.md), [0.108 reusable estates plus application retirement](../design/0.108-fleet-subnet-canister-estates/status.md), [0.109 stateful Fleet release adoption](../design/0.109-stateful-fleet-release-adoption/status.md) and [0.110 generic Fleet observatory](../design/0.110-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+- Scheduled application-safety and estate path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../design/0.108-coordinator-backed-root-funding/status.md), [0.109 reusable estates plus application retirement](../design/0.109-fleet-subnet-canister-estates/status.md), [0.110 stateful Fleet release adoption](../design/0.110-stateful-fleet-release-adoption/status.md) and [0.111 generic Fleet observatory](../design/0.111-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: every pre-1.0 transition is reinstall-only. Every
   Canic-owned canister in a Fleet must come from one admitted release set
   before activation. Same-release interruption recovery, exact retry, backup
-  and restore remain required. Scheduled 0.109 is the first explicit
+  and restore remain required. Scheduled 0.110 is the first explicit
   one-predecessor-to-one-successor exception; no current release is adoptable
   until that line is implemented and published.
 
@@ -145,7 +145,7 @@ immutable source also contains the accepted 0.105 B1/B2 presenter, scope,
 authority and pure-policy hard cuts; the active changelog records that early
 inclusion rather than leaving it classified as unreleased.
 
-Scheduled 0.105 now owns framework-neutral caller-bound scoped local
+Published `v0.105.0` owns framework-neutral caller-bound scoped local
 application sessions directly after 0.104; presentation supplies no semantic
 dependency. B1 was captured against exact released `v0.104.1` and is now
 reconciled to exact B3 predecessor `v0.104.2`. Its complete
@@ -164,35 +164,82 @@ the synchronous facade and token-free generic consumer, converges the proof and
 session authority read, and deletes the subject-identity fallback across
 managed, Root and Store endpoint generation. B6 adds the separately
 Root-authorized paginated audit, bounded aggregate metrics and exact generation
-reconciliation. Current PocketIC observations keep one/midpoint/maximum local
-authorization at 180,797/186,749/187,112 instructions, retain physical stable
+reconciliation. Published `v0.105.0` PocketIC observations keep
+one/midpoint/maximum local authorization at 180,797/186,749/187,112
+instructions, retain physical stable
 memory at 3,329 pages under maximum state and bound one cleanup delivery to 128
-records. Controlled equal-path product builds measure 19,054,678 -> 19,236,127
-raw bytes, +181,449 and within the 256 KiB ceiling, with all four Candid hashes
-and lifecycle export sets unchanged. B7 proves one native identity can establish
-independent authority on both compatible managed targets while their common
-Root controller remains denied. Both sessions and exact receipts survive proof
-expiry and same-release upgrade without duplicate rows; target-local clear,
+records. Controlled equal-path `v0.104.2` -> `v0.105.0` product builds measure
+19,054,678 -> 19,236,127 raw bytes, +181,449 and within the 256 KiB ceiling,
+with all four Candid hashes and lifecycle export sets unchanged. B7 proves one
+native identity can establish independent authority on both compatible managed
+targets while their common Root controller remains denied. Both sessions and
+exact receipts survive proof expiry and same-release upgrade without duplicate rows; target-local clear,
 strict session expiry, bounded cleanup and non-resurrection finish with zero
-rows. B2-B7 are complete and the 0.105 implementation batch is closed.
+rows. B2-B7 are complete, the 0.105 implementation batch is closed and
+`v0.105.0` is published.
 
-The scheduled 0.106 B1 is approved to freeze current pool/platform provenance,
-measurement/reset protocol, horizon-qualified standby semantics and production
-reachability for a 1,000-Canister reserve Fleet. B2 execution is held pending
-accepted B1 and separate exact authorization for every external effect.
+The scheduled 0.106 B1 was accepted on 2026-08-20. Its immutable `v0.105.0` baseline, exact
+empty-topology `EmptyRootAdmissions` blocker, complete Q2 normative provenance
+matrix and complete current pool/state/scan/timer/encoding/snapshot inventory
+are captured under
+`docs/audits/working/0.106-fleet-estate-platform-qualification/`. Every Q2
+empirical cell remains pending B2; Q3/Q4 acceptance and the bounded local
+harness are complete. Accepted protocol `canic-0.106-q3q4-v1` freezes the cohort,
+censoring, seven-day horizon, margin and recovery-reserve rules plus the exact
+predecessor-built fixture hash and initialized memory observations. Its
+proposed operation, physical-asset, concurrency,
+fee/refund, reserve and funded-exposure ceilings are frozen; exact external
+network, identity and terminal-asset binding is a separate B2 execution gate.
+The focused
+Root uncertainty journey reuses one exact paid request and recovers its
+original Principal on request two. Local 1/8/16/32 creation and empty/installed
+reset cohorts, first excess and source/joint/destination controller transitions
+also pass. The terminal guard keeps both qualification canisters as unpublished
+test-only dependency leaves outside shipped role configuration. Q6 records
+unbounded pool failure text, the 64-byte handoff-receipt bound's 67-byte
+structural counterexample, unbounded terminal-receipt retention and the absent
+canonical receipt-map snapshot payload as accepted 0.109-owned constraints;
+0.106 does not repair them. B2 execution is held pending separate exact
+authorization for every external effect. The release-tree closeout restores
+the exact `v0.105.0` versions of every pre-existing locked package and
+classifies the co-delivered 0.108 B1 probe separately as an unpublished
+test-only leaf; neither the probe nor its direct test dependency enters a
+shipped role or the 0.106 protocol.
 
-The scheduled 0.107 line closes replay-safe Coordinator-backed root operating
+The scheduled 0.107 line closes the three deployment-readiness gaps exposed by
+the first read-only Toko integration pass: target- and Fleet-input-complete
+fresh-Fleet planning, structured NNS catalog inconsistency diagnostics and a
+bounded durable runtime whitelist. Its seven batches are estimated at 10-15
+engineering days excluding upstream release latency or separately approved
+live-IC qualification. B1 is complete and ready for maintainer acceptance: it
+freezes the exact plan/install grammar and digest, Root-or-controller managed
+role surface, memory ID 61, 256-principal/128-page/one-operation bounds and the
+smallest typed `ic-query 0.40.1` provenance addition. Test-only maximum
+encodings are 8,417 stable bytes, 4,072 status Candid bytes and 101 mutation
+Candid bytes. The read-only Toko baseline supplies 175 principals but no
+current Canic integration fixture. No production or stable-state mutation has
+begun; it waits for explicit B1 acceptance. Held 0.106 B2 effects remain
+independent and unauthorized.
+
+The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
-completed 0.103 and 0.104 plus accepted 0.106 B1 ownership/cost evidence, not
-0.106 B2, plus its own proof. Its public work adds Root/Coordinator command and
-status variants rather than funding methods.
+completed 0.103, 0.104 and 0.107 plus accepted 0.106 B1 ownership/cost
+evidence, not 0.106 B2, plus its own proof. Its public work adds
+Root/Coordinator command and
+status variants rather than funding methods. Its test-only B1 proof now passes
+intent/call/receipt interruption, exact caller binding and zero-accept replay
+with automatic refund. PocketIC 15.0.0 observes a 42,102,499,000-cycle exact
+call cost for the 1T fixture request, at most 12,460,866 cycles of Coordinator
+execution overhead and at most 5,227,404 cycles of root execution overhead.
+B1 proposes separate 100M-rounded execution allowances and remains at
+maintainer acceptance before production or stable-state work begins.
 
-Scheduled 0.108 owns indexed estates, parallel creation/reset, transfer and
+Scheduled 0.109 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
 bounded application retirement acknowledgement before ordinary uninstall;
 forced removal is separately authorized and permanently marked unqualified.
-Scheduled 0.109 then owns one stop-the-world exact predecessor/successor
-adoption before stateful production claims. Scheduled 0.110 publishes generic
+Scheduled 0.110 then owns one stop-the-world exact predecessor/successor
+adoption before stateful production claims. Scheduled 0.111 publishes generic
 supported observatory views/rendering for downstream Prequel Wars without a
 game dependency. Estate-budget replenishment, a product-frontend delivery
 handoff, transport, Workers, authentication profiles, blob/archive storage and
@@ -243,13 +290,15 @@ retry. Published B8 parses the complete Rust ownership set and freezes native
 constructors. Published `v0.104.2` also freezes registration method
 actions and rejects their disguised or duplicated use across applications,
 crates and executable fixtures. It also includes accepted 0.105 B1/B2 ahead of
-the remaining 0.105 batches; B3-B7 are now complete without an observatory
-dependency. 0.106 remains evidence-only
-until accepted B1, final 0.103/0.104 reconciliation and an approved external
-run plan. 0.107 requires
-its accepted inputs and own proof; 0.108 requires completed 0.107 plus
-application-retirement evidence; 0.109 requires accepted 0.108 and an exact
-released predecessor; and 0.110 requires accepted 0.109 closeout. Deferred
+the remaining 0.105 batches; published `v0.105.0` completes B3-B7 without an
+observatory dependency. 0.106 remains evidence-only: repository-local B1 is
+accepted and B2 stays held pending its separately approved external run plan.
+0.107 may begin
+from accepted 0.106 B1 and does not require the held B2 external effects;
+0.108 requires completed 0.107, its accepted inputs and own proof; 0.109
+requires completed 0.108 plus application-retirement evidence; 0.110 requires
+accepted 0.109 and an exact
+released predecessor; and 0.111 requires accepted 0.110 closeout. Deferred
 ideas authorize none of these mutations.
 
 ## Validation
@@ -679,12 +728,20 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-0.105 B2-B7 implementation, direct recovery evidence, propagation and cleanup
-are complete. The maintainer may run the complete release validation and
-human-owned version/tag/publication flow. Any validation correction stays
-inside the closed framework-neutral authority boundary; do not add a framework
-dependency, compatibility reader, new method identity or second authority
-owner.
+Published `v0.105.0` closes the framework-neutral authorization line. The
+maintainer accepted repository-local 0.106 B1 on 2026-08-20: protocol
+`canic-0.106-q3q4-v1` is frozen, and the exact empty-topology blocker plus four
+Q6 current-state constraints are assigned to 0.109. The operation,
+physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
+plus bounded creation/reset/controller harness and terminal source/dependency
+guard pass. Keep B2 held until a separate exact network, identity and
+terminal-disposition authorization exists. Begin scheduled 0.107 B1 from the
+accepted repository baseline: freeze the exact planner/install/whitelist and
+`ic-query` propagation contract before production or stable-state mutation.
+The renumbered 0.108 root-funding B1 proof remains complete and ready for
+maintainer acceptance, but its production work waits for 0.107 closeout. Do
+not add a production pool contract, run any remote qualification effect or
+begin 0.109.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

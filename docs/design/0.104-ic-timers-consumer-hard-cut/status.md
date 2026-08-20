@@ -101,11 +101,12 @@ B1 must deliver together:
    and synchronous lifecycle composition.
 3. 0.105 adds framework-neutral local application authorization.
 4. 0.106 qualifies platform behavior, costs, balances and bounded lanes.
-5. 0.107 closes replay-safe Coordinator-backed root operating funding.
-6. 0.108 implements reusable Fleet Subnet Canister estates and proves the
+5. 0.107 closes fresh-Fleet preflight and runtime-admission gaps.
+6. 0.108 closes replay-safe Coordinator-backed root operating funding.
+7. 0.109 implements reusable Fleet Subnet Canister estates and proves the
    10/100/1,000 progression.
-7. 0.109 qualifies one explicit stateful predecessor-to-successor adoption.
-8. 0.110 serves the generic Fleet observatory from every installed Canister.
+8. 0.110 qualifies one explicit stateful predecessor-to-successor adoption.
+9. 0.111 serves the generic Fleet observatory from every installed Canister.
 
 Unnumbered ideas remain outside this path. Historical releases, archived
 designs and deferred drafts retain their truthful old identities.

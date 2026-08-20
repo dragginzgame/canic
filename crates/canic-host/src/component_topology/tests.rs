@@ -40,6 +40,15 @@ component_role = "user_hub"
 maximum_instances = 3
 "#;
 
+const EMPTY_APPLICATION_CONFIG: &str = r#"
+[app]
+name = "reserve"
+
+[roles.root]
+kind = "root"
+package = "root"
+"#;
+
 fn config() -> ConfigModel {
     parse_config_model(CONFIG).expect("valid topology config")
 }
@@ -151,6 +160,18 @@ fn pre_creation_planner_derives_complete_topology_without_canister_principals() 
             ],
         ),
         Err(FleetTopologyPlanError::DuplicatePlacementSubnet { .. })
+    );
+}
+
+#[test]
+fn empty_application_topology_reports_the_current_projection_blocker() {
+    let config = parse_config_model(EMPTY_APPLICATION_CONFIG).expect("valid empty application");
+
+    std::assert_matches!(
+        plan_initial_fleet_topology(&config, vec![planned_root(5, Vec::new())]),
+        Err(FleetTopologyPlanError::Topology(
+            canic_core::bootstrap::compiled::ComponentTopologyError::EmptyRootAdmissions
+        ))
     );
 }
 

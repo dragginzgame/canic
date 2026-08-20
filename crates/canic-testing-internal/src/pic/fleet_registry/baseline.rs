@@ -16,6 +16,10 @@ const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 mod tests {
     use super::*;
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
+    #[cfg(test)]
+    use candid::Nat;
+    #[cfg(test)]
+    use candid::decode_args;
     use candid::{CandidType, Deserialize, decode_one, encode_one};
     #[cfg(test)]
     use canic::dto::authority_restore::{
@@ -109,6 +113,10 @@ mod tests {
         ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
         is_dead_pocket_ic_transport_error,
     };
+    #[cfg(test)]
+    use pocket_ic::{
+        CreateCanisterParams, CreateCanisterPlacement, common::rest::RawEffectivePrincipal,
+    };
 
     #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
@@ -121,6 +129,20 @@ mod tests {
     const ROOT_REMOVAL_MAX_SIMULATED_SECONDS: usize = 512;
     #[cfg(test)]
     const ROOT_REMOVAL_TICKS_PER_SECOND: usize = 4;
+    #[cfg(test)]
+    const QUALIFICATION_ASSET_CYCLES: u128 = 5_000_000_000_000;
+    #[cfg(test)]
+    const QUALIFICATION_FEE_CYCLES: u128 = 100_000_000;
+    #[cfg(test)]
+    const QUALIFICATION_RESERVE_CYCLES: u128 = 10_000_000_000_000;
+    #[cfg(test)]
+    const QUALIFICATION_WORKLOAD_PACKAGE: &str = "payload_limit_probe";
+    #[cfg(test)]
+    const QUALIFICATION_WORKLOAD_WASM_SHA256: [u8; 32] = [
+        0xe9, 0x6e, 0x05, 0x38, 0x2a, 0x8a, 0xcc, 0xfa, 0x13, 0xec, 0xf6, 0x7b, 0x24, 0xf9, 0xcb,
+        0x77, 0x11, 0x17, 0xbc, 0xa7, 0x12, 0xa9, 0x39, 0x5b, 0xf7, 0xd8, 0x27, 0x9c, 0x06, 0x48,
+        0x42, 0x06,
+    ];
 
     #[derive(CandidType)]
     enum RootCommandFragment {
@@ -751,13 +773,199 @@ mod tests {
     #[cfg(test)]
     #[derive(CandidType)]
     struct CyclesLedgerStubInitArgs {
-        canister_id: Principal,
+        canister_ids: Vec<Principal>,
         expected_root: Principal,
         expected_subnet: Principal,
+        pending_first_index: Option<u64>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Clone)]
+    struct QualificationCreateCanisterArgs {
+        from_subaccount: Option<[u8; 32]>,
+        created_at_time: Option<u64>,
+        amount: Nat,
+        creation_args: Option<QualificationCmcCreateCanisterArgs>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Clone)]
+    struct QualificationCmcCreateCanisterArgs {
+        settings: Option<QualificationCanisterSettings>,
+        subnet_selection: Option<QualificationSubnetSelection>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Clone)]
+    struct QualificationCanisterSettings {
+        controllers: Option<Vec<Principal>>,
+        compute_allocation: Option<Nat>,
+        memory_allocation: Option<Nat>,
+        freezing_threshold: Option<Nat>,
+        reserved_cycles_limit: Option<Nat>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Clone)]
+    enum QualificationSubnetSelection {
+        Subnet { subnet: Principal },
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Debug, Deserialize)]
+    struct QualificationCreateCanisterSuccess {
+        block_id: Nat,
+        canister_id: Principal,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Debug, Deserialize)]
+    enum QualificationCreateCanisterError {
+        Duplicate {
+            duplicate_of: Nat,
+            canister_id: Option<Principal>,
+        },
+        GenericError {
+            message: String,
+            error_code: Nat,
+        },
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    struct QualificationCanisterIdRecord {
+        canister_id: Principal,
     }
 
     #[test]
     fn prepared_mainnet_root_automatically_refills_one_exact_pool_asset() {
+        assert_mainnet_refill(false, 1);
+    }
+
+    #[test]
+    fn uncertain_mainnet_refill_reuses_the_exact_paid_request() {
+        assert_mainnet_refill(true, 2);
+    }
+
+    #[test]
+    fn qualification_ledger_preflight_keeps_1_8_16_32_lanes_independent() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let (_, cycles_ledger_wasm) = build_mainnet_refill_wasms();
+        // Protocol warm-up is a separate, excluded cohort.
+        assert_qualification_lane_cohort(&cycles_ledger_wasm, 1);
+        for width in [1, 8, 16, 32] {
+            assert_qualification_lane_cohort(&cycles_ledger_wasm, width);
+        }
+    }
+
+    #[test]
+    fn qualification_reset_preflight_keeps_1_8_16_32_lanes_independent() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workload_wasm = build_qualification_workload_wasm();
+        assert_eq!(workload_wasm.len(), 3_010_225);
+        assert_eq!(
+            wasm_hash(&workload_wasm),
+            QUALIFICATION_WORKLOAD_WASM_SHA256
+        );
+
+        // Each reset journey owns one separate, excluded protocol warm-up.
+        assert_qualification_reset_cohort(None, 1);
+        assert_qualification_reset_cohort(Some(&workload_wasm), 1);
+        for width in [1, 8, 16, 32] {
+            assert_qualification_reset_cohort(None, width);
+            assert_qualification_reset_cohort(Some(&workload_wasm), width);
+        }
+    }
+
+    #[test]
+    fn qualification_external_effect_envelope_uses_checked_arithmetic() {
+        let disposable_assets = qualification_journey_operations(&[1, 8, 16, 32], 3);
+        let mainnet_assets = qualification_journey_operations(&[1], 3);
+
+        assert_eq!(disposable_assets, 172);
+        assert_eq!(mainnet_assets, 4);
+        assert_eq!(
+            qualification_funded_exposure(disposable_assets),
+            2_590_086_000_000_000
+        );
+        assert_eq!(
+            qualification_funded_exposure(mainnet_assets),
+            70_002_000_000_000
+        );
+    }
+
+    #[test]
+    fn qualification_controller_transition_requires_exact_routing_evidence() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let pic = build_pic();
+        let subnet = *pic
+            .topology()
+            .get_app_subnets()
+            .first()
+            .expect("one application Subnet");
+        let source_root = pic.create_canister_on_subnet(None, None, subnet);
+        let destination_root = pic.create_canister_on_subnet(None, None, subnet);
+        let asset = pic.create_canister_on_subnet(None, None, subnet);
+        pic.set_controllers(asset, None, vec![source_root])
+            .expect("prepare source-controlled asset");
+
+        assert!(
+            qualification_controller_transition(&pic, asset, source_root, destination_root, None,)
+                .is_err()
+        );
+        assert_eq!(
+            pic.canister_status(asset, Some(source_root))
+                .expect("observe after missing routing evidence")
+                .settings
+                .controllers,
+            vec![source_root]
+        );
+
+        assert!(
+            qualification_controller_transition(
+                &pic,
+                asset,
+                source_root,
+                destination_root,
+                Some(Principal::from_slice(&[0x54; 29])),
+            )
+            .is_err()
+        );
+        assert_eq!(
+            pic.canister_status(asset, Some(source_root))
+                .expect("observe after contradictory routing evidence")
+                .settings
+                .controllers,
+            vec![source_root]
+        );
+
+        let observations = qualification_controller_transition(
+            &pic,
+            asset,
+            source_root,
+            destination_root,
+            Some(subnet),
+        )
+        .expect("exact same-Subnet routing evidence");
+        assert_eq!(observations[0], vec![source_root]);
+        let mut joint = observations[1].clone();
+        joint.sort();
+        let mut expected_joint = vec![source_root, destination_root];
+        expected_joint.sort();
+        assert_eq!(joint, expected_joint);
+        assert_eq!(observations[2], vec![destination_root]);
+        assert_eq!(pic.get_subnet(source_root), Some(subnet));
+        assert_eq!(pic.get_subnet(destination_root), Some(subnet));
+        assert_eq!(pic.get_subnet(asset), Some(subnet));
+        let terminal = pic
+            .canister_status(asset, Some(destination_root))
+            .expect("observe destination-controlled asset");
+        assert_eq!(terminal.module_hash, None);
+        assert_eq!(terminal.settings.controllers, vec![destination_root]);
+    }
+
+    #[cfg(test)]
+    fn assert_mainnet_refill(first_response_pending: bool, expected_request_count: u64) {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let (root_wasm, cycles_ledger_wasm) = build_mainnet_refill_wasms();
         let _ = build_test_wasm_store_wasm();
@@ -782,9 +990,10 @@ mod tests {
                     cycles_ledger,
                     cycles_ledger_wasm,
                     encode_one(CyclesLedgerStubInitArgs {
-                        canister_id: asset,
+                        canister_ids: vec![asset],
                         expected_root: root,
                         expected_subnet: root_subnet,
+                        pending_first_index: first_response_pending.then_some(0),
                     })
                     .expect("encode Cycles Ledger stub init"),
                     None,
@@ -823,7 +1032,383 @@ mod tests {
         let request_count: u64 = pic
             .query_candid(cycles_ledger, "request_count", ())
             .expect("query ledger request count");
-        assert_eq!(request_count, 1);
+        assert_eq!(request_count, expected_request_count);
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one bounded harness proves exact lane admission, contradiction and first excess"
+    )]
+    fn assert_qualification_lane_cohort(cycles_ledger_wasm: &[u8], width: usize) {
+        let pic = build_pic();
+        let subnet = *pic
+            .topology()
+            .get_app_subnets()
+            .first()
+            .expect("one application Subnet");
+        let root = Principal::from_slice(&[0x51; 29]);
+        let canister_ids = (0..width)
+            .map(|_| {
+                let canister_id = pic.create_canister_on_subnet(None, None, subnet);
+                pic.set_controllers(canister_id, None, vec![root])
+                    .expect("prepare one root-controlled lane result");
+                canister_id
+            })
+            .collect::<Vec<_>>();
+        let cycles_ledger = pic.create_canister_on_subnet(None, None, subnet);
+        pic.install_canister(
+            cycles_ledger,
+            cycles_ledger_wasm.to_vec(),
+            encode_one(CyclesLedgerStubInitArgs {
+                canister_ids: canister_ids.clone(),
+                expected_root: root,
+                expected_subnet: subnet,
+                pending_first_index: Some(0),
+            })
+            .expect("encode lane-stub init"),
+            None,
+        );
+
+        let first = qualification_creation_request(root, subnet, 1);
+        let mut wrong_controller = first.clone();
+        wrong_controller
+            .creation_args
+            .as_mut()
+            .and_then(|args| args.settings.as_mut())
+            .expect("complete controller fixture")
+            .controllers = Some(vec![Principal::from_slice(&[0x52; 29])]);
+        assert_qualification_generic_error(&pic, cycles_ledger, root, wrong_controller);
+
+        let mut wrong_subnet = first;
+        wrong_subnet
+            .creation_args
+            .as_mut()
+            .expect("complete Subnet fixture")
+            .subnet_selection = Some(QualificationSubnetSelection::Subnet {
+            subnet: Principal::from_slice(&[0x53; 29]),
+        });
+        assert_qualification_generic_error(&pic, cycles_ledger, root, wrong_subnet);
+
+        let requests = (0..width)
+            .map(|index| {
+                qualification_creation_request(
+                    root,
+                    subnet,
+                    u64::try_from(index + 1).expect("bounded lane timestamp"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let messages = requests
+            .iter()
+            .map(|request| {
+                pic.submit_call(
+                    cycles_ledger,
+                    root,
+                    "create_canister",
+                    encode_one(request).expect("encode lane request"),
+                )
+                .expect("submit independent lane")
+            })
+            .collect::<Vec<_>>();
+
+        let mut pending_request_index = None;
+        let mut completed_canisters = std::collections::BTreeSet::new();
+        for (index, message) in messages.into_iter().enumerate() {
+            let response = pic.await_call(message).expect("await independent lane");
+            let result = decode_one::<
+                Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError>,
+            >(&response)
+            .expect("decode lane response");
+            match result {
+                Err(QualificationCreateCanisterError::Duplicate {
+                    canister_id: None, ..
+                }) => {
+                    assert!(
+                        pending_request_index.replace(index).is_none(),
+                        "exactly one submitted lane may remain pending"
+                    );
+                }
+                Ok(success) => {
+                    assert!(success.block_id > 0_u8);
+                    assert!(canister_ids.contains(&success.canister_id));
+                    assert!(completed_canisters.insert(success.canister_id));
+                }
+                outcome => panic!("unexpected qualification lane outcome: {outcome:?}"),
+            }
+        }
+
+        let pending_request_index =
+            pending_request_index.expect("one lane must exercise uncertain response recovery");
+        let retry: Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError> =
+            pic.update_candid_as(
+                cycles_ledger,
+                root,
+                "create_canister",
+                (requests[pending_request_index].clone(),),
+            )
+            .expect("exact pending-lane retry transport");
+        let recovered_canister = match retry {
+            Err(QualificationCreateCanisterError::Duplicate {
+                canister_id: Some(canister_id),
+                ..
+            }) => canister_id,
+            outcome => panic!("unexpected exact-retry outcome: {outcome:?}"),
+        };
+        assert!(completed_canisters.insert(recovered_canister));
+        assert_eq!(completed_canisters.len(), width);
+        assert!(
+            canister_ids
+                .iter()
+                .all(|canister_id| completed_canisters.contains(canister_id))
+        );
+
+        let first_excess = qualification_creation_request(
+            root,
+            subnet,
+            u64::try_from(width + 1).expect("bounded excess timestamp"),
+        );
+        assert_qualification_generic_error(&pic, cycles_ledger, root, first_excess);
+
+        for canister_id in canister_ids {
+            assert_eq!(pic.get_subnet(canister_id), Some(subnet));
+            let status = pic
+                .canister_status(canister_id, Some(root))
+                .expect("observe one lane result");
+            assert_eq!(status.settings.controllers, vec![root]);
+        }
+
+        let request_count: u64 = pic
+            .query_candid(cycles_ledger, "request_count", ())
+            .expect("query bounded lane request count");
+        assert_eq!(
+            request_count,
+            u64::try_from(width + 4).expect("bounded request count")
+        );
+    }
+
+    #[cfg(test)]
+    fn assert_qualification_reset_cohort(workload_wasm: Option<&[u8]>, width: usize) {
+        assert!([1, 8, 16, 32].contains(&width));
+        let pic = build_pic();
+        let subnet = *pic
+            .topology()
+            .get_app_subnets()
+            .first()
+            .expect("one application Subnet");
+        let root = pic.create_canister_on_subnet(None, None, subnet);
+        let assets = (0..width)
+            .map(|_| {
+                let asset = pic
+                    .create_canister_with_params(
+                        None,
+                        CreateCanisterParams {
+                            cycles: Some(QUALIFICATION_ASSET_CYCLES),
+                            settings: None,
+                            placement: Some(CreateCanisterPlacement::SubnetId(subnet)),
+                        },
+                    )
+                    .expect("create exact-balance reset asset on selected Subnet");
+                pic.set_controllers(asset, None, vec![root])
+                    .expect("prepare exact Root-controlled reset asset");
+                if let Some(wasm) = workload_wasm {
+                    pic.install_canister(
+                        asset,
+                        wasm.to_vec(),
+                        encode_one(()).expect("encode workload init"),
+                        Some(root),
+                    );
+                    pic.tick();
+                }
+                asset
+            })
+            .collect::<Vec<_>>();
+
+        for asset in &assets {
+            let status = pic
+                .canister_status(*asset, Some(root))
+                .expect("freeze reset starting observation");
+            assert_eq!(format!("{:?}", status.status), "Running");
+            assert_eq!(status.settings.controllers, vec![root]);
+            assert_eq!(pic.get_subnet(*asset), Some(subnet));
+            assert_eq!(
+                status.module_hash.as_deref(),
+                workload_wasm.map(|_| QUALIFICATION_WORKLOAD_WASM_SHA256.as_slice())
+            );
+            let balance = pic.cycle_balance(*asset);
+            let top_up = QUALIFICATION_ASSET_CYCLES
+                .checked_sub(balance)
+                .expect("prepared fixture stays below reset starting balance");
+            assert_eq!(pic.add_cycles(*asset, top_up), QUALIFICATION_ASSET_CYCLES);
+            assert_eq!(pic.cycle_balance(*asset), QUALIFICATION_ASSET_CYCLES);
+        }
+
+        let messages = assets
+            .iter()
+            .map(|asset| {
+                pic.submit_call_with_effective_principal(
+                    Principal::management_canister(),
+                    RawEffectivePrincipal::CanisterId(asset.as_slice().to_vec()),
+                    root,
+                    "uninstall_code",
+                    encode_one(QualificationCanisterIdRecord {
+                        canister_id: *asset,
+                    })
+                    .expect("encode reset lane"),
+                )
+                .expect("submit independent reset lane")
+            })
+            .collect::<Vec<_>>();
+
+        for message in messages {
+            let response = pic
+                .await_call(message)
+                .expect("await independent reset lane");
+            decode_args::<()>(&response).expect("decode reset lane response");
+        }
+
+        for asset in assets {
+            let status = pic
+                .canister_status(asset, Some(root))
+                .expect("observe terminal reset asset");
+            assert_eq!(format!("{:?}", status.status), "Running");
+            assert_eq!(status.module_hash, None);
+            assert_eq!(status.settings.controllers, vec![root]);
+            assert_eq!(pic.get_subnet(asset), Some(subnet));
+            assert!(pic.cycle_balance(asset) <= QUALIFICATION_ASSET_CYCLES);
+        }
+    }
+
+    #[cfg(test)]
+    fn build_qualification_workload_wasm() -> Vec<u8> {
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let target_dir = test_target_dir(&workspace_root, "estate-qualification-reset");
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &[QUALIFICATION_WORKLOAD_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[],
+        );
+        read_wasm(
+            &target_dir,
+            QUALIFICATION_WORKLOAD_PACKAGE,
+            CanicWasmBuildProfile::Fast.target_dir_name(),
+        )
+    }
+
+    #[cfg(test)]
+    fn qualification_journey_operations(cohorts: &[u128], repetitions: u128) -> u128 {
+        cohorts
+            .iter()
+            .try_fold(1_u128, |operations, width| {
+                width
+                    .checked_mul(repetitions)
+                    .and_then(|measured| operations.checked_add(measured))
+            })
+            .expect("qualification operation count must fit u128")
+    }
+
+    #[cfg(test)]
+    fn qualification_funded_exposure(assets: u128) -> u128 {
+        let principal = assets
+            .checked_mul(3)
+            .and_then(|uses| uses.checked_mul(QUALIFICATION_ASSET_CYCLES))
+            .expect("qualification principal exposure must fit u128");
+        let fees = assets
+            .checked_mul(5)
+            .and_then(|rows| rows.checked_mul(QUALIFICATION_FEE_CYCLES))
+            .expect("qualification fee exposure must fit u128");
+        principal
+            .checked_add(fees)
+            .and_then(|total| total.checked_add(QUALIFICATION_RESERVE_CYCLES))
+            .expect("qualification funded exposure must fit u128")
+    }
+
+    #[cfg(test)]
+    fn qualification_creation_request(
+        root: Principal,
+        subnet: Principal,
+        created_at_time: u64,
+    ) -> QualificationCreateCanisterArgs {
+        QualificationCreateCanisterArgs {
+            from_subaccount: None,
+            created_at_time: Some(created_at_time),
+            amount: Nat::from(5_000_000_000_000_u64),
+            creation_args: Some(QualificationCmcCreateCanisterArgs {
+                settings: Some(QualificationCanisterSettings {
+                    controllers: Some(vec![root]),
+                    compute_allocation: None,
+                    memory_allocation: None,
+                    freezing_threshold: None,
+                    reserved_cycles_limit: None,
+                }),
+                subnet_selection: Some(QualificationSubnetSelection::Subnet { subnet }),
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_qualification_generic_error(
+        pic: &PocketIc,
+        cycles_ledger: Principal,
+        root: Principal,
+        request: QualificationCreateCanisterArgs,
+    ) {
+        let result: Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError> =
+            pic.update_candid_as(cycles_ledger, root, "create_canister", (request,))
+                .expect("qualification rejection transport");
+        assert!(matches!(
+            result,
+            Err(QualificationCreateCanisterError::GenericError { .. })
+        ));
+    }
+
+    #[cfg(test)]
+    fn qualification_controller_transition(
+        pic: &PocketIc,
+        asset: Principal,
+        source_root: Principal,
+        destination_root: Principal,
+        expected_subnet: Option<Principal>,
+    ) -> Result<Vec<Vec<Principal>>, &'static str> {
+        let expected_subnet = expected_subnet.ok_or("routing evidence is missing")?;
+        let actual_subnets = [
+            pic.get_subnet(asset),
+            pic.get_subnet(source_root),
+            pic.get_subnet(destination_root),
+        ];
+        if actual_subnets != [Some(expected_subnet); 3] {
+            return Err("routing evidence contradicts observed placement");
+        }
+
+        let initial = pic
+            .canister_status(asset, Some(source_root))
+            .map_err(|_| "source cannot observe asset")?
+            .settings
+            .controllers;
+        if initial != [source_root] {
+            return Err("source controller authority is stale");
+        }
+        pic.set_controllers(
+            asset,
+            Some(source_root),
+            vec![source_root, destination_root],
+        )
+        .map_err(|_| "joint controller transition failed")?;
+        let joint = pic
+            .canister_status(asset, Some(source_root))
+            .map_err(|_| "source cannot observe joint authority")?
+            .settings
+            .controllers;
+        pic.set_controllers(asset, Some(source_root), vec![destination_root])
+            .map_err(|_| "destination controller transition failed")?;
+        let destination = pic
+            .canister_status(asset, Some(destination_root))
+            .map_err(|_| "destination cannot observe final authority")?
+            .settings
+            .controllers;
+        Ok(vec![initial, joint, destination])
     }
 
     #[test]
