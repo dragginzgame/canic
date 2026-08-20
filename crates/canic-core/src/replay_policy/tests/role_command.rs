@@ -145,6 +145,15 @@ fn managed_auth_effects_own_exact_replay_contracts() {
         prepare.quota_policy,
         Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
     );
+
+    let runtime_whitelist =
+        command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "RuntimeWhitelist");
+    assert_eq!(
+        runtime_whitelist.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("runtime_whitelist.mutate.v1"),
+        }
+    );
 }
 
 #[test]

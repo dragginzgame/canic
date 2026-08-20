@@ -125,16 +125,18 @@ the configured cohort rejects, every returned Principal is unique, and every
 asset observation retains the requested physical Subnet and sole Root
 controller.
 
-The bounded reset preflight passes the same 1, 8, 16 and 32 cohorts separately
-for the empty control and exact-hash installed workload. Each asset is observed
-running on one selected application Subnet with the Root as sole controller;
+The B1 bounded reset preflight passed the same 1, 8, 16 and 32 cohorts
+separately for the empty control and exact-hash predecessor workload. Each
+asset was observed running on one selected application Subnet with the Root as
+sole controller;
 the separately accounted setup top-up then freezes exactly 5T cycles
 immediately before admission. Every management reset is submitted before any
 response is collected. Every terminal asset remains running, on the selected
 Subnet, Root-only and uninstalled, and its retained balance does not exceed the
-5T start. The workload builder also rejects any raw-Wasm size or SHA-256 drift.
-These are deterministic PocketIC lane and terminal-accounting facts, not
-throughput or platform-cost observations.
+5T start. The B1 capture rejected any raw-Wasm size or SHA-256 drift. Current-
+source harness runs retain the lane and terminal-accounting proof while
+validating the exact bytes they installed. These are deterministic PocketIC
+facts, not throughput or platform-cost observations.
 
 The local controller harness observes the exact transition
 `[source] -> [source, destination] -> [destination]` for an empty same-Subnet
@@ -145,9 +147,9 @@ facts; B2 must observe the separately authorized platform transition.
 ## Q3 Candidate Measurement Protocol
 
 The accepted protocol identity is `canic-0.106-q3q4-v1`. It became immutable
-when B1 was accepted on 2026-08-20. The local harness freezes the installed fixture's initialized
-heap and stable-memory observations below. No value below authorizes execution
-on a remote network.
+when B1 was accepted on 2026-08-20. The B1 capture froze the installed
+fixture's initialized heap and stable-memory observations below. No value below
+authorizes execution on a remote network.
 
 ### Networks, Cohorts And Samples
 
@@ -199,10 +201,12 @@ costs remain in the effect ledger but never enter a statistic.
   snapshot, 208,937,103 total memory bytes: 1,376,256 Wasm-memory bytes,
   201,392,128 stable-memory bytes, 64 global-memory bytes, 3,010,225 Wasm-binary
   bytes, zero custom-section bytes, 414 canister-history bytes, 3,145,728
-  Wasm-chunk-store bytes and zero snapshot bytes. The focused harness freezes
-  each value and the raw module hash. A mismatch in source, build fingerprint,
-  raw hash or initialized state invalidates the fixture rather than silently
-  selecting a replacement.
+  Wasm-chunk-store bytes and zero snapshot bytes. The B1 capture froze each
+  value and the raw module hash against exact `v0.105.0` source. Later-source
+  test runs verify their own installed bytes and do not rewrite or compare
+  themselves to this immutable predecessor observation. Reproduction of this
+  identity therefore requires the exact tagged source; a mismatch there
+  invalidates the fixture rather than silently selecting a replacement.
 
 The installed probe is a bounded representative Canic lifecycle workload, not
 a claim about every App. Any 0.109 funding recommendation derived from it must

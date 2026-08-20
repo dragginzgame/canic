@@ -99,6 +99,12 @@ The following focused commands pass:
 ```text
 cargo test -p canic-core runtime_whitelist -- --nocapture
   9 passed
+cargo test --locked -p canic-core replay_policy::tests::role_command -- --nocapture
+  10 passed
+cargo test --locked -p canic-core role_contract::tests::canonical_allocations_form_packed_owner_ledgers -- --exact --nocapture
+  1 passed
+cargo test --locked -p canic-core role_contract::tests::surplus_state_feature_allocates_normally -- --exact --nocapture
+  1 passed
 cargo test -p canic-core state_contract::tests::descriptors_exactly_cover_declared_core_memory_ids -- --nocapture
   1 passed
 cargo test -p canic-core state_contract::tests::runtime_bindings_and_fleet_state_descriptors_reference_canonical_data_types -- --nocapture
@@ -111,11 +117,19 @@ cargo check -p delegation_issuer_stub -p canic_icydb_lifecycle_probe
   passed
 cargo test -p canic-tests --test native_agent_delegation runtime_whitelist_is_durable_bounded_and_separate_from_application_sessions -- --nocapture
   1 passed against the pinned local PocketIC 15.0.0 server
+cargo test --locked -p canic-tests --test pic_ingress_payload_limits -- --nocapture
+  2 passed against the pinned local PocketIC 15.0.0 server
+cargo test --locked -p canic-testing-internal --lib pic::fleet_registry::baseline::tests::qualification_reset_preflight_keeps_1_8_16_32_lanes_independent -- --exact --nocapture
+  1 passed against the pinned local PocketIC 15.0.0 server
 cargo clippy -p canic-core -p canic --all-targets -- -D warnings
   passed
 cargo clippy -p delegation_issuer_stub --all-targets -- -D warnings
   passed
 cargo clippy -p canic-tests --test native_agent_delegation -- -D warnings
+  passed
+cargo clippy --locked -p canic-core -p canic-testing-internal --lib -- -D warnings
+  passed
+cargo clippy --locked -p canic-tests --test pic_ingress_payload_limits -- -D warnings
   passed
 bash scripts/ci/run-layering-guards.sh
   passed
