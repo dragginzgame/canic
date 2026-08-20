@@ -48,6 +48,7 @@ not selected through a facade feature.
 | `auth-issuer-canister-sig-create` | No | Issuer canister-signature token-proof creation. |
 | `auth-issuer-canister-sig-verify` | No | Issuer canister-signature token-proof verification. |
 | `auth-delegated-token-verify` | No | Delegated-token verification, including required chain-key and issuer-signature verification support. |
+| `internal-test-fixtures` | No | Repository qualification helpers that are excluded from product-role builds and grant no runtime capability. |
 
 The `control-plane` feature is the normal root-role selection. The narrower
 `fleet-coordinator-canister` and `wasm-store-canister` features exist for

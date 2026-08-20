@@ -232,6 +232,7 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
 
 /// Canonical replay-policy rows for managed Canister command variants.
 pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
+    response_idempotent("ApplicationSession", "auth.application_session.v1"),
     response_idempotent("ConfigureRuntime", "component_runtime.configure.v1"),
     intentionally_non_idempotent(
         "InstallDelegationProof",

@@ -430,7 +430,7 @@ fn canonical_plan_binds_exact_roots_placements_members_and_limits() {
 
     assert_eq!(
         crate::ids::ComponentDeploymentConfigurationDigest::from_bytes(hash).to_string(),
-        "71c9c85ebd7a4ff8445df3cb32c1b05eaf9462c568047a4c868855744e8cbe41"
+        "9a6ce99c1a02d9faf23d919ab34c8c3eb53f991d34a2cebdf17da2c58773a52a"
     );
 
     assert_eq!(
@@ -529,8 +529,8 @@ fn exact_root_batch_validation_returns_bounded_capacity_and_artifact_facts() {
     assert_eq!(
         hash,
         [
-            56, 62, 229, 20, 255, 138, 237, 163, 237, 11, 43, 6, 103, 35, 227, 70, 137, 144, 159,
-            139, 238, 99, 22, 4, 149, 162, 16, 250, 30, 115, 132, 51,
+            203, 166, 209, 96, 121, 22, 135, 202, 185, 68, 5, 123, 246, 192, 36, 36, 159, 246, 132,
+            43, 227, 146, 219, 56, 112, 94, 226, 220, 174, 129, 42, 168,
         ]
     );
 

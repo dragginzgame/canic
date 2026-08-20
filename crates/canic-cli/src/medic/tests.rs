@@ -1284,6 +1284,7 @@ auth-root-canister-sig-verify = ["canic-core/auth-root-canister-sig-verify"]
 auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
 auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
 auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
+internal-test-fixtures = ["canic-core/internal-test-fixtures"]
 
 [dependencies]
 canic-core = {{ path = "../canic-core" }}
@@ -1312,6 +1313,7 @@ auth-issuer-canister-sig-verify = []
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
 blob-storage = []
 blob-storage-billing = ["blob-storage"]
+internal-test-fixtures = []
 "#,
             env!("CARGO_PKG_VERSION")
         ),
