@@ -16,8 +16,9 @@ use crate::{
     domain::policy::pure::auth::application_authorization::{
         ApplicationProofEligibilityError, ApplicationReplayDisposition,
         ApplicationSessionAdmissionDecision, ApplicationSessionAdmissionError,
-        ApplicationSessionAdmissionInput, decide_application_session_admission,
-        narrow_application_session_scopes, validate_application_proof_eligibility,
+        ApplicationSessionAdmissionInput, ApplicationSessionCapacity,
+        decide_application_session_admission, narrow_application_session_scopes,
+        validate_application_proof_eligibility,
     },
     model::auth::application_authorization::{
         ApplicationAuthorityModelError, CanonicalApplicationScopes, LocalApplicationReplay,
@@ -148,11 +149,16 @@ impl ApplicationSessionWorkflow {
                 .map_err(ApplicationSessionWorkflowError::AdmissionDenied)?;
 
         let current_session = AuthStateOps::application_session(caller)?;
-        let capacity = AuthStateOps::application_session_capacity(caller)?;
+        let occupancy = AuthStateOps::application_session_occupancy(caller)?;
         let admission = decide_application_session_admission(ApplicationSessionAdmissionInput {
             replay: ApplicationReplayDisposition::Absent,
             replacing_existing_session: current_session.is_some(),
-            capacity,
+            capacity: ApplicationSessionCapacity {
+                active_global: occupancy.active_global,
+                active_for_subject: occupancy.active_for_subject,
+                replay_global: occupancy.replay_global,
+                replay_for_subject: occupancy.replay_for_subject,
+            },
         })
         .map_err(ApplicationSessionWorkflowError::AdmissionDenied)?;
 

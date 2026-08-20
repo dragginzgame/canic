@@ -15,10 +15,6 @@
 use super::{AuthState, AuthStateOps};
 use crate::{
     cdk::types::Principal,
-    domain::policy::pure::auth::application_authorization::{
-        ApplicationAuthorityBindingTransition, ApplicationSessionCapacity,
-        decide_application_authority_binding_transition,
-    },
     model::auth::application_authorization::{
         ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
         LocalApplicationReplay, LocalApplicationSession, MAX_ACTIVE_APPLICATION_SESSIONS,
@@ -101,6 +97,15 @@ pub struct ApplicationSessionPage {
     pub total: usize,
 }
 
+/// Current physical occupancy projected from the reconstructed storage indexes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationSessionOccupancy {
+    pub active_global: usize,
+    pub active_for_subject: usize,
+    pub replay_global: usize,
+    pub replay_for_subject: usize,
+}
+
 /// Closed corruption, capacity and atomic-commit failures for application-session state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ApplicationSessionStateError {
@@ -178,33 +183,38 @@ impl AuthStateOps {
         AuthState::application_authority_generation()
     }
 
-    /// Reconcile one locally activated protected binding and advance at most once.
-    pub fn reconcile_application_authority_binding(
-        current: LocalApplicationAuthorityBinding,
-    ) -> Result<ApplicationAuthorityBindingTransition, ApplicationSessionStateError> {
-        let mut state = AuthState::application_authorization_state();
-        let previous = state
+    /// Return the current locally persisted application authority binding.
+    pub fn application_authority_binding()
+    -> Result<Option<LocalApplicationAuthorityBinding>, ApplicationSessionStateError> {
+        AuthState::application_authorization_state()
             .authority_binding
             .as_ref()
             .map(authority_binding_from_record)
-            .transpose()?;
-        let transition =
-            decide_application_authority_binding_transition(previous.as_ref(), &current);
-        if transition == ApplicationAuthorityBindingTransition::Unchanged {
-            return Ok(transition);
-        }
-        if transition == ApplicationAuthorityBindingTransition::AdvanceGeneration {
-            state.authority_generation = state
-                .authority_generation
-                .checked_add(1)
-                .ok_or(ApplicationSessionStateError::AuthorityGenerationExhausted)?;
-        }
+            .transpose()
+    }
+
+    /// Persist one binding without changing the current authority generation.
+    pub fn set_application_authority_binding(
+        current: LocalApplicationAuthorityBinding,
+    ) -> Result<(), ApplicationSessionStateError> {
+        let mut state = AuthState::application_authorization_state();
+        state.authority_binding = Some(authority_binding_to_record(&current));
+        commit_validated_state(state)
+    }
+
+    /// Persist one binding and atomically advance its authority generation.
+    pub fn advance_application_authority_binding_generation(
+        current: LocalApplicationAuthorityBinding,
+    ) -> Result<(), ApplicationSessionStateError> {
+        let mut state = AuthState::application_authorization_state();
+        state.authority_generation = state
+            .authority_generation
+            .checked_add(1)
+            .ok_or(ApplicationSessionStateError::AuthorityGenerationExhausted)?;
         state.authority_binding = Some(authority_binding_to_record(&current));
         commit_validated_state(state)?;
-        if transition == ApplicationAuthorityBindingTransition::AdvanceGeneration {
-            record_application_session_generation_invalidation();
-        }
-        Ok(transition)
+        record_application_session_generation_invalidation();
+        Ok(())
     }
 
     /// Resolve one canonical retained session by exact transport caller without cleanup.
@@ -306,10 +316,10 @@ impl AuthStateOps {
     }
 
     /// Return current physical occupancy used by target-local admission policy.
-    pub fn application_session_capacity(
+    pub fn application_session_occupancy(
         subject: Principal,
-    ) -> Result<ApplicationSessionCapacity, ApplicationSessionStateError> {
-        with_indexes(|indexes| ApplicationSessionCapacity {
+    ) -> Result<ApplicationSessionOccupancy, ApplicationSessionStateError> {
+        with_indexes(|indexes| ApplicationSessionOccupancy {
             active_global: indexes.session_by_caller.len(),
             active_for_subject: indexes
                 .session_count_by_subject
@@ -353,7 +363,7 @@ impl AuthStateOps {
             return Err(ApplicationSessionStateError::ReplayAlreadyExists);
         }
 
-        let capacity = Self::application_session_capacity(session.authenticated_subject())?;
+        let capacity = Self::application_session_occupancy(session.authenticated_subject())?;
         if capacity.replay_for_subject >= MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT {
             return Err(ApplicationSessionStateError::ReplaySubjectCapacity);
         }
@@ -1012,7 +1022,7 @@ mod tests {
             Ok(ApplicationReplayResolution::Conflict)
         );
         assert_eq!(
-            AuthStateOps::application_session_capacity(p(1))
+            AuthStateOps::application_session_occupancy(p(1))
                 .unwrap()
                 .replay_global,
             2
@@ -1054,7 +1064,7 @@ mod tests {
         assert_eq!(page.entries[0].transport_caller(), p(2));
         assert_eq!(page.entries[1].transport_caller(), p(3));
         assert_eq!(
-            AuthStateOps::application_session_capacity(p(1))
+            AuthStateOps::application_session_occupancy(p(1))
                 .unwrap()
                 .active_global,
             3
@@ -1066,25 +1076,26 @@ mod tests {
     }
 
     #[test]
-    fn authority_binding_reconciliation_advances_once_and_invalidates_exact_retry() {
+    fn authority_binding_mutations_preserve_or_advance_generation_explicitly() {
         let _lock = seams::lock();
         let _state = StateGuard::empty();
         AuthStateOps::commit_application_session(session(1, 2, 3, 10), replay(1, 2, 70)).unwrap();
         let original = binding(&["app:read", "app:write"], 900);
+        assert_eq!(AuthStateOps::application_authority_binding(), Ok(None));
+        AuthStateOps::set_application_authority_binding(original.clone()).unwrap();
         assert_eq!(
-            AuthStateOps::reconcile_application_authority_binding(original),
-            Ok(ApplicationAuthorityBindingTransition::Initialize)
+            AuthStateOps::application_authority_binding(),
+            Ok(Some(original))
         );
         assert_eq!(AuthStateOps::application_authority_generation(), 0);
+        let narrowed = binding(&["app:read"], 900);
+        AuthStateOps::advance_application_authority_binding_generation(narrowed.clone()).unwrap();
         assert_eq!(
-            AuthStateOps::reconcile_application_authority_binding(binding(&["app:read"], 900)),
-            Ok(ApplicationAuthorityBindingTransition::AdvanceGeneration)
+            AuthStateOps::application_authority_binding(),
+            Ok(Some(narrowed.clone()))
         );
         assert_eq!(AuthStateOps::application_authority_generation(), 1);
-        assert_eq!(
-            AuthStateOps::reconcile_application_authority_binding(binding(&["app:read"], 900)),
-            Ok(ApplicationAuthorityBindingTransition::Unchanged)
-        );
+        AuthStateOps::set_application_authority_binding(narrowed).unwrap();
         assert_eq!(AuthStateOps::application_authority_generation(), 1);
         assert_eq!(
             AuthStateOps::resolve_application_replay([2; 32], p(1), p(1), [3; 32], 20),
@@ -1108,7 +1119,10 @@ mod tests {
         AuthStateOps::restore_application_session_state().unwrap();
 
         assert_eq!(
-            AuthStateOps::reconcile_application_authority_binding(binding(&["app:read"], 900)),
+            AuthStateOps::advance_application_authority_binding_generation(binding(
+                &["app:read"],
+                900,
+            )),
             Err(ApplicationSessionStateError::AuthorityGenerationExhausted)
         );
         let retained = AuthState::application_authorization_state();
@@ -1202,7 +1216,7 @@ mod tests {
             }
         );
         assert_eq!(
-            AuthStateOps::application_session_capacity(p(1))
+            AuthStateOps::application_session_occupancy(p(1))
                 .unwrap()
                 .replay_global,
             1
@@ -1236,7 +1250,7 @@ mod tests {
             Err(ApplicationSessionStateError::ReplaySubjectCapacity)
         );
         assert_eq!(AuthStateOps::application_session(p(1)), Ok(Some(retained)));
-        let capacity = AuthStateOps::application_session_capacity(p(1)).unwrap();
+        let capacity = AuthStateOps::application_session_occupancy(p(1)).unwrap();
         assert_eq!(capacity.replay_global, 256);
         assert_eq!(capacity.replay_for_subject, 256);
     }

@@ -18,10 +18,21 @@ if [ "${#partially_staged[@]}" -ne 0 ]; then
     exit 1
 fi
 
+staged_paths="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-staged.XXXXXX")"
+stage_after_format="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-stage-after-format.XXXXXX")"
 before="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-before.XXXXXX")"
+formatted="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-formatted.XXXXXX")"
 after="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-after.XXXXXX")"
 format_log="$(mktemp "${TMPDIR:-/tmp}/canic-pre-commit-format.XXXXXX")"
-trap 'rm -f -- "$before" "$after" "$format_log"' EXIT
+trap 'rm -f -- "$staged_paths" "$stage_after_format" "$before" "$formatted" "$after" "$format_log"' EXIT
+
+git diff --cached --name-only -z --diff-filter=ACMR >"$staged_paths"
+cp "$staged_paths" "$stage_after_format"
+
+declare -A unstaged_before=()
+while IFS= read -r -d '' path; do
+    unstaged_before["$path"]=1
+done < <(git diff --name-only -z --diff-filter=ACMR)
 
 git diff --binary --no-ext-diff >"$before"
 
@@ -31,12 +42,28 @@ if ! make fmt >"$format_log" 2>&1; then
     exit 1
 fi
 
+git diff --binary --no-ext-diff >"$formatted"
+
+while IFS= read -r -d '' path; do
+    if [ -z "${unstaged_before[$path]+x}" ]; then
+        printf '%s\0' "$path" >>"$stage_after_format"
+    fi
+done < <(git diff --name-only -z --diff-filter=ACMR)
+
+if [ -s "$stage_after_format" ]; then
+    git add --pathspec-from-file="$stage_after_format" --pathspec-file-nul
+fi
+
 git diff --binary --no-ext-diff >"$after"
 if ! cmp -s "$before" "$after"; then
-    echo "Formatting changed working-tree files." >&2
-    echo "Review and stage the formatted changes, then commit again." >&2
+    echo "Formatting changed a file that already had unstaged edits." >&2
+    echo "Review that file and stage it explicitly before committing again." >&2
     git status --short >&2
     exit 1
 fi
 
-echo "Pre-commit formatting passed."
+if cmp -s "$before" "$formatted"; then
+    echo "Pre-commit formatting passed."
+else
+    echo "Pre-commit formatting updated the staged snapshot."
+fi
