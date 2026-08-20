@@ -19,7 +19,6 @@ use crate::{
     },
     model::runtime_whitelist::{
         MAX_RUNTIME_WHITELIST_PAGE, MAX_RUNTIME_WHITELIST_PRINCIPALS, RuntimeWhitelistAction,
-        RuntimeWhitelistMutationResponseModel,
     },
     ops::{config::ConfigOps, storage::runtime_whitelist::RuntimeWhitelistOps},
 };
@@ -60,7 +59,7 @@ impl RuntimeWhitelistWorkflow {
         if !decision.replayed {
             RuntimeWhitelistOps::replace(decision.state)?;
         }
-        Ok(response_to_dto(decision.response))
+        Ok(RuntimeWhitelistOps::response_to_dto(decision.response))
     }
 
     /// Return one bounded canonical membership page.
@@ -114,17 +113,6 @@ fn status_from_state(
 fn require_state() -> Result<crate::model::runtime_whitelist::RuntimeWhitelistState, InternalError>
 {
     RuntimeWhitelistOps::load().ok_or_else(InternalError::unavailable)
-}
-
-const fn response_to_dto(
-    response: RuntimeWhitelistMutationResponseModel,
-) -> RuntimeWhitelistMutationResponse {
-    RuntimeWhitelistMutationResponse {
-        outcome: response.outcome,
-        principal: response.principal,
-        revision: response.revision,
-        membership_digest: response.membership_digest,
-    }
 }
 
 const fn policy_error(error: RuntimeWhitelistPolicyError) -> InternalError {

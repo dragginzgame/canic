@@ -4,7 +4,7 @@
 //! Does not own: stable-memory access, endpoint authorization, or Candid dispatch.
 //! Boundary: pure policy returns complete model records; ops converts them to storage and DTOs.
 
-use crate::{cdk::types::Principal, dto::runtime_whitelist::RuntimeWhitelistMutationOutcome};
+use crate::cdk::types::Principal;
 
 /// Current product schema. Pre-1.0 changes hard-cut this value in place.
 pub const RUNTIME_WHITELIST_SCHEMA_VERSION: u32 = 1;
@@ -20,6 +20,15 @@ pub const MAX_RUNTIME_WHITELIST_RECORD_BYTES: u32 = 32 * 1024;
 pub enum RuntimeWhitelistAction {
     Add,
     Remove,
+}
+
+/// Model-owned semantic outcome of one accepted mutation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuntimeWhitelistMutationOutcomeModel {
+    Added,
+    AlreadyPresent,
+    Removed,
+    AlreadyAbsent,
 }
 
 impl RuntimeWhitelistAction {
@@ -43,7 +52,7 @@ pub struct RuntimeWhitelistOperation {
 /// Model-owned exact mutation response.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeWhitelistMutationResponseModel {
-    pub outcome: RuntimeWhitelistMutationOutcome,
+    pub outcome: RuntimeWhitelistMutationOutcomeModel,
     pub principal: Principal,
     pub revision: u64,
     pub membership_digest: [u8; 32],

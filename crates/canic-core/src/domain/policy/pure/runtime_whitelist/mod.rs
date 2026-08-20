@@ -6,10 +6,10 @@
 
 use crate::{
     cdk::types::Principal,
-    dto::runtime_whitelist::RuntimeWhitelistMutationOutcome,
     model::runtime_whitelist::{
         MAX_RUNTIME_WHITELIST_PRINCIPALS, RUNTIME_WHITELIST_SCHEMA_VERSION, RuntimeWhitelistAction,
-        RuntimeWhitelistMutationResponseModel, RuntimeWhitelistOperation, RuntimeWhitelistState,
+        RuntimeWhitelistMutationOutcomeModel, RuntimeWhitelistMutationResponseModel,
+        RuntimeWhitelistOperation, RuntimeWhitelistState,
     },
 };
 use sha2::{Digest, Sha256};
@@ -101,33 +101,33 @@ pub fn validate(state: &RuntimeWhitelistState) -> Result<(), RuntimeWhitelistPol
             })
             .is_ok();
         let outcome_consistent = match operation.response.outcome {
-            RuntimeWhitelistMutationOutcome::Added
-            | RuntimeWhitelistMutationOutcome::AlreadyPresent => present,
-            RuntimeWhitelistMutationOutcome::Removed
-            | RuntimeWhitelistMutationOutcome::AlreadyAbsent => !present,
+            RuntimeWhitelistMutationOutcomeModel::Added
+            | RuntimeWhitelistMutationOutcomeModel::AlreadyPresent => present,
+            RuntimeWhitelistMutationOutcomeModel::Removed
+            | RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent => !present,
         };
         if !outcome_consistent {
             return Err(RuntimeWhitelistPolicyError::InvalidRetainedOperation);
         }
         let (action, expected_revision) = match operation.response.outcome {
-            RuntimeWhitelistMutationOutcome::Added => (
+            RuntimeWhitelistMutationOutcomeModel::Added => (
                 RuntimeWhitelistAction::Add,
                 state
                     .revision
                     .checked_sub(1)
                     .ok_or(RuntimeWhitelistPolicyError::InvalidRetainedOperation)?,
             ),
-            RuntimeWhitelistMutationOutcome::AlreadyPresent => {
+            RuntimeWhitelistMutationOutcomeModel::AlreadyPresent => {
                 (RuntimeWhitelistAction::Add, state.revision)
             }
-            RuntimeWhitelistMutationOutcome::Removed => (
+            RuntimeWhitelistMutationOutcomeModel::Removed => (
                 RuntimeWhitelistAction::Remove,
                 state
                     .revision
                     .checked_sub(1)
                     .ok_or(RuntimeWhitelistPolicyError::InvalidRetainedOperation)?,
             ),
-            RuntimeWhitelistMutationOutcome::AlreadyAbsent => {
+            RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent => {
                 (RuntimeWhitelistAction::Remove, state.revision)
             }
         };
@@ -174,21 +174,21 @@ pub fn mutate(
         principals.binary_search_by(|candidate| candidate.as_slice().cmp(principal.as_slice()));
     let (outcome, changed) = match (action, position) {
         (RuntimeWhitelistAction::Add, Ok(_)) => {
-            (RuntimeWhitelistMutationOutcome::AlreadyPresent, false)
+            (RuntimeWhitelistMutationOutcomeModel::AlreadyPresent, false)
         }
         (RuntimeWhitelistAction::Add, Err(index)) => {
             if principals.len() == MAX_RUNTIME_WHITELIST_PRINCIPALS {
                 return Err(RuntimeWhitelistPolicyError::CapacityExhausted);
             }
             principals.insert(index, principal);
-            (RuntimeWhitelistMutationOutcome::Added, true)
+            (RuntimeWhitelistMutationOutcomeModel::Added, true)
         }
         (RuntimeWhitelistAction::Remove, Ok(index)) => {
             principals.remove(index);
-            (RuntimeWhitelistMutationOutcome::Removed, true)
+            (RuntimeWhitelistMutationOutcomeModel::Removed, true)
         }
         (RuntimeWhitelistAction::Remove, Err(_)) => {
-            (RuntimeWhitelistMutationOutcome::AlreadyAbsent, false)
+            (RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent, false)
         }
     };
     let revision = if changed {
@@ -291,7 +291,7 @@ mod tests {
         .expect("add");
         assert_eq!(
             added.response.outcome,
-            RuntimeWhitelistMutationOutcome::Added
+            RuntimeWhitelistMutationOutcomeModel::Added
         );
         assert_eq!(added.response.revision, 1);
         let replay = mutate(
@@ -316,7 +316,7 @@ mod tests {
         .expect("idempotent add");
         assert_eq!(
             present.response.outcome,
-            RuntimeWhitelistMutationOutcome::AlreadyPresent
+            RuntimeWhitelistMutationOutcomeModel::AlreadyPresent
         );
         assert_eq!(present.response.revision, 1);
 
@@ -330,7 +330,7 @@ mod tests {
         .expect("remove");
         assert_eq!(
             removed.response.outcome,
-            RuntimeWhitelistMutationOutcome::Removed
+            RuntimeWhitelistMutationOutcomeModel::Removed
         );
         assert_eq!(removed.response.revision, 2);
         validate(&removed.state).expect("removed state remains canonical");
@@ -345,7 +345,7 @@ mod tests {
         .expect("idempotent remove");
         assert_eq!(
             absent.response.outcome,
-            RuntimeWhitelistMutationOutcome::AlreadyAbsent
+            RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent
         );
         assert_eq!(absent.response.revision, 2);
         validate(&absent.state).expect("idempotent result remains canonical");

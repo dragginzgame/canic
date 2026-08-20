@@ -6,12 +6,14 @@
 
 use crate::{
     InternalError,
+    dto::runtime_whitelist::{RuntimeWhitelistMutationOutcome, RuntimeWhitelistMutationResponse},
     model::runtime_whitelist::{
-        RuntimeWhitelistMutationResponseModel, RuntimeWhitelistOperation, RuntimeWhitelistState,
+        RuntimeWhitelistMutationOutcomeModel, RuntimeWhitelistMutationResponseModel,
+        RuntimeWhitelistOperation, RuntimeWhitelistState,
     },
     storage::stable::runtime_whitelist::{
-        RuntimeWhitelistMutationResponseRecord, RuntimeWhitelistOperationRecord,
-        RuntimeWhitelistRecord, RuntimeWhitelistStore,
+        RuntimeWhitelistMutationOutcomeRecord, RuntimeWhitelistMutationResponseRecord,
+        RuntimeWhitelistOperationRecord, RuntimeWhitelistRecord, RuntimeWhitelistStore,
     },
 };
 
@@ -41,6 +43,18 @@ impl RuntimeWhitelistOps {
             Err(InternalError::unavailable())
         }
     }
+
+    /// Project one internal accepted response onto the public wire contract.
+    pub(crate) const fn response_to_dto(
+        response: RuntimeWhitelistMutationResponseModel,
+    ) -> RuntimeWhitelistMutationResponse {
+        RuntimeWhitelistMutationResponse {
+            outcome: model_outcome_to_dto(response.outcome),
+            principal: response.principal,
+            revision: response.revision,
+            membership_digest: response.membership_digest,
+        }
+    }
 }
 
 fn record_to_model(record: RuntimeWhitelistRecord) -> RuntimeWhitelistState {
@@ -55,7 +69,7 @@ fn record_to_model(record: RuntimeWhitelistRecord) -> RuntimeWhitelistState {
                 operation_id: operation.operation_id,
                 request_hash: operation.request_hash,
                 response: RuntimeWhitelistMutationResponseModel {
-                    outcome: operation.result.outcome,
+                    outcome: record_outcome_to_model(operation.result.outcome),
                     principal: operation.result.principal,
                     revision: operation.result.revision,
                     membership_digest: operation.result.membership_digest,
@@ -76,12 +90,61 @@ fn model_to_record(state: RuntimeWhitelistState) -> RuntimeWhitelistRecord {
                 operation_id: operation.operation_id,
                 request_hash: operation.request_hash,
                 result: RuntimeWhitelistMutationResponseRecord {
-                    outcome: operation.response.outcome,
+                    outcome: model_outcome_to_record(operation.response.outcome),
                     principal: operation.response.principal,
                     revision: operation.response.revision,
                     membership_digest: operation.response.membership_digest,
                 },
             }),
+    }
+}
+
+const fn record_outcome_to_model(
+    outcome: RuntimeWhitelistMutationOutcomeRecord,
+) -> RuntimeWhitelistMutationOutcomeModel {
+    match outcome {
+        RuntimeWhitelistMutationOutcomeRecord::Added => RuntimeWhitelistMutationOutcomeModel::Added,
+        RuntimeWhitelistMutationOutcomeRecord::AlreadyPresent => {
+            RuntimeWhitelistMutationOutcomeModel::AlreadyPresent
+        }
+        RuntimeWhitelistMutationOutcomeRecord::Removed => {
+            RuntimeWhitelistMutationOutcomeModel::Removed
+        }
+        RuntimeWhitelistMutationOutcomeRecord::AlreadyAbsent => {
+            RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent
+        }
+    }
+}
+
+const fn model_outcome_to_record(
+    outcome: RuntimeWhitelistMutationOutcomeModel,
+) -> RuntimeWhitelistMutationOutcomeRecord {
+    match outcome {
+        RuntimeWhitelistMutationOutcomeModel::Added => RuntimeWhitelistMutationOutcomeRecord::Added,
+        RuntimeWhitelistMutationOutcomeModel::AlreadyPresent => {
+            RuntimeWhitelistMutationOutcomeRecord::AlreadyPresent
+        }
+        RuntimeWhitelistMutationOutcomeModel::Removed => {
+            RuntimeWhitelistMutationOutcomeRecord::Removed
+        }
+        RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent => {
+            RuntimeWhitelistMutationOutcomeRecord::AlreadyAbsent
+        }
+    }
+}
+
+const fn model_outcome_to_dto(
+    outcome: RuntimeWhitelistMutationOutcomeModel,
+) -> RuntimeWhitelistMutationOutcome {
+    match outcome {
+        RuntimeWhitelistMutationOutcomeModel::Added => RuntimeWhitelistMutationOutcome::Added,
+        RuntimeWhitelistMutationOutcomeModel::AlreadyPresent => {
+            RuntimeWhitelistMutationOutcome::AlreadyPresent
+        }
+        RuntimeWhitelistMutationOutcomeModel::Removed => RuntimeWhitelistMutationOutcome::Removed,
+        RuntimeWhitelistMutationOutcomeModel::AlreadyAbsent => {
+            RuntimeWhitelistMutationOutcome::AlreadyAbsent
+        }
     }
 }
 
@@ -108,5 +171,25 @@ mod tests {
         .state;
 
         assert_eq!(record_to_model(model_to_record(accepted.clone())), accepted);
+    }
+
+    #[test]
+    fn model_response_projects_to_the_exact_public_outcome() {
+        let response = RuntimeWhitelistMutationResponseModel {
+            outcome: RuntimeWhitelistMutationOutcomeModel::Removed,
+            principal: Principal::from_slice(&[4; 29]),
+            revision: 7,
+            membership_digest: [5; 32],
+        };
+
+        assert_eq!(
+            RuntimeWhitelistOps::response_to_dto(response),
+            RuntimeWhitelistMutationResponse {
+                outcome: RuntimeWhitelistMutationOutcome::Removed,
+                principal: Principal::from_slice(&[4; 29]),
+                revision: 7,
+                membership_digest: [5; 32],
+            }
+        );
     }
 }
