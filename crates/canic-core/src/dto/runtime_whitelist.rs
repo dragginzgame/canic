@@ -17,7 +17,7 @@ pub enum RuntimeWhitelistCommand {
     Remove(RuntimeWhitelistMutationRequest),
 }
 
-/// Stable semantic outcome of one accepted mutation.
+/// Public semantic outcome of one accepted mutation.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RuntimeWhitelistMutationOutcome {
     Added,

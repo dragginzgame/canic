@@ -98,7 +98,7 @@ The following focused commands pass:
 
 ```text
 cargo test -p canic-core runtime_whitelist -- --nocapture
-  8 passed
+  9 passed
 cargo test -p canic-core state_contract::tests::descriptors_exactly_cover_declared_core_memory_ids -- --nocapture
   1 passed
 cargo test -p canic-core state_contract::tests::runtime_bindings_and_fleet_state_descriptors_reference_canonical_data_types -- --nocapture
@@ -116,6 +116,8 @@ cargo clippy -p canic-core -p canic --all-targets -- -D warnings
 cargo clippy -p delegation_issuer_stub --all-targets -- -D warnings
   passed
 cargo clippy -p canic-tests --test native_agent_delegation -- -D warnings
+  passed
+bash scripts/ci/run-layering-guards.sh
   passed
 cargo test --locked -p canic --test changelog_governance -- --nocapture
   1 passed

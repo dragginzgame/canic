@@ -63,6 +63,17 @@ fn test_fleet() -> FleetKey {
     }
 }
 
+fn maximum_runtime_whitelist_principal(index: usize) -> Principal {
+    let mut bytes = [0_u8; 29];
+    bytes[..8].copy_from_slice(
+        &u64::try_from(index)
+            .expect("fixture index fits u64")
+            .to_be_bytes(),
+    );
+    bytes[8..].fill(u8::try_from(index % 251).expect("bounded fixture byte"));
+    Principal::from_slice(&bytes)
+}
+
 // Returns the repository root so wire-surface fixtures can be read from disk.
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -213,6 +224,28 @@ fn runtime_whitelist_candid_uses_the_bounded_managed_role_contract() {
     let status = candid_type_env::<RuntimeWhitelistStatusResponse>();
     assert!(status.contains("principals") && status.contains("maximum_principals"));
     assert!(!status.contains("operation_id") && !status.contains("request_hash"));
+
+    let maximum_principals = (0..256)
+        .map(maximum_runtime_whitelist_principal)
+        .collect::<Vec<_>>();
+    let maximum_status = encode_one(RuntimeWhitelistStatusResponse {
+        principals: Page {
+            entries: maximum_principals[..128].to_vec(),
+            total: 256,
+        },
+        revision: u64::MAX,
+        membership_digest: [0xfb; 32],
+        maximum_principals: 256,
+    })
+    .expect("maximum runtime-whitelist status Candid");
+    let maximum_request = encode_one(RuntimeWhitelistMutationRequest {
+        principal: maximum_principals[255],
+        expected_revision: u64::MAX,
+        operation_id: [0xfa; 32],
+    })
+    .expect("maximum runtime-whitelist request Candid");
+    assert_eq!(maximum_status.len(), 4_072);
+    assert_eq!(maximum_request.len(), 101);
 }
 
 #[test]

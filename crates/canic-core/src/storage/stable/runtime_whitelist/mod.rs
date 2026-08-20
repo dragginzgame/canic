@@ -8,7 +8,6 @@ use crate::{
     cdk::structures::{
         DefaultMemoryImpl, btreemap::BTreeMap as StableBtreeMap, memory::VirtualMemory,
     },
-    dto::runtime_whitelist::RuntimeWhitelistMutationOutcome,
     model::runtime_whitelist::MAX_RUNTIME_WHITELIST_RECORD_BYTES,
     role_contract::allocation::memory::runtime_whitelist::RUNTIME_WHITELIST_ID,
     storage::prelude::*,
@@ -28,10 +27,19 @@ eager_static! {
     )));
 }
 
+/// Stable semantic outcome of one accepted mutation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RuntimeWhitelistMutationOutcomeRecord {
+    Added,
+    AlreadyPresent,
+    Removed,
+    AlreadyAbsent,
+}
+
 /// Exact retained response for one accepted operation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RuntimeWhitelistMutationResponseRecord {
-    pub outcome: RuntimeWhitelistMutationOutcome,
+    pub outcome: RuntimeWhitelistMutationOutcomeRecord,
     pub principal: Principal,
     pub revision: u64,
     pub membership_digest: [u8; 32],
@@ -108,13 +116,9 @@ impl RuntimeWhitelistStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::{
-        page::Page,
-        runtime_whitelist::{RuntimeWhitelistMutationRequest, RuntimeWhitelistStatusResponse},
-    };
 
     #[test]
-    fn maximum_current_record_and_public_shapes_fit_the_frozen_bounds() {
+    fn maximum_current_record_fits_the_frozen_bound() {
         let principals = (0..256).map(principal).collect::<Vec<_>>();
         let record = RuntimeWhitelistRecord {
             schema_version: 1,
@@ -125,7 +129,7 @@ mod tests {
                 operation_id: [0xfe; 32],
                 request_hash: [0xfd; 32],
                 result: RuntimeWhitelistMutationResponseRecord {
-                    outcome: RuntimeWhitelistMutationOutcome::AlreadyPresent,
+                    outcome: RuntimeWhitelistMutationOutcomeRecord::AlreadyPresent,
                     principal: principals[255],
                     revision: u64::MAX,
                     membership_digest: [0xfc; 32],
@@ -133,29 +137,8 @@ mod tests {
             }),
         };
         let stable_bytes = crate::cdk::serialize::serialize(&record).expect("record CBOR");
-        let status_bytes = candid::encode_one(RuntimeWhitelistStatusResponse {
-            principals: Page {
-                entries: principals[..128].to_vec(),
-                total: 256,
-            },
-            revision: u64::MAX,
-            membership_digest: [0xfb; 32],
-            maximum_principals: 256,
-        })
-        .expect("status Candid");
-        let request_bytes = candid::encode_one(RuntimeWhitelistMutationRequest {
-            principal: principals[255],
-            expected_revision: u64::MAX,
-            operation_id: [0xfa; 32],
-        })
-        .expect("request Candid");
-
         assert_eq!(stable_bytes.len(), 8_417);
-        assert_eq!(status_bytes.len(), 4_072);
-        assert_eq!(request_bytes.len(), 101);
         assert!(stable_bytes.len() <= MAX_RUNTIME_WHITELIST_RECORD_BYTES as usize);
-        assert!(status_bytes.len() <= crate::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES);
-        assert!(request_bytes.len() <= crate::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES);
     }
 
     fn principal(index: usize) -> Principal {
