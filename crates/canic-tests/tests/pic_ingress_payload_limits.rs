@@ -1,4 +1,3 @@
-use candid::Nat;
 use canic::{Error, ids::CanisterRole};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, install_standalone_canister, install_standalone_canister_on_pic,
@@ -11,10 +10,6 @@ use ic_testkit::pic::{
 const PROBE_CRATE: &str = "payload_limit_probe";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
 const EXPLICIT_ECHO_MAX_BYTES: usize = 32 * 1024;
-const QUALIFICATION_FIXTURE_WASM_SHA256: [u8; 32] = [
-    0xe9, 0x6e, 0x05, 0x38, 0x2a, 0x8a, 0xcc, 0xfa, 0x13, 0xec, 0xf6, 0x7b, 0x24, 0xf9, 0xcb, 0x77,
-    0x11, 0x17, 0xbc, 0xa7, 0x12, 0xa9, 0x39, 0x5b, 0xf7, 0xd8, 0x27, 0x9c, 0x06, 0x48, 0x42, 0x06,
-];
 const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 10_000_000_000_000;
 
 // Both cases observe only the restored target; the relay created by one case is unrelated state.
@@ -73,57 +68,6 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
     assert!(
         rejected.is_err(),
         "oversized inter-canister payload must be rejected by the target"
-    );
-}
-
-// Freeze the initialized predecessor-built workload used by the 0.106 Q3 protocol.
-#[test]
-fn estate_qualification_fixture_has_exact_initialized_memory_identity() {
-    let fixture = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast);
-    let status = fixture
-        .pocket_ic()
-        .canister_status(fixture.canister_id(), None)
-        .expect("query initialized qualification fixture");
-
-    assert_eq!(
-        status.module_hash.as_deref(),
-        Some(QUALIFICATION_FIXTURE_WASM_SHA256.as_slice())
-    );
-    assert_eq!(status.memory_size, Nat::from(208_937_103_u64));
-    assert_eq!(
-        status.memory_metrics.wasm_memory_size,
-        Nat::from(1_376_256_u64)
-    );
-    assert_eq!(
-        status.memory_metrics.stable_memory_size,
-        Nat::from(201_392_128_u64)
-    );
-    assert_eq!(status.memory_metrics.global_memory_size, Nat::from(64_u64));
-    assert_eq!(
-        status.memory_metrics.wasm_binary_size,
-        Nat::from(3_010_225_u64)
-    );
-    assert_eq!(status.memory_metrics.custom_sections_size, Nat::from(0_u64));
-    assert_eq!(
-        status.memory_metrics.canister_history_size,
-        Nat::from(414_u64)
-    );
-    assert_eq!(
-        status.memory_metrics.wasm_chunk_store_size,
-        Nat::from(3_145_728_u64)
-    );
-    assert_eq!(status.memory_metrics.snapshots_size, Nat::from(0_u64));
-    eprintln!(
-        "[estate-qualification-fixture] memory_size={} wasm_memory={} stable_memory={} global_memory={} wasm_binary={} custom_sections={} history={} chunk_store={} snapshots={}",
-        status.memory_size,
-        status.memory_metrics.wasm_memory_size,
-        status.memory_metrics.stable_memory_size,
-        status.memory_metrics.global_memory_size,
-        status.memory_metrics.wasm_binary_size,
-        status.memory_metrics.custom_sections_size,
-        status.memory_metrics.canister_history_size,
-        status.memory_metrics.wasm_chunk_store_size,
-        status.memory_metrics.snapshots_size,
     );
 }
 

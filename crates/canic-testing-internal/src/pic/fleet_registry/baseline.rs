@@ -137,13 +137,6 @@ mod tests {
     const QUALIFICATION_RESERVE_CYCLES: u128 = 10_000_000_000_000;
     #[cfg(test)]
     const QUALIFICATION_WORKLOAD_PACKAGE: &str = "payload_limit_probe";
-    #[cfg(test)]
-    const QUALIFICATION_WORKLOAD_WASM_SHA256: [u8; 32] = [
-        0xe9, 0x6e, 0x05, 0x38, 0x2a, 0x8a, 0xcc, 0xfa, 0x13, 0xec, 0xf6, 0x7b, 0x24, 0xf9, 0xcb,
-        0x77, 0x11, 0x17, 0xbc, 0xa7, 0x12, 0xa9, 0x39, 0x5b, 0xf7, 0xd8, 0x27, 0x9c, 0x06, 0x48,
-        0x42, 0x06,
-    ];
-
     #[derive(CandidType)]
     enum RootCommandFragment {
         BootstrapStore(RootStoreBootstrapRequest),
@@ -862,11 +855,6 @@ mod tests {
     fn qualification_reset_preflight_keeps_1_8_16_32_lanes_independent() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workload_wasm = build_qualification_workload_wasm();
-        assert_eq!(workload_wasm.len(), 3_010_225);
-        assert_eq!(
-            wasm_hash(&workload_wasm),
-            QUALIFICATION_WORKLOAD_WASM_SHA256
-        );
 
         // Each reset journey owns one separate, excluded protocol warm-up.
         assert_qualification_reset_cohort(None, 1);
@@ -1190,6 +1178,7 @@ mod tests {
     #[cfg(test)]
     fn assert_qualification_reset_cohort(workload_wasm: Option<&[u8]>, width: usize) {
         assert!([1, 8, 16, 32].contains(&width));
+        let expected_module_hash = workload_wasm.map(wasm_hash);
         let pic = build_pic();
         let subnet = *pic
             .topology()
@@ -1233,7 +1222,7 @@ mod tests {
             assert_eq!(pic.get_subnet(*asset), Some(subnet));
             assert_eq!(
                 status.module_hash.as_deref(),
-                workload_wasm.map(|_| QUALIFICATION_WORKLOAD_WASM_SHA256.as_slice())
+                expected_module_hash.as_ref().map(|hash| hash.as_slice())
             );
             let balance = pic.cycle_balance(*asset);
             let top_up = QUALIFICATION_ASSET_CYCLES

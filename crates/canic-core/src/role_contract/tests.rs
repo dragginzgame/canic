@@ -160,7 +160,7 @@ fn canonical_allocations_form_packed_owner_ledgers() {
     assert_eq!(
         ids(AllocationOwner::CanicCore),
         (allocation::CANIC_CORE_MIN_ID
-            ..=allocation::memory::async_job_recovery::ASYNC_JOB_RECOVERY_ID)
+            ..=allocation::memory::runtime_whitelist::RUNTIME_WHITELIST_ID)
             .collect::<Vec<_>>()
     );
 }
@@ -497,7 +497,7 @@ fn surplus_state_feature_allocates_normally() {
         allocation_ids(&contract.allocations),
         vec![
             30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 55, 56, 57, 58,
-            60,
+            60, 61,
         ]
     );
 }

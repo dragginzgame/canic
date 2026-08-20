@@ -254,6 +254,7 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    response_idempotent("RuntimeWhitelist", "runtime_whitelist.mutate.v1"),
 ];
 
 /// Canonical replay-policy rows for Wasm Store command variants.
