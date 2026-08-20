@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - The 0.105 authorization state path now composes pure binding and admission
   policy in workflow while storage ops expose only neutral occupancy and exact
   mutations; workflow tests use an ops-owned state seam instead of importing
-  stable records.
+  stable records. Managed-command replay policy, role-feature fixtures and
+  documentation, and frozen canonical identities now propagate the accepted
+  application-session config and test-only feature contract.
 
 - The formatting pre-commit hook now refreshes the staged snapshot after
   `make fmt`, so the ordinary `git add .` then `git commit` flow does not fail

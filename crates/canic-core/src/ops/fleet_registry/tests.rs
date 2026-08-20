@@ -294,7 +294,7 @@ fn initial_services_publish_as_one_canonical_registry_revision() {
                 .expect("published version")
                 .content_hash,
         ),
-        "98adff7973bce47c3ad807101c49c07a3574498c5f8104c318fdcd90a3b0118b"
+        "cd23f326cc9c570ff8eb1a159793acd5c29630e48a95fa78712054c03db369f1"
     );
 
     std::assert_matches!(
@@ -562,7 +562,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "0eee880efb941ed2d3391b53fa8c7c415ffbd600bde63807fa5a681c1ed0f5bc"
+        "4f31f2a1e8136b26f0d3cfdf1f46c31fba4f9cc0e74e161ed1cb1c4dbf1aa2f3"
     );
 }
 

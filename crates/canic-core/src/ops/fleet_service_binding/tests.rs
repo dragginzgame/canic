@@ -543,8 +543,8 @@ fn compiles_complete_mode_compatible_initial_services_in_canonical_order() {
     assert_eq!(
         receipts[0].receipt_content_hash,
         [
-            166, 136, 10, 151, 230, 206, 132, 114, 248, 141, 176, 138, 147, 210, 38, 93, 139, 163,
-            18, 227, 204, 247, 154, 59, 41, 114, 251, 12, 97, 153, 41, 5,
+            13, 227, 22, 118, 180, 142, 196, 110, 37, 93, 191, 97, 204, 10, 178, 95, 20, 86, 101,
+            48, 92, 35, 171, 183, 104, 200, 227, 49, 27, 240, 179, 201,
         ]
     );
     let services = compile_initial(&config, &registry, &plan, [10; 32], &receipts)

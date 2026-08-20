@@ -848,6 +848,10 @@ impl ApplicationSessionTestStateGuard {
     }
 
     /// Install one replay record for a workflow test without exposing stable records upward.
+    #[expect(
+        clippy::unused_self,
+        reason = "the receiver proves the scoped state-restoration guard is held"
+    )]
     pub fn install_replay(
         &self,
         proof_fingerprint: [u8; 32],

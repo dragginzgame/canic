@@ -264,15 +264,15 @@ fn canonical_spec_and_topology_hashes_match_frozen_golden_values() {
 
     assert_eq!(
         hex_bytes(topology.component_specs[0].spec_hash),
-        "c7c76c00e156c56f76d97601ace207a854b501d80e8acfc849c8e6cca5dd11b0",
+        "1eb1344874c92de6a4cfe039f0761f5e14e34d1e9e5fa09eed135952df65b435",
     );
     assert_eq!(
         hex_bytes(topology.component_specs[1].spec_hash),
-        "938046a0febe19bb17380024dff3f5458d84fab5f22829f1c1c381c5c7fb07b8",
+        "662f725d751caadaa910b4eec2cbf6139733a87aec14dc77891fc6706d65253d",
     );
     assert_eq!(
         topology.digest().expect("topology digest").to_string(),
-        "436945fa61c71c65b079ddcd633e973ffa1114850564ebd0f28c9bfc49b20e08",
+        "8d8450ea375f8d0899da6b4eeede3858fe86fea77955d34093c2adf99045015c",
     );
 }
 

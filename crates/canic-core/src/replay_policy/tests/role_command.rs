@@ -107,7 +107,16 @@ fn coordinator_long_running_intents_are_operation_replay_protected() {
 }
 
 #[test]
-fn managed_auth_effects_preserve_their_existing_replay_contracts() {
+fn managed_auth_effects_own_exact_replay_contracts() {
+    let application_session =
+        command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "ApplicationSession");
+    assert_eq!(
+        application_session.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("auth.application_session.v1"),
+        }
+    );
+
     let install = command_entry(
         MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
         "InstallDelegationProof",
