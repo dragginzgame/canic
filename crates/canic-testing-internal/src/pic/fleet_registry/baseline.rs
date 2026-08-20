@@ -1222,7 +1222,7 @@ mod tests {
             assert_eq!(pic.get_subnet(*asset), Some(subnet));
             assert_eq!(
                 status.module_hash.as_deref(),
-                expected_module_hash.as_ref().map(|hash| hash.as_slice())
+                expected_module_hash.as_deref()
             );
             let balance = pic.cycle_balance(*asset);
             let top_up = QUALIFICATION_ASSET_CYCLES
