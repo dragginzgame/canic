@@ -1,95 +1,50 @@
 //! Module: access::auth::identity
 //!
-//! Responsibility: resolve authenticated subjects from raw callers and sessions.
-//! Does not own: token verification, endpoint predicates, or public error mapping.
-//! Boundary: `access::auth` calls this before evaluating caller predicates.
+//! Responsibility: validate whether a principal may act as a local application subject.
+//! Does not own: session resolution, token verification, endpoint predicates, or policy.
+//! Boundary: explicit application authorization checks this current topology fact.
 
-use super::{
-    AuthenticatedIdentitySource, DelegatedSessionSubjectRejection, ResolvedAuthenticatedIdentity,
-};
+use super::ApplicationSubjectRejection;
 use crate::{
     cdk::types::Principal,
-    ops::{
-        runtime::env::EnvOps,
-        runtime::metrics::auth::{
-            record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
-        },
-        storage::{auth::AuthStateOps, children::CanisterChildrenOps},
-    },
+    ops::{runtime::env::EnvOps, storage::children::CanisterChildrenOps},
 };
 
-/// resolve_authenticated_identity
-///
-/// Resolve transport caller and authenticated subject for user auth checks.
-#[must_use]
-pub(super) fn resolve_authenticated_identity(
-    transport_caller: Principal,
-) -> ResolvedAuthenticatedIdentity {
-    resolve_authenticated_identity_at(transport_caller, crate::ops::ic::IcOps::now_secs())
-}
-
-pub(super) fn resolve_authenticated_identity_at(
-    transport_caller: Principal,
-    now_secs: u64,
-) -> ResolvedAuthenticatedIdentity {
-    if let Some(session) = AuthStateOps::delegated_session(transport_caller, now_secs) {
-        if validate_delegated_session_subject(session.delegated_pid).is_ok() {
-            return ResolvedAuthenticatedIdentity {
-                transport_caller,
-                authenticated_subject: session.delegated_pid,
-                identity_source: AuthenticatedIdentitySource::DelegatedSession,
-            };
-        }
-
-        AuthStateOps::clear_delegated_session(transport_caller);
-        record_session_fallback_invalid_subject();
-    }
-
-    record_session_fallback_raw_caller();
-    ResolvedAuthenticatedIdentity {
-        transport_caller,
-        authenticated_subject: transport_caller,
-        identity_source: AuthenticatedIdentitySource::RawCaller,
-    }
-}
-
-/// validate_delegated_session_subject
-///
-/// Reject obvious canister and infrastructure identities for delegated user sessions.
-pub(super) fn validate_delegated_session_subject(
+/// Reject obvious canister and infrastructure identities for local application sessions.
+pub(super) fn validate_application_subject(
     subject: Principal,
-) -> Result<(), DelegatedSessionSubjectRejection> {
+) -> Result<(), ApplicationSubjectRejection> {
     if subject == Principal::anonymous() {
-        return Err(DelegatedSessionSubjectRejection::Anonymous);
+        return Err(ApplicationSubjectRejection::Anonymous);
     }
 
     if subject == Principal::management_canister() {
-        return Err(DelegatedSessionSubjectRejection::ManagementCanister);
+        return Err(ApplicationSubjectRejection::ManagementCanister);
     }
 
     if try_canister_self().is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::LocalCanister);
+        return Err(ApplicationSubjectRejection::LocalCanister);
     }
 
     let env = EnvOps::snapshot();
     if env.record.root_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::RootCanister);
+        return Err(ApplicationSubjectRejection::RootCanister);
     }
     if env.record.parent_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::ParentCanister);
+        return Err(ApplicationSubjectRejection::ParentCanister);
     }
     if env.record.subnet_pid.is_some_and(|pid| pid == subject) {
-        return Err(DelegatedSessionSubjectRejection::SubnetCanister);
+        return Err(ApplicationSubjectRejection::SubnetCanister);
     }
     if env
         .record
         .fleet_subnet_root_pid
         .is_some_and(|pid| pid == subject)
     {
-        return Err(DelegatedSessionSubjectRejection::FleetSubnetRootCanister);
+        return Err(ApplicationSubjectRejection::FleetSubnetRootCanister);
     }
     if CanisterChildrenOps::contains_pid(&subject) {
-        return Err(DelegatedSessionSubjectRejection::DirectChildCanister);
+        return Err(ApplicationSubjectRejection::DirectChildCanister);
     }
 
     Ok(())

@@ -27,6 +27,7 @@ pub enum CanicFeatureKey {
     BlobStorageBilling,
     ControlPlane,
     FleetCoordinatorCanister,
+    InternalTestFixtures,
     Sharding,
     WasmStoreCanister,
 }
@@ -57,6 +58,7 @@ pub enum RoleCapabilityKey {
     FleetCoordinator,
     Icrc21,
     Index,
+    LocalApplicationAuthorization,
     RoleAttestationSigner,
     RoleAttestationVerifier,
     Root,
@@ -78,6 +80,7 @@ impl RoleCapabilityKey {
             Self::FleetCoordinator => "FleetCoordinator",
             Self::Icrc21 => "Icrc21",
             Self::Index => "Index",
+            Self::LocalApplicationAuthorization => "LocalApplicationAuthorization",
             Self::RoleAttestationSigner => "RoleAttestationSigner",
             Self::RoleAttestationVerifier => "RoleAttestationVerifier",
             Self::Root => "Root",

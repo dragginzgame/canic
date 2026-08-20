@@ -121,6 +121,11 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::StateBearing,
     ),
     feature(
+        CanicFeatureKey::InternalTestFixtures,
+        "internal-test-fixtures",
+        CanicFeatureEffect::NoState,
+    ),
+    feature(
         CanicFeatureKey::Sharding,
         "sharding",
         CanicFeatureEffect::StateBearing,
@@ -171,6 +176,12 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
         "auth.delegated_token_verifier",
         CanicFeatureKey::AuthDelegatedTokenVerify,
         "delegated-token verifiers verify delegated-token root proof material",
+    ),
+    requirement(
+        RoleCapabilityKey::LocalApplicationAuthorization,
+        "auth.local_application_authorization",
+        CanicFeatureKey::AuthDelegatedTokenVerify,
+        "local application-session establishment verifies delegated-token authority",
     ),
     requirement(
         RoleCapabilityKey::RoleAttestationSigner,
@@ -520,6 +531,7 @@ impl CanicFeatureKey {
         Self::BlobStorageBilling,
         Self::ControlPlane,
         Self::FleetCoordinatorCanister,
+        Self::InternalTestFixtures,
         Self::Sharding,
         Self::WasmStoreCanister,
     ];

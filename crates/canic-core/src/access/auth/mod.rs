@@ -1,53 +1,116 @@
 //! Module: access::auth
 //!
-//! Responsibility: resolve endpoint caller identity and enforce auth predicates.
+//! Responsibility: enforce auth predicates and expose the synchronous local application decision.
 //! Does not own: endpoint response mapping, operation replay safety, or storage schema.
 //! Boundary: access expressions call auth predicates before endpoint workflow execution.
 
 mod attestation;
 mod identity;
+#[cfg(feature = "internal-test-fixtures")]
+mod measurement;
 mod predicates;
 mod token;
 
 use crate::{access::AccessError, cdk::types::Principal};
 use std::fmt;
 
-///
-/// AuthenticatedIdentitySource
-///
-/// Source used to resolve the authenticated endpoint subject.
-/// Owned by access auth and stored in access evaluation context.
-///
+pub use crate::{
+    domain::policy::pure::auth::application_authorization::{
+        AuthorizedApplicationSubject, LocalApplicationAuthorizationDecision,
+        LocalApplicationAuthorizationDenial,
+    },
+    model::auth::application_authorization::{
+        ApplicationScope, ApplicationScopeError, ApplicationScopeRef, CanonicalApplicationScopes,
+    },
+};
+use crate::{
+    domain::policy::pure::auth::application_authorization::{
+        LocalApplicationAuthorizationPolicyInput,
+        authorize_local_application as authorize_local_application_policy,
+    },
+    ops::{auth::AuthOps, ic::IcOps, storage::auth::AuthStateOps},
+};
+#[cfg(feature = "internal-test-fixtures")]
+#[doc(hidden)]
+pub use measurement::measure_local_application_authorization_denial;
 
+/// Public synchronous request for one caller-bound local application decision.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AuthenticatedIdentitySource {
-    RawCaller,
-    DelegatedSession,
+pub struct LocalApplicationAuthorizationRequest<'a> {
+    pub observed_transport_caller: Principal,
+    pub required_scope: ApplicationScopeRef<'a>,
+}
+
+/// Authorize one local application call without parsing payloads or mutating state.
+#[must_use]
+pub fn authorize_local_application(
+    request: LocalApplicationAuthorizationRequest<'_>,
+) -> LocalApplicationAuthorizationDecision {
+    let actual_caller = IcOps::msg_caller();
+    let now_ns = IcOps::now_nanos();
+    if actual_caller == Principal::anonymous() || actual_caller != request.observed_transport_caller
+    {
+        return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
+    }
+
+    let authority = match AuthOps::local_application_authorization_authority() {
+        Ok(Some(authority)) => authority,
+        Ok(None) => {
+            return authorize_with_values(request, actual_caller, now_ns, false, None, None, false);
+        }
+        Err(_) => {
+            return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
+        }
+    };
+    let Ok(session) = AuthStateOps::application_session(actual_caller) else {
+        return authorize_with_values(request, actual_caller, now_ns, true, None, None, false);
+    };
+    let subject_admissible = session.as_ref().is_some_and(|session| {
+        validate_application_subject(session.authenticated_subject()).is_ok()
+    });
+    authorize_with_values(
+        request,
+        actual_caller,
+        now_ns,
+        true,
+        Some(&authority.snapshot),
+        session.as_ref(),
+        subject_admissible,
+    )
+}
+
+fn authorize_with_values(
+    request: LocalApplicationAuthorizationRequest<'_>,
+    actual_caller: Principal,
+    now_ns: u64,
+    capability_enabled: bool,
+    authority: Option<
+        &crate::model::auth::application_authorization::LocalApplicationAuthoritySnapshot,
+    >,
+    session: Option<&crate::model::auth::application_authorization::LocalApplicationSession>,
+    subject_admissible: bool,
+) -> LocalApplicationAuthorizationDecision {
+    authorize_local_application_policy(LocalApplicationAuthorizationPolicyInput {
+        actual_caller,
+        observed_caller: request.observed_transport_caller,
+        now_ns,
+        capability_enabled,
+        authority,
+        session,
+        subject_admissible,
+        required_scope: request.required_scope,
+    })
 }
 
 ///
-/// ResolvedAuthenticatedIdentity
+/// ApplicationSubjectRejection
 ///
-/// Transport caller plus resolved authenticated subject for access evaluation.
-/// Owned by access auth and returned to endpoint access plumbing.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ResolvedAuthenticatedIdentity {
-    pub transport_caller: Principal,
-    pub authenticated_subject: Principal,
-    pub identity_source: AuthenticatedIdentitySource,
-}
-
-///
-/// DelegatedSessionSubjectRejection
-///
-/// Reason a delegated session subject cannot be accepted as a user identity.
+/// Reason an application subject cannot be accepted as a user identity.
 /// Owned by access auth and used to reject infrastructure principals.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DelegatedSessionSubjectRejection {
+pub enum ApplicationSubjectRejection {
     Anonymous,
     ManagementCanister,
     LocalCanister,
@@ -58,7 +121,7 @@ pub enum DelegatedSessionSubjectRejection {
     DirectChildCanister,
 }
 
-impl fmt::Display for DelegatedSessionSubjectRejection {
+impl fmt::Display for ApplicationSubjectRejection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let reason = match self {
             Self::Anonymous => "anonymous principals are not allowed",
@@ -74,23 +137,11 @@ impl fmt::Display for DelegatedSessionSubjectRejection {
     }
 }
 
-/// resolve_authenticated_identity
+/// validate_application_subject
 ///
-/// Resolve transport caller and authenticated subject for user auth checks.
-#[must_use]
-pub fn resolve_authenticated_identity(
-    transport_caller: Principal,
-) -> ResolvedAuthenticatedIdentity {
-    identity::resolve_authenticated_identity(transport_caller)
-}
-
-/// validate_delegated_session_subject
-///
-/// Reject obvious canister and infrastructure identities for delegated user sessions.
-pub fn validate_delegated_session_subject(
-    subject: Principal,
-) -> Result<(), DelegatedSessionSubjectRejection> {
-    identity::validate_delegated_session_subject(subject)
+/// Reject obvious canister and infrastructure identities for local application sessions.
+pub fn validate_application_subject(subject: Principal) -> Result<(), ApplicationSubjectRejection> {
+    identity::validate_application_subject(subject)
 }
 
 pub(crate) fn delegated_token_verified(
@@ -154,230 +205,35 @@ mod tests {
     use super::*;
     use crate::{
         ids::CanisterRole,
-        ops::runtime::metrics::auth::{
-            AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
-            AuthMetrics,
+        model::auth::application_authorization::{
+            ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthoritySnapshot,
+            LocalApplicationSession,
         },
-        test::seams,
+        test::{seams, support::fleet_key},
     };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
-    fn auth_identity_fallback_metric_count(reason: AuthMetricReason) -> u64 {
-        AuthMetrics::snapshot()
-            .into_iter()
-            .find_map(|(key, count)| {
-                if key.surface == AuthMetricSurface::Session
-                    && key.operation == AuthMetricOperation::IdentityFallback
-                    && key.outcome == AuthMetricOutcome::Completed
-                    && key.reason == reason
-                {
-                    Some(count)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0)
-    }
-
     #[test]
-    fn resolve_authenticated_identity_defaults_to_wallet_when_no_override_exists() {
+    fn validate_application_subject_rejects_anonymous() {
         let _guard = seams::lock();
-        AuthMetrics::reset();
-        let wallet = p(9);
-        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
-        let resolved = resolve_authenticated_identity(wallet);
-        assert_eq!(resolved.authenticated_subject, wallet);
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
-            1,
-            "missing delegated session should record raw-caller fallback"
-        );
-    }
-
-    #[test]
-    fn resolve_authenticated_identity_prefers_active_delegated_session() {
-        let _guard = seams::lock();
-        AuthMetrics::reset();
-        let wallet = p(8);
-        let delegated = p(7);
-        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
-            crate::ops::storage::auth::DelegatedSession {
-                wallet_pid: wallet,
-                delegated_pid: delegated,
-                issued_at: 100,
-                expires_at: 200,
-                bootstrap_token_fingerprint: None,
-            },
-            100,
-        );
-
-        let resolved = identity::resolve_authenticated_identity_at(wallet, 150);
-        assert_eq!(resolved.transport_caller, wallet);
-        assert_eq!(resolved.authenticated_subject, delegated);
-        assert_eq!(
-            resolved.identity_source,
-            AuthenticatedIdentitySource::DelegatedSession
-        );
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
-            0,
-            "active delegated session should not fallback to raw caller"
-        );
-
-        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
-    }
-
-    #[test]
-    fn resolve_authenticated_identity_falls_back_when_session_expired() {
-        let _guard = seams::lock();
-        AuthMetrics::reset();
-        let wallet = p(6);
-        let delegated = p(5);
-        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
-            crate::ops::storage::auth::DelegatedSession {
-                wallet_pid: wallet,
-                delegated_pid: delegated,
-                issued_at: 100,
-                expires_at: 120,
-                bootstrap_token_fingerprint: None,
-            },
-            100,
-        );
-
-        let resolved = identity::resolve_authenticated_identity_at(wallet, 121);
-        assert_eq!(resolved.authenticated_subject, wallet);
-        assert_eq!(
-            resolved.identity_source,
-            AuthenticatedIdentitySource::RawCaller
-        );
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
-            1,
-            "expired delegated session should fallback to raw caller"
-        );
-
-        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
-    }
-
-    #[test]
-    fn resolve_authenticated_identity_falls_back_at_session_expiry_boundary() {
-        let _guard = seams::lock();
-        AuthMetrics::reset();
-        let wallet = p(16);
-        let delegated = p(15);
-        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
-            crate::ops::storage::auth::DelegatedSession {
-                wallet_pid: wallet,
-                delegated_pid: delegated,
-                issued_at: 100,
-                expires_at: 120,
-                bootstrap_token_fingerprint: None,
-            },
-            100,
-        );
-
-        let resolved = identity::resolve_authenticated_identity_at(wallet, 120);
-        assert_eq!(resolved.authenticated_subject, wallet);
-        assert_eq!(
-            resolved.identity_source,
-            AuthenticatedIdentitySource::RawCaller
-        );
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
-            1,
-            "delegated session expiry must match token expiry boundary"
-        );
-
-        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
-    }
-
-    #[test]
-    fn resolve_authenticated_identity_falls_back_after_clear() {
-        let _guard = seams::lock();
-        AuthMetrics::reset();
-        let wallet = p(4);
-        let delegated = p(3);
-        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
-            crate::ops::storage::auth::DelegatedSession {
-                wallet_pid: wallet,
-                delegated_pid: delegated,
-                issued_at: 50,
-                expires_at: 500,
-                bootstrap_token_fingerprint: None,
-            },
-            50,
-        );
-        crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
-
-        let resolved = identity::resolve_authenticated_identity_at(wallet, 100);
-        assert_eq!(resolved.authenticated_subject, wallet);
-        assert_eq!(
-            resolved.identity_source,
-            AuthenticatedIdentitySource::RawCaller
-        );
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
-            1
-        );
-    }
-
-    #[test]
-    fn resolve_authenticated_identity_records_invalid_subject_fallback() {
-        let _guard = seams::lock();
-        AuthMetrics::reset();
-        let wallet = p(23);
-        crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
-            crate::ops::storage::auth::DelegatedSession {
-                wallet_pid: wallet,
-                delegated_pid: Principal::management_canister(),
-                issued_at: 10,
-                expires_at: 100,
-                bootstrap_token_fingerprint: None,
-            },
-            10,
-        );
-
-        let resolved = identity::resolve_authenticated_identity_at(wallet, 20);
-        assert_eq!(resolved.authenticated_subject, wallet);
-        assert_eq!(
-            resolved.identity_source,
-            AuthenticatedIdentitySource::RawCaller
-        );
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::InvalidSubject),
-            1
-        );
-        assert_eq!(
-            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
-            1
-        );
-        assert!(
-            crate::ops::storage::auth::AuthStateOps::delegated_session(wallet, 20).is_none(),
-            "invalid delegated session should be cleared"
-        );
-    }
-
-    #[test]
-    fn validate_delegated_session_subject_rejects_anonymous() {
-        let _guard = seams::lock();
-        let err = validate_delegated_session_subject(Principal::anonymous())
+        let err = validate_application_subject(Principal::anonymous())
             .expect_err("anonymous must be rejected");
-        assert_eq!(err, DelegatedSessionSubjectRejection::Anonymous);
+        assert_eq!(err, ApplicationSubjectRejection::Anonymous);
     }
 
     #[test]
-    fn validate_delegated_session_subject_rejects_management_canister() {
+    fn validate_application_subject_rejects_management_canister() {
         let _guard = seams::lock();
-        let err = validate_delegated_session_subject(Principal::management_canister())
+        let err = validate_application_subject(Principal::management_canister())
             .expect_err("management canister must be rejected");
-        assert_eq!(err, DelegatedSessionSubjectRejection::ManagementCanister);
+        assert_eq!(err, ApplicationSubjectRejection::ManagementCanister);
     }
 
     #[test]
-    fn validate_delegated_session_subject_rejects_direct_child() {
+    fn validate_application_subject_rejects_direct_child() {
         let _guard = seams::lock();
         let child = p(31);
         crate::ops::storage::children::CanisterChildrenOps::import_direct_children(
@@ -385,10 +241,94 @@ mod tests {
             vec![(child, CanisterRole::new("session_subject_child"))],
         );
 
-        let err = validate_delegated_session_subject(child)
+        let err = validate_application_subject(child)
             .expect_err("direct child canister must be rejected");
-        assert_eq!(err, DelegatedSessionSubjectRejection::DirectChildCanister);
+        assert_eq!(err, ApplicationSubjectRejection::DirectChildCanister);
 
         crate::ops::storage::children::CanisterChildrenOps::import_direct_children(p(30), vec![]);
+    }
+
+    #[test]
+    fn synchronous_local_application_facade_values_preserve_closed_policy() {
+        let caller = p(7);
+        let fleet = fleet_key(3);
+        let role = CanisterRole::new("component");
+        let authority = LocalApplicationAuthoritySnapshot::new(fleet, role.clone(), 4);
+        let session = LocalApplicationSession::new(
+            caller,
+            caller,
+            p(8),
+            fleet,
+            role,
+            CanonicalApplicationScopes::for_session(vec![
+                ApplicationScope::parse("app:read").unwrap(),
+            ])
+            .unwrap(),
+            4,
+            10,
+            100,
+            [1; 32],
+            [2; 32],
+        )
+        .unwrap();
+        let request = LocalApplicationAuthorizationRequest {
+            observed_transport_caller: caller,
+            required_scope: ApplicationScopeRef::from_static("app:read"),
+        };
+
+        assert_eq!(
+            authorize_with_values(
+                request,
+                caller,
+                20,
+                true,
+                Some(&authority),
+                Some(&session),
+                true,
+            ),
+            LocalApplicationAuthorizationDecision::Allow(AuthorizedApplicationSubject {
+                subject: caller,
+                expires_at_ns: 100,
+            })
+        );
+        assert_eq!(
+            authorize_with_values(request, p(9), 20, false, None, None, false),
+            LocalApplicationAuthorizationDecision::Deny(
+                LocalApplicationAuthorizationDenial::CallerMismatch,
+            )
+        );
+    }
+
+    #[test]
+    fn synchronous_local_application_facade_is_one_bounded_read_path() {
+        let source = include_str!("mod.rs");
+        let start = source
+            .find("pub fn authorize_local_application(")
+            .expect("public local application facade");
+        let end = source[start..]
+            .find("fn authorize_with_values(")
+            .map_or(source.len(), |offset| start + offset);
+        let body = &source[start..end];
+
+        assert_eq!(body.matches("IcOps::msg_caller()").count(), 1);
+        assert_eq!(body.matches("IcOps::now_nanos()").count(), 1);
+        assert_eq!(
+            body.matches("AuthOps::local_application_authorization_authority()")
+                .count(),
+            1
+        );
+        assert_eq!(
+            body.matches("AuthStateOps::application_session(actual_caller)")
+                .count(),
+            1
+        );
+        for forbidden in [
+            ".await", "spawn(", "timer", "cleanup", "record_", "log!", "set_", "clear_",
+        ] {
+            assert!(
+                !body.contains(forbidden),
+                "authorization facade contains forbidden operation {forbidden}"
+            );
+        }
     }
 }

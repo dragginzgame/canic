@@ -5,7 +5,10 @@
 //! Boundary: test-only checks over schema models and validation implementations.
 
 use super::*;
-use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
+use crate::{
+    cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
+    model::auth::application_authorization::MAX_VERIFIED_APPLICATION_SCOPES,
+};
 use std::{
     collections::BTreeMap,
     fmt::Write as _,
@@ -77,6 +80,146 @@ fn component_spec_config(role: &str, maximum_instances: u32) -> ComponentSpecCon
         children: BTreeMap::default(),
         spawn_grants: BTreeMap::default(),
     }
+}
+
+fn local_application_authorization() -> LocalApplicationAuthorizationConfig {
+    LocalApplicationAuthorizationConfig {
+        allowed_scopes: vec!["my_app:read".to_string()],
+        default_session_ttl_secs: 900,
+        maximum_session_ttl_secs: 1_800,
+    }
+}
+
+#[test]
+fn local_application_authorization_config_is_opt_in_and_canonicalized_on_parse() {
+    let source = r#"
+[app]
+name = "probe"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[component_specs.default]
+component_role = "app"
+maximum_instances = 1
+
+[component_specs.default.auth]
+delegated_token_verifier = true
+
+[component_specs.default.auth.local_application_authorization]
+allowed_scopes = ["my_app:write", "my_app:read"]
+default_session_ttl_secs = 900
+maximum_session_ttl_secs = 1800
+"#;
+    let cfg = crate::bootstrap::parse_config_model(source).expect("valid local auth config");
+    let local = cfg
+        .component_specs
+        .get(&default_component_spec_id())
+        .and_then(|spec| spec.auth.local_application_authorization.as_ref())
+        .expect("local application authorization");
+    assert_eq!(
+        local.allowed_scopes,
+        ["my_app:read".to_string(), "my_app:write".to_string()]
+    );
+
+    let omitted = ConfigModel::test_default();
+    assert!(
+        omitted
+            .component_specs
+            .get(&default_component_spec_id())
+            .unwrap()
+            .auth
+            .local_application_authorization
+            .is_none()
+    );
+}
+
+#[test]
+fn local_application_authorization_requires_verifier_and_bounded_policy() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .local_application_authorization = Some(local_application_authorization());
+    assert!(cfg.validate().is_err(), "verifier is mandatory");
+
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .delegated_token_verifier = true;
+    cfg.validate().expect("exact 1,800-second maximum");
+
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .local_application_authorization
+        .as_mut()
+        .unwrap()
+        .maximum_session_ttl_secs = 1_801;
+    assert!(cfg.validate().is_err(), "hard maximum must reject");
+    let local = cfg
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .local_application_authorization
+        .as_mut()
+        .unwrap();
+    local.maximum_session_ttl_secs = 900;
+    local.default_session_ttl_secs = 901;
+    assert!(cfg.validate().is_err(), "default above maximum must reject");
+    cfg.component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth
+        .local_application_authorization
+        .as_mut()
+        .unwrap()
+        .default_session_ttl_secs = 0;
+    assert!(cfg.validate().is_err(), "zero default must reject");
+}
+
+#[test]
+fn local_application_authorization_rejects_scope_residue() {
+    for scopes in [
+        vec![],
+        vec!["my_app.read".to_string()],
+        vec!["my_app:read".to_string(), "my_app:read".to_string()],
+    ] {
+        let mut cfg = ConfigModel::test_default();
+        let auth = &mut cfg
+            .component_specs
+            .get_mut(&default_component_spec_id())
+            .unwrap()
+            .auth;
+        auth.delegated_token_verifier = true;
+        let mut local = local_application_authorization();
+        local.allowed_scopes = scopes;
+        auth.local_application_authorization = Some(local);
+        assert!(cfg.validate().is_err());
+    }
+
+    let mut cfg = ConfigModel::test_default();
+    let auth = &mut cfg
+        .component_specs
+        .get_mut(&default_component_spec_id())
+        .unwrap()
+        .auth;
+    auth.delegated_token_verifier = true;
+    let mut local = local_application_authorization();
+    local.allowed_scopes = (0..=MAX_VERIFIED_APPLICATION_SCOPES)
+        .map(|index| format!("app:scope_{index:02}"))
+        .collect();
+    auth.local_application_authorization = Some(local);
+    assert!(cfg.validate().is_err(), "scope count must remain bounded");
 }
 
 fn provisioning_grant(

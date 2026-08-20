@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 
 ## Purpose
 
@@ -137,25 +137,44 @@ synchronous lifecycle participant after Canic restoration and before deferred
 work. The 46,593-instruction result with zero Wasm- or stable-memory-page
 growth is one current two-work-sample observation.
 
-The 2026-08-19 independent closeout audit reopened the line: published
-`v0.104.1` freezes native constructors but not registration method actions;
-capability-disabled product artifacts retain automatic-top-up callback and
-workflow code; and the exact release-build-ID inputs behind the recorded byte
-table were not retained. The working tree contains the open `0.104.2`
-corrective candidate for those defects. It is not published, so existing 0.105
-and 0.106 work must not consume it as an accepted predecessor.
+The 2026-08-19 independent closeout audit reopened the line after
+`v0.104.1`. Published `v0.104.2` now freezes native registration actions,
+prunes automatic-top-up callback/workflow code from capability-disabled
+product artifacts and corrects the quantitative evidence authority. Its
+immutable source also contains the accepted 0.105 B1/B2 presenter, scope,
+authority and pure-policy hard cuts; the active changelog records that early
+inclusion rather than leaving it classified as unreleased.
 
 Scheduled 0.105 now owns framework-neutral caller-bound scoped local
 application sessions directly after 0.104; presentation supplies no semantic
-dependency. B1 is captured against exact released `v0.104.1`. Its complete
+dependency. B1 was captured against exact released `v0.104.1` and is now
+reconciled to exact B3 predecessor `v0.104.2`. Its complete
 producer/consumer inventory, stable/resource baseline and real PEM-backed
 native-agent prepare/retrieve/present journey are retained under
 `docs/audits/working/0.105-local-application-authorization/`. The maintainer
 accepted caller-derived signed presenter/subject identity and target-local
 typed replay-capacity denial on 2026-08-19. B2 now owns the presenter-bearing
 token hard cut, canonical application scopes, one verified-authority model and
-pure closed policy. Existing B3 work is paused; B3-B7 remain held on the
-reopened 0.104 predecessor gate.
+pure closed policy, all already present in `v0.104.2`. B3 hard-cuts memory ID
+34 to bounded caller-bound scoped sessions, proof-consumption replay authority,
+one local generation and synchronously reconstructed exact indexes. B4 adds
+explicit protected role enablement plus cfg-pruned establish, clear and
+caller-self status variants beneath the existing managed role methods. B5 adds
+the synchronous facade and token-free generic consumer, converges the proof and
+session authority read, and deletes the subject-identity fallback across
+managed, Root and Store endpoint generation. B6 adds the separately
+Root-authorized paginated audit, bounded aggregate metrics and exact generation
+reconciliation. Current PocketIC observations keep one/midpoint/maximum local
+authorization at 180,797/186,749/187,112 instructions, retain physical stable
+memory at 3,329 pages under maximum state and bound one cleanup delivery to 128
+records. Controlled equal-path product builds measure 19,054,678 -> 19,236,127
+raw bytes, +181,449 and within the 256 KiB ceiling, with all four Candid hashes
+and lifecycle export sets unchanged. B7 proves one native identity can establish
+independent authority on both compatible managed targets while their common
+Root controller remains denied. Both sessions and exact receipts survive proof
+expiry and same-release upgrade without duplicate rows; target-local clear,
+strict session expiry, bounded cleanup and non-resurrection finish with zero
+rows. B2-B7 are complete and the 0.105 implementation batch is closed.
 
 The scheduled 0.106 B1 is approved to freeze current pool/platform provenance,
 measurement/reset protocol, horizon-qualified standby semantics and production
@@ -221,11 +240,11 @@ defer ordering, Prepared/inactive execution and trap rollback. B7 composes that
 participant with exact published IcyDB 0.230.2 and proves one timer provider,
 one lifecycle export pair, separate reconstructed rows, rollback and corrected
 retry. Published B8 parses the complete Rust ownership set and freezes native
-constructors. The `0.104.2` candidate also freezes registration method
+constructors. Published `v0.104.2` also freezes registration method
 actions and rejects their disguised or duplicated use across applications,
-crates and executable fixtures. Existing 0.105 local-authorization work
-remains preserved without an observatory dependency, but further successor
-mutation is held on the reopened 0.104 closeout. 0.106 remains evidence-only
+crates and executable fixtures. It also includes accepted 0.105 B1/B2 ahead of
+the remaining 0.105 batches; B3-B7 are now complete without an observatory
+dependency. 0.106 remains evidence-only
 until accepted B1, final 0.103/0.104 reconciliation and an approved external
 run plan. 0.107 requires
 its accepted inputs and own proof; 0.108 requires completed 0.107 plus
@@ -436,8 +455,8 @@ duplicate or missing rows and scheduling-state drift. The locked PocketIC
 journey passes in 11.59 seconds and warning-denied targeted Clippy passes; no
 product canister source or interface changed.
 
-Focused 0.104 B8 validation parses the 45-file Rust ownership set. The
-`0.104.2` candidate freezes native constructors and registration method
+Focused 0.104 B8 validation parses the 45-file Rust ownership set. Published
+`v0.104.2` freezes native constructors and registration method
 actions and rejects aliases, public re-exports, unclassified files and
 duplicate custody. It closes the exact one-provider lock and nine-manifest
 declaration set. All sixteen structural provider,
@@ -660,12 +679,12 @@ dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
-Finish targeted validation of the bounded `0.104.2` corrective candidate and
-preserve the existing 0.105 B1/B2 work without extending successor mutation.
-The maintainer must run the complete validation and release flow and publish a
-new immutable `v0.104.2` tag. Before release verification, the maintainer must
-also remove/refetch the incorrect local lightweight
-`v0.103.0` shadow; do not move either published tag.
+0.105 B2-B7 implementation, direct recovery evidence, propagation and cleanup
+are complete. The maintainer may run the complete release validation and
+human-owned version/tag/publication flow. Any validation correction stays
+inside the closed framework-neutral authority boundary; do not add a framework
+dependency, compatibility reader, new method identity or second authority
+owner.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

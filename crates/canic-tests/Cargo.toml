@@ -22,7 +22,10 @@ canic-control-plane = { workspace = true, features = [
     "wasm-store-canister",
 ] }
 canic-core = { workspace = true }
+ciborium = { workspace = true }
 ic-agent = { workspace = true }
+ic-stable-structures = { workspace = true }
+pocket-ic = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 

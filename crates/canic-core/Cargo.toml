@@ -28,6 +28,7 @@ auth-issuer-canister-sig-verify = ["dep:ic-signature-verification"]
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
 blob-storage = []
 blob-storage-billing = ["blob-storage"]
+internal-test-fixtures = []
 
 [dependencies]
 async-trait = { workspace = true }

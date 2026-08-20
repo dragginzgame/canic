@@ -53,7 +53,6 @@ use syn::{GenericArgument, PathArguments, Signature, Type, visit::Visit};
 
 pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2 {
     let caller = format_ident!("__canic_caller");
-    let authenticated_identity = format_ident!("__canic_authenticated_identity");
     let ctx = format_ident!("__canic_access_ctx");
 
     let deny = quote!(return Err(err.into()););
@@ -66,8 +65,6 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
                 let #caller = ::canic::__internal::cdk::api::msg_caller();
                 let #ctx = ::canic::__internal::core::access::expr::AccessContext {
                     caller: #caller,
-                    authenticated_caller: #caller,
-                    identity_source: ::canic::__internal::core::access::auth::AuthenticatedIdentitySource::RawCaller,
                     call: #call,
                 };
                 if let Err(err) = ::canic::__internal::core::access::expr::eval_default_fleet_guard(
@@ -82,12 +79,8 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
             let expr_ident = format_ident!("__canic_access_expr");
             quote! {
                 let #caller = ::canic::__internal::cdk::api::msg_caller();
-                let #authenticated_identity =
-                    ::canic::__internal::core::access::auth::resolve_authenticated_identity(#caller);
                 let #ctx = ::canic::__internal::core::access::expr::AccessContext {
-                    caller: #authenticated_identity.transport_caller,
-                    authenticated_caller: #authenticated_identity.authenticated_subject,
-                    identity_source: #authenticated_identity.identity_source,
+                    caller: #caller,
                     call: #call,
                 };
                 let #expr_ident = #expr;
@@ -243,7 +236,7 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::Authenticated { required_scope } => match required_scope {
             Some(AuthScopeArg::Literal(required_scope)) => quote!(
                 ::canic::__internal::core::access::expr::auth::authenticated_with_scope(
-                    #required_scope
+                    ::canic::application_scope!(#required_scope).as_str()
                 )
             ),
             Some(AuthScopeArg::Expr(required_scope)) => quote!(

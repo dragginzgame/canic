@@ -19,10 +19,11 @@ use crate::{
             ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
             DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
             FleetServicePlacementPolicyConfig, FleetServiceTargetConfig, FleetServicesConfig,
-            IndexConfig, IndexPool, LogConfig, MetricsCanisterConfig, MetricsProfile,
-            RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
-            ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
-            ShardingConfig, Standards, StandardsCanisterConfig, TopupPolicy, Whitelist,
+            IndexConfig, IndexPool, LocalApplicationAuthorizationConfig, LogConfig,
+            MetricsCanisterConfig, MetricsProfile, RoleAttestationConfig, RoleDeclaration,
+            RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
+            ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
+            TopupPolicy, Whitelist,
         },
     },
     ids::{
@@ -1063,13 +1064,37 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
 fn render_canister_auth_config(config: &CanisterAuthConfig) -> TokenStream {
     let issuer = config.delegated_token_issuer;
     let verifier = config.delegated_token_verifier;
+    let local_application_authorization = match &config.local_application_authorization {
+        None => quote!(::core::option::Option::None),
+        Some(config) => {
+            let config = render_local_application_authorization_config(config);
+            quote!(::core::option::Option::Some(#config))
+        }
+    };
     let role_attestation_cache = config.role_attestation_cache;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::CanisterAuthConfig {
             delegated_token_issuer: #issuer,
             delegated_token_verifier: #verifier,
+            local_application_authorization: #local_application_authorization,
             role_attestation_cache: #role_attestation_cache,
+        }
+    }
+}
+
+fn render_local_application_authorization_config(
+    config: &LocalApplicationAuthorizationConfig,
+) -> TokenStream {
+    let allowed_scopes = &config.allowed_scopes;
+    let default_session_ttl_secs = config.default_session_ttl_secs;
+    let maximum_session_ttl_secs = config.maximum_session_ttl_secs;
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::LocalApplicationAuthorizationConfig {
+            allowed_scopes: ::std::vec![#(#allowed_scopes.to_string()),*],
+            default_session_ttl_secs: #default_session_ttl_secs,
+            maximum_session_ttl_secs: #maximum_session_ttl_secs,
         }
     }
 }

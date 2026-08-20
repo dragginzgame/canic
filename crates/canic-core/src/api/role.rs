@@ -31,7 +31,7 @@ impl RoleOverviewApi {
         let mut capabilities = capabilities
             .iter()
             .copied()
-            .map(capability_view)
+            .filter_map(capability_view)
             .collect::<Vec<_>>();
         capabilities.sort_unstable();
 
@@ -45,14 +45,15 @@ impl RoleOverviewApi {
     }
 }
 
-const fn capability_view(capability: RoleCapabilityKey) -> RoleCapability {
-    match capability {
+const fn capability_view(capability: RoleCapabilityKey) -> Option<RoleCapability> {
+    Some(match capability {
         RoleCapabilityKey::AutomaticTopup => RoleCapability::AutomaticTopup,
         RoleCapabilityKey::DelegatedTokenIssuer => RoleCapability::DelegatedTokenIssuer,
         RoleCapabilityKey::DelegatedTokenVerifier => RoleCapability::DelegatedTokenVerifier,
         RoleCapabilityKey::FleetCoordinator => RoleCapability::FleetCoordinator,
         RoleCapabilityKey::Index => RoleCapability::Index,
         RoleCapabilityKey::Icrc21 => RoleCapability::Icrc21,
+        RoleCapabilityKey::LocalApplicationAuthorization => return None,
         RoleCapabilityKey::RoleAttestationSigner => RoleCapability::RoleAttestationSigner,
         RoleCapabilityKey::RoleAttestationVerifier => RoleCapability::RoleAttestationVerifier,
         RoleCapabilityKey::Root => RoleCapability::Root,
@@ -61,7 +62,7 @@ const fn capability_view(capability: RoleCapabilityKey) -> RoleCapability {
         RoleCapabilityKey::Scaling => RoleCapability::Scaling,
         RoleCapabilityKey::Sharding => RoleCapability::Sharding,
         RoleCapabilityKey::WasmStore => RoleCapability::WasmStore,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -69,7 +70,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn overview_projects_every_compiled_capability_in_lexical_order() {
+    fn overview_projects_public_capabilities_in_lexical_order() {
         let capabilities = BTreeSet::from([
             RoleCapabilityKey::AutomaticTopup,
             RoleCapabilityKey::DelegatedTokenIssuer,
@@ -77,6 +78,7 @@ mod tests {
             RoleCapabilityKey::FleetCoordinator,
             RoleCapabilityKey::Index,
             RoleCapabilityKey::Icrc21,
+            RoleCapabilityKey::LocalApplicationAuthorization,
             RoleCapabilityKey::RoleAttestationSigner,
             RoleCapabilityKey::RoleAttestationVerifier,
             RoleCapabilityKey::Root,

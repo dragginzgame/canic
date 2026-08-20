@@ -1180,6 +1180,18 @@ fn encode_index(encoder: &mut CanonicalEncoder, index: Option<&IndexConfig>) {
 fn encode_auth(encoder: &mut CanonicalEncoder, auth: &CanisterAuthConfig) {
     encoder.boolean(auth.delegated_token_issuer);
     encoder.boolean(auth.delegated_token_verifier);
+    match &auth.local_application_authorization {
+        None => encoder.u8(0),
+        Some(local) => {
+            encoder.u8(1);
+            encoder.u64(local.allowed_scopes.len() as u64);
+            for scope in &local.allowed_scopes {
+                encoder.string(scope);
+            }
+            encoder.u64(local.default_session_ttl_secs);
+            encoder.u64(local.maximum_session_ttl_secs);
+        }
+    }
     encoder.boolean(auth.role_attestation_cache);
 }
 

@@ -149,6 +149,42 @@ impl LocalApplicationAuthoritySnapshot {
     }
 }
 
+/// Current protected inputs whose narrowing can invalidate retained sessions.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LocalApplicationAuthorityBinding {
+    Disabled,
+    Enabled {
+        fleet: FleetKey,
+        role: CanisterRole,
+        verifier_root_canister_id: Principal,
+        minimum_accepted_registry_epoch: Option<u64>,
+        allowed_scopes: CanonicalApplicationScopes,
+        maximum_session_ttl_secs: u64,
+    },
+}
+
+impl LocalApplicationAuthorityBinding {
+    /// Construct one enabled protected binding from already validated inputs.
+    #[must_use]
+    pub const fn enabled(
+        fleet: FleetKey,
+        role: CanisterRole,
+        verifier_root_canister_id: Principal,
+        minimum_accepted_registry_epoch: Option<u64>,
+        allowed_scopes: CanonicalApplicationScopes,
+        maximum_session_ttl_secs: u64,
+    ) -> Self {
+        Self::Enabled {
+            fleet,
+            role,
+            verifier_root_canister_id,
+            minimum_accepted_registry_epoch,
+            allowed_scopes,
+            maximum_session_ttl_secs,
+        }
+    }
+}
+
 /// Canonical active local application session inspected by pure policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalApplicationSession {
@@ -216,6 +252,11 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    pub const fn issuer(&self) -> Principal {
+        self.issuer
+    }
+
+    #[must_use]
     pub const fn fleet(&self) -> FleetKey {
         self.fleet
     }
@@ -236,8 +277,83 @@ impl LocalApplicationSession {
     }
 
     #[must_use]
+    pub const fn established_at_ns(&self) -> u64 {
+        self.established_at_ns
+    }
+
+    #[must_use]
     pub const fn expires_at_ns(&self) -> u64 {
         self.expires_at_ns
+    }
+
+    #[must_use]
+    pub const fn proof_fingerprint(&self) -> [u8; 32] {
+        self.proof_fingerprint
+    }
+
+    #[must_use]
+    pub const fn establishment_request_hash(&self) -> [u8; 32] {
+        self.establishment_request_hash
+    }
+}
+
+/// Durable proof-consumption identity retained independently of an active session.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LocalApplicationReplay {
+    proof_fingerprint: [u8; 32],
+    transport_caller: Principal,
+    authenticated_subject: Principal,
+    authority_generation: u64,
+    remove_at_ns: u64,
+}
+
+impl LocalApplicationReplay {
+    /// Construct one replay tombstone bound to the exact consumed proof authority.
+    pub fn new(
+        proof_fingerprint: [u8; 32],
+        transport_caller: Principal,
+        authenticated_subject: Principal,
+        authority_generation: u64,
+        remove_at_ns: u64,
+    ) -> Result<Self, ApplicationAuthorityModelError> {
+        if transport_caller != authenticated_subject {
+            return Err(ApplicationAuthorityModelError::CallerSubjectMismatch);
+        }
+        if remove_at_ns == 0 {
+            return Err(ApplicationAuthorityModelError::InvalidReplayRemovalTime);
+        }
+        Ok(Self {
+            proof_fingerprint,
+            transport_caller,
+            authenticated_subject,
+            authority_generation,
+            remove_at_ns,
+        })
+    }
+
+    #[must_use]
+    pub const fn proof_fingerprint(&self) -> [u8; 32] {
+        self.proof_fingerprint
+    }
+
+    #[must_use]
+    pub const fn transport_caller(&self) -> Principal {
+        self.transport_caller
+    }
+
+    #[must_use]
+    pub const fn authenticated_subject(&self) -> Principal {
+        self.authenticated_subject
+    }
+
+    #[must_use]
+    pub const fn authority_generation(&self) -> u64 {
+        self.authority_generation
+    }
+
+    #[must_use]
+    pub const fn remove_at_ns(&self) -> u64 {
+        self.remove_at_ns
     }
 }
 
@@ -249,6 +365,9 @@ pub enum ApplicationAuthorityModelError {
 
     #[error("application proof expiry must be after issue time")]
     InvalidProofWindow,
+
+    #[error("application replay removal time must be nonzero")]
+    InvalidReplayRemovalTime,
 
     #[error("application session expiry must be after establishment")]
     InvalidSessionWindow,
@@ -315,6 +434,12 @@ mod tests {
             [6; 32],
         )
         .unwrap_err();
+        assert_eq!(err, ApplicationAuthorityModelError::CallerSubjectMismatch);
+    }
+
+    #[test]
+    fn replay_rejects_different_caller_and_subject() {
+        let err = LocalApplicationReplay::new([1; 32], p(1), p(2), 3, 4).unwrap_err();
         assert_eq!(err, ApplicationAuthorityModelError::CallerSubjectMismatch);
     }
 }

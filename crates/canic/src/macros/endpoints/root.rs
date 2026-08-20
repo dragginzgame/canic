@@ -196,11 +196,8 @@ macro_rules! canic_emit_root_command_endpoint {
 
             if matches!(&command, RootCommand::GetOrCreateDelegationProof) {
                 use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
-                let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
                 let context = $crate::__internal::core::access::expr::AccessContext {
-                    caller: identity.transport_caller,
-                    authenticated_caller: identity.authenticated_subject,
-                    identity_source: identity.identity_source,
+                    caller,
                     call: $crate::__internal::core::ids::EndpointCall {
                         endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
@@ -215,11 +212,8 @@ macro_rules! canic_emit_root_command_endpoint {
             #[cfg(canic_capability_role_attestation_signer)]
             if matches!(&command, RootCommand::PrepareRoleAttestation(_)) {
                 use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
-                let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
                 let context = $crate::__internal::core::access::expr::AccessContext {
-                    caller: identity.transport_caller,
-                    authenticated_caller: identity.authenticated_subject,
-                    identity_source: identity.identity_source,
+                    caller,
                     call: $crate::__internal::core::ids::EndpointCall {
                         endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,
@@ -247,11 +241,8 @@ macro_rules! canic_emit_root_command_endpoint {
 
             if matches!(&command, RootCommand::RespondCapability(_)) {
                 use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
-                let identity = $crate::__internal::core::access::auth::resolve_authenticated_identity(caller);
                 let context = $crate::__internal::core::access::expr::AccessContext {
-                    caller: identity.transport_caller,
-                    authenticated_caller: identity.authenticated_subject,
-                    identity_source: identity.identity_source,
+                    caller,
                     call: $crate::__internal::core::ids::EndpointCall {
                         endpoint: $crate::__internal::core::ids::EndpointId::new("canic_command"),
                         kind: $crate::__internal::core::ids::EndpointCallKind::Update,

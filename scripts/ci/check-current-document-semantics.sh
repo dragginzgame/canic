@@ -176,18 +176,29 @@ forbid_texts "$TIMER_STATUS" "$GUARD_LABEL" \
     "open 0.104.1 changelog" \
     "only remaining action is maintainer closeout review" \
     'Published `v0.104.1` contains that correction and closes the line.' \
+    "not part of either published tag" \
+    'bounded `0.104.2` corrective candidate' \
     "1.1750% raw" \
     "1.9779% gzip"
 require_texts "$TIMER_STATUS" "$GUARD_LABEL" \
-    "closeout reopened by the 2026-08-19 independent audit" \
-    "not part of either published tag" \
-    'bounded `0.104.2` corrective candidate' \
+    '`v0.104.2` freezes exact registration actions' \
+    "No 0.104 implementation work remains." \
     "not canonical release-identity evidence"
 forbid_texts "$STATUS" "$GUARD_LABEL" \
     "Keep the open 0.104.0" \
     "bounded closeout correction are complete" \
+    'open `0.104.2` corrective candidate' \
+    "Existing B3 work is paused" \
     "1.1750% raw" \
     "1.9779% gzip"
+require_texts "$STATUS" "$GUARD_LABEL" \
+    'Published `v0.104.2` now freezes native registration actions' \
+    "B2-B7 are complete" \
+    "the 0.105 implementation batch is closed"
+forbid_texts "$STATUS" "$GUARD_LABEL" \
+    "B7 is active" \
+    "B7 may proceed" \
+    "final Canic-only recovery and residue qualification remains"
 require_texts "$TIMER_EVIDENCE" "$GUARD_LABEL" \
     "not acceptance evidence" \
     "19,424,848" \

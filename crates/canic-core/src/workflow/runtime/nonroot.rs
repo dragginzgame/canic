@@ -190,6 +190,7 @@ fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(),
     FleetStateOps::init_mode(app_mode);
     let canister_cfg = ConfigOps::current_canister()?;
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(canister_role, &canister_cfg)?;
+    RuntimeAuthWorkflow::reconcile_local_application_authority()?;
     Ok(())
 }
 
@@ -281,6 +282,7 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
         )?;
     }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
+    RuntimeAuthWorkflow::reconcile_local_application_authority()?;
 
     Ok(())
 }

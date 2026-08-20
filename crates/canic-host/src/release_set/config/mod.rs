@@ -325,6 +325,7 @@ pub(in crate::release_set) fn project_role_capabilities(
             }
             RoleCapabilityKey::DelegatedTokenIssuer
             | RoleCapabilityKey::DelegatedTokenVerifier
+            | RoleCapabilityKey::LocalApplicationAuthorization
             | RoleCapabilityKey::RoleAttestationSigner
             | RoleCapabilityKey::RoleAttestationVerifier => {
                 labels.insert("auth");

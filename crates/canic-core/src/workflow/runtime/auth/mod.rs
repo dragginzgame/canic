@@ -14,6 +14,7 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::ConfigModel,
+    domain::policy::pure::auth::application_authorization::ApplicationAuthorityBindingTransition,
     dto::auth::SignedRoleAttestation,
     format::display_optional,
     ids::{CanisterRole, ManagedCanisterBinding},
@@ -27,6 +28,7 @@ use crate::{
         runtime::metrics::auth::{
             record_attestation_epoch_rejected, record_attestation_verify_failed,
         },
+        storage::auth::AuthStateOps,
     },
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
@@ -42,6 +44,14 @@ use crate::{
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
+    /// Reconcile the one locally activated application authority binding.
+    pub fn reconcile_local_application_authority()
+    -> Result<ApplicationAuthorityBindingTransition, InternalError> {
+        let binding = AuthOps::local_application_authority_binding()?;
+        AuthStateOps::reconcile_application_authority_binding(binding)
+            .map_err(|_| InternalError::invariant())
+    }
+
     /// Return the exact root issuer-renewal native identity.
     pub(crate) fn root_issuer_renewal_timer_identity()
     -> Result<ic_timers::TimerIdentity, crate::workflow::runtime::timer::TimerError> {
@@ -353,6 +363,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            local_application_authorization: None,
             role_attestation_cache: false,
         };
 
@@ -374,6 +385,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: false,
+            local_application_authorization: None,
             role_attestation_cache: true,
         };
 
@@ -395,6 +407,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            local_application_authorization: None,
             role_attestation_cache: false,
         };
 
@@ -423,6 +436,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
+            local_application_authorization: None,
             role_attestation_cache: false,
         };
 
@@ -439,6 +453,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: false,
+            local_application_authorization: None,
             role_attestation_cache: true,
         };
 
@@ -463,6 +478,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
+            local_application_authorization: None,
             role_attestation_cache: true,
         };
 
@@ -470,6 +486,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            local_application_authorization: None,
             role_attestation_cache: false,
         };
 
@@ -489,6 +506,7 @@ mod tests {
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
             delegated_token_verifier: true,
+            local_application_authorization: None,
             role_attestation_cache: true,
         };
         let role = CanisterRole::new("app");
@@ -503,6 +521,7 @@ mod tests {
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
             delegated_token_verifier: false,
+            local_application_authorization: None,
             role_attestation_cache: true,
         };
 

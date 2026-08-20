@@ -9,6 +9,7 @@ pub const CANIC_CUSTOM_CFG_NAMES: &[&str] = &[
     "canic_capability_fleet_coordinator",
     "canic_capability_icrc21",
     "canic_capability_index",
+    "canic_capability_local_application_authorization",
     "canic_capability_role_attestation_signer",
     "canic_capability_role_attestation_verifier",
     "canic_capability_root",

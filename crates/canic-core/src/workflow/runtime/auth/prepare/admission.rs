@@ -10,7 +10,8 @@ use crate::{
     domain::policy::pure::{
         PolicyError,
         auth::{
-            AuthPolicyError, DelegatedRoleGrantPolicy, validate_public_delegated_token_prepare,
+            AuthPolicyError, DeclaredApplicationRoleScopes, DelegatedRoleGrantPolicy,
+            validate_public_delegated_token_prepare,
         },
     },
     dto::auth::{DelegatedRoleGrant, DelegatedTokenPrepareRequest, RoleAttestationRequest},
@@ -112,7 +113,20 @@ pub(super) fn validate_token_prepare_public_request(
         .iter()
         .map(delegated_role_grant_policy)
         .collect::<Vec<_>>();
-    validate_public_delegated_token_prepare(&grants).map_err(map_token_prepare_policy_error)
+    let declared_application_scopes = request
+        .grants
+        .iter()
+        .filter_map(|grant| {
+            let canister = ConfigOps::try_get_canister_by_role(&grant.target).ok()?;
+            let local = canister.auth.local_application_authorization?;
+            Some(DeclaredApplicationRoleScopes {
+                target: grant.target.clone(),
+                scopes: local.allowed_scopes,
+            })
+        })
+        .collect::<Vec<_>>();
+    validate_public_delegated_token_prepare(&grants, &declared_application_scopes)
+        .map_err(map_token_prepare_policy_error)
 }
 
 fn delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> DelegatedRoleGrantPolicy {

@@ -22,6 +22,7 @@ use super::{
             CachedDelegatedTokenProofValidity, delegated_token_cache_key, positive_cache_get,
             positive_cache_insert, positive_cache_remove,
         },
+        canonical::claims_hash,
         cert_rules::DelegatedAuthTtlLimits,
         chain_key::{
             ChainKeyRootProofError, ChainKeyRootVerifierPolicy, VerifyChainKeyBatchRootProofInput,
@@ -73,7 +74,29 @@ use verifier_config::{
     configured_root_canister_id,
 };
 
+const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
+const NS_PER_SEC: u64 = 1_000_000_000;
+
 impl AuthOps {
+    /// Return the canonical signed-claims identity used by replay policy.
+    pub(crate) fn delegated_token_claims_fingerprint(
+        token: &DelegatedToken,
+    ) -> Result<[u8; 32], InternalError> {
+        claims_hash(&token.claims).map_err(|_| InternalError::invalid_input())
+    }
+
+    /// Resolve the current delegated-token verifier lifetime ceiling.
+    pub(crate) fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
+        let cfg = ConfigOps::delegated_tokens_config()?;
+        if !cfg.enabled {
+            return Err(AuthValidationError::DelegatedTokenAuthDisabled.into());
+        }
+        cfg.max_ttl_secs
+            .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS)
+            .checked_mul(NS_PER_SEC)
+            .ok_or_else(|| InternalError::public(crate::diagnostics::codes::TIME_CAPACITY))
+    }
+
     pub(crate) const fn delegated_token_replay_retention_limits()
     -> crate::ops::replay::receipt::ReplayReceiptRetentionLimits {
         retention::DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS

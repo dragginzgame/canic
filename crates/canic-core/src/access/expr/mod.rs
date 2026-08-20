@@ -28,10 +28,6 @@ pub use async_trait::async_trait;
 pub struct AccessContext {
     // Raw transport identity from msg_caller().
     pub caller: Principal,
-    // Resolved app/auth subject (raw caller or delegated session subject).
-    pub authenticated_caller: Principal,
-    // Source of the resolved authenticated subject.
-    pub identity_source: access::auth::AuthenticatedIdentitySource,
     pub call: EndpointCall,
 }
 
@@ -39,11 +35,6 @@ impl AccessContext {
     #[must_use]
     pub const fn transport_caller(&self) -> Principal {
         self.caller
-    }
-
-    #[must_use]
-    pub const fn authenticated_subject(&self) -> Principal {
-        self.authenticated_caller
     }
 }
 
@@ -550,14 +541,10 @@ mod tests {
 
         let ctx_parent = AccessContext {
             caller: parent,
-            authenticated_caller: parent,
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
         let ctx_other = AccessContext {
             caller: other,
-            authenticated_caller: other,
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -578,8 +565,6 @@ mod tests {
         let expr = fleet::allows_updates();
         let ctx = AccessContext {
             caller: seams::p(1),
-            authenticated_caller: seams::p(1),
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -608,8 +593,6 @@ mod tests {
         let expr = fleet::is_queryable();
         let ctx = AccessContext {
             caller: seams::p(1),
-            authenticated_caller: seams::p(1),
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -634,8 +617,6 @@ mod tests {
     fn build_network_predicates_match_env_access_checks() {
         let ctx = AccessContext {
             caller: seams::p(1),
-            authenticated_caller: seams::p(1),
-            identity_source: access::auth::AuthenticatedIdentitySource::RawCaller,
             call: test_call(),
         };
 
@@ -656,13 +637,12 @@ mod tests {
     }
 
     #[test]
-    fn caller_predicates_use_transport_caller_not_authenticated_subject() {
+    fn caller_predicates_use_the_exact_transport_caller() {
         let _guard = seams::lock();
         let original = Env::export();
         let _restore = EnvRestore(original);
 
         let parent = seams::p(10);
-        let delegated_subject = seams::p(11);
         Env::import(EnvData {
             record: EnvRecord {
                 parent_pid: Some(parent),
@@ -673,8 +653,6 @@ mod tests {
         let expr = caller::is_parent();
         let ctx = AccessContext {
             caller: parent,
-            authenticated_caller: delegated_subject,
-            identity_source: access::auth::AuthenticatedIdentitySource::DelegatedSession,
             call: test_call(),
         };
 

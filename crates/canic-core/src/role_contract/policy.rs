@@ -155,6 +155,9 @@ pub fn derive_role_capabilities(
         if canister.auth.delegated_token_verifier {
             capabilities.insert(RoleCapabilityKey::DelegatedTokenVerifier);
         }
+        if canister.auth.local_application_authorization.is_some() {
+            capabilities.insert(RoleCapabilityKey::LocalApplicationAuthorization);
+        }
     }
 
     if capabilities.contains(&RoleCapabilityKey::Root)
