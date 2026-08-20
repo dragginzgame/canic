@@ -208,27 +208,9 @@ mod tests {
         cdk::types::Principal,
         ids::CanisterRole,
         model::auth::application_authorization::{ApplicationScope, CanonicalApplicationScopes},
-        storage::stable::auth::{AuthState, AuthStateData},
+        ops::storage::auth::application_sessions::ApplicationSessionTestStateGuard,
         test::{seams, support::fleet_key},
     };
-
-    struct StateGuard(AuthStateData);
-
-    impl StateGuard {
-        fn empty() -> Self {
-            let original = AuthState::export();
-            AuthState::import(AuthStateData::default());
-            AuthStateOps::restore_application_session_state().unwrap();
-            Self(original)
-        }
-    }
-
-    impl Drop for StateGuard {
-        fn drop(&mut self) {
-            AuthState::import(self.0.clone());
-            AuthStateOps::restore_application_session_state().unwrap();
-        }
-    }
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -276,7 +258,7 @@ mod tests {
     #[test]
     fn exact_retry_returns_the_committed_session_after_proof_expiry_without_extension() {
         let _lock = seams::lock();
-        let _state = StateGuard::empty();
+        let _state = ApplicationSessionTestStateGuard::empty();
         let created = ApplicationSessionWorkflow::establish_verified(input(20, 5)).unwrap();
         let ApplicationSessionEstablishResult::Created(created) = created else {
             panic!("first establishment must create");
@@ -292,7 +274,7 @@ mod tests {
     #[test]
     fn conflicting_request_hash_is_denied_before_expired_proof_eligibility() {
         let _lock = seams::lock();
-        let _state = StateGuard::empty();
+        let _state = ApplicationSessionTestStateGuard::empty();
         ApplicationSessionWorkflow::establish_verified(input(20, 5)).unwrap();
         assert_eq!(
             ApplicationSessionWorkflow::establish_verified(input(80, 6)),

@@ -1,6 +1,0 @@
-use crate::ops::storage::auth::AuthStateOps;
-
-#[cfg(test)]
-mod tests {
-    use crate::storage::stable::auth::AuthState;
-}

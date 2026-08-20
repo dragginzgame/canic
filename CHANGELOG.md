@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - The 0.105 authorization state path now composes pure binding and admission
   policy in workflow while storage ops expose only neutral occupancy and exact
-  mutations; the layering guard retains its production scan while consistently
-  excluding inline test fixtures.
+  mutations; workflow tests use an ops-owned state seam instead of importing
+  stable records.
 
 - The formatting pre-commit hook now refreshes the staged snapshot after
   `make fmt`, so the ordinary `git add .` then `git commit` flow does not fail

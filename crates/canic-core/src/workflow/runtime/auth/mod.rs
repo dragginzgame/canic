@@ -383,30 +383,11 @@ mod tests {
         model::auth::application_authorization::{
             ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
         },
-        ops::storage::auth::{AuthStateOps, application_sessions::invalidate_indexes},
-        storage::stable::auth::{AuthState, AuthStateData},
+        ops::storage::auth::{
+            AuthStateOps, application_sessions::ApplicationSessionTestStateGuard,
+        },
         test::{config::ConfigTestBuilder, seams, support::fleet_key},
     };
-
-    struct ApplicationAuthStateGuard(AuthStateData);
-
-    impl ApplicationAuthStateGuard {
-        fn empty() -> Self {
-            let original = AuthState::export();
-            AuthState::import(AuthStateData::default());
-            invalidate_indexes();
-            AuthStateOps::restore_application_session_state().unwrap();
-            Self(original)
-        }
-    }
-
-    impl Drop for ApplicationAuthStateGuard {
-        fn drop(&mut self) {
-            AuthState::import(self.0.clone());
-            invalidate_indexes();
-            AuthStateOps::restore_application_session_state().unwrap();
-        }
-    }
 
     fn application_authority_binding(
         scopes: &[&str],
@@ -432,7 +413,7 @@ mod tests {
     #[test]
     fn application_authority_reconciliation_composes_policy_and_storage_mutation() {
         let _lock = seams::lock();
-        let _state = ApplicationAuthStateGuard::empty();
+        let _state = ApplicationSessionTestStateGuard::empty();
         let original = application_authority_binding(&["app:read"], 900);
         assert_eq!(
             RuntimeAuthWorkflow::reconcile_application_authority_binding(original).unwrap(),

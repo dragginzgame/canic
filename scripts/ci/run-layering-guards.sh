@@ -25,23 +25,6 @@ scan_ops_to_policy() {
     done < <(find "$root" -type f -name "$name_pattern" ! -name tests.rs -print0)
 }
 
-scan_workflow_storage() {
-    local root="$1"
-    local name_pattern="${2:-*.rs}"
-    local file
-
-    while IFS= read -r -d '' file; do
-        awk '
-                /^#\[cfg\(test\)\]$/ { cfg_test = 1; next }
-                cfg_test && /^mod tests;$/ { cfg_test = 0; next }
-                cfg_test && /^mod tests[[:space:]]*\{/ { exit }
-                cfg_test { cfg_test = 0 }
-                { print FILENAME ":" FNR ":" $0 }
-            ' "$file" \
-            | rg "storage::.*Record|storage::stable" || true
-    done < <(find "$root" -type f -name "$name_pattern" ! -name tests.rs -print0)
-}
-
 fixture_root="docs/audits/fixtures/layering"
 expected_fixture_matches="$fixture_root/forbidden-direct-import.txt
 $fixture_root/forbidden-grouped-import.txt
@@ -52,15 +35,6 @@ if [[ "$actual_fixture_matches" != "$expected_fixture_matches" ]]; then
     echo "ops-to-policy detector fixture mismatch" >&2
     printf 'expected:\n%s\nactual:\n%s\n' \
         "$expected_fixture_matches" "$actual_fixture_matches" >&2
-    exit 2
-fi
-
-expected_workflow_fixture_matches="$fixture_root/forbidden-workflow-storage.txt:1:use crate::storage::stable::auth::AuthState;"
-actual_workflow_fixture_matches="$(scan_workflow_storage "$fixture_root" '*.txt' | sort)"
-if [[ "$actual_workflow_fixture_matches" != "$expected_workflow_fixture_matches" ]]; then
-    echo "workflow-to-storage detector fixture mismatch" >&2
-    printf 'expected:\n%s\nactual:\n%s\n' \
-        "$expected_workflow_fixture_matches" "$actual_workflow_fixture_matches" >&2
     exit 2
 fi
 
@@ -87,12 +61,10 @@ if [[ -n "$ops_policy_matches" ]]; then
     failed=1
 fi
 
-workflow_storage_matches="$({
-    scan_workflow_storage crates/canic-core/src/workflow
-    scan_workflow_storage crates/canic-control-plane/src/workflow
-} | sort)"
-if [[ -n "$workflow_storage_matches" ]]; then
-    printf '%s\n' "$workflow_storage_matches"
+if rg "storage::.*Record|storage::stable" \
+    crates/canic-core/src/workflow \
+    crates/canic-control-plane/src/workflow \
+    --glob '!**/tests.rs'; then
     echo "workflow must not touch stable storage or storage records" >&2
     failed=1
 fi

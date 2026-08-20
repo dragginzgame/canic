@@ -589,33 +589,9 @@ mod tests {
             intent::{PayloadBinding, TerminalEvidence},
             replay::OperationId,
         },
-        ops::storage::auth::application_sessions::invalidate_indexes,
-        storage::stable::auth::{
-            AuthState, AuthStateData, LocalApplicationAuthorizationStateData,
-            LocalApplicationReplayRecord,
-        },
+        ops::storage::auth::application_sessions::ApplicationSessionTestStateGuard,
         test::seams,
     };
-
-    struct ApplicationAuthStateGuard(AuthStateData);
-
-    impl ApplicationAuthStateGuard {
-        fn empty() -> Self {
-            let original = AuthState::export();
-            AuthState::import(AuthStateData::default());
-            invalidate_indexes();
-            AuthStateOps::restore_application_session_state().unwrap();
-            Self(original)
-        }
-    }
-
-    impl Drop for ApplicationAuthStateGuard {
-        fn drop(&mut self) {
-            AuthState::import(self.0.clone());
-            invalidate_indexes();
-            AuthStateOps::restore_application_session_state().unwrap();
-        }
-    }
 
     fn canic_receipt_input() -> BeginReceiptBackedIntentInput {
         BeginReceiptBackedIntentInput {
@@ -879,23 +855,10 @@ mod tests {
     #[test]
     fn application_session_expiry_uses_the_existing_intent_cleanup_owner() {
         let _guard = seams::lock();
-        let _auth_state = ApplicationAuthStateGuard::empty();
+        let auth_state = ApplicationSessionTestStateGuard::empty();
         IntentStoreOps::reset_for_tests();
         let caller = Principal::from_slice(&[7; 29]);
-        AuthState::replace_application_authorization_state(
-            LocalApplicationAuthorizationStateData {
-                replays: vec![LocalApplicationReplayRecord {
-                    proof_fingerprint: [8; 32],
-                    transport_caller: caller,
-                    authenticated_subject: caller,
-                    authority_generation: 0,
-                    remove_at_ns: 77,
-                }],
-                ..LocalApplicationAuthorizationStateData::default()
-            },
-        );
-        invalidate_indexes();
-        AuthStateOps::restore_application_session_state().unwrap();
+        auth_state.install_replay([8; 32], caller, 77);
 
         assert_eq!(
             IntentCleanupWorkflow::next_cleanup_deadline_ns().unwrap(),
