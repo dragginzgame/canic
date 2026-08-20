@@ -16,6 +16,13 @@ use std::path::Path;
 
 use canic_host::{
     durable_io::create_new_bytes,
+    fleet_install_input::{
+        SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFieldV1,
+        SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1,
+        SubnetCatalogRefreshTriggerV1, SubnetCatalogRegistryRecordKindV1,
+        SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1, SubnetCatalogSubjectV1,
+        SubnetCatalogUnknownRetryReasonV1,
+    },
     fleet_install_plan::{
         FreshFleetDeploymentPlanV1, FreshFleetFundingPayerV1, PlannedCanisterCreationFunding,
     },
@@ -93,12 +100,19 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
                 .fresh_fleet_plan
                 .as_ref()
                 .is_some_and(|plan| plan.preflight.effects.no_effects_started())
+                || report
+                    .catalog_failure
+                    .as_ref()
+                    .is_some_and(catalog_failure_has_no_effects)
         ),
         String::new(),
     ];
 
     if let Some(plan) = &report.fresh_fleet_plan {
         append_fresh_fleet_decision(&mut lines, plan);
+    }
+    if let Some(failure) = &report.catalog_failure {
+        append_catalog_failure(&mut lines, failure);
     }
 
     append_diagnostics(&mut lines, "blockers", &report.blockers);
@@ -109,6 +123,220 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
     append_next_actions(&mut lines, &report.next_actions);
 
     lines.join("\n")
+}
+
+const fn catalog_failure_has_no_effects(failure: &SubnetCatalogLoadFailureEvidenceV1) -> bool {
+    !failure.effects.build_started
+        && !failure.effects.workspace_mutation_started
+        && !failure.effects.ic_mutation_started
+}
+
+fn append_catalog_failure(lines: &mut Vec<String>, failure: &SubnetCatalogLoadFailureEvidenceV1) {
+    let (cache_disposition, refresh_trigger) = catalog_cache_disposition(failure.cache_disposition);
+    let (retryability, unknown_retry_reason) = catalog_retryability(failure.retryability);
+    lines.push("catalog failure provenance".to_string());
+    lines.push(format!("  schema_version: {}", failure.schema_version));
+    lines.push(format!("  network: {}", failure.network));
+    lines.push(format!(
+        "  source_kind: {}",
+        failure
+            .source_kind
+            .map_or("not_selected", catalog_source_kind)
+    ));
+    lines.push(format!(
+        "  source_endpoints: {}",
+        if failure.source_endpoints.is_empty() {
+            "none".to_string()
+        } else {
+            failure.source_endpoints.join(",")
+        }
+    ));
+    lines.push(format!(
+        "  source_assurance: {}",
+        failure
+            .source_assurance
+            .as_deref()
+            .unwrap_or("not_selected")
+    ));
+    lines.push(format!(
+        "  minimum_assurance: {}",
+        failure.minimum_assurance
+    ));
+    lines.push(format!("  stage: {}", catalog_load_stage(failure.stage)));
+    lines.push(format!(
+        "  registry_version: {}",
+        failure
+            .registry_version
+            .map_or_else(|| "unknown".to_string(), |version| version.to_string())
+    ));
+    lines.push(format!("  cache_disposition: {cache_disposition}"));
+    lines.push(format!(
+        "  refresh_trigger: {}",
+        refresh_trigger.unwrap_or("not_applicable")
+    ));
+    lines.push(format!(
+        "  subject: {}",
+        failure
+            .subject
+            .as_ref()
+            .map_or_else(|| "unknown".to_string(), catalog_subject)
+    ));
+    lines.push(format!("  code: {}", failure.code));
+    lines.push(format!("  category: {}", failure.category));
+    lines.push(format!("  retryability: {retryability}"));
+    lines.push(format!(
+        "  unknown_retry_reason: {}",
+        unknown_retry_reason.unwrap_or("not_applicable")
+    ));
+    lines.push(format!(
+        "  effects: build_started={} workspace_mutation_started={} ic_mutation_started={}",
+        failure.effects.build_started,
+        failure.effects.workspace_mutation_started,
+        failure.effects.ic_mutation_started,
+    ));
+    lines.push(format!("  source_message: {}", failure.source_message));
+    lines.push(String::new());
+}
+
+const fn catalog_source_kind(value: SubnetCatalogSourceKindV1) -> &'static str {
+    match value {
+        SubnetCatalogSourceKindV1::UncertifiedQuery => "uncertified_query",
+        SubnetCatalogSourceKindV1::MultiEndpointAgreement => "multi_endpoint_agreement",
+    }
+}
+
+const fn catalog_load_stage(value: SubnetCatalogLoadStageV1) -> &'static str {
+    match value {
+        SubnetCatalogLoadStageV1::RequestValidation => "request_validation",
+        SubnetCatalogLoadStageV1::CacheOnlyLoad => "cache_only_load",
+        SubnetCatalogLoadStageV1::CacheLookup => "cache_lookup",
+        SubnetCatalogLoadStageV1::CacheAbsence => "cache_absence",
+        SubnetCatalogLoadStageV1::CacheRejection => "cache_rejection",
+        SubnetCatalogLoadStageV1::CacheBypass => "cache_bypass",
+        SubnetCatalogLoadStageV1::RefreshAttempted => "refresh_attempted",
+        SubnetCatalogLoadStageV1::RefreshFailed => "refresh_failed",
+        SubnetCatalogLoadStageV1::PostRefreshCacheLoadFailed => "post_refresh_cache_load_failed",
+        SubnetCatalogLoadStageV1::RuntimeAdapter => "runtime_adapter",
+    }
+}
+
+const fn catalog_cache_disposition(
+    value: SubnetCatalogFailureCacheDispositionV1,
+) -> (&'static str, Option<&'static str>) {
+    match value {
+        SubnetCatalogFailureCacheDispositionV1::NotExamined => ("not_examined", None),
+        SubnetCatalogFailureCacheDispositionV1::CacheOnly => ("cache_only", None),
+        SubnetCatalogFailureCacheDispositionV1::CacheBypassed => ("cache_bypassed", None),
+        SubnetCatalogFailureCacheDispositionV1::CacheMissing => ("cache_missing", None),
+        SubnetCatalogFailureCacheDispositionV1::CacheRejected => ("cache_rejected", None),
+        SubnetCatalogFailureCacheDispositionV1::CacheReadFailed => ("cache_read_failed", None),
+        SubnetCatalogFailureCacheDispositionV1::RefreshAttempted { trigger } => {
+            ("refresh_attempted", Some(catalog_refresh_trigger(trigger)))
+        }
+        SubnetCatalogFailureCacheDispositionV1::RefreshFailed { trigger } => {
+            ("refresh_failed", Some(catalog_refresh_trigger(trigger)))
+        }
+        SubnetCatalogFailureCacheDispositionV1::PostRefreshLoadFailed { trigger } => (
+            "post_refresh_load_failed",
+            Some(catalog_refresh_trigger(trigger)),
+        ),
+    }
+}
+
+const fn catalog_refresh_trigger(value: SubnetCatalogRefreshTriggerV1) -> &'static str {
+    match value {
+        SubnetCatalogRefreshTriggerV1::Missing => "missing",
+        SubnetCatalogRefreshTriggerV1::Rejected => "rejected",
+        SubnetCatalogRefreshTriggerV1::Stale => "stale",
+        SubnetCatalogRefreshTriggerV1::Forced => "forced",
+    }
+}
+
+fn catalog_subject(value: &SubnetCatalogSubjectV1) -> String {
+    match value {
+        SubnetCatalogSubjectV1::Network { network } => format!("network={network:?}"),
+        SubnetCatalogSubjectV1::Endpoint { endpoint } => format!("endpoint={endpoint:?}"),
+        SubnetCatalogSubjectV1::CachePath { path } => format!("cache_path={path:?}"),
+        SubnetCatalogSubjectV1::RegistryLatestVersion => "registry_latest_version".to_string(),
+        SubnetCatalogSubjectV1::RegistryRecord {
+            record_kind,
+            key,
+            subnet,
+        } => format!(
+            "registry_record kind={} key={key:?} subnet={}",
+            catalog_record_kind(*record_kind),
+            subnet.as_deref().unwrap_or("not_applicable")
+        ),
+        SubnetCatalogSubjectV1::Subnet { subnet, field } => format!(
+            "subnet={subnet} field={}",
+            field.map_or("not_narrowed", catalog_field)
+        ),
+        SubnetCatalogSubjectV1::RegistryRoutingTableEntry { index, field } => format!(
+            "registry_routing_table_entry={index} field={}",
+            field.map_or("not_narrowed", catalog_field)
+        ),
+        SubnetCatalogSubjectV1::RoutingRange {
+            start_canister_id,
+            end_canister_id,
+            subnet_principal,
+            field,
+        } => format!(
+            "routing_range start={start_canister_id} end={end_canister_id} subnet={subnet_principal} field={}",
+            field.map_or("not_narrowed", catalog_field)
+        ),
+        SubnetCatalogSubjectV1::Field { field } => {
+            format!("field={}", catalog_field(*field))
+        }
+    }
+}
+
+const fn catalog_record_kind(value: SubnetCatalogRegistryRecordKindV1) -> &'static str {
+    match value {
+        SubnetCatalogRegistryRecordKindV1::SubnetList => "subnet_list",
+        SubnetCatalogRegistryRecordKindV1::RoutingTable => "routing_table",
+        SubnetCatalogRegistryRecordKindV1::SubnetRecord => "subnet_record",
+    }
+}
+
+const fn catalog_field(value: SubnetCatalogFieldV1) -> &'static str {
+    match value {
+        SubnetCatalogFieldV1::SubnetListEntry => "subnet_list_entry",
+        SubnetCatalogFieldV1::RoutingTableRange => "routing_table_range",
+        SubnetCatalogFieldV1::RoutingTableSubnetId => "routing_table_subnet_id",
+        SubnetCatalogFieldV1::RoutingRangeStart => "routing_range_start",
+        SubnetCatalogFieldV1::RoutingRangeEnd => "routing_range_end",
+        SubnetCatalogFieldV1::Network => "network",
+        SubnetCatalogFieldV1::RegistryCanister => "registry_canister",
+        SubnetCatalogFieldV1::RegistryVersion => "registry_version",
+        SubnetCatalogFieldV1::SourceEndpoint => "source_endpoint",
+        SubnetCatalogFieldV1::SubnetPrincipal => "subnet_principal",
+        SubnetCatalogFieldV1::CollectionTimestamp => "collection_timestamp",
+        SubnetCatalogFieldV1::Classification => "classification",
+        SubnetCatalogFieldV1::AgreementDigest => "agreement_digest",
+        SubnetCatalogFieldV1::CatalogDigest => "catalog_digest",
+        SubnetCatalogFieldV1::Provenance => "provenance",
+    }
+}
+
+const fn catalog_retryability(
+    value: SubnetCatalogRetryabilityV1,
+) -> (&'static str, Option<&'static str>) {
+    match value {
+        SubnetCatalogRetryabilityV1::Retryable => ("retryable", None),
+        SubnetCatalogRetryabilityV1::NotRetryable => ("not_retryable", None),
+        SubnetCatalogRetryabilityV1::Unknown { reason } => {
+            ("unknown", Some(catalog_unknown_retry_reason(reason)))
+        }
+    }
+}
+
+const fn catalog_unknown_retry_reason(value: SubnetCatalogUnknownRetryReasonV1) -> &'static str {
+    match value {
+        SubnetCatalogUnknownRetryReasonV1::CacheOperation => "cache_operation",
+        SubnetCatalogUnknownRetryReasonV1::RegistryResponse => "registry_response",
+        SubnetCatalogUnknownRetryReasonV1::RegistryTransport => "registry_transport",
+        SubnetCatalogUnknownRetryReasonV1::RuntimeAdapter => "runtime_adapter",
+    }
 }
 
 fn append_fresh_fleet_decision(lines: &mut Vec<String>, plan: &FreshFleetDeploymentPlanV1) {

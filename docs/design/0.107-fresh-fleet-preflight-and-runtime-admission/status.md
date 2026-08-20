@@ -5,9 +5,9 @@ Date: 2026-08-20
 ## Status
 
 - State: accepted and scheduled as application-safety/estate step 5.
-- Runtime impact: B2-B4 change only the host CLI/planning and pre-effect install
-  boundary; no Canister runtime, stable state, Candid or external effect
-  changes.
+- Runtime impact: B2-B5 change only the host CLI/planning and pre-effect install
+  boundary. B6 owns the bounded managed-role runtime-whitelist state and
+  existing-method variants. No external effect was performed.
 - Predecessor: accepted repository-local 0.106 B1 baseline. The separately
   authorized 0.106 B2 external evidence does not gate this line.
 - Successors: 0.108 Coordinator-backed root funding retains its passing B1
@@ -30,9 +30,9 @@ Design: [Fresh-Fleet preflight and runtime admission](0.107-design.md)
 | B2 | Target-correct planning | direct plan-leaf environment forwarding and mismatch rejection | CLI parse/forwarding/help tests | Complete |
 | B3 | Fleet-input-complete pure preflight | shared compiler, no-effect ordering and fresh-Fleet blockers | host plan/install ordering and fixture tests | Complete |
 | B4 | Complete evidence and digest binding | placement, counts, funding, balance, output and install-receipt parity | parity, insufficient-funds and receipt tests | Complete |
-| B5 | Structured catalog inconsistency | Registry version/provenance/cache/subject/retry/effect propagation and upstream update if needed | typed collector/host/CLI tests | Blocked on upstream typed API |
+| B5 | Structured catalog inconsistency | Registry version/provenance/cache/subject/retry/effect propagation and upstream update if needed | typed collector/host/CLI tests | Complete |
 | B6 | Durable runtime whitelist | seed/restore, bounds, add/remove/revision/digest/replay and config hard cut | core/facade/restoration tests | Complete |
-| B7 | Operator proof and closeout | command/status UX, adversarial/recovery journeys, generic fixture, downstream read-only rerun and residue cleanup | targeted package and bounded PocketIC checks | Independent proof complete; closeout held by B5 |
+| B7 | Operator proof and closeout | command/status UX, adversarial/recovery journeys, generic fixture, downstream read-only rerun and residue cleanup | targeted package and bounded PocketIC checks | Complete; ready for human closeout audit |
 
 These are coherent outcome batches, not preassigned patch releases.
 
@@ -103,9 +103,9 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   allocation. The later immutable Fleet-plan compiler reuses the same
   preflight rather than retaining a second topology/funding validator.
 - Mainnet preflight reads only existing validated catalog evidence: it makes no
-  network call and does not refresh or publish a cache. B5 still owns the
-  structured live collector/provenance outcome; missing cache authority remains
-  a blocker in the interim.
+  network call and does not refresh or publish a cache. B5 later completed the
+  structured collector/provenance outcome; missing cache authority remains a
+  typed pre-effect blocker.
 - Invalid Fleet schema and invalid Component admissions both reject in the
   Planning phase before `.canic/release-builds` exists. Focused pure-compiler,
   plan-report, install-ordering and no-allocation tests pass.
@@ -139,22 +139,29 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   tests, 23 direct-plan tests, the workspace-source exclusion case and
   warning-denied host/CLI Clippy.
 - No Canister runtime, stable state, Candid, external Canister or sibling
-  repository changed. B5 still owns live catalog collection and complete typed
-  inconsistency provenance.
+  repository changed. B5 later completed live catalog failure propagation and
+  complete typed inconsistency provenance.
 
-## B5 External Gate
+## B5 Result
 
-- The exact locked production graph still resolves crates.io `ic-query 0.40.1`.
-  Its `SubnetCatalogRetryability` remains the closed `Retryable` /
-  `NotRetryable` pair, and failed loads still return only
-  `SubnetCatalogHostError` rather than a typed failure carrying cache stage,
-  known Registry version and unknown retryability.
-- Read-only upstream `main` at
-  `3cceda805725e2c85d7129f1f51f42bacba1d249` has the same limitation: it has
-  no `Unknown` retry classification and no `CatalogLoadFailure` result.
-- B5 is therefore blocked on a committed or published upstream typed API. Canic
-  did not fork `ic-query`, parse error text or mutate an external repository to
-  manufacture the missing provenance. B5 and minor closeout remain open.
+- The exact locked production graph now resolves published crates.io
+  `ic-query 0.41.0`, checksum
+  `2d9f80d344dab9cb5ad21029f66c5aad23317c330d61c8fce06cc6424101d7d6`.
+  Its detailed load result retains the request source and assurance, exact
+  cache stage/disposition, a Registry version learned before later failure,
+  the typed offending subject, stable code/category and
+  `Unknown(typed reason)` retryability.
+- Canic calls only the detailed cached/live APIs. One exhaustive typed
+  projection carries all upstream-known fields into the deployment-plan JSON
+  and text report and adds explicit false build, workspace-mutation and IC-
+  mutation facts. Catalog failures are classified as Fleet-catalog evidence;
+  no error-string parser, fork, inferred version or guessed retry decision was
+  introduced.
+- Focused host tests prove a real cache-absence journey and a pinned-version
+  Registry-record projection with unknown retryability. Focused CLI tests prove
+  end-to-end cache-failure propagation plus JSON/text rendering of the pinned
+  version, subject, cache trigger and unknown reason without calling it
+  transient. Warning-denied host/CLI Clippy passes.
 
 ## B6 Result
 
@@ -200,8 +207,9 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   `bf14a5d3d89be4335d3da2601e8a60128fde04df`, with no Canic integration or
   CANIC-011/012/013 identifiers. Acceptance criterion 10 permits recording
   this exact external evidence blocker; no downstream file was changed.
-- Independent B7 proof is complete. Its final closeout step cannot complete
-  while B5 remains blocked, and the minor is not accepted or closed.
+- B7 is reconciled against the completed B5 result. The implementation batch
+  is ready for the required human closeout audit; the minor is not accepted or
+  closed by this implementation status.
 
 ## Feedback Traceability
 
@@ -213,9 +221,6 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
 
 ## Next Authorized Action
 
-Wait for a committed or published upstream `ic-query` API that preserves the
-accepted typed failed-load context and unknown retryability. Then complete B5
-propagation and its focused tests, reconcile B7 against that result and stop at
-0.107 closeout-audit readiness. A human must request and accept the exact 0.107
-closeout audit before any 0.108 production implementation begins. Keep 0.106
-B2's external effects held pending their separate exact authorization.
+Request and complete the exact human 0.107 closeout audit. Do not begin 0.108
+production implementation until that audit is accepted. Keep 0.106 B2's
+external effects held pending their separate exact authorization.
