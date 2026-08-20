@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- The 0.105 authorization state path now composes pure binding and admission
+  policy in workflow while storage ops expose only neutral occupancy and exact
+  mutations; the layering guard retains its production scan while consistently
+  excluding inline test fixtures.
+
+- The formatting pre-commit hook now refreshes the staged snapshot after
+  `make fmt`, so the ordinary `git add .` then `git commit` flow does not fail
+  solely because formatting changed staged files; partially staged files and
+  pre-existing unstaged edits remain protected.
+
 - CI ordinary tests now retain the immutable Git history used by release
   guards and provision the pinned workspace-version reader in their owning
   job.

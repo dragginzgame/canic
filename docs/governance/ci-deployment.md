@@ -37,14 +37,17 @@ failure in one run. Every expensive compile and test job still requires both
 cheap gate jobs to pass.
 
 The repository owns one `pre-commit` hook, configured by `make install-dev` or
-`make install-hooks`. It runs only `make fmt`. It never stages files or runs
-tests, Clippy, builds, validation, versioning, commits, or pushes. A partially
-staged file rejects before formatting because formatting the working copy
-cannot prove the staged snapshot. If formatting changes tracked working-tree
-content, the hook rejects so the maintainer can review and stage the result.
-Pre-existing unrelated unstaged changes do not reject when formatting leaves
-them byte-for-byte unchanged. `make fmt-check` remains in validation and CI so
-hook bypass does not weaken the release boundary.
+`make install-hooks`. It runs only `make fmt`; it does not run tests, Clippy,
+builds, validation, versioning, commits, or pushes. A partially staged file
+rejects before formatting because formatting the working copy cannot prove the
+staged snapshot. After successful formatting, the hook refreshes the index only
+for files that were already staged and tracked files that were clean before the
+formatter changed them. It never stages pre-existing unstaged edits and rejects
+if formatting changes such a file. Therefore `git add .` followed by
+`git commit` commits the formatted snapshot without a second staging pass, while
+unrelated unstaged content remains byte-for-byte unchanged. `make fmt-check`
+remains in validation and CI so hook bypass does not weaken the release
+boundary.
 
 `make test` executes every top-level integration test recorded in the guarded
 workspace test inventory. New integration targets must declare their release

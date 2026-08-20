@@ -296,9 +296,15 @@ rg -F 'git diff --cached --name-only -z --diff-filter=ACMR' "$PRE_COMMIT_HOOK" >
     fail "pre-commit hook does not reject partially staged formatting inputs"
 rg -F 'git diff --binary --no-ext-diff' "$PRE_COMMIT_HOOK" >/dev/null ||
     fail "pre-commit hook does not snapshot tracked working-tree content"
+rg -F 'unstaged_before["$path"]=1' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "pre-commit hook does not classify pre-existing unstaged content"
+rg -F 'git add --pathspec-from-file="$stage_after_format" --pathspec-file-nul' "$PRE_COMMIT_HOOK" >/dev/null ||
+    fail "pre-commit hook does not refresh the formatted staged snapshot"
 rg -F 'cmp -s "$before" "$after"' "$PRE_COMMIT_HOOK" >/dev/null ||
-    fail "pre-commit hook does not reject formatter mutations"
-if rg -n 'git[[:space:]]+add|make[[:space:]]+(fmt-check|validate|test|clippy|build)|cargo[[:space:]]+(test|clippy|build)|git[[:space:]]+(commit|push)' \
+    fail "pre-commit hook does not preserve pre-existing unstaged content"
+git_add_count="$(rg -c 'git[[:space:]]+add' "$PRE_COMMIT_HOOK" || true)"
+[ "${git_add_count:-0}" -eq 1 ] || fail "pre-commit hook must own exactly one bounded index refresh"
+if rg -n 'make[[:space:]]+(fmt-check|validate|test|clippy|build)|cargo[[:space:]]+(test|clippy|build)|git[[:space:]]+(commit|push)' \
     "$PRE_COMMIT_HOOK" >/dev/null; then
     fail "pre-commit hook exceeds its formatting-only boundary"
 fi

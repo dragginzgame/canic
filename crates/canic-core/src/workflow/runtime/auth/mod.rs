@@ -14,12 +14,15 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::ConfigModel,
-    domain::policy::pure::auth::application_authorization::ApplicationAuthorityBindingTransition,
+    domain::policy::pure::auth::application_authorization::{
+        ApplicationAuthorityBindingTransition, decide_application_authority_binding_transition,
+    },
     dto::auth::SignedRoleAttestation,
     format::display_optional,
     ids::{CanisterRole, ManagedCanisterBinding},
     log,
     log::Topic,
+    model::auth::application_authorization::LocalApplicationAuthorityBinding,
     ops::{
         auth::{AuthExpiryError, AuthOps, AuthOpsError},
         config::ConfigOps,
@@ -48,8 +51,29 @@ impl RuntimeAuthWorkflow {
     pub fn reconcile_local_application_authority()
     -> Result<ApplicationAuthorityBindingTransition, InternalError> {
         let binding = AuthOps::local_application_authority_binding()?;
-        AuthStateOps::reconcile_application_authority_binding(binding)
-            .map_err(|_| InternalError::invariant())
+        Self::reconcile_application_authority_binding(binding)
+    }
+
+    fn reconcile_application_authority_binding(
+        binding: LocalApplicationAuthorityBinding,
+    ) -> Result<ApplicationAuthorityBindingTransition, InternalError> {
+        let previous = AuthStateOps::application_authority_binding()
+            .map_err(|_| InternalError::invariant())?;
+        let transition =
+            decide_application_authority_binding_transition(previous.as_ref(), &binding);
+        match transition {
+            ApplicationAuthorityBindingTransition::AdvanceGeneration => {
+                AuthStateOps::advance_application_authority_binding_generation(binding)
+                    .map_err(|_| InternalError::invariant())?;
+            }
+            ApplicationAuthorityBindingTransition::Initialize
+            | ApplicationAuthorityBindingTransition::UpdateWithoutGeneration => {
+                AuthStateOps::set_application_authority_binding(binding)
+                    .map_err(|_| InternalError::invariant())?;
+            }
+            ApplicationAuthorityBindingTransition::Unchanged => {}
+        }
+        Ok(transition)
     }
 
     /// Return the exact root issuer-renewal native identity.
@@ -352,10 +376,89 @@ mod tests {
         nonroot_requires_root_proof_verifier_support, root_requires_role_attestation_proofs,
     };
     use crate::{
+        cdk::types::Principal,
         config::schema::{CanisterAuthConfig, CanisterKind},
+        domain::policy::pure::auth::application_authorization::ApplicationAuthorityBindingTransition,
         ids::CanisterRole,
-        test::config::ConfigTestBuilder,
+        model::auth::application_authorization::{
+            ApplicationScope, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
+        },
+        ops::storage::auth::{AuthStateOps, application_sessions::invalidate_indexes},
+        storage::stable::auth::{AuthState, AuthStateData},
+        test::{config::ConfigTestBuilder, seams, support::fleet_key},
     };
+
+    struct ApplicationAuthStateGuard(AuthStateData);
+
+    impl ApplicationAuthStateGuard {
+        fn empty() -> Self {
+            let original = AuthState::export();
+            AuthState::import(AuthStateData::default());
+            invalidate_indexes();
+            AuthStateOps::restore_application_session_state().unwrap();
+            Self(original)
+        }
+    }
+
+    impl Drop for ApplicationAuthStateGuard {
+        fn drop(&mut self) {
+            AuthState::import(self.0.clone());
+            invalidate_indexes();
+            AuthStateOps::restore_application_session_state().unwrap();
+        }
+    }
+
+    fn application_authority_binding(
+        scopes: &[&str],
+        maximum_session_ttl_secs: u64,
+    ) -> LocalApplicationAuthorityBinding {
+        let scopes = CanonicalApplicationScopes::for_verified_grant(
+            scopes
+                .iter()
+                .map(|scope| ApplicationScope::parse(*scope).unwrap())
+                .collect(),
+        )
+        .unwrap();
+        LocalApplicationAuthorityBinding::enabled(
+            fleet_key(1),
+            CanisterRole::new("component"),
+            Principal::from_slice(&[9; 29]),
+            Some(4),
+            scopes,
+            maximum_session_ttl_secs,
+        )
+    }
+
+    #[test]
+    fn application_authority_reconciliation_composes_policy_and_storage_mutation() {
+        let _lock = seams::lock();
+        let _state = ApplicationAuthStateGuard::empty();
+        let original = application_authority_binding(&["app:read"], 900);
+        assert_eq!(
+            RuntimeAuthWorkflow::reconcile_application_authority_binding(original).unwrap(),
+            ApplicationAuthorityBindingTransition::Initialize
+        );
+        assert_eq!(AuthStateOps::application_authority_generation(), 0);
+
+        let expanded = application_authority_binding(&["app:read", "app:write"], 1_000);
+        assert_eq!(
+            RuntimeAuthWorkflow::reconcile_application_authority_binding(expanded).unwrap(),
+            ApplicationAuthorityBindingTransition::UpdateWithoutGeneration
+        );
+        assert_eq!(AuthStateOps::application_authority_generation(), 0);
+
+        let narrowed = application_authority_binding(&["app:read"], 900);
+        assert_eq!(
+            RuntimeAuthWorkflow::reconcile_application_authority_binding(narrowed.clone()).unwrap(),
+            ApplicationAuthorityBindingTransition::AdvanceGeneration
+        );
+        assert_eq!(AuthStateOps::application_authority_generation(), 1);
+        assert_eq!(
+            RuntimeAuthWorkflow::reconcile_application_authority_binding(narrowed).unwrap(),
+            ApplicationAuthorityBindingTransition::Unchanged
+        );
+        assert_eq!(AuthStateOps::application_authority_generation(), 1);
+    }
 
     #[test]
     fn root_does_not_require_canister_signature_proofs_for_delegated_issuer_when_enabled() {
