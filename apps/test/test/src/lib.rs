@@ -1,7 +1,6 @@
 #![expect(clippy::unused_async)]
 
-use candid::Principal;
-use canic::{Error, api::auth::AuthApi, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
 use std::cell::Cell;
 
 thread_local! {
@@ -73,20 +72,6 @@ async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error>
     }
 
     Ok(())
-}
-
-#[canic_update(public)]
-async fn test_set_delegated_session_subject(
-    delegated_subject: Principal,
-    bootstrap_token: DelegatedToken,
-    requested_ttl_secs: Option<u64>,
-) -> Result<(), Error> {
-    AuthApi::set_delegated_session_subject(delegated_subject, bootstrap_token, requested_ttl_secs)
-}
-
-#[canic_query(public)]
-async fn test_delegated_session_subject() -> Result<Option<Principal>, Error> {
-    Ok(AuthApi::delegated_session_subject())
 }
 
 canic::finish!();

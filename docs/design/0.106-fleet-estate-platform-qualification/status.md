@@ -11,11 +11,10 @@ Date: 2026-08-18
 - External effects: none authorized. B2 remains blocked until accepted B1
   freezes the protocol and an exact maintainer-approved run plan names network,
   identity, count, concurrency, cycle ceiling and terminal asset disposition.
-- Predecessor reconciliation: `v0.103.0`, `v0.104.0` and `v0.104.1` are
-  published, but the 2026-08-19 audit reopened 0.104 closeout. Existing B1
-  evidence may be preserved; B2 and the final timer/state baseline require
-  published `v0.104.2` and may not use the stale
-  `v0.104.1` capability-reachability inventory as current authority.
+- Predecessor reconciliation: published `v0.104.2` closes 0.104 and is the
+  current timer/state authority. Existing B1 evidence may be preserved, but B2
+  and the final baseline must use `v0.104.2`, not the stale `v0.104.1`
+  capability-reachability inventory.
 - Successors: 0.107 consumes the accepted B1 root-ownership/current-cost
   boundary and is not gated on B2. Accepted B2 evidence is mandatory for
   mutating 0.108 Fleet-estate work.

@@ -157,6 +157,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
@@ -168,10 +169,12 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
+          cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Check ordinary test helper tools
         shell: bash
         run: |
+          cargo get --version
           rg --version
           rg --pcre2-version
       - name: Check runner disk before ordinary tests

@@ -8,25 +8,19 @@ use crate::{
 use std::cell::RefCell;
 
 mod records;
-mod sessions;
 
 pub use records::{
     ActiveDelegationProofRecord, AuthStateData, AuthStateRecord, ChainKeyAlgorithmRecord,
     ChainKeyBatchHeaderRecord, ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord,
     ChainKeyDelegationCertRecord, ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
     ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
-    ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
-    DelegatedSessionRecord, DelegationCertRecord, DelegationProofRecord,
-    IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-    RootIssuerRecord, RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord,
-    RootProofRecord,
+    ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegationCertRecord,
+    DelegationProofRecord, IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord,
+    IssuerProofBindingRecord, LocalApplicationAuthorityBindingRecord,
+    LocalApplicationAuthorizationStateData, LocalApplicationReplayRecord,
+    LocalApplicationSessionRecord, RootIssuerRecord, RootIssuerRenewalStateRecord,
+    RootIssuerRenewalTemplateRecord, RootProofRecord,
 };
-pub use sessions::DelegatedSessionUpsertResult;
-
-const DELEGATED_SESSION_CAPACITY: usize = 2_048;
-const DELEGATED_SESSION_SUBJECT_CAPACITY: usize = 128;
-const DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY: usize = 4_096;
-const DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY: usize = 256;
 
 eager_static! {
     pub(super) static AUTH_STATE: RefCell<Cell<AuthStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
@@ -58,130 +52,52 @@ impl AuthState {
         AUTH_STATE.with_borrow_mut(|cell| cell.set(data.record));
     }
 
-    // Resolve an active delegated session for the wallet caller.
+    // Return one atomic snapshot of current local application authorization state.
     #[must_use]
-    pub(crate) fn get_active_delegated_session(
-        wallet_pid: Principal,
-        now_secs: u64,
-    ) -> Option<DelegatedSessionRecord> {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let session = sessions::get_active_delegated_session(
-                &mut data.delegated_sessions,
-                wallet_pid,
-                now_secs,
-            );
-            if session.is_none() {
-                cell.set(data);
+    pub(crate) fn application_authorization_state() -> LocalApplicationAuthorizationStateData {
+        AUTH_STATE.with_borrow(|cell| {
+            let data = cell.get();
+            LocalApplicationAuthorizationStateData {
+                sessions: data.application_sessions.clone(),
+                replays: data.application_replays.clone(),
+                authority_generation: data.application_authority_generation,
+                authority_binding: data.application_authority_binding.clone(),
             }
-            session
         })
     }
 
-    // Upsert a delegated session for a wallet caller.
-    #[cfg(test)]
-    pub(crate) fn upsert_delegated_session(
-        session: DelegatedSessionRecord,
-        now_secs: u64,
-    ) -> DelegatedSessionUpsertResult {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let result = sessions::upsert_delegated_session(
-                &mut data.delegated_sessions,
-                session,
-                now_secs,
-                DELEGATED_SESSION_CAPACITY,
-                DELEGATED_SESSION_SUBJECT_CAPACITY,
-            );
-            if matches!(result, DelegatedSessionUpsertResult::Upserted) {
-                cell.set(data);
-            }
-            result
-        })
+    // Resolve one canonical application session record by its derived index.
+    #[must_use]
+    pub(crate) fn application_session_record(
+        index: usize,
+    ) -> Option<LocalApplicationSessionRecord> {
+        AUTH_STATE.with_borrow(|cell| cell.get().application_sessions.get(index).cloned())
     }
 
-    pub(crate) fn upsert_delegated_session_with_bootstrap_binding(
-        session: DelegatedSessionRecord,
-        binding: DelegatedSessionBootstrapBindingRecord,
-        now_secs: u64,
-    ) -> DelegatedSessionUpsertResult {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let result = sessions::upsert_delegated_session_with_bootstrap_binding(
-                &mut data.delegated_sessions,
-                &mut data.delegated_session_bootstrap_bindings,
-                session,
-                binding,
-                now_secs,
-                sessions::DelegatedSessionCapacityLimits {
-                    session: DELEGATED_SESSION_CAPACITY,
-                    session_subject: DELEGATED_SESSION_SUBJECT_CAPACITY,
-                    binding: DELEGATED_SESSION_BOOTSTRAP_BINDING_CAPACITY,
-                    binding_subject: DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY,
-                },
-            );
-            if matches!(result, DelegatedSessionUpsertResult::Upserted) {
-                cell.set(data);
-            }
-            result
-        })
+    // Resolve one canonical replay record by its derived index.
+    #[must_use]
+    pub(crate) fn application_replay_record(index: usize) -> Option<LocalApplicationReplayRecord> {
+        AUTH_STATE.with_borrow(|cell| cell.get().application_replays.get(index).copied())
     }
 
-    // Clear the delegated session for a wallet caller.
-    pub(crate) fn clear_delegated_session(wallet_pid: Principal) {
+    // Replace local application session and replay state in one stable-cell commit.
+    pub(crate) fn replace_application_authorization_state(
+        state: LocalApplicationAuthorizationStateData,
+    ) {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
-            sessions::clear_delegated_session(&mut data.delegated_sessions, wallet_pid);
+            data.application_sessions = state.sessions;
+            data.application_replays = state.replays;
+            data.application_authority_generation = state.authority_generation;
+            data.application_authority_binding = state.authority_binding;
             cell.set(data);
         });
     }
 
-    // Prune expired delegated sessions and report the removal count.
-    pub(crate) fn prune_expired_delegated_sessions(now_secs: u64) -> usize {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let removed =
-                sessions::prune_expired_delegated_sessions(&mut data.delegated_sessions, now_secs);
-            if removed > 0 {
-                cell.set(data);
-            }
-            removed
-        })
-    }
-
-    // Resolve an active delegated-session bootstrap binding by token fingerprint.
+    // Return the current target-local application authority generation.
     #[must_use]
-    pub(crate) fn get_active_delegated_session_bootstrap_binding(
-        token_fingerprint: [u8; 32],
-        now_secs: u64,
-    ) -> Option<DelegatedSessionBootstrapBindingRecord> {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let binding = sessions::get_active_delegated_session_bootstrap_binding(
-                &mut data.delegated_session_bootstrap_bindings,
-                token_fingerprint,
-                now_secs,
-            );
-            if binding.is_none() {
-                cell.set(data);
-            }
-            binding
-        })
-    }
-
-    // Prune expired delegated-session bootstrap bindings and report the removal count.
-    pub(crate) fn prune_expired_delegated_session_bootstrap_bindings(now_secs: u64) -> usize {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let removed = sessions::prune_expired_delegated_session_bootstrap_bindings(
-                &mut data.delegated_session_bootstrap_bindings,
-                now_secs,
-            );
-            if removed > 0 {
-                cell.set(data);
-            }
-            removed
-        })
+    pub(crate) fn application_authority_generation() -> u64 {
+        AUTH_STATE.with_borrow(|cell| cell.get().application_authority_generation)
     }
 
     // Resolve the issuer's installed active delegation proof.

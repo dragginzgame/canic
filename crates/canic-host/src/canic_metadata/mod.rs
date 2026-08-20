@@ -15,6 +15,7 @@ use candid::{CandidType, Deserialize};
 use canic_core::{
     dto::role::{RoleCapability, RoleOverviewResponse},
     protocol,
+    role_contract::RoleCapabilityKey,
 };
 use thiserror::Error as ThisError;
 
@@ -98,6 +99,7 @@ fn verify_overview_binding(
     let expected = binding
         .capabilities
         .iter()
+        .filter(|capability| **capability != RoleCapabilityKey::LocalApplicationAuthorization)
         .map(|capability| capability.manifest_name())
         .collect::<Vec<_>>();
     if capabilities != expected {

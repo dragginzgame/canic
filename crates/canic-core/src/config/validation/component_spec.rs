@@ -6,12 +6,16 @@
 
 use crate::{
     config::schema::{
-        CanisterConfig, ComponentChildKind, ComponentSpecConfig, ConfigSchemaError,
-        CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
-        MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES, TopupPolicy, Validate,
+        CanisterAuthConfig, CanisterConfig, ComponentChildKind, ComponentSpecConfig,
+        ConfigSchemaError, CyclesFundingPolicyConfig, MAX_COMPONENT_CHILD_ROLES,
+        MAX_COMPONENT_PROVISIONING_GRANTS, MAX_COMPONENT_SPAWN_GRANTS, NAME_MAX_BYTES, TopupPolicy,
+        Validate,
     },
     config::validation::validate_canister_role,
     ids::CanisterRole,
+    model::auth::application_authorization::{
+        ApplicationScope, MAX_LOCAL_APPLICATION_SESSION_TTL_NS, MAX_VERIFIED_APPLICATION_SCOPES,
+    },
 };
 use std::collections::BTreeMap;
 
@@ -74,6 +78,7 @@ impl Validate for ComponentSpecConfig {
 
         validate_cycles_funding(&self.cycles_funding, &self.component_role)?;
         validate_topup(self.topup.as_ref(), &self.component_role)?;
+        validate_auth(&self.auth, &self.component_role)?;
 
         validate_component_children(self)?;
         validate_spawn_grants(self)?;
@@ -108,6 +113,63 @@ fn validate_component_children(config: &ComponentSpecConfig) -> Result<(), Confi
         }
         validate_cycles_funding(&child.cycles_funding, role)?;
         validate_topup(child.topup.as_ref(), role)?;
+        validate_auth(&child.auth, role)?;
+    }
+
+    Ok(())
+}
+
+fn validate_auth(
+    auth: &CanisterAuthConfig,
+    canister: &CanisterRole,
+) -> Result<(), ConfigSchemaError> {
+    let Some(local) = &auth.local_application_authorization else {
+        return Ok(());
+    };
+
+    if !auth.delegated_token_verifier {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.local_application_authorization requires auth.delegated_token_verifier = true",
+        )));
+    }
+    if local.allowed_scopes.is_empty() {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.local_application_authorization.allowed_scopes must not be empty",
+        )));
+    }
+    if local.allowed_scopes.len() > MAX_VERIFIED_APPLICATION_SCOPES {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.local_application_authorization.allowed_scopes exceeds {MAX_VERIFIED_APPLICATION_SCOPES} entries",
+        )));
+    }
+    for (index, scope) in local.allowed_scopes.iter().enumerate() {
+        ApplicationScope::parse(scope.clone()).map_err(|error| {
+            ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' auth.local_application_authorization.allowed_scopes[{index}] is invalid: {error}",
+            ))
+        })?;
+        if index > 0 && local.allowed_scopes[index - 1] >= *scope {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "canister '{canister}' auth.local_application_authorization.allowed_scopes must be strictly sorted and unique",
+            )));
+        }
+    }
+
+    let hard_maximum_secs = MAX_LOCAL_APPLICATION_SESSION_TTL_NS / 1_000_000_000;
+    if local.default_session_ttl_secs == 0 || local.maximum_session_ttl_secs == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.local_application_authorization session TTLs must be greater than zero",
+        )));
+    }
+    if local.default_session_ttl_secs > local.maximum_session_ttl_secs {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.local_application_authorization.default_session_ttl_secs must not exceed maximum_session_ttl_secs",
+        )));
+    }
+    if local.maximum_session_ttl_secs > hard_maximum_secs {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' auth.local_application_authorization.maximum_session_ttl_secs must not exceed {hard_maximum_secs}",
+        )));
     }
 
     Ok(())

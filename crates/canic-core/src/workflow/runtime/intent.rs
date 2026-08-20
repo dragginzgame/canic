@@ -18,12 +18,18 @@ use crate::{
     },
     ops::{
         ic::IcOps,
-        runtime::metrics::intent::{
-            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
-            IntentMetrics,
+        runtime::metrics::{
+            auth::record_application_session_cleanup,
+            intent::{
+                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
+                IntentMetricSurface, IntentMetrics,
+            },
         },
         runtime::recent_failure::{RecentFailureInput, RecentFailureOps},
-        storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
+        storage::{
+            auth::AuthStateOps,
+            intent::{IntentStoreOps, ReceiptBackedIntentOps},
+        },
     },
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
@@ -43,6 +49,7 @@ thread_local! {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct IntentCleanupBatch {
     application_receipts_removed: usize,
+    application_sessions_removed: usize,
     local_intents_aborted: usize,
 }
 
@@ -50,6 +57,8 @@ impl IntentCleanupBatch {
     fn work_count(self) -> Result<u64, InternalError> {
         let total = self
             .application_receipts_removed
+            .checked_add(self.application_sessions_removed)
+            .ok_or_else(InternalError::invariant)?
             .checked_add(self.local_intents_aborted)
             .ok_or_else(InternalError::invariant)?;
         u64::try_from(total).map_err(|_| InternalError::invariant())
@@ -394,8 +403,9 @@ impl IntentCleanupWorkflow {
             log!(
                 Topic::Memory,
                 Info,
-                "intent cleanup: application_receipts_removed={} local_intents_aborted={} batch_limit={CLEANUP_BATCH_SIZE}",
+                "intent cleanup: application_receipts_removed={} application_sessions_removed={} local_intents_aborted={} intent_batch_limit={CLEANUP_BATCH_SIZE}",
                 batch.application_receipts_removed,
+                batch.application_sessions_removed,
                 batch.local_intents_aborted,
             );
             TimerRunResult::new(TimerCompletion::success(work_count), directive)
@@ -436,8 +446,19 @@ impl IntentCleanupWorkflow {
                 }
             }
         }
+        let application_session_cleanup_start = crate::perf::perf_counter();
+        let application_sessions = AuthStateOps::cleanup_application_sessions(now_ns)
+            .map_err(|_| InternalError::invariant())?;
+        crate::perf::record_checkpoint(
+            module_path!(),
+            "application_session_cleanup",
+            crate::perf::perf_counter().saturating_sub(application_session_cleanup_start),
+        );
+        let application_sessions_removed = application_sessions.total_removed();
+        record_application_session_cleanup(application_sessions_removed);
         Ok(IntentCleanupBatch {
             application_receipts_removed,
+            application_sessions_removed,
             local_intents_aborted: aborted,
         })
     }
@@ -514,11 +535,11 @@ impl IntentCleanupWorkflow {
             .map(Self::deadline_ns)
             .transpose()?;
         let application = ReceiptBackedIntentOps::receipt_capacity()?.next_eligibility_at_ns;
-        Ok(match (local, application) {
-            (Some(local), Some(application)) => Some(local.min(application)),
-            (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
-            (None, None) => None,
-        })
+        let application_session = AuthStateOps::application_session_cleanup_due_at_ns();
+        Ok([local, application, application_session]
+            .into_iter()
+            .flatten()
+            .min())
     }
 
     fn deadline_ns(due_at_secs: u64) -> Result<u64, InternalError> {
@@ -568,8 +589,33 @@ mod tests {
             intent::{PayloadBinding, TerminalEvidence},
             replay::OperationId,
         },
+        ops::storage::auth::application_sessions::invalidate_indexes,
+        storage::stable::auth::{
+            AuthState, AuthStateData, LocalApplicationAuthorizationStateData,
+            LocalApplicationReplayRecord,
+        },
         test::seams,
     };
+
+    struct ApplicationAuthStateGuard(AuthStateData);
+
+    impl ApplicationAuthStateGuard {
+        fn empty() -> Self {
+            let original = AuthState::export();
+            AuthState::import(AuthStateData::default());
+            invalidate_indexes();
+            AuthStateOps::restore_application_session_state().unwrap();
+            Self(original)
+        }
+    }
+
+    impl Drop for ApplicationAuthStateGuard {
+        fn drop(&mut self) {
+            AuthState::import(self.0.clone());
+            invalidate_indexes();
+            AuthStateOps::restore_application_session_state().unwrap();
+        }
+    }
 
     fn canic_receipt_input() -> BeginReceiptBackedIntentInput {
         BeginReceiptBackedIntentInput {
@@ -730,6 +776,7 @@ mod tests {
                 .expect("first bounded batch"),
             IntentCleanupBatch {
                 application_receipts_removed: 0,
+                application_sessions_removed: 0,
                 local_intents_aborted: CLEANUP_BATCH_SIZE,
             }
         );
@@ -743,6 +790,7 @@ mod tests {
                 .expect("second bounded batch"),
             IntentCleanupBatch {
                 application_receipts_removed: 0,
+                application_sessions_removed: 0,
                 local_intents_aborted: 1,
             }
         );
@@ -797,6 +845,7 @@ mod tests {
             IntentCleanupWorkflow::cleanup_due_batch(due_at_ns).expect("first shared batch"),
             IntentCleanupBatch {
                 application_receipts_removed: CLEANUP_BATCH_SIZE,
+                application_sessions_removed: 0,
                 local_intents_aborted: 0,
             }
         );
@@ -810,6 +859,7 @@ mod tests {
             IntentCleanupWorkflow::cleanup_due_batch(due_at_ns).expect("second shared batch"),
             IntentCleanupBatch {
                 application_receipts_removed: 1,
+                application_sessions_removed: 0,
                 local_intents_aborted: 1,
             }
         );
@@ -824,6 +874,45 @@ mod tests {
             0
         );
         assert!(!IntentStoreOps::is_pending_for_tests(IntentId(50)).expect("local intent removed"));
+    }
+
+    #[test]
+    fn application_session_expiry_uses_the_existing_intent_cleanup_owner() {
+        let _guard = seams::lock();
+        let _auth_state = ApplicationAuthStateGuard::empty();
+        IntentStoreOps::reset_for_tests();
+        let caller = Principal::from_slice(&[7; 29]);
+        AuthState::replace_application_authorization_state(
+            LocalApplicationAuthorizationStateData {
+                replays: vec![LocalApplicationReplayRecord {
+                    proof_fingerprint: [8; 32],
+                    transport_caller: caller,
+                    authenticated_subject: caller,
+                    authority_generation: 0,
+                    remove_at_ns: 77,
+                }],
+                ..LocalApplicationAuthorizationStateData::default()
+            },
+        );
+        invalidate_indexes();
+        AuthStateOps::restore_application_session_state().unwrap();
+
+        assert_eq!(
+            IntentCleanupWorkflow::next_cleanup_deadline_ns().unwrap(),
+            Some(77)
+        );
+        assert_eq!(
+            IntentCleanupWorkflow::cleanup_due_batch(77).unwrap(),
+            IntentCleanupBatch {
+                application_receipts_removed: 0,
+                application_sessions_removed: 1,
+                local_intents_aborted: 0,
+            }
+        );
+        assert_eq!(
+            IntentCleanupWorkflow::next_directive(77).unwrap(),
+            TimerDirective::Stop
+        );
     }
 
     #[test]

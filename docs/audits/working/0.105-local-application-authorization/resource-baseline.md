@@ -1,8 +1,8 @@
 # 0.105 B1 Released Resource Baseline
 
-The predecessor is `v0.104.1`, peeled commit
-`464c186d9d82112d1ea4c7bdb1f47bcd5e5224a5`. All byte counts use the current
-CBOR serializer and maximum-length 29-byte principals. The retained focused
+The implementation predecessor is annotated tag `v0.104.2`, peeled commit
+`0811b7d3ea3e0ebae5b522faa1f0f18d4dca1220`. All record byte counts use the
+current CBOR serializer and maximum-length 29-byte principals. The retained focused
 unit test `released_session_and_replay_cbor_footprint_is_exact` reproduces the
 stable values.
 
@@ -15,17 +15,20 @@ stable values.
 | H | 0 bytes of reconstructed lookup indexes | No exact-caller or subject-count index exists. The stable vectors themselves are cloned/read in heap but are canonical authority, not derived indexes. |
 | R | 0 instructions attributable to index reconstruction; N/A as a comparable restore measurement | Lifecycle restores no application-session index. B3 must introduce and measure synchronous reconstruction. |
 | C | Up to 6,144 removals and a full scan of 6,144 records in one call | Cleanup retains over both complete bounded vectors: up to 2,048 sessions and 4,096 bindings. There is no 128-record work cap. |
-| M | 19,124,317 raw bytes across the four released 0.104 product roles | Component 3,560,554; Root 8,406,365; Coordinator 3,818,092; Wasm Store 3,339,306. B1 changes no shipped product role, so its product delta is zero. B2's first product mutation must rebuild this exact role set. |
+| M | 19,054,678 raw bytes across the four controlled predecessor product roles | Component 3,559,180; Root 8,372,728; Coordinator 3,816,760; Wasm Store 3,306,010. Exact `v0.104.2` was rebuilt with its own locked graph and the repository's `fast` canonical artifact builder, without a release-build ID. |
 
-The corresponding released gzip total is 4,959,729 bytes. It is retained for
+The corresponding builder-produced gzip total is 4,940,882 bytes. It is retained for
 artifact identity context but is not substituted for the design's raw-Wasm
 `M` bound.
 
-The immutable artifacts were built from `v0.104.0`. The published 0.104.1
-closeout correction changed tests, test fixtures, development dependencies,
-guards and documentation but no shipped product-role source or runtime
-dependency, so that exact table remains the released 0.104.1 product
-predecessor footprint.
+The older 19,124,317 raw / 4,959,729 gzip table belongs to the immutable
+`v0.104.0` release build with a release-owned identity input. That input was
+not retained, so those bytes remain truthful historical release evidence but
+are not a controlled causal baseline for 0.105. B6 instead builds both exact
+`v0.104.2` and the current tree under equal-length temporary roots, their own
+locked graphs, the same toolchain/profile/configuration and no release-build
+ID. The resulting comparison is retained in
+[b6-operator-resource.md](b6-operator-resource.md).
 
 ## Stable-State Facts
 

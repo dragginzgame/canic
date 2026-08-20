@@ -4,7 +4,6 @@
 //! Does not own: endpoint response mapping, workflow authorization, or runtime metrics storage.
 //! Boundary: endpoint macros call access predicates before delegating to workflow.
 
-pub mod application_authorization;
 pub mod auth;
 pub mod deployment;
 pub mod env;

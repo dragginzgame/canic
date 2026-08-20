@@ -467,6 +467,19 @@ mod tests {
             };
             pic.make_live(None).to_string()
         }
+
+        /// Return the exact configured verifier Wasm installed by this fixture.
+        ///
+        /// # Panics
+        ///
+        /// Panics when the fixture's admitted verifier role has no built artifact.
+        #[must_use]
+        pub fn verifier_wasm(&self) -> Vec<u8> {
+            build_test_component_wasms()
+                .get(&self.verifier.role)
+                .expect("fixture verifier artifact")
+                .clone()
+        }
     }
 
     enum ActiveComponentRegistryRuntime {

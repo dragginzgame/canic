@@ -4,6 +4,7 @@
 //! Does not own: auth verification, persistence, policy, or runtime effects.
 //! Boundary: stable Candid/Serde auth shapes re-exported from concern modules.
 
+mod application_session;
 mod attestation;
 mod common;
 mod proof;
@@ -12,6 +13,12 @@ mod renewal;
 mod tests;
 mod token;
 
+pub use application_session::{
+    ApplicationSessionAuditEntry, ApplicationSessionAuditResponse, ApplicationSessionCommand,
+    ApplicationSessionCommandResponse, ApplicationSessionPolicyView, ApplicationSessionRequest,
+    ApplicationSessionStatus, ApplicationSessionVerifierPolicyView, ApplicationSessionView,
+    InactiveApplicationSession,
+};
 pub use attestation::{
     RoleAttestation, RoleAttestationGetRequest, RoleAttestationPrepareResponse,
     RoleAttestationRequest, RoleAttestationRootProof, SignedRoleAttestation,

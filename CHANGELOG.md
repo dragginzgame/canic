@@ -8,12 +8,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- 0.105 B1 freezes the released auth/session ownership and resource baseline,
-  proves browser-neutral delegated-token acquisition with a PEM-backed native
-  agent, accepts caller-derived signed presenter/subject identity and
-  target-local typed replay-capacity denial, and hard-cuts canonical application
-  scopes, the presenter-bearing token/verifier projection and pure closed
-  authorization/admission policy.
+- CI ordinary tests now retain the immutable Git history used by release
+  guards and provision the pinned workspace-version reader in their owning
+  job.
+
+## [0.105.x] - 2026-08-20 - Framework-Neutral Local Application Authorization
+
+Detailed patch breakdown: [docs/changelog/0.105.md](docs/changelog/0.105.md)
+
+- `0.105.0` hard-cuts the old subject-only session into bounded caller-bound
+  application sessions with canonical scopes, durable replay tombstones,
+  atomic replacement, exact retry and synchronous same-release index restore,
+  then adds explicitly configured, cfg-pruned establish/clear and caller-self
+  status variants beneath the existing managed role methods, one synchronous
+  local authorization facade and a token-free generic consumer, while deleting
+  the old subject-identity fallback across generated endpoint paths. Its
+  protected operator audit, bounded metrics and instruction/memory/Wasm gates
+  plus Canic-only multi-target recovery, controller separation, same-release
+  reconstruction and residue qualification are complete.
 
 ## [0.104.x] - 2026-08-19 - Timer Ownership And Lifecycle Composition
 
@@ -22,7 +34,9 @@ Detailed patch breakdown: [docs/changelog/0.104.md](docs/changelog/0.104.md)
 - `0.104.2` closes the reopened timer-ownership audit by freezing native
   registration actions, pruning automatic-top-up code from capability-disabled
   artifacts, proving closed-owner takeover and correcting quantitative evidence
-  authority without changing Candid or stable state.
+  authority. It also publishes the accepted 0.105 B1/B2 presenter-bound token,
+  canonical application scopes and pure authorization policy ahead of the
+  remaining 0.105 batches.
 
 - `0.104.1` strengthens the timer-ownership contract from lexical hits to
   parsed Rust authority plus exact native callsites, adds failed-install

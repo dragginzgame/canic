@@ -197,6 +197,7 @@ mod tests {
             RoleCapabilityKey::FleetCoordinator,
             RoleCapabilityKey::Icrc21,
             RoleCapabilityKey::Index,
+            RoleCapabilityKey::LocalApplicationAuthorization,
             RoleCapabilityKey::RoleAttestationSigner,
             RoleCapabilityKey::RoleAttestationVerifier,
             RoleCapabilityKey::Root,

@@ -312,6 +312,67 @@ fn semantic_protocol_and_cycle_types_are_public() {
 }
 
 #[test]
+fn local_application_authorization_facade_has_one_public_owner() {
+    const READ: canic::access::auth::ApplicationScopeRef<'static> =
+        canic::application_scope!("app:read");
+    let request = canic::access::auth::LocalApplicationAuthorizationRequest {
+        observed_transport_caller: Principal::anonymous(),
+        required_scope: READ,
+    };
+    assert_eq!(request.required_scope.as_str(), "app:read");
+
+    let facade: for<'a> fn(
+        canic::access::auth::LocalApplicationAuthorizationRequest<'a>,
+    ) -> canic::access::auth::LocalApplicationAuthorizationDecision =
+        canic::access::auth::authorize_local_application;
+    let _ = facade;
+
+    assert!(
+        !workspace_root()
+            .join("crates/canic-core/src/access/application_authorization.rs")
+            .exists(),
+        "the intermediate scope-only facade module must not survive B5"
+    );
+}
+
+#[test]
+fn application_session_audit_is_bounded_protected_and_secret_free() {
+    let audit_env = candid_type_env::<canic::dto::auth::ApplicationSessionAuditResponse>();
+    for required in [
+        "allowed_scopes",
+        "authority_generation",
+        "minimum_accepted_registry_epoch",
+        "sessions",
+        "transport_caller",
+    ] {
+        assert!(audit_env.contains(required), "audit omits {required}");
+    }
+    for forbidden in [
+        "delegated_token",
+        "establishment_request_hash",
+        "proof_fingerprint",
+        "proof_bytes",
+    ] {
+        assert!(
+            !audit_env.contains(forbidden),
+            "operator audit exposes {forbidden}"
+        );
+    }
+
+    let role_surface =
+        read_text(&workspace_root().join("crates/canic/src/macros/endpoints/role.rs"));
+    let audit_authorization = role_surface
+        .split("CanisterStatusRequest::ApplicationSessionAudit(_) =>")
+        .nth(1)
+        .expect("audit authorization arm");
+    let audit_authorization = audit_authorization
+        .split("CanisterStatusRequest::CycleBalance")
+        .next()
+        .expect("bounded audit authorization arm");
+    assert!(audit_authorization.contains("access::auth::is_root(caller)"));
+}
+
+#[test]
 fn icrc21_dispatcher_uses_the_registered_typed_handler() {
     let method = "protocol_surface_transfer";
     Icrc21Dispatcher::register(method, |request| {
@@ -379,6 +440,37 @@ fn role_capability_surfaces_are_pruned_at_the_destination_macro() {
             && role_surface.contains("CanisterStatusResponse::Children"),
         "the managed children status variant must compile only for Sharding profiles"
     );
+
+    assert_eq!(
+        role_surface
+            .matches("#[cfg(canic_capability_local_application_authorization)]")
+            .count(),
+        12,
+        "application-session request, response, authorization and dispatch sites must share one compile-time capability"
+    );
+    for surface in [
+        "CanisterCommand::ApplicationSession",
+        "CanisterCommandResponse::ApplicationSession",
+        "CanisterStatusRequest::ApplicationSession",
+        "CanisterStatusRequest::ApplicationSessionAudit",
+        "CanisterStatusResponse::ApplicationSession",
+        "CanisterStatusResponse::ApplicationSessionAudit",
+    ] {
+        assert!(
+            role_surface.contains(surface),
+            "managed role surface omits {surface}"
+        );
+    }
+    for relative_path in [
+        "crates/canic/src/macros/endpoints/root.rs",
+        "crates/canic/src/macros/endpoints/fleet_coordinator.rs",
+        "crates/canic/src/macros/endpoints/wasm_store.rs",
+    ] {
+        assert!(
+            !read_text(&root.join(relative_path)).contains("ApplicationSession"),
+            "infrastructure surface acquired application-session authority in {relative_path}"
+        );
+    }
 
     let root_surface = read_text(&root.join("crates/canic/src/macros/endpoints/root.rs"));
     let command_macro = root_surface

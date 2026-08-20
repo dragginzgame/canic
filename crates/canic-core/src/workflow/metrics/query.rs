@@ -175,8 +175,8 @@ mod tests {
         metrics::reset_for_tests();
 
         AuthMetrics::record(
-            AuthMetricSurface::Session,
-            AuthMetricOperation::Session,
+            AuthMetricSurface::ApplicationSession,
+            AuthMetricOperation::Establish,
             AuthMetricOutcome::Completed,
             AuthMetricReason::Created,
         );
@@ -189,7 +189,13 @@ mod tests {
 
         assert_first_metric_labels(
             MetricsKind::Security,
-            ["auth", "attestation", "verify", "failed", "verify_failed"],
+            [
+                "auth",
+                "application_session",
+                "establish",
+                "completed",
+                "created",
+            ],
         );
     }
 

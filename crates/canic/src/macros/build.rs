@@ -183,6 +183,9 @@ macro_rules! __canic_build_internal {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::Index => {
                     println!("cargo:rustc-cfg=canic_capability_index");
                 }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::LocalApplicationAuthorization => {
+                    println!("cargo:rustc-cfg=canic_capability_local_application_authorization");
+                }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21 => {
                     println!("cargo:rustc-cfg=canic_capability_icrc21");
                 }

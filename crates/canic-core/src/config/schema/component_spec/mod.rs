@@ -439,8 +439,45 @@ pub struct CanisterAuthConfig {
     #[serde(default)]
     pub delegated_token_verifier: bool,
 
+    /// Protected role-local policy for scoped application sessions.
+    #[serde(default)]
+    pub local_application_authorization: Option<LocalApplicationAuthorizationConfig>,
+
     #[serde(default)]
     pub role_attestation_cache: bool,
+}
+
+/// Protected role-local application-session authority.
+#[derive(Clone, Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalApplicationAuthorizationConfig {
+    pub allowed_scopes: Vec<String>,
+    pub default_session_ttl_secs: u64,
+    pub maximum_session_ttl_secs: u64,
+}
+
+impl<'de> Deserialize<'de> for LocalApplicationAuthorizationConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawConfig {
+            allowed_scopes: Vec<String>,
+            default_session_ttl_secs: u64,
+            maximum_session_ttl_secs: u64,
+        }
+
+        let raw = RawConfig::deserialize(deserializer)?;
+        let mut allowed_scopes = raw.allowed_scopes;
+        allowed_scopes.sort_unstable();
+        Ok(Self {
+            allowed_scopes,
+            default_session_ttl_secs: raw.default_session_ttl_secs,
+            maximum_session_ttl_secs: raw.maximum_session_ttl_secs,
+        })
+    }
 }
 
 ///

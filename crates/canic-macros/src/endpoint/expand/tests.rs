@@ -128,7 +128,7 @@ fn fleet_command_endpoints_skip_fleet_guard_and_reject_gating() {
 }
 
 #[test]
-fn access_stage_expr_builds_context_from_resolved_identity() {
+fn access_stage_expr_builds_context_from_the_exact_transport_caller() {
     let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
     let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
         BuiltinPredicate::CallerIsController,
@@ -138,18 +138,13 @@ fn access_stage_expr_builds_context_from_resolved_identity() {
     let stage = access_stage(&plan, &call).to_string();
     let compact = stage.split_whitespace().collect::<String>();
 
-    assert!(compact.contains("resolve_authenticated_identity("));
     assert!(compact.contains("::canic::__internal::cdk::api::msg_caller"));
-    assert!(compact.contains("caller:__canic_authenticated_identity.transport_caller"));
-    assert!(
-        compact
-            .contains("authenticated_caller:__canic_authenticated_identity.authenticated_subject")
-    );
-    assert!(compact.contains("identity_source:__canic_authenticated_identity.identity_source"));
+    assert!(compact.contains("caller:__canic_caller"));
+    assert!(!compact.contains("authenticated_caller"));
 }
 
 #[test]
-fn access_stage_default_guard_marks_identity_source_raw_caller() {
+fn access_stage_default_guard_uses_the_exact_transport_caller() {
     let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
     let args = make_args(Vec::new());
     let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
@@ -157,10 +152,8 @@ fn access_stage_default_guard_marks_identity_source_raw_caller() {
     let stage = access_stage(&plan, &call).to_string();
     let compact = stage.split_whitespace().collect::<String>();
 
-    assert!(
-        compact.contains("identity_source::canic::__internal::core::access::auth::AuthenticatedIdentitySource::RawCaller")
-            || compact.contains("identity_source:::canic::__internal::core::access::auth::AuthenticatedIdentitySource::RawCaller")
-    );
+    assert!(compact.contains("caller:__canic_caller"));
+    assert!(!compact.contains("authenticated_caller"));
 }
 
 #[test]
@@ -177,6 +170,7 @@ fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
     );
 
     let expanded = expand(EndpointKind::Update, args, func).to_string();
+    let compact = expanded.split_whitespace().collect::<String>();
 
     let fence = expanded
         .find("preflight_endpoint")
@@ -194,6 +188,8 @@ fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
     assert!(fence < access);
     assert!(access < dispatch);
     assert!(dispatch < impl_call);
+    assert!(compact.contains("::canic::application_scope!(\"write\").as_str()"));
+    assert!(!compact.contains("authenticated_with_scope(\"write\")"));
 }
 
 #[test]

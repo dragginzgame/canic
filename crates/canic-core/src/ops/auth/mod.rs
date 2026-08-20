@@ -4,8 +4,8 @@
 //! Does not own: endpoint authorization, storage schemas, or pure auth policy.
 //! Boundary: ops layer between auth workflows, policy, storage, and crypto helpers.
 
+pub mod application_authorization;
 mod attestation;
-mod boundary;
 #[cfg(any(
     feature = "auth-root-canister-sig-verify",
     feature = "auth-issuer-canister-sig-verify"
@@ -20,7 +20,6 @@ mod root_canister_sig;
 mod token;
 mod types;
 mod verify;
-pub use boundary::DelegatedSessionExpiryClamp;
 #[cfg(test)]
 pub use delegated::test_fixtures;
 pub use delegation::ChainKeyRootDelegationBatchInstallPlan;

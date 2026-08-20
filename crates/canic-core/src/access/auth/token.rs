@@ -16,7 +16,6 @@ use crate::{
     dto::auth::DelegatedToken,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
-        config::ConfigOps,
         ic::IcOps,
     },
 };
@@ -24,9 +23,6 @@ use ic_cdk::api::msg_arg_data;
 
 const DELEGATED_TOKEN_DECODING_QUOTA: usize = 256 * 1024;
 const DELEGATED_TOKEN_MAX_TYPE_LEN: usize = 16 * 1024;
-const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
-const NS_PER_SEC: u64 = 1_000_000_000;
-
 pub(super) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
@@ -59,17 +55,6 @@ fn verify_token(
         now_ns,
     })
     .map_err(access_error_from_verification)?;
-
-    if let Some(required_scope) = required_scope {
-        let required_scope =
-            crate::model::auth::application_authorization::ApplicationScopeRef::parse(
-                required_scope,
-            )
-            .map_err(|_| AccessError::RequiredScopeMissing)?;
-        if !verified.scopes().contains(required_scope) {
-            return Err(AccessError::RequiredScopeMissing);
-        }
-    }
 
     Ok(verified.issuer())
 }
@@ -112,17 +97,7 @@ fn delegated_token_from_bytes(bytes: &[u8]) -> Result<DelegatedToken, String> {
 
 // Resolve the verifier-side TTL policy from delegated-token config.
 fn delegated_token_max_ttl_ns() -> Result<u64, AccessError> {
-    let cfg = ConfigOps::delegated_tokens_config().map_err(dependency_unavailable)?;
-    if !cfg.enabled {
-        return Err(AccessError::DelegatedTokensDisabled);
-    }
-
-    let max_ttl_secs = cfg
-        .max_ttl_secs
-        .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS);
-    max_ttl_secs
-        .checked_mul(NS_PER_SEC)
-        .ok_or(AccessError::DelegatedTokenMaxTtlOverflow)
+    AuthOps::delegated_token_max_ttl_ns().map_err(dependency_unavailable)
 }
 
 // -----------------------------------------------------------------------------
@@ -197,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn delegated_auth_guard_verifies_presenter_before_local_scope_check() {
+    fn delegated_auth_guard_delegates_presenter_and_scope_policy_once() {
         let source = include_str!("token.rs");
         let start = source
             .find("fn verify_token(")
@@ -207,14 +182,8 @@ mod tests {
             .map_or(source.len(), |offset| start + offset);
         let body = &source[start..end];
 
-        let verify = body
-            .find("AuthOps::verify_token")
-            .expect("verifier call exists");
-        let scope = body
-            .find("verified.scopes().contains")
-            .expect("scope check exists");
-
-        assert!(verify < scope);
+        assert_eq!(body.matches("AuthOps::verify_token").count(), 1);
+        assert!(!body.contains("verified.scopes().contains"));
     }
 
     #[test]

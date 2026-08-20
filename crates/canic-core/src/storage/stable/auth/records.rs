@@ -2,29 +2,58 @@ use crate::ids::FleetKey;
 use crate::storage::prelude::*;
 
 ///
-/// DelegatedSessionRecord
+/// LocalApplicationSessionRecord
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedSessionRecord {
-    pub wallet_pid: Principal,
-    pub delegated_pid: Principal,
-    pub issued_at: u64,
-    pub expires_at: u64,
-    pub bootstrap_token_fingerprint: Option<[u8; 32]>,
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LocalApplicationSessionRecord {
+    pub transport_caller: Principal,
+    pub authenticated_subject: Principal,
+    pub issuer: Principal,
+    pub fleet: FleetKey,
+    pub role: CanisterRole,
+    pub scopes: Vec<String>,
+    pub authority_generation: u64,
+    pub established_at_ns: u64,
+    pub expires_at_ns: u64,
+    pub proof_fingerprint: [u8; 32],
+    pub establishment_request_hash: [u8; 32],
 }
 
 ///
-/// DelegatedSessionBootstrapBindingRecord
+/// LocalApplicationReplayRecord
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedSessionBootstrapBindingRecord {
-    pub wallet_pid: Principal,
-    pub delegated_pid: Principal,
-    pub token_fingerprint: [u8; 32],
-    pub bound_at: u64,
-    pub expires_at: u64,
+pub struct LocalApplicationReplayRecord {
+    pub proof_fingerprint: [u8; 32],
+    pub transport_caller: Principal,
+    pub authenticated_subject: Principal,
+    pub authority_generation: u64,
+    pub remove_at_ns: u64,
+}
+
+/// Last locally activated protected binding used only for generation transitions.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum LocalApplicationAuthorityBindingRecord {
+    Disabled,
+    Enabled {
+        fleet: FleetKey,
+        role: CanisterRole,
+        verifier_root_canister_id: Principal,
+        minimum_accepted_registry_epoch: Option<u64>,
+        allowed_scopes: Vec<String>,
+        maximum_session_ttl_secs: u64,
+    },
+}
+
+/// Atomic persisted projection for local application session authority.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LocalApplicationAuthorizationStateData {
+    pub sessions: Vec<LocalApplicationSessionRecord>,
+    pub replays: Vec<LocalApplicationReplayRecord>,
+    pub authority_generation: u64,
+    pub authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
 }
 
 ///
@@ -309,9 +338,13 @@ pub struct RootIssuerRenewalStateRecord {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct AuthStateRecord {
-    pub delegated_sessions: Vec<DelegatedSessionRecord>,
+    pub application_sessions: Vec<LocalApplicationSessionRecord>,
 
-    pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
+    pub application_replays: Vec<LocalApplicationReplayRecord>,
+
+    pub application_authority_generation: u64,
+
+    pub application_authority_binding: Option<LocalApplicationAuthorityBindingRecord>,
 
     pub active_delegation_proof: Option<ActiveDelegationProofRecord>,
 
@@ -355,7 +388,7 @@ impl AuthStateData {
 }
 
 #[cfg(test)]
-mod released_resource_baseline {
+mod current_resource_contract {
     use super::*;
 
     fn encoded<T: Serialize>(value: &T) -> Vec<u8> {
@@ -370,51 +403,85 @@ mod released_resource_baseline {
         Principal::from_slice(&bytes)
     }
 
-    fn session(id: u64) -> DelegatedSessionRecord {
-        DelegatedSessionRecord {
-            wallet_pid: principal(id),
-            delegated_pid: principal(id % 128),
-            issued_at: 1,
-            expires_at: 1_801,
-            bootstrap_token_fingerprint: Some([1; 32]),
+    fn session(id: u64) -> LocalApplicationSessionRecord {
+        let mut proof_fingerprint = [0_u8; 32];
+        proof_fingerprint[..8].copy_from_slice(&id.to_be_bytes());
+        LocalApplicationSessionRecord {
+            transport_caller: principal(id),
+            authenticated_subject: principal(id),
+            issuer: principal(9_000),
+            fleet: crate::test::support::fleet_key(1),
+            role: CanisterRole::new("component"),
+            scopes: vec!["app:read".to_string()],
+            authority_generation: 1,
+            established_at_ns: 1,
+            expires_at_ns: 1_800_000_000_001,
+            proof_fingerprint,
+            establishment_request_hash: [2; 32],
         }
     }
 
-    fn binding(id: u64) -> DelegatedSessionBootstrapBindingRecord {
-        let mut token_fingerprint = [0_u8; 32];
-        token_fingerprint[..8].copy_from_slice(&id.to_be_bytes());
-        DelegatedSessionBootstrapBindingRecord {
-            wallet_pid: principal(id % 2_048),
-            delegated_pid: principal(id % 128),
-            token_fingerprint,
-            bound_at: 1,
-            expires_at: 61,
+    fn replay(id: u64) -> LocalApplicationReplayRecord {
+        let mut proof_fingerprint = [0_u8; 32];
+        proof_fingerprint[..8].copy_from_slice(&id.to_be_bytes());
+        LocalApplicationReplayRecord {
+            proof_fingerprint,
+            transport_caller: principal(id),
+            authenticated_subject: principal(id),
+            authority_generation: 1,
+            remove_at_ns: 60_000_000_001,
+        }
+    }
+
+    fn maximum_scope_session(id: u64) -> LocalApplicationSessionRecord {
+        let mut session = session(id);
+        session.scopes = (0..16)
+            .map(|scope| format!("app{scope:02}:{}", "x".repeat(58)))
+            .collect();
+        session
+    }
+
+    fn maximum_authority_binding() -> LocalApplicationAuthorityBindingRecord {
+        LocalApplicationAuthorityBindingRecord::Enabled {
+            fleet: crate::test::support::fleet_key(1),
+            role: CanisterRole::new("component"),
+            verifier_root_canister_id: principal(9_001),
+            minimum_accepted_registry_epoch: Some(u64::MAX),
+            allowed_scopes: maximum_scope_session(1).scopes,
+            maximum_session_ttl_secs: 1_800,
         }
     }
 
     #[test]
-    fn released_session_and_replay_cbor_footprint_is_exact() {
+    fn current_session_and_replay_cbor_footprint_stays_bounded() {
         let empty = AuthStateRecord::default();
         let one_session = AuthStateRecord {
-            delegated_sessions: vec![session(1)],
+            application_sessions: vec![session(1)],
             ..AuthStateRecord::default()
         };
-        let one_binding = AuthStateRecord {
-            delegated_session_bootstrap_bindings: vec![binding(1)],
+        let one_replay = AuthStateRecord {
+            application_replays: vec![replay(1)],
             ..AuthStateRecord::default()
         };
         let maximum = AuthStateRecord {
-            delegated_sessions: (0..2_048).map(session).collect(),
-            delegated_session_bootstrap_bindings: (0..4_096).map(binding).collect(),
+            application_sessions: (0..2_048).map(maximum_scope_session).collect(),
+            application_replays: (0..4_096).map(replay).collect(),
+            application_authority_generation: 1,
+            application_authority_binding: Some(maximum_authority_binding()),
             ..AuthStateRecord::default()
         };
 
         let empty_bytes = encoded(&empty).len();
-        assert_eq!(empty_bytes, 257);
-        assert_eq!(encoded(&session(1)).len(), 176);
-        assert_eq!(encoded(&binding(1)).len(), 163);
-        assert_eq!(encoded(&one_session).len() - empty_bytes, 176);
-        assert_eq!(encoded(&one_binding).len() - empty_bytes, 163);
-        assert_eq!(encoded(&maximum).len(), 1_032_069);
+        let session_bytes = encoded(&session(1)).len();
+        let replay_bytes = encoded(&replay(1)).len();
+        assert_eq!(empty_bytes, 308);
+        assert_eq!(session_bytes, 519);
+        assert_eq!(replay_bytes, 198);
+        assert_eq!(encoded(&maximum).len(), 4_025_450);
+        assert!(session_bytes <= 2_048);
+        assert!(encoded(&one_session).len() > empty_bytes);
+        assert!(encoded(&one_replay).len() > empty_bytes);
+        assert!(replay_bytes < session_bytes);
+        assert!(encoded(&maximum).len() <= 8 * 1024 * 1024);
     }
 }

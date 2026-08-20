@@ -388,6 +388,7 @@ fn install_verifier_test_config(
     canister_cfg.auth = CanisterAuthConfig {
         delegated_token_issuer,
         delegated_token_verifier,
+        local_application_authorization: None,
         role_attestation_cache,
     };
 

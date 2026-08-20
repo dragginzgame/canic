@@ -10,18 +10,18 @@ mod start;
 /// Construct one statically validated canonical application scope.
 ///
 /// ```
-/// const READ: canic::access::application_authorization::ApplicationScopeRef<'static> =
+/// const READ: canic::access::auth::ApplicationScopeRef<'static> =
 ///     canic::application_scope!("my_app:read");
 /// assert_eq!(READ.as_str(), "my_app:read");
 /// ```
 ///
 /// ```compile_fail
-/// const INVALID: canic::access::application_authorization::ApplicationScopeRef<'static> =
+/// const INVALID: canic::access::auth::ApplicationScopeRef<'static> =
 ///     canic::application_scope!("my.app:read");
 /// ```
 #[macro_export]
 macro_rules! application_scope {
-    ($scope:literal) => {{ $crate::access::application_authorization::ApplicationScopeRef::from_static($scope) }};
+    ($scope:literal) => {{ const { $crate::access::auth::ApplicationScopeRef::from_static($scope) } }};
 }
 
 // -----------------------------------------------------------------------------

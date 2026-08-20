@@ -4,15 +4,14 @@ Date: 2026-08-19
 
 ## Status
 
-- State: closeout reopened by the 2026-08-19 independent audit. Published
-  `v0.104.0` contains the accepted runtime hard cut and published `v0.104.1`
-  contains its first bounded evidence correction. The audit then found that
-  the B8 guard froze native constructors but not registration method actions,
-  capability-disabled artifacts retained the automatic-top-up callback and
-  workflow, and the recorded release-size command omitted a release-build-ID
-  input needed to reproduce its byte table. The working tree contains a
-  bounded `0.104.2` corrective candidate; it is not part of either published tag
-  and does not close the line until the maintainer publishes that release.
+- State: complete. Published `v0.104.0` contains the accepted runtime hard cut,
+  `v0.104.1` its first bounded evidence correction and `v0.104.2` the final
+  audit correction. The final release freezes native registration actions,
+  prunes automatic-top-up callback/workflow reachability from
+  capability-disabled artifacts and corrects the release-size evidence
+  authority. Its immutable source also contains the accepted 0.105 B1/B2
+  application-authorization hard cut; the active changelog records that early
+  inclusion rather than misclassifying it as unreleased.
 - Runtime impact: B2 removes the public timer facade and transient claim
   machinery. B3 hard-cuts memory ID 60 to minimal domain attempt fences and
   cycle-only exact retry identity. B4 moves auth, cycles and placement to lazy
@@ -31,13 +30,16 @@ Date: 2026-08-19
   export pair and complete phase-specific shared inventories with separately
   reconstructed owner rows. Its artifact is
   test-only and changes no shipped product role. Published B8 parses the
-  45-file Rust ownership set and freezes native constructors. The corrective
-  `0.104.2` candidate additionally freezes exact registration actions and
-  rejects their aliased, unclassified or duplicate use. The 46,593-instruction, zero-page
+  45-file Rust ownership set and freezes native constructors. Published
+  `v0.104.2` freezes exact registration actions in addition to those
+  constructors and rejects their aliased, unclassified or duplicate use. The
+  46,593-instruction, zero-page
   result is one current two-work-sample observation, not a threshold or causal
-  performance claim. The `0.104.2` candidate adds doc-hidden macro plumbing
+  performance claim. The timer correction adds doc-hidden macro plumbing
   for capability-specific internal selection but no supported facade/prelude
-  item, lifecycle grammar or Candid method.
+  item, lifecycle grammar or Candid method. Separately, the early 0.105 B1/B2
+  inclusion changes delegated-token Candid and the public Rust authorization
+  model without allocating active session stable state.
 - Quantitative boundary: the recorded 19,424,848 raw / 5,030,696 gzip bytes
   for 0.103.0 and 19,124,317 raw / 4,959,729 gzip bytes for 0.104.0 are retained
   as historical release-identity-bearing observations. Their exact
@@ -56,10 +58,10 @@ Date: 2026-08-19
   or compatibility surface is permitted.
 - Predecessor: `v0.103.0` publishes the completed role-owned Candid and
   autonomous-operation hard cut. B1 inventories that exact tagged result.
-- Successors: existing 0.105 work remains preserved, but no new successor
-  mutation should consume the reopened boundary. 0.106 B1 evidence may remain
-  preserved, but its final timer inventory must reconcile against the eventual
-  published `v0.104.2` correction rather than published `v0.104.1`.
+- Successors: 0.105 B1/B2 are already present in the exact published
+  `v0.104.2` predecessor, so B3 may proceed. 0.106 B1 evidence may remain
+  preserved, but its final timer inventory must use `v0.104.2` rather than
+  `v0.104.1` as current authority.
 
 ## Release-Batch Tracker
 
@@ -110,11 +112,6 @@ designs and deferred drafts retain their truthful old identities.
 
 ## Next Authorized Action
 
-Finish targeted validation of the bounded `0.104.2` corrective candidate and
-preserve the existing 0.105 work without extending it. The maintainer must then
-run the complete release gate and publish a new immutable `v0.104.2` tag. The
-local lightweight `v0.103.0` shadow must also be removed and refetched
-by the maintainer before release verification; it currently resolves to
-`721783675c2e7dc0981d7fa7639f654b84593df7`, while the published annotated tag
-object `b571f51a1e599677752b61b1f7ad1fae9e455186` peels to
-`89be28f8edf0d55035ddac0c864d6c99771fc49c`. Do not move either published tag.
+No 0.104 implementation work remains. Preserve every published tag and resume
+0.105 B3 from exact predecessor `v0.104.2`; do not reopen timer provider,
+lifecycle-export, watchdog or stable provider-state ownership.

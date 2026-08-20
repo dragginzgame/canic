@@ -28,10 +28,10 @@ production	crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs	Sele
 production	crates/canic-core/src/ops/auth/types.rs	Runtime prepare and verify input/output shapes	Use model verified-authority type; remove duplicate subject-only projection	B2
 production	crates/canic-core/src/ops/auth/boundary.rs	Current token-clamped delegated-session expiry	Delete old clamp; local session TTL is independent of proof remaining lifetime	B3
 production	crates/canic-core/src/access/auth/token.rs	Decodes argument-zero token, verifies it and checks scope	Require signed presenter==subject==raw caller in the verifier and delete the duplicated access-layer subject check	B2/B5
-production	crates/canic-core/src/access/auth/identity.rs	Resolves subject-only session, mutates stale state and falls back to raw caller	Delete fallback and old session identity resolution; local application decision is explicit and closed	B3/B5
+production	crates/canic-core/src/access/auth/identity.rs	Validates whether one application subject is admissible as a user identity	Retain only subject admissibility; subject-only session resolution, mutation and raw-caller fallback are deleted	B3/B5
 production	crates/canic-core/src/access/auth/mod.rs	Public access types, predicates and delegated-session subject validation	Own caller/time acquisition and re-export model authorization values without redeclaration	B5
 production	crates/canic-core/src/access/expr/evaluators.rs	Runs authenticated endpoint access expressions	Converge proof-bearing authority on the common verified projection	B5
-production	crates/canic-core/src/access/expr/mod.rs	Declares authenticated access expression and context	Retain endpoint expression surface; do not add session syntax or a second policy engine	B5
+production	crates/canic-core/src/access/expr/mod.rs	Declares authenticated access expressions and the exact transport-caller context	Retain endpoint expression surface with no session identity field, session syntax or second policy engine	B5
 production	crates/canic-macros/src/endpoint/expand/access.rs	Expands authenticated endpoint guards	Use common proof-bearing access boundary; no local-session wrapper generation	B5
 production	crates/canic-macros/src/endpoint/parse/mod.rs	Parses authenticated endpoint access declarations	No new grammar; current scope declarations must use canonical model validation	B5
 production	crates/canic-macros/src/endpoint/validate/mod.rs	Validates endpoint access declarations	Reject invalid canonical scopes at expansion; no compatibility spellings	B5
@@ -55,7 +55,8 @@ production	crates/canic-core/src/ops/config/mod.rs	Runtime compiled-config acces
 production	crates/canic/src/macros/build.rs	Emits role capability cfgs	Emit one cfg for local application authorization only on admitted managed roles	B4
 production	crates/canic/src/build_support/cfg_catalog.rs	Canonical generated cfg catalogue	Add exact local capability cfg and no aliases	B4
 production	crates/canic/src/macros/endpoints/role.rs	Cfg-pruned managed command/status Candid and dispatch	Add nested ApplicationSession command/status variants; infrastructure roles remain pruned	B4
-production	crates/canic/src/macros/endpoints/root.rs	Root issuer policy, renewal and proof role variants	Retain issuer/grant authority; add no application-session variant to Root	B2/B4
+production	crates/canic/src/macros/endpoints/root.rs	Root issuer policy, renewal, proof and control-plane predicate variants	Retain issuer/grant authority and exact transport-caller predicates; add no application-session variant or identity fallback to Root	B2/B4/B5
+production	crates/canic/src/macros/endpoints/wasm_store.rs	Store control-plane predicate generation	Use only the exact transport caller; retain no application-session variant or identity fallback	B5
 production	crates/canic/src/access/mod.rs	Facade re-export of core access types and helpers	Re-export the single model-backed local authorization facade and types	B5
 production	crates/canic/src/api/mod.rs	Facade re-export of AuthApi	Remove subject-only session API exposure; retain token/root workflow helpers	B3/B4
 production	crates/canic/src/prelude/mod.rs	Convenience re-export of DelegatedToken	Expose only the presenter-bearing current token; do not prelude-export session authority	B2
@@ -70,12 +71,12 @@ production	crates/canic-core/src/ops/runtime/metrics/auth/sessions.rs	Subject-on
 production	crates/canic-core/src/ops/runtime/metrics/delegated_auth.rs	Proof verification metrics	Retain proof lane metrics; do not duplicate session policy decisions	B6
 test	canisters/test/delegation_root_stub/src/lib.rs	Custom subject-only session bootstrap/clear/status test endpoints	Remove old methods when B3/B4 role variants exist; retain proof/root fixtures only	B3/B4
 test	canisters/test/delegation_issuer_stub/src/lib.rs	Custom subject-only clear/status plus token issuer/verifier probes	Remove old methods; retain exact prepare/retrieve/verify qualification	B3/B4
-test	canisters/test/runtime_probe/src/lib.rs	Access/session behavior fixture	Hard-cut to current local decision and role protocol	B4/B5
+test	canisters/test/runtime_probe/src/lib.rs	Native timer/lifecycle probe without managed local-authorization authority	Retain its bounded native timer/lifecycle role; it owns no 0.105 session or generic-consumer path	B5
 test	crates/canic-testing-internal/src/pic/delegation.rs	PocketIC issuer, verifier, session and grant helpers	Propagate presenter, canonical scopes and new role variants without old helpers	B2-B7
 test	crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs	Shared/fresh active issuer-verifier Fleet fixture	Retain fresh exclusive HTTP-gateway path for native-agent qualification	B1/B7
-test	crates/canic-tests/tests/native_agent_delegation.rs	PEM-backed native prepare/retrieve/present journey	Retain as B1 acquisition proof; extend to target-local establishment only in B7	B1/B7
-test	crates/canic-tests/tests/instruction_audit_support/execution.rs	Prepare and verifier instruction scenarios	Add cold/warm establishment and local authorization/denial measurements	B6
-test	crates/canic-tests/tests/instruction_audit_support/scenarios.rs	Fixed instruction scenario roster	Version the method when 0.105 E/A/D scenarios are added	B6
+test	crates/canic-tests/tests/native_agent_delegation.rs	PEM-backed native prepare/retrieve/present, session and generic-consumer journey	Retain B1 acquisition, B4 target-local session and B5 token-free consumer proof; add B6 cold/warm establishment, one/median/maximum authorization, every denial, restore and cleanup observations; B7 adds multi-target/security closeout	B1/B4/B5/B6/B7
+test	crates/canic-tests/tests/instruction_audit_support/execution.rs	Existing broad prepare and verifier instruction scenarios	Retain unchanged; B6 uses the dedicated native-agent fixture so the public session and synchronous local facade are measured directly	B6
+test	crates/canic-tests/tests/instruction_audit_support/scenarios.rs	Existing versioned instruction scenario roster	Retain unchanged; no broad instruction-audit method bump is needed for the dedicated focused B6 measurements	B6
 test	crates/canic-macros/src/endpoint/expand/tests.rs	Generated authenticated guard tests	Hard-cut presenter and common projection expectations	B5
 test	crates/canic-macros/src/endpoint/parse/tests.rs	Authenticated annotation parse tests	Add exact scope grammar acceptance/rejection	B2/B5
 test	crates/canic-macros/src/endpoint/validate/tests.rs	Authenticated annotation validation tests	Reject noncanonical application scopes	B2/B5

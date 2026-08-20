@@ -11,16 +11,11 @@ use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
 pub use sessions::{
-    record_session_bootstrap_rejected_capacity, record_session_bootstrap_rejected_disabled,
-    record_session_bootstrap_rejected_replay_conflict,
-    record_session_bootstrap_rejected_replay_reused,
-    record_session_bootstrap_rejected_subject_mismatch,
-    record_session_bootstrap_rejected_subject_rejected,
-    record_session_bootstrap_rejected_token_invalid, record_session_bootstrap_rejected_ttl_invalid,
-    record_session_bootstrap_rejected_wallet_caller_rejected,
-    record_session_bootstrap_replay_idempotent, record_session_cleared, record_session_created,
-    record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
-    record_session_pruned, record_session_replaced,
+    record_application_session_cleanup, record_application_session_clear,
+    record_application_session_created, record_application_session_establishment_started,
+    record_application_session_expired_observation,
+    record_application_session_generation_invalidation, record_application_session_idempotent,
+    record_application_session_rejected, record_application_session_replaced,
 };
 
 thread_local! {
@@ -36,8 +31,8 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricSurface {
+    ApplicationSession,
     Attestation,
-    Session,
 }
 
 impl AuthMetricSurface {
@@ -45,8 +40,8 @@ impl AuthMetricSurface {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::ApplicationSession => "application_session",
             Self::Attestation => "attestation",
-            Self::Session => "session",
         }
     }
 }
@@ -56,13 +51,14 @@ impl AuthMetricSurface {
 ///
 /// Auth metric operation dimension used by public metrics projection.
 ///
-
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricOperation {
-    Bootstrap,
-    IdentityFallback,
-    Session,
+    Cleanup,
+    Clear,
+    Establish,
+    ExpiryObservation,
+    GenerationInvalidation,
     Verify,
 }
 
@@ -71,9 +67,11 @@ impl AuthMetricOperation {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Bootstrap => "bootstrap",
-            Self::IdentityFallback => "identity_fallback",
-            Self::Session => "session",
+            Self::Cleanup => "cleanup",
+            Self::Clear => "clear",
+            Self::Establish => "establish",
+            Self::ExpiryObservation => "expiry_observation",
+            Self::GenerationInvalidation => "generation_invalidation",
             Self::Verify => "verify",
         }
     }
@@ -84,7 +82,6 @@ impl AuthMetricOperation {
 ///
 /// Auth metric outcome dimension used by public metrics projection.
 ///
-
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricOutcome {
@@ -92,6 +89,7 @@ pub enum AuthMetricOutcome {
     Failed,
     Idempotent,
     Rejected,
+    Started,
 }
 
 impl AuthMetricOutcome {
@@ -103,6 +101,7 @@ impl AuthMetricOutcome {
             Self::Failed => "failed",
             Self::Idempotent => "idempotent",
             Self::Rejected => "rejected",
+            Self::Started => "started",
         }
     }
 }
@@ -112,28 +111,24 @@ impl AuthMetricOutcome {
 ///
 /// Auth metric reason dimension used by public metrics projection.
 ///
-
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum AuthMetricReason {
+    AuthorityConflict,
     Capacity,
     Cleared,
     Created,
-    Disabled,
     EpochRejected,
-    InvalidSubject,
-    Pruned,
-    RawCaller,
+    Expired,
+    GenerationAdvanced,
+    InvalidRequest,
+    ProofInvalid,
     Replaced,
     Replay,
     ReplayConflict,
-    ReplayReused,
-    SubjectMismatch,
-    SubjectRejected,
-    TokenInvalid,
-    TtlInvalid,
+    Request,
+    StateUnavailable,
     VerifyFailed,
-    WalletCallerRejected,
 }
 
 impl AuthMetricReason {
@@ -141,24 +136,21 @@ impl AuthMetricReason {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::AuthorityConflict => "authority_conflict",
             Self::Capacity => "capacity",
             Self::Cleared => "cleared",
             Self::Created => "created",
-            Self::Disabled => "disabled",
             Self::EpochRejected => "epoch_rejected",
-            Self::InvalidSubject => "invalid_subject",
-            Self::Pruned => "pruned",
-            Self::RawCaller => "raw_caller",
+            Self::Expired => "expired",
+            Self::GenerationAdvanced => "generation_advanced",
+            Self::InvalidRequest => "invalid_request",
+            Self::ProofInvalid => "proof_invalid",
             Self::Replaced => "replaced",
             Self::Replay => "replay",
             Self::ReplayConflict => "replay_conflict",
-            Self::ReplayReused => "replay_reused",
-            Self::SubjectMismatch => "subject_mismatch",
-            Self::SubjectRejected => "subject_rejected",
-            Self::TokenInvalid => "token_invalid",
-            Self::TtlInvalid => "ttl_invalid",
+            Self::Request => "request",
+            Self::StateUnavailable => "state_unavailable",
             Self::VerifyFailed => "verify_failed",
-            Self::WalletCallerRejected => "wallet_caller_rejected",
         }
     }
 }
@@ -267,7 +259,7 @@ mod tests {
         expected: u64,
     ) {
         assert_metric_count(
-            AuthMetricSurface::Session,
+            AuthMetricSurface::ApplicationSession,
             operation,
             outcome,
             reason,
@@ -276,90 +268,54 @@ mod tests {
     }
 
     #[test]
-    fn session_lifecycle_metrics_increment_expected_auth_dimensions() {
+    fn application_session_metrics_use_only_bounded_outcome_dimensions() {
         AuthMetrics::reset();
 
-        record_session_created();
-        record_session_replaced();
-        record_session_cleared();
-        record_session_pruned(2);
+        record_application_session_establishment_started();
+        record_application_session_created();
+        record_application_session_replaced();
+        record_application_session_idempotent();
+        record_application_session_rejected(AuthMetricReason::Capacity);
+        record_application_session_clear(true);
+        record_application_session_clear(false);
+        record_application_session_expired_observation();
+        record_application_session_cleanup(2);
+        record_application_session_generation_invalidation();
 
-        for (reason, expected) in [
-            (AuthMetricReason::Created, 1),
-            (AuthMetricReason::Replaced, 1),
-            (AuthMetricReason::Cleared, 1),
-            (AuthMetricReason::Pruned, 2),
-        ] {
-            assert_session_metric_count(
-                AuthMetricOperation::Session,
-                AuthMetricOutcome::Completed,
-                reason,
-                expected,
-            );
-        }
-    }
-
-    #[test]
-    fn session_identity_fallback_metrics_increment_expected_auth_dimensions() {
-        AuthMetrics::reset();
-
-        record_session_fallback_raw_caller();
-        record_session_fallback_invalid_subject();
-
-        for reason in [
-            AuthMetricReason::RawCaller,
-            AuthMetricReason::InvalidSubject,
-        ] {
-            assert_session_metric_count(
-                AuthMetricOperation::IdentityFallback,
-                AuthMetricOutcome::Completed,
-                reason,
-                1,
-            );
-        }
-    }
-
-    #[test]
-    fn session_bootstrap_metrics_increment_expected_auth_dimensions() {
-        AuthMetrics::reset();
-
-        for action in [
-            record_session_bootstrap_rejected_capacity as fn(),
-            record_session_bootstrap_rejected_disabled,
-            record_session_bootstrap_rejected_wallet_caller_rejected,
-            record_session_bootstrap_rejected_subject_rejected,
-            record_session_bootstrap_rejected_replay_conflict,
-            record_session_bootstrap_rejected_replay_reused,
-            record_session_bootstrap_rejected_token_invalid,
-            record_session_bootstrap_rejected_subject_mismatch,
-            record_session_bootstrap_rejected_ttl_invalid,
-        ] {
-            action();
-        }
-        record_session_bootstrap_replay_idempotent();
-
-        for reason in [
-            AuthMetricReason::Capacity,
-            AuthMetricReason::Disabled,
-            AuthMetricReason::WalletCallerRejected,
-            AuthMetricReason::SubjectRejected,
-            AuthMetricReason::ReplayConflict,
-            AuthMetricReason::ReplayReused,
-            AuthMetricReason::TokenInvalid,
-            AuthMetricReason::SubjectMismatch,
-            AuthMetricReason::TtlInvalid,
-        ] {
-            assert_session_metric_count(
-                AuthMetricOperation::Bootstrap,
-                AuthMetricOutcome::Rejected,
-                reason,
-                1,
-            );
-        }
         assert_session_metric_count(
-            AuthMetricOperation::Bootstrap,
+            AuthMetricOperation::Establish,
+            AuthMetricOutcome::Started,
+            AuthMetricReason::Request,
+            1,
+        );
+        assert_session_metric_count(
+            AuthMetricOperation::Establish,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::Created,
+            1,
+        );
+        assert_session_metric_count(
+            AuthMetricOperation::Establish,
             AuthMetricOutcome::Idempotent,
             AuthMetricReason::Replay,
+            1,
+        );
+        assert_session_metric_count(
+            AuthMetricOperation::Cleanup,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::Expired,
+            2,
+        );
+        assert_session_metric_count(
+            AuthMetricOperation::Clear,
+            AuthMetricOutcome::Idempotent,
+            AuthMetricReason::Cleared,
+            1,
+        );
+        assert_session_metric_count(
+            AuthMetricOperation::GenerationInvalidation,
+            AuthMetricOutcome::Completed,
+            AuthMetricReason::GenerationAdvanced,
             1,
         );
     }

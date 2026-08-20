@@ -115,7 +115,6 @@ fi
 rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound ic-wasm installer"
 for single_use_tool in \
-    'cargo install cargo-get' \
     'cargo install candid-extractor' \
     'bash scripts/ci/install-icp-cli.sh' \
     'bash scripts/ci/install-ic-wasm.sh' \
@@ -123,10 +122,11 @@ for single_use_tool in \
     [ "$(rg -c -F "$single_use_tool" "$CI")" -eq 1 ] ||
         fail "CI must install $single_use_tool exactly once in its owning lane"
 done
-rg -F 'cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked' "$CI" >/dev/null ||
-    fail "CI does not install the exact pinned cargo-get version"
-rg -F 'cargo get --version' "$CI" >/dev/null ||
-    fail "CI does not verify the installed cargo-get version"
+cargo_get_install='cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked'
+[ "$(rg -c -F "$cargo_get_install" "$CI")" -eq 2 ] ||
+    fail "CI must install the exact pinned cargo-get version in both owning jobs"
+[ "$(rg -c -F 'cargo get --version' "$CI")" -eq 2 ] ||
+    fail "CI must verify cargo-get in both owning jobs"
 rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound Gitleaks installer"
 rg -F 'run: make ci-preflight' "$CI" >/dev/null ||
@@ -135,7 +135,18 @@ rg -F 'run: make ci-security' "$CI" >/dev/null ||
     fail "CI does not run the failure-collecting security boundary"
 rg -F 'run: make ci-checks' "$CI" >/dev/null ||
     fail "CI does not run the failure-collecting Rust-check boundary"
+preflight_job="$(sed -n '/^  preflight:/,/^  security:/p' "$CI")"
+rg -F "$cargo_get_install" <<<"$preflight_job" >/dev/null ||
+    fail "CI preflight does not install the pinned cargo-get helper"
+rg -F 'cargo get --version' <<<"$preflight_job" >/dev/null ||
+    fail "CI preflight does not verify the cargo-get helper"
 ordinary_job="$(sed -n '/^  tests-ordinary:/,/^  tests-pocketic:/p' "$CI")"
+rg -F 'fetch-depth: 0' <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests cannot read immutable Git baselines from a shallow checkout"
+rg -F "$cargo_get_install" <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not install the pinned cargo-get helper"
+rg -F 'cargo get --version' <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not verify the cargo-get helper"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
     <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests do not install the feature-qualified ripgrep test helper"

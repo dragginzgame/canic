@@ -8,8 +8,8 @@ use super::{
 };
 use crate::{
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, IndexConfig, ScalingConfig,
-        ShardingConfig, TopupPolicy,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, IndexConfig,
+        LocalApplicationAuthorizationConfig, ScalingConfig, ShardingConfig, TopupPolicy,
     },
     ids::CanisterRole,
     test::config::ConfigTestBuilder,
@@ -221,6 +221,7 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
     app.auth = CanisterAuthConfig {
         delegated_token_issuer: false,
         delegated_token_verifier: true,
+        local_application_authorization: None,
         role_attestation_cache: true,
     };
     app.sharding = Some(ShardingConfig::default());
@@ -240,6 +241,36 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Sharding,
         ])
+    );
+}
+
+#[test]
+fn local_application_authorization_capability_is_exactly_role_pruned() {
+    let mut enabled = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    enabled.auth.delegated_token_verifier = true;
+    enabled.auth.local_application_authorization = Some(LocalApplicationAuthorizationConfig {
+        allowed_scopes: vec!["app:read".to_string()],
+        default_session_ttl_secs: 900,
+        maximum_session_ttl_secs: 1_800,
+    });
+    let disabled = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    let config = ConfigTestBuilder::new()
+        .with_default_canister("enabled", enabled)
+        .with_default_canister("disabled", disabled)
+        .build();
+
+    let enabled = derive_role_capabilities(&config, &CanisterRole::new("enabled")).unwrap();
+    let disabled = derive_role_capabilities(&config, &CanisterRole::new("disabled")).unwrap();
+    assert!(enabled.contains(&RoleCapabilityKey::LocalApplicationAuthorization));
+    assert!(enabled.contains(&RoleCapabilityKey::DelegatedTokenVerifier));
+    assert!(!disabled.contains(&RoleCapabilityKey::LocalApplicationAuthorization));
+    assert!(
+        !built_in_role_capabilities(BuiltInRoleKind::FleetCoordinator)
+            .contains(&RoleCapabilityKey::LocalApplicationAuthorization)
+    );
+    assert!(
+        !built_in_role_capabilities(BuiltInRoleKind::WasmStore)
+            .contains(&RoleCapabilityKey::LocalApplicationAuthorization)
     );
 }
 

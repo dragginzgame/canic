@@ -5,17 +5,31 @@ Date: 2026-08-19
 ## Captured Predecessor
 
 - Branch: `main`.
-- Released predecessor: annotated tag `v0.104.1`, peeled commit
+- Historical B1 capture: annotated tag `v0.104.1`, peeled commit
   `464c186d9d82112d1ea4c7bdb1f47bcd5e5224a5`.
-- B1 source basis: that exact product source plus the uncommitted B1-only test,
-  fixture and evidence changes listed by `git status --short`.
+- Current B3 predecessor: annotated tag `v0.104.2`, peeled commit
+  `0811b7d3ea3e0ebae5b522faa1f0f18d4dca1220`. That immutable source contains
+  the accepted B1/B2 presenter, scope, authority and pure-policy hard cuts as
+  well as the final 0.104 timer correction.
+- B1 source basis: exact `v0.104.1` product source plus the then-uncommitted
+  B1-only test, fixture and evidence changes. The accepted mutations were
+  subsequently published in `v0.104.2`, which is now the implementation
+  baseline.
 - Release boundary: reinstall only. No pre-0.105 token, session, Candid or
   stable-state shape is accepted by 0.105.
-- Runtime mutation: none. B1 adds only evidence and test-only qualification.
+- B1 runtime mutation: none. B2 performed the accepted hard cut now present in
+  `v0.104.2`; B3 begins from that published state.
 
 The complete producer and consumer map is in
 [consumer-inventory.tsv](consumer-inventory.tsv). The exact predecessor costs
-are in [resource-baseline.md](resource-baseline.md).
+are in [resource-baseline.md](resource-baseline.md). The accepted state hard
+cut is recorded in [b3-session-state.md](b3-session-state.md), and the enabled
+and disabled role artifacts plus endpoint journey are recorded in
+[b4-role-surface.md](b4-role-surface.md). The synchronous facade, duplicate
+hard cut and generic consumer are recorded in
+[b5-synchronous-facade.md](b5-synchronous-facade.md). The protected operator
+audit, instruction/memory bounds and controlled Wasm/Candid comparison are in
+[b6-operator-resource.md](b6-operator-resource.md).
 
 ## B1 Decision
 
@@ -179,5 +193,42 @@ PocketIC `key_1` public-key pin in both delegation stubs. It also starts the
 HTTP gateway before proof provisioning so all proof timestamps share live
 PocketIC time.
 
-This proves browser-neutral acquisition through the current verifier. It does
-not claim the unimplemented 0.105 session-establishment variant.
+This proves browser-neutral acquisition through the current verifier. B4 then
+extended the same journey through configured session establishment, exact
+retry, caller-self status, clear and tombstoned non-resurrection; that later
+result is retained in [b4-role-surface.md](b4-role-surface.md).
+
+## B7 Canic-Only Closeout
+
+**Completed 2026-08-20.** One focused PocketIC journey uses the same real
+PEM-backed native principal and one signed proof to establish independent
+target-local sessions on both active managed Components in the Fleet fixture.
+The Components share the same admitted role and Root controller but retain
+separate memory-ID-34 authority. Both generic consumers return the signed
+subject, while the common Root controller is rejected on both targets because
+controllership grants no application authority.
+
+After the proof's 10-second lifetime and one cleanup round, both 1,800-second
+sessions remain active and byte-exact establishment retries return their
+original receipts without moving either expiry. The fixture then advances
+through the install-code cooldown and upgrades both targets with the exact
+same-release Wasm. Synchronous lifecycle restore reconstructs each target once;
+the consumer and exact receipt still work, each Root audit reports exactly one
+row and no duplicate authority appears.
+
+Clearing the verifier removes only its row and immediately denies its generic
+consumer while the issuer remains admitted. Advancing beyond the issuer's
+exclusive session expiry and executing the bounded cleanup round denies that
+consumer; caller clear remains idempotent whether the expired row is still
+observable or already removed. Both target audits finish at zero rows, and the
+expired proof cannot recreate either cleared session.
+
+The dedicated `native_agent_delegation` file passes all five focused tests in
+72.73 seconds. Final residue scans classify the only old subject-session names
+as predecessor evidence or negative macro assertions. The production owners
+contain no subject-only API, bootstrap binding, identity fallback, IcyDB or
+other framework dependency, compatibility decoder, migration reader, dual
+format or alternate authority owner. Final controlled product artifacts remain
+within the accepted raw-Wasm bound and preserve all four predecessor Candid
+hashes and lifecycle export sets; exact values are retained in
+[b6-operator-resource.md](b6-operator-resource.md).

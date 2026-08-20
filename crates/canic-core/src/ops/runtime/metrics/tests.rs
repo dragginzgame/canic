@@ -73,20 +73,20 @@ fn auth_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
     AuthMetrics::record(
-        AuthMetricSurface::Session,
-        AuthMetricOperation::Bootstrap,
+        AuthMetricSurface::ApplicationSession,
+        AuthMetricOperation::Establish,
         AuthMetricOutcome::Rejected,
-        AuthMetricReason::TokenInvalid,
+        AuthMetricReason::ProofInvalid,
     );
     AuthMetrics::record(
-        AuthMetricSurface::Session,
-        AuthMetricOperation::Session,
+        AuthMetricSurface::ApplicationSession,
+        AuthMetricOperation::Establish,
         AuthMetricOutcome::Completed,
         AuthMetricReason::Created,
     );
     AuthMetrics::record(
-        AuthMetricSurface::Session,
-        AuthMetricOperation::Session,
+        AuthMetricSurface::ApplicationSession,
+        AuthMetricOperation::Establish,
         AuthMetricOutcome::Completed,
         AuthMetricReason::Created,
     );
@@ -101,12 +101,24 @@ fn auth_metrics_are_exposed_with_stable_labels() {
 
     assert_metric_count(
         &entries,
-        &["auth", "session", "bootstrap", "rejected", "token_invalid"],
+        &[
+            "auth",
+            "application_session",
+            "establish",
+            "rejected",
+            "proof_invalid",
+        ],
         1,
     );
     assert_metric_count(
         &entries,
-        &["auth", "session", "session", "completed", "created"],
+        &[
+            "auth",
+            "application_session",
+            "establish",
+            "completed",
+            "created",
+        ],
         2,
     );
     assert_metric_count(
@@ -802,8 +814,8 @@ fn seed_all_metric_families_for_reset_test() {
 
     AccessMetrics::increment("create_project", AccessMetricKind::Guard, "controller_only");
     AuthMetrics::record(
-        AuthMetricSurface::Session,
-        AuthMetricOperation::Session,
+        AuthMetricSurface::ApplicationSession,
+        AuthMetricOperation::Establish,
         AuthMetricOutcome::Completed,
         AuthMetricReason::Created,
     );

@@ -33,6 +33,10 @@ macro_rules! __canic_compiled_role_capabilities {
         capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
         #[cfg(canic_capability_index)]
         capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Index);
+        #[cfg(canic_capability_local_application_authorization)]
+        capabilities.insert(
+            $crate::__internal::core::role_contract::RoleCapabilityKey::LocalApplicationAuthorization,
+        );
         #[cfg(canic_capability_role_attestation_signer)]
         capabilities.insert(
             $crate::__internal::core::role_contract::RoleCapabilityKey::RoleAttestationSigner,
@@ -70,6 +74,10 @@ macro_rules! __canic_emit_managed_status_endpoint {
         pub enum CanisterStatusRequest {
             #[cfg(canic_delegated_token_issuer)]
             ActiveDelegationProof,
+            #[cfg(canic_capability_local_application_authorization)]
+            ApplicationSession,
+            #[cfg(canic_capability_local_application_authorization)]
+            ApplicationSessionAudit(::canic::dto::page::PageRequest),
             Binding,
             #[cfg(canic_capability_sharding)]
             Children(::canic::dto::page::PageRequest),
@@ -105,6 +113,10 @@ macro_rules! __canic_emit_managed_status_endpoint {
         pub enum CanisterStatusResponse {
             #[cfg(canic_delegated_token_issuer)]
             ActiveDelegationProof(::canic::dto::auth::ActiveDelegationProofStatusResponse),
+            #[cfg(canic_capability_local_application_authorization)]
+            ApplicationSession(::canic::dto::auth::ApplicationSessionStatus),
+            #[cfg(canic_capability_local_application_authorization)]
+            ApplicationSessionAudit(::canic::dto::auth::ApplicationSessionAuditResponse),
             Binding(::canic::ids::ManagedCanisterBinding),
             #[cfg(canic_capability_sharding)]
             Children(
@@ -152,6 +164,14 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 #[cfg(canic_delegated_token_issuer)]
                 CanisterStatusRequest::ActiveDelegationProof
                 | CanisterStatusRequest::DelegatedToken(_) => {}
+                #[cfg(canic_capability_local_application_authorization)]
+                CanisterStatusRequest::ApplicationSession => {}
+                #[cfg(canic_capability_local_application_authorization)]
+                CanisterStatusRequest::ApplicationSessionAudit(_) => {
+                    $crate::__internal::core::access::auth::is_root(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
                 CanisterStatusRequest::CycleBalance
                 | CanisterStatusRequest::CycleHistory(_)
                 | CanisterStatusRequest::Metrics(_)
@@ -167,6 +187,16 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 CanisterStatusRequest::ActiveDelegationProof => {
                     $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status()
                         .map(CanisterStatusResponse::ActiveDelegationProof)
+                }
+                #[cfg(canic_capability_local_application_authorization)]
+                CanisterStatusRequest::ApplicationSession => {
+                    $crate::__internal::core::api::auth::AuthApi::application_session_status()
+                        .map(CanisterStatusResponse::ApplicationSession)
+                }
+                #[cfg(canic_capability_local_application_authorization)]
+                CanisterStatusRequest::ApplicationSessionAudit(page) => {
+                    $crate::__internal::core::api::auth::AuthApi::application_session_audit(page)
+                        .map(CanisterStatusResponse::ApplicationSessionAudit)
                 }
                 CanisterStatusRequest::Binding => {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::managed_binding()
@@ -383,6 +413,8 @@ macro_rules! __canic_emit_managed_command_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum CanisterCommand {
+            #[cfg(canic_capability_local_application_authorization)]
+            ApplicationSession(::canic::dto::auth::ApplicationSessionCommand),
             ConfigureRuntime(
                 ::canic::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
             ),
@@ -401,6 +433,8 @@ macro_rules! __canic_emit_managed_command_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum CanisterCommandResponse {
+            #[cfg(canic_capability_local_application_authorization)]
+            ApplicationSession(::canic::dto::auth::ApplicationSessionCommandResponse),
             #[cfg(canic_delegated_token_issuer)]
             InstallDelegationProof(
                 ::canic::dto::auth::InstallActiveDelegationProofResponse,
@@ -442,6 +476,18 @@ macro_rules! __canic_emit_managed_command_endpoint {
             use CanisterCommand::{ConfigureRuntime, RespondCapability};
 
             match command {
+                #[cfg(canic_capability_local_application_authorization)]
+                CanisterCommand::ApplicationSession(command) => {
+                    let response = match command {
+                        ::canic::dto::auth::ApplicationSessionCommand::Establish(request) => {
+                            $crate::__internal::core::api::auth::AuthApi::establish_application_session(request)?
+                        }
+                        ::canic::dto::auth::ApplicationSessionCommand::Clear => {
+                            $crate::__internal::core::api::auth::AuthApi::clear_application_session()?
+                        }
+                    };
+                    Ok(CanisterCommandResponse::ApplicationSession(response))
+                }
                 ConfigureRuntime(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_root(caller)

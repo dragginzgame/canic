@@ -3,6 +3,7 @@
 //! `workflow` sequences ops calls, schedules async follow-up work, and owns
 //! behavior that unfolds over time.
 
+pub mod auth;
 #[cfg(feature = "blob-storage-billing")]
 pub mod blob_storage;
 pub mod bootstrap;
