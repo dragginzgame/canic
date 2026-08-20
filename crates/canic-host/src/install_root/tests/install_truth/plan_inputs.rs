@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn install_truth_plan_carries_the_admitted_fresh_fleet_digest() {
+    let (root, _) = demo_install_deployment_truth_check("canic-install-truth-plan-digest");
+    let config_path = root.join("apps/demo/canic.toml");
+    let mut options = local_demo_install_options(&root);
+    let digest = "ab".repeat(32);
+    options.admitted_fresh_fleet_plan_digest = Some(digest.clone());
+
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+
+    assert_eq!(check.plan.plan_digest, Some(digest));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_truth_artifact_gate_blocks_missing_built_artifacts() {
     let root = temp_dir("canic-install-truth-artifact-gate");
     let config_path = root.join("apps/demo/canic.toml");
@@ -108,6 +130,8 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
@@ -144,6 +168,8 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
@@ -179,6 +205,8 @@ fn install_truth_check_rejects_supplied_plan_fleet_name_mismatch() {
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),

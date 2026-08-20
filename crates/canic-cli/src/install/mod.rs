@@ -32,6 +32,7 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
+const EXPECTED_PLAN_DIGEST_ARG: &str = "expected-plan-digest";
 const FLEET_INPUT_ARG: &str = "fleet-input";
 const RELEASE_BUILD_ARG: &str = "release-build";
 const INSTALL_HELP_AFTER: &str = "\
@@ -73,6 +74,7 @@ struct InstallOptions {
     fleet: String,
     icp: String,
     environment: String,
+    expected_plan_digest: Option<String>,
     profile: Option<CanisterBuildProfile>,
     release_build_id: Option<ReleaseBuildId>,
     fleet_input: PathBuf,
@@ -90,6 +92,7 @@ impl InstallOptions {
             fleet: required_string(&matches, "fleet"),
             icp: string_option_or_else(&matches, "icp", default_icp),
             environment: string_option_or_else(&matches, "environment", local_environment),
+            expected_plan_digest: matches.get_one::<String>(EXPECTED_PLAN_DIGEST_ARG).cloned(),
             profile: typed_option(&matches, "profile"),
             release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
             fleet_input: PathBuf::from(required_string(&matches, FLEET_INPUT_ARG)),
@@ -119,6 +122,8 @@ impl InstallOptions {
             release_build_id: self.release_build_id,
             config_path: Some(config_path),
             fleet_install_input_path: Some(self.fleet_input),
+            expected_fresh_fleet_plan_digest: self.expected_plan_digest,
+            admitted_fresh_fleet_plan_digest: None,
             expected_app: Some(self.app),
             interactive_config_selection: false,
             deployment_plan_override: None,
@@ -145,20 +150,20 @@ fn install_command() -> ClapCommand {
                 .help("Operator-facing name for the installed Fleet"),
         )
         .arg(
+            value_arg(EXPECTED_PLAN_DIGEST_ARG)
+                .long(EXPECTED_PLAN_DIGEST_ARG)
+                .value_name("SHA256")
+                .num_args(1)
+                .value_parser(parse_plan_digest)
+                .help("Require the exact canonical pre-effect plan digest"),
+        )
+        .arg(
             value_arg(FLEET_INPUT_ARG)
                 .long(FLEET_INPUT_ARG)
                 .value_name("PATH")
                 .required(true)
                 .num_args(1)
                 .help("Operator-owned Fleet placement, admission, limit, and funding input TOML"),
-        )
-        .arg(
-            value_arg(RELEASE_BUILD_ARG)
-                .long(RELEASE_BUILD_ARG)
-                .value_name("ID")
-                .num_args(1)
-                .value_parser(clap::value_parser!(ReleaseBuildId))
-                .help("Reuse one finalized release build instead of compiling artifacts"),
         )
         .arg(
             value_arg("profile")
@@ -168,9 +173,27 @@ fn install_command() -> ClapCommand {
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Canister wasm build profile; defaults to release"),
         )
+        .arg(
+            value_arg(RELEASE_BUILD_ARG)
+                .long(RELEASE_BUILD_ARG)
+                .value_name("ID")
+                .num_args(1)
+                .value_parser(clap::value_parser!(ReleaseBuildId))
+                .help("Reuse one finalized release build instead of compiling artifacts"),
+        )
         .arg(internal_icp_arg())
         .arg(internal_environment_arg())
         .after_help(INSTALL_HELP_AFTER)
+}
+
+fn parse_plan_digest(value: &str) -> Result<String, String> {
+    let valid = value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
+    valid.then(|| value.to_string()).ok_or_else(|| {
+        "plan digest must contain exactly 64 lowercase hexadecimal characters".to_string()
+    })
 }
 
 /// Run the root install workflow.

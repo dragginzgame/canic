@@ -1,6 +1,9 @@
 [app]
 name = "delegation_root_stub"
 
+[app.whitelist]
+principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai"]
+
 [roles.root]
 kind = "root"
 package = "../delegation_root_stub"

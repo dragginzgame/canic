@@ -11,11 +11,12 @@ use crate::{
     component_topology::RootComponentAdmissionInput,
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{
+        FreshFleetCatalogEvidenceV1, FreshFleetOperatorFundingEvidenceV1,
         PlannedCanisterCreationFunding, PlannedComponentGroupPlacementAssignment,
         PlannedFleetCoordinator, PlannedFleetSubnetRootInput,
     },
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
-    subnet_catalog::load_mainnet_subnet_catalog,
+    subnet_catalog::{load_cached_mainnet_subnet_catalog, load_mainnet_subnet_catalog},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -32,10 +33,13 @@ use canic_core::{
         FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, SubnetId,
     },
 };
+#[cfg(test)]
+use ic_query::subnet_catalog::CacheDisposition;
 use ic_query::subnet_catalog::{
-    SubnetInfo, SubnetKind, SubnetSpecialization, ValidatedSubnetCatalog,
+    CatalogLoadOutcome, SubnetInfo, SubnetKind, SubnetSpecialization, ValidatedSubnetCatalog,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 const FLEET_INSTALL_INPUT_SCHEMA_VERSION: u32 = 1;
@@ -50,6 +54,10 @@ const MAX_SUBNET_PROFILE_BYTES: usize = 64;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolvedFleetInstallInput {
+    pub schema_version: u32,
+    pub canonical_sha256: String,
+    pub operator: FreshFleetOperatorFundingEvidenceV1,
+    pub catalog: FreshFleetCatalogEvidenceV1,
     pub coordinator: PlannedFleetCoordinator,
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootInput>,
 }
@@ -144,6 +152,23 @@ pub enum FleetInstallInputError {
     #[error("creation funding amount must be positive for {owner}")]
     NonPositiveCreationFunding { owner: String },
 
+    #[error("invalid operator principal {value:?}: {reason}")]
+    InvalidOperatorPrincipal { value: String, reason: String },
+
+    #[error("operator {field} is invalid")]
+    InvalidOperatorEvidence { field: &'static str },
+
+    #[error(
+        "operator balance evidence is stale at Unix second {now_unix_secs}; validity ended at {valid_until_unix_secs}"
+    )]
+    StaleOperatorBalance {
+        now_unix_secs: u64,
+        valid_until_unix_secs: u64,
+    },
+
+    #[error("could not encode canonical Fleet installation input: {0}")]
+    CanonicalEncoding(#[from] serde_json::Error),
+
     #[error("failed to read Fleet installation input {path}: {source}")]
     Io {
         path: PathBuf,
@@ -161,22 +186,34 @@ pub enum FleetInstallInputError {
     SubnetCatalog(#[from] ic_query::subnet_catalog::SubnetCatalogHostError),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct FleetInstallInputDocument {
     schema_version: u32,
+    operator: OperatorFundingDocument,
     coordinator: CoordinatorInputDocument,
     fleet_subnet_roots: Vec<FleetSubnetRootInputDocument>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct OperatorFundingDocument {
+    principal: String,
+    funding_account: String,
+    source: String,
+    observed_at_unix_secs: u64,
+    valid_until_unix_secs: u64,
+    balance: CreationFundingDocument,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct CoordinatorInputDocument {
     subnet: CoordinatorSubnetSelector,
     creation_funding: CreationFundingDocument,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "snake_case", tag = "kind")]
 enum CoordinatorSubnetSelector {
     Recommended,
@@ -184,7 +221,7 @@ enum CoordinatorSubnetSelector {
     Explicit { subnet: String },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "snake_case", tag = "kind")]
 enum CreationFundingDocument {
     Cycles {
@@ -196,7 +233,7 @@ enum CreationFundingDocument {
     },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct FleetSubnetRootInputDocument {
     placement_subnet: String,
@@ -209,7 +246,7 @@ struct FleetSubnetRootInputDocument {
     wasm_store_creation_funding: CreationFundingDocument,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct CanisterPoolInputDocument {
     minimum_size: u32,
@@ -220,7 +257,7 @@ struct CanisterPoolInputDocument {
     imports: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct FleetSubnetRootLimitsDocument {
     maximum_component_instances: u32,
@@ -230,7 +267,7 @@ struct FleetSubnetRootLimitsDocument {
     cycles_funding: CyclesFundingBudgetDocument,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct CyclesFundingBudgetDocument {
     window_secs: u64,
@@ -244,18 +281,61 @@ pub fn load_and_resolve_fleet_install_input(
     environment: &str,
     path: &Path,
 ) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
-    let document = load_document(path)?;
+    let (document, canonical_sha256) = load_document_with_identity(path)?;
     let build_network = resolve_icp_build_network_from_root(icp_root, environment)?;
+    let now_unix_secs = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     if build_network == BuildNetwork::Ic {
-        let now_unix_secs = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let cached = load_mainnet_subnet_catalog(icp_root, now_unix_secs)?;
-        return resolve_document(&document, build_network, Some(&cached.catalog));
+        return resolve_document_with_evidence(
+            &document,
+            &canonical_sha256,
+            build_network,
+            Some(&cached),
+            now_unix_secs,
+        );
     }
 
-    resolve_document(&document, build_network, None)
+    resolve_document_with_evidence(
+        &document,
+        &canonical_sha256,
+        build_network,
+        None,
+        now_unix_secs,
+    )
 }
 
-fn load_document(path: &Path) -> Result<FleetInstallInputDocument, FleetInstallInputError> {
+/// Load preflight input without a network call or workspace/cache mutation.
+pub fn load_and_resolve_fleet_install_input_for_preflight(
+    icp_root: &Path,
+    environment: &str,
+    path: &Path,
+) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
+    let (document, canonical_sha256) = load_document_with_identity(path)?;
+    let build_network = resolve_icp_build_network_from_root(icp_root, environment)?;
+    let now_unix_secs = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    if build_network == BuildNetwork::Ic {
+        let cached = load_cached_mainnet_subnet_catalog(icp_root, now_unix_secs)?;
+        return resolve_document_with_evidence(
+            &document,
+            &canonical_sha256,
+            build_network,
+            Some(&cached),
+            now_unix_secs,
+        );
+    }
+
+    resolve_document_with_evidence(
+        &document,
+        &canonical_sha256,
+        build_network,
+        None,
+        now_unix_secs,
+    )
+}
+
+fn load_document_with_identity(
+    path: &Path,
+) -> Result<(FleetInstallInputDocument, String), FleetInstallInputError> {
     let bytes = match read_optional_regular_bytes(path) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
@@ -296,7 +376,9 @@ fn load_document(path: &Path) -> Result<FleetInstallInputDocument, FleetInstallI
         source,
     })?;
     validate_schema_version(&document)?;
-    Ok(document)
+    let canonical = serde_json::to_vec(&document)?;
+    let canonical_sha256 = canic_core::cdk::utils::hash::hex_bytes(Sha256::digest(canonical));
+    Ok((document, canonical_sha256))
 }
 
 const fn validate_schema_version(
@@ -311,20 +393,28 @@ const fn validate_schema_version(
     }
 }
 
-fn resolve_document(
+fn resolve_document_with_evidence(
     document: &FleetInstallInputDocument,
+    canonical_sha256: &str,
     build_network: BuildNetwork,
-    catalog: Option<&ValidatedSubnetCatalog>,
+    catalog: Option<&CatalogLoadOutcome>,
+    now_unix_secs: u64,
 ) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
     validate_schema_version(document)?;
-    let coordinator_subnet =
-        resolve_coordinator_subnet(&document.coordinator.subnet, build_network, catalog)?;
+    let operator = resolve_operator(&document.operator, build_network, now_unix_secs)?;
+    let catalog_evidence = resolve_catalog_evidence(build_network, catalog)?;
+    let validated_catalog = catalog.map(|outcome| &outcome.catalog);
+    let coordinator_subnet = resolve_coordinator_subnet(
+        &document.coordinator.subnet,
+        build_network,
+        validated_catalog,
+    )?;
     let coordinator_funding = resolve_funding(
         "Fleet Coordinator",
         coordinator_subnet,
         &document.coordinator.creation_funding,
         build_network,
-        catalog,
+        validated_catalog,
     )?;
     let coordinator = PlannedFleetCoordinator {
         coordinator_subnet,
@@ -337,14 +427,134 @@ fn resolve_document(
         fleet_subnet_roots.push(resolve_root_document(
             root,
             build_network,
-            catalog,
+            validated_catalog,
             &mut imported_canisters,
         )?);
     }
 
     Ok(ResolvedFleetInstallInput {
+        schema_version: document.schema_version,
+        canonical_sha256: canonical_sha256.to_string(),
+        operator,
+        catalog: catalog_evidence,
         coordinator,
         fleet_subnet_roots,
+    })
+}
+
+fn resolve_operator(
+    document: &OperatorFundingDocument,
+    build_network: BuildNetwork,
+    now_unix_secs: u64,
+) -> Result<FreshFleetOperatorFundingEvidenceV1, FleetInstallInputError> {
+    let principal = Principal::from_text(&document.principal).map_err(|error| {
+        FleetInstallInputError::InvalidOperatorPrincipal {
+            value: document.principal.clone(),
+            reason: error.to_string(),
+        }
+    })?;
+    if principal == Principal::anonymous() || principal.to_text() != document.principal {
+        return Err(FleetInstallInputError::InvalidOperatorPrincipal {
+            value: document.principal.clone(),
+            reason: "principal must be canonical and non-anonymous".to_string(),
+        });
+    }
+    validate_operator_text("funding_account", &document.funding_account)?;
+    validate_operator_text("source", &document.source)?;
+    if document.observed_at_unix_secs == 0 {
+        return Err(FleetInstallInputError::InvalidOperatorEvidence {
+            field: "observed_at_unix_secs",
+        });
+    }
+    if document.valid_until_unix_secs <= document.observed_at_unix_secs {
+        return Err(FleetInstallInputError::InvalidOperatorEvidence {
+            field: "valid_until_unix_secs",
+        });
+    }
+    if now_unix_secs < document.observed_at_unix_secs {
+        return Err(FleetInstallInputError::InvalidOperatorEvidence {
+            field: "observed_at_unix_secs",
+        });
+    }
+    if now_unix_secs >= document.valid_until_unix_secs {
+        return Err(FleetInstallInputError::StaleOperatorBalance {
+            now_unix_secs,
+            valid_until_unix_secs: document.valid_until_unix_secs,
+        });
+    }
+    let balance = planned_funding("operator balance", &document.balance)?;
+    let _ = build_network;
+
+    Ok(FreshFleetOperatorFundingEvidenceV1 {
+        principal: document.principal.clone(),
+        funding_account: document.funding_account.clone(),
+        balance,
+        source: document.source.clone(),
+        observed_at_unix_secs: document.observed_at_unix_secs,
+        valid_until_unix_secs: document.valid_until_unix_secs,
+        balance_fresh: true,
+    })
+}
+
+#[cfg(test)]
+fn load_document(path: &Path) -> Result<FleetInstallInputDocument, FleetInstallInputError> {
+    load_document_with_identity(path).map(|(document, _)| document)
+}
+
+#[cfg(test)]
+fn resolve_document(
+    document: &FleetInstallInputDocument,
+    build_network: BuildNetwork,
+    catalog: Option<&ValidatedSubnetCatalog>,
+) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
+    let canonical = serde_json::to_vec(document)?;
+    let canonical_sha256 = canic_core::cdk::utils::hash::hex_bytes(Sha256::digest(canonical));
+    let outcome = catalog.map(|catalog| CatalogLoadOutcome {
+        path: PathBuf::from("test-subnet-catalog.json"),
+        catalog: catalog.clone(),
+        disposition: CacheDisposition::CacheHit,
+    });
+    resolve_document_with_evidence(
+        document,
+        &canonical_sha256,
+        build_network,
+        outcome.as_ref(),
+        document.operator.observed_at_unix_secs,
+    )
+}
+
+const fn validate_operator_text(
+    field: &'static str,
+    value: &str,
+) -> Result<(), FleetInstallInputError> {
+    if value.is_empty() || value.len() > 256 || !value.is_ascii() {
+        Err(FleetInstallInputError::InvalidOperatorEvidence { field })
+    } else {
+        Ok(())
+    }
+}
+
+fn resolve_catalog_evidence(
+    build_network: BuildNetwork,
+    outcome: Option<&CatalogLoadOutcome>,
+) -> Result<FreshFleetCatalogEvidenceV1, FleetInstallInputError> {
+    if build_network != BuildNetwork::Ic {
+        return Ok(FreshFleetCatalogEvidenceV1::NotRequired {
+            network: build_network.to_string(),
+        });
+    }
+    let outcome = outcome.ok_or_else(|| FleetInstallInputError::TrustedMetadataRequired {
+        selector: "fresh-Fleet catalog evidence".to_string(),
+    })?;
+    let authority = outcome.authority_evidence();
+    Ok(FreshFleetCatalogEvidenceV1::Validated {
+        network: outcome.catalog.provenance().network.clone(),
+        assurance: authority.assurance.as_str().to_string(),
+        source_endpoints: authority.source_endpoints,
+        cache_disposition: authority.cache_disposition.as_str().to_string(),
+        collected_at: outcome.catalog.provenance().fetched_at.clone(),
+        registry_version: authority.registry_version,
+        catalog_sha256: authority.catalog_digest,
     })
 }
 

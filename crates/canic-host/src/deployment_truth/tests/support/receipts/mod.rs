@@ -10,6 +10,7 @@ pub(in crate::deployment_truth::tests) fn sample_receipt_with_phase(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: "operation-1".to_string(),
         plan_id: plan_id.to_string(),
+        fresh_fleet_decision: None,
         execution_context: None,
         operation_status: DeploymentExecutionStatusV1::Complete,
         started_at: "2026-05-22T00:00:00Z".to_string(),

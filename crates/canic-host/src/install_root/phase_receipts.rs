@@ -2,8 +2,9 @@ use super::operations::InstallPhaseLabel;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionContextV1,
-    DeploymentExecutionStatusV1, DeploymentReceiptV1, ObservationStatusV1, RolePhaseReceiptV1,
-    RolePhaseResultV1, deployment_receipt_from_check_with_status, phase_receipt,
+    DeploymentExecutionStatusV1, DeploymentReceiptV1, FreshFleetInstallDecisionReceiptV1,
+    ObservationStatusV1, RolePhaseReceiptV1, RolePhaseResultV1,
+    deployment_receipt_from_check_with_status, phase_receipt,
 };
 use canic_core::ids::FleetKey;
 use std::path::{Path, PathBuf};
@@ -14,6 +15,7 @@ pub(super) struct InstallReceiptScope<'a> {
     pub(super) fleet: FleetKey,
     pub(super) check: &'a DeploymentCheckV1,
     pub(super) execution_context: Option<&'a DeploymentExecutionContextV1>,
+    pub(super) fresh_fleet_decision: Option<&'a FreshFleetInstallDecisionReceiptV1>,
 }
 
 pub(super) struct CompletedInstallPhase {
@@ -177,6 +179,8 @@ impl InstallReceiptScope<'_> {
         self,
         receipt: &DeploymentReceiptV1,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        write_install_deployment_truth_receipt(self.icp_root, self.fleet, receipt)
+        let mut receipt = receipt.clone();
+        receipt.fresh_fleet_decision = self.fresh_fleet_decision.cloned();
+        write_install_deployment_truth_receipt(self.icp_root, self.fleet, &receipt)
     }
 }

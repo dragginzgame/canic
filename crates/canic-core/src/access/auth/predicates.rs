@@ -8,7 +8,8 @@ use super::dependency_unavailable;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
-    ops::{config::ConfigOps, runtime::env::EnvOps, storage::children::CanisterChildrenOps},
+    ops::{runtime::env::EnvOps, storage::children::CanisterChildrenOps},
+    workflow::runtime_whitelist::RuntimeWhitelistWorkflow,
 };
 use ic_cdk::api::{canister_self, is_controller as caller_is_controller};
 
@@ -23,16 +24,24 @@ pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> 
     }
 }
 
-/// Require that the caller appears in the configured whitelist.
-/// Missing whitelist configuration fails closed.
+/// Require that the caller appears in the canonical runtime whitelist.
+/// Missing or unavailable stable authority fails closed.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
-    let whitelisted = ConfigOps::is_whitelisted(&caller).map_err(dependency_unavailable)?;
+    let whitelisted = RuntimeWhitelistWorkflow::contains(caller).map_err(dependency_unavailable)?;
     if !whitelisted {
         return Err(AccessError::WhitelistRequired);
     }
 
     Ok(())
+}
+
+/// Require controller authority first, then the exact stable Root binding.
+pub(super) async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
+    if is_controller(caller).await.is_ok() {
+        return Ok(());
+    }
+    is_root(caller).await
 }
 
 /// Require that the caller is a direct child of the current canister.

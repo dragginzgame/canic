@@ -21,6 +21,7 @@ pub mod placement;
 pub mod replay;
 pub mod rpc;
 pub mod runtime;
+pub mod runtime_whitelist;
 pub mod state;
 pub mod topology;
 pub mod view;

@@ -38,9 +38,10 @@ use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, check_install_deployment_truth, check_install_execution_preflight,
-    current_install_release_build, latest_deployment_truth_receipt_path_from_root,
-    require_current_release_builder, root_registry_synchronization_operation_id,
-    root_store_adoption_operation_id, root_store_bootstrap_operation_id,
+    current_install_release_build, install_root, latest_deployment_truth_receipt_path_from_root,
+    prepare_current_fresh_fleet_preflight, require_current_release_builder,
+    root_registry_synchronization_operation_id, root_store_adoption_operation_id,
+    root_store_bootstrap_operation_id,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -121,6 +122,9 @@ fn current_install_reuses_the_existing_session_release_build_before_rebuilding()
             fleet_name: "primary".parse().expect("Fleet name"),
             app: "demo".into(),
             finalized_release_build: &finalized,
+            decision_release_build_id: None,
+            fresh_fleet_plan_digest:
+                "abababababababababababababababababababababababababababababababab",
         },
     )
     .expect("publish Fleet install session");
@@ -198,6 +202,90 @@ fn public_install_error_preserves_phase_and_typed_source() {
             .and_then(|source| source.downcast_ref::<std::io::Error>())
             .is_some()
     );
+}
+
+#[test]
+fn invalid_fleet_input_rejects_before_release_build_allocation() {
+    let root = temp_dir("current-install-invalid-fleet-input");
+    fs::create_dir_all(&root).expect("create temp root");
+    write_demo_root_only_config(&root.join("apps/demo/canic.toml"));
+    let input_path = root.join("fleet-input.toml");
+    fs::write(&input_path, "schema_version = 2\n").expect("write invalid Fleet input");
+    let mut options = local_demo_install_options(&root);
+    options.fleet_install_input_path = Some(input_path);
+
+    let error = install_root(options).expect_err("invalid Fleet input must reject");
+
+    assert_eq!(error.phase(), InstallRootPhase::Planning);
+    assert!(!root.join(".canic/release-builds").exists());
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn invalid_fresh_fleet_topology_rejects_before_release_build_allocation() {
+    let root = temp_dir("current-install-invalid-fleet-topology");
+    fs::create_dir_all(&root).expect("create temp root");
+    write_demo_root_only_config(&root.join("apps/demo/canic.toml"));
+    let input_path = root.join("fleet-input.toml");
+    fs::write(&input_path, invalid_root_only_fleet_input())
+        .expect("write invalid topology Fleet input");
+    let mut options = local_demo_install_options(&root);
+    options.fleet_install_input_path = Some(input_path);
+
+    let error = install_root(options).expect_err("unknown Component admission must reject");
+
+    assert_eq!(error.phase(), InstallRootPhase::Planning);
+    assert!(!root.join(".canic/release-builds").exists());
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn expected_plan_digest_mismatch_rejects_before_release_build_allocation() {
+    let root = temp_dir("current-install-plan-digest-mismatch");
+    fs::create_dir_all(&root).expect("create temp root");
+    write_demo_single_component_config(&root.join("apps/demo/canic.toml"));
+    let input_path = root.join("fleet-input.toml");
+    fs::write(&input_path, valid_single_component_fleet_input()).expect("write valid Fleet input");
+    let mut options = local_demo_install_options(&root);
+    options.fleet_install_input_path = Some(input_path);
+    options.expected_fresh_fleet_plan_digest = Some("00".repeat(32));
+
+    let error = install_root(options).expect_err("changed plan digest must reject");
+
+    assert_eq!(error.phase(), InstallRootPhase::Planning);
+    assert!(!root.join(".canic/release-builds").exists());
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence() {
+    let root = temp_dir("current-install-plan-parity");
+    fs::create_dir_all(&root).expect("create temp root");
+    fs::write(root.join("Cargo.lock"), "# test lock\n").expect("write test Cargo.lock");
+    fs::write(root.join("Cargo.toml"), "[workspace]\n").expect("write test Cargo.toml");
+    let config_path = root.join("apps/demo/canic.toml");
+    write_demo_single_component_config(&config_path);
+    let input_path = root.join("fleet-input.toml");
+    fs::write(&input_path, valid_single_component_fleet_input()).expect("write valid Fleet input");
+    let mut options = local_demo_install_options(&root);
+    options.fleet_install_input_path = Some(input_path.clone());
+
+    let first = prepare_current_fresh_fleet_preflight(&root, &root, &config_path, &options)
+        .expect("compile first install decision");
+    options.expected_fresh_fleet_plan_digest = Some(first.plan.plan_digest.clone());
+    let exact = prepare_current_fresh_fleet_preflight(&root, &root, &config_path, &options)
+        .expect("exact decision digest should be reusable");
+    assert_eq!(exact.plan, first.plan);
+    assert!(!root.join(".canic/release-builds").exists());
+
+    let changed_input =
+        valid_single_component_fleet_input().replace("cycles = \"100T\"", "cycles = \"101T\"");
+    fs::write(&input_path, changed_input).expect("change balance observation");
+    let error = prepare_current_fresh_fleet_preflight(&root, &root, &config_path, &options)
+        .expect_err("changed balance must change and reject the expected digest");
+    assert_eq!(error.phase(), InstallRootPhase::Planning);
+    assert!(!root.join(".canic/release-builds").exists());
+    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 #[test]
@@ -365,6 +453,8 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -390,6 +480,90 @@ package = "root"
 "#,
     )
     .expect("write config");
+}
+
+fn write_demo_single_component_config(config_path: &Path) {
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        config_path,
+        r#"
+[app]
+name = "demo"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+[app.whitelist]
+
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
+"#,
+    )
+    .expect("write config");
+}
+
+fn invalid_root_only_fleet_input() -> &'static str {
+    r#"schema_version = 1
+
+[operator]
+principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
+funding_account = "test-operator"
+source = "test_fixture"
+observed_at_unix_secs = 1782432100
+valid_until_unix_secs = 4102444800
+
+[operator.balance]
+kind = "cycles"
+cycles = "100T"
+
+[coordinator.subnet]
+kind = "explicit"
+subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+
+[coordinator.creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[[fleet_subnet_roots]]
+placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+
+[fleet_subnet_roots.component_admissions]
+unknown = 1
+
+[fleet_subnet_roots.limits]
+maximum_component_instances = 1
+maximum_registry_bytes = 4194304
+maximum_wasm_store_bytes = 40000000
+maximum_group_placements = 0
+
+[fleet_subnet_roots.limits.cycles_funding]
+window_secs = 3600
+maximum_cycles = "10T"
+
+[fleet_subnet_roots.canister_pool]
+minimum_size = 1
+maximum_size = 1
+canister_cycles = "1T"
+imports = []
+
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
+kind = "cycles"
+cycles = "2T"
+"#
+}
+
+fn valid_single_component_fleet_input() -> String {
+    invalid_root_only_fleet_input().replace("unknown = 1", "app = 1")
 }
 
 fn write_wasm_gz_artifact(root: &Path, role: &str, bytes: &[u8]) {
@@ -472,6 +646,8 @@ package = "worker"
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,

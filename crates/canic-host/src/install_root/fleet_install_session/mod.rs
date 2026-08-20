@@ -49,6 +49,8 @@ pub(super) struct FleetInstallSession {
     pub release_build_id: ReleaseBuildId,
     pub release_build_plan_digest: [u8; 32],
     pub release_set_manifest_digest: [u8; 32],
+    pub decision_release_build_id: Option<ReleaseBuildId>,
+    pub fresh_fleet_plan_digest: String,
     pub operation_id: [u8; 32],
 }
 
@@ -64,6 +66,15 @@ pub(super) struct PlanFleetInstallSessionRequest<'a> {
     pub fleet_name: FleetName,
     pub app: AppId,
     pub finalized_release_build: &'a FinalizedReleaseBuild,
+    pub decision_release_build_id: Option<ReleaseBuildId>,
+    pub fresh_fleet_plan_digest: &'a str,
+}
+
+/// Exact plan/release authority retained for same-release install recovery.
+pub(super) struct RecoveredFleetInstallAuthority {
+    pub finalized_release_build: FinalizedReleaseBuild,
+    pub decision_release_build_id: Option<ReleaseBuildId>,
+    pub fresh_fleet_plan_digest: String,
 }
 
 ///
@@ -153,6 +164,8 @@ pub(super) fn plan_fleet_install_session(
         release_build_id: finalized.record.release_build_id,
         release_build_plan_digest: finalized.plan_hash,
         release_set_manifest_digest,
+        decision_release_build_id: request.decision_release_build_id,
+        fresh_fleet_plan_digest: request.fresh_fleet_plan_digest.to_string(),
         operation_id: random_identity_bytes()?,
     };
     let bytes = encode_session(&path, &session)?;
@@ -195,6 +208,17 @@ pub(super) fn recover_fleet_install_session_release_build(
     fleet_name: &FleetName,
     app: &AppId,
 ) -> Result<Option<FinalizedReleaseBuild>, FleetInstallSessionError> {
+    recover_fleet_install_session_authority(root, canonical_network_id, fleet_name, app)
+        .map(|authority| authority.map(|authority| authority.finalized_release_build))
+}
+
+/// Recover the original decision binding plus finalized artifacts for exact resume.
+pub(super) fn recover_fleet_install_session_authority(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+    fleet_name: &FleetName,
+    app: &AppId,
+) -> Result<Option<RecoveredFleetInstallAuthority>, FleetInstallSessionError> {
     let path = session_path(root, canonical_network_id, fleet_name);
     let _lock = lock_session(&path)?;
     let Some(session) = load_optional_session(&path)? else {
@@ -223,7 +247,11 @@ pub(super) fn recover_fleet_install_session_release_build(
         ));
     }
 
-    Ok(Some(finalized))
+    Ok(Some(RecoveredFleetInstallAuthority {
+        finalized_release_build: finalized,
+        decision_release_build_id: session.decision_release_build_id,
+        fresh_fleet_plan_digest: session.fresh_fleet_plan_digest,
+    }))
 }
 
 fn session_matches_request(
@@ -239,6 +267,8 @@ fn session_matches_request(
         && session.release_build_id == request.finalized_release_build.record.release_build_id
         && session.release_build_plan_digest == release_build_plan_digest
         && session.release_set_manifest_digest == release_set_manifest_digest
+        && session.decision_release_build_id == request.decision_release_build_id
+        && session.fresh_fleet_plan_digest == request.fresh_fleet_plan_digest
 }
 
 fn encode_session(
@@ -300,7 +330,29 @@ fn validate_session(
     if session.operation_id == [0; 32] {
         return Err(invalid(path, "operation identity must not be zero"));
     }
+    if !is_canonical_sha256(&session.fresh_fleet_plan_digest) {
+        return Err(invalid(
+            path,
+            "fresh-Fleet plan digest must contain 64 lowercase hexadecimal characters",
+        ));
+    }
+    if session
+        .decision_release_build_id
+        .is_some_and(|release_build_id| release_build_id != session.release_build_id)
+    {
+        return Err(invalid(
+            path,
+            "decision release build differs from finalized install release build",
+        ));
+    }
     Ok(())
+}
+
+fn is_canonical_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 fn session_path(

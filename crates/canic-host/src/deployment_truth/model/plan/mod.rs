@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 pub struct DeploymentPlanV1 {
     pub schema_version: u32,
     pub plan_id: String,
+    pub plan_digest: Option<String>,
     pub deployment_identity: DeploymentIdentityV1,
     pub trust_domain: TrustDomainV1,
     pub runtime_variant: String,

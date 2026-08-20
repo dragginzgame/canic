@@ -8,16 +8,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The accepted 0.107 B1 contract freezes target-complete plan/install inputs,
-  one canonical plan digest, bounded Root-or-controller runtime-whitelist
-  authority and exact upstream catalog provenance; B2 now forwards the
-  top-level environment to direct planning and rejects hidden or canonical
-  target disagreement before Fleet-catalog lookup.
-
 - The test-only 0.108 B1 attached-cycles probe proves exact caller-bound root
   acceptance, intent/call/receipt interruption and zero-accept replay with
   automatic principal return, while retaining measured PocketIC call-cost and
   operating-headroom inputs for maintainer acceptance before production work.
+
+## [0.107.x] - 2026-08-20 - Fresh-Fleet Preflight And Runtime Admission
+
+Detailed patch breakdown: [docs/changelog/0.107.md](docs/changelog/0.107.md)
+
+- `0.107.0` is the target-complete Fleet preflight, canonical plan-digest and
+  managed runtime-whitelist checkpoint; structured catalog-failure provenance
+  remains blocked on the accepted upstream typed API, so this patch does not
+  close the 0.107 minor.
 
 ## [0.106.x] - 2026-08-20 - Fleet Estate Qualification Baseline
 

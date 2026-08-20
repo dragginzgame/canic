@@ -1,8 +1,15 @@
 use crate::{
-    deployment_truth::DeploymentReceiptV1,
-    fleet_install_input::{ResolvedFleetInstallInput, load_and_resolve_fleet_install_input},
+    deployment_truth::{DeploymentReceiptV1, FreshFleetInstallDecisionReceiptV1},
+    fleet_install_input::{
+        ResolvedFleetInstallInput, load_and_resolve_fleet_install_input_for_preflight,
+    },
     fleet_install_plan::{
-        FleetInstallPlanRequest, PersistedFleetInstallPlan, compile_and_persist_fleet_install_plan,
+        FleetInstallPlanRequest, FreshFleetDecisionAuthorityRequest,
+        FreshFleetDeploymentPlanRequest, FreshFleetDeploymentPlanV1, FreshFleetPreflightEffectsV1,
+        FreshFleetPreflightRequest, FreshFleetPreflightV1, PersistedFleetInstallPlan,
+        PlannedCanisterCreationFunding, compile_and_persist_fleet_install_plan,
+        compile_fresh_fleet_deployment_plan, compile_fresh_fleet_preflight,
+        load_fresh_fleet_decision_authority,
     },
     network::resolve_canonical_network_id_from_root,
     release_set::{AppConfigSnapshot, icp_root, workspace_root},
@@ -229,6 +236,28 @@ impl InstallRootError {
 #[error("fresh Fleet installation requires --fleet-input <PATH>")]
 struct MissingFleetInstallInputError;
 
+#[derive(Debug, ThisError)]
+#[error("preflight App {preflight} differs from build snapshot App {build_snapshot}")]
+struct InstallAppSnapshotChangedError {
+    preflight: String,
+    build_snapshot: String,
+}
+
+#[derive(Debug, ThisError)]
+#[error("fresh-Fleet plan digest differs: expected {expected}, observed {observed}")]
+struct FreshFleetPlanDigestMismatchError {
+    expected: String,
+    observed: String,
+}
+
+#[derive(Debug)]
+struct PreparedFreshFleetDecision {
+    app_id: String,
+    fleet_name: String,
+    input: ResolvedFleetInstallInput,
+    plan: FreshFleetDeploymentPlanV1,
+}
+
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let workspace_root = current_canic_workspace_root()?;
@@ -249,6 +278,20 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
 pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootError> {
     let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
     let config_path = current_install_config_path(&icp_root, &options)?;
+    let announced_fresh_fleet =
+        prepare_current_fresh_fleet_preflight(&workspace_root, &icp_root, &config_path, &options)?;
+    print_fresh_fleet_decision(&announced_fresh_fleet.plan);
+    let fresh_fleet =
+        prepare_current_fresh_fleet_preflight(&workspace_root, &icp_root, &config_path, &options)?;
+    require_recompiled_fresh_fleet_plan(&announced_fresh_fleet.plan, &fresh_fleet.plan)?;
+    let PreparedFreshFleetDecision {
+        app_id,
+        fleet_name,
+        input: resolved_fleet_install_input,
+        plan: fresh_fleet_plan,
+    } = fresh_fleet;
+    options.admitted_fresh_fleet_plan_digest = Some(fresh_fleet_plan.plan_digest.clone());
+
     let icp_context =
         InstallIcpContext::new(&options.icp_executable, &icp_root, &options.environment);
     let (build_context, install_snapshot) = current_install_build_inputs(
@@ -260,9 +303,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::BuildInputs))?;
     options.build_profile = Some(build_context.profile);
-    let (app_id, fleet_name) =
-        resolve_install_identity(&options, &config_path, &install_snapshot.app_id)
-            .map_err(InstallRootError::in_phase(InstallRootPhase::Identity))?;
+    require_install_app_unchanged(&app_id, &install_snapshot)?;
     let total_started_at = Instant::now();
     let environment = options.environment.as_str();
     let artifact_root = if options.deployment_plan_override.is_some() {
@@ -275,10 +316,6 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         &icp_root,
         &artifact_root,
     );
-    let resolved_fleet_install_input =
-        resolve_current_fleet_install_input(&icp_root, environment, &options)
-            .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
-
     print_install_identity(&app_id, &fleet_name);
     let prepared = prepare_install_deployment_truth(
         &options,
@@ -302,20 +339,26 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
     timings.emit_manifest = emitted_manifest.duration;
     let finalized_release_build =
         require_finalized_release_build(emitted_manifest.finalized_release_build)?;
-    let planned_install = plan_current_fleet_install(
-        &icp_root,
+    let planned_install = plan_current_fleet_install(CurrentFleetInstallPlanRequest {
+        icp_root: &icp_root,
         environment,
-        &fleet_name,
-        &app_id,
-        &config_path,
-        &finalized_release_build,
-        resolved_fleet_install_input,
-    )?;
+        fleet_name: &fleet_name,
+        app_id: &app_id,
+        config_path: &config_path,
+        finalized_release_build: &finalized_release_build,
+        input: resolved_fleet_install_input,
+        fresh_fleet_plan: &fresh_fleet_plan,
+    })?;
+    let fresh_fleet_receipt_decision = FreshFleetInstallDecisionReceiptV1 {
+        plan_digest: fresh_fleet_plan.plan_digest.clone(),
+        catalog: fresh_fleet_plan.authority.catalog,
+    };
     let receipt_scope = InstallReceiptScope {
         icp_root: &icp_root,
         fleet: planned_install.fleet(),
         check: &prepared.deployment_truth_check,
         execution_context: Some(&execution_context),
+        fresh_fleet_decision: Some(&fresh_fleet_receipt_decision),
     };
     persist_current_pre_root_receipts(
         receipt_scope,
@@ -330,6 +373,69 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Ok(())
+}
+
+fn prepare_current_fresh_fleet_preflight(
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    options: &InstallRootOptions,
+) -> Result<PreparedFreshFleetDecision, InstallRootError> {
+    let config = AppConfigSnapshot::load(config_path)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Configuration, source))?;
+    let (app_id, fleet_name) = resolve_install_identity(options, config_path, config.app_id())
+        .map_err(InstallRootError::in_phase(InstallRootPhase::Identity))?;
+    let canonical_network_id =
+        resolve_canonical_network_id_from_root(icp_root, &options.environment)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
+    let input = resolve_current_fleet_install_input(icp_root, &options.environment, options)
+        .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let (build_profile, release_build_id, recovered_plan_digest) =
+        current_install_preflight_release_source(
+            icp_root,
+            canonical_network_id,
+            &fleet_name,
+            &app_id,
+            options,
+        )
+        .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let preflight = compile_current_fresh_fleet_preflight(
+        &config,
+        &app_id,
+        &fleet_name,
+        &input,
+        build_profile,
+        release_build_id,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let authority = load_fresh_fleet_decision_authority(FreshFleetDecisionAuthorityRequest {
+        workspace_root,
+        icp_root,
+        config: &config,
+        requested_environment: &options.environment,
+        canonical_network_id,
+        release_build_id,
+        fleet_input: &input,
+    })
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight,
+        authority,
+    })
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    require_fresh_fleet_plan_digest(
+        options.expected_fresh_fleet_plan_digest.as_deref(),
+        &plan.plan_digest,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    require_fresh_fleet_plan_digest(recovered_plan_digest.as_deref(), &plan.plan_digest)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    Ok(PreparedFreshFleetDecision {
+        app_id,
+        fleet_name,
+        input,
+        plan,
+    })
 }
 
 fn install_current_fleet_infrastructure(
@@ -444,28 +550,36 @@ fn resolve_current_install_roots(
     Ok((workspace_root, icp_root))
 }
 
-fn plan_current_fleet_install(
-    icp_root: &Path,
-    environment: &str,
-    fleet_name: &str,
-    app_id: &str,
-    config_path: &Path,
-    finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
+struct CurrentFleetInstallPlanRequest<'a> {
+    icp_root: &'a Path,
+    environment: &'a str,
+    fleet_name: &'a str,
+    app_id: &'a str,
+    config_path: &'a Path,
+    finalized_release_build: &'a crate::release_build::FinalizedReleaseBuild,
     input: ResolvedFleetInstallInput,
+    fresh_fleet_plan: &'a FreshFleetDeploymentPlanV1,
+}
+
+fn plan_current_fleet_install(
+    request: CurrentFleetInstallPlanRequest<'_>,
 ) -> Result<PlannedCurrentFleetInstall, InstallRootError> {
     let session = plan_current_fleet_install_session(
-        icp_root,
-        environment,
-        fleet_name,
-        app_id,
-        finalized_release_build,
+        request.icp_root,
+        request.environment,
+        request.fleet_name,
+        request.app_id,
+        request.finalized_release_build,
+        request.fresh_fleet_plan,
     )?;
     let plan = persist_current_fleet_install_plan(
-        icp_root,
-        config_path,
+        request.icp_root,
+        request.config_path,
+        request.fleet_name,
         session.fleet.clone(),
-        finalized_release_build,
-        input,
+        request.finalized_release_build,
+        request.input,
+        request.fresh_fleet_plan,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
     Ok(PlannedCurrentFleetInstall { session, plan })
@@ -493,6 +607,30 @@ fn require_finalized_release_build(
     })
 }
 
+fn require_recompiled_fresh_fleet_plan(
+    announced: &FreshFleetDeploymentPlanV1,
+    recompiled: &FreshFleetDeploymentPlanV1,
+) -> Result<(), InstallRootError> {
+    require_fresh_fleet_plan_digest(Some(&announced.plan_digest), &recompiled.plan_digest)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))
+}
+
+fn require_install_app_unchanged(
+    preflight_app_id: &str,
+    install_snapshot: &build_snapshot::ValidatedInstallSnapshot,
+) -> Result<(), InstallRootError> {
+    if install_snapshot.app_id == preflight_app_id {
+        return Ok(());
+    }
+    Err(InstallRootError::new(
+        InstallRootPhase::Identity,
+        InstallAppSnapshotChangedError {
+            preflight: preflight_app_id.to_string(),
+            build_snapshot: install_snapshot.app_id.clone(),
+        },
+    ))
+}
+
 fn resolve_current_fleet_install_input(
     icp_root: &Path,
     environment: &str,
@@ -507,21 +645,101 @@ fn resolve_current_fleet_install_input(
     } else {
         icp_root.join(input_path)
     };
-    load_and_resolve_fleet_install_input(icp_root, environment, &input_path).map_err(Into::into)
+    load_and_resolve_fleet_install_input_for_preflight(icp_root, environment, &input_path)
+        .map_err(Into::into)
+}
+
+fn compile_current_fresh_fleet_preflight(
+    config: &AppConfigSnapshot,
+    app_id: &str,
+    fleet_name: &str,
+    input: &ResolvedFleetInstallInput,
+    build_profile: crate::canister_build::CanisterBuildProfile,
+    release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+) -> Result<FreshFleetPreflightV1, Box<dyn std::error::Error>> {
+    let fleet_name = fleet_name.parse()?;
+    compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: config.model(),
+        app: app_id,
+        fleet_name: &fleet_name,
+        coordinator: &input.coordinator,
+        fleet_subnet_roots: &input.fleet_subnet_roots,
+        build_profile,
+        release_build_id,
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .map_err(Into::into)
+}
+
+type CurrentInstallPreflightReleaseSource = (
+    crate::canister_build::CanisterBuildProfile,
+    Option<canic_core::ids::ReleaseBuildId>,
+    Option<String>,
+);
+
+fn current_install_preflight_release_source(
+    icp_root: &Path,
+    canonical_network_id: canic_core::ids::CanonicalNetworkId,
+    fleet_name: &str,
+    app_id: &str,
+    options: &InstallRootOptions,
+) -> Result<CurrentInstallPreflightReleaseSource, Box<dyn std::error::Error>> {
+    let fleet_name = fleet_name.parse()?;
+    let app = app_id.into();
+    if let Some(recovered) = fleet_install_session::recover_fleet_install_session_authority(
+        icp_root,
+        canonical_network_id,
+        &fleet_name,
+        &app,
+    )? {
+        let finalized = recovered.finalized_release_build;
+        if options
+            .release_build_id
+            .is_some_and(|requested| requested != finalized.record.release_build_id)
+        {
+            return Err(
+                "requested release build differs from the interrupted Fleet install session".into(),
+            );
+        }
+        require_current_release_builder(&finalized.record.builder_version)?;
+        require_requested_build_profile(options.build_profile, finalized.record.build_profile)?;
+        return Ok((
+            finalized.record.build_profile,
+            recovered.decision_release_build_id,
+            Some(recovered.fresh_fleet_plan_digest),
+        ));
+    }
+    if let Some(release_build_id) = options.release_build_id {
+        let finalized = load_finalized_release_build(icp_root, release_build_id)?;
+        require_current_release_builder(&finalized.record.builder_version)?;
+        require_requested_build_profile(options.build_profile, finalized.record.build_profile)?;
+        return Ok((finalized.record.build_profile, Some(release_build_id), None));
+    }
+    Ok((
+        options
+            .build_profile
+            .unwrap_or(crate::canister_build::CanisterBuildProfile::Release),
+        None,
+        None,
+    ))
 }
 
 fn persist_current_fleet_install_plan(
     icp_root: &Path,
     config_path: &Path,
+    fleet_name: &str,
     fleet: canic_core::ids::FleetBinding,
     finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
     input: ResolvedFleetInstallInput,
+    fresh_fleet_plan: &FreshFleetDeploymentPlanV1,
 ) -> Result<PersistedFleetInstallPlan, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(config_path)?;
     compile_and_persist_fleet_install_plan(FleetInstallPlanRequest {
         root: icp_root,
         config: config.model(),
         fleet,
+        fleet_name: fleet_name.parse()?,
+        fresh_fleet_plan_digest: fresh_fleet_plan.plan_digest.clone(),
         release_build_id: finalized_release_build.record.release_build_id,
         coordinator: input.coordinator,
         fleet_subnet_roots: input.fleet_subnet_roots,
@@ -547,6 +765,7 @@ fn plan_current_fleet_install_session(
     fleet_name: &str,
     app_id: &str,
     finalized_release_build: &crate::release_build::FinalizedReleaseBuild,
+    fresh_fleet_plan: &FreshFleetDeploymentPlanV1,
 ) -> Result<fleet_install_session::FleetInstallSession, InstallRootError> {
     let canonical_network_id = resolve_canonical_network_id_from_root(icp_root, environment)
         .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
@@ -560,9 +779,39 @@ fn plan_current_fleet_install_session(
             fleet_name,
             app: app_id.into(),
             finalized_release_build,
+            decision_release_build_id: fresh_fleet_plan.preflight.release_build_id,
+            fresh_fleet_plan_digest: &fresh_fleet_plan.plan_digest,
         },
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))
+}
+
+fn require_fresh_fleet_plan_digest(
+    expected: Option<&str>,
+    observed: &str,
+) -> Result<(), FreshFleetPlanDigestMismatchError> {
+    match expected {
+        Some(expected) if expected != observed => Err(FreshFleetPlanDigestMismatchError {
+            expected: expected.to_string(),
+            observed: observed.to_string(),
+        }),
+        _ => Ok(()),
+    }
+}
+
+fn print_fresh_fleet_decision(plan: &FreshFleetDeploymentPlanV1) {
+    let maximum_debit = match &plan.maximum_operator_debit {
+        PlannedCanisterCreationFunding::Cycles { cycles } => format!("{cycles} cycles"),
+        PlannedCanisterCreationFunding::Icp { e8s } => format!("{e8s} ICP e8s"),
+    };
+    TerminalStyle::detected().print_section(
+        "Fresh-Fleet decision",
+        &format!(
+            "plan {} with maximum operator debit {maximum_debit}",
+            plan.plan_digest
+        ),
+    );
+    println!();
 }
 
 fn print_install_identity(app: &str, fleet_name: &str) {

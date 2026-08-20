@@ -1,13 +1,6 @@
 use super::*;
 
-#[test]
-fn install_truth_gate_lines_include_warning_codes() {
-    let root = temp_dir("canic-install-truth-warning-lines");
-    let config_path = root.join("apps/demo/canic.toml");
-    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
-    fs::write(
-        &config_path,
-        r#"
+const INSTALL_TRUTH_WARNING_CONFIG: &str = r#"
 [app]
 name = "demo"
 init_mode = "enabled"
@@ -53,9 +46,14 @@ kind = "canister"
 package = "worker"
 [app.whitelist]
 
-"#,
-    )
-    .expect("write config");
+"#;
+
+#[test]
+fn install_truth_gate_lines_include_warning_codes() {
+    let root = temp_dir("canic-install-truth-warning-lines");
+    let config_path = root.join("apps/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(&config_path, INSTALL_TRUTH_WARNING_CONFIG).expect("write config");
     write_wasm_gz_artifact(&root, "fleet_coordinator", b"fleet-coordinator-artifact");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
@@ -72,6 +70,8 @@ package = "worker"
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -211,6 +211,8 @@ package = "worker"
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,

@@ -14,7 +14,12 @@ use crate::deploy::{
 
 use std::path::Path;
 
-use canic_host::durable_io::create_new_bytes;
+use canic_host::{
+    durable_io::create_new_bytes,
+    fleet_install_plan::{
+        FreshFleetDeploymentPlanV1, FreshFleetFundingPayerV1, PlannedCanisterCreationFunding,
+    },
+};
 
 pub(in crate::deploy) fn write_report(
     options: &DeployPlanOptions,
@@ -75,10 +80,26 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
         format!("fleet: {}", report.fleet),
         format!("app: {}", report.app),
         format!("environment: {}", report.environment),
+        format!("fleet_input: {}", report.fleet_input_path),
         format!("config: {}", report.config_path),
         format!("build_profile: {}", report.build_profile),
+        format!(
+            "release_build: {}",
+            report.release_build_id.as_deref().unwrap_or("workspace")
+        ),
+        format!(
+            "no_effects_started: {}",
+            report
+                .fresh_fleet_plan
+                .as_ref()
+                .is_some_and(|plan| plan.preflight.effects.no_effects_started())
+        ),
         String::new(),
     ];
+
+    if let Some(plan) = &report.fresh_fleet_plan {
+        append_fresh_fleet_decision(&mut lines, plan);
+    }
 
     append_diagnostics(&mut lines, "blockers", &report.blockers);
     append_diagnostics(&mut lines, "warnings", &report.warnings);
@@ -88,6 +109,78 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
     append_next_actions(&mut lines, &report.next_actions);
 
     lines.join("\n")
+}
+
+fn append_fresh_fleet_decision(lines: &mut Vec<String>, plan: &FreshFleetDeploymentPlanV1) {
+    let counts = plan.counts;
+    let operator = &plan.authority.operator;
+    lines.push("canonical fresh-Fleet decision".to_string());
+    lines.push(format!("  plan_digest: {}", plan.plan_digest));
+    lines.push(format!("  operator_principal: {}", operator.principal));
+    lines.push(format!(
+        "  operator_funding_account: {}",
+        operator.funding_account
+    ));
+    lines.push(format!(
+        "  operator_balance: {}",
+        render_funding(&operator.balance)
+    ));
+    lines.push(format!(
+        "  operator_balance_evidence: source={} observed_at={} valid_until={} fresh={} sufficient={}",
+        operator.source,
+        operator.observed_at_unix_secs,
+        operator.valid_until_unix_secs,
+        operator.balance_fresh,
+        plan.operator_balance_sufficient,
+    ));
+    lines.push(format!(
+        "  maximum_operator_debit: {}",
+        render_funding(&plan.maximum_operator_debit)
+    ));
+    lines.push(format!(
+        "  canister_counts: coordinator={} root={} store={} component={} ready_pool={} role={} total={}",
+        counts.coordinator_canisters,
+        counts.root_canisters,
+        counts.wasm_store_canisters,
+        counts.component_canisters,
+        counts.ready_pool_canisters,
+        counts.role_canisters,
+        counts.total_canisters,
+    ));
+    for root in &plan.preflight.fleet_subnet_roots {
+        lines.push(format!(
+            "  root: subnet={} component={} initial_pool={} pool_creations={} ready_pool={} admissions={}",
+            root.placement_subnet,
+            root.initial_component_canisters,
+            root.initial_pool_canisters,
+            root.pool_canister_creations,
+            root.remaining_pool_canisters,
+            root.component_admissions.len(),
+        ));
+    }
+    for requirement in &plan.funding_requirements {
+        let payer = match requirement.payer {
+            FreshFleetFundingPayerV1::Operator => "operator",
+            FreshFleetFundingPayerV1::FleetSubnetRoot => "fleet_subnet_root",
+        };
+        lines.push(format!(
+            "  funding: category={} owner={} payer={} count={} per_canister={} maximum={}",
+            requirement.category,
+            requirement.owner,
+            payer,
+            requirement.canister_count,
+            render_funding(&requirement.per_canister),
+            render_funding(&requirement.maximum),
+        ));
+    }
+    lines.push(String::new());
+}
+
+fn render_funding(funding: &PlannedCanisterCreationFunding) -> String {
+    match funding {
+        PlannedCanisterCreationFunding::Cycles { cycles } => format!("{cycles} cycles"),
+        PlannedCanisterCreationFunding::Icp { e8s } => format!("{e8s} ICP e8s"),
+    }
 }
 
 fn append_diagnostics(lines: &mut Vec<String>, label: &str, diagnostics: &[PlanDiagnostic]) {

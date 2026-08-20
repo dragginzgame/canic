@@ -130,9 +130,12 @@ pub(super) fn install_and_verify_fleet_coordinator(
                 recover_or_create_coordinator(icp_context, fleet_install_plan, &current)?
             }
             FleetCoordinatorInstallPhase::Created => begin_coordinator_install(&current)?,
-            FleetCoordinatorInstallPhase::InstallInFlight => {
-                recover_or_install_coordinator(icp_context, &artifact, &current)?
-            }
+            FleetCoordinatorInstallPhase::InstallInFlight => recover_or_install_coordinator(
+                icp_context,
+                &artifact,
+                &fleet_install_plan.plan.fresh_fleet_plan_digest,
+                &current,
+            )?,
             FleetCoordinatorInstallPhase::Installed => {
                 verify_and_record_coordinator(icp_context, &protocol_binding, &current)?
             }
@@ -186,6 +189,7 @@ fn recover_or_create_coordinator(
 fn recover_or_install_coordinator(
     icp_context: &InstallIcpContext,
     artifact: &InstallArtifact,
+    fresh_fleet_plan_digest: &str,
     current: &ResolvedFleetCoordinatorInstall,
 ) -> Result<ResolvedFleetCoordinatorInstall, Box<dyn std::error::Error>> {
     let coordinator = current
@@ -201,6 +205,7 @@ fn recover_or_install_coordinator(
             wasm_path: &artifact.wasm_path,
             args_path: &args_path,
             expected_module_hash: current.journal.expected_module_hash,
+            fresh_fleet_plan_digest,
             action: EffectAction::from_advanced(current.advanced),
         },
         || Ok(expected_genesis(&current.journal)?.init_args),

@@ -22,8 +22,8 @@ pub use comparison::{
 pub use execution::{
     DeploymentCommandResultV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
     DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
-    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, PhaseReceiptV1, RolePhaseReceiptV1,
-    RolePhaseResultV1, VerifiedPostconditionV1,
+    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, FreshFleetInstallDecisionReceiptV1,
+    PhaseReceiptV1, RolePhaseReceiptV1, RolePhaseResultV1, VerifiedPostconditionV1,
 };
 pub use inventory::{
     CanisterControlClassV1, DeploymentInventoryV1, DeploymentObservationGapV1,

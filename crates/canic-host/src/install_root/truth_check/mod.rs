@@ -137,7 +137,9 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
         .to_string();
     if let Some(plan) = prepared_plan.or(options.deployment_plan_override.as_ref()) {
         validate_current_install_plan_override(plan, &options.environment, scope.fleet_name, &app)?;
-        return current_install_deployment_truth_check_for_plan(plan, scope, &options.environment);
+        let mut plan = plan.clone();
+        bind_admitted_fresh_fleet_plan_digest(&mut plan, options)?;
+        return current_install_deployment_truth_check_for_plan(&plan, scope, &options.environment);
     }
 
     let build_profile = options
@@ -146,7 +148,7 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
         .target_dir_name()
         .to_string();
 
-    check_local_deployment_at_root(
+    let mut check = check_local_deployment_at_root(
         &LocalDeploymentCheckRequest {
             fleet_name: scope.fleet_name.to_string(),
             app,
@@ -160,8 +162,27 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
             build_profile,
         },
         scope.artifact_root,
-    )
-    .map_err(Into::into)
+    )?;
+    bind_admitted_fresh_fleet_plan_digest(&mut check.plan, options)?;
+    Ok(check)
+}
+
+fn bind_admitted_fresh_fleet_plan_digest(
+    plan: &mut DeploymentPlanV1,
+    options: &InstallRootOptions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(admitted) = options.admitted_fresh_fleet_plan_digest.as_ref() else {
+        return Ok(());
+    };
+    if plan
+        .plan_digest
+        .as_ref()
+        .is_some_and(|observed| observed != admitted)
+    {
+        return Err("deployment-truth plan digest differs from admitted fresh-Fleet plan".into());
+    }
+    plan.plan_digest = Some(admitted.clone());
+    Ok(())
 }
 
 pub(super) fn validate_expected_app_id(

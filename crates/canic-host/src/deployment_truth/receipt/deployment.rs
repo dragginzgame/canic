@@ -62,6 +62,7 @@ pub fn deployment_receipt_from_check_with_status(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: operation_id.into(),
         plan_id: check.plan.plan_id.clone(),
+        fresh_fleet_decision: None,
         execution_context: None,
         operation_status,
         started_at: started_at.into(),

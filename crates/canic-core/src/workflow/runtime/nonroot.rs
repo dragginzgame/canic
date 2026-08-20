@@ -29,6 +29,7 @@ use crate::{
             RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
             rebuild_derived_storage_indexes,
         },
+        runtime_whitelist::RuntimeWhitelistWorkflow,
     },
 };
 
@@ -189,6 +190,9 @@ fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(),
     let app_mode = ConfigOps::app_init_mode().map_err(|_err| InternalError::invariant())?;
     FleetStateOps::init_mode(app_mode);
     let canister_cfg = ConfigOps::current_canister()?;
+    if !FleetActivationRuntimeOps::is_standalone_local() && !canister_role.is_wasm_store() {
+        RuntimeWhitelistWorkflow::initialize_from_compiled_seed()?;
+    }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;
     Ok(())
@@ -280,6 +284,7 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
             &deployment,
             owning_component(&binding),
         )?;
+        RuntimeWhitelistWorkflow::restore()?;
     }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;

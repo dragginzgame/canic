@@ -5,6 +5,7 @@
 //! Boundary: exact cycle amounts use canonical decimal strings only in the durable JSON shape.
 
 use crate::{
+    canister_build::CanisterBuildProfile,
     component_topology::{FleetTopologyPlanError, RootComponentAdmissionInput},
     release_build::ReleaseBuildPlanError,
     release_set::{ApplicationArtifactUnionPersistenceError, ApplicationReleaseSetError},
@@ -18,9 +19,10 @@ use canic_core::{
     bootstrap::compiled::ConfigModel,
     cdk::types::{Cycles, Principal},
     ids::{
-        ComponentGroupDeploymentId, ComponentSpecAdmission, ComponentTopologyDigest,
-        CyclesFundingBudget, FleetBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
-        ReleaseBuildId, ReleaseSetDigest, SubnetId,
+        CanonicalNetworkId, ComponentGroupDeploymentId, ComponentSpecAdmission,
+        ComponentTopologyDigest, CyclesFundingBudget, FleetBinding, FleetName,
+        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseSetDigest,
+        SubnetId,
     },
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
@@ -32,7 +34,7 @@ use thiserror::Error as ThisError;
 /// Exact positive funding method resolved for one host-created initial Canister.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PlannedCanisterCreationFunding {
     Cycles { cycles: u128 },
     Icp { e8s: u64 },
@@ -76,6 +78,295 @@ pub struct PlannedFleetSubnetRootInput {
     pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
 }
 
+/// Explicit proof that fresh-Fleet preflight still precedes every effect boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetPreflightEffectsV1 {
+    pub build_started: bool,
+    pub workspace_mutation_started: bool,
+    pub ic_mutation_started: bool,
+}
+
+impl FreshFleetPreflightEffectsV1 {
+    /// Construct the only effect state admitted by pure preflight.
+    #[must_use]
+    pub const fn none_started() -> Self {
+        Self {
+            build_started: false,
+            workspace_mutation_started: false,
+            ic_mutation_started: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn no_effects_started(self) -> bool {
+        !self.build_started && !self.workspace_mutation_started && !self.ic_mutation_started
+    }
+}
+
+/// Complete named authority accepted by the pure fresh-Fleet preflight compiler.
+pub struct FreshFleetPreflightRequest<'a> {
+    pub config: &'a ConfigModel,
+    pub app: &'a str,
+    pub fleet_name: &'a FleetName,
+    pub coordinator: &'a PlannedFleetCoordinator,
+    pub fleet_subnet_roots: &'a [PlannedFleetSubnetRootInput],
+    pub build_profile: CanisterBuildProfile,
+    pub release_build_id: Option<ReleaseBuildId>,
+    pub effects: FreshFleetPreflightEffectsV1,
+}
+
+/// One canonical root plan proven before release-build allocation or another effect.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetSubnetRootPlanV1 {
+    pub placement_subnet: SubnetId,
+    pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
+    pub component_admissions: Vec<ComponentSpecAdmission>,
+    pub component_topology_digest: ComponentTopologyDigest,
+    #[serde(with = "root_limits_document")]
+    pub limits: FleetSubnetRootLimits,
+    pub canister_pool_imports: Vec<Principal>,
+    pub root_creation_funding: PlannedCanisterCreationFunding,
+    pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
+    pub initial_component_canisters: u32,
+    pub initial_pool_canisters: u32,
+    pub pool_canister_creations: u32,
+    pub remaining_pool_canisters: u32,
+}
+
+/// Canonical placement, admission and funding result shared by plan and install.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetPreflightV1 {
+    pub schema_version: u16,
+    pub app: String,
+    pub fleet_name: FleetName,
+    pub coordinator: PlannedFleetCoordinator,
+    pub fleet_subnet_roots: Vec<FreshFleetSubnetRootPlanV1>,
+    pub build_profile: String,
+    pub release_build_id: Option<ReleaseBuildId>,
+    pub effects: FreshFleetPreflightEffectsV1,
+    #[serde(skip)]
+    pub(super) component_topology: canic_core::bootstrap::compiled::ComponentTopology,
+}
+
+/// One expected build artifact bound into a workspace or finalized release source.
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetExpectedArtifactV1 {
+    pub role: String,
+    pub package: String,
+}
+
+/// Exact release-source identity admitted by a complete fresh-Fleet decision.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum FreshFleetReleaseSourceV1 {
+    Workspace {
+        builder_version: String,
+        cargo_lock_sha256: String,
+        source_snapshot_sha256: String,
+        expected_artifacts: Vec<FreshFleetExpectedArtifactV1>,
+    },
+    Finalized {
+        release_build_id: ReleaseBuildId,
+        builder_version: String,
+        release_build_plan_sha256: String,
+        release_set_manifest_sha256: String,
+        expected_artifacts: Vec<FreshFleetExpectedArtifactV1>,
+    },
+}
+
+impl FreshFleetReleaseSourceV1 {
+    #[must_use]
+    pub fn expected_artifacts(&self) -> &[FreshFleetExpectedArtifactV1] {
+        match self {
+            Self::Workspace {
+                expected_artifacts, ..
+            }
+            | Self::Finalized {
+                expected_artifacts, ..
+            } => expected_artifacts,
+        }
+    }
+}
+
+/// Catalog authority bound into a complete plan; local networks need no NNS catalog.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum FreshFleetCatalogEvidenceV1 {
+    NotRequired {
+        network: String,
+    },
+    Validated {
+        network: String,
+        assurance: String,
+        source_endpoints: Vec<String>,
+        cache_disposition: String,
+        collected_at: String,
+        registry_version: u64,
+        catalog_sha256: String,
+    },
+}
+
+/// Exact operator funding account and one bounded balance observation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetOperatorFundingEvidenceV1 {
+    pub principal: String,
+    pub funding_account: String,
+    pub balance: PlannedCanisterCreationFunding,
+    pub source: String,
+    pub observed_at_unix_secs: u64,
+    pub valid_until_unix_secs: u64,
+    pub balance_fresh: bool,
+}
+
+/// Complete loader-owned authority passed to the pure decision compiler.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetDecisionAuthorityV1 {
+    pub app_config_sha256: String,
+    pub requested_environment: String,
+    pub canonical_network_id: CanonicalNetworkId,
+    pub fleet_input_schema_version: u32,
+    pub fleet_input_sha256: String,
+    pub release_source: FreshFleetReleaseSourceV1,
+    pub catalog: FreshFleetCatalogEvidenceV1,
+    pub operator: FreshFleetOperatorFundingEvidenceV1,
+}
+
+/// Expected physical and role-bearing Canister counts after initial placement.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetCanisterCountsV1 {
+    pub coordinator_canisters: u32,
+    pub root_canisters: u32,
+    pub wasm_store_canisters: u32,
+    pub component_canisters: u32,
+    pub ready_pool_canisters: u32,
+    pub role_canisters: u32,
+    pub total_canisters: u32,
+}
+
+/// Account that bears one category of fresh-install funding.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FreshFleetFundingPayerV1 {
+    Operator,
+    FleetSubnetRoot,
+}
+
+/// One checked per-category funding maximum included in the plan digest.
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetFundingRequirementV1 {
+    pub category: String,
+    pub owner: String,
+    pub payer: FreshFleetFundingPayerV1,
+    pub canister_count: u32,
+    pub per_canister: PlannedCanisterCreationFunding,
+    pub maximum: PlannedCanisterCreationFunding,
+}
+
+/// Complete successful fresh-Fleet admission decision and its canonical identity.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FreshFleetDeploymentPlanV1 {
+    pub schema_version: u16,
+    pub preflight: FreshFleetPreflightV1,
+    pub authority: FreshFleetDecisionAuthorityV1,
+    pub counts: FreshFleetCanisterCountsV1,
+    pub funding_requirements: Vec<FreshFleetFundingRequirementV1>,
+    pub maximum_operator_debit: PlannedCanisterCreationFunding,
+    pub operator_balance_sufficient: bool,
+    pub plan_digest: String,
+}
+
+/// Complete evidence accepted by the pure canonical decision compiler.
+pub struct FreshFleetDeploymentPlanRequest {
+    pub preflight: FreshFleetPreflightV1,
+    pub authority: FreshFleetDecisionAuthorityV1,
+}
+
+/// Typed rejection produced exclusively by the pure fresh-Fleet compiler.
+#[derive(Debug, ThisError)]
+pub enum FreshFleetPreflightError {
+    #[error("preflight App '{requested_app}' does not match configured App '{configured_app}'")]
+    AppMismatch {
+        configured_app: String,
+        requested_app: String,
+    },
+
+    #[error(
+        "fresh-Fleet preflight began after an effect boundary: build={build_started}, workspace_mutation={workspace_mutation_started}, ic_mutation={ic_mutation_started}"
+    )]
+    EffectsAlreadyStarted {
+        build_started: bool,
+        workspace_mutation_started: bool,
+        ic_mutation_started: bool,
+    },
+
+    #[error("Coordinator placement Subnet must not be anonymous")]
+    AnonymousCoordinatorSubnet,
+
+    #[error("{owner} creation funding amount must be positive")]
+    NonPositiveCreationFunding { owner: String },
+
+    #[error("validated topology root {placement_subnet} has no exact resolved input")]
+    MissingResolvedRoot { placement_subnet: SubnetId },
+
+    #[error("initial Component Group placement assignments are invalid: {reason}")]
+    InvalidComponentGroupPlacementAssignments { reason: String },
+
+    #[error("{subject} count does not fit u32")]
+    CountDoesNotFitU32 { subject: &'static str },
+
+    #[error(transparent)]
+    Topology(#[from] FleetTopologyPlanError),
+}
+
+/// Typed blocker emitted before a complete fresh-Fleet decision can be admitted.
+#[derive(Debug, ThisError)]
+pub enum FreshFleetDeploymentPlanError {
+    #[error("{field} must be exactly 64 lowercase hexadecimal characters")]
+    InvalidSha256 { field: &'static str },
+
+    #[error("{field} must not be empty")]
+    EmptyAuthority { field: &'static str },
+
+    #[error("operator principal must not be anonymous")]
+    AnonymousOperator,
+
+    #[error("release-source artifact inventory is not strictly canonical")]
+    NonCanonicalArtifactInventory,
+
+    #[error("finalized release source differs from preflight release-build identity")]
+    ReleaseBuildIdentityMismatch,
+
+    #[error("{subject} count overflowed")]
+    CountOverflow { subject: &'static str },
+
+    #[error("{subject} funding overflowed")]
+    FundingOverflow { subject: String },
+
+    #[error("operator-funded creation requirements use more than one funding unit")]
+    MixedOperatorFunding,
+
+    #[error("operator balance uses a different funding unit from maximum debit")]
+    OperatorBalanceUnitMismatch,
+
+    #[error("operator balance is insufficient for the maximum debit")]
+    InsufficientOperatorBalance,
+
+    #[error("operator balance evidence is not fresh")]
+    StaleOperatorBalance,
+
+    #[error("failed to encode canonical fresh-Fleet plan input: {0}")]
+    PlanSerialization(serde_json::Error),
+}
+
 ///
 /// PlannedFleetSubnetRoot
 ///
@@ -107,6 +398,7 @@ pub struct PlannedFleetSubnetRoot {
 #[serde(deny_unknown_fields)]
 pub struct FleetInstallPlan {
     pub fleet: FleetBinding,
+    pub fresh_fleet_plan_digest: String,
     pub release_build_id: ReleaseBuildId,
     pub application_artifact_union_digest: [u8; 32],
     pub coordinator: PlannedFleetCoordinator,
@@ -151,6 +443,8 @@ pub struct FleetInstallPlanRequest<'a> {
     pub root: &'a Path,
     pub config: &'a ConfigModel,
     pub fleet: FleetBinding,
+    pub fleet_name: FleetName,
+    pub fresh_fleet_plan_digest: String,
     pub release_build_id: ReleaseBuildId,
     pub coordinator: PlannedFleetCoordinator,
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootInput>,
@@ -170,6 +464,15 @@ pub enum FleetInstallPlanError {
         fleet_app: String,
     },
 
+    #[error(
+        "Fleet install planning crossed an effect boundary before pure preflight: build={build_started}, workspace_mutation={workspace_mutation_started}, ic_mutation={ic_mutation_started}"
+    )]
+    EffectsAlreadyStarted {
+        build_started: bool,
+        workspace_mutation_started: bool,
+        ic_mutation_started: bool,
+    },
+
     #[error("Fleet install plan already exists with different canonical bytes: {path}")]
     ConflictingPlan { path: PathBuf },
 
@@ -185,8 +488,14 @@ pub enum FleetInstallPlanError {
     #[error("Fleet Subnet Root placement Subnet must not be anonymous")]
     AnonymousRootSubnet,
 
+    #[error("validated topology root {placement_subnet} has no exact resolved input")]
+    MissingResolvedRoot { placement_subnet: SubnetId },
+
     #[error("Fleet install plan application artifact union digest does not match durable evidence")]
     ApplicationArtifactUnionDigestMismatch,
+
+    #[error("Fleet install plan fresh-Fleet digest is not canonical SHA-256 text")]
+    InvalidFreshFleetPlanDigest,
 
     #[error("Fleet Subnet Root plans are not in canonical placement order")]
     NonCanonicalRootOrder,

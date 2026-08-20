@@ -4,7 +4,7 @@
 //! Does not own: file paths, serialization, durable publication, artifact projection, or effects.
 //! Boundary: compiled deployment/service policy plus planned roots yields acceptance or typed error.
 
-use super::model::PlannedFleetSubnetRoot;
+use super::model::FreshFleetSubnetRootPlanV1;
 use std::collections::BTreeMap;
 
 use canic_core::{
@@ -91,8 +91,8 @@ pub(super) enum InitialPlacementPolicyError {
 
 pub(super) fn validate_initial_component_group_assignments(
     config: &ConfigModel,
-    roots: &[PlannedFleetSubnetRoot],
-) -> Result<(), InitialPlacementPolicyError> {
+    roots: &[FreshFleetSubnetRootPlanV1],
+) -> Result<BTreeMap<SubnetId, u32>, InitialPlacementPolicyError> {
     let configuration = config
         .compile_component_deployment_configuration()
         .map_err(|error| InitialPlacementPolicyError::Configuration(error.to_string()))?;
@@ -104,25 +104,28 @@ pub(super) fn validate_initial_component_group_assignments(
         (SubnetId, &ComponentGroupDeploymentSpec),
     >::new();
     let mut service_roots = BTreeMap::<FleetServiceId, BTreeMap<SubnetId, u32>>::new();
+    let mut component_counts = BTreeMap::<SubnetId, u32>::new();
 
     for root in roots {
         validate_root_assignment_order(root)?;
-        validate_root_initial_assignment_capacity(
+        let component_count = validate_root_initial_assignment_capacity(
             root,
             deployments,
             &mut assignments,
             &mut service_roots,
         )?;
+        component_counts.insert(root.placement_subnet, component_count);
     }
 
     for deployment in deployments {
         validate_deployment_assignment(deployment, &assignments)?;
     }
-    validate_service_assignments(&configuration.fleet_service_topology, &service_roots)
+    validate_service_assignments(&configuration.fleet_service_topology, &service_roots)?;
+    Ok(component_counts)
 }
 
 fn validate_root_assignment_order(
-    root: &PlannedFleetSubnetRoot,
+    root: &FreshFleetSubnetRootPlanV1,
 ) -> Result<(), InitialPlacementPolicyError> {
     let assignments_are_sorted = root.component_group_placements.is_sorted();
     let assignments_are_unique = root
@@ -143,14 +146,14 @@ fn validate_root_assignment_order(
 }
 
 fn validate_root_initial_assignment_capacity<'a>(
-    root: &PlannedFleetSubnetRoot,
+    root: &FreshFleetSubnetRootPlanV1,
     deployments: &'a [ComponentGroupDeploymentSpec],
     assignments: &mut BTreeMap<
         (ComponentGroupDeploymentId, u32),
         (SubnetId, &'a ComponentGroupDeploymentSpec),
     >,
     service_roots: &mut BTreeMap<FleetServiceId, BTreeMap<SubnetId, u32>>,
-) -> Result<(), InitialPlacementPolicyError> {
+) -> Result<u32, InitialPlacementPolicyError> {
     let mut component_counts = BTreeMap::<ComponentSpecId, u32>::new();
     let mut component_count = 0_u32;
     for assignment in &root.component_group_placements {
@@ -197,11 +200,12 @@ fn validate_root_initial_assignment_capacity<'a>(
         });
     }
     validate_initial_pool_capacity(root, component_count)?;
-    validate_component_admissions(root, component_counts)
+    validate_component_admissions(root, component_counts)?;
+    Ok(component_count)
 }
 
 fn record_member_capacity(
-    root: &PlannedFleetSubnetRoot,
+    root: &FreshFleetSubnetRootPlanV1,
     deployment: &ComponentGroupDeploymentSpec,
     component_counts: &mut BTreeMap<ComponentSpecId, u32>,
     service_roots: &mut BTreeMap<FleetServiceId, BTreeMap<SubnetId, u32>>,
@@ -232,7 +236,7 @@ fn record_member_capacity(
 }
 
 fn validate_initial_pool_capacity(
-    root: &PlannedFleetSubnetRoot,
+    root: &FreshFleetSubnetRootPlanV1,
     component_count: u32,
 ) -> Result<(), InitialPlacementPolicyError> {
     let imported_assets = u32::try_from(root.canister_pool_imports.len()).map_err(|_| {
@@ -252,7 +256,7 @@ fn validate_initial_pool_capacity(
 }
 
 fn validate_component_admissions(
-    root: &PlannedFleetSubnetRoot,
+    root: &FreshFleetSubnetRootPlanV1,
     component_counts: BTreeMap<ComponentSpecId, u32>,
 ) -> Result<(), InitialPlacementPolicyError> {
     for (component_spec, count) in component_counts {

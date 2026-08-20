@@ -116,6 +116,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::BlobStorageBilling, vec![58]),
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
+        (StateAllocationKey::CoreRuntimeWhitelist, vec![61]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -272,6 +273,69 @@ fn local_application_authorization_capability_is_exactly_role_pruned() {
         !built_in_role_capabilities(BuiltInRoleKind::WasmStore)
             .contains(&RoleCapabilityKey::LocalApplicationAuthorization)
     );
+}
+
+#[test]
+fn runtime_whitelist_allocation_is_declared_nonroot_only() {
+    let service = resolved_service_contract(
+        ConfigTestBuilder::canister_config(CanisterKind::Service),
+        BTreeSet::new(),
+    );
+    assert!(
+        service
+            .allocations
+            .iter()
+            .any(|allocation| allocation.key == StateAllocationKey::CoreRuntimeWhitelist)
+    );
+
+    let root_config = ConfigTestBuilder::new()
+        .with_default_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
+        .build();
+    let RoleContractResolution::Resolved { contract: root } =
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &root_config,
+                role: &CanisterRole::ROOT,
+            },
+            declared_features: BTreeSet::from([CanicFeatureKey::ControlPlane]),
+            default_features_enabled: true,
+        })
+    else {
+        panic!("root contract should resolve");
+    };
+    assert!(
+        !root
+            .allocations
+            .iter()
+            .any(|allocation| allocation.key == StateAllocationKey::CoreRuntimeWhitelist)
+    );
+
+    for (role, declared_feature) in [
+        (
+            BuiltInRoleKind::FleetCoordinator,
+            CanicFeatureKey::FleetCoordinatorCanister,
+        ),
+        (
+            BuiltInRoleKind::WasmStore,
+            CanicFeatureKey::WasmStoreCanister,
+        ),
+    ] {
+        let RoleContractResolution::Resolved { contract } =
+            resolve_role_contract(RoleContractInput {
+                source: RoleContractSource::BuiltIn(role),
+                declared_features: BTreeSet::from([declared_feature]),
+                default_features_enabled: false,
+            })
+        else {
+            panic!("built-in contract should resolve");
+        };
+        assert!(
+            !contract
+                .allocations
+                .iter()
+                .any(|allocation| allocation.key == StateAllocationKey::CoreRuntimeWhitelist)
+        );
+    }
 }
 
 #[test]

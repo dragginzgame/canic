@@ -189,8 +189,18 @@ impl ConfigOps {
         Ok(cfg)
     }
 
-    pub(crate) fn is_whitelisted(caller: &Principal) -> Result<bool, InternalError> {
-        Ok(Config::get()?.is_whitelisted(caller))
+    /// Parse the validated compiled whitelist for one fresh runtime seed.
+    pub(crate) fn runtime_whitelist_seed() -> Result<Vec<Principal>, InternalError> {
+        Config::get()?.app.whitelist.as_ref().map_or_else(
+            || Ok(Vec::new()),
+            |whitelist| {
+                whitelist
+                    .principals
+                    .iter()
+                    .map(|principal| principal.parse().map_err(|_| InternalError::invariant()))
+                    .collect()
+            },
+        )
     }
 
     pub(crate) fn log_config() -> Result<LogConfig, InternalError> {

@@ -34,6 +34,7 @@ use crate::role_contract::allocation::memory::{
     },
     replay::REPLAY_RECEIPTS_ID,
     runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
+    runtime_whitelist::RUNTIME_WHITELIST_ID,
     sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
@@ -256,6 +257,11 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
         descriptor(
             StateAllocationKey::CoreAsyncJobRecovery,
             async_job_recovery_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRuntimeWhitelist,
+            runtime_whitelist_domains(),
             Vec::new(),
         ),
     ]
@@ -520,6 +526,19 @@ fn async_job_recovery_domains() -> Vec<StateDomainManifest> {
         AsyncJobRecoveryData::STATE_CONTRACT_NAME,
         58,
         "async_job_recovery_restores_exact_serial_attempt_fences",
+    )]
+}
+
+fn runtime_whitelist_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::runtime_whitelist::{RuntimeWhitelistData, RuntimeWhitelistRecord};
+
+    vec![state_domain(
+        "runtime_whitelist",
+        RUNTIME_WHITELIST_ID,
+        RuntimeWhitelistRecord::STATE_CONTRACT_NAME,
+        RuntimeWhitelistData::STATE_CONTRACT_NAME,
+        59,
+        "runtime_whitelist_restores_canonical_membership_without_reseeding",
     )]
 }
 
@@ -808,6 +827,7 @@ mod tests {
     fn runtime_bindings_and_fleet_state_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             env::{EnvData, EnvRecord},
+            runtime_whitelist::{RuntimeWhitelistData, RuntimeWhitelistRecord},
             state::fleet::{FleetStateData, FleetStateRecord},
         };
 
@@ -824,6 +844,12 @@ mod tests {
                 "fleet_state",
                 FleetStateRecord::STATE_CONTRACT_NAME,
                 FleetStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreRuntimeWhitelist,
+                "runtime_whitelist",
+                RuntimeWhitelistRecord::STATE_CONTRACT_NAME,
+                RuntimeWhitelistData::STATE_CONTRACT_NAME,
             ),
         ] {
             let descriptor = descriptors

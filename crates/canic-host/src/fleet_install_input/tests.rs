@@ -24,6 +24,40 @@ const DISPOSABLE_ROOT_DELETION_PROOF_INPUT: &str =
 const PLAYGROUND_INPUT: &str = include_str!("../../../../deployments/demos/playground-ic.toml");
 
 #[test]
+fn operator_balance_validity_is_strict_and_bounded() {
+    let input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    });
+
+    let fresh = resolve_operator(
+        &input.operator,
+        BuildNetwork::Local,
+        input.operator.valid_until_unix_secs - 1,
+    )
+    .expect("balance is fresh immediately before exclusive expiry");
+    assert!(fresh.balance_fresh);
+
+    assert!(matches!(
+        resolve_operator(
+            &input.operator,
+            BuildNetwork::Local,
+            input.operator.valid_until_unix_secs,
+        ),
+        Err(FleetInstallInputError::StaleOperatorBalance { .. })
+    ));
+    assert!(matches!(
+        resolve_operator(
+            &input.operator,
+            BuildNetwork::Local,
+            input.operator.observed_at_unix_secs - 1,
+        ),
+        Err(FleetInstallInputError::InvalidOperatorEvidence {
+            field: "observed_at_unix_secs"
+        })
+    ));
+}
+
+#[test]
 fn disposable_root_deletion_proof_input_resolves_one_bounded_mainnet_root() {
     let document: FleetInstallInputDocument =
         toml::from_slice(DISPOSABLE_ROOT_DELETION_PROOF_INPUT.as_bytes())
@@ -617,6 +651,16 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
     let application_subnet = subnet_text(7);
     FleetInstallInputDocument {
         schema_version: 1,
+        operator: OperatorFundingDocument {
+            principal: subnet_text(9),
+            funding_account: "test-operator".to_string(),
+            source: "test_fixture".to_string(),
+            observed_at_unix_secs: FIXTURE_NOW_UNIX_SECS,
+            valid_until_unix_secs: FIXTURE_NOW_UNIX_SECS + 300,
+            balance: CreationFundingDocument::Cycles {
+                cycles: Cycles::new(100_000_000_000_000),
+            },
+        },
         coordinator: CoordinatorInputDocument {
             subnet: selector,
             creation_funding: CreationFundingDocument::Cycles {
@@ -661,6 +705,17 @@ fn input_toml() -> String {
     format!(
         r#"schema_version = 1
 
+[operator]
+principal = "{}"
+funding_account = "test-operator"
+source = "test_fixture"
+observed_at_unix_secs = {FIXTURE_NOW_UNIX_SECS}
+valid_until_unix_secs = 4102444800
+
+[operator.balance]
+kind = "cycles"
+cycles = "100T"
+
 [coordinator.subnet]
 kind = "explicit"
 subnet = "{application_subnet}"
@@ -698,7 +753,8 @@ cycles = "2T"
 [fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
 cycles = "2T"
-"#
+"#,
+        subnet_text(9)
     )
 }
 

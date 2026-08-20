@@ -18,6 +18,8 @@ pub struct InstallRootOptions {
     pub release_build_id: Option<ReleaseBuildId>,
     pub config_path: Option<String>,
     pub fleet_install_input_path: Option<PathBuf>,
+    pub expected_fresh_fleet_plan_digest: Option<String>,
+    pub admitted_fresh_fleet_plan_digest: Option<String>,
     pub expected_app: Option<String>,
     pub interactive_config_selection: bool,
     pub deployment_plan_override: Option<DeploymentPlanV1>,

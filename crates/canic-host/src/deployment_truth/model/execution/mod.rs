@@ -1,5 +1,6 @@
 use super::inventory::ObservationStatusV1;
 use super::safety::SafetyFindingV1;
+use crate::fleet_install_plan::FreshFleetCatalogEvidenceV1;
 use serde::{Deserialize, Serialize};
 
 ///
@@ -10,6 +11,7 @@ pub struct DeploymentReceiptV1 {
     pub schema_version: u32,
     pub operation_id: String,
     pub plan_id: String,
+    pub fresh_fleet_decision: Option<FreshFleetInstallDecisionReceiptV1>,
     pub execution_context: Option<DeploymentExecutionContextV1>,
     pub operation_status: DeploymentExecutionStatusV1,
     pub started_at: String,
@@ -21,6 +23,13 @@ pub struct DeploymentReceiptV1 {
     pub role_phase_receipts: Vec<RolePhaseReceiptV1>,
     pub final_inventory_id: Option<String>,
     pub command_result: DeploymentCommandResultV1,
+}
+
+/// Exact pre-effect fresh-Fleet decision bound to an install receipt.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FreshFleetInstallDecisionReceiptV1 {
+    pub plan_digest: String,
+    pub catalog: FreshFleetCatalogEvidenceV1,
 }
 
 ///

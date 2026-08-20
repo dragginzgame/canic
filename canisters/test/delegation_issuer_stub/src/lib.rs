@@ -109,6 +109,12 @@ async fn issuer_application_subject() -> Result<Principal, Error> {
     application_subject()
 }
 
+/// Exercise the generic caller whitelist against its durable runtime authority.
+#[canic_query(requires(caller::is_whitelisted()))]
+async fn issuer_runtime_whitelist_probe() -> Result<(), Error> {
+    Ok(())
+}
+
 /// Measure the same synchronous local-application decision in its query context.
 #[canic_query(public)]
 async fn issuer_application_subject_perf()

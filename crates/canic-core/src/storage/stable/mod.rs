@@ -11,6 +11,7 @@ pub mod intent;
 pub mod log;
 pub mod placement_index;
 pub mod replay;
+pub mod runtime_whitelist;
 pub mod scaling;
 pub mod sharding;
 pub mod state;

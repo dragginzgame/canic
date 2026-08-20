@@ -26,6 +26,7 @@ pub mod ready;
 pub mod role;
 pub mod rpc;
 pub mod runtime;
+pub mod runtime_whitelist;
 pub mod state;
 pub mod timer;
 pub mod topology;

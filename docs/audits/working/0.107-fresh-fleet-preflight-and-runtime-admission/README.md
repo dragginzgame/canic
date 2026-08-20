@@ -31,7 +31,10 @@ operation was performed for this batch.
 - [Source baseline](source-baseline.tsv) freezes the exact local and read-only
   external file identities used by the capture.
 - [`stable_memory_abi_guard.rs`](../../../../crates/canic-core/tests/stable_memory_abi_guard.rs)
-  contains a test-only schema-1 fixture proving the chosen whitelist bounds.
+  retained the pre-implementation B1 sizing fixture; B6 replaced it with the
+  production schema's own exact bound test.
+- [B5-B7 implementation progress](b5-b7-progress.md) records the exact
+  upstream B5 gate and the reproducible B6 plus independent B7 evidence.
 
 ## B1 Result
 

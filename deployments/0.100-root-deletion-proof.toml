@@ -1,6 +1,17 @@
 # Disposable IC mainnet Fleet used only for the final 0.100 root-deletion proof.
 schema_version = 1
 
+[operator]
+principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
+funding_account = "qualification-cycles-authority"
+source = "maintainer_fixture"
+observed_at_unix_secs = 1782432100
+valid_until_unix_secs = 4102444800
+
+[operator.balance]
+kind = "cycles"
+cycles = "100T"
+
 [coordinator.subnet]
 kind = "explicit"
 subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"

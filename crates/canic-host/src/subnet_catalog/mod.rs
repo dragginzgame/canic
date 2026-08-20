@@ -7,7 +7,8 @@
 use ic_query::subnet_catalog::{
     CatalogAssurance, CatalogLoadOutcome, CatalogSourceSelection,
     DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, MAINNET_NETWORK, SubnetCatalogCacheRequest,
-    SubnetCatalogHostError, SubnetCatalogLoadRequest, load_subnet_catalog,
+    SubnetCatalogHostError, SubnetCatalogLoadRequest, load_cached_subnet_catalog,
+    load_subnet_catalog,
 };
 use std::path::{Path, PathBuf};
 
@@ -22,6 +23,15 @@ pub fn load_mainnet_subnet_catalog(
     load_subnet_catalog(&request)
 }
 
+/// Load existing validated mainnet evidence without a network call or cache mutation.
+pub fn load_cached_mainnet_subnet_catalog(
+    icp_root: &Path,
+    now_unix_secs: u64,
+) -> Result<CatalogLoadOutcome, SubnetCatalogHostError> {
+    let request = mainnet_subnet_catalog_cache_only_request(icp_root, now_unix_secs);
+    load_cached_subnet_catalog(&request)
+}
+
 fn mainnet_subnet_catalog_load_request(
     icp_root: &Path,
     now_unix_secs: u64,
@@ -34,6 +44,18 @@ fn mainnet_subnet_catalog_load_request(
     let request =
         SubnetCatalogLoadRequest::refresh_missing_or_invalid(cache, source, now_unix_secs);
     request.with_minimum_assurance(CatalogAssurance::UncertifiedQuery)
+}
+
+fn mainnet_subnet_catalog_cache_only_request(
+    icp_root: &Path,
+    now_unix_secs: u64,
+) -> SubnetCatalogLoadRequest {
+    let cache = SubnetCatalogCacheRequest::new(
+        mainnet_subnet_catalog_cache_root(icp_root),
+        MAINNET_NETWORK,
+    );
+    SubnetCatalogLoadRequest::cache_only(cache, now_unix_secs)
+        .with_minimum_assurance(CatalogAssurance::UncertifiedQuery)
 }
 
 /// Return the private capability root used for Canic's embedded `ic-query` cache.
@@ -69,5 +91,22 @@ mod tests {
                 ),
             }
         );
+    }
+
+    #[test]
+    fn mainnet_preflight_request_is_cache_only_and_read_only() {
+        let request = mainnet_subnet_catalog_cache_only_request(Path::new("/tmp/canic-test"), 123);
+
+        assert_eq!(
+            request.minimum_assurance,
+            CatalogAssurance::UncertifiedQuery
+        );
+        assert_eq!(request.now_unix_secs, 123);
+        assert_eq!(request.cache.network, MAINNET_NETWORK);
+        assert_eq!(
+            request.cache.cache_root,
+            Path::new("/tmp/canic-test/.canic/ic-query")
+        );
+        assert_eq!(request.policy, CatalogReadPolicy::CacheOnly);
     }
 }

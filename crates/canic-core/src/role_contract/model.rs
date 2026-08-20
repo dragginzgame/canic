@@ -135,6 +135,7 @@ pub enum StateAllocationKey {
     BlobStorageBilling,
     CoreAuthorityRestoreFence,
     CoreAsyncJobRecovery,
+    CoreRuntimeWhitelist,
 }
 
 ///

@@ -6,7 +6,7 @@
 
 use crate::deploy::plan::{
     ASSUMPTION_KEY_LOCAL_CONFIG_POOLS, ASSUMPTION_KEY_LOCAL_CONFIG_ROLES,
-    ASSUMPTION_PREFIX_LOCAL_ARTIFACTS, build_profile_name,
+    ASSUMPTION_PREFIX_LOCAL_ARTIFACTS,
     command::DeployPlanOptions,
     report::{
         CATEGORY_ARTIFACT, CATEGORY_AUTHORITY, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY,
@@ -24,6 +24,7 @@ pub(super) fn verified_facts(
     options: &DeployPlanOptions,
     config_path: &Path,
     target_resolved: bool,
+    build_profile: &str,
     plan: &DeploymentPlanV1,
 ) -> Vec<PlanDiagnostic> {
     if !target_resolved {
@@ -54,7 +55,7 @@ pub(super) fn verified_facts(
         next: None,
         source: SOURCE_APP_CONFIG,
     });
-    facts.extend(plan_context_facts(options, config_path, plan));
+    facts.extend(plan_context_facts(config_path, build_profile, plan));
     facts.extend(plan_identity_facts(plan));
     facts.extend(authority_profile_facts(plan));
     facts.extend(expected_role_artifact_inventory_facts(plan));
@@ -67,8 +68,8 @@ pub(super) fn verified_facts(
 }
 
 fn plan_context_facts(
-    options: &DeployPlanOptions,
     config_path: &Path,
+    build_profile: &str,
     plan: &DeploymentPlanV1,
 ) -> Vec<PlanDiagnostic> {
     let subject = plan.deployment_identity.fleet_name.clone();
@@ -78,7 +79,7 @@ fn plan_context_facts(
             code: "build_profile_resolved".to_string(),
             severity: SEVERITY_INFO,
             subject: subject.clone(),
-            detail: format!("build profile resolved: {}", build_profile_name(options)),
+            detail: format!("build profile resolved: {build_profile}"),
             next: None,
             source: SOURCE_BUILD_PROFILE,
         },

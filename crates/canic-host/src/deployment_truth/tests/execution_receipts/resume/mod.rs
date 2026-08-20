@@ -53,6 +53,35 @@ fn receipt_aware_diff_blocks_plan_mismatch_resume() {
 }
 
 #[test]
+fn receipt_aware_diff_blocks_fresh_fleet_digest_mismatch_resume() {
+    let mut plan = sample_plan();
+    plan.plan_digest = Some("ab".repeat(32));
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt.fresh_fleet_decision = Some(FreshFleetInstallDecisionReceiptV1 {
+        plan_digest: "cd".repeat(32),
+        catalog: crate::fleet_install_plan::FreshFleetCatalogEvidenceV1::NotRequired {
+            network: "local".to_string(),
+        },
+    });
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == RECEIPT_PLAN_MISMATCH_CODE)
+    );
+}
+
+#[test]
 fn receipt_aware_diff_does_not_resume_unverified_phase() {
     let plan = sample_plan();
     let inventory = sample_matching_inventory();

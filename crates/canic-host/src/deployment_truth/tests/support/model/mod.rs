@@ -53,6 +53,7 @@ pub(in crate::deployment_truth::tests) fn sample_plan() -> DeploymentPlanV1 {
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: "plan-local-root".to_string(),
+        plan_digest: None,
         deployment_identity: sample_identity(),
         trust_domain: TrustDomainV1 {
             root_trust_anchor: Some("aaaaa-aa".to_string()),

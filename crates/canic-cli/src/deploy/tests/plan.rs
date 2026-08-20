@@ -6,7 +6,11 @@ use canic_core::{
     cdk::utils::hash::{sha256_hex, wasm_hash_hex},
     ids::{AppId, CanonicalNetworkId, FleetId},
 };
-use canic_host::fleet_catalog::FleetCatalogEntryV1;
+use canic_host::{
+    canister_build::CanisterBuildProfile,
+    fleet_catalog::FleetCatalogEntryV1,
+    release_build::{finalize_release_build_from_manifest, plan_release_build_for_profile},
+};
 use serde_json::Value as JsonValue;
 use std::{ffi::OsString, fs, path::PathBuf};
 
@@ -39,6 +43,58 @@ unknown = true
 
 [app]
 name = "demo"
+"#;
+
+const SAMPLE_FLEET_INPUT: &str = r#"schema_version = 1
+
+[operator]
+principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
+funding_account = "test-operator"
+source = "test_fixture"
+observed_at_unix_secs = 1782432100
+valid_until_unix_secs = 4102444800
+
+[operator.balance]
+kind = "cycles"
+cycles = "100T"
+
+[coordinator.subnet]
+kind = "explicit"
+subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+
+[coordinator.creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[[fleet_subnet_roots]]
+placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+
+[fleet_subnet_roots.component_admissions]
+user_hub = 1
+
+[fleet_subnet_roots.limits]
+maximum_component_instances = 1
+maximum_registry_bytes = 4194304
+maximum_wasm_store_bytes = 40000000
+maximum_group_placements = 0
+
+[fleet_subnet_roots.limits.cycles_funding]
+window_secs = 3600
+maximum_cycles = "10T"
+
+[fleet_subnet_roots.canister_pool]
+minimum_size = 1
+maximum_size = 4
+canister_cycles = "1T"
+imports = []
+
+[fleet_subnet_roots.root_creation_funding]
+kind = "cycles"
+cycles = "2T"
+
+[fleet_subnet_roots.wasm_store_creation_funding]
+kind = "cycles"
+cycles = "2T"
 "#;
 
 const POOL_CONFIG: &str = r#"
@@ -100,8 +156,8 @@ fn deploy_plan_is_top_level_deploy_command() {
 fn deploy_plan_help_documents_no_mutation_contract() {
     let help = deploy_plan::usage();
 
-    assert!(help.contains("canic deploy plan <fleet> --app <app>"));
-    assert!(help.contains("canic --environment ic deploy plan demo --app demo"));
+    assert!(help.contains("canic deploy plan <fleet> --app <app> --fleet-input <PATH>"));
+    assert!(help.contains("canic --environment ic deploy plan demo --app demo --fleet-input"));
     assert!(help.contains("Read-only"));
     assert!(help.contains("deterministic local desired state"));
     assert!(help.contains("without contacting the IC"));
@@ -119,10 +175,12 @@ fn deploy_plan_options_parse_supported_surface() {
         OsString::from("--json"),
         OsString::from("--out"),
         OsString::from("deployment-plan.json"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
-        OsString::from("--build-profile"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+        OsString::from("--profile"),
         OsString::from("fast"),
+        OsString::from("--release-build"),
+        OsString::from("01".repeat(32)),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
     ])
@@ -132,7 +190,83 @@ fn deploy_plan_options_parse_supported_surface() {
     assert_eq!(options.environment, "local");
     assert!(options.json);
     assert_eq!(options.out, Some(PathBuf::from("deployment-plan.json")));
-    assert_eq!(options.config, Some(PathBuf::from("apps/demo/canic.toml")));
+    assert_eq!(options.fleet_input, PathBuf::from("fleet-input.toml"));
+    assert_eq!(
+        options.profile,
+        Some(canic_host::canister_build::CanisterBuildProfile::Fast)
+    );
+    assert_eq!(
+        options
+            .release_build_id
+            .map(|identity| identity.to_string()),
+        Some("01".repeat(32))
+    );
+}
+
+#[test]
+fn deploy_plan_hard_cuts_old_config_and_build_profile_options() {
+    for obsolete in ["--config", "--build-profile"] {
+        let error = deploy_plan::DeployPlanOptions::parse([
+            OsString::from("demo-local"),
+            OsString::from("--app"),
+            OsString::from("demo"),
+            OsString::from("--fleet-input"),
+            OsString::from("fleet-input.toml"),
+            OsString::from(obsolete),
+            OsString::from("obsolete"),
+        ])
+        .expect_err("obsolete plan spelling must reject");
+
+        assert!(matches!(error, DeployCommandError::Usage(_)));
+    }
+}
+
+#[test]
+fn deploy_plan_loads_one_exact_finalized_release_source_without_allocation() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-finalized-source");
+    let planned = plan_release_build_for_profile(&icp_root, CanisterBuildProfile::Fast)
+        .expect("plan fixture release build");
+    let manifest = icp_root.join("release-set.json");
+    fs::write(&manifest, b"fixture release set").expect("write release-set fixture");
+    let finalized =
+        finalize_release_build_from_manifest(&icp_root, planned.record.release_build_id, &manifest)
+            .expect("finalize fixture release build");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+        OsString::from("--release-build"),
+        OsString::from(finalized.record.release_build_id.to_string()),
+    ])
+    .expect("parse exact release source");
+
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root: icp_root.clone(),
+        },
+    );
+    let json = serde_json::to_value(&report).expect("serialize report");
+
+    assert_eq!(json["build_profile"], "fast");
+    assert_eq!(
+        json["release_build_id"],
+        finalized.record.release_build_id.to_string()
+    );
+    assert_eq!(
+        json["fresh_fleet_plan"]["preflight"]["build_profile"],
+        "fast"
+    );
+    assert_eq!(
+        fs::read_dir(icp_root.join(".canic/release-builds"))
+            .expect("read release-build directory")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -141,6 +275,8 @@ fn deploy_plan_options_reject_invalid_app_before_path_resolution() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("../../sentinel"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect_err("invalid App path identity must reject");
 
@@ -156,8 +292,8 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -174,6 +310,23 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     assert_eq!(json["command"], "canic deploy plan");
     assert_eq!(json["fleet"], "demo-local");
     assert_eq!(json["app"], "demo");
+    assert!(
+        json["fleet_input_path"]
+            .as_str()
+            .is_some_and(|path| path.ends_with("fleet-input.toml"))
+    );
+    assert_eq!(
+        json["fresh_fleet_plan"]["preflight"]["effects"]["build_started"],
+        false
+    );
+    assert_eq!(
+        json["fresh_fleet_plan"]["preflight"]["effects"]["workspace_mutation_started"],
+        false
+    );
+    assert_eq!(
+        json["fresh_fleet_plan"]["preflight"]["effects"]["ic_mutation_started"],
+        false
+    );
     assert_eq!(json["status"], "warning");
     assert_eq!(json["comparison_status"], "not_available");
     assert_eq!(
@@ -181,6 +334,10 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
         "demo-local"
     );
     assert_eq!(json["plan"]["deployment_identity"]["app"], "demo");
+    assert_eq!(
+        json["plan"]["plan_digest"],
+        json["fresh_fleet_plan"]["plan_digest"]
+    );
     assert_base_plan_verified_facts(&json);
     assert!(
         json["warnings"]
@@ -231,8 +388,8 @@ fn deploy_plan_catalog_identity_does_not_invent_one_root_fact() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -279,8 +436,8 @@ fn deploy_plan_report_keeps_complete_inputs_planned_without_root_comparison() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -345,8 +502,8 @@ fn deploy_plan_report_previews_pool_canister_creation() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -382,6 +539,8 @@ fn deploy_plan_report_blocks_unresolved_config_target() {
         OsString::from("missing"),
         OsString::from("--app"),
         OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -405,14 +564,48 @@ fn deploy_plan_report_blocks_unresolved_config_target() {
 }
 
 #[test]
+fn deploy_plan_blocks_invalid_fleet_input_without_allocating_release_state() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-invalid-fleet-input");
+    fs::write(icp_root.join("fleet-input.toml"), "schema_version = 2\n")
+        .expect("write invalid Fleet input");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+    ])
+    .expect("parse deploy plan options");
+
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root: icp_root.clone(),
+        },
+    );
+    let json = serde_json::to_value(&report).expect("report should serialize");
+
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(json["fresh_fleet_plan"], JsonValue::Null);
+    assert!(json["blockers"].as_array().is_some_and(|blockers| {
+        blockers.iter().any(|blocker| {
+            blocker["code"] == "fresh_fleet_plan_blocked" && blocker["source"] == "fleet_input"
+        })
+    }));
+    assert!(!icp_root.join(".canic/release-builds").exists());
+}
+
+#[test]
 fn deploy_plan_report_blocks_invalid_fleet_name() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-invalid-target");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo/local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -445,6 +638,8 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
         OsString::from("demo"),
         OsString::from("--app"),
         OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("staging"),
     ])
@@ -464,7 +659,11 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
         json["plan"]["deployment_identity"]["canonical_network_id"],
         CanonicalNetworkId::ic_mainnet().to_string()
     );
-    assert!(json["blockers"].as_array().is_some_and(Vec::is_empty));
+    assert!(json["blockers"].as_array().is_some_and(|blockers| {
+        blockers
+            .iter()
+            .all(|blocker| blocker["code"] != "environment_mismatch")
+    }));
     assert_verified_fact(
         &json,
         "environment_resolved",
@@ -487,6 +686,8 @@ fn deploy_plan_blocks_contradictory_environment_profile() {
         OsString::from("demo"),
         OsString::from("--app"),
         OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("staging"),
     ])
@@ -524,8 +725,8 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -594,8 +795,8 @@ fn deploy_plan_json_out_is_create_new_and_json_only() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
         OsString::from("--out"),
         OsString::from(out.as_os_str()),
     ])
@@ -638,8 +839,8 @@ fn deploy_plan_out_does_not_create_parent_directories() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
         OsString::from("--out"),
         OsString::from(out.as_os_str()),
     ])
@@ -666,8 +867,8 @@ fn deploy_plan_json_renderer_is_report_only() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
     let report = deploy_plan::build_report(
@@ -695,8 +896,8 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
     let report = deploy_plan::build_report(
@@ -717,10 +918,13 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
             "fleet",
             "app",
             "environment",
+            "fleet_input_path",
             "build_profile",
+            "release_build_id",
             "config_path",
             "status",
             "comparison_status",
+            "fresh_fleet_plan",
             "plan",
             "blockers",
             "warnings",
@@ -733,6 +937,45 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
 }
 
 #[test]
+fn workspace_plan_digest_tracks_build_inputs_but_excludes_report_outputs() {
+    let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-source-digest");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+    ])
+    .expect("parse deploy plan options");
+    let roots = deploy_plan::DeployPlanRoots {
+        workspace_root: workspace_root.clone(),
+        icp_root,
+    };
+    let first = plan_digest_from_report(&deploy_plan::build_report(&options, &roots));
+
+    fs::write(
+        workspace_root.join("deployment-plan.json"),
+        "report output\n",
+    )
+    .expect("write excluded report output");
+    let after_report = plan_digest_from_report(&deploy_plan::build_report(&options, &roots));
+    assert_eq!(after_report, first);
+
+    fs::write(workspace_root.join("Cargo.lock"), "# changed test lock\n")
+        .expect("change Cargo.lock");
+    let after_lock = plan_digest_from_report(&deploy_plan::build_report(&options, &roots));
+    assert_ne!(after_lock, first);
+}
+
+fn plan_digest_from_report(report: &impl serde::Serialize) -> String {
+    let value = serde_json::to_value(report).expect("serialize deployment plan report");
+    value["fresh_fleet_plan"]["plan_digest"]
+        .as_str()
+        .expect("complete fresh-Fleet plan digest")
+        .to_string()
+}
+
+#[test]
 fn deploy_plan_text_avoids_apply_safety_claims() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-text");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -740,8 +983,8 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         OsString::from("demo-local"),
         OsString::from("--app"),
         OsString::from("demo"),
-        OsString::from("--config"),
-        OsString::from("apps/demo/canic.toml"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
     let report = deploy_plan::build_report(
@@ -756,6 +999,22 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("Deployment plan"));
     assert!(text.contains("schema_version: 1"));
     assert!(text.contains("command: canic deploy plan"));
+    assert!(text.contains("canonical fresh-Fleet decision"));
+    assert!(text.contains("plan_digest: "));
+    assert!(text.contains("operator_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));
+    assert!(text.contains("maximum_operator_debit: 6000000000000 cycles"));
+    assert!(text.contains(
+        "operator_balance_evidence: source=test_fixture observed_at=1782432100 valid_until=4102444800 fresh=true sufficient=true"
+    ));
+    assert!(text.contains(
+        "canister_counts: coordinator=1 root=1 store=1 component=0 ready_pool=1 role=3 total=4"
+    ));
+    assert!(text.contains(
+        "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1"
+    ));
+    assert!(text.contains(
+        "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=2000000000000 cycles maximum=2000000000000 cycles"
+    ));
     assert!(text.contains("future apply preview (proposed operation labels; not executed)"));
     assert!(text.contains(
         "phase: future_apply_preview label: upload_artifact subject: root status: not_executed"
@@ -781,7 +1040,9 @@ fn temp_plan_workspace_with_config(prefix: &str, config: &str) -> (TempDir, Path
     let config_dir = workspace_root.join("apps").join("demo");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::create_dir_all(&icp_root).expect("create icp root");
+    fs::write(workspace_root.join("Cargo.lock"), "# test lock\n").expect("write Cargo.lock");
     fs::write(config_dir.join("canic.toml"), config).expect("write config");
+    fs::write(icp_root.join("fleet-input.toml"), SAMPLE_FLEET_INPUT).expect("write Fleet input");
     write_local_network_authority(&icp_root, "local");
     (temp, workspace_root, icp_root)
 }

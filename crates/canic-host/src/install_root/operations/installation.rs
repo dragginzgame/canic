@@ -41,6 +41,7 @@ struct InstallEffectError {
 #[serde(deny_unknown_fields)]
 struct InstallRejectionReceipt {
     schema_version: u32,
+    fresh_fleet_plan_digest: String,
     canister: Principal,
     expected_module_hash: [u8; 32],
     args_sha256: [u8; 32],
@@ -83,6 +84,7 @@ pub(in crate::install_root) struct InstallEffectRequest<'a> {
     pub wasm_path: &'a Path,
     pub args_path: &'a Path,
     pub expected_module_hash: [u8; 32],
+    pub fresh_fleet_plan_digest: &'a str,
     pub action: EffectAction,
 }
 
@@ -122,6 +124,7 @@ where
     let args = candid::encode_one(resolve_args()?)?;
     let expected_rejection = InstallRejectionReceipt {
         schema_version: INSTALL_REJECTION_RECEIPT_SCHEMA_VERSION,
+        fresh_fleet_plan_digest: request.fresh_fleet_plan_digest.to_string(),
         canister: request.canister,
         expected_module_hash: request.expected_module_hash,
         args_sha256: Sha256::digest(&args).into(),
@@ -314,7 +317,20 @@ fn validate_install_rejection_receipt(
     if receipt.canister == Principal::anonymous() {
         return Err(invalid_receipt(path, "Canister principal is anonymous"));
     }
+    if !is_canonical_sha256(&receipt.fresh_fleet_plan_digest) {
+        return Err(invalid_receipt(
+            path,
+            "fresh-Fleet plan digest is not canonical SHA-256 text",
+        ));
+    }
     Ok(())
+}
+
+fn is_canonical_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 fn invalid_receipt(path: &Path, reason: &str) -> InstallRejectionReceiptError {
@@ -341,6 +357,7 @@ mod tests {
     fn receipt(args_sha256: [u8; 32]) -> InstallRejectionReceipt {
         InstallRejectionReceipt {
             schema_version: INSTALL_REJECTION_RECEIPT_SCHEMA_VERSION,
+            fresh_fleet_plan_digest: "ab".repeat(32),
             canister: Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai")
                 .expect("Canister principal"),
             expected_module_hash: [7; 32],
@@ -378,6 +395,12 @@ mod tests {
         assert!(matches!(
             error,
             InstallRejectionReceiptError::Conflict { .. }
+        ));
+        let mut changed_plan = receipt([1; 32]);
+        changed_plan.fresh_fleet_plan_digest = "cd".repeat(32);
+        assert!(matches!(
+            persist_install_rejection_receipt(&path, &changed_plan),
+            Err(InstallRejectionReceiptError::Conflict { .. })
         ));
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

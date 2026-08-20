@@ -9,6 +9,7 @@ use crate::{
     config::schema::{
         AppConfig, AppNameIssue, ConfigSchemaError, Validate, Whitelist, validate_app_name,
     },
+    model::runtime_whitelist::MAX_RUNTIME_WHITELIST_PRINCIPALS,
 };
 
 impl Validate for AppConfig {
@@ -36,6 +37,12 @@ impl Validate for AppConfig {
 
 impl Validate for Whitelist {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
+        if self.principals.len() > MAX_RUNTIME_WHITELIST_PRINCIPALS {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "App whitelist contains {} principals; maximum is {MAX_RUNTIME_WHITELIST_PRINCIPALS}",
+                self.principals.len()
+            )));
+        }
         for (i, s) in self.principals.iter().enumerate() {
             if Principal::from_text(s).is_err() {
                 return Err(ConfigSchemaError::ValidationError(format!(

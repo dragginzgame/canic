@@ -23,7 +23,6 @@ pub use role::*;
 
 use crate::{
     InternalError,
-    cdk::candid::Principal,
     ids::{
         AppId, BuildNetwork, CanisterRole, ComponentGroupDeploymentId, ComponentGroupSpecId,
         ComponentSpecId,
@@ -367,26 +366,13 @@ impl ConfigModel {
             .insert(default_component_spec_id, default_component_spec);
         cfg
     }
-
-    /// Check whether a principal is whitelisted.
-    ///
-    /// NOTE:
-    /// Principals are stored as text intentionally so invalid values
-    /// can be rejected at config load time.
-    #[must_use]
-    pub fn is_whitelisted(&self, principal: &Principal) -> bool {
-        self.app
-            .whitelist
-            .as_ref()
-            .is_some_and(|w| w.principals.contains(&principal.to_string()))
-    }
 }
 
 ///
 /// AppConfig
 ///
 /// App identity, startup mode and optional whitelist configuration.
-/// Owned by config schema and consumed by access/Fleet-state setup.
+/// Owned by config schema and consumed by fresh runtime seeding/Fleet-state setup.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -617,7 +603,7 @@ impl Default for RoleAttestationConfig {
 ///
 /// Stores principals as text to allow validation at config load time.
 /// Text representation is treated as canonical.
-/// Owned by config schema and consumed by access whitelist checks.
+/// Owned by config schema and consumed only as fresh runtime-whitelist seed input.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
