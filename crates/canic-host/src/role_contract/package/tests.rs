@@ -674,6 +674,73 @@ fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
 }
 
 #[test]
+fn qualification_harness_packages_are_test_only_leaves() {
+    const HARNESS_PACKAGES: [&str; 3] = [
+        "cycles_ledger_stub",
+        "payload_limit_probe",
+        "root_funding_probe",
+    ];
+
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("canonical workspace root");
+    let metadata = cargo_metadata_catalog_for_manifest(&workspace.join("Cargo.toml"), true, false)
+        .expect("read locked workspace metadata");
+    for package_name in HARNESS_PACKAGES {
+        let packages = metadata
+            .packages
+            .iter()
+            .filter(|package| package.name == package_name)
+            .collect::<Vec<_>>();
+        let [package] = packages.as_slice() else {
+            panic!("qualification package `{package_name}` must resolve exactly once");
+        };
+        assert!(
+            package
+                .manifest_path
+                .starts_with(workspace.join("canisters/test")),
+            "qualification package `{package_name}` must remain under canisters/test"
+        );
+        let manifest = fs::read_to_string(&package.manifest_path)
+            .expect("read qualification package manifest");
+        assert!(
+            manifest
+                .lines()
+                .any(|line| line.trim() == "publish = false"),
+            "qualification package `{package_name}` must remain unpublished"
+        );
+        assert!(
+            metadata.packages.iter().all(|candidate| {
+                candidate.name == package_name
+                    || candidate
+                        .dependencies
+                        .iter()
+                        .all(|dependency| dependency.name != package_name)
+            }),
+            "qualification package `{package_name}` must remain a dependency leaf"
+        );
+    }
+
+    let mut configs = Vec::new();
+    for root in ["apps", "canisters", "crates"] {
+        collect_named_files(&workspace.join(root), "canic.toml", &mut configs);
+    }
+    for config in configs {
+        let source = fs::read_to_string(&config).expect("read Canic role configuration");
+        for package_name in HARNESS_PACKAGES {
+            if source.contains(package_name) {
+                assert!(
+                    config.starts_with(workspace.join("canisters/test").join(package_name)),
+                    "shipped role configuration {} must not select qualification package `{package_name}`",
+                    config.display()
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn built_in_wasm_store_uses_the_canonical_role_graph_contract() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let validation = validate_built_in_wasm_store_package(
@@ -690,6 +757,22 @@ fn built_in_wasm_store_uses_the_canonical_role_graph_contract() {
         evidence.direct_features,
         BTreeSet::from([CanicFeatureKey::WasmStoreCanister])
     );
+}
+
+fn collect_named_files(root: &Path, name: &str, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries {
+        let entry = entry.expect("read workspace source entry");
+        let path = entry.path();
+        let file_type = entry.file_type().expect("read workspace source type");
+        if file_type.is_dir() {
+            collect_named_files(&path, name, files);
+        } else if file_type.is_file() && entry.file_name() == name {
+            files.push(path);
+        }
+    }
 }
 
 fn package(name: &str, id: &str, manifest_path: &str) -> CargoMetadataPackage {

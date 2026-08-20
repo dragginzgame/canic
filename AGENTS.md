@@ -78,7 +78,7 @@ with this file, the code is wrong.
   or compatibility recovery unless the maintainer explicitly asks for an
   exception.
 - The maintainer approved one bounded exception on 2026-08-18: scheduled
-  0.109 may define one whole-Fleet, stop-the-world transition from one exact
+  0.110 may define one whole-Fleet, stop-the-world transition from one exact
   released predecessor to one successor. This does not authorize rolling or
   mixed-version operation, arbitrary historical adoption, downgrade, generic
   compatibility code or implementation before the design's own gates.

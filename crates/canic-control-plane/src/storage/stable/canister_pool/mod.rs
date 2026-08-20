@@ -287,3 +287,241 @@ impl CanisterPoolStore {
         Self::set_state(CanisterPoolStateRecord::default());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_core::{
+        cdk::structures::{Storable, storable::Bound},
+        ids::IntentId,
+    };
+
+    #[test]
+    fn q6_current_asset_record_encodings_are_measured() {
+        let asset_measurements = finite_asset_statuses()
+            .into_iter()
+            .map(|(name, status)| (name, maximum_asset(status).to_bytes().len()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            asset_measurements,
+            vec![
+                ("store", 268),
+                ("store_deletion_pending", 364),
+                ("pending_reset", 275),
+                ("ready", 268),
+                ("claimed", 427),
+                ("workload", 428),
+                ("recycling_pending", 450),
+                ("recycling_ready", 448),
+                ("recycling_failed_empty", 451),
+                ("handing_off", 316),
+                ("failed_empty", 271),
+            ]
+        );
+    }
+
+    #[test]
+    fn q6_current_pool_state_and_receipt_encodings_are_measured() {
+        let state_measurements = [
+            (
+                "default",
+                CanisterPoolStateRecord::default().to_bytes().len(),
+            ),
+            (
+                "intent",
+                maximum_state(CanisterPoolCreationProgressRecord::Intent {
+                    uncertain_result: true,
+                })
+                .to_bytes()
+                .len(),
+            ),
+            (
+                "created",
+                maximum_state(CanisterPoolCreationProgressRecord::Created {
+                    block_index: u64::MAX,
+                    canister_id: maximum_principal(),
+                })
+                .to_bytes()
+                .len(),
+            ),
+            (
+                "blocked",
+                maximum_state(CanisterPoolCreationProgressRecord::Blocked {
+                    failure: CanisterPoolCreationFailureRecord::UnresolvedAfterLedgerWindow,
+                })
+                .to_bytes()
+                .len(),
+            ),
+        ];
+        assert_eq!(
+            state_measurements,
+            [
+                ("default", 73),
+                ("intent", 604),
+                ("created", 651),
+                ("blocked", 624),
+            ]
+        );
+        assert!(state_measurements.iter().all(|(_, bytes)| *bytes <= 1_024));
+
+        let handoff_receipt = CanisterPoolHandoffReceiptRecord {
+            recipient: canister_principal(),
+            completed_at_ns: u64::MAX,
+        };
+        assert_eq!(maximum_principal().to_bytes().len(), 29);
+        assert_eq!(canister_principal().to_bytes().len(), 10);
+        assert_eq!(handoff_receipt.to_bytes().len(), 47);
+        assert!(handoff_receipt.to_bytes().len() <= 64);
+    }
+
+    #[test]
+    fn q6_handoff_receipt_bound_does_not_cover_every_principal_value() {
+        let structurally_maximal = CanisterPoolHandoffReceiptRecord {
+            recipient: maximum_principal(),
+            completed_at_ns: u64::MAX,
+        };
+
+        assert_eq!(structurally_maximal.to_bytes().len(), 67);
+        assert!(structurally_maximal.to_bytes().len() > 64);
+        assert!(matches!(
+            CanisterPoolHandoffReceiptRecord::BOUND,
+            Bound::Bounded {
+                max_size: 64,
+                is_fixed_size: false,
+            }
+        ));
+    }
+
+    #[test]
+    fn q6_failure_text_keeps_asset_encoding_structurally_unbounded() {
+        let failed_empty = maximum_asset(CanisterPoolAssetStatusRecord::Failed(String::new()))
+            .to_bytes()
+            .len();
+        let failed_1_kib = maximum_asset(CanisterPoolAssetStatusRecord::Failed("x".repeat(1_024)))
+            .to_bytes()
+            .len();
+        let recycling_empty = maximum_asset(CanisterPoolAssetStatusRecord::Recycling {
+            claim: maximum_claim(),
+            reset: CanisterPoolRecycleResetRecord::Failed(String::new()),
+        })
+        .to_bytes()
+        .len();
+        let recycling_1_kib = maximum_asset(CanisterPoolAssetStatusRecord::Recycling {
+            claim: maximum_claim(),
+            reset: CanisterPoolRecycleResetRecord::Failed("x".repeat(1_024)),
+        })
+        .to_bytes()
+        .len();
+
+        assert_eq!((failed_empty, failed_1_kib), (271, 1_297));
+        assert_eq!((recycling_empty, recycling_1_kib), (451, 1_477));
+        assert!(matches!(CanisterPoolAssetRecord::BOUND, Bound::Unbounded));
+    }
+
+    fn maximum_principal() -> Principal {
+        Principal::from_slice(&[u8::MAX; 29])
+    }
+
+    fn canister_principal() -> Principal {
+        Principal::from_slice(&[u8::MAX; 10])
+    }
+
+    fn finite_asset_statuses() -> [(&'static str, CanisterPoolAssetStatusRecord); 11] {
+        let claim = maximum_claim();
+        [
+            ("store", CanisterPoolAssetStatusRecord::Store),
+            (
+                "store_deletion_pending",
+                CanisterPoolAssetStatusRecord::StoreDeletionPending {
+                    operation_id: [u8::MAX; 32],
+                },
+            ),
+            ("pending_reset", CanisterPoolAssetStatusRecord::PendingReset),
+            ("ready", CanisterPoolAssetStatusRecord::Ready),
+            (
+                "claimed",
+                CanisterPoolAssetStatusRecord::Claimed(claim.clone()),
+            ),
+            (
+                "workload",
+                CanisterPoolAssetStatusRecord::Workload(claim.clone()),
+            ),
+            (
+                "recycling_pending",
+                CanisterPoolAssetStatusRecord::Recycling {
+                    claim: claim.clone(),
+                    reset: CanisterPoolRecycleResetRecord::Pending,
+                },
+            ),
+            (
+                "recycling_ready",
+                CanisterPoolAssetStatusRecord::Recycling {
+                    claim: claim.clone(),
+                    reset: CanisterPoolRecycleResetRecord::Ready,
+                },
+            ),
+            (
+                "recycling_failed_empty",
+                CanisterPoolAssetStatusRecord::Recycling {
+                    claim,
+                    reset: CanisterPoolRecycleResetRecord::Failed(String::new()),
+                },
+            ),
+            (
+                "handing_off",
+                CanisterPoolAssetStatusRecord::HandingOff {
+                    recipient: maximum_principal(),
+                },
+            ),
+            (
+                "failed_empty",
+                CanisterPoolAssetStatusRecord::Failed(String::new()),
+            ),
+        ]
+    }
+
+    fn maximum_claim() -> CanisterPoolClaimRecord {
+        CanisterPoolClaimRecord {
+            component: ComponentInstanceId::from_generated_bytes([u8::MAX; 32]),
+            operation_id: [u8::MAX; 32],
+        }
+    }
+
+    fn maximum_asset(status: CanisterPoolAssetStatusRecord) -> CanisterPoolAssetRecord {
+        CanisterPoolAssetRecord {
+            cycles: Cycles::new(u128::MAX),
+            origin: CanisterPoolAssetOriginRecord::Recycled,
+            status,
+            last_recycle: Some(maximum_claim()),
+            added_at_ns: u64::MAX,
+            updated_at_ns: u64::MAX,
+        }
+    }
+
+    fn maximum_state(progress: CanisterPoolCreationProgressRecord) -> CanisterPoolStateRecord {
+        CanisterPoolStateRecord {
+            next_creation_sequence: u64::MAX,
+            last_creation_timestamp_ns: u64::MAX,
+            creation: Some(CanisterPoolCreationRecord {
+                operation_id: [u8::MAX; 32],
+                cycles_ledger: maximum_principal(),
+                placement_subnet: maximum_principal(),
+                root: maximum_principal(),
+                ledger_amount: Cycles::new(u128::MAX),
+                created_at_time_ns: u64::MAX,
+                prepared_at_ns: u64::MAX,
+                cost_guard_settlement: Some(ReplayCostGuardSettlement {
+                    quota_intent_id: IntentId(u64::MAX),
+                    reservation_intent_id: IntentId(u64::MAX),
+                }),
+                progress,
+            }),
+            handoff: Some(CanisterPoolHandoffRecord {
+                canister_id: maximum_principal(),
+                recipient: maximum_principal(),
+                prepared_at_ns: u64::MAX,
+            }),
+        }
+    }
+}

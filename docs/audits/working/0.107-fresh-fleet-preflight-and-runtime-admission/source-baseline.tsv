@@ -1,0 +1,25 @@
+scope	path	sha256	disposition
+canic	Cargo.toml	1d7febede5c0c9b2513c96ef7f5b68b0952cb61dd0ecf7a9c2392b92fd293a27	captured working workspace authority; only unrelated test-member addition differs from v0.105.0
+canic	Cargo.lock	60937280cdae1bdd633d23d7bacb0b6bc5607d9e392858b76760da7382ed8d35	captured working lock; ic-query remains exact 0.40.1
+canic	crates/canic-cli/src/cli/globals.rs	d2f5e97bb72a36964c124d1bfca18c548e1df89909aaceca5efa8444e421959a	current global forwarding baseline; identical to v0.105.0
+canic	crates/canic-cli/src/deploy/plan/command.rs	70b067cd3a53ff799fe54d12c5237cf116d7e80059f445d16731f4f0e7443db7	current plan grammar baseline; identical to v0.105.0
+canic	crates/canic-cli/src/deploy/plan/mod.rs	24420920bd1bf48faae8e4eb4909cfc5e85a0114f5f07551f2546de04df51874	current plan orchestration baseline; identical to v0.105.0
+canic	crates/canic-cli/src/install/mod.rs	7265c4e2a585b6fa28364bb21e6beb711a459911da2b33f8af8dd68ea3ea3747	current install grammar baseline; identical to v0.105.0
+canic	crates/canic-host/src/install_root/mod.rs	e9925a5bb8127531e0f20a508ee5d02d289a593ee6a9934ec603a0bf31e4ec30	current install ordering baseline; identical to v0.105.0
+canic	crates/canic-host/src/fleet_install_plan/persistence/mod.rs	2130dd8e39514795640b304fd341078d55e8c461fffa1a0430f60d79bad34425	current compile/persist coupling baseline; identical to v0.105.0
+canic	crates/canic-host/src/fleet_install_plan/model/mod.rs	0fcff57714121c20e3dd030df6f8d6fe196b4a06a83d2159513cfea1cef9faa5	current immutable install-plan model baseline; identical to v0.105.0
+canic	crates/canic-host/src/deployment_truth/model/plan/mod.rs	8734d0804c6bfa934c7337c078a56eced53d3c8febd2a67d594b33a6e7c9c91b	current DeploymentPlanV1 baseline; identical to v0.105.0
+canic	crates/canic-core/src/config/schema/mod.rs	8fbdb2cf29af873b83b736438af6428c427c75a6e77e5e8a40151f2e90f10f6d	current compiled-whitelist authority baseline; identical to v0.105.0
+canic	crates/canic-core/src/ops/config/mod.rs	1df583010685f6e83c1f1666251c24459ce4e7ff27c7c75d6a117aa077b35a42	current whitelist config-ops baseline; identical to v0.105.0
+canic	crates/canic-core/src/access/auth/predicates.rs	2548c8d2a2a2bd3ffb1c51194cb6bbaa55763e010998e1e3e9790b97a9aad300	current caller predicate baseline; identical to v0.105.0
+canic	crates/canic-core/src/role_contract/allocation.rs	0e7d61289394c76a93317707b4c8a87feb2a8f4eae9839709b1583d42884c4b6	current memory allocation baseline through ID 60; identical to v0.105.0
+canic	crates/canic-core/src/role_contract/model.rs	765d011962cef1074e5aaac362a08455bb1727a96e28886bbb5cdab1ace52d37	current StateAllocationKey baseline; identical to v0.105.0
+canic	crates/canic/src/macros/endpoints/role.rs	2e33ab206e72fe8130ca5026bfb30eda49977d43c97a8c85c1cc71a7f122b172	current managed/local role surface baseline; identical to v0.105.0
+canic	crates/canic-core/tests/stable_memory_abi_guard.rs	dd1ee417f0498f1aaf3aae338b55f4d165c6d90f96b03f7f89923fee9665c51f	B1 test-only schema/bound fixture
+canic	docs/design/0.107-fresh-fleet-preflight-and-runtime-admission/0.107-design.md	52f89cdc9d82345b13d0cd54c2a4de44b8fa0433211b6cbe46e2c373eaad784b	accepted design authority
+external-read-only	ic-query-0.40.1/src/subnet_catalog/host/error.rs	e6a8101634cd18a6c877c5dc0245391a579c36ab63097f2b22a1448579c35d83	exact upstream host error/code/category/retry baseline
+external-read-only	ic-query-0.40.1/src/subnet_catalog/host/cache.rs	c844625a7fdbb5451edbfab4436aacd0d01368a3692e110542a37f7c90add588	exact upstream load/cache-disposition baseline
+external-read-only	ic-query-0.40.1/src/ic_registry/error.rs	28f90fb2b01a5bd002ff55df3fd76a7d82a37ea9437bd9f4c090253a4e04422d	exact upstream fetch-error baseline
+external-read-only	ic-query-0.40.1/src/ic_registry/source/subnet_catalog.rs	db067ddbd1f2bcf9ead2166293954aab6198633a5f8d3efe90a52a9a4159c184	exact upstream point where Registry version becomes known
+external-read-only	ic-query-0.40.1/src/subnet_catalog/error.rs	4658d026b4907a896b44a1aedc59876683e5458874e01e091b0a63b530dee71b	exact upstream typed catalog-subject baseline
+external-read-only	toko@bf14a5d3d89be4335d3da2601e8a60128fde04df/backend/src/canisters/icu.toml	b398d8c2453d043a019ea8787ff9d90058ed082b5b8ab86326693206b6eb14a6	read-only 175-principal sizing fixture; not Canic authority

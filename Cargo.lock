@@ -637,6 +637,7 @@ dependencies = [
  "canic-host",
  "flate2",
  "ic-testkit",
+ "pocket-ic",
  "serde",
  "serde_json",
 ]
@@ -4120,6 +4121,15 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "root_funding_probe"
+version = "0.105.0"
+dependencies = [
+ "candid",
+ "ic-cdk",
+ "serde",
 ]
 
 [[package]]

@@ -34,20 +34,23 @@ release-batch plan and explicit maintainer acceptance.
    estate work.
 4. [0.106 Fleet estate platform qualification](0.106-fleet-estate-platform-qualification/status.md)
    freezes local and separately authorized live-platform evidence.
-5. [0.107 Coordinator-backed root funding](0.107-coordinator-backed-root-funding/status.md)
+5. [0.107 fresh-Fleet preflight and runtime admission](0.107-fresh-fleet-preflight-and-runtime-admission/status.md)
+   makes planning target- and Fleet-input-complete, preserves structured NNS
+   catalog failures and makes the application whitelist durably evolvable.
+6. [0.108 Coordinator-backed root funding](0.108-coordinator-backed-root-funding/status.md)
    closes replay-safe root operating funding without funding the estate
    Cycles Ledger budget implicitly.
-6. [0.108 Fleet Subnet Canister estates](0.108-fleet-subnet-canister-estates/status.md)
+7. [0.109 Fleet Subnet Canister estates](0.109-fleet-subnet-canister-estates/status.md)
    adds application retirement evidence before recycling, indexed reusable
    estates, bounded parallel work, transfer and the 10/100/1,000 proof.
-7. [0.109 stateful Fleet release adoption](0.109-stateful-fleet-release-adoption/status.md)
+8. [0.110 stateful Fleet release adoption](0.110-stateful-fleet-release-adoption/status.md)
    qualifies one whole-Fleet stop-the-world predecessor-to-successor
    transition before stateful production claims.
-8. [0.110 generic Fleet observatory](0.110-fleet-observatory/status.md)
+9. [0.111 generic Fleet observatory](0.111-fleet-observatory/status.md)
    publishes supported downstream views/rendering with external Prequel Wars
    as the flagship consumer.
 
-Deferred ideas do not gate this eight-line path unless a later explicit
+Deferred ideas do not gate this nine-line path unless a later explicit
 amendment moves one into a numbered design.
 
 ## Release-Batch Plan Template

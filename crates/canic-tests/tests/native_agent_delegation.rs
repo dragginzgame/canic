@@ -8,7 +8,9 @@ use canic::{
             ApplicationSessionView, AuthRequestMetadata, DelegatedToken, DelegatedTokenGetRequest,
             DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
             InactiveApplicationSession, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusRequest,
+            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+            RootIssuerRenewalTemplateUpsertRequest,
         },
         metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
         page::{Page, PageRequest},
@@ -38,6 +40,7 @@ const MAX_APPLICATION_SESSION_CLEANUP_REMOVALS: u64 = 128;
 const MAX_APPLICATION_SESSION_STABLE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_LOCAL_AUTHORIZATION_INSTRUCTIONS: u64 = 1_000_000;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+const ROOT_PROOF_PROVISION_ATTEMPTS: usize = 10;
 
 // Deterministic test-only identity; it has no authority outside this fresh PocketIC runtime.
 const TEST_IDENTITY_PEM: &str = "-----BEGIN PRIVATE KEY-----
@@ -68,6 +71,16 @@ enum RootCommand {
 enum RootCommandResponse {
     UpsertIssuerPolicy(RootIssuerPolicyResponse),
     UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateResponse),
+}
+
+#[derive(CandidType)]
+enum RootStatusRequest {
+    IssuerRenewal(RootIssuerRenewalStatusRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootStatusResponse {
+    IssuerRenewal(RootIssuerRenewalStatusResponse),
 }
 
 #[derive(CandidType)]
@@ -1406,24 +1419,68 @@ fn configure_issuer(fixture: &canic_testing_internal::pic::ActiveComponentRegist
 fn provision_delegation_proof(
     fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
 ) {
-    let provisioned: Result<(), Error> = fixture.pic().update_candid_or_panic(
-        fixture.root,
-        "test_provision_chain_key_delegation_proof_for_issuer",
-        (fixture.issuer.canister_id,),
-    );
-    if provisioned.is_err() {
-        report_canister_diagnostics(
-            fixture.pic(),
+    for _ in 0..ROOT_PROOF_PROVISION_ATTEMPTS {
+        let provisioned: Result<(), Error> = fixture.pic().update_candid_or_panic(
             fixture.root,
-            candid::Principal::anonymous(),
-            "native-agent root proof provisioning",
+            "test_provision_chain_key_delegation_proof_for_issuer",
+            (fixture.issuer.canister_id,),
         );
-        report_canister_diagnostics(
-            fixture.pic(),
-            fixture.issuer.canister_id,
-            fixture.root,
-            "native-agent issuer proof provisioning",
-        );
+        match provisioned {
+            Ok(()) => return,
+            Err(err)
+                if err.code() == canic::diagnostics::codes::SECURITY_UNAVAILABLE.raw_code() =>
+            {
+                fixture.pic().tick();
+                if root_issuer_proof_is_installed(fixture) {
+                    return;
+                }
+            }
+            Err(err) => {
+                report_proof_provisioning_diagnostics(fixture);
+                panic!("root proof provisioning returned unexpected error: {err:?}");
+            }
+        }
     }
-    provisioned.expect("root proof provisioning must succeed");
+
+    report_proof_provisioning_diagnostics(fixture);
+    panic!(
+        "root proof provisioning remained unavailable after {ROOT_PROOF_PROVISION_ATTEMPTS} attempts"
+    );
+}
+
+fn root_issuer_proof_is_installed(
+    fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
+) -> bool {
+    let status: Result<RootStatusResponse, Error> = fixture.pic().query_candid_or_panic(
+        fixture.root,
+        protocol::CANIC_STATUS,
+        (RootStatusRequest::IssuerRenewal(
+            RootIssuerRenewalStatusRequest {
+                issuer_pid: fixture.issuer.canister_id,
+            },
+        ),),
+    );
+    let RootStatusResponse::IssuerRenewal(status) =
+        status.expect("root issuer renewal status must be available");
+
+    status.latest_batch.is_some_and(|batch| {
+        batch.status == RootIssuerRenewalBatchStatus::Installed && batch.installed_at_ns.is_some()
+    })
+}
+
+fn report_proof_provisioning_diagnostics(
+    fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
+) {
+    report_canister_diagnostics(
+        fixture.pic(),
+        fixture.root,
+        candid::Principal::anonymous(),
+        "native-agent root proof provisioning",
+    );
+    report_canister_diagnostics(
+        fixture.pic(),
+        fixture.issuer.canister_id,
+        fixture.root,
+        "native-agent issuer proof provisioning",
+    );
 }

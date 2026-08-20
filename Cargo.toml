@@ -34,6 +34,7 @@ members = [
     "canisters/test/delegation_root_stub",
     "canisters/test/intent_authority",
     "canisters/test/payload_limit_probe",
+    "canisters/test/root_funding_probe",
     "canisters/test/runtime_probe",
     "canisters/test/sharding_root_stub",
     "crates/canic",

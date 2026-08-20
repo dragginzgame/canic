@@ -4,8 +4,9 @@ Date: 2026-08-20
 
 ## Status
 
-- State: B1 accepted and B2-B7 complete against exact published predecessor
-  `v0.104.2`; the 0.105 implementation batch is closed.
+- State: published `v0.105.0`, peeled commit
+  `b6c46ca1d307e0a3fed6f7bfddfba7d9f1922811`, closes B1-B7 against exact
+  predecessor `v0.104.2`; the 0.105 implementation batch is closed.
 - Outcome: one framework-neutral bridge from verified Canic token authority to
   a bounded synchronous local application decision.
 - Review state: the lifetime, client-access, predecessor,
@@ -26,9 +27,9 @@ Date: 2026-08-20
   proves multi-target target-local authority, controller separation,
   proof/session expiry, clear, same-release reconstruction and final residue
   cleanup without a framework dependency.
-- Implementation approval: B2-B7 implementation is complete. Only the
-  maintainer-owned full release validation, version, tag and publication flow
-  remains.
+- Implementation approval: B2-B7 implementation and the maintainer-owned full
+  release validation, version, tag and publication flow are complete. No 0.105
+  work remains.
 - Surface posture: enabled managed roles add establish/clear command variants
   and one application-session status variant to the fixed 0.103 role surface.
   Infrastructure roles cannot enable the capability; no session-specific
@@ -191,7 +192,7 @@ misrepresent issuer-local preparation limits as a Fleet-wide quota.
 ## Next Authorized Action
 
 No additional 0.105 implementation is authorized or required. The maintainer
-may run the complete release validation and human-owned version/tag/publication
-flow. Any failure must be assessed within the closed 0.105 boundary; do not add
-a framework dependency, compatibility reader, new method identity or second
+published `v0.105.0`; repository-only 0.106 B1 is the active successor. Any
+later finding must be assessed within the closed 0.105 boundary; do not add a
+framework dependency, compatibility reader, new method identity or second
 authority owner.
