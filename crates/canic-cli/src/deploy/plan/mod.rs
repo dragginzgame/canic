@@ -18,7 +18,10 @@ use canic_core::ids::FleetName;
 use canic_host::deployment_truth::DeploymentAssumptionV1;
 use canic_host::{
     deployment_truth::{DeploymentPlanV1, LocalDeploymentPlanRequest},
-    fleet_install_input::load_and_resolve_fleet_install_input_for_preflight,
+    fleet_install_input::{
+        FleetInstallInputError, SubnetCatalogLoadFailureEvidenceV1,
+        load_and_resolve_fleet_install_input_for_preflight,
+    },
     fleet_install_plan::{
         FreshFleetDecisionAuthorityRequest, FreshFleetDeploymentPlanRequest,
         FreshFleetDeploymentPlanV1, FreshFleetPreflightEffectsV1, FreshFleetPreflightRequest,
@@ -54,7 +57,7 @@ pub(super) use render::{render_json, render_text};
 use report::{DeploymentPlanReport, REPORT_SCHEMA_VERSION};
 use report::{
     PlanDiagnosticSource, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
-    SOURCE_FLEET_INPUT,
+    SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT,
 };
 
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
@@ -87,10 +90,12 @@ pub(super) fn build_report(
     let fleet_input_path = plan_fleet_input_path(&roots.icp_root, options);
     let mut blockers = target_resolution_blockers(options, &config_path, &roots.icp_root);
     let target_resolved = blockers.is_empty();
+    let mut catalog_failure = None;
     let fresh_fleet_plan = if target_resolved {
         match build_fresh_fleet_plan(options, roots, &config_path, &fleet_input_path) {
             Ok(plan) => Some(plan),
             Err(error) => {
+                catalog_failure = error.catalog_failure.map(|failure| *failure);
                 blockers.push(fresh_fleet_plan_blocker(
                     &options.fleet,
                     error.detail,
@@ -151,6 +156,7 @@ pub(super) fn build_report(
         config_path: display_path(&config_path),
         status,
         comparison_status,
+        catalog_failure,
         fresh_fleet_plan,
         plan,
         blockers,
@@ -175,7 +181,7 @@ fn build_fresh_fleet_plan(
         &options.environment,
         fleet_input_path,
     )
-    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+    .map_err(fleet_input_preflight_build_error)?;
     let (build_profile, release_build_id) = resolve_plan_release_source(options, roots)
         .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
     let fleet_name = options
@@ -216,6 +222,7 @@ fn build_fresh_fleet_plan(
 struct FreshFleetPreflightBuildError {
     detail: String,
     source: PlanDiagnosticSource,
+    catalog_failure: Option<Box<SubnetCatalogLoadFailureEvidenceV1>>,
 }
 
 fn preflight_build_error(
@@ -225,6 +232,25 @@ fn preflight_build_error(
     FreshFleetPreflightBuildError {
         detail: error.to_string(),
         source,
+        catalog_failure: None,
+    }
+}
+
+fn fleet_input_preflight_build_error(
+    error: FleetInstallInputError,
+) -> FreshFleetPreflightBuildError {
+    let catalog_failure = error
+        .subnet_catalog_failure()
+        .map(SubnetCatalogLoadFailureEvidenceV1::from_preflight_failure);
+    let source = if catalog_failure.is_some() {
+        SOURCE_FLEET_CATALOG
+    } else {
+        SOURCE_FLEET_INPUT
+    };
+    FreshFleetPreflightBuildError {
+        detail: error.to_string(),
+        source,
+        catalog_failure: catalog_failure.map(Box::new),
     }
 }
 
@@ -321,6 +347,12 @@ mod tests {
         ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1, DeploymentIdentityV1,
         ExpectedCanisterV1, RoleArtifactV1, RoleEpochExpectationV1, TrustDomainV1,
         VerifierReadinessExpectationV1,
+    };
+    use canic_host::fleet_install_input::{
+        SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1,
+        SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1, SubnetCatalogRegistryRecordKindV1,
+        SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1, SubnetCatalogSubjectV1,
+        SubnetCatalogUnknownRetryReasonV1,
     };
 
     #[test]
@@ -448,6 +480,53 @@ mod tests {
             assert_eq!(err.exit_code(), 1);
             assert!(err.suppress_stderr());
         }
+    }
+
+    #[test]
+    fn catalog_failure_rendering_preserves_typed_unknown_provenance() {
+        let mut report = report_with_status(PlanStatus::Blocked);
+        report.catalog_failure = Some(SubnetCatalogLoadFailureEvidenceV1 {
+            schema_version: 1,
+            network: "ic".to_string(),
+            source_kind: Some(SubnetCatalogSourceKindV1::UncertifiedQuery),
+            source_endpoints: vec!["https://ic0.app".to_string()],
+            source_assurance: Some("uncertified_query".to_string()),
+            minimum_assurance: "uncertified_query".to_string(),
+            stage: SubnetCatalogLoadStageV1::RefreshFailed,
+            registry_version: Some(881_337),
+            cache_disposition: SubnetCatalogFailureCacheDispositionV1::RefreshFailed {
+                trigger: SubnetCatalogRefreshTriggerV1::Missing,
+            },
+            subject: Some(SubnetCatalogSubjectV1::RegistryRecord {
+                record_kind: SubnetCatalogRegistryRecordKindV1::SubnetList,
+                key: "subnet_list".to_string(),
+                subnet: None,
+            }),
+            code: "registry_refresh".to_string(),
+            category: "network".to_string(),
+            retryability: SubnetCatalogRetryabilityV1::Unknown {
+                reason: SubnetCatalogUnknownRetryReasonV1::RegistryResponse,
+            },
+            source_message: "typed source failure".to_string(),
+            effects: SubnetCatalogFailureEffectsV1 {
+                build_started: false,
+                workspace_mutation_started: false,
+                ic_mutation_started: false,
+            },
+        });
+
+        let json = render_json(&report).expect("render typed catalog failure JSON");
+        let text = render_text(&report);
+
+        assert!(json.contains("\"registry_version\": 881337"));
+        assert!(json.contains("\"kind\": \"unknown\""));
+        assert!(json.contains("\"reason\": \"registry_response\""));
+        assert!(text.contains("registry_version: 881337"));
+        assert!(text.contains("cache_disposition: refresh_failed"));
+        assert!(text.contains("refresh_trigger: missing"));
+        assert!(text.contains("retryability: unknown"));
+        assert!(text.contains("unknown_retry_reason: registry_response"));
+        assert!(!text.contains("transient"));
     }
 
     #[test]
@@ -646,6 +725,7 @@ mod tests {
             config_path: "apps/demo/canic.toml".to_string(),
             status,
             comparison_status: ComparisonStatus::NotRequested,
+            catalog_failure: None,
             fresh_fleet_plan: None,
             plan: plan_with_assumptions([]),
             blockers: Vec::new(),

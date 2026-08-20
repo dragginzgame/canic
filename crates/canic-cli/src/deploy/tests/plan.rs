@@ -659,6 +659,45 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
         json["plan"]["deployment_identity"]["canonical_network_id"],
         CanonicalNetworkId::ic_mainnet().to_string()
     );
+    assert_eq!(json["catalog_failure"]["network"], "ic");
+    assert_eq!(json["catalog_failure"]["source_kind"], JsonValue::Null);
+    assert_eq!(
+        json["catalog_failure"]["source_endpoints"],
+        JsonValue::Array(vec![])
+    );
+    assert_eq!(json["catalog_failure"]["stage"], "cache_absence");
+    assert_eq!(
+        json["catalog_failure"]["cache_disposition"]["kind"],
+        "cache_missing"
+    );
+    assert_eq!(json["catalog_failure"]["registry_version"], JsonValue::Null);
+    assert_eq!(
+        json["catalog_failure"]["retryability"]["kind"],
+        "not_retryable"
+    );
+    assert_eq!(json["catalog_failure"]["effects"]["build_started"], false);
+    assert_eq!(
+        json["catalog_failure"]["effects"]["workspace_mutation_started"],
+        false
+    );
+    assert_eq!(
+        json["catalog_failure"]["effects"]["ic_mutation_started"],
+        false
+    );
+    assert!(json["blockers"].as_array().is_some_and(|blockers| {
+        blockers.iter().any(|blocker| {
+            blocker["code"] == "fresh_fleet_plan_blocked" && blocker["source"] == "fleet_catalog"
+        })
+    }));
+    let text = deploy_plan::render_text(&report);
+    assert!(text.contains("catalog failure provenance"));
+    assert!(text.contains("no_effects_started: true"));
+    assert!(text.contains("stage: cache_absence"));
+    assert!(text.contains("cache_disposition: cache_missing"));
+    assert!(text.contains("retryability: not_retryable"));
+    assert!(text.contains(
+        "effects: build_started=false workspace_mutation_started=false ic_mutation_started=false"
+    ));
     assert!(json["blockers"].as_array().is_some_and(|blockers| {
         blockers
             .iter()
@@ -924,6 +963,7 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
             "config_path",
             "status",
             "comparison_status",
+            "catalog_failure",
             "fresh_fleet_plan",
             "plan",
             "blockers",

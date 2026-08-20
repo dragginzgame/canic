@@ -233,11 +233,12 @@ domain-separated SHA-256 digest. Planning renders that decision; install
 recompiles it before allocation and binds it through same-release session,
 persisted Fleet plan, deployment truth, completion/rejection receipts and
 resume comparison. Changed source, balance or expected digest fails before an
-effect begins. B5 is explicitly blocked: locked crates.io `ic-query 0.40.1`
-and read-only upstream `main` commit
-`3cceda805725e2c85d7129f1f51f42bacba1d249` still lack the accepted typed
-failed-load context and unknown-retryability result, so Canic has not replaced
-that boundary with a fork or error-string parser. B6 is complete. Memory ID 61
+effect begins. B5 is complete on published crates.io `ic-query 0.41.0`: Canic
+uses its detailed cached/live results and exhaustively projects the typed
+request source/assurance, cache stage/disposition, known Registry version,
+offending subject, code/category and truthful unknown-retry reason into plan
+JSON/text plus explicit false effect facts. No fork, error-string parser,
+inferred version or guessed retry decision exists. B6 is complete. Memory ID 61
 now owns one bounded canonical runtime-whitelist record, managed role methods
 own Root-or-controller add/remove/status variants, configuration is fresh-seed
 input only and same-release restoration validates without reseeding. The real
@@ -245,11 +246,13 @@ maximum schema remains 8,417 bytes. Focused unit, Candid, source and managed-
 artifact checks pass, and the bounded PocketIC journey proves seeding,
 controller/Root separation, response-loss exact retry, conflict denial,
 immediate removal, restoration and application-session separation. Independent
-B7 proof is complete; the read-only Toko checkout remains at
+B7 proof is complete and reconciled with B5; the read-only Toko checkout remains at
 `bf14a5d3d89be4335d3da2601e8a60128fde04df` with no Canic integration or
 CANIC-011/012/013 identifiers, which is the accepted exact downstream evidence
 blocker rather than authority to edit it. No external effect occurred. Held
-0.106 B2 effects remain independent and unauthorized.
+0.106 B2 effects remain independent and unauthorized. The implementation line
+is ready for the required human 0.107 closeout audit; it is not yet accepted or
+closed.
 
 The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
@@ -765,11 +768,9 @@ Q6 current-state constraints are assigned to 0.109. The operation,
 physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
-terminal-disposition authorization exists. In 0.107, B2-B4, B6 and the
-independent B7 proof are complete. Wait for a committed or published upstream
-`ic-query` API carrying the accepted typed B5 failure context, then complete
-its propagation and focused evidence. Stop at 0.107 closeout-audit readiness;
-a human must request and accept the exact 0.107 audit before 0.108 production
+terminal-disposition authorization exists. In 0.107, B2-B7 implementation and
+focused evidence are complete on published `ic-query 0.41.0`. Request and
+accept the exact human 0.107 closeout audit before 0.108 production
 implementation begins. The renumbered 0.108 root-funding B1 proof remains
 complete and ready for maintainer acceptance, but its production work waits
 for that boundary. Do not add a production pool contract, run any remote

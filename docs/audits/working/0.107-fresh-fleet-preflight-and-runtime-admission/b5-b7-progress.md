@@ -9,32 +9,45 @@ human closeout audit and does not accept the minor.
 
 | Item | Identity |
 | --- | --- |
-| current branch/HEAD | `main` / `63c80c21fd5d67a70d1a2173afcdd4ad0f33fc30` |
+| current branch/HEAD | `main` / published checkpoint `v0.107.0` at `448c5f2d19c41b9a71dd2b69affa32d8cf4868df`, plus the dirty B5 closeout batch |
 | published direct predecessor | annotated `v0.106.0`, peeled commit `63c80c21fd5d67a70d1a2173afcdd4ad0f33fc30` |
+| published 0.107 checkpoint | annotated `v0.107.0`, peeled commit `448c5f2d19c41b9a71dd2b69affa32d8cf4868df` |
 | accepted B1 production baseline | annotated `v0.105.0`, peeled commit `b6c46ca1d307e0a3fed6f7bfddfba7d9f1922811` |
-| working `Cargo.lock` SHA-256 | `cdd9a40d5f363d40e086490df9ae9e0839958ae5d1e30fdab7e23881ad1bd569` |
+| working `Cargo.lock` SHA-256 | `5d98823414e6b0a8957e41d5d96f87e8c0b680757855040085d02e39394d5217` |
 | Rust/Cargo | `rustc 1.97.1 (8bab26f4f 2026-07-14)` / `cargo 1.97.1 (c980f4866 2026-06-30)` |
 
-The source is a dirty 0.107 implementation worktree over the published
-evidence-only 0.106 predecessor. No version, tag, commit or external Canister
-operation was created by B5-B7 work.
+The source is a dirty 0.107 implementation worktree over published checkpoint
+`v0.107.0`. No version, tag, commit or external Canister operation was created
+by this B5 closeout batch.
 
-## B5 Typed-Upstream Gate
+## B5 Typed-Upstream Result
 
 `cargo tree --locked --offline -p canic-host -i ic-query` resolves exactly
-`ic-query v0.40.1 -> canic-host`. The locked source and read-only upstream
-`main` commit `3cceda805725e2c85d7129f1f51f42bacba1d249` both retain:
+`ic-query v0.41.0 -> canic-host`; the CLI reaches the same package only through
+`canic-host`. The crates.io lock checksum is
+`2d9f80d344dab9cb5ad21029f66c5aad23317c330d61c8fce06cc6424101d7d6`.
+The relevant published source identities are:
 
-- `SubnetCatalogRetryability::{Retryable, NotRetryable}` with no typed unknown
-  state; and
-- failed cache loads as `Result<CatalogLoadOutcome, SubnetCatalogHostError>`
-  with no `CatalogLoadFailure` carrying cache stage or a Registry version
-  already learned during the failed request.
+| Published `ic-query 0.41.0` source | SHA-256 |
+| --- | --- |
+| `subnet_catalog/host/failure.rs` | `db027c7b82a8f23db564e9d975ef4e0e2852feba09ef1aa1e78368bbf9911666` |
+| `subnet_catalog/host/error.rs` | `f790ea60f974b903599473d48953d9cfda1fd2b71bed1450975a6e615a66f1d8` |
+| `subnet_catalog/host/cache.rs` | `e66ec094fda4262ec790b7b992634319792c103f3cdd8c3c416aa150f1291097` |
+| `ic_registry/catalog.rs` | `a7ea0a511ab341c58acbbf332b6703265c06ab44ead0c32cbcd0a22fcc09cab2` |
 
-B5 cannot truthfully preserve the accepted complete provenance until a
-committed or published upstream API supplies it. Canic has no fork, string
-parser or guessed transient classification. B5 and minor closeout remain
-blocked on that exact external dependency state.
+The published detailed APIs now return `SubnetCatalogLoadFailure`, which
+retains request network/source/assurance, exact load stage, failure-side cache
+disposition, a Registry version known before later failure, typed subject,
+stable code/category and
+`SubnetCatalogRetryability::Unknown(SubnetCatalogUnknownRetryReason)`.
+
+Canic switches both cached and live wrappers to those detailed APIs. One
+exhaustive typed host projection carries every upstream-known field into the
+deployment-plan JSON/text report and adds the three local false effect facts.
+The wrapping path reads no prose to derive identity, version, subject, cache
+state or retryability. A real missing-cache journey remains read-only and is
+reported as cache absence; a pinned-version Registry-record fixture remains
+unknown with its typed reason rather than becoming transient. B5 is complete.
 
 ## B6 Durable Runtime Whitelist
 
@@ -131,6 +144,18 @@ cargo clippy --locked -p canic-core -p canic-testing-internal --lib -- -D warnin
   passed
 cargo clippy --locked -p canic-tests --test pic_ingress_payload_limits -- -D warnings
   passed
+cargo test --locked -p canic-host subnet_catalog -- --nocapture
+  5 passed
+cargo test --locked -p canic-cli deploy::tests::plan -- --nocapture
+  22 passed
+cargo test --locked -p canic-cli catalog_failure_rendering_preserves_typed_unknown_provenance -- --nocapture
+  1 passed
+cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings
+  passed
+cargo tree --locked --offline -p canic-host -i ic-query
+  one `ic-query v0.41.0` package directly beneath `canic-host`
+cargo tree --locked --offline -p canic-cli -i ic-query
+  the same package reaches `canic-cli` only through `canic-host`
 bash scripts/ci/run-layering-guards.sh
   passed
 cargo test --locked -p canic --test changelog_governance -- --nocapture
@@ -158,9 +183,8 @@ validation suite was run.
 
 ## Remaining Boundary
 
-Independent B7 implementation evidence is complete, but B7 cannot perform
-minor closeout while B5 is blocked. When the upstream typed API becomes
-available, finish B5 propagation and its focused host/CLI tests, reconcile the
-artifact hashes from the final source, then stop at **ready for human 0.107
-closeout audit**. Do not begin 0.108 before the maintainer requests and accepts
-that exact audit.
+B5-B7 implementation evidence is complete. B5 changes only the host dependency
+and host/CLI report path, so it does not alter the B7 managed/Root/Coordinator/
+Store/runtime-probe Wasm or Candid boundary recorded above. The line is
+**ready for human 0.107 closeout audit**. Do not begin 0.108 production before
+the maintainer requests and accepts that exact audit.

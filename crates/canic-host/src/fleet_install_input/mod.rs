@@ -7,6 +7,12 @@
 #[cfg(test)]
 mod tests;
 
+pub use crate::subnet_catalog::{
+    SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1, SubnetCatalogFieldV1,
+    SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1,
+    SubnetCatalogRegistryRecordKindV1, SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1,
+    SubnetCatalogSubjectV1, SubnetCatalogUnknownRetryReasonV1,
+};
 use crate::{
     component_topology::RootComponentAdmissionInput,
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
@@ -182,8 +188,30 @@ pub enum FleetInstallInputError {
     #[error("system clock is before the Unix epoch: {0}")]
     Clock(#[from] SystemTimeError),
 
-    #[error("trusted Subnet catalog resolution failed: {0}")]
-    SubnetCatalog(#[from] ic_query::subnet_catalog::SubnetCatalogHostError),
+    #[error("trusted Subnet catalog resolution failed: {source}")]
+    SubnetCatalog {
+        #[source]
+        source: Box<ic_query::subnet_catalog::SubnetCatalogLoadFailure>,
+    },
+}
+
+impl FleetInstallInputError {
+    /// Borrow the exact detailed catalog failure when this rejection owns one.
+    #[must_use]
+    pub fn subnet_catalog_failure(
+        &self,
+    ) -> Option<&ic_query::subnet_catalog::SubnetCatalogLoadFailure> {
+        match self {
+            Self::SubnetCatalog { source } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+impl From<Box<ic_query::subnet_catalog::SubnetCatalogLoadFailure>> for FleetInstallInputError {
+    fn from(source: Box<ic_query::subnet_catalog::SubnetCatalogLoadFailure>) -> Self {
+        Self::SubnetCatalog { source }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
