@@ -94,6 +94,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             Overview,
             Readiness,
             Runtime,
+            RuntimeWhitelist(::canic::dto::page::PageRequest),
         }
 
         #[derive(
@@ -139,6 +140,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
             Overview(::canic::dto::role::RoleOverviewResponse),
             Readiness(::canic::dto::runtime::CanicReadinessStatus),
             Runtime(::canic::dto::runtime::CanicRuntimeStatus),
+            RuntimeWhitelist(::canic::dto::runtime_whitelist::RuntimeWhitelistStatusResponse),
         }
 
         #[$crate::canic_query(public)]
@@ -158,6 +160,11 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 }
                 CanisterStatusRequest::Operation(_) => {
                     $crate::__internal::core::access::auth::is_root(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                }
+                CanisterStatusRequest::RuntimeWhitelist(_) => {
+                    $crate::__internal::core::access::auth::is_controller_or_root(caller)
                         .await
                         .map_err(::canic::Error::from)?;
                 }
@@ -274,6 +281,12 @@ macro_rules! __canic_emit_managed_status_endpoint {
                         $crate::__internal::cdk::api::canister_version(),
                     ),
                 )),
+                CanisterStatusRequest::RuntimeWhitelist(page) => {
+                    $crate::__internal::core::api::runtime_whitelist::RuntimeWhitelistApi::status(
+                        page,
+                    )
+                    .map(CanisterStatusResponse::RuntimeWhitelist)
+                }
             }
         }
     };
@@ -425,6 +438,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             #[cfg(canic_delegated_token_issuer)]
             PrepareDelegatedToken(::canic::dto::auth::DelegatedTokenPrepareRequest),
             RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityEnvelopeV1),
+            RuntimeWhitelist(::canic::dto::runtime_whitelist::RuntimeWhitelistCommand),
         }
 
         #[derive(
@@ -443,6 +457,9 @@ macro_rules! __canic_emit_managed_command_endpoint {
             #[cfg(canic_delegated_token_issuer)]
             PrepareDelegatedToken(::canic::dto::auth::DelegatedTokenPrepareResponse),
             RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityResponseV1),
+            RuntimeWhitelist(
+                ::canic::dto::runtime_whitelist::RuntimeWhitelistMutationResponse,
+            ),
         }
 
         #[doc(hidden)]
@@ -531,6 +548,16 @@ macro_rules! __canic_emit_managed_command_endpoint {
                     )
                     .await
                     .map(CanisterCommandResponse::RespondCapability)
+                }
+                CanisterCommand::RuntimeWhitelist(command) => {
+                    let caller = $crate::__internal::cdk::api::msg_caller();
+                    $crate::__internal::core::access::auth::is_controller_or_root(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                    $crate::__internal::core::api::runtime_whitelist::RuntimeWhitelistApi::command(
+                        command,
+                    )
+                    .map(CanisterCommandResponse::RuntimeWhitelist)
                 }
             }
         }

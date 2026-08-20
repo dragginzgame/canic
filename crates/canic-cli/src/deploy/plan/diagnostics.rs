@@ -53,7 +53,7 @@ pub(super) fn target_resolution_blockers(
                 config_path.display(),
                 options.app
             ),
-            next: Some("select the matching --app or --config".to_string()),
+            next: Some("select the matching --app".to_string()),
             source: SOURCE_DEPLOYMENT_CONFIG,
         }],
         Err(err) => vec![PlanDiagnostic {
@@ -66,7 +66,9 @@ pub(super) fn target_resolution_blockers(
                 options.app,
                 config_path.display()
             ),
-            next: Some("provide --config with a readable config for the requested App".to_string()),
+            next: Some(
+                "provide a readable apps/<app>/canic.toml for the requested App".to_string(),
+            ),
             source: SOURCE_DEPLOYMENT_CONFIG,
         }],
     };
@@ -93,6 +95,22 @@ pub(super) fn target_resolution_blockers(
         });
     }
     blockers
+}
+
+pub(super) fn fresh_fleet_plan_blocker(
+    fleet: &str,
+    detail: impl Into<String>,
+    source: crate::deploy::plan::report::PlanDiagnosticSource,
+) -> PlanDiagnostic {
+    PlanDiagnostic {
+        category: CATEGORY_TOPOLOGY,
+        code: "fresh_fleet_plan_blocked".to_string(),
+        severity: SEVERITY_BLOCKED,
+        subject: fleet.to_string(),
+        detail: detail.into(),
+        next: Some("repair the Fleet input and fresh-Fleet authority before retrying".to_string()),
+        source,
+    }
 }
 
 fn validate_fleet_name(name: &str) -> Result<(), String> {

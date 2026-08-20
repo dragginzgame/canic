@@ -287,6 +287,68 @@ fn standalone_local_emits_only_local_status_and_standards() {
 }
 
 #[test]
+fn runtime_whitelist_is_managed_only_and_authenticates_before_state_access() {
+    let workspace = workspace_root();
+    let role_path = workspace.join("crates/canic/src/macros/endpoints/role.rs");
+    let role = fs::read_to_string(&role_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", role_path.display()));
+    let managed_status = role
+        .split("macro_rules! __canic_emit_managed_status_endpoint")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! __canic_emit_local_status_endpoint")
+                .next()
+        })
+        .expect("managed status emitter");
+    let managed_command = role
+        .split("macro_rules! __canic_emit_managed_command_endpoint")
+        .nth(1)
+        .expect("managed command emitter");
+    let local_status = role
+        .split("macro_rules! __canic_emit_local_status_endpoint")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! __canic_emit_managed_command_endpoint")
+                .next()
+        })
+        .expect("standalone-local status emitter");
+
+    for source in [managed_status, managed_command] {
+        assert!(
+            source.contains("RuntimeWhitelist"),
+            "managed role surface must own the runtime-whitelist selector"
+        );
+        let auth = source
+            .find("is_controller_or_root(caller)")
+            .expect("controller-or-Root authorization");
+        let dispatch = source
+            .find("RuntimeWhitelistApi")
+            .expect("runtime-whitelist facade dispatch");
+        assert!(
+            auth < dispatch,
+            "managed endpoint must authorize before runtime-whitelist state dispatch"
+        );
+    }
+    assert!(
+        !local_status.contains("RuntimeWhitelist"),
+        "standalone-local status must not expose managed runtime-whitelist state"
+    );
+
+    for relative in [
+        "crates/canic/src/macros/endpoints/root.rs",
+        "crates/canic/src/macros/endpoints/fleet_coordinator.rs",
+        "crates/canic/src/macros/endpoints/wasm_store.rs",
+    ] {
+        let source = fs::read_to_string(workspace.join(relative))
+            .unwrap_or_else(|error| panic!("read {relative}: {error}"));
+        assert!(
+            !source.contains("RuntimeWhitelist") && !source.contains("runtime_whitelist"),
+            "specialized infrastructure surface must not expose runtime whitelist: {relative}"
+        );
+    }
+}
+
+#[test]
 fn managed_start_remains_a_thin_profile_surface_composer() {
     let workspace = workspace_root();
     let start_path = workspace.join("crates/canic/src/macros/start.rs");

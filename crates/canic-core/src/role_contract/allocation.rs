@@ -119,6 +119,10 @@ pub mod memory {
     pub mod async_job_recovery {
         pub const ASYNC_JOB_RECOVERY_ID: u8 = 60;
     }
+
+    pub mod runtime_whitelist {
+        pub const RUNTIME_WHITELIST_ID: u8 = 61;
+    }
 }
 
 use memory::{
@@ -157,6 +161,7 @@ use memory::{
     },
     replay::REPLAY_RECEIPTS_ID,
     runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
+    runtime_whitelist::RUNTIME_WHITELIST_ID,
     sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 
@@ -217,6 +222,7 @@ const CORE_PLACEMENT_ACKNOWLEDGEMENT_IDS: &[MemoryId] =
     &[MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID)];
 const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
 const CORE_ASYNC_JOB_RECOVERY_IDS: &[MemoryId] = &[MemoryId::new(ASYNC_JOB_RECOVERY_ID)];
+const CORE_RUNTIME_WHITELIST_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_WHITELIST_ID)];
 const PLACEMENT_SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_SCALING_REGISTRY_ID)];
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
@@ -399,6 +405,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreAsyncJobRecovery,
         AllocationOwner::CanicCore,
         CORE_ASYNC_JOB_RECOVERY_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreRuntimeWhitelist,
+        AllocationOwner::CanicCore,
+        CORE_RUNTIME_WHITELIST_IDS,
     ),
 ];
 

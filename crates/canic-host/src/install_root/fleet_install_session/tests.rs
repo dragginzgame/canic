@@ -7,7 +7,8 @@
 use crate::{
     install_root::fleet_install_session::{
         FleetInstallSessionError, PlanFleetInstallSessionRequest, plan_fleet_install_session,
-        recover_fleet_install_session_release_build, session_path,
+        recover_fleet_install_session_authority, recover_fleet_install_session_release_build,
+        session_path,
     },
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     test_support::temp_dir,
@@ -15,6 +16,8 @@ use crate::{
 use std::fs;
 
 use canic_core::ids::CanonicalNetworkId;
+
+const PLAN_DIGEST: &str = "abababababababababababababababababababababababababababababababab";
 
 #[test]
 fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
@@ -27,6 +30,8 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
         fleet_name: "primary".parse().expect("Fleet name"),
         app: "toko".into(),
         finalized_release_build: &finalized,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: PLAN_DIGEST,
     };
 
     let first = plan_fleet_install_session(request()).expect("plan session");
@@ -46,6 +51,8 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
         first.release_build_id
     );
     assert_ne!(first.operation_id, [0; 32]);
+    assert_eq!(first.fresh_fleet_plan_digest, PLAN_DIGEST);
+    assert_eq!(first.decision_release_build_id, None);
     assert_eq!(
         first.fleet.fleet.canonical_network_id,
         CanonicalNetworkId::ic_mainnet()
@@ -66,6 +73,8 @@ fn retry_rejects_changed_app_or_release_authority() {
         fleet_name: "primary".parse().expect("Fleet name"),
         app: "toko".into(),
         finalized_release_build: &first_release,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: PLAN_DIGEST,
     };
     plan_fleet_install_session(first).expect("plan session");
 
@@ -75,6 +84,8 @@ fn retry_rejects_changed_app_or_release_authority() {
         fleet_name: "primary".parse().expect("Fleet name"),
         app: "other".into(),
         finalized_release_build: &first_release,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: PLAN_DIGEST,
     };
     assert!(matches!(
         plan_fleet_install_session(changed_app),
@@ -97,11 +108,61 @@ fn retry_rejects_changed_app_or_release_authority() {
         fleet_name: "primary".parse().expect("Fleet name"),
         app: "toko".into(),
         finalized_release_build: &second_release,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: PLAN_DIGEST,
     };
     assert!(matches!(
         plan_fleet_install_session(changed_release),
         Err(FleetInstallSessionError::ConflictingAuthority { .. })
     ));
+
+    let changed_digest = PlanFleetInstallSessionRequest {
+        root: &root,
+        canonical_network_id: network,
+        fleet_name: "primary".parse().expect("Fleet name"),
+        app: "toko".into(),
+        finalized_release_build: &first_release,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    };
+    assert!(matches!(
+        plan_fleet_install_session(changed_digest),
+        Err(FleetInstallSessionError::ConflictingAuthority { .. })
+    ));
+}
+
+#[test]
+fn recovery_retains_original_finalized_decision_source_and_digest() {
+    let root = temp_dir("fleet-install-session-plan-authority");
+    let finalized = finalized_release(&root, [11; 32]);
+    let network = CanonicalNetworkId::ic_mainnet();
+    let release_build_id = finalized.record.release_build_id;
+    let session = plan_fleet_install_session(PlanFleetInstallSessionRequest {
+        root: &root,
+        canonical_network_id: network,
+        fleet_name: "primary".parse().expect("Fleet name"),
+        app: "toko".into(),
+        finalized_release_build: &finalized,
+        decision_release_build_id: Some(release_build_id),
+        fresh_fleet_plan_digest: PLAN_DIGEST,
+    })
+    .expect("plan finalized-source session");
+
+    let recovered = recover_fleet_install_session_authority(
+        &root,
+        network,
+        &session.fleet_name,
+        &session.fleet.app,
+    )
+    .expect("recover plan authority")
+    .expect("existing session");
+
+    assert_eq!(recovered.decision_release_build_id, Some(release_build_id));
+    assert_eq!(recovered.fresh_fleet_plan_digest, PLAN_DIGEST);
+    assert_eq!(
+        recovered.finalized_release_build.record.release_build_id,
+        release_build_id
+    );
 }
 
 #[cfg(unix)]
@@ -118,6 +179,8 @@ fn session_loader_rejects_noncanonical_and_symlinked_files() {
         fleet_name: "primary".parse().expect("Fleet name"),
         app: "toko".into(),
         finalized_release_build: &finalized,
+        decision_release_build_id: None,
+        fresh_fleet_plan_digest: PLAN_DIGEST,
     };
     let session = plan_fleet_install_session(request()).expect("plan session");
     let path = session_path(&root, network, &session.fleet_name);

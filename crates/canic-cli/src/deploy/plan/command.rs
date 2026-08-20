@@ -7,7 +7,7 @@
 use crate::{
     cli::{
         clap::{
-            flag_arg, parse_matches, path_option, render_usage, required_string,
+            flag_arg, parse_matches, path_option, render_usage, required_path, required_string,
             string_option_or_else, typed_option,
         },
         defaults::local_environment,
@@ -17,7 +17,7 @@ use crate::{
 };
 use std::{ffi::OsString, path::PathBuf};
 
-use canic_core::bootstrap::compiled::validate_app_name;
+use canic_core::{bootstrap::compiled::validate_app_name, ids::ReleaseBuildId};
 use canic_host::{
     canister_build::CanisterBuildProfile,
     release_set::{icp_root as resolve_icp_root, workspace_root as resolve_workspace_root},
@@ -28,15 +28,16 @@ pub(super) const REPORT_COMMAND: &str = "canic deploy plan";
 
 const FLEET_ARG: &str = "fleet";
 const APP_ARG: &str = "app";
+const FLEET_INPUT_ARG: &str = "fleet-input";
 const JSON_ARG: &str = "json";
 const OUT_ARG: &str = "out";
-const CONFIG_ARG: &str = "config";
-const BUILD_PROFILE_ARG: &str = "build-profile";
+const PROFILE_ARG: &str = "profile";
+const RELEASE_BUILD_ARG: &str = "release-build";
 
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
-  canic deploy plan demo-local --app demo
-  canic --environment ic deploy plan demo --app demo
+  canic deploy plan demo-local --app demo --fleet-input deployments/demo-local.toml
+  canic --environment ic deploy plan demo --app demo --fleet-input deployments/demo-ic.toml
 
 Read-only: reports deterministic local desired state without contacting the IC
 or authorizing mutation. Put the top-level --environment before deploy to select
@@ -47,10 +48,11 @@ pub(in crate::deploy) struct DeployPlanOptions {
     pub(in crate::deploy) fleet: String,
     pub(in crate::deploy) app: String,
     pub(in crate::deploy) environment: String,
+    pub(in crate::deploy) fleet_input: PathBuf,
     pub(in crate::deploy) json: bool,
     pub(in crate::deploy) out: Option<PathBuf>,
-    pub(in crate::deploy) config: Option<PathBuf>,
-    pub(in crate::deploy) build_profile: CanisterBuildProfile,
+    pub(in crate::deploy) profile: Option<CanisterBuildProfile>,
+    pub(in crate::deploy) release_build_id: Option<ReleaseBuildId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -74,11 +76,11 @@ impl DeployPlanOptions {
             fleet: required_string(&matches, FLEET_ARG),
             app,
             environment: string_option_or_else(&matches, "environment", local_environment),
+            fleet_input: required_path(&matches, FLEET_INPUT_ARG),
             json: matches.get_flag(JSON_ARG),
             out: path_option(&matches, OUT_ARG),
-            config: path_option(&matches, CONFIG_ARG),
-            build_profile: typed_option(&matches, BUILD_PROFILE_ARG)
-                .unwrap_or(CanisterBuildProfile::Release),
+            profile: typed_option(&matches, PROFILE_ARG),
+            release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
         })
     }
 }
@@ -98,13 +100,14 @@ pub(in crate::deploy) fn command() -> ClapCommand {
         .bin_name(REPORT_COMMAND)
         .about("Explain the deterministic deployment plan without mutation")
         .disable_help_flag(true)
-        .override_usage("canic deploy plan <fleet> --app <app>")
+        .override_usage("canic deploy plan <fleet> --app <app> --fleet-input <PATH>")
         .arg(fleet_arg())
         .arg(app_arg())
+        .arg(fleet_input_arg())
         .arg(json_arg())
         .arg(out_arg())
-        .arg(config_arg())
-        .arg(build_profile_arg())
+        .arg(profile_arg())
+        .arg(release_build_arg())
         .arg(internal_environment_arg())
         .after_help(DEPLOY_PLAN_HELP_AFTER)
 }
@@ -131,6 +134,15 @@ fn json_arg() -> clap::Arg {
         .help("Print JSON DeploymentPlanReport to stdout")
 }
 
+fn fleet_input_arg() -> clap::Arg {
+    value_arg(FLEET_INPUT_ARG)
+        .long(FLEET_INPUT_ARG)
+        .value_name("PATH")
+        .num_args(1)
+        .required(true)
+        .help("Operator-owned Fleet placement, admission, limit, and funding input TOML")
+}
+
 fn out_arg() -> clap::Arg {
     value_arg(OUT_ARG)
         .long(OUT_ARG)
@@ -139,21 +151,22 @@ fn out_arg() -> clap::Arg {
         .help("Write JSON DeploymentPlanReport to a new file")
 }
 
-fn config_arg() -> clap::Arg {
-    value_arg(CONFIG_ARG)
-        .long(CONFIG_ARG)
-        .value_name("path")
-        .num_args(1)
-        .help("App config path used to build the desired plan")
-}
-
-fn build_profile_arg() -> clap::Arg {
-    value_arg(BUILD_PROFILE_ARG)
-        .long(BUILD_PROFILE_ARG)
+fn profile_arg() -> clap::Arg {
+    value_arg(PROFILE_ARG)
+        .long(PROFILE_ARG)
         .value_name("debug|fast|release")
         .num_args(1)
         .value_parser(clap::value_parser!(CanisterBuildProfile))
-        .help("Expected canister wasm build profile")
+        .help("Canister wasm build profile; defaults to release")
+}
+
+fn release_build_arg() -> clap::Arg {
+    value_arg(RELEASE_BUILD_ARG)
+        .long(RELEASE_BUILD_ARG)
+        .value_name("ID")
+        .num_args(1)
+        .value_parser(clap::value_parser!(ReleaseBuildId))
+        .help("Use one exact finalized release build as the plan source")
 }
 
 pub(in crate::deploy) fn usage() -> String {

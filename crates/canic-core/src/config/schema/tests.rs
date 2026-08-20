@@ -6,7 +6,8 @@
 
 use super::*;
 use crate::{
-    cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
+    cdk::types::{Cycles, Principal},
+    domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
     model::auth::application_authorization::MAX_VERIFIED_APPLICATION_SCOPES,
 };
 use std::{
@@ -1026,9 +1027,17 @@ fn invalid_whitelist_principal_is_rejected() {
 }
 
 #[test]
-fn missing_whitelist_fails_closed() {
-    let cfg = ConfigModel::test_default();
-    let caller = Principal::from_slice(&[42; 29]);
+fn runtime_whitelist_seed_capacity_is_rejected_by_config_validation() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.app.whitelist = Some(Whitelist {
+        principals: (0..=crate::model::runtime_whitelist::MAX_RUNTIME_WHITELIST_PRINCIPALS)
+            .map(|index| {
+                let index = u16::try_from(index).expect("fixture index fits u16");
+                Principal::from_slice(&index.to_be_bytes()).to_text()
+            })
+            .collect(),
+    });
 
-    assert!(!cfg.is_whitelisted(&caller));
+    cfg.validate()
+        .expect_err("seed above runtime capacity must fail before build");
 }

@@ -247,6 +247,15 @@ fn collect_allocation_selections(
         }
     }
 
+    // Every declared non-root role may use the managed runtime-whitelist
+    // surface. Built-in roles and declared Roots never receive its allocation.
+    if built_in.is_none() && !capabilities.contains(&RoleCapabilityKey::Root) {
+        selections
+            .entry(StateAllocationKey::CoreRuntimeWhitelist)
+            .or_default()
+            .insert(SelectionProvenance::Capability(RoleCapabilityKey::Runtime));
+    }
+
     selections
 }
 

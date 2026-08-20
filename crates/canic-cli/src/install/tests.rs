@@ -21,12 +21,14 @@ fn install_defaults_to_root_target() {
     assert_eq!(options.icp, default_icp());
     assert_eq!(options.profile, None);
     assert_eq!(options.release_build_id, None);
+    assert_eq!(options.expected_plan_digest, None);
     assert_eq!(install.root_canister, "root");
     assert_eq!(install.root_build_target, "root");
     assert_eq!(install.icp_executable, default_icp());
     assert_eq!(install.icp_root, None);
     assert_eq!(install.build_profile, None);
     assert_eq!(install.release_build_id, None);
+    assert_eq!(install.expected_fresh_fleet_plan_digest, None);
     assert_eq!(
         install.fleet_install_input_path,
         Some(PathBuf::from("deployments/demo-local.toml"))
@@ -37,6 +39,42 @@ fn install_defaults_to_root_target() {
     );
     assert_eq!(install.fleet_name, "demo-local");
     assert_eq!(install.expected_app, Some("demo".to_string()));
+}
+
+#[test]
+fn install_accepts_exact_expected_plan_digest() {
+    let digest = "ab".repeat(32);
+    let options = InstallOptions::parse([
+        OsString::from("toko"),
+        OsString::from("demo"),
+        OsString::from("--expected-plan-digest"),
+        OsString::from(&digest),
+        OsString::from("--fleet-input"),
+        OsString::from("deployments/demo.toml"),
+    ])
+    .expect("parse expected plan digest");
+
+    assert_eq!(
+        options.expected_plan_digest.as_deref(),
+        Some(digest.as_str())
+    );
+}
+
+#[test]
+fn install_rejects_noncanonical_expected_plan_digest() {
+    for digest in ["ab".repeat(31), "AB".repeat(32), "gg".repeat(32)] {
+        let error = InstallOptions::parse([
+            OsString::from("toko"),
+            OsString::from("demo"),
+            OsString::from("--expected-plan-digest"),
+            OsString::from(digest),
+            OsString::from("--fleet-input"),
+            OsString::from("deployments/demo.toml"),
+        ])
+        .expect_err("noncanonical plan digest should fail");
+
+        std::assert_matches!(error, InstallCommandError::Usage(_));
+    }
 }
 
 // Ensure top-level dispatch can pass environment selection internally.
@@ -173,6 +211,7 @@ fn install_usage_explains_app_config() {
     assert!(text.contains("--profile"));
     assert!(text.contains("--release-build"));
     assert!(text.contains("--fleet-input"));
+    assert!(text.contains("--expected-plan-digest"));
     assert!(normalized.contains("fresh Fleet"));
     assert!(normalized.contains("App config"));
     assert!(normalized.contains("required operator-owned Fleet input"));

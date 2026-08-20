@@ -7,9 +7,20 @@ fn current_install_records_gates_before_activation_mutation() {
         .find("pub fn install_root(")
         .expect("install_root function exists");
     let install = &source[install_start..];
+    let fresh_preflight = source_section(
+        source,
+        "fn prepare_current_fresh_fleet_preflight(",
+        "fn install_current_fleet_infrastructure(",
+    );
+    assert_fresh_preflight_order(fresh_preflight);
     assert_before(
         install,
-        "resolve_current_fleet_install_input(",
+        "prepare_current_fresh_fleet_preflight(",
+        "current_install_build_inputs(",
+    );
+    assert_before(
+        install,
+        "current_install_build_inputs(",
         "prepare_install_deployment_truth(",
     );
     assert_before(
@@ -89,6 +100,39 @@ fn current_install_records_gates_before_activation_mutation() {
     assert!(
         root_install.contains("install_and_verify_fleet_subnet_roots("),
         "root wrapper must invoke the journalled multi-root install and verification workflow"
+    );
+}
+
+fn assert_fresh_preflight_order(preflight: &str) {
+    assert_before(
+        preflight,
+        "resolve_canonical_network_id_from_root(",
+        "resolve_current_fleet_install_input(",
+    );
+    assert_before(
+        preflight,
+        "resolve_current_fleet_install_input(",
+        "current_install_preflight_release_source(",
+    );
+    assert_before(
+        preflight,
+        "current_install_preflight_release_source(",
+        "compile_current_fresh_fleet_preflight(",
+    );
+    assert_before(
+        preflight,
+        "compile_current_fresh_fleet_preflight(",
+        "load_fresh_fleet_decision_authority(",
+    );
+    assert_before(
+        preflight,
+        "load_fresh_fleet_decision_authority(",
+        "compile_fresh_fleet_deployment_plan(",
+    );
+    assert_before(
+        preflight,
+        "compile_fresh_fleet_deployment_plan(",
+        "require_fresh_fleet_plan_digest(",
     );
 }
 

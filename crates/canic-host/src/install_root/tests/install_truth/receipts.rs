@@ -140,6 +140,8 @@ package = "worker"
         release_build_id: None,
         config_path: Some("apps/demo/canic.toml".to_string()),
         fleet_install_input_path: None,
+        expected_fresh_fleet_plan_digest: None,
+        admitted_fresh_fleet_plan_digest: None,
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -187,11 +189,18 @@ package = "worker"
 fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
     let (root, check) = demo_install_deployment_truth_check("canic-install-truth-pre-gate-phase");
     let execution_context = current_install_execution_context(&root, &root, "local");
+    let fresh_fleet_decision = crate::deployment_truth::FreshFleetInstallDecisionReceiptV1 {
+        plan_digest: "ab".repeat(32),
+        catalog: crate::fleet_install_plan::FreshFleetCatalogEvidenceV1::NotRequired {
+            network: "local".to_string(),
+        },
+    };
     let scope = InstallReceiptScope {
         icp_root: &root,
         fleet: sample_fleet_key(),
         check: &check,
         execution_context: Some(&execution_context),
+        fresh_fleet_decision: Some(&fresh_fleet_decision),
     };
 
     let path = write_completed_install_phase_receipt(
@@ -225,6 +234,10 @@ fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
     assert_eq!(receipt.role_phase_receipts.len(), 1);
     assert_eq!(receipt.role_phase_receipts[0].role, "root");
     assert_eq!(receipt.role_phase_receipts[0].phase, "build_artifacts");
+    assert_eq!(
+        receipt.fresh_fleet_decision.as_ref(),
+        Some(&fresh_fleet_decision)
+    );
     assert_eq!(
         receipt.role_phase_receipts[0].result,
         crate::deployment_truth::RolePhaseResultV1::Applied

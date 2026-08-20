@@ -220,9 +220,36 @@ Candid bytes. The read-only Toko baseline supplies 175 principals but no
 current Canic integration fixture. B2 is complete: the top-level environment
 reaches direct `deploy plan`, hidden/global disagreement rejects before
 dispatch, and missing or contradictory canonical target authority blocks
-before Fleet-catalog lookup. No Canister runtime, stable state, Candid or
-external effect changed. Held 0.106 B2 effects remain independent and
-unauthorized.
+before Fleet-catalog lookup. B3 is complete: direct planning now hard-cuts to
+the required install Fleet input, common profile and optional finalized
+release source, while one pure host compiler owns placement, admission,
+initial Component Group and positive-funding validation for both plan and
+install. Install resolves target, input and read-only release source before
+durable release-build allocation; invalid input/topology tests leave no
+release-build directory. B4 is complete: one canonical decision now binds
+exact source/artifact authority, placement, derived counts, per-category
+funding, maximum operator debit and strictly bounded balance evidence into a
+domain-separated SHA-256 digest. Planning renders that decision; install
+recompiles it before allocation and binds it through same-release session,
+persisted Fleet plan, deployment truth, completion/rejection receipts and
+resume comparison. Changed source, balance or expected digest fails before an
+effect begins. B5 is explicitly blocked: locked crates.io `ic-query 0.40.1`
+and read-only upstream `main` commit
+`3cceda805725e2c85d7129f1f51f42bacba1d249` still lack the accepted typed
+failed-load context and unknown-retryability result, so Canic has not replaced
+that boundary with a fork or error-string parser. B6 is complete. Memory ID 61
+now owns one bounded canonical runtime-whitelist record, managed role methods
+own Root-or-controller add/remove/status variants, configuration is fresh-seed
+input only and same-release restoration validates without reseeding. The real
+maximum schema remains 8,417 bytes. Focused unit, Candid, source and managed-
+artifact checks pass, and the bounded PocketIC journey proves seeding,
+controller/Root separation, response-loss exact retry, conflict denial,
+immediate removal, restoration and application-session separation. Independent
+B7 proof is complete; the read-only Toko checkout remains at
+`bf14a5d3d89be4335d3da2601e8a60128fde04df` with no Canic integration or
+CANIC-011/012/013 identifiers, which is the accepted exact downstream evidence
+blocker rather than authority to edit it. No external effect occurred. Held
+0.106 B2 effects remain independent and unauthorized.
 
 The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
@@ -738,13 +765,15 @@ Q6 current-state constraints are assigned to 0.109. The operation,
 physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
-terminal-disposition authorization exists. Continue scheduled 0.107 B3 from
-the accepted B1 contract and completed B2 target boundary: implement the
-Fleet-input-complete pure preflight and its pre-effect ordering evidence.
-The renumbered 0.108 root-funding B1 proof remains complete and ready for
-maintainer acceptance, but its production work waits for 0.107 closeout. Do
-not add a production pool contract, run any remote qualification effect or
-begin 0.109.
+terminal-disposition authorization exists. In 0.107, B2-B4, B6 and the
+independent B7 proof are complete. Wait for a committed or published upstream
+`ic-query` API carrying the accepted typed B5 failure context, then complete
+its propagation and focused evidence. Stop at 0.107 closeout-audit readiness;
+a human must request and accept the exact 0.107 audit before 0.108 production
+implementation begins. The renumbered 0.108 root-funding B1 proof remains
+complete and ready for maintainer acceptance, but its production work waits
+for that boundary. Do not add a production pool contract, run any remote
+qualification effect or begin 0.109.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

@@ -211,6 +211,8 @@ impl DeployTruthOptions {
             release_build_id: None,
             config_path: Some(format!("apps/{app}/canic.toml")),
             fleet_install_input_path: None,
+            expected_fresh_fleet_plan_digest: None,
+            admitted_fresh_fleet_plan_digest: None,
             expected_app: Some(app),
             interactive_config_selection: false,
             deployment_plan_override: None,

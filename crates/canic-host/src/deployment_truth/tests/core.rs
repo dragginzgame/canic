@@ -10,6 +10,7 @@ fn plan_round_trips_through_json() {
     let plan = DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: "plan-local-root".to_string(),
+        plan_digest: None,
         deployment_identity: sample_identity(),
         trust_domain: TrustDomainV1 {
             root_trust_anchor: Some("aaaaa-aa".to_string()),
@@ -124,6 +125,7 @@ fn receipt_diff_and_safety_report_support_not_evaluated_state() {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         operation_id: "operation-1".to_string(),
         plan_id: "plan-local-root".to_string(),
+        fresh_fleet_decision: None,
         execution_context: None,
         operation_status: DeploymentExecutionStatusV1::InProgress,
         started_at: "2026-05-21T00:00:00Z".to_string(),

@@ -15,6 +15,7 @@ pub mod icp_refill;
 pub mod intent;
 pub mod placement;
 pub mod replay;
+pub mod runtime_whitelist;
 pub mod state;
 
 use crate::InternalError;

@@ -6,10 +6,7 @@
 //! before any external effect.
 
 use crate::{
-    component_topology::{
-        PlannedFleetSubnetRootTopology, PlannedFleetSubnetRootTopologyInput,
-        plan_initial_fleet_topology,
-    },
+    component_topology::PlannedFleetSubnetRootTopology,
     durable_io::{
         RegularFileLockError, RegularFileReadError, create_new_bytes_with_parents,
         lock_regular_file_with_parents, read_optional_regular_bytes,
@@ -17,9 +14,11 @@ use crate::{
     fleet_install_plan::initial_placement_policy,
     fleet_install_plan::model::{
         FleetInstallPlan, FleetInstallPlanError, FleetInstallPlanRequest,
-        PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet,
+        FreshFleetPreflightEffectsV1, FreshFleetPreflightError, FreshFleetPreflightRequest,
+        FreshFleetSubnetRootPlanV1, PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet,
         PlannedCanisterCreationFunding, PlannedFleetCoordinator, PlannedFleetSubnetRoot,
     },
+    fleet_install_plan::preflight::compile_fresh_fleet_preflight,
     release_build::load_finalized_release_build,
     release_set::{FleetSubnetRootReleaseSetManifest, load_persisted_application_artifact_union},
 };
@@ -51,14 +50,19 @@ struct CompiledFleetInstallPlan {
 pub fn compile_and_persist_fleet_install_plan(
     request: FleetInstallPlanRequest<'_>,
 ) -> Result<PersistedFleetInstallPlan, FleetInstallPlanError> {
-    load_finalized_release_build(request.root, request.release_build_id)?;
+    let finalized = load_finalized_release_build(request.root, request.release_build_id)?;
     let topology = request.config.compile_component_topology()?;
     let union = load_persisted_application_artifact_union(
         request.root,
         &topology,
         request.release_build_id,
     )?;
-    let compiled = compile_plan(&request, union.digest, &union.union)?;
+    let compiled = compile_plan(
+        &request,
+        finalized.record.build_profile,
+        union.digest,
+        &union.union,
+    )?;
     let path = fleet_install_plan_path(request.root, &request.fleet, request.release_build_id);
     let lock_path = path.with_file_name(FLEET_INSTALL_PLAN_LOCK_FILE);
     let _lock = lock_plan(&lock_path)?;
@@ -190,89 +194,108 @@ pub fn load_persisted_fleet_install_plan(
 
 fn compile_plan(
     request: &FleetInstallPlanRequest<'_>,
+    build_profile: crate::canister_build::CanisterBuildProfile,
     union_digest: [u8; 32],
     union: &crate::release_set::ApplicationArtifactUnion,
 ) -> Result<CompiledFleetInstallPlan, FleetInstallPlanError> {
-    if request.config.app_id() != &request.fleet.app {
-        return Err(FleetInstallPlanError::AppMismatch {
-            configured_app: request.config.app_id().to_string(),
-            fleet_app: request.fleet.app.to_string(),
-        });
-    }
-    validate_coordinator(&request.coordinator)?;
-    let topology_inputs = request
-        .fleet_subnet_roots
-        .iter()
-        .map(|root| PlannedFleetSubnetRootTopologyInput {
-            placement_subnet: root.placement_subnet,
-            component_admissions: root.component_admissions.clone(),
-            limits: root.limits.clone(),
-        })
-        .collect();
-    let topology_plan = plan_initial_fleet_topology(request.config, topology_inputs)?;
+    let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: request.config,
+        app: request.fleet.app.as_str(),
+        fleet_name: &request.fleet_name,
+        coordinator: &request.coordinator,
+        fleet_subnet_roots: &request.fleet_subnet_roots,
+        build_profile,
+        release_build_id: Some(request.release_build_id),
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .map_err(fleet_install_plan_error)?;
 
-    let mut planned_roots = Vec::with_capacity(topology_plan.fleet_subnet_roots.len());
-    let mut root_release_sets = Vec::with_capacity(topology_plan.fleet_subnet_roots.len());
-    for topology_root in &topology_plan.fleet_subnet_roots {
-        let input = request
-            .fleet_subnet_roots
-            .iter()
-            .find(|input| input.placement_subnet == topology_root.placement_subnet)
-            .expect("validated topology root must come from one exact input");
-        validate_funding(
-            &format!("Fleet Subnet Root {}", topology_root.placement_subnet),
-            &input.root_creation_funding,
-        )?;
-        validate_funding(
-            &format!(
-                "Wasm Store for Fleet Subnet Root {}",
-                topology_root.placement_subnet
-            ),
-            &input.wasm_store_creation_funding,
-        )?;
+    let mut planned_roots = Vec::with_capacity(preflight.fleet_subnet_roots.len());
+    let mut root_release_sets = Vec::with_capacity(preflight.fleet_subnet_roots.len());
+    let mut topology_roots = Vec::with_capacity(preflight.fleet_subnet_roots.len());
+    for root in &preflight.fleet_subnet_roots {
+        let topology_root = fresh_topology_root(root);
         let manifest = FleetSubnetRootReleaseSetManifest::project_planned(
-            &topology_plan.component_topology,
-            topology_root,
+            &preflight.component_topology,
+            &topology_root,
             union,
         )?;
         let manifest_digest =
-            manifest.digest_planned(&topology_plan.component_topology, topology_root, union)?;
+            manifest.digest_planned(&preflight.component_topology, &topology_root, union)?;
         planned_roots.push(PlannedFleetSubnetRoot {
-            placement_subnet: topology_root.placement_subnet,
-            component_group_placements: input.component_group_placements.clone(),
-            component_admissions: topology_root.component_admissions.clone(),
-            component_topology_digest: topology_root.component_topology_digest,
+            placement_subnet: root.placement_subnet,
+            component_group_placements: root.component_group_placements.clone(),
+            component_admissions: root.component_admissions.clone(),
+            component_topology_digest: root.component_topology_digest,
             initial_release_set: FleetSubnetRootReleaseSet {
                 release_build_id: request.release_build_id,
                 manifest_digest,
             },
-            limits: topology_root.limits.clone(),
-            canister_pool_imports: input.canister_pool_imports.clone(),
-            root_creation_funding: input.root_creation_funding.clone(),
-            wasm_store_creation_funding: input.wasm_store_creation_funding.clone(),
+            limits: root.limits.clone(),
+            canister_pool_imports: root.canister_pool_imports.clone(),
+            root_creation_funding: root.root_creation_funding.clone(),
+            wasm_store_creation_funding: root.wasm_store_creation_funding.clone(),
         });
         root_release_sets.push(manifest);
+        topology_roots.push(topology_root);
     }
 
     let plan = FleetInstallPlan {
         fleet: request.fleet.clone(),
+        fresh_fleet_plan_digest: request.fresh_fleet_plan_digest.clone(),
         release_build_id: request.release_build_id,
         application_artifact_union_digest: union_digest,
         coordinator: request.coordinator.clone(),
         fleet_subnet_roots: planned_roots,
     };
-    validate_initial_component_group_assignments(request.config, &plan.fleet_subnet_roots)?;
     canonical_plan_bytes(
         &plan,
-        &topology_plan.component_topology,
+        &preflight.component_topology,
         request.config,
         union_digest,
     )?;
     Ok(CompiledFleetInstallPlan {
         plan,
-        topology_roots: topology_plan.fleet_subnet_roots,
+        topology_roots,
         root_release_sets,
     })
+}
+
+fn fleet_install_plan_error(error: FreshFleetPreflightError) -> FleetInstallPlanError {
+    match error {
+        FreshFleetPreflightError::AppMismatch {
+            configured_app,
+            requested_app,
+        } => FleetInstallPlanError::AppMismatch {
+            configured_app,
+            fleet_app: requested_app,
+        },
+        FreshFleetPreflightError::EffectsAlreadyStarted {
+            build_started,
+            workspace_mutation_started,
+            ic_mutation_started,
+        } => FleetInstallPlanError::EffectsAlreadyStarted {
+            build_started,
+            workspace_mutation_started,
+            ic_mutation_started,
+        },
+        FreshFleetPreflightError::AnonymousCoordinatorSubnet => {
+            FleetInstallPlanError::AnonymousCoordinatorSubnet
+        }
+        FreshFleetPreflightError::NonPositiveCreationFunding { owner } => {
+            FleetInstallPlanError::NonPositiveCreationFunding { owner }
+        }
+        FreshFleetPreflightError::MissingResolvedRoot { placement_subnet } => {
+            FleetInstallPlanError::MissingResolvedRoot { placement_subnet }
+        }
+        FreshFleetPreflightError::InvalidComponentGroupPlacementAssignments { reason } => {
+            invalid_assignments(reason)
+        }
+        FreshFleetPreflightError::CountDoesNotFitU32 { subject } => {
+            invalid_assignments(format!("{subject} count does not fit u32"))
+        }
+        FreshFleetPreflightError::Topology(error) => FleetInstallPlanError::Topology(error),
+    }
 }
 
 fn canonical_plan_bytes(
@@ -290,6 +313,9 @@ fn canonical_plan_bytes(
     }
     if plan.application_artifact_union_digest != union_digest {
         return Err(FleetInstallPlanError::ApplicationArtifactUnionDigestMismatch);
+    }
+    if !is_canonical_sha256(&plan.fresh_fleet_plan_digest) {
+        return Err(FleetInstallPlanError::InvalidFreshFleetPlanDigest);
     }
     validate_coordinator(&plan.coordinator)?;
     let mut previous = None;
@@ -329,11 +355,20 @@ fn canonical_plan_bytes(
     Ok(bytes)
 }
 
+fn is_canonical_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
 fn validate_initial_component_group_assignments(
     config: &ConfigModel,
     roots: &[PlannedFleetSubnetRoot],
 ) -> Result<(), FleetInstallPlanError> {
-    initial_placement_policy::validate_initial_component_group_assignments(config, roots)
+    let roots = roots.iter().map(fresh_root).collect::<Vec<_>>();
+    initial_placement_policy::validate_initial_component_group_assignments(config, &roots)
+        .map(|_| ())
         .map_err(|error| invalid_assignments(error.to_string()))
 }
 
@@ -344,6 +379,32 @@ fn invalid_assignments(reason: impl Into<String>) -> FleetInstallPlanError {
 }
 
 fn topology_root(root: &PlannedFleetSubnetRoot) -> PlannedFleetSubnetRootTopology {
+    PlannedFleetSubnetRootTopology {
+        placement_subnet: root.placement_subnet,
+        component_admissions: root.component_admissions.clone(),
+        component_topology_digest: root.component_topology_digest,
+        limits: root.limits.clone(),
+    }
+}
+
+fn fresh_root(root: &PlannedFleetSubnetRoot) -> FreshFleetSubnetRootPlanV1 {
+    FreshFleetSubnetRootPlanV1 {
+        placement_subnet: root.placement_subnet,
+        component_group_placements: root.component_group_placements.clone(),
+        component_admissions: root.component_admissions.clone(),
+        component_topology_digest: root.component_topology_digest,
+        limits: root.limits.clone(),
+        canister_pool_imports: root.canister_pool_imports.clone(),
+        root_creation_funding: root.root_creation_funding.clone(),
+        wasm_store_creation_funding: root.wasm_store_creation_funding.clone(),
+        initial_component_canisters: 0,
+        initial_pool_canisters: 0,
+        pool_canister_creations: 0,
+        remaining_pool_canisters: 0,
+    }
+}
+
+fn fresh_topology_root(root: &FreshFleetSubnetRootPlanV1) -> PlannedFleetSubnetRootTopology {
     PlannedFleetSubnetRootTopology {
         placement_subnet: root.placement_subnet,
         component_admissions: root.component_admissions.clone(),

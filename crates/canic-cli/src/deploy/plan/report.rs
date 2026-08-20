@@ -6,7 +6,9 @@
 
 use serde::Serialize;
 
-use canic_host::deployment_truth::DeploymentPlanV1;
+use canic_host::{
+    deployment_truth::DeploymentPlanV1, fleet_install_plan::FreshFleetDeploymentPlanV1,
+};
 
 pub(super) const REPORT_SCHEMA_VERSION: u16 = 1;
 pub(super) const SEVERITY_INFO: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Info;
@@ -33,6 +35,7 @@ pub(super) const SOURCE_DEPLOYMENT_PLAN_BUILDER: PlanDiagnosticSource =
     PlanDiagnosticSource::DeploymentPlanBuilder;
 pub(super) const SOURCE_APP_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::AppConfig;
 pub(super) const SOURCE_FLEET_CATALOG: PlanDiagnosticSource = PlanDiagnosticSource::FleetCatalog;
+pub(super) const SOURCE_FLEET_INPUT: PlanDiagnosticSource = PlanDiagnosticSource::FleetInput;
 pub(super) const SOURCE_LOCAL_OBSERVATION: PlanDiagnosticSource =
     PlanDiagnosticSource::LocalObservation;
 pub(super) const FUTURE_APPLY_PREVIEW_PHASE: ProposedOperationPhase =
@@ -58,10 +61,13 @@ pub(in crate::deploy) struct DeploymentPlanReport {
     pub(super) fleet: String,
     pub(super) app: String,
     pub(super) environment: String,
+    pub(super) fleet_input_path: String,
     pub(super) build_profile: String,
+    pub(super) release_build_id: Option<String>,
     pub(super) config_path: String,
     pub(super) status: PlanStatus,
     pub(super) comparison_status: ComparisonStatus,
+    pub(super) fresh_fleet_plan: Option<FreshFleetDeploymentPlanV1>,
     pub(super) plan: DeploymentPlanV1,
     pub(super) blockers: Vec<PlanDiagnostic>,
     pub(super) warnings: Vec<PlanDiagnostic>,
@@ -168,6 +174,7 @@ pub(super) enum PlanDiagnosticSource {
     DeploymentPlanBuilder,
     AppConfig,
     FleetCatalog,
+    FleetInput,
     LocalObservation,
 }
 
@@ -180,6 +187,7 @@ impl PlanDiagnosticSource {
             Self::DeploymentPlanBuilder => "deployment_plan_builder",
             Self::AppConfig => "app_config",
             Self::FleetCatalog => "fleet_catalog",
+            Self::FleetInput => "fleet_input",
             Self::LocalObservation => "local_observation",
         }
     }

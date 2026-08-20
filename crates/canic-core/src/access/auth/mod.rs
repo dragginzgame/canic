@@ -161,8 +161,13 @@ pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
     predicates::is_controller(caller).await
 }
 
-/// Require that the caller appears in the configured whitelist.
-/// Missing whitelist configuration fails closed.
+/// Require the actual caller to be a controller or the exact stable Root.
+pub async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_controller_or_root(caller).await
+}
+
+/// Require that the caller appears in the canonical runtime whitelist.
+/// Missing or unavailable stable authority fails closed.
 pub async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
     predicates::is_whitelisted(caller).await
 }

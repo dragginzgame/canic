@@ -1,4 +1,4 @@
-use candid::{CandidType, Decode, Deserialize, Encode};
+use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use canic::{
     Error,
     dto::{
@@ -15,6 +15,11 @@ use canic::{
         metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
         page::{Page, PageRequest},
         role::MetricsStatusRequest,
+        runtime_whitelist::{
+            RuntimeWhitelistCommand, RuntimeWhitelistMutationOutcome,
+            RuntimeWhitelistMutationRequest, RuntimeWhitelistMutationResponse,
+            RuntimeWhitelistStatusResponse,
+        },
     },
     ids::{CanisterRole, FleetKey, cap},
     protocol,
@@ -119,6 +124,26 @@ enum CanisterStatusResponse {
     Metrics(Page<MetricEntry>),
 }
 
+#[derive(CandidType)]
+enum RuntimeWhitelistManagedCommand {
+    RuntimeWhitelist(RuntimeWhitelistCommand),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RuntimeWhitelistManagedCommandResponse {
+    RuntimeWhitelist(RuntimeWhitelistMutationResponse),
+}
+
+#[derive(CandidType)]
+enum RuntimeWhitelistManagedStatusRequest {
+    RuntimeWhitelist(PageRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RuntimeWhitelistManagedStatusResponse {
+    RuntimeWhitelist(RuntimeWhitelistStatusResponse),
+}
+
 #[derive(CandidType, Clone, Copy)]
 enum LocalAuthorizationDenialProbe {
     Anonymous,
@@ -221,6 +246,135 @@ fn pem_backed_native_agent_prepares_retrieves_and_presents_delegated_token() {
         establish_request,
     ));
     drop(runtime);
+    drop(fixture);
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ordered PocketIC journey proves runtime-whitelist authority and recovery"
+)]
+fn runtime_whitelist_is_durable_bounded_and_separate_from_application_sessions() {
+    let fixture = setup_fresh_active_component_registry();
+    let target = fixture.verifier.canister_id;
+    let root = fixture.root;
+    let controller = Principal::from_slice(&[0x61; 29]);
+    let unauthorized = Principal::from_slice(&[0x62; 29]);
+    let seeded = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
+        .expect("frozen whitelist fixture principal");
+
+    let initial = runtime_whitelist_status_as(&fixture, target, root).expect("initial Root status");
+    assert_eq!(initial.principals.entries, vec![seeded]);
+    assert_eq!(initial.principals.total, 1);
+    assert_eq!(initial.revision, 0);
+    assert_eq!(initial.maximum_principals, 256);
+    assert_eq!(runtime_whitelist_probe_as(&fixture, target, seeded), Ok(()));
+    assert!(
+        generic_application_subject_as(&fixture, target, seeded).is_err(),
+        "runtime whitelist membership must not create a 0.105 application session"
+    );
+
+    fixture
+        .pic()
+        .set_controllers(target, Some(root), vec![controller])
+        .expect("move management authority to the independent controller fixture");
+    runtime_whitelist_status_as(&fixture, target, root)
+        .expect("stable Root binding must retain whitelist inspection authority");
+    runtime_whitelist_status_as(&fixture, target, controller)
+        .expect("current controller must have whitelist inspection authority");
+    assert_eq!(
+        runtime_whitelist_status_as(&fixture, target, unauthorized)
+            .expect_err("unrelated caller must not inspect membership")
+            .code(),
+        canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+    );
+
+    let remove = RuntimeWhitelistCommand::Remove(RuntimeWhitelistMutationRequest {
+        principal: seeded,
+        expected_revision: 0,
+        operation_id: [0x71; 32],
+    });
+    let removed = runtime_whitelist_command_as(&fixture, target, root, remove.clone())
+        .expect("stable Root removes the seeded principal");
+    assert_eq!(removed.outcome, RuntimeWhitelistMutationOutcome::Removed);
+    assert_eq!(removed.revision, 1);
+    assert_eq!(
+        runtime_whitelist_command_as(&fixture, target, root, remove.clone())
+            .expect("response-loss retry returns the exact accepted result"),
+        removed
+    );
+    let after_remove =
+        runtime_whitelist_status_as(&fixture, target, root).expect("status after removal");
+    assert!(after_remove.principals.entries.is_empty());
+    assert_eq!(after_remove.principals.total, 0);
+    assert!(runtime_whitelist_probe_as(&fixture, target, seeded).is_err());
+
+    let conflicting_reuse = RuntimeWhitelistCommand::Add(RuntimeWhitelistMutationRequest {
+        principal: seeded,
+        expected_revision: 1,
+        operation_id: [0x71; 32],
+    });
+    assert_eq!(
+        runtime_whitelist_command_as(&fixture, target, root, conflicting_reuse)
+            .expect_err("operation ID reuse for another request must reject")
+            .code(),
+        canic::diagnostics::codes::REQUEST_CONFLICT.raw_code()
+    );
+    let stale_revision = RuntimeWhitelistCommand::Add(RuntimeWhitelistMutationRequest {
+        principal: seeded,
+        expected_revision: 0,
+        operation_id: [0x72; 32],
+    });
+    assert_eq!(
+        runtime_whitelist_command_as(&fixture, target, root, stale_revision)
+            .expect_err("stale revision must reject")
+            .code(),
+        canic::diagnostics::codes::VERSION_CONFLICT.raw_code()
+    );
+    assert_eq!(
+        runtime_whitelist_status_as(&fixture, target, root)
+            .expect("rejections leave state readable")
+            .revision,
+        1
+    );
+
+    fixture
+        .pic()
+        .set_controllers(target, Some(controller), vec![root])
+        .expect("return management authority to the Fleet Root");
+    fixture
+        .pic()
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture
+        .pic()
+        .upgrade_canister(target, fixture.verifier_wasm(), upgrade_args(), Some(root))
+        .expect("same-release upgrade restores runtime-whitelist authority");
+
+    let restored =
+        runtime_whitelist_status_as(&fixture, target, root).expect("restored Root status");
+    assert_eq!(restored.revision, 1);
+    assert!(restored.principals.entries.is_empty());
+    assert_eq!(
+        runtime_whitelist_command_as(&fixture, target, root, remove)
+            .expect("retained exact operation survives restoration"),
+        removed
+    );
+
+    let added = runtime_whitelist_command_as(
+        &fixture,
+        target,
+        root,
+        RuntimeWhitelistCommand::Add(RuntimeWhitelistMutationRequest {
+            principal: seeded,
+            expected_revision: 1,
+            operation_id: [0x73; 32],
+        }),
+    )
+    .expect("Root re-adds the principal without rebuilding");
+    assert_eq!(added.outcome, RuntimeWhitelistMutationOutcome::Added);
+    assert_eq!(added.revision, 2);
+    assert_eq!(runtime_whitelist_probe_as(&fixture, target, seeded), Ok(()));
+    assert_eq!(root_application_session_audit(&fixture).sessions.total, 0);
     drop(fixture);
 }
 
@@ -531,6 +685,59 @@ fn generic_application_subject_as(
     fixture
         .pic()
         .query_candid_as_or_panic(canister_id, caller, "issuer_application_subject", ())
+}
+
+fn runtime_whitelist_command_as(
+    fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
+    canister_id: candid::Principal,
+    caller: candid::Principal,
+    command: RuntimeWhitelistCommand,
+) -> Result<RuntimeWhitelistMutationResponse, Error> {
+    let response: Result<RuntimeWhitelistManagedCommandResponse, Error> =
+        fixture.pic().update_candid_as_or_panic(
+            canister_id,
+            caller,
+            protocol::CANIC_COMMAND,
+            (RuntimeWhitelistManagedCommand::RuntimeWhitelist(command),),
+        );
+    response.map(|response| match response {
+        RuntimeWhitelistManagedCommandResponse::RuntimeWhitelist(response) => response,
+    })
+}
+
+fn runtime_whitelist_status_as(
+    fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
+    canister_id: candid::Principal,
+    caller: candid::Principal,
+) -> Result<RuntimeWhitelistStatusResponse, Error> {
+    let response: Result<RuntimeWhitelistManagedStatusResponse, Error> =
+        fixture.pic().query_candid_as_or_panic(
+            canister_id,
+            caller,
+            protocol::CANIC_STATUS,
+            (RuntimeWhitelistManagedStatusRequest::RuntimeWhitelist(
+                PageRequest {
+                    offset: 0,
+                    limit: u64::MAX,
+                },
+            ),),
+        );
+    response.map(|response| match response {
+        RuntimeWhitelistManagedStatusResponse::RuntimeWhitelist(response) => response,
+    })
+}
+
+fn runtime_whitelist_probe_as(
+    fixture: &canic_testing_internal::pic::ActiveComponentRegistryFixture,
+    canister_id: candid::Principal,
+    caller: candid::Principal,
+) -> Result<(), Error> {
+    fixture.pic().query_candid_as_or_panic(
+        canister_id,
+        caller,
+        "issuer_runtime_whitelist_probe",
+        (),
+    )
 }
 
 #[test]

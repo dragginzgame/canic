@@ -110,6 +110,7 @@ pub fn build_local_deployment_plan_at_root(
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: local_plan_id(request),
+        plan_digest: None,
         deployment_identity: identity,
         trust_domain: TrustDomainV1 {
             root_trust_anchor: root_canister_id,

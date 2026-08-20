@@ -18,6 +18,7 @@ use canic_core::{
 use flate2::{Compression, GzBuilder};
 
 use crate::{
+    canister_build::CanisterBuildProfile,
     component_topology::RootComponentAdmissionInput,
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     release_set::{
@@ -192,6 +193,8 @@ fn request<'a>(
         root,
         config,
         fleet,
+        fleet_name: "demo-local".parse().expect("Fleet name"),
+        fresh_fleet_plan_digest: "ab".repeat(32),
         release_build_id,
         coordinator: coordinator(),
         fleet_subnet_roots: vec![
@@ -199,6 +202,255 @@ fn request<'a>(
             root_input(6, vec![admission("alpha", 1)]),
         ],
     }
+}
+
+#[test]
+fn fresh_fleet_preflight_canonicalizes_roots_before_any_effect() {
+    let config = config();
+    let coordinator = coordinator();
+    let roots = vec![
+        root_input(7, vec![admission("beta", 1), admission("alpha", 1)]),
+        root_input(6, vec![admission("alpha", 1)]),
+    ];
+    let fleet_name = "demo-local".parse().expect("Fleet name");
+
+    let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: &config,
+        app: "demo",
+        fleet_name: &fleet_name,
+        coordinator: &coordinator,
+        fleet_subnet_roots: &roots,
+        build_profile: CanisterBuildProfile::Release,
+        release_build_id: None,
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .expect("compile fresh-Fleet preflight");
+
+    assert_eq!(preflight.schema_version, 1);
+    assert_eq!(preflight.app, "demo");
+    assert_eq!(preflight.fleet_name, fleet_name);
+    assert!(preflight.effects.no_effects_started());
+    assert_eq!(
+        preflight
+            .fleet_subnet_roots
+            .iter()
+            .map(|root| root.placement_subnet)
+            .collect::<Vec<_>>(),
+        vec![subnet(6), subnet(7)]
+    );
+}
+
+#[test]
+fn fresh_fleet_preflight_rejects_any_started_effect() {
+    let config = config();
+    let coordinator = coordinator();
+    let roots = vec![root_input(
+        6,
+        vec![admission("alpha", 2), admission("beta", 1)],
+    )];
+    let fleet_name = "demo-local".parse().expect("Fleet name");
+
+    let error = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: &config,
+        app: "demo",
+        fleet_name: &fleet_name,
+        coordinator: &coordinator,
+        fleet_subnet_roots: &roots,
+        build_profile: CanisterBuildProfile::Release,
+        release_build_id: None,
+        effects: FreshFleetPreflightEffectsV1 {
+            build_started: false,
+            workspace_mutation_started: true,
+            ic_mutation_started: false,
+        },
+    })
+    .expect_err("started workspace mutation must reject");
+
+    assert!(matches!(
+        error,
+        FreshFleetPreflightError::EffectsAlreadyStarted {
+            workspace_mutation_started: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn fresh_fleet_preflight_rejects_incomplete_group_placement() {
+    let config = group_config();
+    let coordinator = coordinator();
+    let mut first = root_input(6, vec![admission("alpha", 1), admission("beta", 1)]);
+    first.component_group_placements = vec![group_assignment(0)];
+    let second = root_input(7, vec![admission("alpha", 1), admission("beta", 1)]);
+    let roots = vec![first, second];
+    let fleet_name = "demo-local".parse().expect("Fleet name");
+
+    let error = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: &config,
+        app: "demo",
+        fleet_name: &fleet_name,
+        coordinator: &coordinator,
+        fleet_subnet_roots: &roots,
+        build_profile: CanisterBuildProfile::Release,
+        release_build_id: None,
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .expect_err("incomplete initial placement must reject");
+
+    assert!(matches!(
+        error,
+        FreshFleetPreflightError::InvalidComponentGroupPlacementAssignments { .. }
+    ));
+}
+
+fn complete_group_preflight() -> FreshFleetPreflightV1 {
+    let config = group_config();
+    let coordinator = PlannedFleetCoordinator {
+        coordinator_subnet: subnet(4),
+        creation_funding: PlannedCanisterCreationFunding::Cycles { cycles: 100 },
+    };
+    let mut first = root_input(6, vec![admission("alpha", 1), admission("beta", 1)]);
+    first.component_group_placements = vec![group_assignment(0)];
+    first.root_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 200 };
+    first.wasm_store_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 300 };
+    first.limits.canister_pool.canister_cycles = Cycles::new(50);
+    let mut second = root_input(7, vec![admission("alpha", 1), admission("beta", 1)]);
+    second.component_group_placements = vec![group_assignment(1)];
+    second.root_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 200 };
+    second.wasm_store_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 300 };
+    second.limits.canister_pool.canister_cycles = Cycles::new(50);
+    let fleet_name = "demo-local".parse().expect("Fleet name");
+
+    compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: &config,
+        app: "demo",
+        fleet_name: &fleet_name,
+        coordinator: &coordinator,
+        fleet_subnet_roots: &[second, first],
+        build_profile: CanisterBuildProfile::Release,
+        release_build_id: None,
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .expect("complete group preflight")
+}
+
+fn decision_authority(balance: u128) -> FreshFleetDecisionAuthorityV1 {
+    FreshFleetDecisionAuthorityV1 {
+        app_config_sha256: "a".repeat(64),
+        requested_environment: "local".to_string(),
+        canonical_network_id: "0".repeat(64).parse().expect("canonical network ID"),
+        fleet_input_schema_version: 1,
+        fleet_input_sha256: "b".repeat(64),
+        release_source: FreshFleetReleaseSourceV1::Workspace {
+            builder_version: env!("CARGO_PKG_VERSION").to_string(),
+            cargo_lock_sha256: "c".repeat(64),
+            source_snapshot_sha256: "d".repeat(64),
+            expected_artifacts: vec![
+                FreshFleetExpectedArtifactV1 {
+                    role: "fleet_coordinator".to_string(),
+                    package: "canic-fleet-coordinator".to_string(),
+                },
+                FreshFleetExpectedArtifactV1 {
+                    role: "root".to_string(),
+                    package: "root".to_string(),
+                },
+                FreshFleetExpectedArtifactV1 {
+                    role: "wasm_store".to_string(),
+                    package: "canic-wasm-store".to_string(),
+                },
+            ],
+        },
+        catalog: FreshFleetCatalogEvidenceV1::NotRequired {
+            network: "local".to_string(),
+        },
+        operator: FreshFleetOperatorFundingEvidenceV1 {
+            principal: subnet(9).as_principal().to_text(),
+            funding_account: "local-replica:default".to_string(),
+            balance: PlannedCanisterCreationFunding::Cycles { cycles: balance },
+            source: "test_fixture".to_string(),
+            observed_at_unix_secs: 1_787_200_000,
+            valid_until_unix_secs: 4_102_444_800,
+            balance_fresh: true,
+        },
+    }
+}
+
+#[test]
+fn complete_decision_has_checked_counts_funding_and_canonical_digest() {
+    let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: complete_group_preflight(),
+        authority: decision_authority(1_100),
+    })
+    .expect("complete deployment decision");
+
+    assert_eq!(plan.schema_version, 1);
+    assert_eq!(plan.counts.coordinator_canisters, 1);
+    assert_eq!(plan.counts.root_canisters, 2);
+    assert_eq!(plan.counts.wasm_store_canisters, 2);
+    assert_eq!(plan.counts.component_canisters, 4);
+    assert_eq!(plan.counts.ready_pool_canisters, 0);
+    assert_eq!(plan.counts.role_canisters, 9);
+    assert_eq!(plan.counts.total_canisters, 9);
+    assert_eq!(
+        plan.maximum_operator_debit,
+        PlannedCanisterCreationFunding::Cycles { cycles: 1_100 }
+    );
+    assert_eq!(plan.plan_digest.len(), 64);
+    assert!(
+        plan.plan_digest
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    );
+    assert_eq!(
+        plan,
+        compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+            preflight: complete_group_preflight(),
+            authority: decision_authority(1_100),
+        })
+        .expect("repeat exact decision")
+    );
+    assert_eq!(
+        plan.funding_requirements
+            .iter()
+            .filter(|requirement| requirement.payer == FreshFleetFundingPayerV1::FleetSubnetRoot)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn complete_decision_rejects_insufficient_or_changed_authority() {
+    let insufficient = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: complete_group_preflight(),
+        authority: decision_authority(1_099),
+    })
+    .expect_err("insufficient balance must block");
+    assert!(matches!(
+        insufficient,
+        FreshFleetDeploymentPlanError::InsufficientOperatorBalance
+    ));
+
+    let mut stale_authority = decision_authority(1_100);
+    stale_authority.operator.balance_fresh = false;
+    assert!(matches!(
+        compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+            preflight: complete_group_preflight(),
+            authority: stale_authority,
+        }),
+        Err(FreshFleetDeploymentPlanError::StaleOperatorBalance)
+    ));
+
+    let baseline = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: complete_group_preflight(),
+        authority: decision_authority(1_100),
+    })
+    .expect("baseline decision");
+    let changed = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: complete_group_preflight(),
+        authority: decision_authority(1_101),
+    })
+    .expect("changed observation remains sufficient");
+    assert_ne!(baseline.plan_digest, changed.plan_digest);
 }
 
 #[test]
@@ -224,6 +476,7 @@ fn exact_multi_root_plan_and_manifests_are_immutable_and_idempotent() {
     .expect("repeat exact plan");
 
     assert_eq!(repeated, persisted);
+    assert_eq!(persisted.plan.fresh_fleet_plan_digest, "ab".repeat(32));
     fs::remove_file(&persisted.path).expect("simulate interruption before plan publication");
     assert_eq!(
         compile_and_persist_fleet_install_plan(request(

@@ -145,6 +145,7 @@ fn persisted_plan(root: &Path) -> PersistedFleetInstallPlan {
                 },
                 app: AppId::from("demo"),
             },
+            fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id,
             application_artifact_union_digest: [3; 32],
             coordinator: PlannedFleetCoordinator {

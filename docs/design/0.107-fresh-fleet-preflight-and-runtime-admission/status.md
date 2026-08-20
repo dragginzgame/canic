@@ -5,8 +5,9 @@ Date: 2026-08-20
 ## Status
 
 - State: accepted and scheduled as application-safety/estate step 5.
-- Runtime impact: B2 changes only the host CLI planning boundary; no Canister
-  runtime, stable state, Candid or external effect changes.
+- Runtime impact: B2-B4 change only the host CLI/planning and pre-effect install
+  boundary; no Canister runtime, stable state, Candid or external effect
+  changes.
 - Predecessor: accepted repository-local 0.106 B1 baseline. The separately
   authorized 0.106 B2 external evidence does not gate this line.
 - Successors: 0.108 Coordinator-backed root funding retains its passing B1
@@ -27,11 +28,11 @@ Design: [Fresh-Fleet preflight and runtime admission](0.107-design.md)
 | --- | --- | --- | --- | --- |
 | B1 | Exact baseline and contract | Toko traceability, current planner/install/whitelist/upstream inventories, bounds and exact surface contract | source/fixture inventory and explicit acceptance | Accepted 2026-08-20 |
 | B2 | Target-correct planning | direct plan-leaf environment forwarding and mismatch rejection | CLI parse/forwarding/help tests | Complete |
-| B3 | Fleet-input-complete pure preflight | shared compiler, no-effect ordering and fresh-Fleet blockers | host plan/install ordering and fixture tests | Pending |
-| B4 | Complete evidence and digest binding | placement, counts, funding, balance, output and install-receipt parity | parity, insufficient-funds and receipt tests | Pending |
-| B5 | Structured catalog inconsistency | Registry version/provenance/cache/subject/retry/effect propagation and upstream update if needed | typed collector/host/CLI tests | Pending |
-| B6 | Durable runtime whitelist | seed/restore, bounds, add/remove/revision/digest/replay and config hard cut | core/facade/restoration tests | Pending |
-| B7 | Operator proof and closeout | command/status UX, adversarial/recovery journeys, generic fixture, downstream read-only rerun and residue cleanup | targeted package and bounded PocketIC checks | Pending |
+| B3 | Fleet-input-complete pure preflight | shared compiler, no-effect ordering and fresh-Fleet blockers | host plan/install ordering and fixture tests | Complete |
+| B4 | Complete evidence and digest binding | placement, counts, funding, balance, output and install-receipt parity | parity, insufficient-funds and receipt tests | Complete |
+| B5 | Structured catalog inconsistency | Registry version/provenance/cache/subject/retry/effect propagation and upstream update if needed | typed collector/host/CLI tests | Blocked on upstream typed API |
+| B6 | Durable runtime whitelist | seed/restore, bounds, add/remove/revision/digest/replay and config hard cut | core/facade/restoration tests | Complete |
+| B7 | Operator proof and closeout | command/status UX, adversarial/recovery journeys, generic fixture, downstream read-only rerun and residue cleanup | targeted package and bounded PocketIC checks | Independent proof complete; closeout held by B5 |
 
 These are coherent outcome batches, not preassigned patch releases.
 
@@ -85,6 +86,123 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   Canister runtime, stable state, Candid, external Canister or sibling
   repository changed.
 
+## B3 Result
+
+- Direct `deploy plan` now requires the same `--fleet-input` document as
+  install, uses the common `--profile` spelling, accepts the optional exact
+  finalized `--release-build` identity and hard-cuts its old `--config` and
+  `--build-profile` options without aliases.
+- One pure `canic-host` compiler validates the canonical App/Fleet identity,
+  resolved Coordinator/root placement, admissions, Component Group
+  assignments, limits and positive creation funding. Its named output carries
+  the resolved build profile/release source and admits only
+  `build_started = workspace_mutation_started = ic_mutation_started = false`.
+- Both direct planning and fresh installation call that compiler. Installation
+  resolves canonical target authority, Fleet input and an existing
+  session/finalized or workspace release source before release-build
+  allocation. The later immutable Fleet-plan compiler reuses the same
+  preflight rather than retaining a second topology/funding validator.
+- Mainnet preflight reads only existing validated catalog evidence: it makes no
+  network call and does not refresh or publish a cache. B5 still owns the
+  structured live collector/provenance outcome; missing cache authority remains
+  a blocker in the interim.
+- Invalid Fleet schema and invalid Component admissions both reject in the
+  Planning phase before `.canic/release-builds` exists. Focused pure-compiler,
+  plan-report, install-ordering and no-allocation tests pass.
+- B3 does not yet claim the complete counts, balance, maximum debit or canonical
+  plan digest. Those decision-bearing facts and their receipt binding remain
+  B4. No Canister runtime, stable state, Candid, external Canister or sibling
+  repository changed.
+
+## B4 Result
+
+- One canonical schema-1 decision now contains exact target, Fleet input,
+  workspace or finalized release authority, expected artifact set, catalog
+  evidence, placement, per-category funding, derived Canister counts and
+  bounded operator-balance evidence. Missing, stale, insufficient or changed
+  authority rejects instead of becoming a warning.
+- The domain-separated SHA-256 plan digest is compiled from the compact
+  canonical decision payload. Workspace release authority hashes the selected
+  source/build inputs while excluding plan delivery and generated output, so
+  writing a report cannot change its own decision identity.
+- Direct planning renders the exact digest, maximum operator debit, balance
+  validity, counts, root placement/pool summary and funding categories in text
+  and JSON. Install recompiles the decision before release-build allocation;
+  an optional exact expected digest and changed balance or source evidence fail
+  in Planning before an effect begins.
+- Same-release install sessions retain the original workspace-versus-finalized
+  decision source and digest. The persisted Fleet plan, deployment truth,
+  completion receipt, known replica rejection receipt and resume comparison
+  all bind that digest; conflicting retry or recovery authority fails closed.
+- Focused validation passes 35 host Fleet-input/plan/session tests, three known
+  rejection-receipt tests, the install parity/truth/resume cases, 15 CLI install
+  tests, 23 direct-plan tests, the workspace-source exclusion case and
+  warning-denied host/CLI Clippy.
+- No Canister runtime, stable state, Candid, external Canister or sibling
+  repository changed. B5 still owns live catalog collection and complete typed
+  inconsistency provenance.
+
+## B5 External Gate
+
+- The exact locked production graph still resolves crates.io `ic-query 0.40.1`.
+  Its `SubnetCatalogRetryability` remains the closed `Retryable` /
+  `NotRetryable` pair, and failed loads still return only
+  `SubnetCatalogHostError` rather than a typed failure carrying cache stage,
+  known Registry version and unknown retryability.
+- Read-only upstream `main` at
+  `3cceda805725e2c85d7129f1f51f42bacba1d249` has the same limitation: it has
+  no `Unknown` retry classification and no `CatalogLoadFailure` result.
+- B5 is therefore blocked on a committed or published upstream typed API. Canic
+  did not fork `ic-query`, parse error text or mutate an external repository to
+  manufacture the missing provenance. B5 and minor closeout remain open.
+
+## B6 Result
+
+- Memory ID 61 now owns one schema-1 stable record containing at most 256
+  sorted unique principals, a revision, the canonical membership digest and
+  one retained exact-operation result. The real maximum record remains exactly
+  8,417 bytes; the 128-entry status and mutation request remain 4,072 and 101
+  Candid bytes.
+- Fresh managed non-root lifecycle synchronously sorts, deduplicates and seeds
+  that record from validated App configuration. Same-release post-upgrade
+  validates only the retained record and never reseeds, merges or repairs it.
+  Root, Coordinator, Store and standalone-local specialized surfaces do not
+  expose the variants.
+- One pure policy owns zero-ID, revision, capacity and operation-conflict
+  rejection; checked revision advance; idempotent add/remove; exact response-
+  loss retry; canonical hashing; and corruption rejection including a retained
+  request-hash mismatch. Rejected decisions cannot reach the atomic complete-
+  record replacement.
+- Managed `canic_command` and `canic_status` add only the frozen
+  `RuntimeWhitelist` variants. They read the transport caller once and complete
+  controller-first, exact-stable-Root authorization before facade state access.
+  `caller::is_whitelisted()` now reads only this stable authority; compiled
+  configuration is seed input and 0.105 application sessions remain separate.
+- Focused unit, conversion, role-allocation, source-boundary and Candid checks
+  pass. The managed fixture compiles, and one bounded PocketIC journey proves
+  compiled seeding, independent controller and Root authorization, unrelated-
+  caller denial, response-loss exact retry, conflict rejection, immediate
+  removal, same-release restoration without reseeding, re-addition without a
+  rebuild and zero application-session creation.
+
+## B7 Independent Result
+
+- Extracted managed Candid contains the bounded command/status variants beneath
+  the existing two method identities. Current Root, Coordinator, Store and
+  canonically rebuilt standalone-local artifacts contain no runtime-whitelist
+  type or selector.
+- The generic fixture and bounded PocketIC journey cover authorized Root and
+  controller administration, unrelated-caller denial, immediate access
+  removal, response-loss replay, conflicts, restoration and application-
+  session separation. Focused warning-denied Clippy passes for the owning core,
+  facade, fixture and test target.
+- Read-only Toko remains clean `main` at
+  `bf14a5d3d89be4335d3da2601e8a60128fde04df`, with no Canic integration or
+  CANIC-011/012/013 identifiers. Acceptance criterion 10 permits recording
+  this exact external evidence blocker; no downstream file was changed.
+- Independent B7 proof is complete. Its final closeout step cannot complete
+  while B5 remains blocked, and the minor is not accepted or closed.
+
 ## Feedback Traceability
 
 | Feedback | Owning batches | Closeout proof |
@@ -95,6 +213,9 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
 
 ## Next Authorized Action
 
-Begin B3's Fleet-input-complete pure preflight from the accepted B1 contract
-and completed target-correct B2 boundary. Keep 0.106 B2's external effects
-held pending their separate exact authorization.
+Wait for a committed or published upstream `ic-query` API that preserves the
+accepted typed failed-load context and unknown retryability. Then complete B5
+propagation and its focused tests, reconcile B7 against that result and stop at
+0.107 closeout-audit readiness. A human must request and accept the exact 0.107
+closeout audit before any 0.108 production implementation begins. Keep 0.106
+B2's external effects held pending their separate exact authorization.

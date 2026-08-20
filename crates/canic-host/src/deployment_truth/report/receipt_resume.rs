@@ -251,6 +251,23 @@ fn validate_receipt_identity(
             Some("receipt.plan_id".to_string()),
         ));
     }
+    if let Some(expected) = plan.plan_digest.as_ref() {
+        let observed = receipt
+            .fresh_fleet_decision
+            .as_ref()
+            .map(|decision| decision.plan_digest.as_str());
+        if observed != Some(expected.as_str()) {
+            hard_failures.push(finding(
+                RECEIPT_PLAN_MISMATCH_CODE,
+                format!(
+                    "receipt fresh-Fleet digest {} does not match current plan {expected}",
+                    observed.unwrap_or("<none>")
+                ),
+                SafetySeverityV1::HardFailure,
+                Some("receipt.fresh_fleet_decision.plan_digest".to_string()),
+            ));
+        }
+    }
     if let (Some(expected), Some(observed)) = (
         plan.deployment_identity.root_principal.as_ref(),
         receipt.root_principal.as_ref(),

@@ -84,6 +84,30 @@ design/status tracker. A maintainer does not need to repeat the batch label or
 use a phase-specific authorization phrase. Trackers must not add a magic-word
 gate around ordinary in-repository implementation.
 
+### Human Minor Closeout Gate
+
+Ordinary continuation crosses release batches within one minor line, but it
+does not cross a minor boundary. Completing the final planned batch leaves the
+minor **ready for human closeout audit**, not closed.
+
+Every minor requires one audit specific to that exact minor and source state.
+The human maintainer must explicitly request the audit and accept its verdict.
+An automated agent may execute the requested read-only audit, but it may not
+self-accept the result, infer acceptance from passing validation or substitute
+a prior line's audit.
+
+Until the human maintainer accepts that closeout:
+
+- do not describe the minor as closed;
+- do not begin implementation of the next minor;
+- do not treat generic `continue`, `keep going` or `next` wording as authority
+  to cross the boundary; and
+- report the exact closeout audit as the next required action.
+
+Human-owned versioning, tagging and publication retain their separate command
+authority. An emergency publication or explicit boundary exception must name
+the exact minor and does not silently waive the next minor's own closeout.
+
 Generic continuation does not approve an unaccepted design or scope expansion,
 broad validation, release/version mutation, Git publication, deployment,
 destructive action or external/network effect. Those boundaries retain their

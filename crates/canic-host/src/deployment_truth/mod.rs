@@ -44,12 +44,12 @@ pub use model::{
     DeploymentExecutorCapabilityV1, DeploymentIdentityV1, DeploymentInventoryV1,
     DeploymentObservationGapV1, DeploymentPlanV1, DeploymentReceiptV1,
     DeploymentRootObservationSourceV1, DeploymentRootObservationV1, DiffItemV1, ExpectedCanisterV1,
-    ExpectedPoolCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1,
-    ObservedCanisterV1, ObservedPoolCanisterV1, PhaseReceiptV1, ResumeSafetyV1,
-    RoleArtifactManifestV1, RoleArtifactV1, RoleAssignmentSourceV1, RoleEpochExpectationV1,
-    RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1, SafetyFindingV1, SafetyReportV1,
-    SafetySeverityV1, SafetyStatusV1, TrustDomainV1, VerifiedPostconditionV1,
-    VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+    ExpectedPoolCanisterV1, FreshFleetInstallDecisionReceiptV1, LocalDeploymentConfigV1,
+    ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1,
+    PhaseReceiptV1, ResumeSafetyV1, RoleArtifactManifestV1, RoleArtifactV1, RoleAssignmentSourceV1,
+    RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1,
+    SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1, TrustDomainV1,
+    VerifiedPostconditionV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 pub use multi::{
     DeploymentComparisonReportError, deployment_comparison_report_from_checks,

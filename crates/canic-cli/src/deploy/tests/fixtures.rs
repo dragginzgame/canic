@@ -52,6 +52,7 @@ fn sample_deployment_plan(identity: DeploymentIdentityV1) -> DeploymentPlanV1 {
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         plan_id: "plan-1".to_string(),
+        plan_digest: None,
         deployment_identity: identity,
         trust_domain: TrustDomainV1 {
             root_trust_anchor: Some("aaaaa-aa".to_string()),

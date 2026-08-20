@@ -147,6 +147,7 @@ pub(super) fn install_and_verify_fleet_subnet_roots(
             icp_context,
             &root_artifact,
             &wasm_store_artifact,
+            &fleet_install_plan.plan.fresh_fleet_plan_digest,
             current,
         )?);
     }
@@ -163,6 +164,7 @@ fn drive_root_install(
     icp_context: &InstallIcpContext,
     root_artifact: &InstallArtifact,
     wasm_store_artifact: &InstallArtifact,
+    fresh_fleet_plan_digest: &str,
     mut current: ResolvedFleetSubnetRootInstall,
 ) -> Result<FleetSubnetRootAuthority, Box<dyn std::error::Error>> {
     for _ in 0..MAX_ROOT_TRANSITIONS {
@@ -186,13 +188,19 @@ fn drive_root_install(
                 recover_or_create_wasm_store(icp_context, &current)?
             }
             FleetSubnetRootInstallPhase::WasmStoreCreated => begin_wasm_store_install(&current)?,
-            FleetSubnetRootInstallPhase::WasmStoreInstallInFlight => {
-                recover_or_install_wasm_store(icp_context, wasm_store_artifact, &current)?
-            }
+            FleetSubnetRootInstallPhase::WasmStoreInstallInFlight => recover_or_install_wasm_store(
+                icp_context,
+                wasm_store_artifact,
+                fresh_fleet_plan_digest,
+                &current,
+            )?,
             FleetSubnetRootInstallPhase::WasmStoreInstalled => begin_root_install(&current)?,
-            FleetSubnetRootInstallPhase::RootInstallInFlight => {
-                recover_or_install_root(icp_context, root_artifact, &current)?
-            }
+            FleetSubnetRootInstallPhase::RootInstallInFlight => recover_or_install_root(
+                icp_context,
+                root_artifact,
+                fresh_fleet_plan_digest,
+                &current,
+            )?,
             FleetSubnetRootInstallPhase::RootInstalled => {
                 verify_and_record_infrastructure(icp_context, &current)?
             }
@@ -260,6 +268,7 @@ fn recover_or_create_root(
 fn recover_or_install_root(
     icp_context: &InstallIcpContext,
     artifact: &InstallArtifact,
+    fresh_fleet_plan_digest: &str,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let fleet_subnet_root = current
@@ -275,6 +284,7 @@ fn recover_or_install_root(
             wasm_path: &artifact.wasm_path,
             args_path: &args_path,
             expected_module_hash: current.journal.expected_root_module_hash,
+            fresh_fleet_plan_digest,
             action: EffectAction::from_advanced(current.advanced),
         },
         || root_install_args(&current.journal),
@@ -329,6 +339,7 @@ fn temporary_store_controllers(journal: &FleetSubnetRootInstallJournal) -> Vec<P
 fn recover_or_install_wasm_store(
     icp_context: &InstallIcpContext,
     artifact: &InstallArtifact,
+    fresh_fleet_plan_digest: &str,
     current: &ResolvedFleetSubnetRootInstall,
 ) -> Result<ResolvedFleetSubnetRootInstall, Box<dyn std::error::Error>> {
     let wasm_store = current
@@ -344,6 +355,7 @@ fn recover_or_install_wasm_store(
             wasm_path: &artifact.wasm_path,
             args_path: &args_path,
             expected_module_hash: current.journal.expected_wasm_store_module_hash,
+            fresh_fleet_plan_digest,
             action: EffectAction::from_advanced(current.advanced),
         },
         || wasm_store_install_args(&current.journal),

@@ -171,6 +171,7 @@ fn authorities(
     (
         FleetInstallPlan {
             fleet,
+            fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id: release_set.release_build_id,
             application_artifact_union_digest: [6; 32],
             coordinator: PlannedFleetCoordinator {

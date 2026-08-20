@@ -600,6 +600,7 @@ fn fixture(root: &Path) -> Fixture {
                 },
                 app: AppId::from("toko"),
             },
+            fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id,
             application_artifact_union_digest: [3; 32],
             coordinator: PlannedFleetCoordinator {

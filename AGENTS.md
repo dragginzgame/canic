@@ -39,6 +39,11 @@ with this file, the code is wrong.
   separate mutation ceremony. This does not authorize broad validation,
   versioning, Git publication, deployment, destructive actions or external
   effects; those boundaries retain their own rules.
+- Minor boundaries are the exception: after the final batch, stop at
+  closeout-audit readiness. Do not begin the next minor until the human
+  maintainer explicitly requests that exact minor's closeout audit and accepts
+  its verdict. Passing tests, agent review or generic continuation cannot
+  substitute for that human-owned gate.
 - A focused implementation slice is not a patch release. Continue the current
   planned release batch until its direct implementation, adversarial/recovery
   evidence, propagation and cleanup are complete.

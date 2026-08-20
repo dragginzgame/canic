@@ -42,10 +42,15 @@ use canic::{
         ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
     },
     dto::memory::MemoryLedgerResponse,
+    dto::page::Page,
     dto::rpc::{CyclesFundingPreflightResponse, CyclesResponse, Response as RootRpcResponse},
     dto::runtime::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
         RuntimeFieldVisibility,
+    },
+    dto::runtime_whitelist::{
+        RuntimeWhitelistCommand, RuntimeWhitelistMutationOutcome, RuntimeWhitelistMutationRequest,
+        RuntimeWhitelistMutationResponse, RuntimeWhitelistStatusResponse,
     },
     dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
     ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
@@ -156,6 +161,58 @@ fn fleet_state_and_internal_cascade_candid_shapes_use_the_current_contract() {
     );
 
     assert_candid_roundtrip(FleetMode::Readonly);
+}
+
+#[test]
+fn runtime_whitelist_candid_uses_the_bounded_managed_role_contract() {
+    let principal = Principal::from_slice(&[0x31; 29]);
+    let request = RuntimeWhitelistMutationRequest {
+        principal,
+        expected_revision: 7,
+        operation_id: [0x41; 32],
+    };
+    assert_candid_roundtrip(RuntimeWhitelistCommand::Add(request.clone()));
+    assert_candid_roundtrip(RuntimeWhitelistCommand::Remove(request));
+    assert_candid_roundtrip(RuntimeWhitelistMutationResponse {
+        outcome: RuntimeWhitelistMutationOutcome::AlreadyPresent,
+        principal,
+        revision: 7,
+        membership_digest: [0x51; 32],
+    });
+    let status_value = RuntimeWhitelistStatusResponse {
+        principals: Page {
+            entries: vec![principal],
+            total: 1,
+        },
+        revision: 7,
+        membership_digest: [0x51; 32],
+        maximum_principals: 256,
+    };
+    let status_bytes = encode_one(&status_value).expect("encode runtime-whitelist status");
+    let decoded = decode_one::<RuntimeWhitelistStatusResponse>(&status_bytes)
+        .expect("decode runtime-whitelist status");
+    assert_eq!(decoded.principals.entries, status_value.principals.entries);
+    assert_eq!(decoded.principals.total, status_value.principals.total);
+    assert_eq!(decoded.revision, status_value.revision);
+    assert_eq!(decoded.membership_digest, status_value.membership_digest);
+    assert_eq!(decoded.maximum_principals, status_value.maximum_principals);
+
+    let command = candid_type_env::<RuntimeWhitelistCommand>();
+    for field in [
+        "Add",
+        "Remove",
+        "expected_revision",
+        "operation_id",
+        "principal",
+    ] {
+        assert!(
+            command.contains(field),
+            "runtime-whitelist command omits {field}:\n{command}"
+        );
+    }
+    let status = candid_type_env::<RuntimeWhitelistStatusResponse>();
+    assert!(status.contains("principals") && status.contains("maximum_principals"));
+    assert!(!status.contains("operation_id") && !status.contains("request_hash"));
 }
 
 #[test]

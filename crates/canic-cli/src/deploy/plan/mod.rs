@@ -13,9 +13,22 @@ mod report;
 
 use super::DeployCommandError;
 use crate::{cli::help::print_help_or_version, version_text};
+use canic_core::ids::FleetName;
 #[cfg(test)]
 use canic_host::deployment_truth::DeploymentAssumptionV1;
-use canic_host::deployment_truth::{DeploymentPlanV1, LocalDeploymentPlanRequest};
+use canic_host::{
+    deployment_truth::{DeploymentPlanV1, LocalDeploymentPlanRequest},
+    fleet_install_input::load_and_resolve_fleet_install_input_for_preflight,
+    fleet_install_plan::{
+        FreshFleetDecisionAuthorityRequest, FreshFleetDeploymentPlanRequest,
+        FreshFleetDeploymentPlanV1, FreshFleetPreflightEffectsV1, FreshFleetPreflightRequest,
+        compile_fresh_fleet_deployment_plan, compile_fresh_fleet_preflight,
+        load_fresh_fleet_decision_authority,
+    },
+    network::resolve_canonical_network_id_from_root,
+    release_build::load_finalized_release_build,
+    release_set::AppConfigSnapshot,
+};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -23,7 +36,10 @@ use std::{
 
 use command::REPORT_COMMAND;
 pub(super) use command::{DeployPlanOptions, DeployPlanRoots, usage};
-use diagnostics::{plan_assumptions, plan_blockers, plan_warnings, target_resolution_blockers};
+use diagnostics::{
+    fresh_fleet_plan_blocker, plan_assumptions, plan_blockers, plan_warnings,
+    target_resolution_blockers,
+};
 use evidence::verified_facts;
 #[cfg(test)]
 use evidence::verifier_readiness_facts;
@@ -36,6 +52,10 @@ pub(super) use render::{command_exit_result, write_report};
 #[cfg(test)]
 pub(super) use render::{render_json, render_text};
 use report::{DeploymentPlanReport, REPORT_SCHEMA_VERSION};
+use report::{
+    PlanDiagnosticSource, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
+    SOURCE_FLEET_INPUT,
+};
 
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
 const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
@@ -64,15 +84,48 @@ pub(super) fn build_report(
     roots: &DeployPlanRoots,
 ) -> DeploymentPlanReport {
     let config_path = plan_config_path(&roots.workspace_root, options);
+    let fleet_input_path = plan_fleet_input_path(&roots.icp_root, options);
     let mut blockers = target_resolution_blockers(options, &config_path, &roots.icp_root);
-    let plan = build_plan(options, roots, &config_path);
     let target_resolved = blockers.is_empty();
+    let fresh_fleet_plan = if target_resolved {
+        match build_fresh_fleet_plan(options, roots, &config_path, &fleet_input_path) {
+            Ok(plan) => Some(plan),
+            Err(error) => {
+                blockers.push(fresh_fleet_plan_blocker(
+                    &options.fleet,
+                    error.detail,
+                    error.source,
+                ));
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let resolved_build_profile = fresh_fleet_plan.as_ref().map_or_else(
+        || build_profile_name(options),
+        |plan| plan.preflight.build_profile.clone(),
+    );
+    let resolved_release_build_id = fresh_fleet_plan
+        .as_ref()
+        .and_then(|plan| plan.preflight.release_build_id)
+        .or(options.release_build_id);
+    let mut plan = build_plan(options, roots, &config_path, &resolved_build_profile);
+    plan.plan_digest = fresh_fleet_plan
+        .as_ref()
+        .map(|fresh_fleet_plan| fresh_fleet_plan.plan_digest.clone());
     if target_resolved {
         blockers.extend(plan_blockers(&plan));
     }
     let mut assumptions = plan_assumptions(&plan);
     let mut warnings = plan_warnings(&plan);
-    let mut verified_facts = verified_facts(options, &config_path, target_resolved, &plan);
+    let mut verified_facts = verified_facts(
+        options,
+        &config_path,
+        target_resolved,
+        &resolved_build_profile,
+        &plan,
+    );
     let proposed_operations = proposed_operations(&plan);
     let mut next_actions = next_actions(options, &blockers, &warnings, &assumptions);
 
@@ -92,10 +145,13 @@ pub(super) fn build_report(
         fleet: options.fleet.clone(),
         app: options.app.clone(),
         environment: options.environment.clone(),
-        build_profile: build_profile_name(options),
+        fleet_input_path: display_path(&fleet_input_path),
+        build_profile: resolved_build_profile,
+        release_build_id: resolved_release_build_id.map(|identity| identity.to_string()),
         config_path: display_path(&config_path),
         status,
         comparison_status,
+        fresh_fleet_plan,
         plan,
         blockers,
         warnings,
@@ -106,10 +162,116 @@ pub(super) fn build_report(
     }
 }
 
+fn build_fresh_fleet_plan(
+    options: &DeployPlanOptions,
+    roots: &DeployPlanRoots,
+    config_path: &Path,
+    fleet_input_path: &Path,
+) -> Result<FreshFleetDeploymentPlanV1, FreshFleetPreflightBuildError> {
+    let config = AppConfigSnapshot::load(config_path)
+        .map_err(|error| preflight_build_error(SOURCE_APP_CONFIG, error))?;
+    let input = load_and_resolve_fleet_install_input_for_preflight(
+        &roots.icp_root,
+        &options.environment,
+        fleet_input_path,
+    )
+    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+    let (build_profile, release_build_id) = resolve_plan_release_source(options, roots)
+        .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
+    let fleet_name = options
+        .fleet
+        .parse::<FleetName>()
+        .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+    let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: config.model(),
+        app: &options.app,
+        fleet_name: &fleet_name,
+        coordinator: &input.coordinator,
+        fleet_subnet_roots: &input.fleet_subnet_roots,
+        build_profile,
+        release_build_id,
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+    let canonical_network_id =
+        resolve_canonical_network_id_from_root(&roots.icp_root, &options.environment)
+            .map_err(|error| preflight_build_error(SOURCE_DEPLOYMENT_CONFIG, error))?;
+    let authority = load_fresh_fleet_decision_authority(FreshFleetDecisionAuthorityRequest {
+        workspace_root: &roots.workspace_root,
+        icp_root: &roots.icp_root,
+        config: &config,
+        requested_environment: &options.environment,
+        canonical_network_id,
+        release_build_id,
+        fleet_input: &input,
+    })
+    .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
+    compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight,
+        authority,
+    })
+    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))
+}
+
+struct FreshFleetPreflightBuildError {
+    detail: String,
+    source: PlanDiagnosticSource,
+}
+
+fn preflight_build_error(
+    source: PlanDiagnosticSource,
+    error: impl std::fmt::Display,
+) -> FreshFleetPreflightBuildError {
+    FreshFleetPreflightBuildError {
+        detail: error.to_string(),
+        source,
+    }
+}
+
+fn resolve_plan_release_source(
+    options: &DeployPlanOptions,
+    roots: &DeployPlanRoots,
+) -> Result<
+    (
+        canic_host::canister_build::CanisterBuildProfile,
+        Option<canic_core::ids::ReleaseBuildId>,
+    ),
+    String,
+> {
+    let Some(release_build_id) = options.release_build_id else {
+        return Ok((
+            options
+                .profile
+                .unwrap_or(canic_host::canister_build::CanisterBuildProfile::Release),
+            None,
+        ));
+    };
+    let finalized = load_finalized_release_build(&roots.icp_root, release_build_id)
+        .map_err(|error| error.to_string())?;
+    if finalized.record.builder_version != env!("CARGO_PKG_VERSION") {
+        return Err(format!(
+            "finalized release build belongs to Canic {}, not current Canic {}",
+            finalized.record.builder_version,
+            env!("CARGO_PKG_VERSION")
+        ));
+    }
+    if options
+        .profile
+        .is_some_and(|requested| requested != finalized.record.build_profile)
+    {
+        return Err(format!(
+            "requested build profile differs from finalized release build profile {}",
+            finalized.record.build_profile.target_dir_name()
+        ));
+    }
+    Ok((finalized.record.build_profile, Some(release_build_id)))
+}
+
 fn build_plan(
     options: &DeployPlanOptions,
     roots: &DeployPlanRoots,
     config_path: &Path,
+    build_profile: &str,
 ) -> DeploymentPlanV1 {
     canic_host::deployment_truth::build_local_deployment_plan(&LocalDeploymentPlanRequest {
         fleet_name: options.fleet.clone(),
@@ -120,19 +282,22 @@ fn build_plan(
         icp_root: roots.icp_root.clone(),
         config_path: Some(config_path.to_path_buf()),
         runtime_variant: options.environment.clone(),
-        build_profile: build_profile_name(options),
+        build_profile: build_profile.to_string(),
     })
 }
 
 fn plan_config_path(workspace_root: &Path, options: &DeployPlanOptions) -> PathBuf {
-    let config = options
-        .config
-        .clone()
-        .unwrap_or_else(|| PathBuf::from("apps").join(&options.app).join("canic.toml"));
-    if config.is_absolute() {
-        config
+    workspace_root
+        .join("apps")
+        .join(&options.app)
+        .join("canic.toml")
+}
+
+fn plan_fleet_input_path(icp_root: &Path, options: &DeployPlanOptions) -> PathBuf {
+    if options.fleet_input.is_absolute() {
+        options.fleet_input.clone()
     } else {
-        workspace_root.join(config)
+        icp_root.join(&options.fleet_input)
     }
 }
 
@@ -141,7 +306,11 @@ fn display_path(path: &Path) -> String {
 }
 
 fn build_profile_name(options: &DeployPlanOptions) -> String {
-    options.build_profile.target_dir_name().to_string()
+    options
+        .profile
+        .unwrap_or(canic_host::canister_build::CanisterBuildProfile::Release)
+        .target_dir_name()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -458,6 +627,7 @@ mod tests {
             "deployment_plan_builder" => SOURCE_DEPLOYMENT_PLAN_BUILDER,
             "app_config" => SOURCE_APP_CONFIG,
             "fleet_catalog" => SOURCE_FLEET_CATALOG,
+            "fleet_input" => SOURCE_FLEET_INPUT,
             "local_observation" => SOURCE_LOCAL_OBSERVATION,
             _ => panic!("unknown diagnostic source fixture {value}"),
         }
@@ -470,10 +640,13 @@ mod tests {
             fleet: "demo-local".to_string(),
             app: "demo".to_string(),
             environment: "local".to_string(),
+            fleet_input_path: "deployments/demo-local.toml".to_string(),
             build_profile: "debug".to_string(),
+            release_build_id: None,
             config_path: "apps/demo/canic.toml".to_string(),
             status,
             comparison_status: ComparisonStatus::NotRequested,
+            fresh_fleet_plan: None,
             plan: plan_with_assumptions([]),
             blockers: Vec::new(),
             warnings: Vec::new(),
@@ -490,6 +663,7 @@ mod tests {
         DeploymentPlanV1 {
             schema_version: 1,
             plan_id: "local:demo-local:plan".to_string(),
+            plan_digest: None,
             deployment_identity: DeploymentIdentityV1 {
                 canonical_network_id: None,
                 fleet_id: None,

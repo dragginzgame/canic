@@ -271,6 +271,7 @@ fn install_plan(root: &Path) -> PersistedFleetInstallPlan {
     PersistedFleetInstallPlan {
         plan: FleetInstallPlan {
             fleet,
+            fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
                 [6; 32],
             )),
