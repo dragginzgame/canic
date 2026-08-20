@@ -832,6 +832,54 @@ fn estimate_index_bytes(indexes: &ApplicationSessionIndexes) -> usize {
         + indexes.replay_count_by_subject.len() * (29 + size_of::<usize>() + BTREE_ENTRY_OVERHEAD)
 }
 
+/// Test-only owner for resetting and restoring application authorization state.
+#[cfg(test)]
+pub struct ApplicationSessionTestStateGuard(crate::storage::stable::auth::AuthStateData);
+
+#[cfg(test)]
+impl ApplicationSessionTestStateGuard {
+    /// Replace application authorization state with one empty current-format value.
+    pub fn empty() -> Self {
+        let original = AuthState::export();
+        AuthState::import(crate::storage::stable::auth::AuthStateData::default());
+        invalidate_indexes();
+        AuthStateOps::restore_application_session_state().unwrap();
+        Self(original)
+    }
+
+    /// Install one replay record for a workflow test without exposing stable records upward.
+    pub fn install_replay(
+        &self,
+        proof_fingerprint: [u8; 32],
+        caller: Principal,
+        remove_at_ns: u64,
+    ) {
+        AuthState::replace_application_authorization_state(
+            LocalApplicationAuthorizationStateData {
+                replays: vec![LocalApplicationReplayRecord {
+                    proof_fingerprint,
+                    transport_caller: caller,
+                    authenticated_subject: caller,
+                    authority_generation: 0,
+                    remove_at_ns,
+                }],
+                ..LocalApplicationAuthorizationStateData::default()
+            },
+        );
+        invalidate_indexes();
+        AuthStateOps::restore_application_session_state().unwrap();
+    }
+}
+
+#[cfg(test)]
+impl Drop for ApplicationSessionTestStateGuard {
+    fn drop(&mut self) {
+        AuthState::import(self.0.clone());
+        invalidate_indexes();
+        AuthStateOps::restore_application_session_state().unwrap();
+    }
+}
+
 #[cfg(test)]
 pub fn invalidate_indexes() {
     APPLICATION_SESSION_INDEXES.with_borrow_mut(|indexes| *indexes = None);
