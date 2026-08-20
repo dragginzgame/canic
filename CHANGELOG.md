@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The test-only 0.107 B1 capture freezes target-complete plan/install inputs,
+- The accepted 0.107 B1 contract freezes target-complete plan/install inputs,
   one canonical plan digest, bounded Root-or-controller runtime-whitelist
-  authority and the exact upstream catalog-provenance requirement for
-  maintainer acceptance before production or stable-state work begins.
+  authority and exact upstream catalog provenance; B2 now forwards the
+  top-level environment to direct planning and rejects hidden or canonical
+  target disagreement before Fleet-catalog lookup.
 
 - The test-only 0.108 B1 attached-cycles probe proves exact caller-bound root
   acceptance, intent/call/receipt interruption and zero-accept replay with

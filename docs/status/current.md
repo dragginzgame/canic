@@ -211,15 +211,18 @@ the first read-only Toko integration pass: target- and Fleet-input-complete
 fresh-Fleet planning, structured NNS catalog inconsistency diagnostics and a
 bounded durable runtime whitelist. Its seven batches are estimated at 10-15
 engineering days excluding upstream release latency or separately approved
-live-IC qualification. B1 is complete and ready for maintainer acceptance: it
+live-IC qualification. The maintainer accepted B1 on 2026-08-20: it
 freezes the exact plan/install grammar and digest, Root-or-controller managed
 role surface, memory ID 61, 256-principal/128-page/one-operation bounds and the
 smallest typed `ic-query 0.40.1` provenance addition. Test-only maximum
 encodings are 8,417 stable bytes, 4,072 status Candid bytes and 101 mutation
 Candid bytes. The read-only Toko baseline supplies 175 principals but no
-current Canic integration fixture. No production or stable-state mutation has
-begun; it waits for explicit B1 acceptance. Held 0.106 B2 effects remain
-independent and unauthorized.
+current Canic integration fixture. B2 is complete: the top-level environment
+reaches direct `deploy plan`, hidden/global disagreement rejects before
+dispatch, and missing or contradictory canonical target authority blocks
+before Fleet-catalog lookup. No Canister runtime, stable state, Candid or
+external effect changed. Held 0.106 B2 effects remain independent and
+unauthorized.
 
 The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
@@ -735,9 +738,9 @@ Q6 current-state constraints are assigned to 0.109. The operation,
 physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
-terminal-disposition authorization exists. Begin scheduled 0.107 B1 from the
-accepted repository baseline: freeze the exact planner/install/whitelist and
-`ic-query` propagation contract before production or stable-state mutation.
+terminal-disposition authorization exists. Continue scheduled 0.107 B3 from
+the accepted B1 contract and completed B2 target boundary: implement the
+Fleet-input-complete pure preflight and its pre-effect ordering evidence.
 The renumbered 0.108 root-funding B1 proof remains complete and ready for
 maintainer acceptance, but its production work waits for 0.107 closeout. Do
 not add a production pool contract, run any remote qualification effect or
