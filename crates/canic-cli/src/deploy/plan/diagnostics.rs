@@ -20,12 +20,14 @@ use std::path::Path;
 
 use canic_host::{
     deployment_truth::{DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentPlanV1},
+    network::{NetworkIdentityError, resolve_canonical_network_id_from_root},
     release_set::read_app_config_identity,
 };
 
 pub(super) fn target_resolution_blockers(
     options: &DeployPlanOptions,
     config_path: &Path,
+    icp_root: &Path,
 ) -> Vec<PlanDiagnostic> {
     if let Err(err) = validate_fleet_name(&options.fleet) {
         return vec![PlanDiagnostic {
@@ -39,7 +41,7 @@ pub(super) fn target_resolution_blockers(
         }];
     }
 
-    match read_app_config_identity(config_path) {
+    let mut blockers = match read_app_config_identity(config_path) {
         Ok(app) if app == options.app => Vec::new(),
         Ok(app) => vec![PlanDiagnostic {
             category: CATEGORY_CONFIG,
@@ -67,7 +69,30 @@ pub(super) fn target_resolution_blockers(
             next: Some("provide --config with a readable config for the requested App".to_string()),
             source: SOURCE_DEPLOYMENT_CONFIG,
         }],
+    };
+    if let Err(error) = resolve_canonical_network_id_from_root(icp_root, &options.environment) {
+        let mismatch = matches!(error, NetworkIdentityError::ProfileConflict { .. });
+        blockers.push(PlanDiagnostic {
+            category: CATEGORY_DEPLOYMENT_IDENTITY,
+            code: if mismatch {
+                "environment_mismatch"
+            } else {
+                "environment_unresolved"
+            }
+            .to_string(),
+            severity: SEVERITY_BLOCKED,
+            subject: options.environment.clone(),
+            detail: format!(
+                "selected ICP environment {:?} does not resolve to one canonical target: {error}",
+                options.environment
+            ),
+            next: Some(
+                "repair the selected ICP environment and its canonical network profile".to_string(),
+            ),
+            source: SOURCE_CLI_ARG,
+        });
     }
+    blockers
 }
 
 fn validate_fleet_name(name: &str) -> Result<(), String> {

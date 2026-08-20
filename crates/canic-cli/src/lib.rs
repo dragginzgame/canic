@@ -33,7 +33,10 @@ mod token;
 use crate::cli::{
     argv::trace_if_enabled,
     clap::parse_matches,
-    globals::{DISPATCH_ARGS, apply_global_environment, apply_global_icp, misplaced_global_option},
+    globals::{
+        DISPATCH_ARGS, apply_global_environment, apply_global_icp, global_environment_conflict,
+        misplaced_global_option,
+    },
 };
 use clap::error::ErrorKind;
 pub use cli::top_level_command;
@@ -192,6 +195,13 @@ where
         .get_many::<OsString>(DISPATCH_ARGS)
         .map(|values| values.cloned().collect::<Vec<_>>())
         .unwrap_or_default();
+    if let Some(conflict) =
+        global_environment_conflict(command, &tail, global_environment.as_deref())
+    {
+        return Err(CliError::Clap(
+            top_level_command().error(ErrorKind::InvalidValue, conflict.to_string()),
+        ));
+    }
     apply_global_icp(command, &mut tail, global_icp);
     apply_global_environment(command, &mut tail, global_environment);
     let tail = tail.into_iter();

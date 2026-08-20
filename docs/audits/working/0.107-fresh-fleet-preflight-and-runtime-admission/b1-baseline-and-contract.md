@@ -20,8 +20,9 @@ Date: 2026-08-20
 The current lockfile differs from the predecessor only for co-delivered
 test-only work recorded by its owning evidence. `cargo tree --locked --offline
 -p canic-host -i ic-query` resolves exactly `ic-query v0.40.1 -> canic-host
-v0.105.0`. The 0.107 production files listed in `source-baseline.tsv` have no
-diff from `v0.105.0`.
+v0.105.0`. At B1 capture, the 0.107 production files listed in
+`source-baseline.tsv` had no diff from `v0.105.0`; their retained hashes remain
+the accepted predecessor baseline after subsequent batches.
 
 ## 2. Downstream Traceability
 
@@ -457,7 +458,8 @@ sessions remain separate authorities.
 | exact bounds | Complete and executable test-only measurements pass |
 | variant and option spelling | Complete |
 | digest contract | Complete |
-| production/stable mutation | Not begun; prohibited until B1 acceptance |
+| production/stable mutation | Not begun in B1; authorized after maintainer acceptance on 2026-08-20 |
 
-No 0.106 B2 effect was performed. No sibling repository was modified. B2-B7
-remain pending this B1's explicit maintainer acceptance.
+No 0.106 B2 effect was performed. No sibling repository was modified. The
+maintainer accepted this B1 on 2026-08-20, authorizing the sequenced B2-B7
+implementation within the accepted design.

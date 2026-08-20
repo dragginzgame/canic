@@ -36,10 +36,11 @@ const BUILD_PROFILE_ARG: &str = "build-profile";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo-local --app demo
-  canic deploy plan demo-local --app demo --out deployment-plan.json
+  canic --environment ic deploy plan demo --app demo
 
 Read-only: reports deterministic local desired state without contacting the IC
-or authorizing mutation.";
+or authorizing mutation. Put the top-level --environment before deploy to select
+the exact ICP target.";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::deploy) struct DeployPlanOptions {

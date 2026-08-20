@@ -662,6 +662,7 @@ fn global_environment_is_forwarded_to_deploy() {
         &["inspect", "plan", "demo"],
         &["inspect", "report", "demo"],
         &["inspect", "resume-report", "demo"],
+        &["plan", "demo", "--app", "demo"],
     ] {
         assert_global_environment_forwarded_to_deploy_tail(raw_tail);
     }
@@ -669,6 +670,28 @@ fn global_environment_is_forwarded_to_deploy() {
     let mut family_tail = Vec::new();
     apply_global_environment("deploy", &mut family_tail, Some("ic".to_string()));
     assert!(family_tail.is_empty());
+}
+
+#[test]
+fn conflicting_top_level_and_internal_plan_environments_reject() {
+    let error = run([
+        "--environment",
+        "ic",
+        "deploy",
+        "plan",
+        "demo-local",
+        "--app",
+        "demo",
+        INTERNAL_ENVIRONMENT_OPTION,
+        "local",
+    ]
+    .map(OsString::from))
+    .expect_err("conflicting direct-plan target environments must reject");
+
+    assert!(matches!(error, CliError::Clap(_)));
+    assert!(error.to_string().contains(
+        "top-level environment \"ic\" conflicts with internal target environment \"local\""
+    ));
 }
 
 fn assert_global_environment_forwarded_to_deploy_tail(raw_tail: &[&str]) {
@@ -716,11 +739,11 @@ fn global_environment_is_not_forwarded_to_request_only_deploy_leaves() {
 }
 
 #[test]
-fn global_environment_does_not_override_internal_forwarded_environment() {
+fn matching_internal_forwarded_environment_is_not_duplicated() {
     let mut tail = vec![
         OsString::from("test"),
         OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-        OsString::from("local"),
+        OsString::from("ic"),
     ];
 
     apply_global_environment("install", &mut tail, Some("ic".to_string()));
@@ -730,7 +753,7 @@ fn global_environment_does_not_override_internal_forwarded_environment() {
         vec![
             OsString::from("test"),
             OsString::from(INTERNAL_ENVIRONMENT_OPTION),
-            OsString::from("local")
+            OsString::from("ic")
         ]
     );
 }

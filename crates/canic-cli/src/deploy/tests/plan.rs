@@ -101,12 +101,13 @@ fn deploy_plan_help_documents_no_mutation_contract() {
     let help = deploy_plan::usage();
 
     assert!(help.contains("canic deploy plan <fleet> --app <app>"));
-    assert!(help.contains("canic deploy plan demo-local --app demo --out deployment-plan.json"));
+    assert!(help.contains("canic --environment ic deploy plan demo --app demo"));
     assert!(help.contains("Read-only"));
     assert!(help.contains("deterministic local desired state"));
     assert!(help.contains("without contacting the IC"));
     assert!(help.contains("or authorizing mutation"));
-    assert_eq!(help.matches("  canic deploy plan ").count(), 2);
+    assert!(help.contains("Put the top-level --environment before deploy"));
+    assert_eq!(help.matches("  canic deploy plan ").count(), 1);
 }
 
 #[test]
@@ -432,6 +433,88 @@ fn deploy_plan_report_blocks_invalid_fleet_name() {
 }
 
 #[test]
+fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-environment-target");
+    fs::write(
+        icp_root.join("icp.yaml"),
+        "environments:\n  - name: staging\n    network: ic\n",
+    )
+    .expect("write ICP environment mapping");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
+        OsString::from("staging"),
+    ])
+    .expect("parse forwarded plan environment");
+
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root,
+        },
+    );
+    let json = serde_json::to_value(&report).expect("report should serialize");
+
+    assert_eq!(json["environment"], "staging");
+    assert_eq!(
+        json["plan"]["deployment_identity"]["canonical_network_id"],
+        CanonicalNetworkId::ic_mainnet().to_string()
+    );
+    assert!(json["blockers"].as_array().is_some_and(Vec::is_empty));
+    assert_verified_fact(
+        &json,
+        "environment_resolved",
+        "demo",
+        "deployment_plan_builder",
+    );
+}
+
+#[test]
+fn deploy_plan_blocks_contradictory_environment_profile() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-environment-mismatch");
+    fs::write(
+        icp_root.join("icp.yaml"),
+        "environments:\n  - name: staging\n    network: ic\n",
+    )
+    .expect("write ICP environment mapping");
+    write_local_network_authority(&icp_root, "staging");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
+        OsString::from("staging"),
+    ])
+    .expect("parse forwarded plan environment");
+
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root,
+        },
+    );
+    let json = serde_json::to_value(&report).expect("report should serialize");
+
+    assert_eq!(json["status"], "blocked");
+    assert!(json["blockers"].as_array().is_some_and(|blockers| {
+        blockers
+            .iter()
+            .any(|blocker| blocker["code"] == "environment_mismatch")
+    }));
+    assert_eq!(
+        json["plan"]["deployment_identity"]["canonical_network_id"],
+        JsonValue::Null
+    );
+    assert_no_verified_fact(&json, "environment_resolved");
+}
+
+#[test]
 fn deploy_plan_report_blocks_malformed_desired_config() {
     let (temp, workspace_root, icp_root) = temp_plan_workspace_with_config(
         "canic-deploy-plan-malformed-config",
@@ -699,6 +782,7 @@ fn temp_plan_workspace_with_config(prefix: &str, config: &str) -> (TempDir, Path
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::create_dir_all(&icp_root).expect("create icp root");
     fs::write(config_dir.join("canic.toml"), config).expect("write config");
+    write_local_network_authority(&icp_root, "local");
     (temp, workspace_root, icp_root)
 }
 
@@ -707,10 +791,33 @@ fn write_fleet_catalog(
     environment: &str,
     mut fleet: FleetCatalogEntryV1,
 ) {
+    let network = write_local_network_authority(icp_root, environment);
+    fleet.canonical_network_id = network;
+    let path = icp_root
+        .join(".canic")
+        .join("networks")
+        .join(network.to_string())
+        .join("fleets/catalog.json");
+    fs::create_dir_all(path.parent().expect("catalog parent")).expect("create catalog dir");
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "canonical_network_id": network,
+            "entries": [fleet],
+        }))
+        .expect("encode Fleet catalog"),
+    )
+    .expect("write Fleet catalog");
+}
+
+fn write_local_network_authority(
+    icp_root: &std::path::Path,
+    environment: &str,
+) -> CanonicalNetworkId {
     let root_key = test_local_root_key();
     let network = CanonicalNetworkId::from_der_root_trust_anchor(&root_key)
         .expect("canonical local network ID");
-    fleet.canonical_network_id = network;
     let authority = icp_root
         .join(".canic")
         .join("networks")
@@ -741,22 +848,7 @@ fn write_fleet_catalog(
         .expect("encode profile"),
     )
     .expect("write profile");
-    let path = icp_root
-        .join(".canic")
-        .join("networks")
-        .join(network.to_string())
-        .join("fleets/catalog.json");
-    fs::create_dir_all(path.parent().expect("catalog parent")).expect("create catalog dir");
-    fs::write(
-        path,
-        serde_json::to_vec_pretty(&serde_json::json!({
-            "schema_version": 1,
-            "canonical_network_id": network,
-            "entries": [fleet],
-        }))
-        .expect("encode Fleet catalog"),
-    )
-    .expect("write Fleet catalog");
+    network
 }
 
 fn test_local_root_key() -> Vec<u8> {

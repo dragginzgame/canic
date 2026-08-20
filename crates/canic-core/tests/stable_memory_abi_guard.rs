@@ -209,7 +209,8 @@ mod runtime_whitelist_b1_contract {
             },
             revision: u64::MAX,
             membership_digest: [0xfb; 32],
-            maximum_principals: MAX_PRINCIPALS as u16,
+            maximum_principals: u16::try_from(MAX_PRINCIPALS)
+                .expect("runtime-whitelist maximum must fit the public u16 boundary"),
         };
         let status_bytes = candid::encode_one(&status).expect("runtime-whitelist status Candid");
         let request_bytes = candid::encode_one(RuntimeWhitelistMutationRequestFixture {

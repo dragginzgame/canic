@@ -64,8 +64,8 @@ pub(super) fn build_report(
     roots: &DeployPlanRoots,
 ) -> DeploymentPlanReport {
     let config_path = plan_config_path(&roots.workspace_root, options);
+    let mut blockers = target_resolution_blockers(options, &config_path, &roots.icp_root);
     let plan = build_plan(options, roots, &config_path);
-    let mut blockers = target_resolution_blockers(options, &config_path);
     let target_resolved = blockers.is_empty();
     if target_resolved {
         blockers.extend(plan_blockers(&plan));

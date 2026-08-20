@@ -5,7 +5,8 @@ Date: 2026-08-20
 ## Status
 
 - State: accepted and scheduled as application-safety/estate step 5.
-- Runtime impact: none from this planning and renumbering cut.
+- Runtime impact: B2 changes only the host CLI planning boundary; no Canister
+  runtime, stable state, Candid or external effect changes.
 - Predecessor: accepted repository-local 0.106 B1 baseline. The separately
   authorized 0.106 B2 external evidence does not gate this line.
 - Successors: 0.108 Coordinator-backed root funding retains its passing B1
@@ -15,8 +16,8 @@ Date: 2026-08-20
   final acceptance evidence only.
 - Estimate: seven release batches and approximately 10-15 engineering days,
   excluding upstream release latency and separately approved live-IC work.
-- Implementation approval: B1 is complete and ready for maintainer acceptance.
-  Production and stable-state mutation wait for that acceptance.
+- Implementation approval: the maintainer accepted B1 on 2026-08-20. B2 is
+  complete; the sequenced B3-B7 work is authorized within this design.
 
 Design: [Fresh-Fleet preflight and runtime admission](0.107-design.md)
 
@@ -24,8 +25,8 @@ Design: [Fresh-Fleet preflight and runtime admission](0.107-design.md)
 
 | Batch | Outcome | Direct evidence and fallout | Focused validation | Status |
 | --- | --- | --- | --- | --- |
-| B1 | Exact baseline and contract | Toko traceability, current planner/install/whitelist/upstream inventories, bounds and exact surface contract | source/fixture inventory and explicit acceptance | Complete; ready for maintainer acceptance |
-| B2 | Target-correct planning | direct plan-leaf environment forwarding and mismatch rejection | CLI parse/forwarding/help tests | Pending |
+| B1 | Exact baseline and contract | Toko traceability, current planner/install/whitelist/upstream inventories, bounds and exact surface contract | source/fixture inventory and explicit acceptance | Accepted 2026-08-20 |
+| B2 | Target-correct planning | direct plan-leaf environment forwarding and mismatch rejection | CLI parse/forwarding/help tests | Complete |
 | B3 | Fleet-input-complete pure preflight | shared compiler, no-effect ordering and fresh-Fleet blockers | host plan/install ordering and fixture tests | Pending |
 | B4 | Complete evidence and digest binding | placement, counts, funding, balance, output and install-receipt parity | parity, insufficient-funds and receipt tests | Pending |
 | B5 | Structured catalog inconsistency | Registry version/provenance/cache/subject/retry/effect propagation and upstream update if needed | typed collector/host/CLI tests | Pending |
@@ -38,10 +39,12 @@ These are coherent outcome batches, not preassigned patch releases.
 
 The repository-local B1 capture is complete under
 [`docs/audits/working/0.107-fresh-fleet-preflight-and-runtime-admission/`](../../audits/working/0.107-fresh-fleet-preflight-and-runtime-admission/README.md).
-It is not yet accepted production or stable-state implementation authority.
+The maintainer accepted it on 2026-08-20 as production and stable-state
+implementation authority for the sequenced B2-B7 batches.
 
-- The current planner, installer, whitelist access path, stable-allocation
-  registry and managed-role macros remain byte-for-byte `v0.105.0` source.
+- At B1 capture, the planner, installer, whitelist access path, stable-
+  allocation registry and managed-role macros were byte-for-byte `v0.105.0`
+  source. The retained hashes remain that accepted predecessor baseline.
 - The maintained direct plan leaf now has one frozen grammar shared with
   install: required App, Fleet and Fleet input; common profile and optional
   finalized release-build identity; one forwarded global environment; and an
@@ -67,6 +70,21 @@ It is not yet accepted production or stable-state implementation authority.
 No production source, stable implementation, Candid or CLI was changed by B1.
 No 0.106 B2 effect or sibling-repository mutation occurred.
 
+## B2 Result
+
+- The top-level environment is forwarded to the direct `deploy plan` leaf.
+- A hidden/internal environment that disagrees with the selected top-level
+  environment rejects before dispatch instead of silently winning.
+- Planning resolves the selected ICP environment to one canonical network.
+  Missing authority and contradictory environment profiles are blockers, and
+  a contradiction cannot fall through to Fleet-catalog lookup.
+- Direct plan help now identifies the top-level environment placement. The
+  leaf still accepts no ICP executable because planning performs no ICP
+  command or IC effect.
+- Focused plan/forwarding tests and warning-denied `canic-cli` Clippy pass. No
+  Canister runtime, stable state, Candid, external Canister or sibling
+  repository changed.
+
 ## Feedback Traceability
 
 | Feedback | Owning batches | Closeout proof |
@@ -77,6 +95,6 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
 
 ## Next Authorized Action
 
-Review and explicitly accept B1's frozen baseline and contract. Keep 0.106
-B2's external effects held. Do not begin 0.107 production or stable-state
-mutation until this B1 output is accepted.
+Begin B3's Fleet-input-complete pure preflight from the accepted B1 contract
+and completed target-correct B2 boundary. Keep 0.106 B2's external effects
+held pending their separate exact authorization.
