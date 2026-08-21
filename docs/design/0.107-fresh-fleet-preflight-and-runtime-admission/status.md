@@ -4,7 +4,9 @@ Date: 2026-08-21
 
 ## Status
 
-- State: accepted and scheduled as application-safety/estate step 5.
+- State: the design is accepted as application-safety/estate step 5, and B2-B7
+  implementation is complete. Minor closeout remains pending the exact AC12
+  documentation re-audit.
 - Runtime impact: B2-B5 change only the host CLI/planning and pre-effect install
   boundary. B6 owns the bounded managed-role runtime-whitelist state and
   existing-method variants. No external effect was performed.
@@ -15,10 +17,13 @@ Date: 2026-08-21
   later scheduled lines move one minor number without semantic change.
 - Repository boundary: Toko remains read-only and supplies requirements plus
   final acceptance evidence only.
-- Estimate: seven release batches and approximately 10-15 engineering days,
-  excluding upstream release latency and separately approved live-IC work.
-- Implementation approval: the maintainer accepted B1 on 2026-08-20. B2 is
-  complete; the sequenced B3-B7 work is authorized within this design.
+- Historical delivery estimate: seven release batches and approximately 10-15
+  engineering days, excluding upstream release latency and separately approved
+  live-IC work.
+- Implementation approval: the maintainer accepted B1 on 2026-08-20, and
+  B2-B7 are complete. The 2026-08-21 closeout audit passed AC1-AC11 and AC13
+  and rejected only AC12's active-document residue; this documentation-only
+  correction is ready for the exact re-audit.
 
 Design: [Fresh-Fleet preflight and runtime admission](0.107-design.md)
 
@@ -32,7 +37,7 @@ Design: [Fresh-Fleet preflight and runtime admission](0.107-design.md)
 | B4 | Complete evidence and digest binding | placement, counts, funding, balance, output and install-receipt parity | parity, insufficient-funds and receipt tests | Complete |
 | B5 | Structured catalog inconsistency | Registry version/provenance/cache/subject/retry/effect propagation and upstream update if needed | typed collector/host/CLI tests | Complete |
 | B6 | Durable runtime whitelist | seed/restore, bounds, add/remove/revision/digest/replay and config hard cut | core/facade/restoration tests | Complete |
-| B7 | Operator proof and closeout | command/status UX, adversarial/recovery journeys, generic fixture, downstream read-only rerun and residue cleanup | targeted package and bounded PocketIC checks | Complete; ready for human closeout audit |
+| B7 | Operator proof and closeout | command/status UX, adversarial/recovery journeys, generic fixture, downstream read-only rerun and residue cleanup | targeted package and bounded PocketIC checks | Complete; AC12 documentation correction ready for closeout re-audit |
 
 These are coherent outcome batches, not preassigned patch releases.
 
@@ -235,16 +240,20 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   facade, fixture and test target.
 - The original read-only Toko snapshot was clean `main` at
   `bf14a5d3d89be4335d3da2601e8a60128fde04df`, with no Canic integration or
-  CANIC identifiers. Newer downstream feedback supplied from a separate dirty
-  Toko working tree identified CANIC-009 and the cold-cache CANIC-012 gap; the
-  correction addresses both without modifying that working tree. Acceptance
-  criterion 13 retains the read-only downstream boundary.
+  CANIC identifiers. Final read-only inspection of the separate dirty Toko
+  Miner working tree at `4cd7aa8c18e6edde4a9d28a3b4d23709ff542d3e`
+  records CANIC-012 and CANIC-013 as verified. It records exact external
+  blockers for CANIC-009's first real anonymous/locked installation exercise
+  and CANIC-011's first installed-Fleet mutation/removal/restoration exercise.
+  That evidence satisfies acceptance criterion 13's blocker alternative; no
+  Toko file or live IC state was changed by the audit.
 - B7 is reconciled against the completed B5 result and its downstream
   cold-cache feedback: the explicit live catalog-acquisition mode is present,
   ordinary planning remains cache-only, install acquires automatically and
-  effective identity admission precedes builds. The implementation batch is
-  ready for the required human closeout audit; the minor is not accepted or
-  closed by this implementation status.
+  effective identity admission precedes builds. The closeout audit confirmed
+  that implementation evidence and rejected only superseded publication and
+  schedule wording under AC12. This correction removes that residue; the minor
+  remains unaccepted until the exact documentation re-audit passes.
 
 ## Feedback Traceability
 
@@ -257,6 +266,7 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
 
 ## Next Authorized Action
 
-Request and complete the exact human 0.107 closeout audit. Do not begin 0.108
-production implementation until that audit is accepted. Keep 0.106 B2's
-external effects held pending their separate exact authorization.
+Request and complete the exact AC12 documentation re-audit for 0.107. Do not
+begin 0.108 production implementation until that re-audit accepts minor
+closeout. Keep 0.106 B2's external effects held pending their separate exact
+authorization.
