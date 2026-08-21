@@ -132,7 +132,7 @@ pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
 ///
 /// Panics when `role` is not a canonical non-root canister role.
 #[must_use]
-pub fn standalone_config_source(role: &str) -> String {
+fn standalone_config_source(role: &str) -> String {
     assert!(
         role != "root" && validate_canister_role_name(role).is_ok(),
         "standalone Canic config requires a canonical non-root role"

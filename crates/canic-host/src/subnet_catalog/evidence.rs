@@ -7,7 +7,8 @@
 use ic_query::subnet_catalog::{
     CatalogSourceSelection, SubnetCatalogFailureCacheDisposition, SubnetCatalogField,
     SubnetCatalogLoadFailure, SubnetCatalogLoadStage, SubnetCatalogRefreshTrigger,
-    SubnetCatalogRegistryRecordKind, SubnetCatalogRetryability, SubnetCatalogSubject,
+    SubnetCatalogRegistryRecordEvidence, SubnetCatalogRegistryRecordKind,
+    SubnetCatalogRegistryValueEncoding, SubnetCatalogRetryability, SubnetCatalogSubject,
     SubnetCatalogUnknownRetryReason,
 };
 use serde::Serialize;
@@ -23,6 +24,10 @@ pub struct SubnetCatalogLoadFailureEvidenceV1 {
     pub minimum_assurance: String,
     pub stage: SubnetCatalogLoadStageV1,
     pub registry_version: Option<u64>,
+    pub returned_registry_value_version: Option<u64>,
+    pub source_endpoint: Option<String>,
+    pub assurance: Option<String>,
+    pub registry_records: Vec<SubnetCatalogRegistryRecordEvidenceV1>,
     pub cache_disposition: SubnetCatalogFailureCacheDispositionV1,
     pub subject: Option<SubnetCatalogSubjectV1>,
     pub code: String,
@@ -50,6 +55,12 @@ impl SubnetCatalogLoadFailureEvidenceV1 {
             minimum_assurance: failure.request.minimum_assurance.as_str().to_string(),
             stage: failure.stage.into(),
             registry_version: failure.registry_version,
+            returned_registry_value_version: failure.returned_registry_value_version,
+            source_endpoint: failure.source_endpoint.clone(),
+            assurance: failure
+                .assurance
+                .map(|assurance| assurance.as_str().to_string()),
+            registry_records: failure.registry_records.iter().map(Into::into).collect(),
             cache_disposition: failure.cache_disposition.into(),
             subject: failure.subject.as_ref().map(Into::into),
             code: failure.code.as_str().to_string(),
@@ -212,6 +223,7 @@ pub enum SubnetCatalogSubjectV1 {
         record_kind: SubnetCatalogRegistryRecordKindV1,
         key: String,
         subnet: Option<String>,
+        canister_range_start: Option<String>,
     },
     Subnet {
         subnet: String,
@@ -249,6 +261,9 @@ impl From<&SubnetCatalogSubject> for SubnetCatalogSubjectV1 {
                 record_kind: record.kind.into(),
                 key: record.key.clone(),
                 subnet: record.subnet.map(|subnet| subnet.to_text()),
+                canister_range_start: record
+                    .canister_range_start
+                    .map(|canister| canister.to_text()),
             },
             SubnetCatalogSubject::Subnet { subnet, field } => Self::Subnet {
                 subnet: subnet.to_text(),
@@ -288,6 +303,58 @@ impl From<SubnetCatalogRegistryRecordKind> for SubnetCatalogRegistryRecordKindV1
             SubnetCatalogRegistryRecordKind::SubnetList => Self::SubnetList,
             SubnetCatalogRegistryRecordKind::RoutingTable => Self::RoutingTable,
             SubnetCatalogRegistryRecordKind::SubnetRecord => Self::SubnetRecord,
+        }
+    }
+}
+
+/// One successful Registry value read completed before the catalog failure.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct SubnetCatalogRegistryRecordEvidenceV1 {
+    pub record_kind: SubnetCatalogRegistryRecordKindV1,
+    pub key: String,
+    pub subnet: Option<String>,
+    pub canister_range_start: Option<String>,
+    pub requested_registry_version: u64,
+    pub returned_registry_version: u64,
+    pub timestamp_nanoseconds: u64,
+    pub source_endpoint: String,
+    pub assurance: String,
+    pub value_encoding: SubnetCatalogRegistryValueEncodingV1,
+}
+
+impl From<&SubnetCatalogRegistryRecordEvidence> for SubnetCatalogRegistryRecordEvidenceV1 {
+    fn from(value: &SubnetCatalogRegistryRecordEvidence) -> Self {
+        Self {
+            record_kind: value.record.kind.into(),
+            key: value.record.key.clone(),
+            subnet: value.record.subnet.map(|subnet| subnet.to_text()),
+            canister_range_start: value
+                .record
+                .canister_range_start
+                .map(|canister| canister.to_text()),
+            requested_registry_version: value.requested_registry_version,
+            returned_registry_version: value.returned_registry_version,
+            timestamp_nanoseconds: value.timestamp_nanoseconds,
+            source_endpoint: value.source_endpoint.clone(),
+            assurance: value.assurance.as_str().to_string(),
+            value_encoding: value.value_encoding.into(),
+        }
+    }
+}
+
+/// Exact transport representation used for a completed Registry value read.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubnetCatalogRegistryValueEncodingV1 {
+    Inline,
+    Chunked,
+}
+
+impl From<SubnetCatalogRegistryValueEncoding> for SubnetCatalogRegistryValueEncodingV1 {
+    fn from(value: SubnetCatalogRegistryValueEncoding) -> Self {
+        match value {
+            SubnetCatalogRegistryValueEncoding::Inline => Self::Inline,
+            SubnetCatalogRegistryValueEncoding::Chunked => Self::Chunked,
         }
     }
 }
@@ -404,39 +471,14 @@ mod tests {
     use ic_query::subnet_catalog::{
         CatalogAssurance, SubnetCatalogErrorCategory, SubnetCatalogErrorCode,
         SubnetCatalogHostError, SubnetCatalogLoadFailureRequest,
-        SubnetCatalogRegistryRecordSubject,
+        SubnetCatalogRegistryRecordSubject, SubnetCatalogRegistryValueEncoding,
     };
 
     #[test]
     fn projection_preserves_every_typed_failure_field_without_reclassification() {
         let subnet = Principal::from_slice(&[9; 29]);
-        let failure = SubnetCatalogLoadFailure {
-            request: SubnetCatalogLoadFailureRequest {
-                network: "ic".to_string(),
-                source: Some(CatalogSourceSelection::uncertified_query("https://ic0.app")),
-                minimum_assurance: CatalogAssurance::UncertifiedQuery,
-            },
-            stage: SubnetCatalogLoadStage::RefreshFailed,
-            registry_version: Some(881_337),
-            cache_disposition: SubnetCatalogFailureCacheDisposition::RefreshFailed(
-                SubnetCatalogRefreshTrigger::Missing,
-            ),
-            subject: Some(SubnetCatalogSubject::RegistryRecord(
-                SubnetCatalogRegistryRecordSubject {
-                    kind: SubnetCatalogRegistryRecordKind::SubnetRecord,
-                    key: "subnet_record_test".to_string(),
-                    subnet: Some(subnet),
-                },
-            )),
-            code: SubnetCatalogErrorCode::InvalidReadPolicy,
-            category: SubnetCatalogErrorCategory::Input,
-            retryability: SubnetCatalogRetryability::Unknown(
-                SubnetCatalogUnknownRetryReason::RegistryResponse,
-            ),
-            source: SubnetCatalogHostError::InvalidReadPolicy {
-                reason: "typed fixture".to_string(),
-            },
-        };
+        let canister_range_start = Principal::from_slice(&[7; 29]);
+        let failure = detailed_failure_fixture();
 
         let evidence = SubnetCatalogLoadFailureEvidenceV1::from_preflight_failure(&failure);
 
@@ -453,6 +495,24 @@ mod tests {
         assert_eq!(evidence.minimum_assurance, "uncertified_query");
         assert_eq!(evidence.stage, SubnetCatalogLoadStageV1::RefreshFailed);
         assert_eq!(evidence.registry_version, Some(881_337));
+        assert_eq!(evidence.returned_registry_value_version, Some(881_336));
+        assert_eq!(evidence.source_endpoint.as_deref(), Some("https://ic0.app"));
+        assert_eq!(evidence.assurance.as_deref(), Some("uncertified_query"));
+        assert_eq!(
+            evidence.registry_records,
+            [SubnetCatalogRegistryRecordEvidenceV1 {
+                record_kind: SubnetCatalogRegistryRecordKindV1::RoutingTable,
+                key: "canister_ranges_test".to_string(),
+                subnet: None,
+                canister_range_start: Some(canister_range_start.to_text()),
+                requested_registry_version: 881_337,
+                returned_registry_version: 881_330,
+                timestamp_nanoseconds: 42,
+                source_endpoint: "https://ic0.app".to_string(),
+                assurance: "uncertified_query".to_string(),
+                value_encoding: SubnetCatalogRegistryValueEncodingV1::Chunked,
+            }]
+        );
         assert_eq!(
             evidence.cache_disposition,
             SubnetCatalogFailureCacheDispositionV1::RefreshFailed {
@@ -465,6 +525,7 @@ mod tests {
                 record_kind: SubnetCatalogRegistryRecordKindV1::SubnetRecord,
                 key: "subnet_record_test".to_string(),
                 subnet: Some(subnet.to_text()),
+                canister_range_start: None,
             })
         );
         assert_eq!(evidence.code, "invalid_read_policy");
@@ -482,5 +543,56 @@ mod tests {
         let json = serde_json::to_value(evidence).expect("serialize typed projection");
         assert_eq!(json["retryability"]["kind"], "unknown");
         assert_eq!(json["retryability"]["reason"], "registry_response");
+        assert_eq!(json["registry_records"][0]["value_encoding"], "chunked");
+    }
+
+    fn detailed_failure_fixture() -> SubnetCatalogLoadFailure {
+        let subnet = Principal::from_slice(&[9; 29]);
+        let canister_range_start = Principal::from_slice(&[7; 29]);
+        SubnetCatalogLoadFailure {
+            request: SubnetCatalogLoadFailureRequest {
+                network: "ic".to_string(),
+                source: Some(CatalogSourceSelection::uncertified_query("https://ic0.app")),
+                minimum_assurance: CatalogAssurance::UncertifiedQuery,
+            },
+            stage: SubnetCatalogLoadStage::RefreshFailed,
+            registry_version: Some(881_337),
+            returned_registry_value_version: Some(881_336),
+            source_endpoint: Some("https://ic0.app".to_string()),
+            assurance: Some(CatalogAssurance::UncertifiedQuery),
+            registry_records: vec![SubnetCatalogRegistryRecordEvidence {
+                record: SubnetCatalogRegistryRecordSubject {
+                    kind: SubnetCatalogRegistryRecordKind::RoutingTable,
+                    key: "canister_ranges_test".to_string(),
+                    subnet: None,
+                    canister_range_start: Some(canister_range_start),
+                },
+                requested_registry_version: 881_337,
+                returned_registry_version: 881_330,
+                timestamp_nanoseconds: 42,
+                source_endpoint: "https://ic0.app".to_string(),
+                assurance: CatalogAssurance::UncertifiedQuery,
+                value_encoding: SubnetCatalogRegistryValueEncoding::Chunked,
+            }],
+            cache_disposition: SubnetCatalogFailureCacheDisposition::RefreshFailed(
+                SubnetCatalogRefreshTrigger::Missing,
+            ),
+            subject: Some(SubnetCatalogSubject::RegistryRecord(
+                SubnetCatalogRegistryRecordSubject {
+                    kind: SubnetCatalogRegistryRecordKind::SubnetRecord,
+                    key: "subnet_record_test".to_string(),
+                    subnet: Some(subnet),
+                    canister_range_start: None,
+                },
+            )),
+            code: SubnetCatalogErrorCode::InvalidReadPolicy,
+            category: SubnetCatalogErrorCategory::Input,
+            retryability: SubnetCatalogRetryability::Unknown(
+                SubnetCatalogUnknownRetryReason::RegistryResponse,
+            ),
+            source: SubnetCatalogHostError::InvalidReadPolicy {
+                reason: "typed fixture".to_string(),
+            },
+        }
     }
 }

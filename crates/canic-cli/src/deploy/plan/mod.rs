@@ -350,9 +350,10 @@ mod tests {
     };
     use canic_host::fleet_install_input::{
         SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1,
-        SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1, SubnetCatalogRegistryRecordKindV1,
-        SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1, SubnetCatalogSubjectV1,
-        SubnetCatalogUnknownRetryReasonV1,
+        SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1,
+        SubnetCatalogRegistryRecordEvidenceV1, SubnetCatalogRegistryRecordKindV1,
+        SubnetCatalogRegistryValueEncodingV1, SubnetCatalogRetryabilityV1,
+        SubnetCatalogSourceKindV1, SubnetCatalogSubjectV1, SubnetCatalogUnknownRetryReasonV1,
     };
 
     #[test]
@@ -494,6 +495,21 @@ mod tests {
             minimum_assurance: "uncertified_query".to_string(),
             stage: SubnetCatalogLoadStageV1::RefreshFailed,
             registry_version: Some(881_337),
+            returned_registry_value_version: Some(881_336),
+            source_endpoint: Some("https://ic0.app".to_string()),
+            assurance: Some("uncertified_query".to_string()),
+            registry_records: vec![SubnetCatalogRegistryRecordEvidenceV1 {
+                record_kind: SubnetCatalogRegistryRecordKindV1::RoutingTable,
+                key: "canister_ranges_test".to_string(),
+                subnet: None,
+                canister_range_start: Some("aaaaa-aa".to_string()),
+                requested_registry_version: 881_337,
+                returned_registry_version: 881_330,
+                timestamp_nanoseconds: 42,
+                source_endpoint: "https://ic0.app".to_string(),
+                assurance: "uncertified_query".to_string(),
+                value_encoding: SubnetCatalogRegistryValueEncodingV1::Chunked,
+            }],
             cache_disposition: SubnetCatalogFailureCacheDispositionV1::RefreshFailed {
                 trigger: SubnetCatalogRefreshTriggerV1::Missing,
             },
@@ -501,6 +517,7 @@ mod tests {
                 record_kind: SubnetCatalogRegistryRecordKindV1::SubnetList,
                 key: "subnet_list".to_string(),
                 subnet: None,
+                canister_range_start: None,
             }),
             code: "registry_refresh".to_string(),
             category: "network".to_string(),
@@ -519,9 +536,15 @@ mod tests {
         let text = render_text(&report);
 
         assert!(json.contains("\"registry_version\": 881337"));
+        assert!(json.contains("\"returned_registry_value_version\": 881336"));
+        assert!(json.contains("\"value_encoding\": \"chunked\""));
         assert!(json.contains("\"kind\": \"unknown\""));
         assert!(json.contains("\"reason\": \"registry_response\""));
         assert!(text.contains("registry_version: 881337"));
+        assert!(text.contains("returned_registry_value_version: 881336"));
+        assert!(text.contains("source_endpoint: https://ic0.app"));
+        assert!(text.contains("completed_registry_record_count: 1"));
+        assert!(text.contains("value_encoding=chunked"));
         assert!(text.contains("cache_disposition: refresh_failed"));
         assert!(text.contains("refresh_trigger: missing"));
         assert!(text.contains("retryability: unknown"));

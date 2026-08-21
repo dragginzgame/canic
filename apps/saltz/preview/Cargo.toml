@@ -6,6 +6,11 @@ version = { workspace = true }
 publish = false
 description = "Standalone read-only Saltz waveform preview canister"
 
+[package.metadata.cargo-machete]
+# `candid::Deserialize` expands against the destination crate's direct `serde`
+# dependency.
+ignored = ["serde"]
+
 [lib]
 crate-type = ["cdylib"]
 

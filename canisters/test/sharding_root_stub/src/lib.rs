@@ -54,7 +54,7 @@ struct StubCreateCanisterResult {
 }
 
 #[ic_cdk::init]
-fn init() {}
+const fn init() {}
 
 #[derive(CandidType, Deserialize)]
 enum RootCommand {

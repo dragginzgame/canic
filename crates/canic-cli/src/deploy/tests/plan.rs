@@ -672,6 +672,16 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
     );
     assert_eq!(json["catalog_failure"]["registry_version"], JsonValue::Null);
     assert_eq!(
+        json["catalog_failure"]["returned_registry_value_version"],
+        JsonValue::Null
+    );
+    assert_eq!(json["catalog_failure"]["source_endpoint"], JsonValue::Null);
+    assert_eq!(json["catalog_failure"]["assurance"], JsonValue::Null);
+    assert_eq!(
+        json["catalog_failure"]["registry_records"],
+        JsonValue::Array(vec![])
+    );
+    assert_eq!(
         json["catalog_failure"]["retryability"]["kind"],
         "not_retryable"
     );

@@ -9,7 +9,8 @@ mod evidence;
 pub use evidence::{
     SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1, SubnetCatalogFieldV1,
     SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1,
-    SubnetCatalogRegistryRecordKindV1, SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1,
+    SubnetCatalogRegistryRecordEvidenceV1, SubnetCatalogRegistryRecordKindV1,
+    SubnetCatalogRegistryValueEncodingV1, SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1,
     SubnetCatalogSubjectV1, SubnetCatalogUnknownRetryReasonV1,
 };
 
@@ -136,6 +137,10 @@ mod tests {
         assert!(evidence.source_endpoints.is_empty());
         assert_eq!(evidence.stage, SubnetCatalogLoadStageV1::CacheAbsence);
         assert_eq!(evidence.registry_version, None);
+        assert_eq!(evidence.returned_registry_value_version, None);
+        assert_eq!(evidence.source_endpoint, None);
+        assert_eq!(evidence.assurance, None);
+        assert!(evidence.registry_records.is_empty());
         assert_eq!(
             evidence.cache_disposition,
             SubnetCatalogFailureCacheDispositionV1::CacheMissing

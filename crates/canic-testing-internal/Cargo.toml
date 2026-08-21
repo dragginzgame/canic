@@ -8,6 +8,11 @@ description = "Workspace-only internal test support for Canic self-tests"
 readme = "README.md"
 publish = false
 
+[package.metadata.cargo-machete]
+# `candid::Deserialize` expands against the destination crate's direct `serde`
+# dependency.
+ignored = ["serde"]
+
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = [] }

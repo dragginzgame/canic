@@ -552,7 +552,7 @@ macro_rules! finish {
         mod __canic_candid_export {
             #![allow(
                 unexpected_cfgs,
-                reason = "Canic host builds inject and register this destination-crate cfg"
+                reason = "registered builds emit no lint, while runtime-only consumers may see this destination cfg"
             )]
 
             use super::*;

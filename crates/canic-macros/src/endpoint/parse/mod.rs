@@ -24,7 +24,7 @@ const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must be expressed via requ
 ///
 
 #[derive(Clone, Debug)]
-pub enum AuthScopeArg {
+pub(super) enum AuthScopeArg {
     Literal(String),
     Expr(TokenStream2),
 }
@@ -34,7 +34,7 @@ pub enum AuthScopeArg {
 ///
 
 #[derive(Clone, Debug)]
-pub enum BuiltinPredicate {
+pub(super) enum BuiltinPredicate {
     AttestedLocalSubnet,
     FleetAllowsUpdates,
     FleetIsQueryable,
@@ -60,7 +60,7 @@ pub enum BuiltinPredicate {
 ///
 
 #[derive(Clone, Debug)]
-pub enum AccessExprAst {
+pub(super) enum AccessExprAst {
     All(Vec<Self>),
     Any(Vec<Self>),
     Not(Box<Self>),
@@ -72,7 +72,7 @@ pub enum AccessExprAst {
 ///
 
 #[derive(Clone, Debug)]
-pub enum AccessPredicateAst {
+pub(super) enum AccessPredicateAst {
     Builtin(BuiltinPredicate),
     Custom(TokenStream2),
 }
@@ -82,13 +82,13 @@ pub enum AccessPredicateAst {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QueryMode {
+pub(super) enum QueryMode {
     Plain,
     Composite,
 }
 
 impl QueryMode {
-    pub const fn is_composite(self) -> bool {
+    pub(super) const fn is_composite(self) -> bool {
         matches!(self, Self::Composite)
     }
 }
@@ -98,7 +98,7 @@ impl QueryMode {
 ///
 
 #[derive(Debug)]
-pub struct ParsedArgs {
+pub(super) struct ParsedArgs {
     pub forwarded: Vec<TokenStream2>,
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
@@ -109,7 +109,7 @@ pub struct ParsedArgs {
 }
 
 #[expect(clippy::too_many_lines)]
-pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
+pub(super) fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     if attr.is_empty() {
         return Ok(empty());
     }

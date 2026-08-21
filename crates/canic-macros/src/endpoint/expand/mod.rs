@@ -13,7 +13,7 @@ use syn::{ItemFn, Signature};
 //
 
 #[expect(clippy::default_trait_access)]
-pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> TokenStream2 {
+pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> TokenStream2 {
     let attrs = func.attrs.clone();
     let orig_sig = func.sig.clone();
     let orig_name = orig_sig.ident.clone();
