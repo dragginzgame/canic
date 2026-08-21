@@ -294,10 +294,18 @@ failures across every workspace member, narrows internal facade/proc-macro
 visibility and removes two redundant dependencies from the test-only IcyDB
 composition fixture. Exact generated-code dependency exceptions are documented
 and the repository cargo-machete scan is clean. These compile-time changes do
-not change generated Canister code. No external effect occurred. Held 0.106 B2
-effects remain independent and unauthorized. The corrected implementation
-line is ready for the required human 0.107 closeout audit; it is not yet
-accepted or closed.
+not change generated Canister code. A maintainer-owned complete-validation run
+then passed the Fleet deployment-restore and every serial PocketIC lane but
+exposed two unrelated unit-fixture races: one placement assertion resampled a
+one-second wall clock after the operation, and Linux returned `ETXTBSY` while
+one fixture inspected a directly published fake `ic-wasm` executable. The
+fixtures now compare returned authority with its durable row and atomically
+publish the executable from a closed staging path; focused placement/artifact
+suites and warning-denied Clippy pass. The complete gate remains for the
+maintainer to rerun. No external effect occurred. Held 0.106 B2 effects remain
+independent and unauthorized. Once the maintainer reruns the complete gate,
+the corrected implementation line is ready for the required human 0.107
+closeout audit; it is not yet accepted or closed.
 
 The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require

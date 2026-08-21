@@ -338,16 +338,20 @@ fn recover_entry_repairs_valid_stale_provisional_child() {
     let result = block_on(PlacementIndexWorkflow::recover_entry("projects", "alpha"))
         .expect("valid provisional child should be repaired");
 
+    let PlacementIndexRecoveryResponse::RepairedToBound {
+        instance_pid,
+        bound_at,
+    } = result
+    else {
+        panic!("valid provisional child must repair to a bound entry");
+    };
+    assert_eq!(instance_pid, child_pid);
     assert_eq!(
-        result,
-        PlacementIndexRecoveryResponse::RepairedToBound {
-            instance_pid: child_pid,
-            bound_at: IcOps::now_secs(),
-        }
-    );
-    std::assert_matches!(
         PlacementIndexRegistryOps::lookup_entry("projects", "alpha"),
-        Some(PlacementIndexStatusResponse::Bound { instance_pid, .. }) if instance_pid == child_pid
+        Some(PlacementIndexStatusResponse::Bound {
+            instance_pid: child_pid,
+            bound_at,
+        })
     );
 }
 

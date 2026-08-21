@@ -319,6 +319,36 @@ standalone-local artifact was then produced with the canonical `canic build`
 path before Candid extraction. No broad workspace, full PocketIC or release
 validation suite was run.
 
+## Maintainer Validation Follow-Up
+
+A later maintainer-owned complete-validation run passed the Fleet deployment-
+restore proof and every serial PocketIC lane. Its ordinary workspace unit lane
+found two independent fixture races outside deployment behavior:
+
+- placement recovery returned and persisted `bound_at = 1787314241`, while the
+  assertion resampled the wall clock across the next second and expected
+  `1787314242`; that first panic poisoned the shared seam-test mutex and caused
+  14 follow-on failures;
+- the successful-shrink fixture received Linux `ETXTBSY` while inspecting its
+  just-written fake `ic-wasm` executable.
+
+The placement test now compares the operation-returned timestamp with the
+exact durable bound row. The artifact helper writes and closes a staged fake
+tool, marks it executable and atomically publishes it before invocation.
+Focused correction evidence passes:
+
+```text
+cargo test --locked -p canic-core workflow::placement::index::tests -- --nocapture
+  12 passed
+cargo test --locked -p canic-host artifact_io::tests -- --nocapture
+  7 passed
+cargo clippy --locked -p canic-core -p canic-host --all-targets -- -D warnings
+  passed
+```
+
+The automated correction did not rerun the complete validation gate; that
+remains part of the maintainer-owned release flow.
+
 ## Remaining Boundary
 
 B5-B7 implementation evidence is complete after the `0.107.2` correction and
@@ -336,6 +366,7 @@ visibility and makes dead code and stale lint expectations hard failures; it
 also deletes two redundant dependencies from the test-only IcyDB composition
 fixture and records only proven generated-code dependency exceptions. It does
 not alter generated macro output. Neither part alters the B7 managed/Root/
-Coordinator/Store/runtime-probe Wasm or Candid boundary recorded above. The
-line is **ready for human 0.107 closeout audit**. Do not begin 0.108 production
-before the maintainer requests and accepts that exact audit.
+Coordinator/Store/runtime-probe Wasm or Candid boundary recorded above. After
+the maintainer reruns the complete gate, the line is **ready for human 0.107
+closeout audit**. Do not begin 0.108 production before the maintainer requests
+and accepts that exact audit.
