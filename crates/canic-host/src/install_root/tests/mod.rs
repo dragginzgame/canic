@@ -41,8 +41,9 @@ use super::{
     InstallRootOptions, InstallRootPhase, check_install_deployment_truth,
     check_install_execution_preflight, current_install_release_build, install_root,
     latest_deployment_truth_receipt_path_from_root, prepare_current_fresh_fleet_preflight,
-    require_current_release_builder, root_registry_synchronization_operation_id,
-    root_store_adoption_operation_id, root_store_bootstrap_operation_id,
+    require_current_release_builder, root_component_provisioning_operation_id,
+    root_registry_synchronization_operation_id, root_store_adoption_operation_id,
+    root_store_bootstrap_operation_id,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -77,6 +78,8 @@ use std::{
 fn root_install_phase_operation_ids_are_nonzero_distinct_and_stable() {
     let install_operation_id = [7; 32];
     let operation_ids = [
+        install_operation_id,
+        root_component_provisioning_operation_id(install_operation_id),
         root_store_adoption_operation_id(install_operation_id),
         root_store_bootstrap_operation_id(install_operation_id),
         root_registry_synchronization_operation_id(install_operation_id),
@@ -89,10 +92,16 @@ fn root_install_phase_operation_ids_are_nonzero_distinct_and_stable() {
     let unique = operation_ids
         .into_iter()
         .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(unique.len(), 3);
+    assert_eq!(unique.len(), 5);
     assert_eq!(
-        root_store_bootstrap_operation_id(install_operation_id),
-        root_store_bootstrap_operation_id(install_operation_id)
+        operation_ids,
+        [
+            install_operation_id,
+            root_component_provisioning_operation_id(install_operation_id),
+            root_store_adoption_operation_id(install_operation_id),
+            root_store_bootstrap_operation_id(install_operation_id),
+            root_registry_synchronization_operation_id(install_operation_id),
+        ]
     );
 }
 
@@ -622,6 +631,11 @@ subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
 kind = "cycles"
 cycles = "2T"
 
+[coordinator.root_funding]
+minimum_reserve_cycles = "100000000"
+window_secs = 3600
+maximum_cycles = "10T"
+
 [[fleet_subnet_roots]]
 placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
 
@@ -643,6 +657,13 @@ minimum_size = 1
 maximum_size = 1
 canister_cycles = "1T"
 imports = []
+
+[fleet_subnet_roots.root_funding]
+request_threshold = "50000000000"
+target_balance = "2T"
+cooldown_secs = 300
+window_secs = 3600
+maximum_cycles = "10T"
 
 [fleet_subnet_roots.root_creation_funding]
 kind = "cycles"

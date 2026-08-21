@@ -151,6 +151,7 @@ fn validated_root_entry(
         component_topology_digest: authority.binding.component_topology_digest,
         active_release_set: authority.initial_release_set,
         limits: authority.binding.limits.clone(),
+        funding: authority.binding.funding.clone(),
         status: root_entry.status,
     };
     let status_is_current = matches!(

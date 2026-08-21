@@ -426,9 +426,19 @@ type FleetCoordinatorBinding = record {
 // Exact authority and compiled provisioning configuration installed into a fresh Coordinator.
 //
 type FleetCoordinatorInitArgs = record {
+  root_funding : opt FleetCoordinatorRootFundingPolicy;
   component_deployment_configuration : ComponentDeploymentConfiguration;
   authority : FleetRegistryAuthority;
   configured_app : text;
+};
+//
+// FleetCoordinatorRootFundingPolicy
+//
+// Immutable Fleet-wide reserve and grant-budget authority installed into one Coordinator.
+//
+type FleetCoordinatorRootFundingPolicy = record {
+  minimum_reserve_cycles : nat;
+  budget : CyclesFundingBudget;
 };
 //
 // FleetKey
@@ -559,6 +569,15 @@ type FleetSubnetCanisterPoolConfig = record {
   canister_cycles : nat;
 };
 //
+// FleetSubnetRootAutomaticIcpRefillPolicy
+//
+// Optional emergency trigger and target subordinate to one root's ICP-refill policy.
+//
+type FleetSubnetRootAutomaticIcpRefillPolicy = record {
+  target_balance : nat;
+  emergency_threshold : nat;
+};
+//
 // FleetSubnetRootBinding
 //
 // Complete immutable identity, placement, admissions, and limits of one Fleet Subnet Root.
@@ -570,6 +589,7 @@ type FleetSubnetRootBinding = record {
   authority : FleetRegistryAuthority;
   component_admissions : vec ComponentSpecAdmission;
   limits : FleetSubnetRootLimits;
+  funding : FleetSubnetRootFundingAuthority;
 };
 // Controller request confirming typed root absence under one durable execution intent.
 type FleetSubnetRootDeletionCompletionRequest = record {
@@ -720,6 +740,7 @@ type FleetSubnetRootEntry = record {
   fleet_subnet_root : principal;
   component_admissions : vec ComponentSpecAdmission;
   limits : FleetSubnetRootLimits;
+  funding : FleetSubnetRootFundingAuthority;
 };
 //
 // FleetSubnetRootFinalInventoryResponse
@@ -746,6 +767,42 @@ type FleetSubnetRootFinalInventoryResponse = record {
   inventory_hash : blob;
   wasm_store_catalog_hash : blob;
   wasm_store_occupied_bytes : nat64;
+};
+//
+// FleetSubnetRootFundingAuthority
+//
+// Complete immutable Coordinator-grant and optional ICP-refill policy for one root.
+//
+type FleetSubnetRootFundingAuthority = record {
+  root_funding : FleetSubnetRootFundingPolicy;
+  icp_refill : opt FleetSubnetRootIcpRefillPolicy;
+};
+//
+// FleetSubnetRootFundingPolicy
+//
+// Immutable Coordinator-grant thresholds and budget for one registered root.
+//
+type FleetSubnetRootFundingPolicy = record {
+  target_balance : nat;
+  request_threshold : nat;
+  budget : CyclesFundingBudget;
+  cooldown_secs : nat64;
+};
+//
+// FleetSubnetRootIcpRefillPolicy
+//
+// Immutable root-owned ICP conversion budget, balance floor, and system-Canister authority.
+//
+type FleetSubnetRootIcpRefillPolicy = record {
+  cmc_canister_id : opt principal;
+  minimum_icp_balance_e8s : nat64;
+  allow_ic_system_canister_overrides : bool;
+  automatic : opt FleetSubnetRootAutomaticIcpRefillPolicy;
+  window_secs : nat64;
+  min_xdr_permyriad_per_icp : opt nat64;
+  ledger_canister_id : opt principal;
+  max_refill_e8s_per_call : nat64;
+  maximum_refill_e8s : nat64;
 };
 //
 // FleetSubnetRootJoinRequest

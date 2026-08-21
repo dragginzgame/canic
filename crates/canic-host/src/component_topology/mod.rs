@@ -12,7 +12,7 @@ use canic_core::{
     bootstrap::compiled::{ComponentTopology, ConfigModel},
     ids::{
         ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetRegistryAuthority,
-        FleetSubnetRootBinding, FleetSubnetRootLimits, SubnetId,
+        FleetSubnetRootBinding, FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, SubnetId,
     },
 };
 use std::collections::BTreeSet;
@@ -42,6 +42,7 @@ pub struct FleetSubnetRootTopologyInput {
     pub fleet_subnet_root: Principal,
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
 }
 
 ///
@@ -240,6 +241,7 @@ fn finalize_root_binding(
         component_admissions,
         component_topology_digest: projection.digest()?,
         limits: input.limits,
+        funding: input.funding,
     })
 }
 

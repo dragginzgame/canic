@@ -230,6 +230,7 @@ fn root_entry(
         component_topology_digest: projection.digest().expect("root topology digest"),
         active_release_set: release_set(),
         limits: limits(maximum_group_placements),
+        funding: crate::test::support::fleet_subnet_root_funding_authority(),
         status: FleetSubnetRootStatus::Joining,
     }
 }
@@ -263,6 +264,7 @@ fn binding(registry: &FleetRegistry, root: &FleetSubnetRootEntry) -> FleetSubnet
         component_admissions: root.component_admissions.clone(),
         component_topology_digest: root.component_topology_digest,
         limits: root.limits.clone(),
+        funding: root.funding.clone(),
     }
 }
 

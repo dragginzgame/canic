@@ -139,6 +139,7 @@ fn root(
         component_topology_digest: projection.digest().expect("topology digest"),
         active_release_set: release_set(root_byte),
         limits: limits(),
+        funding: crate::test::support::fleet_subnet_root_funding_authority(),
         status: FleetSubnetRootStatus::Joining,
     }
 }
@@ -562,8 +563,18 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "4f31f2a1e8136b26f0d3cfdf1f46c31fba4f9cc0e74e161ed1cb1c4dbf1aa2f3"
+        "88d950e6a112c8bea333bf69b8e40afb675024895654723a8def99945385fa95"
     );
+
+    let mut changed_policy = registry;
+    changed_policy.fleet_subnet_roots[0]
+        .funding
+        .root_funding
+        .cooldown_secs += 1;
+    let changed_manifest =
+        FleetRegistryOps::manifest(&changed_policy.authority, &topology, &changed_policy)
+            .expect("changed-policy Registry manifest");
+    assert_ne!(manifest.content_hash, changed_manifest.content_hash);
 }
 
 #[test]
@@ -586,6 +597,21 @@ fn registry_rejects_spec_drift_and_noncanonical_roots() {
     std::assert_matches!(
         validation::validate(&registry.authority, &topology, &registry),
         Err(FleetRegistryOpsError::NonCanonicalFleetSubnetRootOrder)
+    );
+
+    let mut invalid_policy =
+        validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+            .expect("valid genesis Registry");
+    invalid_policy.fleet_subnet_roots = vec![root(&topology, 5, 6, &[("alpha", 1)])];
+    invalid_policy.fleet_subnet_roots[0]
+        .funding
+        .root_funding
+        .request_threshold = crate::cdk::types::Cycles::new(1);
+    std::assert_matches!(
+        validation::validate(&invalid_policy.authority, &topology, &invalid_policy),
+        Err(FleetRegistryOpsError::RootFundingPolicy(
+            crate::model::fleet_funding_policy::FleetFundingPolicyValidationError::RootRequestThresholdBelowFloor
+        ))
     );
 }
 

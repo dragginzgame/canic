@@ -367,6 +367,7 @@ fn init_args_with_config(coordinator: Principal, config: &ConfigModel) -> FleetC
             },
             epoch: 1,
         },
+        root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
         component_deployment_configuration,
     }
 }
@@ -377,6 +378,22 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     let coordinator = principal(3);
     let controller = principal(4);
     let args = init_args(coordinator);
+    let expected_root_funding = args.root_funding.clone();
+
+    let mut invalid_policy = args.clone();
+    invalid_policy
+        .root_funding
+        .as_mut()
+        .expect("Coordinator root-funding policy")
+        .minimum_reserve_cycles = Cycles::new(1);
+    let invalid =
+        FleetCoordinatorWorkflow::initialize(invalid_policy, controller, true, coordinator)
+            .expect_err("invalid Coordinator funding policy must reject before commitment");
+    assert_eq!(
+        invalid.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
+    assert!(FleetCoordinatorRegistryStore::export().current.is_none());
 
     FleetCoordinatorWorkflow::initialize(args.clone(), controller, true, coordinator)
         .expect("commit genesis");
@@ -418,6 +435,14 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
     );
 
     let durable = FleetCoordinatorRegistryStore::export();
+    assert_eq!(
+        durable
+            .current
+            .as_ref()
+            .expect("Coordinator state")
+            .root_funding,
+        expected_root_funding
+    );
     let mut corrupted = durable.clone();
     corrupted
         .current
@@ -575,6 +600,41 @@ fn root_join_compare_and_commit_retains_exact_response_receipts() {
     assert_eq!(
         invalid.code(),
         canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+    );
+}
+
+#[test]
+fn root_join_rejects_a_fleet_budget_that_cannot_admit_the_root_target() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(17);
+    let mut args = init_args(coordinator);
+    args.root_funding
+        .as_mut()
+        .expect("Coordinator root-funding policy")
+        .budget
+        .maximum_cycles = Cycles::new(50_000_000_000);
+    let topology = args
+        .component_deployment_configuration
+        .component_topology
+        .clone();
+    FleetCoordinatorWorkflow::initialize(args, principal(18), true, coordinator)
+        .expect("commit bounded genesis");
+    let genesis = FleetCoordinatorWorkflow::version().expect("genesis version");
+
+    let rejected = FleetCoordinatorWorkflow::join_root(FleetSubnetRootJoinRequest {
+        expected_registry: genesis,
+        entry: joining_entry(&topology, 7, 19, 1),
+    })
+    .expect_err("Fleet budget below the root target must reject");
+    assert_eq!(
+        rejected.public_error().code(),
+        canic_core::diagnostics::codes::STATE_INVALID.raw_code()
+    );
+    assert!(
+        FleetCoordinatorWorkflow::registry()
+            .expect("unchanged Registry")
+            .fleet_subnet_roots
+            .is_empty()
     );
 }
 
@@ -3966,6 +4026,7 @@ fn fresh_component_plan(
                 fleet_subnet_root: root.fleet_subnet_root,
                 component_admissions: root.component_admissions.clone(),
                 component_topology_digest: root.component_topology_digest,
+                funding: root.funding.clone(),
                 limits: root.limits.clone(),
             },
             active_release_set: root.active_release_set,
@@ -4168,6 +4229,7 @@ fn fleet_subnet_root_binding(
         fleet_subnet_root: root.fleet_subnet_root,
         component_admissions: root.component_admissions.clone(),
         component_topology_digest: root.component_topology_digest,
+        funding: root.funding.clone(),
         limits: root.limits.clone(),
     }
 }
@@ -4678,6 +4740,7 @@ fn joining_entry(
             )),
             manifest_digest: ReleaseSetDigest::from_bytes([root_byte; 32]),
         },
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 3,
             maximum_registry_bytes: 2_097_152,

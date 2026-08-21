@@ -313,22 +313,48 @@ Clippy, ordinary tests and every serial PocketIC lane passed. The audit found
 no runtime or release-boundary defect and rejected closeout only because active
 documents still called the tagged patch open and retained superseded
 authorization/validation wording. This documentation-only correction removes
-that AC12 residue; the implementation is ready for the exact documentation
-re-audit but the minor is not yet accepted or closed. No external effect
-occurred, and held 0.106 B2 effects remain independent and unauthorized.
+that AC12 residue. The exact re-audit passed, the maintainer accepted its
+`APPROVE 0.107 CLOSEOUT` verdict and explicitly opened 0.108. No external
+effect occurred, and held 0.106 B2 effects remain independent and
+unauthorized.
 
-The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
-funding separately from the estate budget. Its proof and mutation require
-completed 0.103, 0.104 and 0.107 plus accepted 0.106 B1 ownership/cost
-evidence, not 0.106 B2, plus its own proof. Its public work adds
-Root/Coordinator command and
-status variants rather than funding methods. Its test-only B1 proof now passes
-intent/call/receipt interruption, exact caller binding and zero-accept replay
-with automatic refund. PocketIC 15.0.0 observes a 42,102,499,000-cycle exact
-call cost for the 1T fixture request, at most 12,460,866 cycles of Coordinator
-execution overhead and at most 5,227,404 cycles of root execution overhead.
-B1 proposes separate 100M-rounded execution allowances and remains at
-maintainer acceptance before production or stable-state work begins.
+A post-publication fresh Toko installation then exposed an operation-identity
+collision that blocks Component provisioning before application tests begin:
+Fleet activation and Root Component provisioning reused the install operation
+ID, so Root status routing could not return the Coordinator-observable record.
+The 0.108 correction derives a distinct provisioning phase ID, defers
+Root controller/Coordinator observer checks until unique ownership is known,
+retains exact release-build Candid sidecars for infrastructure binding and
+reports the last correlated `AcceptingRoots` evidence when the bounded host
+loop fails. Focused host and control-plane regression tests pass. The
+downstream fresh-install rerun and maintainer-owned release gate remain
+pending.
+
+The active 0.108 line closes replay-safe Coordinator-backed Root operating
+funding separately from the estate budget. The maintainer accepted M0 on
+2026-08-21 and continued the sequenced implementation. The complete test-only
+M0 proof passes Root accept-plus-receipt trap rollback, post-commit
+Coordinator response loss, zero-accept replay/refund and the pre-acceptance
+balance API semantic. It also passes a real nested Root-to-Coordinator-to-same-
+Root request/retry journey, a bounded current/last-result sequence
+counterexample suite and the offline Fleet-catalog/install-journal break-glass
+authority proof. The emergency journey covers fee/decimals/rate acquisition,
+ledger-transfer response loss and duplicate recovery, CMC-notify response loss
+and replay, then terminal completion. M1 recomputed the final 16 KiB
+`canic_command` envelope at 42,118,809,000 cycles and freezes both Root
+request/retry and automatic-refill floors at 42,200,000,000 cycles on PocketIC
+15.0.0 with pinned `ic-cdk 0.20.2`. The eventual command DTO must fit that
+frozen bound. Fixed epoch windows charge the reservation-time window, cooldown
+starts at first accepted receipt, Draining has one lifecycle-owned funding
+fence, and receipt storage stays one current plus one last exact result per
+Root. B2/M1 is complete: strict schema-1 Fleet-input policy, central validation
+and canonical hashes flow through plan, init, root authority and Registry;
+Coordinator genesis and root activation validate independent copies, and the
+unreachable generic `canic.toml` refill path is hard-cut. Generated Candid
+expands only the protected init/Registry data and adds no funding endpoint. B2
+is ready for maintainer review. An unwired B3/M2 Coordinator grant-ops and
+storage slice is preserved on main for continuation; it has no endpoint,
+workflow or attached-cycles execution yet.
 
 Scheduled 0.109 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
@@ -390,10 +416,11 @@ the remaining 0.105 batches; published `v0.105.0` completes B3-B7 without an
 observatory dependency. 0.106 remains evidence-only: repository-local B1 is
 accepted and B2 stays held pending its separately approved external run plan.
 0.107 B2-B7 implementation and the complete validation gate are finished from
-accepted 0.106 B1 without the held B2 external effects. Its closeout audit
-passed AC1-AC11 and AC13 and rejected only AC12 documentation residue; that
-correction is ready for exact re-audit.
-0.108 requires completed 0.107, its accepted inputs and own proof; 0.109
+accepted 0.106 B1 without the held B2 external effects. Its AC12 correction
+re-audit passed and the maintainer accepted the final closeout verdict.
+0.108 has completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
+protected policy is ready for review and an unwired B3/M2 grant-ops slice is
+staged for continuation. 0.109
 requires completed 0.108 plus application-retirement evidence; 0.110 requires
 accepted 0.109 and an exact
 released predecessor; and 0.111 requires accepted 0.110 closeout. Deferred
@@ -834,13 +861,13 @@ physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
 terminal-disposition authorization exists. In 0.107, B2-B7 implementation,
-the full validation gate and AC1-AC11/AC13 audit evidence are complete on
-`ic-query 0.42.0` stable snapshot authority. Request and accept the exact AC12
-documentation re-audit before 0.108 production implementation begins. The
-renumbered 0.108 root-funding B1 proof remains
-complete and ready for maintainer acceptance, but its production work waits
-for that boundary. Do not add a production pool contract, run any remote
-qualification effect or begin 0.109.
+the prior full validation gate and the exact AC12 re-audit/maintainer
+acceptance are complete on `ic-query 0.42.0` stable snapshot authority. Review
+the combined 0.108 B2 protected-policy hard cut and rerun the downstream fresh
+Toko Fleet installation from empty state to confirm the integrated
+provisioning correction. Then complete the staged B3/M2 grant workflow and its
+direct policy, authority and replay tests. Do not add a production pool
+contract, run any remote qualification effect or begin 0.109.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

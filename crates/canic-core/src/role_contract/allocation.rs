@@ -13,6 +13,8 @@ pub const CANIC_CONTROL_PLANE_MIN_ID: u8 = 10;
 pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 29;
 pub const CANIC_CORE_MIN_ID: u8 = 30;
 pub const CANIC_CORE_MAX_ID: u8 = 99;
+pub const CANIC_CORE_LOWER_MAX_ID: u8 = 61;
+pub const CANIC_CORE_UPPER_MIN_ID: u8 = 63;
 
 /// Canonical stable-memory IDs grouped by record owner.
 pub mod memory {
@@ -28,6 +30,7 @@ pub mod memory {
 
         // Fleet Coordinator state.
         pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 15;
+        pub const FLEET_COORDINATOR_FUNDING_ID: u8 = 62;
 
         // Fleet Subnet Root state.
         pub const ROOT_WASM_STORE_STATE_ID: u8 = 16;
@@ -135,9 +138,9 @@ use memory::{
         BLOB_STORAGE_PENDING_DELETIONS_ID, BLOB_STORAGE_ROOTS_ID,
     },
     control_plane::{
-        FLEET_COORDINATOR_REGISTRY_ID, ROOT_CANISTER_INVENTORY_ASSETS_ID,
-        ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_STATE_ID,
-        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
+        FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
+        ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
+        ROOT_CANISTER_POOL_STATE_ID, ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
         ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID,
         ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID, ROOT_COMPONENT_PROVISIONING_STATE_ID,
         ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
@@ -171,6 +174,7 @@ const TEMPLATE_CHUNK_REFS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_REFS
 const TEMPLATE_CHUNK_PAYLOADS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_PAYLOADS_ID)];
 const WASM_STORE_GC_STATE_IDS: &[MemoryId] = &[MemoryId::new(WASM_STORE_GC_STATE_ID)];
 const FLEET_COORDINATOR_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_REGISTRY_ID)];
+const FLEET_COORDINATOR_FUNDING_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_FUNDING_ID)];
 const ROOT_WASM_STORE_STATE_IDS: &[MemoryId] = &[MemoryId::new(ROOT_WASM_STORE_STATE_ID)];
 const ROOT_FLEET_REGISTRY_MIRROR_IDS: &[MemoryId] = &[MemoryId::new(ROOT_FLEET_REGISTRY_MIRROR_ID)];
 const ROOT_COMPONENT_REGISTRY_IDS: &[MemoryId] = &[
@@ -260,6 +264,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::WasmStoreGcState,
         AllocationOwner::CanicControlPlane,
         WASM_STORE_GC_STATE_IDS,
+    ),
+    definition(
+        StateAllocationKey::FleetCoordinatorFunding,
+        AllocationOwner::CanicControlPlane,
+        FLEET_COORDINATOR_FUNDING_IDS,
     ),
     definition(
         StateAllocationKey::FleetCoordinatorRegistry,
@@ -462,7 +471,18 @@ pub fn validate_allocation_definitions(
                     (CANIC_CONTROL_PLANE_MIN_ID, CANIC_CONTROL_PLANE_MAX_ID)
                 }
             };
-            if !(owner_min_id..=owner_max_id).contains(&memory_id.get()) {
+            let id = memory_id.get();
+            let owner_matches = match definition.owner {
+                AllocationOwner::CanicControlPlane => {
+                    (owner_min_id..=owner_max_id).contains(&id)
+                        || id == FLEET_COORDINATOR_FUNDING_ID
+                }
+                AllocationOwner::CanicCore => {
+                    (owner_min_id..=owner_max_id).contains(&id)
+                        && id != FLEET_COORDINATOR_FUNDING_ID
+                }
+            };
+            if !owner_matches {
                 return Err(RoleContractFinding::CatalogInvalid {
                     reason: format!(
                         "allocation {:?} assigns memory ID {} outside owner {} range {owner_min_id}-{owner_max_id}",

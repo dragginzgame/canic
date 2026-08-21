@@ -22,7 +22,10 @@ use crate::storage::stable::{
         RootComponentAllocationRecord, RootComponentDrainingRecord, RootComponentRegistryData,
         RootComponentRegistryStateRecord, RootComponentSubtreeRemovalCompletedLeafRecord,
     },
-    fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
+    fleet_coordinator::{
+        FleetCoordinatorFundingData, FleetCoordinatorFundingRecord, FleetCoordinatorRegistryData,
+        FleetCoordinatorRegistryRecord,
+    },
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
     state::root_wasm_store::{RootWasmStoreStateData, RootWasmStoreStateRecord},
     template::{
@@ -44,12 +47,13 @@ use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
-            FLEET_COORDINATOR_REGISTRY_ID, ROOT_COMPONENT_ALLOCATIONS_ID,
-            ROOT_COMPONENT_DRAINING_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
-            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
-            ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
+            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
+            ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
+            ROOT_COMPONENT_REGISTRY_STATE_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
+            ROOT_FLEET_REGISTRY_MIRROR_ID, ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID,
+            TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID,
+            WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -68,6 +72,15 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             FleetCoordinatorRegistryData::STATE_CONTRACT_NAME,
             190,
             "fleet_coordinator_registry_restores_exact_authority_and_canonical_head",
+        ),
+        descriptor(
+            StateAllocationKey::FleetCoordinatorFunding,
+            "fleet_coordinator_funding",
+            FLEET_COORDINATOR_FUNDING_ID,
+            FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
+            FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
+            191,
+            "fleet_coordinator_funding_restores_exact_reservations_and_terminal_results",
         ),
         descriptor(
             StateAllocationKey::RootFleetRegistryMirror,
@@ -422,6 +435,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         for expected in [
+            StateAllocationKey::FleetCoordinatorFunding,
             StateAllocationKey::FleetCoordinatorRegistry,
             StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
@@ -443,6 +457,11 @@ mod tests {
         let descriptors = canic_control_plane_state_descriptors();
 
         for (allocation, record, snapshot) in [
+            (
+                StateAllocationKey::FleetCoordinatorFunding,
+                FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
+                FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
+            ),
             (
                 StateAllocationKey::FleetCoordinatorRegistry,
                 FleetCoordinatorRegistryRecord::STATE_CONTRACT_NAME,

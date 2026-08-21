@@ -267,6 +267,7 @@ fn root_init_args_are_written_as_binary_candid() {
                         maximum_cycles: Cycles::new(1_000_000_000_000),
                     },
                 },
+                funding: crate::test_support::fleet_subnet_root_funding_authority(),
             },
             initial_release_set: FleetSubnetRootReleaseSet {
                 release_build_id: activation.release_build_id,

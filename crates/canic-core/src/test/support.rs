@@ -8,7 +8,10 @@ use crate::{
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, StandardsCanisterConfig,
     },
-    ids::{CanisterRole, CanonicalNetworkId, ComponentSpecId, FleetId, FleetKey},
+    ids::{
+        CanisterRole, CanonicalNetworkId, ComponentSpecId, CyclesFundingBudget, FleetId, FleetKey,
+        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+    },
     ops::runtime::env::EnvOps,
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
@@ -19,6 +22,23 @@ pub fn fleet_key(byte: u8) -> FleetKey {
     FleetKey {
         canonical_network_id: CanonicalNetworkId::ic_mainnet(),
         fleet_id: FleetId::from_generated_bytes([byte.saturating_add(1); 32]),
+    }
+}
+
+/// Return one valid protected root-funding authority for unrelated unit fixtures.
+#[must_use]
+pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority {
+    FleetSubnetRootFundingAuthority {
+        root_funding: FleetSubnetRootFundingPolicy {
+            request_threshold: Cycles::new(50_000_000_000),
+            target_balance: Cycles::new(60_000_000_000),
+            cooldown_secs: 300,
+            budget: CyclesFundingBudget {
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(100_000_000_000),
+            },
+        },
+        icp_refill: None,
     }
 }
 
@@ -46,7 +66,6 @@ pub fn init_sharding_test_config() {
         kind: CanisterKind::Root,
         initial_cycles: Cycles::new(5_000_000_000_000),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
@@ -61,7 +80,6 @@ pub fn init_sharding_test_config() {
         kind: CanisterKind::Service,
         initial_cycles: Cycles::new(5_000_000_000_000),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: Some(sharding),
@@ -76,7 +94,6 @@ pub fn init_sharding_test_config() {
         kind: CanisterKind::Shard,
         initial_cycles: Cycles::new(5_000_000_000_000),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,

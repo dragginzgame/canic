@@ -568,6 +568,7 @@ mod tests {
                     maximum_cycles: Cycles::new(1_000_000_000_000),
                 },
             },
+            funding: crate::test::support::fleet_subnet_root_funding_authority(),
         };
         (topology, root, component_spec)
     }
@@ -650,6 +651,7 @@ mod tests {
                     maximum_cycles: Cycles::new(1_000_000_000_000),
                 },
             },
+            funding: crate::test::support::fleet_subnet_root_funding_authority(),
         };
         let requester_compiled = topology.get(&requester_spec).expect("requester Spec");
         let requester = ComponentBinding {

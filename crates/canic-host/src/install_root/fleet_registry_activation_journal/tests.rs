@@ -118,27 +118,7 @@ fn journal_rejects_changed_source_or_response_authority() {
 }
 
 fn fixture(root: &Path) -> (PersistedFleetInstallPlan, ComponentTopology, FleetRegistry) {
-    let topology = parse_config_model(
-        r#"
-[app]
-name = "toko"
-
-[roles.root]
-kind = "root"
-package = "root"
-
-[roles.project]
-kind = "canister"
-package = "project"
-
-[component_specs.projects]
-component_role = "project"
-maximum_instances = 2
-"#,
-    )
-    .expect("valid config")
-    .compile_component_topology()
-    .expect("Component Topology");
+    let topology = fixture_component_topology();
     let release_build_id =
         ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([6; 32]));
     let spec = topology
@@ -182,6 +162,7 @@ maximum_instances = 2
         component_topology_digest: topology_digest,
         initial_release_set: release_set,
         limits: limits.clone(),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         canister_pool_imports: Vec::new(),
         root_creation_funding: funding(),
         wasm_store_creation_funding: funding(),
@@ -195,6 +176,7 @@ maximum_instances = 2
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 creation_funding: funding(),
+                root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
             fleet_subnet_roots: vec![root_plan],
         },
@@ -215,11 +197,36 @@ maximum_instances = 2
             component_topology_digest: topology_digest,
             active_release_set: release_set,
             limits,
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
             status: FleetSubnetRootStatus::Joining,
         },
     )
     .expect("Joining root");
     (plan, topology, joining)
+}
+
+fn fixture_component_topology() -> ComponentTopology {
+    parse_config_model(
+        r#"
+[app]
+name = "toko"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.project]
+kind = "canister"
+package = "project"
+
+[component_specs.projects]
+component_role = "project"
+maximum_instances = 2
+"#,
+    )
+    .expect("valid config")
+    .compile_component_topology()
+    .expect("Component Topology")
 }
 
 fn funding() -> PlannedCanisterCreationFunding {

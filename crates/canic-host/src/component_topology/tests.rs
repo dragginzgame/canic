@@ -105,6 +105,7 @@ fn root(
         fleet_subnet_root: Principal::from_slice(&[root_byte; 29]),
         component_admissions,
         limits: limits(),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
     }
 }
 

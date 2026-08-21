@@ -61,8 +61,8 @@ pub mod compiled {
             ConfigModel, CyclesFundingBudgetConfig, CyclesFundingPolicyConfig,
             DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
             FleetServicePlacementPolicyConfig, FleetServiceTargetConfig, FleetServicesConfig,
-            IcpRefillPolicy, IndexConfig, IndexPool, LocalApplicationAuthorizationConfig,
-            LogConfig, MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
+            IndexConfig, IndexPool, LocalApplicationAuthorizationConfig, LogConfig,
+            MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
             MAX_COMPONENT_SPAWN_GRANTS, MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig,
             MetricsProfile, NAME_MAX_BYTES, RoleAttestationConfig, RoleDeclaration,
             RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
@@ -226,6 +226,23 @@ maximum_instances = 1
                 ..
             } if logical_path == "component_specs.default.randomness"
                 && unknown_field == "randomness"
+        ));
+    }
+
+    #[test]
+    fn protected_fleet_funding_policy_is_not_application_config_authority() {
+        let source = format!(
+            "{MINIMAL_CONFIG}\n[component_specs.default.icp_refill]\nmax_refill_e8s_per_call = 1\n"
+        );
+        let error =
+            parse_config_model(&source).expect_err("Fleet policy must reject in canic.toml");
+
+        assert!(matches!(
+            error,
+            ConfigError::CannotParseToml {
+                issue: ConfigTomlIssue::UnknownField { unknown_field, .. },
+                ..
+            } if unknown_field == "icp_refill"
         ));
     }
 

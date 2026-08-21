@@ -1,16 +1,5 @@
 use std::{fs, path::Path, process::Command};
 
-use crate::durable_io::write_bytes;
-
-pub(super) fn extract_candid(
-    debug_wasm_path: &Path,
-    did_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let candid = extract_candid_bytes(debug_wasm_path)?;
-    write_bytes(did_path, &candid)?;
-    Ok(())
-}
-
 pub fn extract_candid_bytes(debug_wasm_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let output = Command::new("candid-extractor")
         .arg(debug_wasm_path)
@@ -45,9 +34,8 @@ fn normalize_candid(candid: &str) -> String {
     normalized
 }
 
-// Remove stale ICP-generated Candid sidecars so local surface scans match the
-// extracted `<role>.did` artifact. Production `ic` builds skip Candid sidecars
-// entirely.
+// Remove stale ICP-generated Candid sidecars so surface scans match the exact
+// selected `<role>.did` artifact.
 pub(super) fn remove_stale_icp_candid_sidecars(artifact_root: &Path) -> std::io::Result<()> {
     for relative in [
         "constructor.did",

@@ -623,6 +623,7 @@ placement.minimum_distinct_roots = 2
                     component_admissions: root.component_admissions.clone(),
                     component_topology_digest: root.component_topology_digest,
                     limits: root.limits.clone(),
+                    funding: root.funding.clone(),
                 },
                 active_release_set: root.active_release_set,
                 placements: vec![ComponentGroupPlacementPlan {
@@ -673,6 +674,7 @@ placement.minimum_distinct_roots = 2
                 },
                 epoch: 1,
             },
+            root_funding: Some(super::super::coordinator_root_funding_policy()),
             component_deployment_configuration,
         }
     }
@@ -723,6 +725,7 @@ placement.minimum_distinct_roots = 2
                     maximum_cycles: Cycles::new(2_000_000_000_000),
                 },
             },
+            funding: super::super::root_funding_authority(),
             status: FleetSubnetRootStatus::Joining,
         }
     }

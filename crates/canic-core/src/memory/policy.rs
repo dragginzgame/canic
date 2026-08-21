@@ -10,8 +10,9 @@ use crate::{
         registry::MemoryRegistryError,
     },
     role_contract::allocation::{
-        CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_MAX_ID,
-        CANIC_CORE_MIN_ID,
+        CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_LOWER_MAX_ID,
+        CANIC_CORE_MAX_ID, CANIC_CORE_MIN_ID, CANIC_CORE_UPPER_MIN_ID,
+        memory::control_plane::FLEET_COORDINATOR_FUNDING_ID,
     },
 };
 use ic_memory::{
@@ -109,7 +110,21 @@ pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
         )
         .expect("valid Canic control-plane authority record"),
         MemoryManagerAuthorityRecord::new(
-            canic_core_range(),
+            canic_core_lower_range(),
+            CANIC_CORE_MEMORY_AUTHORITY,
+            MemoryManagerRangeMode::Reserved,
+            Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
+        )
+        .expect("valid Canic core authority record"),
+        MemoryManagerAuthorityRecord::new(
+            fleet_coordinator_funding_range(),
+            CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
+            MemoryManagerRangeMode::Reserved,
+            Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
+        )
+        .expect("valid Fleet Coordinator funding authority record"),
+        MemoryManagerAuthorityRecord::new(
+            canic_core_upper_range(),
             CANIC_CORE_MEMORY_AUTHORITY,
             MemoryManagerRangeMode::Reserved,
             Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
@@ -124,15 +139,18 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
     }
 
     if stable_key.starts_with("canic.core.") {
-        return require_range(
-            id,
-            stable_key,
-            canic_core_range(),
-            "canic.core.* keys must use Canic core ids 30-99",
-        );
+        return require_core_range(id, stable_key);
     }
 
     if stable_key.starts_with("canic.control_plane.") {
+        if stable_key == "canic.control_plane.fleet_coordinator.funding.v1" {
+            return require_range(
+                id,
+                stable_key,
+                fleet_coordinator_funding_range(),
+                "the Fleet Coordinator funding key must use reserved id 62",
+            );
+        }
         return require_range(
             id,
             stable_key,
@@ -154,7 +172,9 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
 
 fn validate_application_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
     if ic_memory::memory_manager_governance_range().contains(id)
-        || canic_core_range().contains(id)
+        || canic_core_lower_range().contains(id)
+        || fleet_coordinator_funding_range().contains(id)
+        || canic_core_upper_range().contains(id)
         || canic_control_plane_range().contains(id)
     {
         return Err(MemoryRegistryError::RangeAuthorityViolation {
@@ -183,8 +203,31 @@ fn require_range(
     }
 }
 
-fn canic_core_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(CANIC_CORE_MIN_ID, CANIC_CORE_MAX_ID).expect("valid Canic core range")
+fn require_core_range(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
+    if canic_core_lower_range().contains(id) || canic_core_upper_range().contains(id) {
+        Ok(())
+    } else {
+        Err(MemoryRegistryError::RangeAuthorityViolation {
+            stable_key: stable_key.to_string(),
+            id,
+            reason: "canic.core.* keys must use Canic core ids 30-61 or 63-99",
+        })
+    }
+}
+
+fn canic_core_lower_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(CANIC_CORE_MIN_ID, CANIC_CORE_LOWER_MAX_ID)
+        .expect("valid lower Canic core range")
+}
+
+fn fleet_coordinator_funding_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_FUNDING_ID)
+        .expect("valid Fleet Coordinator funding range")
+}
+
+fn canic_core_upper_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(CANIC_CORE_UPPER_MIN_ID, CANIC_CORE_MAX_ID)
+        .expect("valid upper Canic core range")
 }
 
 fn canic_control_plane_range() -> MemoryManagerIdRange {
@@ -273,6 +316,11 @@ mod tests {
         .expect("first control-plane slot");
         validate("canic.control_plane.future.v1", CANIC_CONTROL_PLANE_MAX_ID)
             .expect("last control-plane slot");
+        validate(
+            "canic.control_plane.fleet_coordinator.funding.v1",
+            FLEET_COORDINATOR_FUNDING_ID,
+        )
+        .expect("dedicated Fleet Coordinator funding slot");
     }
 
     #[test]
@@ -286,6 +334,10 @@ mod tests {
             CANIC_CORE_MIN_ID,
         )
         .expect_err("control-plane key cannot claim core range");
+        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
+
+        let err = validate("canic.core.future.v1", FLEET_COORDINATOR_FUNDING_ID)
+            .expect_err("core key cannot claim the dedicated funding slot");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
 
         let err = validate("canic.unknown.state.v1", CANIC_CORE_MAX_ID + 1)

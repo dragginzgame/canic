@@ -747,6 +747,32 @@ fn fleet_coordinator_canonical_did_parses() {
 }
 
 #[test]
+fn fleet_coordinator_candid_contains_only_the_protected_policy_type_expansion() {
+    let did =
+        read_text(&workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"));
+    for declaration in [
+        "root_funding : opt FleetCoordinatorRootFundingPolicy;",
+        "type FleetCoordinatorRootFundingPolicy = record {",
+        "type FleetSubnetRootFundingAuthority = record {",
+        "type FleetSubnetRootFundingPolicy = record {",
+        "type FleetSubnetRootIcpRefillPolicy = record {",
+        "type FleetSubnetRootAutomaticIcpRefillPolicy = record {",
+        "funding : FleetSubnetRootFundingAuthority;",
+    ] {
+        assert!(
+            did.contains(declaration),
+            "canonical Coordinator DID omits protected policy declaration {declaration}"
+        );
+    }
+    assert_eq!(
+        did.matches("funding : FleetSubnetRootFundingAuthority;")
+            .count(),
+        2,
+        "only the protected root binding and Registry entry should carry root funding authority"
+    );
+}
+
+#[test]
 fn fleet_coordinator_command_surface_is_profile_exact() {
     let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
     let did = read_text(&did_path);
@@ -880,12 +906,17 @@ fn role_status_dispatchers_keep_variant_specific_authority() {
         &workspace_root().join("crates/canic-control-plane/src/workflow/component_registry/mod.rs"),
     );
     assert!(
-        root_operation.contains("if !caller_is_controller")
+        root_operation.contains("let selected = select_unique_match(matches)?;")
+            && root_operation
+                .contains("authorize_observer(selected.observer, caller, caller_is_controller)?;")
+            && root_operation.contains("RootOperationObserver::Controller")
+            && root_operation.contains("RootOperationObserver::CoordinatorOrController")
+            && root_operation.contains("RootOperationObserver::Preauthorized")
             && allocation.contains("ComponentProvisioningOrigin::FleetAdministrator")
             && allocation.contains("revalidate_retained_peer_origin(")
             && allocation
                 .contains("ComponentProvisioningOrigin::ComponentGroup { .. } => return Ok(None)"),
-        "Root Operation authority must distinguish controller, exact peer, and group owners"
+        "Root Operation authority must select one durable owner before applying controller, exact peer, and group observer policy"
     );
 }
 

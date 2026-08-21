@@ -214,12 +214,16 @@ fn refill_canister_overrides_follow_config_resolution_fields() {
         IcpRefillCanisterOverrides::default()
     );
 
-    let policy = IcpRefillPolicy {
+    let policy = FleetSubnetRootIcpRefillPolicy {
         max_refill_e8s_per_call: 100_000_000,
+        window_secs: 86_400,
+        maximum_refill_e8s: 200_000_000,
+        minimum_icp_balance_e8s: 10_000_000,
         min_xdr_permyriad_per_icp: None,
         ledger_canister_id: Some(p(11)),
         cmc_canister_id: Some(p(12)),
         allow_ic_system_canister_overrides: true,
+        automatic: None,
     };
 
     assert_eq!(
@@ -246,12 +250,16 @@ fn root_refill_requires_an_explicit_manual_policy() {
         crate::diagnostics::codes::PLATFORM_INVALID_STATE.raw_code()
     );
 
-    let policy = IcpRefillPolicy {
+    let policy = FleetSubnetRootIcpRefillPolicy {
         max_refill_e8s_per_call: 100_000_000,
+        window_secs: 86_400,
+        maximum_refill_e8s: 200_000_000,
+        minimum_icp_balance_e8s: 10_000_000,
         min_xdr_permyriad_per_icp: None,
         ledger_canister_id: None,
         cmc_canister_id: None,
         allow_ic_system_canister_overrides: false,
+        automatic: None,
     };
     validate_icp_refill_configured(Some(&policy)).expect("configured root refill should proceed");
 }

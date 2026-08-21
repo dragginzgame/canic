@@ -727,6 +727,7 @@ fn managed_test_root_init_args(
                 fleet_subnet_root: root_id,
                 component_admissions,
                 component_topology_digest,
+                funding: super::root_funding_authority(),
                 limits: FleetSubnetRootLimits {
                     maximum_component_instances: 4_096,
                     maximum_registry_bytes: 16_777_216,

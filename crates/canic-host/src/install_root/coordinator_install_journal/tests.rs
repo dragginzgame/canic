@@ -153,6 +153,7 @@ fn persisted_plan(root: &Path) -> PersistedFleetInstallPlan {
                 creation_funding: PlannedCanisterCreationFunding::Cycles {
                     cycles: 2_000_000_000_000,
                 },
+                root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
             fleet_subnet_roots: Vec::new(),
         },
