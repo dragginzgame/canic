@@ -10,7 +10,9 @@ use std::fs;
 use ic_query::subnet_catalog::{
     CatalogValidationContext, ClassificationSource, DEFAULT_CATALOG_MAX_FUTURE_SKEW_SECONDS,
     DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, GeographicScope, MAINNET_NETWORK,
-    MAINNET_REGISTRY_CANISTER_ID, RawSubnetCatalog, RoutingRange, SubnetInfo,
+    MAINNET_REGISTRY_CANISTER_ID, RawSubnetCatalog, RoutingRange,
+    SubnetCatalogRegistryRecordEvidence, SubnetCatalogRegistryRecordSubject,
+    SubnetCatalogRegistryValueEncoding, SubnetCatalogRoutingSource, SubnetInfo,
     UncertifiedCatalogCollection, ValidatedSubnetCatalog,
 };
 
@@ -302,6 +304,56 @@ fn public_recommended_and_profile_select_exact_unique_application_subnets() {
     assert_eq!(
         profile.coordinator.coordinator_subnet,
         subnet(EUROPEAN_SUBNET)
+    );
+}
+
+#[test]
+fn catalog_snapshot_authority_excludes_transient_acquisition_provenance() {
+    let catalog = catalog(vec![info(
+        FIDUCIARY_SUBNET,
+        SubnetKind::Application,
+        SubnetSpecialization::Fiduciary,
+        "fiduciary",
+    )]);
+    let refreshed = CatalogLoadOutcome {
+        path: PathBuf::from("refreshed-subnet-catalog.json"),
+        catalog: catalog.clone(),
+        disposition: CacheDisposition::RefreshedMissing,
+    };
+    let cached = CatalogLoadOutcome {
+        path: PathBuf::from("cached-subnet-catalog.json"),
+        catalog,
+        disposition: CacheDisposition::CacheHit,
+    };
+
+    let (refreshed_authority, refreshed_acquisition) =
+        resolve_catalog_evidence(BuildNetwork::Ic, Some(&refreshed))
+            .expect("resolve refreshed catalog evidence");
+    let (cached_authority, cached_acquisition) =
+        resolve_catalog_evidence(BuildNetwork::Ic, Some(&cached))
+            .expect("resolve cached catalog evidence");
+
+    assert_eq!(refreshed_authority, cached_authority);
+    let authority_json =
+        serde_json::to_value(&refreshed_authority).expect("serialize catalog authority");
+    assert!(authority_json.get("cache_path").is_none());
+    assert!(authority_json.get("cache_disposition").is_none());
+    assert!(authority_json.get("collected_at").is_none());
+    assert_eq!(
+        refreshed_acquisition,
+        FleetInstallCatalogAcquisitionV1::ValidatedCache {
+            cache_path: "refreshed-subnet-catalog.json".to_string(),
+            cache_disposition: "refreshed_missing".to_string(),
+            collected_at: FIXTURE_FETCHED_AT.to_string(),
+        }
+    );
+    assert_eq!(
+        cached_acquisition,
+        FleetInstallCatalogAcquisitionV1::ValidatedCache {
+            cache_path: "cached-subnet-catalog.json".to_string(),
+            cache_disposition: "cache_hit".to_string(),
+            collected_at: FIXTURE_FETCHED_AT.to_string(),
+        }
     );
 }
 
@@ -786,6 +838,7 @@ fn catalog_with_ranges(
     subnets: Vec<SubnetInfo>,
     routing_ranges: Vec<RoutingRange>,
 ) -> ValidatedSubnetCatalog {
+    let registry_records = fixture_registry_records(&subnets);
     let raw = RawSubnetCatalog::new_mainnet_uncertified(
         UncertifiedCatalogCollection::new(
             1,
@@ -793,7 +846,14 @@ fn catalog_with_ranges(
             FIXTURE_FETCHED_AT,
             "canic-test",
             "0.29.3",
-            1,
+            registry_records
+                .len()
+                .try_into()
+                .expect("fixture Registry query count fits u64"),
+        )
+        .with_registry_evidence(
+            SubnetCatalogRoutingSource::LegacyRoutingTable,
+            registry_records,
         ),
         subnets,
         routing_ranges,
@@ -807,6 +867,29 @@ fn catalog_with_ranges(
     );
     ValidatedSubnetCatalog::try_from_raw(raw, &validation)
         .expect("validate fixture catalog authority")
+}
+
+fn fixture_registry_records(subnets: &[SubnetInfo]) -> Vec<SubnetCatalogRegistryRecordEvidence> {
+    let evidence = |record| {
+        SubnetCatalogRegistryRecordEvidence::uncertified_query(
+            record,
+            1,
+            1,
+            42,
+            DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+            SubnetCatalogRegistryValueEncoding::Inline,
+        )
+    };
+    let mut records = vec![
+        evidence(SubnetCatalogRegistryRecordSubject::subnet_list()),
+        evidence(SubnetCatalogRegistryRecordSubject::legacy_routing_table()),
+    ];
+    records.extend(subnets.iter().map(|subnet| {
+        let principal = Principal::from_text(&subnet.subnet_principal)
+            .expect("fixture Subnet principal must be valid");
+        evidence(SubnetCatalogRegistryRecordSubject::subnet_record(principal))
+    }));
+    records
 }
 
 fn info(

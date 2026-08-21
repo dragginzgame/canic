@@ -1,7 +1,8 @@
 use crate::{
     deployment_truth::{DeploymentReceiptV1, FreshFleetInstallDecisionReceiptV1},
     fleet_install_input::{
-        ResolvedFleetInstallInput, load_and_resolve_fleet_install_input_for_preflight,
+        ResolvedFleetInstallInput, load_and_resolve_fleet_install_input,
+        load_and_resolve_fleet_install_input_for_preflight,
     },
     fleet_install_plan::{
         FleetInstallPlanRequest, FreshFleetDecisionAuthorityRequest,
@@ -95,6 +96,7 @@ use fleet_subnet_root_registry_sync::{
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use icp_context::InstallIcpContext;
 use identity::resolve_install_identity;
+use operations::require_planned_installation_controller;
 pub use options::InstallRootOptions;
 use output::{TerminalStyle, print_install_timing_summary};
 use phase_receipts::{
@@ -258,6 +260,12 @@ struct PreparedFreshFleetDecision {
     plan: FreshFleetDeploymentPlanV1,
 }
 
+#[derive(Clone, Copy)]
+enum FleetCatalogAcquisition {
+    CacheOnly,
+    RefreshMissingOrInvalid,
+}
+
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let workspace_root = current_canic_workspace_root()?;
@@ -278,12 +286,8 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
 pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootError> {
     let (workspace_root, icp_root) = resolve_current_install_roots(&options)?;
     let config_path = current_install_config_path(&icp_root, &options)?;
-    let announced_fresh_fleet =
-        prepare_current_fresh_fleet_preflight(&workspace_root, &icp_root, &config_path, &options)?;
-    print_fresh_fleet_decision(&announced_fresh_fleet.plan);
-    let fresh_fleet =
-        prepare_current_fresh_fleet_preflight(&workspace_root, &icp_root, &config_path, &options)?;
-    require_recompiled_fresh_fleet_plan(&announced_fresh_fleet.plan, &fresh_fleet.plan)?;
+    let (fresh_fleet, icp_context) =
+        prepare_and_admit_current_fresh_fleet(&workspace_root, &icp_root, &config_path, &options)?;
     let PreparedFreshFleetDecision {
         app_id,
         fleet_name,
@@ -292,8 +296,6 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
     } = fresh_fleet;
     options.admitted_fresh_fleet_plan_digest = Some(fresh_fleet_plan.plan_digest.clone());
 
-    let icp_context =
-        InstallIcpContext::new(&options.icp_executable, &icp_root, &options.environment);
     let (build_context, install_snapshot) = current_install_build_inputs(
         &workspace_root,
         &icp_root,
@@ -375,11 +377,44 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
     Ok(())
 }
 
+fn prepare_and_admit_current_fresh_fleet(
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    options: &InstallRootOptions,
+) -> Result<(PreparedFreshFleetDecision, InstallIcpContext), InstallRootError> {
+    let announced_fresh_fleet = prepare_current_fresh_fleet_preflight(
+        workspace_root,
+        icp_root,
+        config_path,
+        options,
+        FleetCatalogAcquisition::RefreshMissingOrInvalid,
+    )?;
+    print_fresh_fleet_decision(&announced_fresh_fleet.plan);
+    let fresh_fleet = prepare_current_fresh_fleet_preflight(
+        workspace_root,
+        icp_root,
+        config_path,
+        options,
+        FleetCatalogAcquisition::CacheOnly,
+    )?;
+    require_recompiled_fresh_fleet_plan(&announced_fresh_fleet.plan, &fresh_fleet.plan)?;
+    let icp_context =
+        InstallIcpContext::new(&options.icp_executable, icp_root, &options.environment);
+    require_planned_installation_controller(
+        icp_context.cli(),
+        &fresh_fleet.plan.authority.operator.principal,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
+    Ok((fresh_fleet, icp_context))
+}
+
 fn prepare_current_fresh_fleet_preflight(
     workspace_root: &Path,
     icp_root: &Path,
     config_path: &Path,
     options: &InstallRootOptions,
+    catalog_acquisition: FleetCatalogAcquisition,
 ) -> Result<PreparedFreshFleetDecision, InstallRootError> {
     let config = AppConfigSnapshot::load(config_path)
         .map_err(|source| InstallRootError::new(InstallRootPhase::Configuration, source))?;
@@ -388,8 +423,13 @@ fn prepare_current_fresh_fleet_preflight(
     let canonical_network_id =
         resolve_canonical_network_id_from_root(icp_root, &options.environment)
             .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
-    let input = resolve_current_fleet_install_input(icp_root, &options.environment, options)
-        .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let input = resolve_current_fleet_install_input(
+        icp_root,
+        &options.environment,
+        options,
+        catalog_acquisition,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
     let (build_profile, release_build_id, recovered_plan_digest) =
         current_install_preflight_release_source(
             icp_root,
@@ -635,18 +675,33 @@ fn resolve_current_fleet_install_input(
     icp_root: &Path,
     environment: &str,
     options: &InstallRootOptions,
+    catalog_acquisition: FleetCatalogAcquisition,
 ) -> Result<ResolvedFleetInstallInput, Box<dyn std::error::Error>> {
+    let input_path = current_fleet_install_input_path(icp_root, options)?;
+    match catalog_acquisition {
+        FleetCatalogAcquisition::CacheOnly => {
+            load_and_resolve_fleet_install_input_for_preflight(icp_root, environment, &input_path)
+        }
+        FleetCatalogAcquisition::RefreshMissingOrInvalid => {
+            load_and_resolve_fleet_install_input(icp_root, environment, &input_path)
+        }
+    }
+    .map_err(Into::into)
+}
+
+fn current_fleet_install_input_path(
+    icp_root: &Path,
+    options: &InstallRootOptions,
+) -> Result<PathBuf, MissingFleetInstallInputError> {
     let input_path = options
         .fleet_install_input_path
         .as_ref()
         .ok_or(MissingFleetInstallInputError)?;
-    let input_path = if input_path.is_absolute() {
+    Ok(if input_path.is_absolute() {
         input_path.clone()
     } else {
         icp_root.join(input_path)
-    };
-    load_and_resolve_fleet_install_input_for_preflight(icp_root, environment, &input_path)
-        .map_err(Into::into)
+    })
 }
 
 fn compile_current_fresh_fleet_preflight(

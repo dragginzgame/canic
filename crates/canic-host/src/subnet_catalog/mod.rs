@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 const IC_QUERY_CACHE_DIRECTORY: &str = "ic-query";
 
-/// Load Canic's validated mainnet Subnet Catalog under an explicit repair policy.
+/// Query for validated mainnet evidence and repair only the private catalog cache.
 pub fn load_mainnet_subnet_catalog(
     icp_root: &Path,
     now_unix_secs: u64,

@@ -185,6 +185,23 @@ any Canister creation effect.
 
 ## Installation Boundary
 
+Before allocating a release build or preparing Wasm, installation may acquire
+missing or invalid IC-mainnet catalog evidence through public NNS Registry
+queries and compiles its authoritative decision from the validated snapshot's
+stable Registry version, catalog digest, assurance and source endpoints. This
+is the same snapshot authority compiled by `canic deploy plan
+--refresh-catalog`, so cache path, collection time, cache disposition and the
+refresh request do not change the plan digest. Those transient facts remain
+available as report acquisition provenance.
+
+Installation also resolves the effective ICP CLI identity at this boundary.
+It rejects an anonymous or unusable identity and requires the observed
+Principal to equal `[operator].principal` exactly. For an encrypted identity in
+non-interactive execution, set `CANIC_ICP_IDENTITY_PASSWORD_FILE` to an
+absolute operator-owned password file. These checks happen before build
+preparation; controller checks are repeated at creation time to defend the
+later effect boundary.
+
 The installer uses that immutable authority to create, install, and
 independently verify the Coordinator, every planned Fleet Subnet Root, one
 exact topology-admitted local Store per root, and every Registry row. It then

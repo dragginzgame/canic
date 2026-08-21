@@ -100,12 +100,12 @@ controllers, attach topology, or update deployment truth.
 ## Plan Desired Deployment Shape
 
 Before checking live deployment evidence, inspect the desired deployment shape
-that Canic can derive from local config:
+that Canic can derive from local config and the operator-owned Fleet input:
 
 ```text
-canic deploy plan demo-staging --app demo
-canic deploy plan demo-staging --app demo --json
-canic deploy plan demo-staging --app demo --out artifacts/canic/deployment-plan.json
+canic deploy plan demo-staging --app demo --fleet-input deployments/demo-staging.toml
+canic --environment ic deploy plan demo --app demo --fleet-input deployments/demo-ic.toml --refresh-catalog
+canic deploy plan demo-staging --app demo --fleet-input deployments/demo-staging.toml --out artifacts/canic/deployment-plan.json
 ```
 
 `canic deploy plan` emits a `DeploymentPlanReport` with `schema_version = 1`
@@ -115,7 +115,15 @@ preview labels, and next actions.
 
 The command is diagnostic and planning-only. It does not install Wasm, create
 canisters, change controllers, query live mainnet by default, write deployment
-truth, create Fleet-catalog rows, sign evidence, or authorize apply.
+truth, create Fleet-catalog rows, sign evidence, or authorize apply. On an IC
+target, `--refresh-catalog` may issue public NNS Registry query calls and update
+only Canic's private `.canic/ic-query` cache when it is missing or invalid; it
+does not perform an IC update call. Without that flag, a missing cache remains
+a typed planning blocker with a direct `--refresh-catalog` remedy. The plan is
+compiled from the validated snapshot authority, so a later install can
+reproduce its digest without treating the cache path, collection time,
+disposition or refresh request as decision input. The report still renders
+that transient acquisition provenance separately.
 `--out` writes JSON only and fails if the target file already exists or the
 parent directory does not exist.
 

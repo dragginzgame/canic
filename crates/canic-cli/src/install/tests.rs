@@ -215,6 +215,9 @@ fn install_usage_explains_app_config() {
     assert!(normalized.contains("fresh Fleet"));
     assert!(normalized.contains("App config"));
     assert!(normalized.contains("required operator-owned Fleet input"));
+    assert!(normalized.contains("refreshes missing or invalid mainnet catalog evidence"));
+    assert!(normalized.contains("requires that Principal to equal the Fleet input operator"));
+    assert!(text.contains("CANIC_ICP_IDENTITY_PASSWORD_FILE"));
     assert!(!normalized.contains("existing-Fleet update flow"));
     assert!(!normalized.contains("CARGO_TARGET_DIR"));
     assert_eq!(text.matches("  canic install ").count(), 2);

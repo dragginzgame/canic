@@ -5,11 +5,15 @@ Date: 2026-08-21
 This is implementation evidence for the accepted 0.107 design. It is not the
 human closeout audit and does not accept the minor.
 
-## Source Boundary
+## Historical Development Snapshot
+
+The following table records the bounded source state at which the original
+B5-B7 evidence was captured. The word "dirty" describes that past development
+snapshot only; it is not a claim about the current candidate or worktree.
 
 | Item | Identity |
 | --- | --- |
-| current branch/HEAD | `main` / published checkpoint `v0.107.1` at `5487e4e765a46371af69e09ea1e6e347444b6be6`, plus the dirty `0.107.2` B5 correction |
+| captured branch/source | `main` / published checkpoint `v0.107.1` at `5487e4e765a46371af69e09ea1e6e347444b6be6`, plus the then-dirty `0.107.2` B5 correction |
 | published direct predecessor | annotated `v0.106.0`, peeled commit `63c80c21fd5d67a70d1a2173afcdd4ad0f33fc30` |
 | published 0.107 checkpoint | annotated `v0.107.0`, peeled commit `448c5f2d19c41b9a71dd2b69affa32d8cf4868df` |
 | published typed-provenance checkpoint | annotated `v0.107.1`, peeled commit `5487e4e765a46371af69e09ea1e6e347444b6be6` |
@@ -17,9 +21,9 @@ human closeout audit and does not accept the minor.
 | working `Cargo.lock` SHA-256 | `fb51f9a86fc867251bf1e7c3e22e5a58ae4a5d44f21f9bbaa9ddb5180127113f` |
 | Rust/Cargo | `rustc 1.97.1 (8bab26f4f 2026-07-14)` / `cargo 1.97.1 (c980f4866 2026-06-30)` |
 
-The source is a dirty 0.107 correction worktree over published checkpoint
-`v0.107.1`. No Canic package version, tag, commit or external Canister
-operation was created by this B5 correction batch.
+At capture, the source was a dirty 0.107 correction worktree over published
+checkpoint `v0.107.1`. No Canic package version, tag, commit or external
+Canister operation was created by that B5 correction batch.
 
 ## B5 Typed-Upstream Result
 
@@ -65,6 +69,53 @@ remains read-only and is reported as cache absence; a pinned-version Registry-
 record fixture remains unknown with its typed reason rather than becoming
 transient. Old cache shapes fail closed and require refresh without a reader or
 migration. B5 is complete.
+
+### Stable Authority Follow-Up
+
+Published `ic-query 0.42.0`, locked with crates.io checksum
+`311b60543bc5c09c961abe9612d2bf3e26e99ba8bcadb3c01d043056c544a318`,
+hard-cuts reproducible snapshot identity from transient acquisition provenance.
+Canic replaces the removed combined authority accessor with
+`CatalogLoadOutcome::snapshot_authority()` and keeps only Registry version,
+catalog digest, assurance and source endpoints in the canonical Fleet
+decision. Cache path, collection time and disposition are rendered separately
+as `catalog_acquisition`; no alias or compatibility adapter was added.
+
+A focused host test gives one validated catalog both `refreshed_missing` and
+`cache_hit` acquisition outcomes and proves identical canonical authority with
+truthfully different acquisition provenance. Direct plan refresh now compiles
+from the live-capable load outcome without the former extra cache-only reload.
+Install retains its existing exact second compilation gate, whose cache hit is
+now naturally equal to the first load's stable authority.
+
+## Closeout-Feedback Correction
+
+The downstream rerun found one remaining operational gap: a fresh checkout
+could not produce an authoritative mainnet plan until another command had
+created the catalog cache. The corrected CLI now exposes
+`canic deploy plan --refresh-catalog`. Ordinary planning remains cache-only;
+the explicit mode selects the existing `RefreshMissingOrInvalid` policy, may
+issue public NNS Registry query calls and may update only the private
+`.canic/ic-query` cache.
+
+This acquisition step still cannot build Wasm, mutate deployment state or
+perform an IC update call. Its validated Registry version, catalog digest,
+assurance and source endpoints enter the canonical decision used by
+plan/install parity. Cache path, collection time and disposition remain
+separate report provenance, so the request and transient refresh result cannot
+change the digest. Fresh installation uses the same acquisition policy
+automatically when the cache is missing or invalid. No live mainnet call was
+needed or made while testing this correction.
+
+The same downstream feedback exposed CANIC-009: install could discover an
+anonymous, locked or wrong effective ICP identity only after expensive build
+preparation. The corrected install resolves that identity after exact plan
+recompilation and before release-build allocation or Wasm preparation. It must
+be usable, non-anonymous and exactly equal to the Fleet-input operator;
+encrypted non-interactive failure points directly to
+`CANIC_ICP_IDENTITY_PASSWORD_FILE`. The creation-time controller observations
+remain as later time-of-check/time-of-use defenses. Cache-only catalog blockers
+now recommend `--refresh-catalog` instead of Fleet-input repair.
 
 ## B6 Durable Runtime Whitelist
 
@@ -116,11 +167,13 @@ Coordinator, Store or standalone-local specialized artifacts:
 | Coordinator fixture | `41be3cfb4701685aaec5b91e7cd6b517df99d0a660fe761ec33634567180409e` | `5c6e374b3462289023b67ff698997a29f0496ec3b438eacfbc4d6ea084cac0a8` | absent |
 | standalone-local runtime probe | `f730e49fe4e6695bdeaa3801bc18a0962095c7b1e5a2a9f6dad5704bce2d9c2f` | `f2a79cc00ee6fc8dfa56e3a939f4522e3dcc04b6620dff75aa37ff900df0af51` | absent |
 
-The read-only Toko checkout is clean `main` at
-`bf14a5d3d89be4335d3da2601e8a60128fde04df`. It has no Canic integration and
-no `CANIC-011`, `CANIC-012` or `CANIC-013` identifier. That is the exact B7
-downstream evidence blocker permitted by acceptance criterion 10; no Toko file
-was changed to manufacture acceptance.
+The original read-only Toko snapshot was clean `main` at
+`bf14a5d3d89be4335d3da2601e8a60128fde04df` and had no Canic integration or
+feedback identifier. A later read-only inspection at current Toko HEAD
+`2af2182f97cb21e220081d49169d6a006eff1adb` preserved its existing dirty user
+work and supplied concrete CANIC-009/CANIC-012 deployment feedback. The Canic
+correction owns those changes; no Toko file was changed. Acceptance criterion
+13 retains that read-only downstream boundary.
 
 ## Focused Validation
 
@@ -166,7 +219,21 @@ cargo test --locked -p canic-host subnet_catalog -- --nocapture
 cargo test --locked -p canic-host deployment_truth::report::root_subnet::tests::subnet_catalog_source_resolves_cached_canister_without_icq_process -- --exact --nocapture
   1 passed without a live refresh
 cargo test --locked -p canic-cli deploy::tests::plan -- --nocapture
-  22 passed
+  23 passed
+cargo test --locked -p canic-cli medic::tests::fleet -- --nocapture
+  4 passed
+cargo test -p canic-host install_identity_admission -- --nocapture
+  3 passed
+cargo test -p canic-host current_install_records_gates_before_activation_mutation -- --nocapture
+  1 passed
+cargo test -p canic-host install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence -- --nocapture
+  1 passed
+cargo test -p canic-host before_release_build_allocation -- --nocapture
+  3 passed
+cargo test -p canic-cli deploy_plan_ -- --nocapture
+  24 passed
+cargo test -p canic-cli install_usage_explains_app_config -- --nocapture
+  1 passed
 cargo test --locked -p canic-cli catalog_failure_rendering_preserves_typed_unknown_provenance -- --nocapture
   1 passed
 cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings
@@ -205,6 +272,40 @@ git diff --check
   passed
 ```
 
+The published `ic-query 0.42.0` stable-authority follow-up adds these focused
+results without rerunning the broad release gate:
+
+```text
+cargo test --locked -p canic-host fleet_install_input -- --nocapture
+  19 passed
+cargo test --locked -p canic-host fleet_install_plan::tests -- --nocapture
+  13 passed
+cargo test --locked -p canic-host subnet_catalog -- --nocapture
+  5 passed without a live refresh
+cargo test --locked -p canic-cli deploy_plan_ -- --nocapture
+  24 passed
+cargo test --locked -p canic-cli catalog_acquisition_rendering_preserves_transient_provenance -- --nocapture
+  1 passed
+cargo test --locked -p canic-cli catalog_failure_rendering_preserves_typed_unknown_provenance -- --nocapture
+  1 passed
+cargo test --locked -p canic-host install_recompiles_the_exact_plan_digest -- --nocapture
+  1 passed
+cargo test --locked -p canic-host install_identity_admission -- --nocapture
+  3 passed
+cargo test --locked -p canic-host current_install_records_gates_before_activation_mutation -- --nocapture
+  1 passed
+cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings
+  passed
+cargo tree --locked --offline -p canic-host -i ic-query
+  one `ic-query v0.42.0` package directly beneath `canic-host`
+cargo tree --locked --offline -p canic-cli -i ic-query
+  the same package reaches `canic-cli` only through `canic-host`
+cargo test --locked -p canic --test changelog_governance -- --nocapture
+  1 passed
+bash scripts/ci/check-current-document-semantics.sh
+  passed
+```
+
 The first filtered host run exposed that the pre-`0.41.1` Root-subnet fixture
 was no longer valid and therefore entered the production refresh path. It made
 one read-only mainnet catalog refresh, returned a real route and failed the
@@ -220,9 +321,17 @@ validation suite was run.
 
 ## Remaining Boundary
 
-B5-B7 implementation evidence is complete after the `0.107.2` correction. B5
-changes only the host dependency, host/CLI report path and deterministic host
-fixture. The accompanying compile-time hygiene narrows internal facade/macro
+B5-B7 implementation evidence is complete after the `0.107.2` correction and
+the closeout-feedback follow-up. Default planning is cache-only; explicit
+`--refresh-catalog` enables the existing query-only live acquisition policy
+and private-cache repair without deployment or IC update mutation. Install
+uses that policy automatically and both paths compile from stable snapshot
+authority while reporting acquisition provenance separately. Install then
+admits the exact effective Fleet-operator identity before build preparation.
+B5
+otherwise changes only the host dependency, host/CLI report path and
+deterministic host fixture. The accompanying compile-time hygiene narrows
+internal facade/macro
 visibility and makes dead code and stale lint expectations hard failures; it
 also deletes two redundant dependencies from the test-only IcyDB composition
 fixture and records only proven generated-code dependency exceptions. It does

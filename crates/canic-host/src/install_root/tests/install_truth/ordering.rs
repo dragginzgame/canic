@@ -7,17 +7,7 @@ fn current_install_records_gates_before_activation_mutation() {
         .find("pub fn install_root(")
         .expect("install_root function exists");
     let install = &source[install_start..];
-    let fresh_preflight = source_section(
-        source,
-        "fn prepare_current_fresh_fleet_preflight(",
-        "fn install_current_fleet_infrastructure(",
-    );
-    assert_fresh_preflight_order(fresh_preflight);
-    assert_before(
-        install,
-        "prepare_current_fresh_fleet_preflight(",
-        "current_install_build_inputs(",
-    );
+    assert_current_fresh_fleet_admission_order(source, install);
     assert_before(
         install,
         "current_install_build_inputs(",
@@ -103,6 +93,35 @@ fn current_install_records_gates_before_activation_mutation() {
     );
 }
 
+fn assert_current_fresh_fleet_admission_order(source: &str, install: &str) {
+    assert_before(
+        install,
+        "prepare_and_admit_current_fresh_fleet(",
+        "current_install_build_inputs(",
+    );
+    let admission = source_section(
+        source,
+        "fn prepare_and_admit_current_fresh_fleet(",
+        "fn prepare_current_fresh_fleet_preflight(",
+    );
+    assert_before(
+        admission,
+        "FleetCatalogAcquisition::RefreshMissingOrInvalid",
+        "FleetCatalogAcquisition::CacheOnly",
+    );
+    assert_before(
+        admission,
+        "prepare_current_fresh_fleet_preflight(",
+        "require_planned_installation_controller(",
+    );
+    let fresh_preflight = source_section(
+        source,
+        "fn prepare_current_fresh_fleet_preflight(",
+        "fn install_current_fleet_infrastructure(",
+    );
+    assert_fresh_preflight_order(fresh_preflight);
+}
+
 fn assert_fresh_preflight_order(preflight: &str) {
     assert_before(
         preflight,
@@ -133,6 +152,21 @@ fn assert_fresh_preflight_order(preflight: &str) {
         preflight,
         "compile_fresh_fleet_deployment_plan(",
         "require_fresh_fleet_plan_digest(",
+    );
+
+    let source = include_str!("../../mod.rs");
+    let resolution = source_section(
+        source,
+        "fn resolve_current_fleet_install_input(",
+        "fn current_fleet_install_input_path(",
+    );
+    assert!(
+        resolution.contains("load_and_resolve_fleet_install_input("),
+        "install catalog acquisition must use the live-capable loader"
+    );
+    assert!(
+        resolution.contains("load_and_resolve_fleet_install_input_for_preflight("),
+        "exact install recompilation must use a cache-only validated load"
     );
 }
 

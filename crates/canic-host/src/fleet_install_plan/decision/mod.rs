@@ -128,13 +128,11 @@ fn validate_catalog(
             network,
             assurance,
             source_endpoints,
-            cache_disposition,
             catalog_sha256,
             ..
         } => {
             validate_nonempty("catalog.network", network)?;
             validate_nonempty("catalog.assurance", assurance)?;
-            validate_nonempty("catalog.cache_disposition", cache_disposition)?;
             if source_endpoints.is_empty()
                 || !source_endpoints.is_sorted()
                 || source_endpoints
