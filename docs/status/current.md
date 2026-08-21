@@ -25,7 +25,7 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Scheduled application-safety and estate path: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../design/0.108-coordinator-backed-root-funding/status.md), [0.109 reusable estates plus application retirement](../design/0.109-fleet-subnet-canister-estates/status.md), [0.110 stateful Fleet release adoption](../design/0.110-stateful-fleet-release-adoption/status.md) and [0.111 generic Fleet observatory](../design/0.111-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+- Application-safety and estate sequence: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../design/0.108-coordinator-backed-root-funding/status.md), [0.109 reusable estates plus application retirement](../design/0.109-fleet-subnet-canister-estates/status.md), [0.110 stateful Fleet release adoption](../design/0.110-stateful-fleet-release-adoption/status.md) and [0.111 generic Fleet observatory](../design/0.111-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: every pre-1.0 transition is reinstall-only. Every
   Canic-owned canister in a Fleet must come from one admitted release set
   before activation. Same-release interruption recovery, exact retry, backup
@@ -206,12 +206,13 @@ classifies the co-delivered 0.108 B1 probe separately as an unpublished
 test-only leaf; neither the probe nor its direct test dependency enters a
 shipped role or the 0.106 protocol.
 
-The scheduled 0.107 line closes the three deployment-readiness gaps exposed by
-the first read-only Toko integration pass: target- and Fleet-input-complete
-fresh-Fleet planning, structured NNS catalog inconsistency diagnostics and a
-bounded durable runtime whitelist. Its seven batches are estimated at 10-15
-engineering days excluding upstream release latency or separately approved
-live-IC qualification. The maintainer accepted B1 on 2026-08-20: it
+The published 0.107 implementation line closes the three deployment-readiness
+gaps exposed by the first read-only Toko integration pass: target- and Fleet-
+input-complete fresh-Fleet planning, structured NNS catalog inconsistency
+diagnostics and a bounded durable runtime whitelist. Its seven batches were
+estimated at 10-15 engineering days excluding upstream release latency or
+separately approved live-IC qualification. The maintainer accepted B1 on
+2026-08-20: it
 freezes the exact plan/install grammar and digest, Root-or-controller managed
 role surface, memory ID 61, 256-principal/128-page/one-operation bounds and the
 smallest typed `ic-query 0.40.1` provenance addition. Test-only maximum
@@ -234,7 +235,7 @@ recompiles it before allocation and binds it through same-release session,
 persisted Fleet plan, deployment truth, completion/rejection receipts and
 resume comparison. Changed source, balance or expected digest fails before an
 effect begins. B5's routing and detailed failure work is complete on published
-crates.io `ic-query 0.41.2`, and the open correction advances to `0.42.0` for
+crates.io `ic-query 0.41.2`, and published `v0.107.2` advances to `0.42.0` for
 stable snapshot authority, locked with checksum
 `311b60543bc5c09c961abe9612d2bf3e26e99ba8bcadb3c01d043056c544a318`.
 Canic uses its modern-first detailed cached/live results and exhaustively
@@ -256,12 +257,17 @@ B7's original proof is complete and reconciled with B5; its historical
 read-only Toko snapshot was
 `bf14a5d3d89be4335d3da2601e8a60128fde04df` with no Canic integration or
 feedback identifiers. Newer downstream feedback was inspected read-only from
-Toko HEAD `2af2182f97cb21e220081d49169d6a006eff1adb` while preserving that
+Toko Miner HEAD `2af2182f97cb21e220081d49169d6a006eff1adb` while preserving that
 repository's existing dirty user work; it is evidence, not authority to edit
-Toko. Published `v0.107.1` carried the
-first typed B5 projection, but a subsequent live upstream check found that
-`ic-query 0.41.0` could join the current Subnet list against retired legacy
-routing authority. The open `0.107.2` correction now locks published
+Toko Miner. The final audit rechecked the separate dirty Toko Miner worktree at
+`4cd7aa8c18e6edde4a9d28a3b4d23709ff542d3e`: CANIC-012 and CANIC-013 are
+verified, while CANIC-009 records its first real anonymous/locked installation
+exercise and CANIC-011 records its first installed-Fleet mutation/removal/
+restoration exercise as exact external blockers. That record satisfies AC13's
+blocker alternative without a Toko or live-IC mutation. Published `v0.107.1`
+carried the first typed B5 projection, but a subsequent live upstream check
+found that `ic-query 0.41.0` could join the current Subnet list against retired
+legacy routing authority. Published `v0.107.2` locks
 `ic-query 0.41.2`, whose modern-first collector reconstructs the complete
 pinned `canister_ranges_*` family and never falls back after a modern-family
 error. It also exposes portable canonical Registry-key constants, typed record
@@ -271,8 +277,8 @@ the returned value version, exact failing endpoint/assurance, completed
 Registry reads, shard lower bound and value encoding in plan JSON/text. Old
 cache shapes fail closed and require refresh; there is no compatibility reader.
 Downstream closeout feedback identified that ordinary direct planning had no
-supported way to acquire that evidence in a fresh checkout. The open
-correction now adds explicit `deploy plan --refresh-catalog`: default planning
+supported way to acquire that evidence in a fresh checkout. The published
+correction adds explicit `deploy plan --refresh-catalog`: default planning
 remains cache-only, while the opt-in mode may issue public NNS Registry query
 calls and update only the private `.canic/ic-query` cache when it is missing or
 invalid. It cannot start a build, write deployment state or perform an IC
@@ -289,7 +295,7 @@ release-build allocation or Wasm preparation, rejects anonymous and
 Fleet-operator-mismatched Principals, and reports
 `CANIC_ICP_IDENTITY_PASSWORD_FILE` as the non-interactive encrypted-identity
 remedy. Later creation-time controller observations remain in place.
-The open correction also makes dead code and stale lint expectations hard
+The published correction also makes dead code and stale lint expectations hard
 failures across every workspace member, narrows internal facade/proc-macro
 visibility and removes two redundant dependencies from the test-only IcyDB
 composition fixture. Exact generated-code dependency exceptions are documented
@@ -300,12 +306,16 @@ exposed two unrelated unit-fixture races: one placement assertion resampled a
 one-second wall clock after the operation, and Linux returned `ETXTBSY` while
 one fixture inspected a directly published fake `ic-wasm` executable. The
 fixtures now compare returned authority with its durable row and atomically
-publish the executable from a closed staging path; focused placement/artifact
-suites and warning-denied Clippy pass. The complete gate remains for the
-maintainer to rerun. No external effect occurred. Held 0.106 B2 effects remain
-independent and unauthorized. Once the maintainer reruns the complete gate,
-the corrected implementation line is ready for the required human 0.107
-closeout audit; it is not yet accepted or closed.
+publish the executable from a closed staging path. The 2026-08-21 closeout
+audit then ran the complete `make validate` gate: formatting, repository
+invariants, dependency/security checks, locked workspace check, warning-denied
+Clippy, ordinary tests and every serial PocketIC lane passed. The audit found
+no runtime or release-boundary defect and rejected closeout only because active
+documents still called the tagged patch open and retained superseded
+authorization/validation wording. This documentation-only correction removes
+that AC12 residue; the implementation is ready for the exact documentation
+re-audit but the minor is not yet accepted or closed. No external effect
+occurred, and held 0.106 B2 effects remain independent and unauthorized.
 
 The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
@@ -379,8 +389,10 @@ crates and executable fixtures. It also includes accepted 0.105 B1/B2 ahead of
 the remaining 0.105 batches; published `v0.105.0` completes B3-B7 without an
 observatory dependency. 0.106 remains evidence-only: repository-local B1 is
 accepted and B2 stays held pending its separately approved external run plan.
-0.107 may begin
-from accepted 0.106 B1 and does not require the held B2 external effects;
+0.107 B2-B7 implementation and the complete validation gate are finished from
+accepted 0.106 B1 without the held B2 external effects. Its closeout audit
+passed AC1-AC11 and AC13 and rejected only AC12 documentation residue; that
+correction is ready for exact re-audit.
 0.108 requires completed 0.107, its accepted inputs and own proof; 0.109
 requires completed 0.108 plus application-retirement evidence; 0.110 requires
 accepted 0.109 and an exact
@@ -821,11 +833,11 @@ Q6 current-state constraints are assigned to 0.109. The operation,
 physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
-terminal-disposition authorization exists. In 0.107, B2-B7 implementation and
-focused evidence retain `ic-query 0.41.2`'s routing/failure result and advance
-to `0.42.0` stable snapshot authority. Request and
-accept the exact human 0.107 closeout audit before 0.108 production
-implementation begins. The renumbered 0.108 root-funding B1 proof remains
+terminal-disposition authorization exists. In 0.107, B2-B7 implementation,
+the full validation gate and AC1-AC11/AC13 audit evidence are complete on
+`ic-query 0.42.0` stable snapshot authority. Request and accept the exact AC12
+documentation re-audit before 0.108 production implementation begins. The
+renumbered 0.108 root-funding B1 proof remains
 complete and ready for maintainer acceptance, but its production work waits
 for that boundary. Do not add a production pool contract, run any remote
 qualification effect or begin 0.109.
