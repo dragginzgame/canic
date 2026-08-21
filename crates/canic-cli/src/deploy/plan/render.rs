@@ -19,7 +19,8 @@ use canic_host::{
     fleet_install_input::{
         SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFieldV1,
         SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1,
-        SubnetCatalogRefreshTriggerV1, SubnetCatalogRegistryRecordKindV1,
+        SubnetCatalogRefreshTriggerV1, SubnetCatalogRegistryRecordEvidenceV1,
+        SubnetCatalogRegistryRecordKindV1, SubnetCatalogRegistryValueEncodingV1,
         SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1, SubnetCatalogSubjectV1,
         SubnetCatalogUnknownRetryReasonV1,
     },
@@ -169,6 +170,27 @@ fn append_catalog_failure(lines: &mut Vec<String>, failure: &SubnetCatalogLoadFa
             .registry_version
             .map_or_else(|| "unknown".to_string(), |version| version.to_string())
     ));
+    lines.push(format!(
+        "  returned_registry_value_version: {}",
+        failure
+            .returned_registry_value_version
+            .map_or_else(|| "unknown".to_string(), |version| version.to_string())
+    ));
+    lines.push(format!(
+        "  source_endpoint: {}",
+        failure.source_endpoint.as_deref().unwrap_or("unknown")
+    ));
+    lines.push(format!(
+        "  assurance: {}",
+        failure.assurance.as_deref().unwrap_or("unknown")
+    ));
+    lines.push(format!(
+        "  completed_registry_record_count: {}",
+        failure.registry_records.len()
+    ));
+    for (index, record) in failure.registry_records.iter().enumerate() {
+        append_catalog_registry_record(lines, index, record);
+    }
     lines.push(format!("  cache_disposition: {cache_disposition}"));
     lines.push(format!(
         "  refresh_trigger: {}",
@@ -262,10 +284,12 @@ fn catalog_subject(value: &SubnetCatalogSubjectV1) -> String {
             record_kind,
             key,
             subnet,
+            canister_range_start,
         } => format!(
-            "registry_record kind={} key={key:?} subnet={}",
+            "registry_record kind={} key={key:?} subnet={} canister_range_start={}",
             catalog_record_kind(*record_kind),
-            subnet.as_deref().unwrap_or("not_applicable")
+            subnet.as_deref().unwrap_or("not_applicable"),
+            canister_range_start.as_deref().unwrap_or("not_applicable")
         ),
         SubnetCatalogSubjectV1::Subnet { subnet, field } => format!(
             "subnet={subnet} field={}",
@@ -290,11 +314,43 @@ fn catalog_subject(value: &SubnetCatalogSubjectV1) -> String {
     }
 }
 
+fn append_catalog_registry_record(
+    lines: &mut Vec<String>,
+    index: usize,
+    record: &SubnetCatalogRegistryRecordEvidenceV1,
+) {
+    lines.push(format!(
+        "  completed_registry_record[{index}]: kind={} key={:?} subnet={} canister_range_start={} requested_registry_version={} returned_registry_version={} timestamp_nanoseconds={} source_endpoint={:?} assurance={} value_encoding={}",
+        catalog_record_kind(record.record_kind),
+        record.key,
+        record.subnet.as_deref().unwrap_or("not_applicable"),
+        record
+            .canister_range_start
+            .as_deref()
+            .unwrap_or("not_applicable"),
+        record.requested_registry_version,
+        record.returned_registry_version,
+        record.timestamp_nanoseconds,
+        record.source_endpoint,
+        record.assurance,
+        catalog_registry_value_encoding(record.value_encoding),
+    ));
+}
+
 const fn catalog_record_kind(value: SubnetCatalogRegistryRecordKindV1) -> &'static str {
     match value {
         SubnetCatalogRegistryRecordKindV1::SubnetList => "subnet_list",
         SubnetCatalogRegistryRecordKindV1::RoutingTable => "routing_table",
         SubnetCatalogRegistryRecordKindV1::SubnetRecord => "subnet_record",
+    }
+}
+
+const fn catalog_registry_value_encoding(
+    value: SubnetCatalogRegistryValueEncodingV1,
+) -> &'static str {
+    match value {
+        SubnetCatalogRegistryValueEncodingV1::Inline => "inline",
+        SubnetCatalogRegistryValueEncodingV1::Chunked => "chunked",
     }
 }
 

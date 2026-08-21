@@ -1,6 +1,6 @@
 # Canic 0.107 Implementation Status
 
-Date: 2026-08-20
+Date: 2026-08-21
 
 ## Status
 
@@ -145,23 +145,32 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
 ## B5 Result
 
 - The exact locked production graph now resolves published crates.io
-  `ic-query 0.41.0`, checksum
-  `2d9f80d344dab9cb5ad21029f66c5aad23317c330d61c8fce06cc6424101d7d6`.
-  Its detailed load result retains the request source and assurance, exact
-  cache stage/disposition, a Registry version learned before later failure,
-  the typed offending subject, stable code/category and
-  `Unknown(typed reason)` retryability.
+  `ic-query 0.41.2`, checksum
+  `a9c7486d35030ca36b45636599da5f142b92bf51c548cf238d8567750376fded`.
+  It reconstructs the complete pinned `canister_ranges_*` family before
+  considering legacy routing and never falls back after a modern-family
+  failure. Its detailed load result retains the request source and assurance,
+  exact cache stage/disposition, pinned and returned Registry-value versions,
+  exact failing endpoint/assurance, completed record reads, typed offending
+  subject, stable code/category and `Unknown(typed reason)` retryability.
+- Its portable API owns canonical Registry-key constants, typed subjects and
+  ordinary uncertified-query evidence construction, so downstream fixtures do
+  not hand-format Registry identities. Canic's Root-subnet fixture consumes
+  those builders directly.
 - Canic calls only the detailed cached/live APIs. One exhaustive typed
-  projection carries all upstream-known fields into the deployment-plan JSON
-  and text report and adds explicit false build, workspace-mutation and IC-
+  projection carries all upstream-known fields—including routing-shard lower
+  bounds and inline/chunked value encoding—into the deployment-plan JSON and
+  text report and adds explicit false build, workspace-mutation and IC-
   mutation facts. Catalog failures are classified as Fleet-catalog evidence;
-  no error-string parser, fork, inferred version or guessed retry decision was
-  introduced.
+  no error-string parser, fork, inferred version, guessed retry decision or
+  routing fallback was introduced.
 - Focused host tests prove a real cache-absence journey and a pinned-version
-  Registry-record projection with unknown retryability. Focused CLI tests prove
-  end-to-end cache-failure propagation plus JSON/text rendering of the pinned
-  version, subject, cache trigger and unknown reason without calling it
-  transient. Warning-denied host/CLI Clippy passes.
+  Registry-record projection with returned-value and completed-shard evidence.
+  Focused CLI tests prove end-to-end cache-failure propagation plus JSON/text
+  rendering of the versions, endpoint, assurance, subject, completed record,
+  cache trigger and unknown reason without calling it transient. The Root-
+  subnet fixture cannot escape into a live refresh. Warning-denied host/CLI
+  Clippy passes.
 
 ## B6 Result
 

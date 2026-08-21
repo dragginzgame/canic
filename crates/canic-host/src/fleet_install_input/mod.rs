@@ -10,7 +10,8 @@ mod tests;
 pub use crate::subnet_catalog::{
     SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1, SubnetCatalogFieldV1,
     SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1,
-    SubnetCatalogRegistryRecordKindV1, SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1,
+    SubnetCatalogRegistryRecordEvidenceV1, SubnetCatalogRegistryRecordKindV1,
+    SubnetCatalogRegistryValueEncodingV1, SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1,
     SubnetCatalogSubjectV1, SubnetCatalogUnknownRetryReasonV1,
 };
 use crate::{

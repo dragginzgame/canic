@@ -613,7 +613,6 @@ dependencies = [
 name = "canic-icydb-lifecycle-schema"
 version = "0.107.1"
 dependencies = [
- "icydb",
  "icydb-model",
 ]
 
@@ -2416,9 +2415,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.41.0"
+version = "0.41.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d9f80d344dab9cb5ad21029f66c5aad23317c330d61c8fce06cc6424101d7d6"
+checksum = "a9c7486d35030ca36b45636599da5f142b92bf51c548cf238d8567750376fded"
 dependencies = [
  "candid",
  "cap-fs-ext",

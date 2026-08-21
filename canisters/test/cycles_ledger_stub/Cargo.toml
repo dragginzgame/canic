@@ -5,6 +5,11 @@ rust-version = { workspace = true }
 version = { workspace = true }
 publish = false
 
+[package.metadata.cargo-machete]
+# `candid::Deserialize` expands against the destination crate's direct `serde`
+# dependency.
+ignored = ["serde"]
+
 [lib]
 crate-type = ["cdylib"]
 

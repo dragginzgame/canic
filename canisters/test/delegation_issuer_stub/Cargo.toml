@@ -5,7 +5,9 @@ version = { workspace = true }
 publish = false
 
 [package.metadata.cargo-machete]
-ignored = ["ic-cdk"]
+# `candid::Deserialize` expands against the destination crate's direct `serde`
+# dependency.
+ignored = ["serde"]
 
 [package.metadata.canic]
 app = "delegation_root_stub"

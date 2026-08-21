@@ -97,20 +97,20 @@ pub(in crate::deployment_truth) trait RootSubnetEvidenceSource {
 ///
 struct LiveSubnetCatalogRootSubnetEvidenceSource;
 
-impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
-    fn root_subnet_evidence(
-        &self,
+impl LiveSubnetCatalogRootSubnetEvidenceSource {
+    fn root_subnet_evidence_at(
         environment: &str,
         icp_root: &Path,
         canister_id: &str,
+        now_unix_secs: u64,
     ) -> Result<RootSubnetEvidence, String> {
         if environment != MAINNET_ENVIRONMENT {
             return Err(format!(
                 "Subnet Catalog evidence is supported only for {MAINNET_ENVIRONMENT}, not {environment}"
             ));
         }
-        let cached = load_mainnet_subnet_catalog(icp_root, now_unix_secs()?)
-            .map_err(|err| err.to_string())?;
+        let cached =
+            load_mainnet_subnet_catalog(icp_root, now_unix_secs).map_err(|err| err.to_string())?;
         let resolved = cached
             .catalog
             .resolve_canister_route(canister_id)
@@ -125,6 +125,17 @@ impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
     }
 }
 
+impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
+    fn root_subnet_evidence(
+        &self,
+        environment: &str,
+        icp_root: &Path,
+        canister_id: &str,
+    ) -> Result<RootSubnetEvidence, String> {
+        Self::root_subnet_evidence_at(environment, icp_root, canister_id, now_unix_secs()?)
+    }
+}
+
 fn now_unix_secs() -> Result<u64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -136,9 +147,12 @@ fn now_unix_secs() -> Result<u64, String> {
 mod tests {
     use super::*;
     use crate::subnet_catalog::mainnet_subnet_catalog_cache_root;
+    use candid::Principal;
     use ic_query::subnet_catalog::{
         ClassificationSource, DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, GeographicScope,
-        RawSubnetCatalog, RoutingRange, SubnetInfo, SubnetKind, SubnetSpecialization,
+        RawSubnetCatalog, RoutingRange, SubnetCatalogRegistryRecordEvidence,
+        SubnetCatalogRegistryRecordSubject, SubnetCatalogRegistryValueEncoding,
+        SubnetCatalogRoutingSource, SubnetInfo, SubnetKind, SubnetSpecialization,
         UncertifiedCatalogCollection, catalog_to_pretty_json, subnet_catalog_path,
     };
     #[cfg(unix)]
@@ -162,9 +176,13 @@ mod tests {
         #[cfg(unix)]
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("secure catalog file");
 
-        let evidence = LiveSubnetCatalogRootSubnetEvidenceSource
-            .root_subnet_evidence(MAINNET_ENVIRONMENT, &root, CANISTER)
-            .expect("resolve cached canister");
+        let evidence = LiveSubnetCatalogRootSubnetEvidenceSource::root_subnet_evidence_at(
+            MAINNET_ENVIRONMENT,
+            &root,
+            CANISTER,
+            1_782_432_000,
+        )
+        .expect("resolve cached canister");
 
         let _ = fs::remove_dir_all(root);
         assert_eq!(evidence.subnet_principal, SUBNET);
@@ -201,8 +219,12 @@ mod tests {
                 DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
                 "2026-06-26T00:00:00Z",
                 "fixture",
-                "0.29.3",
-                1,
+                "0.41.2",
+                3,
+            )
+            .with_registry_evidence(
+                SubnetCatalogRoutingSource::LegacyRoutingTable,
+                fixture_registry_records(),
             ),
             vec![SubnetInfo {
                 subnet_principal: SUBNET.to_string(),
@@ -225,5 +247,26 @@ mod tests {
             }],
         )
         .expect("build fixture catalog")
+    }
+
+    fn fixture_registry_records() -> Vec<SubnetCatalogRegistryRecordEvidence> {
+        let subnet = Principal::from_text(SUBNET).expect("fixture Subnet principal");
+        [
+            SubnetCatalogRegistryRecordSubject::legacy_routing_table(),
+            SubnetCatalogRegistryRecordSubject::subnet_list(),
+            SubnetCatalogRegistryRecordSubject::subnet_record(subnet),
+        ]
+        .into_iter()
+        .map(|record| {
+            SubnetCatalogRegistryRecordEvidence::uncertified_query(
+                record,
+                123_456,
+                123_455,
+                42,
+                DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+                SubnetCatalogRegistryValueEncoding::Inline,
+            )
+        })
+        .collect()
     }
 }

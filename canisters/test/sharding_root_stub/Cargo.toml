@@ -15,3 +15,6 @@ candid = { workspace = true }
 canic = { workspace = true, features = [] }
 ic-cdk = { workspace = true }
 serde = { workspace = true }
+
+[lints]
+workspace = true

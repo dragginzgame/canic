@@ -22,7 +22,7 @@ use syn::{FnArg, LitStr, Signature, Type};
 ///
 
 #[derive(Debug)]
-pub struct ValidatedArgs {
+pub(super) struct ValidatedArgs {
     pub forwarded: Vec<TokenStream2>,
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
@@ -31,7 +31,7 @@ pub struct ValidatedArgs {
     pub query_mode: QueryMode,
 }
 
-pub fn validate(
+pub(super) fn validate(
     kind: EndpointKind,
     parsed: ParsedArgs,
     sig: &Signature,

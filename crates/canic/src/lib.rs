@@ -13,6 +13,8 @@
 //! as `candid` or `ic-cdk` directly when they need generic IC types or APIs.
 //! Direct access to internal core modules is intentionally unsupported.
 
+#![deny(unreachable_pub)]
+
 pub mod access;
 pub mod api;
 #[cfg(any(not(target_arch = "wasm32"), test))]

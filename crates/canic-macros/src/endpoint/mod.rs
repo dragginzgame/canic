@@ -25,7 +25,11 @@ use syn::{ItemFn, Signature, parse_macro_input};
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub enum EndpointKind {
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "the parent proc-macro entrypoints consume this private-module type"
+)]
+pub(super) enum EndpointKind {
     Query,
     Update,
 }
@@ -57,7 +61,15 @@ fn returns_fallible(sig: &Signature) -> bool {
 /// This function deliberately performs **no semantic checks**.
 ///
 
-pub fn expand_entry(kind: EndpointKind, attr: TokenStream, item: TokenStream) -> TokenStream {
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "the parent proc-macro entrypoints consume this private-module function"
+)]
+pub(super) fn expand_entry(
+    kind: EndpointKind,
+    attr: TokenStream,
+    item: TokenStream,
+) -> TokenStream {
     let func = parse_macro_input!(item as ItemFn);
     let sig = func.sig.clone();
     let is_async = sig.asyncness.is_some();

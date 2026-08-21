@@ -1,3 +1,5 @@
+#![deny(unreachable_pub)]
+
 mod endpoint;
 
 use crate::endpoint::{EndpointKind, expand_entry};

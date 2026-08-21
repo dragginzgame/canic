@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 ## Purpose
 
@@ -233,12 +233,14 @@ domain-separated SHA-256 digest. Planning renders that decision; install
 recompiles it before allocation and binds it through same-release session,
 persisted Fleet plan, deployment truth, completion/rejection receipts and
 resume comparison. Changed source, balance or expected digest fails before an
-effect begins. B5 is complete on published crates.io `ic-query 0.41.0`: Canic
-uses its detailed cached/live results and exhaustively projects the typed
-request source/assurance, cache stage/disposition, known Registry version,
-offending subject, code/category and truthful unknown-retry reason into plan
-JSON/text plus explicit false effect facts. No fork, error-string parser,
-inferred version or guessed retry decision exists. B6 is complete. Memory ID 61
+effect begins. B5 is complete on published crates.io `ic-query 0.41.2`: Canic
+uses its modern-first detailed cached/live results and exhaustively projects
+the typed request source/assurance, cache stage/disposition, pinned and
+returned Registry-value versions, exact failing endpoint/assurance, completed
+record reads, offending subject, code/category and truthful unknown-retry
+reason into plan JSON/text plus explicit false effect facts. No fork, error-
+string parser, routing fallback, inferred version or guessed retry decision
+exists. B6 is complete. Memory ID 61
 now owns one bounded canonical runtime-whitelist record, managed role methods
 own Root-or-controller add/remove/status variants, configuration is fresh-seed
 input only and same-release restoration validates without reseeding. The real
@@ -249,10 +251,27 @@ immediate removal, restoration and application-session separation. Independent
 B7 proof is complete and reconciled with B5; the read-only Toko checkout remains at
 `bf14a5d3d89be4335d3da2601e8a60128fde04df` with no Canic integration or
 CANIC-011/012/013 identifiers, which is the accepted exact downstream evidence
-blocker rather than authority to edit it. No external effect occurred. Held
-0.106 B2 effects remain independent and unauthorized. The implementation line
-is ready for the required human 0.107 closeout audit; it is not yet accepted or
-closed.
+blocker rather than authority to edit it. Published `v0.107.1` carried the
+first typed B5 projection, but a subsequent live upstream check found that
+`ic-query 0.41.0` could join the current Subnet list against retired legacy
+routing authority. The open `0.107.2` correction now locks published
+`ic-query 0.41.2`, whose modern-first collector reconstructs the complete
+pinned `canister_ranges_*` family and never falls back after a modern-family
+error. It also exposes portable canonical Registry-key constants, typed record
+subjects and ordinary uncertified-query evidence construction for downstream
+fixtures. Canic consumes those builders in its Root-subnet fixture and retains
+the returned value version, exact failing endpoint/assurance, completed
+Registry reads, shard lower bound and value encoding in plan JSON/text. Old
+cache shapes fail closed and require refresh; there is no compatibility reader.
+The open correction also makes dead code and stale lint expectations hard
+failures across every workspace member, narrows internal facade/proc-macro
+visibility and removes two redundant dependencies from the test-only IcyDB
+composition fixture. Exact generated-code dependency exceptions are documented
+and the repository cargo-machete scan is clean. These compile-time changes do
+not change generated Canister code. No external effect occurred. Held 0.106 B2
+effects remain independent and unauthorized. The corrected implementation
+line is ready for the required human 0.107 closeout audit; it is not yet
+accepted or closed.
 
 The scheduled 0.108 line closes replay-safe Coordinator-backed root operating
 funding separately from the estate budget. Its proof and mutation require
@@ -769,7 +788,7 @@ physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
 terminal-disposition authorization exists. In 0.107, B2-B7 implementation and
-focused evidence are complete on published `ic-query 0.41.0`. Request and
+focused evidence are complete on published `ic-query 0.41.2`. Request and
 accept the exact human 0.107 closeout audit before 0.108 production
 implementation begins. The renumbered 0.108 root-funding B1 proof remains
 complete and ready for maintainer acceptance, but its production work waits
