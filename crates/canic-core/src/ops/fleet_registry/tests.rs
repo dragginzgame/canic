@@ -295,7 +295,7 @@ fn initial_services_publish_as_one_canonical_registry_revision() {
                 .expect("published version")
                 .content_hash,
         ),
-        "cd23f326cc9c570ff8eb1a159793acd5c29630e48a95fa78712054c03db369f1"
+        "661a74864e800dae9da3419122d587520971b6e580629eed9f0a918c850c62a2"
     );
 
     std::assert_matches!(

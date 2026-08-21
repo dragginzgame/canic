@@ -8,9 +8,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The in-progress 0.108 B3 slice stages bounded Coordinator grant decisions
-  and storage; workflow, endpoint and attached-cycles execution remain unwired.
-
 ## [0.108.0] - 2026-08-21 - Coordinator-Backed Root Funding
 
 Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)

@@ -6,9 +6,9 @@
 
 #[cfg_attr(
     not(test),
-    expect(
+    allow(
         dead_code,
-        reason = "B2 model values are consumed by the sequenced B3-B5 runtime batches"
+        reason = "staged authorization values have compiler-version-dependent liveness until the sequenced runtime batches consume them"
     )
 )]
 pub mod application_authorization;

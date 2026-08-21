@@ -6,9 +6,9 @@
 
 #![cfg_attr(
     not(test),
-    expect(
+    allow(
         dead_code,
-        reason = "B3 workflow is consumed by the sequenced B4 endpoint variants"
+        reason = "staged workflow items have compiler-version-dependent liveness until the sequenced endpoint variants consume them"
     )
 )]
 

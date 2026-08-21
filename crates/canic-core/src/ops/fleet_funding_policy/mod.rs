@@ -4,7 +4,6 @@
 //! Does not own: policy validation, storage, treasury accounting, or external effects.
 //! Boundary: host and canister owners hash the same bounded protected policy shapes.
 
-use crate::dto::fleet_registry::FleetRegistryVersion;
 use crate::ids::{
     FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority,
     FleetSubnetRootIcpRefillPolicy,
@@ -14,7 +13,6 @@ use sha2::{Digest, Sha256};
 
 const COORDINATOR_POLICY_DOMAIN: &[u8] = b"canic/coordinator-root-funding-policy/v1";
 const ROOT_POLICY_DOMAIN: &[u8] = b"canic/fleet-subnet-root-funding-policy/v1";
-const ROOT_FUNDING_OPERATION_DOMAIN: &[u8] = b"canic/fleet-root-funding-operation/v1";
 
 /// Return the canonical digest of one immutable Coordinator treasury policy.
 #[must_use]
@@ -40,29 +38,6 @@ pub fn fleet_subnet_root_funding_policy_hash(
     encoder.u64(authority.root_funding.budget.window_secs);
     encoder.u128(authority.root_funding.budget.maximum_cycles.to_u128());
     encode_icp_refill(&mut encoder, authority.icp_refill.as_ref());
-    encoder.finish()
-}
-
-/// Derive one exact monotonic Root funding operation from caller-bound immutable facts.
-#[must_use]
-pub fn fleet_root_funding_operation_id(
-    coordinator: Principal,
-    fleet_subnet_root: Principal,
-    operation_sequence: u64,
-    registry: &FleetRegistryVersion,
-    observed_balance: u128,
-    requested_cycles: u128,
-    policy_hash: [u8; 32],
-) -> [u8; 32] {
-    let mut encoder = CanonicalPolicyEncoder::new(ROOT_FUNDING_OPERATION_DOMAIN);
-    encoder.bytes(coordinator.as_slice());
-    encoder.bytes(fleet_subnet_root.as_slice());
-    encoder.u64(operation_sequence);
-    encoder.u64(registry.revision);
-    encoder.bytes(&registry.content_hash);
-    encoder.u128(observed_balance);
-    encoder.u128(requested_cycles);
-    encoder.bytes(&policy_hash);
     encoder.finish()
 }
 

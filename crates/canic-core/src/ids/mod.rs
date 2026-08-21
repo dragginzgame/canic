@@ -40,13 +40,11 @@ pub use fleet::{
 pub use fleet_topology::{
     COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES, ComponentBinding,
     ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest, CyclesFundingBudget,
-    FLEET_ROOT_FUNDING_CALL_RESERVATION_CYCLES, FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES,
-    FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES, FleetCoordinatorBinding,
-    FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig,
-    FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootBinding,
+    FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES, FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES,
+    FleetCoordinatorBinding, FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority,
+    FleetSubnetCanisterPoolConfig, FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootBinding,
     FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
-    FleetSubnetRootLimits, FleetSubnetWasmStoreAuthority, MAX_FLEET_ROOT_FUNDING_SLOTS,
-    ManagedCanisterBinding,
+    FleetSubnetRootLimits, FleetSubnetWasmStoreAuthority, ManagedCanisterBinding,
 };
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};

@@ -117,7 +117,6 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
         (StateAllocationKey::CoreRuntimeWhitelist, vec![61]),
-        (StateAllocationKey::FleetCoordinatorFunding, vec![62]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -156,9 +155,6 @@ fn canonical_allocations_form_packed_owner_ledgers() {
         ids(AllocationOwner::CanicControlPlane),
         (allocation::CANIC_CONTROL_PLANE_MIN_ID
             ..=allocation::memory::control_plane::ROOT_COMPONENT_PROVISIONING_STATE_ID)
-            .chain(std::iter::once(
-                allocation::memory::control_plane::FLEET_COORDINATOR_FUNDING_ID,
-            ))
             .collect::<Vec<_>>()
     );
     assert_eq!(
@@ -569,7 +565,7 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
 }
 
 #[test]
-fn built_in_fleet_coordinator_selects_registry_funding_and_restore_fence() {
+fn built_in_fleet_coordinator_selects_registry_and_restore_fence() {
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
         declared_features: BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister]),
@@ -579,7 +575,7 @@ fn built_in_fleet_coordinator_selects_registry_funding_and_restore_fence() {
         panic!("built-in Fleet Coordinator contract should resolve");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59, 62]);
+    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59]);
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])

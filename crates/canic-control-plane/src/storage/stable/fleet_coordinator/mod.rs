@@ -12,12 +12,9 @@ use candid::{CandidType, Principal};
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static, impl_storable_bounded,
-    role_contract::allocation::memory::control_plane::{
-        FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
-    },
+    role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_REGISTRY_ID,
 };
 use canic_core::{
-    cdk::types::Cycles,
     control_plane_support::config::{
         ComponentDeploymentConfiguration, ComponentGroupPlacementPolicy,
     },
@@ -29,7 +26,6 @@ use canic_core::{
             RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
-        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryVersion, FleetServiceBinding, FleetSubnetRootDeletionExecutionResponse,
@@ -65,13 +61,7 @@ use serde::{Deserialize, Serialize};
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-const FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES: u32 = 8_388_608;
-
-#[cfg(feature = "fleet-coordinator-canister")]
 struct FleetCoordinatorRegistryState;
-
-#[cfg(feature = "fleet-coordinator-canister")]
-struct FleetCoordinatorFundingState;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 eager_static! {
@@ -86,82 +76,6 @@ eager_static! {
             ),
             FleetCoordinatorStateRecord::default(),
         ));
-}
-
-#[cfg(feature = "fleet-coordinator-canister")]
-eager_static! {
-    static FLEET_COORDINATOR_FUNDING_STATE:
-        RefCell<Cell<FleetCoordinatorFundingStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(Cell::init(
-            canic_core::ic_memory_key!(
-                authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
-                key = "canic.control_plane.fleet_coordinator.funding.v1",
-                ty = FleetCoordinatorFundingState,
-                id = FLEET_COORDINATOR_FUNDING_ID
-            ),
-            FleetCoordinatorFundingStateRecord::default(),
-        ));
-}
-
-/// Schema identity for the reinstall-only Coordinator funding ledger.
-pub const FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION: u16 = 1;
-
-/// Spent grants committed in one exact epoch-anchored window.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetRootFundingWindowRecord {
-    pub window_start_secs: u64,
-    pub spent_cycles: Cycles,
-}
-
-/// Durable reservation retained before one attached-cycles call.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CoordinatorRootGrantRecord {
-    pub request: FleetRootFundingRequest,
-    pub fleet_subnet_root: Principal,
-    pub fleet_window_start_secs: u64,
-    pub root_window_start_secs: u64,
-    pub call_reservation_cycles: Cycles,
-    pub prepared_at_ns: u64,
-}
-
-/// One exact terminal result retained until the valid successor arrives.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CoordinatorRootGrantResultRecord {
-    pub request: FleetRootFundingRequest,
-    pub response: FleetRootFundingResponse,
-    pub fleet_window_start_secs: Option<u64>,
-    pub root_window_start_secs: Option<u64>,
-    pub completed_at_ns: u64,
-}
-
-/// Bounded funding authority for one exact registered Root.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetRootFundingLedgerRecord {
-    pub fleet_subnet_root: Principal,
-    pub window: Option<FleetRootFundingWindowRecord>,
-    pub last_successful_grant_at_ns: Option<u64>,
-    pub current: Option<CoordinatorRootGrantRecord>,
-    pub last: Option<CoordinatorRootGrantResultRecord>,
-}
-
-/// Complete Coordinator funding ledger stored independently from caller lookup.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetCoordinatorFundingRecord {
-    pub schema_version: u16,
-    pub funding_enabled: bool,
-    pub fleet_window: Option<FleetRootFundingWindowRecord>,
-    pub roots: Vec<FleetRootFundingLedgerRecord>,
-}
-
-impl Default for FleetCoordinatorFundingRecord {
-    fn default() -> Self {
-        Self {
-            schema_version: FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION,
-            funding_enabled: true,
-            fleet_window: None,
-            roots: Vec::new(),
-        }
-    }
 }
 
 ///
@@ -523,20 +437,6 @@ impl_storable_bounded!(
     false
 );
 
-/// Stable optional wrapper used before fresh Coordinator funding initialization.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg(feature = "fleet-coordinator-canister")]
-pub struct FleetCoordinatorFundingStateRecord {
-    pub current: Option<FleetCoordinatorFundingRecord>,
-}
-
-#[cfg(feature = "fleet-coordinator-canister")]
-impl_storable_bounded!(
-    FleetCoordinatorFundingStateRecord,
-    FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES,
-    false
-);
-
 ///
 /// FleetCoordinatorRegistryData
 ///
@@ -546,22 +446,6 @@ impl_storable_bounded!(
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FleetCoordinatorRegistryData {
     pub current: Option<FleetCoordinatorRegistryRecord>,
-}
-
-/// Canonical export snapshot for the independent Coordinator funding allocation.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct FleetCoordinatorFundingData {
-    pub current: Option<FleetCoordinatorFundingRecord>,
-}
-
-#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
-impl FleetCoordinatorFundingRecord {
-    pub const STATE_CONTRACT_NAME: &'static str = "FleetCoordinatorFundingRecord";
-}
-
-#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
-impl FleetCoordinatorFundingData {
-    pub const STATE_CONTRACT_NAME: &'static str = "FleetCoordinatorFundingData";
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
@@ -603,80 +487,6 @@ pub enum FleetCoordinatorCommitError {
 
 #[cfg(feature = "fleet-coordinator-canister")]
 pub struct FleetCoordinatorRegistryStore;
-
-/// Narrow stable-storage owner for Coordinator treasury state.
-#[cfg(feature = "fleet-coordinator-canister")]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "B3 grant storage is staged until the accepted workflow slice wires it"
-    )
-)]
-pub struct FleetCoordinatorFundingStore;
-
-#[cfg(feature = "fleet-coordinator-canister")]
-#[expect(
-    dead_code,
-    reason = "B3 grant storage is staged until the accepted workflow slice wires it"
-)]
-impl FleetCoordinatorFundingStore {
-    pub(crate) fn commit_genesis(
-        record: FleetCoordinatorFundingRecord,
-    ) -> Result<FleetCoordinatorCommitOutcome, FleetCoordinatorCommitError> {
-        FLEET_COORDINATOR_FUNDING_STATE.with_borrow_mut(|cell| {
-            let mut state = cell.get().clone();
-            match state.current.as_ref() {
-                None => {
-                    state.current = Some(record);
-                    cell.set(state);
-                    Ok(FleetCoordinatorCommitOutcome::Committed)
-                }
-                Some(existing) if existing == &record => {
-                    Ok(FleetCoordinatorCommitOutcome::Existing)
-                }
-                Some(_) => Err(FleetCoordinatorCommitError::ConflictingState),
-            }
-        })
-    }
-
-    pub(crate) fn commit_transition(
-        expected: &FleetCoordinatorFundingRecord,
-        next: FleetCoordinatorFundingRecord,
-    ) -> Result<FleetCoordinatorCommitOutcome, FleetCoordinatorCommitError> {
-        FLEET_COORDINATOR_FUNDING_STATE.with_borrow_mut(|cell| {
-            let mut state = cell.get().clone();
-            match state.current.as_ref() {
-                None => Err(FleetCoordinatorCommitError::Uninitialized),
-                Some(existing) if existing == &next => Ok(FleetCoordinatorCommitOutcome::Existing),
-                Some(existing) if existing != expected => {
-                    Err(FleetCoordinatorCommitError::ConflictingState)
-                }
-                Some(_) => {
-                    state.current = Some(next);
-                    cell.set(state);
-                    Ok(FleetCoordinatorCommitOutcome::Committed)
-                }
-            }
-        })
-    }
-
-    #[must_use]
-    pub(crate) fn export() -> FleetCoordinatorFundingData {
-        FLEET_COORDINATOR_FUNDING_STATE.with_borrow(|cell| FleetCoordinatorFundingData {
-            current: cell.get().current.clone(),
-        })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn import(data: FleetCoordinatorFundingData) {
-        FLEET_COORDINATOR_FUNDING_STATE.with_borrow_mut(|cell| {
-            cell.set(FleetCoordinatorFundingStateRecord {
-                current: data.current,
-            });
-        });
-    }
-}
 
 #[cfg(feature = "fleet-coordinator-canister")]
 impl FleetCoordinatorRegistryStore {
@@ -734,6 +544,5 @@ impl FleetCoordinatorRegistryStore {
                 current: data.current,
             });
         });
-        FleetCoordinatorFundingStore::import(FleetCoordinatorFundingData::default());
     }
 }

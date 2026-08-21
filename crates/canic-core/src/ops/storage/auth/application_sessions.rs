@@ -6,9 +6,9 @@
 
 #![cfg_attr(
     not(test),
-    expect(
+    allow(
         dead_code,
-        reason = "B3 state operations are consumed by the sequenced B4 workflow surface"
+        reason = "staged state operations have compiler-version-dependent liveness until the sequenced workflow surface consumes them"
     )
 )]
 

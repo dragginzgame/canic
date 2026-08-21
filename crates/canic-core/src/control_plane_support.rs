@@ -42,14 +42,6 @@ pub mod policy {
             ComponentRegistryVersionEvidence, reserve_component_child,
         };
     }
-
-    pub mod fleet_funding {
-        pub use crate::domain::policy::pure::fleet_funding::{
-            FleetFundingWindowSnapshot, FleetRootGrantAuthorityMatch, FleetRootGrantAvailability,
-            FleetRootGrantDecision, FleetRootGrantDecisionInput, FleetRootGrantNoGrantReason,
-            decide_fleet_root_grant,
-        };
-    }
 }
 
 pub mod ops {

@@ -12,11 +12,10 @@ target. M1 adds protected policy to the existing Fleet-input, plan, init,
 root-authority and Registry contracts, but no runtime grant state machine,
 timer, treasury ledger or public endpoint.
 
-The source base is `main` at
-`c9361036eb10c593c2db4b3c302a489ac0a50c49` plus the retained uncommitted
-0.107 closeout-evidence correction and active M0 changes. The observed
-toolchain is Rust/Cargo 1.97.1 and PocketIC 15.0.0. The exact test Wasm build
-fingerprint after the final M1 payload-bound recomputation is
+The final checkpoint reconciliation starts from `main` at
+`5523280c7c1b081d455c69fb551448c4cf9212f7`. The observed toolchain is
+Rust/Cargo 1.97.1 with MSRV 1.91.0 and PocketIC 15.0.0. The exact test Wasm
+build fingerprint after the final M1 payload-bound recomputation is
 `f93c470cc9e016449c8dfb446703ee8401ef21fa8658ab17ad64b3a5514d1cc9`;
 the 625,326-byte artifact has SHA-256
 `692bc4facc00a9b886c08009864319ad2b59807887c44dcd4a0cc041d54479e9`.
@@ -153,6 +152,19 @@ M1 expansion is the intended optional Coordinator init policy plus root
 binding/Registry policy types. Runtime-funding variants occur only as nested
 authority data; no new public method or command/status selector exists yet.
 
+## 0.108.0 Checkpoint Boundary
+
+The release checkpoint contains accepted M0 test evidence, the complete M1
+protected-policy hard cut and the urgent fresh-Fleet provisioning corrections.
+It does not contain M2 grant DTOs, grant-decision policy, treasury windows,
+intents, receipts, a dedicated funding stable-memory allocation or Coordinator
+grant operations. Those prematurely staged and unwired sources were removed
+before the checkpoint was declared source-ready.
+
+The protected Coordinator and per-root policies remain because they are the
+complete M1 contract. No production grant, request, timer or funding endpoint
+is reachable in 0.108.0.
+
 ## Bounded Receipt Decision
 
 The design now rejects a generalized receipt collection. Each root retains
@@ -206,18 +218,21 @@ Newly executed on 2026-08-21 for the final M1 bound and protected policy:
 - `cargo test --locked -p canic-cli --no-run`: pass.
 - Canonical Coordinator Candid regeneration: pass; the checked-in surface contains only the intended protected data expansion and no funding endpoint.
 
-Final combined-main reconciliation on 2026-08-21:
+Final 0.108.0 checkpoint reconciliation on 2026-08-21:
 
-- Affected core, control-plane, host, CLI, testing and protocol packages pass
-  locked compilation and warning-denied Clippy; the root-funding probe also
-  passes warning-denied Wasm Clippy.
-- Focused funding policy, memory ownership, role-contract, Coordinator genesis,
-  Fleet-input/plan, activation-journal, provisioning-identity, finalized-Candid
-  and generated-protocol tests pass.
-- Formatting, workspace test-inventory, current-document semantics, changelog
-  governance and whitespace checks pass. The prior governed PocketIC evidence
-  is retained; the downstream fresh Toko installation remains the explicit
-  end-to-end confirmation.
+- Locked core/control-plane compilation and the Rust 1.91.0 core check pass.
+- Warning-denied Clippy passes for core and both Root packages that had exposed
+  the generated dispatch-frame regression. The large Root dispatch future is
+  now immediately heap-boxed; its local expectation applies only to that boxed
+  async block.
+- Focused funding policy, canonical hash, memory ownership, role-contract,
+  Coordinator, Fleet-input/plan, provisioning-identity, finalized-Candid,
+  generated-protocol, host state-manifest and CLI planning tests pass.
+- Formatting, changelog governance and whitespace checks pass. The complete
+  workspace/release matrix and governed PocketIC journeys were not rerun during
+  this agent-owned checkpoint repair; prior M0 PocketIC evidence is retained,
+  and the downstream fresh Toko installation remains the explicit end-to-end
+  confirmation after publication.
 
 The first 2026-08-21 pinned server start was denied a sandbox loopback bind and
 reached no product behavior. The approved local-only server and targeted test
@@ -233,6 +248,7 @@ offline break-glass authority as inputs to production design.
 
 M1 is complete: strict protected policy, validation, canonical hashing,
 plan/init/root/Registry propagation and generic refill removal are present,
-with no grant state machine or new public endpoint. Ordinary continuation may
-proceed to M2. Neither M0 nor M1 authorizes a 0.106 B2 effect, remote mutation,
-versioning or publication.
+with no grant state machine or new public endpoint. The source is ready for the
+maintainer-owned 0.108.0 release flow; M2 begins only after that checkpoint and
+has no source in it. Neither M0 nor M1 authorizes a 0.106 B2 effect or remote
+mutation.
