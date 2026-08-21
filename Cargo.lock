@@ -514,7 +514,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "thiserror 2.0.20",
 ]
 
@@ -545,7 +545,7 @@ dependencies = [
  "ic-timers",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "thiserror 2.0.20",
  "toml 1.1.4+spec-1.1.0",
 ]
@@ -573,7 +573,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_path_to_error",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "syn 3.0.3",
  "thiserror 2.0.20",
  "toml 1.1.4+spec-1.1.0",
@@ -603,7 +603,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "syn 3.0.3",
  "thiserror 2.0.20",
  "toml 1.1.4+spec-1.1.0",
@@ -4297,7 +4297,7 @@ dependencies = [
  "ic-cdk",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -4314,7 +4314,7 @@ name = "saltz_simulator"
 version = "0.108.0"
 dependencies = [
  "clap",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
