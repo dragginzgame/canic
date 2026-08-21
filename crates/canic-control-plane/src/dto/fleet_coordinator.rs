@@ -26,7 +26,7 @@ use canic_core::{
         },
         role::{OperationReceipt, OperationStatusRequest, RoleOverviewResponse},
     },
-    ids::{AppId, FleetRegistryAuthority},
+    ids::{AppId, FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority},
 };
 use serde::Deserialize;
 
@@ -41,6 +41,7 @@ pub struct FleetCoordinatorInitArgs {
     pub configured_app: AppId,
     pub authority: FleetRegistryAuthority,
     pub component_deployment_configuration: ComponentDeploymentConfiguration,
+    pub root_funding: Option<FleetCoordinatorRootFundingPolicy>,
 }
 
 /// Closed controller command union for the Fleet Coordinator.
@@ -59,6 +60,10 @@ pub enum CoordinatorCommand {
 
 /// Closed correlated success union for Fleet Coordinator commands.
 #[derive(CandidType, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the accepted Candid union keeps each existing command result as its direct payload"
+)]
 pub enum CoordinatorCommandResponse {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
     ActivateRegistry(FleetRegistryActivationResponse),

@@ -805,6 +805,7 @@ fn registry_root_binding(
         component_admissions: root.component_admissions.clone(),
         component_topology_digest: root.component_topology_digest,
         limits: root.limits.clone(),
+        funding: root.funding.clone(),
     }
 }
 

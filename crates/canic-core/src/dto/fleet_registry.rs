@@ -15,7 +15,8 @@ use crate::{
     ids::{
         CanisterRole, ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentInstanceId,
         ComponentSpecAdmission, ComponentSpecId, ComponentTopologyDigest, FleetRegistryAuthority,
-        FleetServiceId, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
+        FleetServiceId, FleetSubnetRootFundingAuthority, FleetSubnetRootLimits,
+        FleetSubnetRootReleaseSet, SubnetId,
     },
 };
 use candid::{CandidType, Principal};
@@ -63,6 +64,7 @@ pub struct FleetSubnetRootEntry {
     pub component_topology_digest: ComponentTopologyDigest,
     pub active_release_set: FleetSubnetRootReleaseSet,
     pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
     pub status: FleetSubnetRootStatus,
 }
 

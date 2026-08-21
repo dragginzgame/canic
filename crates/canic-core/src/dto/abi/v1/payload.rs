@@ -85,6 +85,7 @@ mod tests {
                     maximum_cycles: Cycles::new(1_000_000_000_000),
                 },
             },
+            funding: crate::test::support::fleet_subnet_root_funding_authority(),
         };
         let binding = ComponentBinding {
             authority,

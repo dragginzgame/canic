@@ -2958,7 +2958,13 @@ async fn install_child_allocation_for_parent(
     )?;
     let plan =
         child_component_install_plan(&authority.binding, &store, &parent.0, &allocation).await?;
-    advance_child_install(request.component, request.operation_id, allocation, plan).await
+    Box::pin(advance_child_install(
+        request.component,
+        request.operation_id,
+        allocation,
+        plan,
+    ))
+    .await
 }
 
 /// Atomically commit one verified direct child and derive the next Component Directory authority.

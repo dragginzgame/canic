@@ -1796,6 +1796,7 @@ mod tests {
                 fleet_subnet_root,
                 component_admissions: Vec::new(),
                 component_topology_digest: ComponentTopologyDigest::from_bytes([6; 32]),
+                funding: crate::test_support::fleet_subnet_root_funding_authority(),
                 limits: FleetSubnetRootLimits {
                     maximum_component_instances: 10,
                     maximum_registry_bytes: 1_024,
@@ -1871,6 +1872,7 @@ mod tests {
             component_admissions: authority.binding.component_admissions.clone(),
             component_topology_digest: authority.binding.component_topology_digest,
             active_release_set: authority.initial_release_set,
+            funding: authority.binding.funding.clone(),
             limits: authority.binding.limits.clone(),
             status,
         }

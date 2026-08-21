@@ -4,8 +4,6 @@
 //! Does not own: config validation, schema definitions, or runtime config install.
 //! Boundary: host-side bootstrap tooling calls this before embedding generated source.
 
-#[cfg(test)]
-use crate::{cdk::candid::Principal, config::schema::IcpRefillPolicy};
 use crate::{
     config::{
         ComponentDeploymentLabelKey, ComponentDeploymentLabelValue, FleetServiceMemberPurpose,
@@ -107,15 +105,6 @@ fn render_role_declaration_kind(kind: RoleDeclarationKind) -> TokenStream {
         RoleDeclarationKind::Canister => {
             quote!(::canic::__internal::core::bootstrap::compiled::RoleDeclarationKind::Canister)
         }
-    }
-}
-
-// Render a principal as a byte-based constructor to avoid runtime text parsing.
-#[cfg(test)]
-fn render_principal(principal: &Principal) -> TokenStream {
-    let bytes = principal.as_slice().iter().copied();
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::Principal::from_slice(&[#(#bytes),*])
     }
 }
 
@@ -1037,29 +1026,6 @@ fn render_topup(policy: &TopupPolicy) -> TokenStream {
     }
 }
 
-// Render the optional ICP-to-cycles refill policy.
-#[cfg(test)]
-fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
-    let max_refill_e8s_per_call = render_u64_literal(policy.max_refill_e8s_per_call);
-    let min_xdr_permyriad_per_icp =
-        render_option(policy.min_xdr_permyriad_per_icp.as_ref(), |value| {
-            render_u64_literal(*value)
-        });
-    let ledger_canister_id = render_option(policy.ledger_canister_id.as_ref(), render_principal);
-    let cmc_canister_id = render_option(policy.cmc_canister_id.as_ref(), render_principal);
-    let allow_ic_system_canister_overrides = policy.allow_ic_system_canister_overrides;
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::IcpRefillPolicy {
-            max_refill_e8s_per_call: #max_refill_e8s_per_call,
-            min_xdr_permyriad_per_icp: #min_xdr_permyriad_per_icp,
-            ledger_canister_id: #ledger_canister_id,
-            cmc_canister_id: #cmc_canister_id,
-            allow_ic_system_canister_overrides: #allow_ic_system_canister_overrides,
-        }
-    }
-}
-
 // Render the delegated-auth role config.
 fn render_canister_auth_config(config: &CanisterAuthConfig) -> TokenStream {
     let issuer = config.delegated_token_issuer;
@@ -1325,29 +1291,6 @@ mode = "active_pool"
 placement.maximum_members_per_root = 1
 placement.minimum_distinct_roots = 1
 "#;
-
-    fn principal(byte: u8) -> Principal {
-        Principal::from_slice(&[byte; 29])
-    }
-
-    #[test]
-    fn render_icp_refill_policy_preserves_system_canister_overrides() {
-        let rendered = render_icp_refill_policy(&IcpRefillPolicy {
-            max_refill_e8s_per_call: 100_000_000,
-            min_xdr_permyriad_per_icp: Some(40_000),
-            ledger_canister_id: Some(principal(11)),
-            cmc_canister_id: Some(principal(12)),
-            allow_ic_system_canister_overrides: true,
-        })
-        .to_string();
-
-        assert!(rendered.contains("ledger_canister_id"));
-        assert!(rendered.contains("cmc_canister_id"));
-        assert!(rendered.contains("allow_ic_system_canister_overrides"));
-        assert!(rendered.contains("Principal :: from_slice"));
-        assert!(rendered.contains("100_000_000_u64"));
-        assert!(rendered.contains("40_000_u64"));
-    }
 
     #[test]
     fn render_large_config_literals_with_clippy_clean_separators() {

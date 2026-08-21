@@ -747,6 +747,32 @@ fn fleet_coordinator_canonical_did_parses() {
 }
 
 #[test]
+fn fleet_coordinator_candid_contains_only_the_protected_policy_type_expansion() {
+    let did =
+        read_text(&workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"));
+    for declaration in [
+        "root_funding : opt FleetCoordinatorRootFundingPolicy;",
+        "type FleetCoordinatorRootFundingPolicy = record {",
+        "type FleetSubnetRootFundingAuthority = record {",
+        "type FleetSubnetRootFundingPolicy = record {",
+        "type FleetSubnetRootIcpRefillPolicy = record {",
+        "type FleetSubnetRootAutomaticIcpRefillPolicy = record {",
+        "funding : FleetSubnetRootFundingAuthority;",
+    ] {
+        assert!(
+            did.contains(declaration),
+            "canonical Coordinator DID omits protected policy declaration {declaration}"
+        );
+    }
+    assert_eq!(
+        did.matches("funding : FleetSubnetRootFundingAuthority;")
+            .count(),
+        2,
+        "only the protected root binding and Registry entry should carry root funding authority"
+    );
+}
+
+#[test]
 fn fleet_coordinator_command_surface_is_profile_exact() {
     let did_path = workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did");
     let did = read_text(&did_path);

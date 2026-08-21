@@ -37,7 +37,15 @@ use canic_core::{
     cdk::types::Cycles,
     ids::{
         BuildNetwork, ComponentGroupDeploymentId, ComponentSpecId, CyclesFundingBudget,
-        FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, SubnetId,
+        FleetCoordinatorRootFundingPolicy, FleetSubnetCanisterPoolConfig,
+        FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy, FleetSubnetRootLimits,
+        SubnetId,
+    },
+    shared_support::fleet_funding_policy::{
+        FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
+        validate_fleet_root_funding_capacity as validate_fleet_root_funding_capacity_policy,
+        validate_fleet_subnet_root_funding_authority,
     },
 };
 #[cfg(test)]
@@ -179,6 +187,18 @@ pub enum FleetInstallInputError {
     #[error("creation funding amount must be positive for {owner}")]
     NonPositiveCreationFunding { owner: String },
 
+    #[error("Coordinator root-funding policy is required when the Fleet contains roots")]
+    MissingCoordinatorRootFundingPolicy,
+
+    #[error("Fleet Subnet Root {placement_subnet} is missing its root-funding policy")]
+    MissingRootFundingPolicy { placement_subnet: SubnetId },
+
+    #[error("invalid protected funding policy field {field}: {reason}")]
+    InvalidFundingPolicy { field: String, reason: &'static str },
+
+    #[error("IC system-Canister override {field} requires allow_ic_system_canister_overrides")]
+    UnsafeIcpRefillOverride { field: &'static str },
+
     #[error("invalid operator principal {value:?}: {reason}")]
     InvalidOperatorPrincipal { value: String, reason: String },
 
@@ -260,6 +280,18 @@ struct OperatorFundingDocument {
 struct CoordinatorInputDocument {
     subnet: CoordinatorSubnetSelector,
     creation_funding: CreationFundingDocument,
+    #[serde(default)]
+    root_funding: Option<CoordinatorRootFundingPolicyDocument>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CoordinatorRootFundingPolicyDocument {
+    #[serde(deserialize_with = "Cycles::from_config")]
+    minimum_reserve_cycles: Cycles,
+    window_secs: u64,
+    #[serde(deserialize_with = "Cycles::from_config")]
+    maximum_cycles: Cycles,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -291,8 +323,53 @@ struct FleetSubnetRootInputDocument {
     component_admissions: BTreeMap<ComponentSpecId, u32>,
     limits: FleetSubnetRootLimitsDocument,
     canister_pool: CanisterPoolInputDocument,
+    #[serde(default)]
+    root_funding: Option<FleetSubnetRootFundingPolicyDocument>,
+    #[serde(default)]
+    icp_refill: Option<FleetSubnetRootIcpRefillPolicyDocument>,
     root_creation_funding: CreationFundingDocument,
     wasm_store_creation_funding: CreationFundingDocument,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetSubnetRootFundingPolicyDocument {
+    #[serde(deserialize_with = "Cycles::from_config")]
+    request_threshold: Cycles,
+    #[serde(deserialize_with = "Cycles::from_config")]
+    target_balance: Cycles,
+    cooldown_secs: u64,
+    window_secs: u64,
+    #[serde(deserialize_with = "Cycles::from_config")]
+    maximum_cycles: Cycles,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetSubnetRootIcpRefillPolicyDocument {
+    max_refill_e8s_per_call: u64,
+    window_secs: u64,
+    maximum_refill_e8s: u64,
+    minimum_icp_balance_e8s: u64,
+    #[serde(default)]
+    min_xdr_permyriad_per_icp: Option<u64>,
+    #[serde(default)]
+    ledger_canister_id: Option<String>,
+    #[serde(default)]
+    cmc_canister_id: Option<String>,
+    #[serde(default)]
+    allow_ic_system_canister_overrides: bool,
+    #[serde(default)]
+    automatic: Option<FleetSubnetRootAutomaticIcpRefillPolicyDocument>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FleetSubnetRootAutomaticIcpRefillPolicyDocument {
+    #[serde(deserialize_with = "Cycles::from_config")]
+    emergency_threshold: Cycles,
+    #[serde(deserialize_with = "Cycles::from_config")]
+    target_balance: Cycles,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -465,9 +542,14 @@ fn resolve_document_with_evidence(
         build_network,
         validated_catalog,
     )?;
+    let coordinator_root_funding = resolve_coordinator_root_funding_policy(
+        document.coordinator.root_funding.as_ref(),
+        !document.fleet_subnet_roots.is_empty(),
+    )?;
     let coordinator = PlannedFleetCoordinator {
         coordinator_subnet,
         creation_funding: coordinator_funding,
+        root_funding: coordinator_root_funding,
     };
 
     let mut fleet_subnet_roots = Vec::with_capacity(document.fleet_subnet_roots.len());
@@ -480,6 +562,7 @@ fn resolve_document_with_evidence(
             &mut imported_canisters,
         )?);
     }
+    validate_fleet_root_funding_capacity(&coordinator, &fleet_subnet_roots)?;
 
     Ok(ResolvedFleetInstallInput {
         schema_version: document.schema_version,
@@ -647,6 +730,7 @@ fn resolve_root_document(
         build_network,
         catalog,
     )?;
+    let funding = resolve_root_funding_authority(root, placement_subnet, build_network)?;
     let component_admissions = root
         .component_admissions
         .iter()
@@ -710,10 +794,258 @@ fn resolve_root_document(
             },
             maximum_group_placements: root.limits.maximum_group_placements,
         },
+        funding,
         canister_pool_imports,
         root_creation_funding,
         wasm_store_creation_funding,
     })
+}
+
+fn resolve_coordinator_root_funding_policy(
+    document: Option<&CoordinatorRootFundingPolicyDocument>,
+    required: bool,
+) -> Result<Option<FleetCoordinatorRootFundingPolicy>, FleetInstallInputError> {
+    let Some(document) = document else {
+        return if required {
+            Err(FleetInstallInputError::MissingCoordinatorRootFundingPolicy)
+        } else {
+            Ok(None)
+        };
+    };
+    let policy = FleetCoordinatorRootFundingPolicy {
+        minimum_reserve_cycles: document.minimum_reserve_cycles.clone(),
+        budget: CyclesFundingBudget {
+            window_secs: document.window_secs,
+            maximum_cycles: document.maximum_cycles.clone(),
+        },
+    };
+    validate_coordinator_root_funding_policy(&policy)
+        .map_err(coordinator_policy_validation_error)?;
+    Ok(Some(policy))
+}
+
+fn resolve_root_funding_authority(
+    root: &FleetSubnetRootInputDocument,
+    placement_subnet: SubnetId,
+    build_network: BuildNetwork,
+) -> Result<FleetSubnetRootFundingAuthority, FleetInstallInputError> {
+    let document = root
+        .root_funding
+        .as_ref()
+        .ok_or(FleetInstallInputError::MissingRootFundingPolicy { placement_subnet })?;
+    let prefix = format!("fleet_subnet_roots[{placement_subnet}]");
+    let root_funding = FleetSubnetRootFundingPolicy {
+        request_threshold: document.request_threshold.clone(),
+        target_balance: document.target_balance.clone(),
+        cooldown_secs: document.cooldown_secs,
+        budget: CyclesFundingBudget {
+            window_secs: document.window_secs,
+            maximum_cycles: document.maximum_cycles.clone(),
+        },
+    };
+    let icp_refill = root
+        .icp_refill
+        .as_ref()
+        .map(resolve_root_icp_refill_policy)
+        .transpose()?;
+    let authority = FleetSubnetRootFundingAuthority {
+        root_funding,
+        icp_refill,
+    };
+    validate_fleet_subnet_root_funding_authority(&authority, build_network == BuildNetwork::Ic)
+        .map_err(|error| root_policy_validation_error(&prefix, &authority, error))?;
+    Ok(authority)
+}
+
+fn resolve_root_icp_refill_policy(
+    document: &FleetSubnetRootIcpRefillPolicyDocument,
+) -> Result<FleetSubnetRootIcpRefillPolicy, FleetInstallInputError> {
+    let ledger_canister_id = parse_optional_refill_canister(
+        "fleet_subnet_roots.icp_refill.ledger_canister_id",
+        document.ledger_canister_id.as_deref(),
+    )?;
+    let cmc_canister_id = parse_optional_refill_canister(
+        "fleet_subnet_roots.icp_refill.cmc_canister_id",
+        document.cmc_canister_id.as_deref(),
+    )?;
+    let automatic =
+        document
+            .automatic
+            .as_ref()
+            .map(|automatic| FleetSubnetRootAutomaticIcpRefillPolicy {
+                emergency_threshold: automatic.emergency_threshold.clone(),
+                target_balance: automatic.target_balance.clone(),
+            });
+
+    Ok(FleetSubnetRootIcpRefillPolicy {
+        max_refill_e8s_per_call: document.max_refill_e8s_per_call,
+        window_secs: document.window_secs,
+        maximum_refill_e8s: document.maximum_refill_e8s,
+        minimum_icp_balance_e8s: document.minimum_icp_balance_e8s,
+        min_xdr_permyriad_per_icp: document.min_xdr_permyriad_per_icp,
+        ledger_canister_id,
+        cmc_canister_id,
+        allow_ic_system_canister_overrides: document.allow_ic_system_canister_overrides,
+        automatic,
+    })
+}
+
+fn validate_fleet_root_funding_capacity(
+    coordinator: &PlannedFleetCoordinator,
+    roots: &[PlannedFleetSubnetRootInput],
+) -> Result<(), FleetInstallInputError> {
+    let Some(policy) = coordinator.root_funding.as_ref() else {
+        return if roots.is_empty() {
+            Ok(())
+        } else {
+            Err(FleetInstallInputError::MissingCoordinatorRootFundingPolicy)
+        };
+    };
+    validate_fleet_root_funding_capacity_policy(policy, roots.iter().map(|root| &root.funding))
+        .map_err(coordinator_policy_validation_error)
+}
+
+fn parse_optional_refill_canister(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<Option<Principal>, FleetInstallInputError> {
+    value.map(|value| parse_canister(field, value)).transpose()
+}
+
+fn coordinator_policy_validation_error(
+    error: FleetFundingPolicyValidationError,
+) -> FleetInstallInputError {
+    use FleetFundingPolicyValidationError::{
+        CoordinatorMaximumBelowLargestRootTarget, CoordinatorMaximumZero,
+        CoordinatorReserveBelowFloor, CoordinatorReserveZero, CoordinatorWindowZero,
+    };
+    match error {
+        CoordinatorReserveZero => invalid_policy(
+            "coordinator.root_funding.minimum_reserve_cycles",
+            "must be positive",
+        ),
+        CoordinatorReserveBelowFloor => invalid_policy(
+            "coordinator.root_funding.minimum_reserve_cycles",
+            "is below the measured Coordinator execution reserve floor",
+        ),
+        CoordinatorWindowZero => {
+            invalid_policy("coordinator.root_funding.window_secs", "must be positive")
+        }
+        CoordinatorMaximumZero => invalid_policy(
+            "coordinator.root_funding.maximum_cycles",
+            "must be positive",
+        ),
+        CoordinatorMaximumBelowLargestRootTarget => invalid_policy(
+            "coordinator.root_funding.maximum_cycles",
+            "must admit the largest root's legitimate zero-balance grant",
+        ),
+        _ => invalid_policy(
+            "coordinator.root_funding",
+            "contains invalid protected policy authority",
+        ),
+    }
+}
+
+fn root_policy_validation_error(
+    prefix: &str,
+    authority: &FleetSubnetRootFundingAuthority,
+    error: FleetFundingPolicyValidationError,
+) -> FleetInstallInputError {
+    use FleetFundingPolicyValidationError::{
+        AutomaticEmergencyNotBelowRequestThreshold, AutomaticEmergencyThresholdBelowFloor,
+        AutomaticEmergencyThresholdZero, AutomaticTargetAboveRootTargetBalance,
+        AutomaticTargetBalanceZero, AutomaticTargetNotAboveRequestThreshold,
+        IcpCmcPrincipalReserved, IcpLedgerPrincipalReserved, IcpMaximumBelowPerCallMaximum,
+        IcpMaximumZero, IcpMinimumBalanceZero, IcpMinimumRateZero, IcpOverrideUnsafe,
+        IcpPerCallMaximumZero, IcpWindowZero, RootCooldownZero, RootMaximumBelowTargetBalance,
+        RootMaximumZero, RootRequestThresholdBelowFloor, RootRequestThresholdZero,
+        RootTargetBalanceZero, RootTargetNotAboveRequestThreshold, RootWindowZero,
+    };
+    let (field, reason) = match error {
+        RootRequestThresholdZero => ("root_funding.request_threshold", "must be positive"),
+        RootRequestThresholdBelowFloor => (
+            "root_funding.request_threshold",
+            "is below the measured Root request and recovery floor",
+        ),
+        RootTargetBalanceZero => ("root_funding.target_balance", "must be positive"),
+        RootTargetNotAboveRequestThreshold => (
+            "root_funding.target_balance",
+            "must be greater than request_threshold",
+        ),
+        RootCooldownZero => ("root_funding.cooldown_secs", "must be positive"),
+        RootWindowZero => ("root_funding.window_secs", "must be positive"),
+        RootMaximumZero => ("root_funding.maximum_cycles", "must be positive"),
+        RootMaximumBelowTargetBalance => (
+            "root_funding.maximum_cycles",
+            "must admit the largest legitimate zero-balance grant",
+        ),
+        IcpPerCallMaximumZero => ("icp_refill.max_refill_e8s_per_call", "must be positive"),
+        IcpWindowZero => ("icp_refill.window_secs", "must be positive"),
+        IcpMaximumZero => ("icp_refill.maximum_refill_e8s", "must be positive"),
+        IcpMaximumBelowPerCallMaximum => (
+            "icp_refill.maximum_refill_e8s",
+            "must be at least max_refill_e8s_per_call",
+        ),
+        IcpMinimumBalanceZero => ("icp_refill.minimum_icp_balance_e8s", "must be positive"),
+        IcpMinimumRateZero => (
+            "icp_refill.min_xdr_permyriad_per_icp",
+            "must be positive when present",
+        ),
+        IcpLedgerPrincipalReserved => (
+            "icp_refill.ledger_canister_id",
+            "must name a non-reserved Canister principal",
+        ),
+        IcpCmcPrincipalReserved => (
+            "icp_refill.cmc_canister_id",
+            "must name a non-reserved Canister principal",
+        ),
+        IcpOverrideUnsafe => {
+            return FleetInstallInputError::UnsafeIcpRefillOverride {
+                field: if authority
+                    .icp_refill
+                    .as_ref()
+                    .is_some_and(|policy| policy.ledger_canister_id.is_some())
+                {
+                    "fleet_subnet_roots.icp_refill.ledger_canister_id"
+                } else {
+                    "fleet_subnet_roots.icp_refill.cmc_canister_id"
+                },
+            };
+        }
+        AutomaticEmergencyThresholdZero => (
+            "icp_refill.automatic.emergency_threshold",
+            "must be positive",
+        ),
+        AutomaticEmergencyThresholdBelowFloor => (
+            "icp_refill.automatic.emergency_threshold",
+            "is below the measured automatic-refill execution and recovery floor",
+        ),
+        AutomaticEmergencyNotBelowRequestThreshold => (
+            "icp_refill.automatic.emergency_threshold",
+            "must be less than root_funding.request_threshold",
+        ),
+        AutomaticTargetBalanceZero => ("icp_refill.automatic.target_balance", "must be positive"),
+        AutomaticTargetNotAboveRequestThreshold => (
+            "icp_refill.automatic.target_balance",
+            "must be greater than root_funding.request_threshold",
+        ),
+        AutomaticTargetAboveRootTargetBalance => (
+            "icp_refill.automatic.target_balance",
+            "must not exceed root_funding.target_balance",
+        ),
+        _ => (
+            "root_funding",
+            "contains invalid protected policy authority",
+        ),
+    };
+    invalid_policy(format!("{prefix}.{field}"), reason)
+}
+
+fn invalid_policy(field: impl Into<String>, reason: &'static str) -> FleetInstallInputError {
+    FleetInstallInputError::InvalidFundingPolicy {
+        field: field.into(),
+        reason,
+    }
 }
 
 fn resolve_coordinator_subnet(

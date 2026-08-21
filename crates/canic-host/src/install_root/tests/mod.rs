@@ -622,6 +622,11 @@ subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
 kind = "cycles"
 cycles = "2T"
 
+[coordinator.root_funding]
+minimum_reserve_cycles = "100000000"
+window_secs = 3600
+maximum_cycles = "10T"
+
 [[fleet_subnet_roots]]
 placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
 
@@ -643,6 +648,13 @@ minimum_size = 1
 maximum_size = 1
 canister_cycles = "1T"
 imports = []
+
+[fleet_subnet_roots.root_funding]
+request_threshold = "50000000000"
+target_balance = "2T"
+cooldown_secs = 300
+window_secs = 3600
+maximum_cycles = "10T"
 
 [fleet_subnet_roots.root_creation_funding]
 kind = "cycles"

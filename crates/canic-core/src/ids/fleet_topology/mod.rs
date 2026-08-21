@@ -65,6 +65,95 @@ pub struct CyclesFundingBudget {
     pub maximum_cycles: Cycles,
 }
 
+/// Minimum post-grant Coordinator execution reserve established by the 0.108 M0 proof.
+pub const COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES: u128 = 100_000_000;
+
+/// Conservative current-Subnet reservation for one bounded 16 KiB funding command.
+pub const FLEET_ROOT_FUNDING_CALL_RESERVATION_CYCLES: u128 = 42_118_809_000;
+
+/// Minimum Root balance admitted for the Coordinator request and exact-retry path.
+pub const FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES: u128 = 42_200_000_000;
+
+/// Minimum Root balance admitted for automatic ICP-refill execution and recovery.
+pub const FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES: u128 = 42_200_000_000;
+
+/// Maximum registered roots represented by the bounded Coordinator funding ledger.
+pub const MAX_FLEET_ROOT_FUNDING_SLOTS: usize = 4_096;
+
+///
+/// FleetCoordinatorRootFundingPolicy
+///
+/// Immutable Fleet-wide reserve and grant-budget authority installed into one Coordinator.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetCoordinatorRootFundingPolicy {
+    pub minimum_reserve_cycles: Cycles,
+    pub budget: CyclesFundingBudget,
+}
+
+///
+/// FleetSubnetRootFundingPolicy
+///
+/// Immutable Coordinator-grant thresholds and budget for one registered root.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetRootFundingPolicy {
+    pub request_threshold: Cycles,
+    pub target_balance: Cycles,
+    pub cooldown_secs: u64,
+    pub budget: CyclesFundingBudget,
+}
+
+///
+/// FleetSubnetRootAutomaticIcpRefillPolicy
+///
+/// Optional emergency trigger and target subordinate to one root's ICP-refill policy.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetRootAutomaticIcpRefillPolicy {
+    pub emergency_threshold: Cycles,
+    pub target_balance: Cycles,
+}
+
+///
+/// FleetSubnetRootIcpRefillPolicy
+///
+/// Immutable root-owned ICP conversion budget, balance floor, and system-Canister authority.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetRootIcpRefillPolicy {
+    pub max_refill_e8s_per_call: u64,
+    pub window_secs: u64,
+    pub maximum_refill_e8s: u64,
+    pub minimum_icp_balance_e8s: u64,
+    pub min_xdr_permyriad_per_icp: Option<u64>,
+    pub ledger_canister_id: Option<Principal>,
+    pub cmc_canister_id: Option<Principal>,
+    pub allow_ic_system_canister_overrides: bool,
+    pub automatic: Option<FleetSubnetRootAutomaticIcpRefillPolicy>,
+}
+
+///
+/// FleetSubnetRootFundingAuthority
+///
+/// Complete immutable Coordinator-grant and optional ICP-refill policy for one root.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetSubnetRootFundingAuthority {
+    pub root_funding: FleetSubnetRootFundingPolicy,
+    pub icp_refill: Option<FleetSubnetRootIcpRefillPolicy>,
+}
+
 ///
 /// FleetSubnetCanisterPoolConfig
 ///
@@ -158,6 +247,7 @@ pub struct FleetSubnetRootBinding {
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,
     pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
 }
 
 ///

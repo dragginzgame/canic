@@ -11787,6 +11787,7 @@ mod tests {
                     component_topology_digest: root.component_topology_digest,
                     active_release_set: release_set,
                     limits: root.limits.clone(),
+                    funding: root.funding.clone(),
                     status: FleetSubnetRootStatus::Active,
                 },
             },
@@ -17315,6 +17316,7 @@ mod tests {
                 maximum_root_instances: 10,
             }],
             component_topology_digest: ComponentTopologyDigest::from_bytes([7; 32]),
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
             limits: FleetSubnetRootLimits {
                 maximum_component_instances: 10,
                 maximum_registry_bytes: 16_777_216,

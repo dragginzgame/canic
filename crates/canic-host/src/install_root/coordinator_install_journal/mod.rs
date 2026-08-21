@@ -29,7 +29,8 @@ use canic_core::{
     },
     dto::fleet_registry::{FleetRegistryManifest, FleetRegistryVersion},
     ids::{
-        FleetBinding, FleetCoordinatorBinding, FleetRegistryAuthority, ReleaseBuildId, SubnetId,
+        FleetBinding, FleetCoordinatorBinding, FleetCoordinatorRootFundingPolicy,
+        FleetRegistryAuthority, ReleaseBuildId, SubnetId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,7 @@ pub(super) struct FleetCoordinatorInstallJournal {
     pub release_build_id: ReleaseBuildId,
     pub coordinator_subnet: SubnetId,
     pub creation_funding: PlannedCanisterCreationFunding,
+    pub root_funding: Option<FleetCoordinatorRootFundingPolicy>,
     pub component_deployment_configuration: ComponentDeploymentConfiguration,
     pub coordinator_artifact: CanicInfrastructureArtifactEntry,
     pub expected_module_hash: [u8; 32],
@@ -99,6 +101,7 @@ struct FleetCoordinatorInstallImmutableAuthority<'a> {
     release_build_id: ReleaseBuildId,
     coordinator_subnet: SubnetId,
     creation_funding: &'a PlannedCanisterCreationFunding,
+    root_funding: &'a Option<FleetCoordinatorRootFundingPolicy>,
     component_deployment_configuration: &'a ComponentDeploymentConfiguration,
     coordinator_artifact: &'a CanicInfrastructureArtifactEntry,
     expected_module_hash: [u8; 32],
@@ -116,6 +119,7 @@ impl<'a> From<&'a FleetCoordinatorInstallJournal>
             release_build_id: journal.release_build_id,
             coordinator_subnet: journal.coordinator_subnet,
             creation_funding: &journal.creation_funding,
+            root_funding: &journal.root_funding,
             component_deployment_configuration: &journal.component_deployment_configuration,
             coordinator_artifact: &journal.coordinator_artifact,
             expected_module_hash: journal.expected_module_hash,
@@ -369,6 +373,7 @@ fn planned_journal(
         release_build_id: plan.release_build_id,
         coordinator_subnet: plan.coordinator.coordinator_subnet,
         creation_funding: plan.coordinator.creation_funding.clone(),
+        root_funding: plan.coordinator.root_funding.clone(),
         component_deployment_configuration: request.component_deployment_configuration.clone(),
         coordinator_artifact,
         expected_module_hash,

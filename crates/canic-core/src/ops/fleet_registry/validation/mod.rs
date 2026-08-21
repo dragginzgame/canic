@@ -10,7 +10,8 @@ use crate::{
         FleetComponentSpecEntry, FleetRegistry, FleetServiceBinding, FleetServiceComponentBinding,
         FleetServiceMode, FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
-    ids::{AppId, ComponentInstanceId, FleetRegistryAuthority, FleetServiceId},
+    ids::{AppId, CanonicalNetworkId, ComponentInstanceId, FleetRegistryAuthority, FleetServiceId},
+    model::fleet_funding_policy::validate_fleet_subnet_root_funding_authority,
     ops::fleet_registry::FleetRegistryOpsError,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -175,6 +176,11 @@ fn validate_root_identity(
     root: &FleetSubnetRootEntry,
     root_principals: &mut BTreeSet<Principal>,
 ) -> Result<(), FleetRegistryOpsError> {
+    validate_fleet_subnet_root_funding_authority(
+        &root.funding,
+        registry.authority.binding.fleet.fleet.canonical_network_id
+            == CanonicalNetworkId::ic_mainnet(),
+    )?;
     if root.placement_subnet.as_principal() == &Principal::anonymous() {
         return Err(FleetRegistryOpsError::Topology(
             ComponentTopologyError::AnonymousBindingPrincipal {

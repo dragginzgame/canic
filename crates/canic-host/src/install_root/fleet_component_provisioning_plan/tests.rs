@@ -161,6 +161,7 @@ fn authorities(
                 component_topology_digest: planned.component_topology_digest,
                 active_release_set: planned.initial_release_set,
                 limits: planned.limits.clone(),
+                funding: planned.funding.clone(),
                 status: FleetSubnetRootStatus::Joining,
             },
         )
@@ -177,6 +178,7 @@ fn authorities(
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 creation_funding: funding(),
+                root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
             fleet_subnet_roots: roots,
         },
@@ -208,6 +210,7 @@ fn planned_root(
             .expect("root topology digest"),
         initial_release_set: release_set,
         limits: limits(),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         canister_pool_imports: Vec::new(),
         root_creation_funding: funding(),
         wasm_store_creation_funding: funding(),

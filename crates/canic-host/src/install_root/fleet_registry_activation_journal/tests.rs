@@ -182,6 +182,7 @@ maximum_instances = 2
         component_topology_digest: topology_digest,
         initial_release_set: release_set,
         limits: limits.clone(),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         canister_pool_imports: Vec::new(),
         root_creation_funding: funding(),
         wasm_store_creation_funding: funding(),
@@ -195,6 +196,7 @@ maximum_instances = 2
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 creation_funding: funding(),
+                root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
             fleet_subnet_roots: vec![root_plan],
         },
@@ -215,6 +217,7 @@ maximum_instances = 2
             component_topology_digest: topology_digest,
             active_release_set: release_set,
             limits,
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
             status: FleetSubnetRootStatus::Joining,
         },
     )

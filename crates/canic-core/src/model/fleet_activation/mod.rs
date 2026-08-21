@@ -9,8 +9,11 @@ pub mod endpoint_mode;
 use crate::{
     config::ComponentTopology,
     ids::{
-        AppId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
+        AppId, CanonicalNetworkId, FleetBinding, FleetSubnetRootBinding, FleetSubnetRootReleaseSet,
         FleetSubnetWasmStoreAuthority, ReleaseBuildId,
+    },
+    model::fleet_funding_policy::{
+        FleetFundingPolicyValidationError, validate_fleet_subnet_root_funding_authority,
     },
 };
 use candid::Principal;
@@ -129,6 +132,9 @@ pub enum PrepareFleetActivationError {
     #[error("sibling Wasm Store authority has a zero module hash")]
     WasmStoreModuleHashZero,
 
+    #[error("Fleet Subnet Root funding authority is invalid: {0}")]
+    FundingPolicy(#[from] FleetFundingPolicyValidationError),
+
     #[error(transparent)]
     Topology(#[from] crate::config::ComponentTopologyError),
 }
@@ -162,6 +168,17 @@ pub fn prepare_root_install(
             observed: root_canister,
         });
     }
+    validate_fleet_subnet_root_funding_authority(
+        &input.binding.funding,
+        input
+            .binding
+            .authority
+            .binding
+            .fleet
+            .fleet
+            .canonical_network_id
+            == CanonicalNetworkId::ic_mainnet(),
+    )?;
     component_topology.validate_root_binding(&input.binding)?;
     validate_wasm_store_authority(&input.wasm_store_authority)?;
     let root_authority = (
@@ -341,6 +358,7 @@ mod tests {
                 },
                 cycles_funding: funding(),
             },
+            funding: crate::test::support::fleet_subnet_root_funding_authority(),
         };
         let initial_release_set = FleetSubnetRootReleaseSet {
             release_build_id,
@@ -473,6 +491,20 @@ mod tests {
         assert_eq!(
             prepare_root(input(supplied), embedded),
             Err(PrepareFleetActivationError::ReleaseBuildMismatch { supplied, embedded })
+        );
+    }
+
+    #[test]
+    fn root_install_rejects_invalid_protected_funding_authority() {
+        let release_build_id = release_build(8);
+        let mut invalid = input(release_build_id);
+        invalid.binding.funding.root_funding.request_threshold = Cycles::new(1);
+
+        assert_eq!(
+            prepare_root(invalid, release_build_id),
+            Err(PrepareFleetActivationError::FundingPolicy(
+                FleetFundingPolicyValidationError::RootRequestThresholdBelowFloor
+            ))
         );
     }
 

@@ -186,6 +186,7 @@ fn root_binding(
         component_admissions: root.component_admissions.clone(),
         component_topology_digest: root.component_topology_digest,
         limits: root.limits.clone(),
+        funding: root.funding.clone(),
     }
 }
 
@@ -415,6 +416,7 @@ mod tests {
             fleet_subnet_root: candid::Principal::from_slice(&[21; 29]),
             component_admissions: admissions.clone(),
             component_topology_digest: topology_digest,
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
             limits: limits.clone(),
         };
         let requester_root = FleetSubnetRootBinding {
@@ -423,6 +425,7 @@ mod tests {
             fleet_subnet_root: candid::Principal::from_slice(&[23; 29]),
             component_admissions: admissions,
             component_topology_digest: topology_digest,
+            funding: crate::test_support::fleet_subnet_root_funding_authority(),
             limits,
         };
         let release_set = FleetSubnetRootReleaseSet {
@@ -633,6 +636,7 @@ mod tests {
             component_admissions: root.component_admissions.clone(),
             component_topology_digest: root.component_topology_digest,
             active_release_set: release_set,
+            funding: root.funding.clone(),
             limits: root.limits.clone(),
             status: FleetSubnetRootStatus::Active,
         }

@@ -159,6 +159,7 @@ fn root_input(
         component_group_placements: Vec::new(),
         component_admissions: admissions,
         limits: limits(),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         canister_pool_imports: Vec::new(),
         root_creation_funding: PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
@@ -180,6 +181,7 @@ fn coordinator() -> PlannedFleetCoordinator {
     PlannedFleetCoordinator {
         coordinator_subnet: subnet(4),
         creation_funding: PlannedCanisterCreationFunding::Icp { e8s: 25_000_000 },
+        root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
     }
 }
 
@@ -308,6 +310,7 @@ fn complete_group_preflight() -> FreshFleetPreflightV1 {
     let coordinator = PlannedFleetCoordinator {
         coordinator_subnet: subnet(4),
         creation_funding: PlannedCanisterCreationFunding::Cycles { cycles: 100 },
+        root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
     };
     let mut first = root_input(6, vec![admission("alpha", 1), admission("beta", 1)]);
     first.component_group_placements = vec![group_assignment(0)];
@@ -451,6 +454,42 @@ fn complete_decision_rejects_insufficient_or_changed_authority() {
     })
     .expect("changed observation remains sufficient");
     assert_ne!(baseline.plan_digest, changed.plan_digest);
+}
+
+#[test]
+fn complete_decision_digest_binds_coordinator_and_root_funding_policy() {
+    let baseline = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: complete_group_preflight(),
+        authority: decision_authority(1_100),
+    })
+    .expect("baseline decision");
+
+    let mut changed_coordinator = complete_group_preflight();
+    changed_coordinator
+        .coordinator
+        .root_funding
+        .as_mut()
+        .expect("Coordinator root-funding policy")
+        .minimum_reserve_cycles = Cycles::new(100_000_001);
+    let changed_coordinator =
+        compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+            preflight: changed_coordinator,
+            authority: decision_authority(1_100),
+        })
+        .expect("changed Coordinator policy decision");
+    assert_ne!(baseline.plan_digest, changed_coordinator.plan_digest);
+
+    let mut changed_root = complete_group_preflight();
+    changed_root.fleet_subnet_roots[0]
+        .funding
+        .root_funding
+        .cooldown_secs += 1;
+    let changed_root = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: changed_root,
+        authority: decision_authority(1_100),
+    })
+    .expect("changed root policy decision");
+    assert_ne!(baseline.plan_digest, changed_root.plan_digest);
 }
 
 #[test]
