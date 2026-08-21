@@ -25,7 +25,8 @@ use crate::{
         AppId, ComponentSpecAdmission, ComponentSpecId, FleetRegistryAuthority,
         FleetSubnetRootLimits, ReleaseBuildId,
     },
-    ops::OpsError,
+    model::fleet_funding_policy::FleetFundingPolicyValidationError,
+    ops::{OpsError, fleet_funding_policy::fleet_subnet_root_funding_policy_hash},
 };
 use candid::Principal;
 use sha2::{Digest, Sha256};
@@ -187,6 +188,9 @@ pub enum FleetRegistryOpsError {
 
     #[error("Fleet Registry root principal conflicts with its Coordinator")]
     RootPrincipalConflictsWithCoordinator,
+
+    #[error("Fleet Registry root funding authority is invalid: {0}")]
+    RootFundingPolicy(#[from] FleetFundingPolicyValidationError),
 
     #[error(
         "Fleet Registry roots carry different active release builds: expected {expected}, got {received}"
@@ -769,6 +773,7 @@ fn encode_root(encoder: &mut CanonicalEncoder, root: &FleetSubnetRootEntry) {
     encoder.bytes(root.active_release_set.release_build_id.as_bytes());
     encoder.bytes(root.active_release_set.manifest_digest.as_bytes());
     encode_limits(encoder, &root.limits);
+    encoder.bytes(&fleet_subnet_root_funding_policy_hash(&root.funding));
     encoder.u8(status_tag(root.status));
 }
 

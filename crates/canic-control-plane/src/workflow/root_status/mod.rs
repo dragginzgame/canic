@@ -24,6 +24,24 @@ use canic_core::control_plane_support::{
     workflow::runtime::fleet_activation::FleetActivationWorkflow,
 };
 
+#[derive(Clone, Copy)]
+enum RootOperationObserver {
+    Controller,
+    CoordinatorOrController,
+    Preauthorized,
+}
+
+struct RootOperationMatch {
+    observer: RootOperationObserver,
+    status: RootOperationStatusResponse,
+}
+
+impl RootOperationMatch {
+    const fn new(status: RootOperationStatusResponse, observer: RootOperationObserver) -> Self {
+        Self { observer, status }
+    }
+}
+
 /// Resolve an operation identity only through domain owners that already have an exact ID index.
 pub fn operation_status(
     operation_id: [u8; 32],
@@ -36,83 +54,94 @@ pub fn operation_status(
 
     let mut matches = Vec::new();
     if let Some(adoption) = fleet_subnet_root::wasm_store_adoption_operation_status(operation_id)? {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::AdoptStore(adoption));
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::AdoptStore(adoption),
+            RootOperationObserver::Controller,
+        ));
     }
     if let Some(bootstrap) =
         RootWasmStoreStateOps::root_store_bootstrap_receipt_by_operation(operation_id)
     {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::BootstrapStore(bootstrap));
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::BootstrapStore(bootstrap),
+            RootOperationObserver::Controller,
+        ));
     }
     let activation = FleetActivationWorkflow::status()?;
     if activation.identity.operation_id == operation_id {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::FleetActivation(activation));
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::FleetActivation(activation),
+            RootOperationObserver::Controller,
+        ));
     }
     if let Some(allocation) = component_registry::child_allocation_operation_status(
         operation_id,
         caller,
         caller_is_controller,
     )? {
-        matches.push(RootOperationStatusResponse::ProvisionChild(
-            RootComponentChildOperationStatus { allocation },
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::ProvisionChild(RootComponentChildOperationStatus {
+                allocation,
+            }),
+            RootOperationObserver::Preauthorized,
         ));
     }
     if let Some(allocation) =
         component_registry::allocation_operation_status(operation_id, caller, caller_is_controller)?
     {
-        matches.push(RootOperationStatusResponse::ProvisionComponent(allocation));
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::ProvisionComponent(allocation),
+            RootOperationObserver::Preauthorized,
+        ));
     }
     if let Some(provisioning) = RootComponentProvisioningOps::status_by_operation_id(operation_id)?
     {
-        if !caller_is_controller {
-            let (authority, _root) = validated_root_authority()?;
-            if caller != authority.binding.authority.binding.coordinator {
-                return Err(InternalError::forbidden());
-            }
-        }
-        matches.push(RootOperationStatusResponse::ProvisionComponents(
-            status_response(provisioning),
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::ProvisionComponents(status_response(provisioning)),
+            RootOperationObserver::CoordinatorOrController,
         ));
     }
     if let Some(refill) = IcpRefillStoreOps::find_by_operation_id(operation_id)? {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::RefillCycles(
-            IcpRefillStoreOps::to_response(&refill),
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::RefillCycles(IcpRefillStoreOps::to_response(&refill)),
+            RootOperationObserver::Controller,
         ));
     }
     if let Some((draining, deletion)) =
         component_registry::component_removal_operation_status(operation_id)?
     {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::RemoveComponent(
-            RootComponentRemovalOperationStatus { draining, deletion },
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::RemoveComponent(RootComponentRemovalOperationStatus {
+                draining,
+                deletion,
+            }),
+            RootOperationObserver::Controller,
         ));
     }
     if let Some(removal) = fleet_subnet_root::removal_operation_status(operation_id)? {
-        require_root_removal_observer(caller, caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::RemoveRoot(removal));
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::RemoveRoot(removal),
+            RootOperationObserver::CoordinatorOrController,
+        ));
     }
     if let Some(removal) = component_registry::subtree_removal_operation_status(operation_id)? {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::RemoveSubtree(removal));
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::RemoveSubtree(removal),
+            RootOperationObserver::Controller,
+        ));
     }
     if let Some(synchronization) =
         fleet_registry_mirror::synchronization_operation_status(operation_id)?
     {
-        require_controller(caller_is_controller)?;
-        matches.push(RootOperationStatusResponse::SynchronizeRegistry(
-            synchronization,
+        matches.push(RootOperationMatch::new(
+            RootOperationStatusResponse::SynchronizeRegistry(synchronization),
+            RootOperationObserver::Controller,
         ));
     }
 
-    let mut matches = matches.into_iter();
-    let status = matches.next().ok_or_else(InternalError::unavailable)?;
-    if matches.next().is_some() {
-        return Err(InternalError::invariant());
-    }
-    Ok(status)
+    let selected = select_unique_match(matches)?;
+    authorize_observer(selected.observer, caller, caller_is_controller)?;
+    Ok(selected.status)
 }
 
 const fn require_controller(caller_is_controller: bool) -> Result<(), InternalError> {
@@ -123,7 +152,21 @@ const fn require_controller(caller_is_controller: bool) -> Result<(), InternalEr
     }
 }
 
-fn require_root_removal_observer(
+fn authorize_observer(
+    observer: RootOperationObserver,
+    caller: Principal,
+    caller_is_controller: bool,
+) -> Result<(), InternalError> {
+    match observer {
+        RootOperationObserver::Controller => require_controller(caller_is_controller),
+        RootOperationObserver::CoordinatorOrController => {
+            require_coordinator_or_controller(caller, caller_is_controller)
+        }
+        RootOperationObserver::Preauthorized => Ok(()),
+    }
+}
+
+fn require_coordinator_or_controller(
     caller: Principal,
     caller_is_controller: bool,
 ) -> Result<(), InternalError> {
@@ -138,6 +181,19 @@ fn require_root_removal_observer(
     }
 }
 
+fn select_unique_match<T>(matches: Vec<T>) -> Result<T, InternalError> {
+    let mut matches = matches.into_iter();
+    let selected = matches.next().ok_or_else(InternalError::unavailable)?;
+    if matches.next().is_some() {
+        return Err(InternalError::invariant());
+    }
+    Ok(selected)
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,6 +206,20 @@ mod tests {
         assert_eq!(
             error.public_error().code(),
             canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+        );
+    }
+
+    #[test]
+    fn duplicate_operation_ownership_is_an_invariant_before_authorization() {
+        let Err(error) = select_unique_match(vec![
+            RootOperationObserver::Controller,
+            RootOperationObserver::CoordinatorOrController,
+        ]) else {
+            panic!("duplicate operation ownership must fail");
+        };
+        assert_eq!(
+            error.public_error().code(),
+            canic_core::diagnostics::codes::STATE_INVALID.raw_code()
         );
     }
 }

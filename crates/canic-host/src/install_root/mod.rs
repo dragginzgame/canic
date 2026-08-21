@@ -107,18 +107,22 @@ use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 
-pub(super) fn root_store_bootstrap_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
-    root_install_phase_operation_id(install_operation_id, b"store-bootstrap")
-}
-
-pub(super) fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
-    root_install_phase_operation_id(install_operation_id, b"store-adoption")
+pub(super) fn root_component_provisioning_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
+    root_install_phase_operation_id(install_operation_id, b"component-provisioning")
 }
 
 pub(super) fn root_registry_synchronization_operation_id(
     install_operation_id: [u8; 32],
 ) -> [u8; 32] {
     root_install_phase_operation_id(install_operation_id, b"registry-synchronization")
+}
+
+pub(super) fn root_store_adoption_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
+    root_install_phase_operation_id(install_operation_id, b"store-adoption")
+}
+
+pub(super) fn root_store_bootstrap_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
+    root_install_phase_operation_id(install_operation_id, b"store-bootstrap")
 }
 
 fn root_install_phase_operation_id(install_operation_id: [u8; 32], phase: &[u8]) -> [u8; 32] {

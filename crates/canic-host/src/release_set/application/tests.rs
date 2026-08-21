@@ -143,6 +143,7 @@ fn root(
             .map(|component_spec| admission(component_spec))
             .collect(),
         limits: limits(maximum_wasm_store_bytes),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
     }
 }
 

@@ -14,14 +14,14 @@ use crate::{
     bootstrap_coordinator::build_bootstrap_fleet_coordinator_artifact,
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
+    durable_io::write_bytes,
     release_set::AppConfigSnapshot,
-    remove_optional_file,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
         resolve_declared_role_package_contract, validate_declared_role_package,
         validate_declared_role_packages,
     },
-    should_export_candid_artifacts,
+    should_embed_candid_metadata,
 };
 
 use super::{
@@ -29,7 +29,7 @@ use super::{
     cache::{
         canister_build_target_root, configure_canister_cargo_command, lock_canister_build_target,
     },
-    candid::{extract_candid, extract_candid_bytes, remove_stale_icp_candid_sidecars},
+    candid::{extract_candid_bytes, remove_stale_icp_candid_sidecars},
     model::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
         CanisterArtifactBuildSpec, CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput,
@@ -134,12 +134,10 @@ fn build_workspace_canister_artifact_from_spec(
         &spec.package_name,
         Some(profile.protocol_profile_digest),
     )?;
-    if should_export_candid_artifacts(context.build_network) {
+    if should_embed_candid_metadata(context.build_network) {
         require_unchanged_profile_candid(&spec.role, &candid, &release_wasm_path)?;
     }
-    let candid_wasm_path = should_export_candid_artifacts(context.build_network)
-        .then_some(release_wasm_path.as_path());
-    finish_canister_artifact_output(context, spec, &release_wasm_path, candid_wasm_path, profile)
+    finish_canister_artifact_output(context, spec, &release_wasm_path, &candid, profile)
 }
 
 /// Build all admitted configured roles in one Cargo invocation per workspace and profile.
@@ -151,14 +149,14 @@ pub fn build_workspace_canister_artifacts_from_specs(
         return Ok(Vec::new());
     }
     let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
-    let export_candid = should_export_candid_artifacts(context.build_network);
+    let embed_candid = should_embed_candid_metadata(context.build_network);
 
     for spec in specs {
         prepare_canister_artifact_output(spec)?;
     }
     let workspace_groups = group_build_specs_by_workspace(specs);
 
-    if export_candid {
+    if embed_candid {
         for (cargo_workspace_root, group) in &workspace_groups {
             run_canister_build_batch(context, cargo_workspace_root, group, context.profile)?;
         }
@@ -188,25 +186,19 @@ pub fn build_workspace_canister_artifacts_from_specs(
             &spec.package_name,
             Some(profile.protocol_profile_digest),
         )?;
-        if export_candid {
+        if embed_candid {
             require_unchanged_profile_candid(&spec.role, &candid, &final_wasm_path)?;
         }
-        profiles.push(profile);
+        profiles.push((candid, profile));
     }
     std::thread::scope(|scope| {
         let mut handles = Vec::with_capacity(specs.len());
-        for (spec, profile) in specs.iter().zip(profiles) {
+        for (spec, (candid, profile)) in specs.iter().zip(profiles) {
             handles.push(scope.spawn(move || {
                 let release_wasm_path =
                     built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
-                finish_canister_artifact_output(
-                    context,
-                    spec,
-                    &release_wasm_path,
-                    export_candid.then_some(release_wasm_path.as_path()),
-                    profile,
-                )
-                .map_err(|error| error.to_string())
+                finish_canister_artifact_output(context, spec, &release_wasm_path, &candid, profile)
+                    .map_err(|error| error.to_string())
             }));
         }
 
@@ -247,24 +239,17 @@ fn finish_canister_artifact_output(
     context: &WorkspaceBuildContext,
     spec: &CanisterArtifactBuildSpec,
     release_wasm_path: &Path,
-    candid_wasm_path: Option<&Path>,
+    candid: &[u8],
     profile: canic_core::role_contract::ProtocolProfileHashes,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
     let mut transforms = Vec::new();
     write_wasm_artifact(release_wasm_path, &spec.wasm_path)?;
     transforms.push(maybe_shrink_wasm_artifact(&spec.wasm_path)?);
+    write_bytes(&spec.did_path, candid)?;
 
-    if should_export_candid_artifacts(context.build_network) {
-        let candid_wasm_path = candid_wasm_path.ok_or_else(|| {
-            format!(
-                "configured role {} is missing its local Wasm for Candid extraction",
-                spec.role
-            )
-        })?;
-        extract_candid(candid_wasm_path, &spec.did_path)?;
+    if should_embed_candid_metadata(context.build_network) {
         transforms.push(embed_candid_metadata(&spec.wasm_path, &spec.did_path)?);
     } else {
-        remove_optional_file(&spec.did_path)?;
         transforms.push(ArtifactTransformOutput::not_requested(
             ArtifactTransformKind::CandidMetadata,
         ));

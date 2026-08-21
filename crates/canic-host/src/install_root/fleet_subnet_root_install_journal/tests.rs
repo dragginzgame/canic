@@ -136,6 +136,30 @@ fn exact_retry_recovers_in_flight_root_without_advancing_it() {
 }
 
 #[test]
+fn durable_root_journal_resolves_break_glass_authority_without_target_calls() {
+    let root = temp_dir("fleet-subnet-root-break-glass-authority");
+    let fixture = fixture(&root);
+    let planned = plan(&fixture).expect("plan root");
+    let root_canister = Principal::from_slice(&[44]);
+    let installed = install_infrastructure(&planned, root_canister);
+
+    let reloaded = plan(&fixture).expect("reload root journal from host storage");
+    assert!(!reloaded.advanced);
+    assert_eq!(reloaded.journal, installed.journal);
+    assert_eq!(
+        reloaded.journal.authority.binding.coordinator,
+        Principal::from_slice(&[33])
+    );
+    assert_eq!(
+        expected_root_authority(&reloaded.journal)
+            .expect("offline root authority")
+            .binding
+            .fleet_subnet_root,
+        root_canister
+    );
+}
+
+#[test]
 fn journals_exact_store_bootstrap_and_rejects_a_catalog_outside_root_admissions() {
     let root = temp_dir("fleet-subnet-root-store-install-journal");
     let fixture = fixture(&root);
@@ -583,6 +607,7 @@ fn fixture(root: &Path) -> Fixture {
             },
             cycles_funding: cycles_budget(),
         },
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         canister_pool_imports: Vec::new(),
         root_creation_funding: PlannedCanisterCreationFunding::Cycles {
             cycles: 2_000_000_000_000,
@@ -608,6 +633,7 @@ fn fixture(root: &Path) -> Fixture {
                 creation_funding: PlannedCanisterCreationFunding::Cycles {
                     cycles: 2_000_000_000_000,
                 },
+                root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
             fleet_subnet_roots: vec![root_plan],
         },

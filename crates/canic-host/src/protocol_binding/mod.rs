@@ -67,7 +67,7 @@ pub enum ProtocolBindingError {
     #[error("Canister {canister} protocol release identity is empty")]
     MissingReleaseIdentity { canister: String },
 
-    #[error("Canister {canister} has no local Candid sidecar for exact role {role}")]
+    #[error("Canister {canister} has no exact Candid sidecar for role {role}")]
     MissingCandid { canister: String, role: String },
 
     #[error("failed to read exact Candid sidecar {path}: {source}")]
@@ -77,7 +77,7 @@ pub enum ProtocolBindingError {
         source: io::Error,
     },
 
-    #[error("Canister {canister} local Candid hash conflicts with protected registry metadata")]
+    #[error("Canister {canister} exact Candid hash conflicts with protected registry metadata")]
     CandidHashMismatch { canister: String },
 
     #[error(
@@ -125,13 +125,19 @@ pub fn resolve_registry_protocol_binding(
             protocol_role: binding.role.to_string(),
         });
     }
-    resolve_local_protocol_binding(icp_root, artifact_environment, &entry.pid, binding)
+    let candid_path =
+        existing_local_canister_candid_path(icp_root, artifact_environment, binding.role.as_str())
+            .ok_or_else(|| ProtocolBindingError::MissingCandid {
+                canister: entry.pid.clone(),
+                role: binding.role.to_string(),
+            })?;
+    resolve_protocol_binding(&entry.pid, binding, candid_path)
 }
 
 /// Select and verify one exact immutable infrastructure-artifact binding before transport.
 pub fn resolve_infrastructure_protocol_binding(
     icp_root: &std::path::Path,
-    artifact_environment: &str,
+    _artifact_environment: &str,
     artifact: &CanicInfrastructureArtifactEntry,
 ) -> Result<ResolvedProtocolBinding, ProtocolBindingError> {
     if artifact.protocol_role.as_str() != artifact.role.protocol_role_name() {
@@ -140,9 +146,10 @@ pub fn resolve_infrastructure_protocol_binding(
             protocol_role: artifact.protocol_role.to_string(),
         });
     }
-    resolve_local_protocol_binding(
-        icp_root,
-        artifact_environment,
+    let candid_path = icp_root
+        .join(&artifact.wasm_relative_path)
+        .with_extension("did");
+    resolve_protocol_binding(
         artifact.role.as_str(),
         RegistryProtocolBinding {
             release_identity: artifact.protocol_release_identity.clone(),
@@ -151,26 +158,26 @@ pub fn resolve_infrastructure_protocol_binding(
             candid_sha256: artifact.candid_sha256,
             protocol_profile_digest: artifact.protocol_profile_digest,
         },
+        candid_path,
     )
 }
 
-fn resolve_local_protocol_binding(
-    icp_root: &std::path::Path,
-    artifact_environment: &str,
+fn resolve_protocol_binding(
     target: &str,
     binding: RegistryProtocolBinding,
+    candid_path: PathBuf,
 ) -> Result<ResolvedProtocolBinding, ProtocolBindingError> {
     if binding.release_identity.trim().is_empty() {
         return Err(ProtocolBindingError::MissingReleaseIdentity {
             canister: target.to_string(),
         });
     }
-    let candid_path =
-        existing_local_canister_candid_path(icp_root, artifact_environment, binding.role.as_str())
-            .ok_or_else(|| ProtocolBindingError::MissingCandid {
-                canister: target.to_string(),
-                role: binding.role.to_string(),
-            })?;
+    if !candid_path.is_file() {
+        return Err(ProtocolBindingError::MissingCandid {
+            canister: target.to_string(),
+            role: binding.role.to_string(),
+        });
+    }
     let candid = fs::read(&candid_path).map_err(|source| ProtocolBindingError::ReadCandid {
         path: candid_path.clone(),
         source,

@@ -22,6 +22,7 @@ use super::{
     },
     icp_context::InstallIcpContext,
     operations::{call_with_arg, query_with_arg, resolve_install_protocol_binding},
+    root_component_provisioning_operation_id,
 };
 use crate::{
     canister_protocol::CanisterProtocolError,
@@ -42,6 +43,7 @@ use canic_control_plane::dto::fleet_coordinator::{
     CoordinatorStatusRequest, CoordinatorStatusResponse,
 };
 use canic_core::{
+    cdk::utils::hash::hex_bytes,
     diagnostics::codes,
     dto::{
         component_provisioning::{
@@ -72,8 +74,18 @@ pub(super) struct InstallFleetComponentsRequest<'a> {
 
 #[derive(Debug, ThisError)]
 enum FleetComponentProvisioningInstallError {
-    #[error("Fleet Component provisioning exceeded its bounded advance count")]
-    AdvanceBoundExceeded,
+    #[error(
+        "Fleet Component provisioning exceeded its bounded advance count: phase={phase} accepted_roots={accepted_roots} acceptance_in_flight_root={acceptance_in_flight_root} operation_id={operation_id}"
+    )]
+    AdvanceBoundExceeded {
+        phase: String,
+        accepted_roots: String,
+        acceptance_in_flight_root: String,
+        operation_id: String,
+    },
+
+    #[error("Fleet Component provisioning could not calculate its bounded advance count")]
+    AdvanceLimitOverflow,
 
     #[error("terminal Fleet Component provisioning has no published Fleet Registry version")]
     MissingPublishedRegistry,
@@ -107,7 +119,7 @@ pub(super) fn install_fleet_components_and_publish_catalog(
             config: config.model(),
             fleet_install_plan: &request.fleet_install_plan.plan,
             registry: request.initial_active_registry,
-            operation_id: request.install_operation_id,
+            operation_id: root_component_provisioning_operation_id(request.install_operation_id),
         })?;
     let advance_limit = provisioning_advance_limit(&compiled.prepare_request.plan)?;
     let mut current =
@@ -136,9 +148,9 @@ pub(super) fn install_fleet_components_and_publish_catalog(
             FleetComponentProvisioningInstallPhase::AdvanceInFlight => {
                 remote_advances = remote_advances
                     .checked_add(1)
-                    .ok_or(FleetComponentProvisioningInstallError::AdvanceBoundExceeded)?;
+                    .ok_or_else(|| advance_bound_exceeded(&current))?;
                 if remote_advances > advance_limit {
-                    return Err(FleetComponentProvisioningInstallError::AdvanceBoundExceeded.into());
+                    return Err(advance_bound_exceeded(&current).into());
                 }
                 let status = reconcile_or_advance(icp, &binding, request.coordinator, &current)?;
                 record_component_provisioning_advanced(&current, status)?
@@ -299,7 +311,7 @@ fn provisioning_advance_limit(
         .try_fold(0_usize, |total, batch| {
             total.checked_add(batch.placements.len())
         })
-        .ok_or(FleetComponentProvisioningInstallError::AdvanceBoundExceeded)?;
+        .ok_or(FleetComponentProvisioningInstallError::AdvanceLimitOverflow)?;
     let components = plan
         .batches
         .iter()
@@ -307,12 +319,12 @@ fn provisioning_advance_limit(
         .try_fold(0_usize, |total, placement| {
             total.checked_add(placement.entries.len())
         })
-        .ok_or(FleetComponentProvisioningInstallError::AdvanceBoundExceeded)?;
+        .ok_or(FleetComponentProvisioningInstallError::AdvanceLimitOverflow)?;
     BASE_ADVANCE_LIMIT
         .checked_add(
             components
                 .checked_mul(ADVANCES_PER_COMPONENT)
-                .ok_or(FleetComponentProvisioningInstallError::AdvanceBoundExceeded)?,
+                .ok_or(FleetComponentProvisioningInstallError::AdvanceLimitOverflow)?,
         )
         .and_then(|limit| {
             placements
@@ -325,5 +337,58 @@ fn provisioning_advance_limit(
                 .checked_mul(ADVANCES_PER_ROOT)
                 .and_then(|root_work| limit.checked_add(root_work))
         })
-        .ok_or(FleetComponentProvisioningInstallError::AdvanceBoundExceeded)
+        .ok_or(FleetComponentProvisioningInstallError::AdvanceLimitOverflow)
+}
+
+fn advance_bound_exceeded(
+    current: &ResolvedFleetComponentProvisioningInstall,
+) -> FleetComponentProvisioningInstallError {
+    let status = current.journal.last_status.as_ref();
+    FleetComponentProvisioningInstallError::AdvanceBoundExceeded {
+        phase: status.map_or_else(
+            || "unavailable".to_string(),
+            |status| format!("{:?}", status.phase),
+        ),
+        accepted_roots: status.map_or_else(
+            || "unavailable".to_string(),
+            |status| status.accepted_root_count.to_string(),
+        ),
+        acceptance_in_flight_root: status.map_or_else(
+            || "unavailable".to_string(),
+            |status| {
+                status
+                    .acceptance_in_flight_root
+                    .as_ref()
+                    .map_or_else(|| "none".to_string(), Principal::to_text)
+            },
+        ),
+        operation_id: hex_bytes(current.journal.prepare_request.operation_id),
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::FleetComponentProvisioningInstallError;
+
+    #[test]
+    fn bounded_advance_error_renders_last_correlated_state() {
+        let error = FleetComponentProvisioningInstallError::AdvanceBoundExceeded {
+            phase: "AcceptingRoots".to_string(),
+            accepted_roots: "0".to_string(),
+            acceptance_in_flight_root: "aaaaa-aa".to_string(),
+            operation_id: "07".repeat(32),
+        };
+
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "Fleet Component provisioning exceeded its bounded advance count: phase=AcceptingRoots accepted_roots=0 acceptance_in_flight_root=aaaaa-aa operation_id={}",
+                "07".repeat(32)
+            )
+        );
+    }
 }

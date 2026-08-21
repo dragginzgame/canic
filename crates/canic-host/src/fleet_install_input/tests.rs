@@ -5,6 +5,10 @@
 
 use super::*;
 use crate::test_support::temp_dir;
+use canic_core::ids::{
+    COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES,
+    FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES, FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES,
+};
 use std::fs;
 
 use ic_query::subnet_catalog::{
@@ -188,6 +192,10 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
             cycles: 2_000_000_000_000
         }
     );
+    assert_eq!(
+        resolved.coordinator.root_funding,
+        Some(crate::test_support::coordinator_root_funding_policy())
+    );
     assert_eq!(resolved.fleet_subnet_roots.len(), 1);
     assert_eq!(
         resolved.fleet_subnet_roots[0]
@@ -208,12 +216,211 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
         }
     );
     assert_eq!(
+        resolved.fleet_subnet_roots[0].funding.root_funding,
+        crate::test_support::fleet_subnet_root_funding_authority().root_funding
+    );
+    let icp_refill = resolved.fleet_subnet_roots[0]
+        .funding
+        .icp_refill
+        .as_ref()
+        .expect("root ICP policy");
+    assert_eq!(icp_refill.maximum_refill_e8s, 200_000_000);
+    assert_eq!(
+        icp_refill
+            .automatic
+            .as_ref()
+            .expect("automatic root ICP policy")
+            .emergency_threshold,
+        Cycles::new(FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES)
+    );
+    assert_eq!(
         resolved.fleet_subnet_roots[0].component_admissions,
         vec![RootComponentAdmissionInput {
             component_spec: "users".parse().expect("valid Component Spec ID"),
             maximum_root_instances: 8,
         }]
     );
+}
+
+#[test]
+fn protected_funding_policies_are_required_for_every_planned_root() {
+    let selector = CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    };
+    let mut missing_coordinator = document(selector.clone());
+    missing_coordinator.coordinator.root_funding = None;
+    assert!(matches!(
+        resolve_document(&missing_coordinator, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::MissingCoordinatorRootFundingPolicy)
+    ));
+
+    let mut missing_root = document(selector);
+    let expected_subnet = subnet(&missing_root.fleet_subnet_roots[0].placement_subnet);
+    missing_root.fleet_subnet_roots[0].root_funding = None;
+    assert!(matches!(
+        resolve_document(&missing_root, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::MissingRootFundingPolicy { placement_subnet })
+            if placement_subnet == expected_subnet
+    ));
+}
+
+#[test]
+fn protected_funding_policy_rejects_underfloor_and_unfundable_values() {
+    let selector = CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    };
+
+    let mut coordinator_reserve = document(selector.clone());
+    coordinator_reserve
+        .coordinator
+        .root_funding
+        .as_mut()
+        .expect("Coordinator policy")
+        .minimum_reserve_cycles =
+        Cycles::new(COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES - 1);
+    assert_invalid_policy(
+        &coordinator_reserve,
+        "coordinator.root_funding.minimum_reserve_cycles",
+    );
+
+    let mut request_floor = document(selector.clone());
+    request_floor.fleet_subnet_roots[0]
+        .root_funding
+        .as_mut()
+        .expect("root policy")
+        .request_threshold = Cycles::new(FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES - 1);
+    assert_invalid_policy(&request_floor, ".root_funding.request_threshold");
+
+    let mut root_target = document(selector.clone());
+    let root_policy = root_target.fleet_subnet_roots[0]
+        .root_funding
+        .as_mut()
+        .expect("root policy");
+    root_policy.target_balance = root_policy.request_threshold.clone();
+    assert_invalid_policy(&root_target, ".root_funding.target_balance");
+
+    let mut root_budget = document(selector.clone());
+    root_budget.fleet_subnet_roots[0]
+        .root_funding
+        .as_mut()
+        .expect("root policy")
+        .maximum_cycles = Cycles::new(1_000_000_000_000);
+    assert_invalid_policy(&root_budget, ".root_funding.maximum_cycles");
+
+    let mut fleet_budget = document(selector);
+    fleet_budget
+        .coordinator
+        .root_funding
+        .as_mut()
+        .expect("Coordinator policy")
+        .maximum_cycles = Cycles::new(1_000_000_000_000);
+    assert_invalid_policy(&fleet_budget, "coordinator.root_funding.maximum_cycles");
+}
+
+#[test]
+fn automatic_icp_policy_rejects_invalid_thresholds_caps_and_unsafe_ic_overrides() {
+    let selector = CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    };
+
+    let mut emergency_floor = document(selector.clone());
+    emergency_floor.fleet_subnet_roots[0]
+        .icp_refill
+        .as_mut()
+        .expect("ICP policy")
+        .automatic
+        .as_mut()
+        .expect("automatic policy")
+        .emergency_threshold = Cycles::new(FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES - 1);
+    assert_invalid_policy(
+        &emergency_floor,
+        ".icp_refill.automatic.emergency_threshold",
+    );
+
+    let mut overlapping_threshold = document(selector.clone());
+    let request_threshold = overlapping_threshold.fleet_subnet_roots[0]
+        .root_funding
+        .as_ref()
+        .expect("root policy")
+        .request_threshold
+        .clone();
+    overlapping_threshold.fleet_subnet_roots[0]
+        .icp_refill
+        .as_mut()
+        .expect("ICP policy")
+        .automatic
+        .as_mut()
+        .expect("automatic policy")
+        .emergency_threshold = request_threshold.clone();
+    assert_invalid_policy(
+        &overlapping_threshold,
+        ".icp_refill.automatic.emergency_threshold",
+    );
+
+    let mut low_target = document(selector.clone());
+    low_target.fleet_subnet_roots[0]
+        .icp_refill
+        .as_mut()
+        .expect("ICP policy")
+        .automatic
+        .as_mut()
+        .expect("automatic policy")
+        .target_balance = request_threshold;
+    assert_invalid_policy(&low_target, ".icp_refill.automatic.target_balance");
+
+    let mut refill_budget = document(selector.clone());
+    refill_budget.fleet_subnet_roots[0]
+        .icp_refill
+        .as_mut()
+        .expect("ICP policy")
+        .maximum_refill_e8s = 99_999_999;
+    assert_invalid_policy(&refill_budget, ".icp_refill.maximum_refill_e8s");
+
+    let application_subnet = subnet_text(7);
+    let public_catalog = catalog(vec![info(
+        &application_subnet,
+        SubnetKind::Application,
+        SubnetSpecialization::None,
+        "application",
+    )]);
+    let mut override_input = document(selector);
+    override_input.fleet_subnet_roots[0]
+        .icp_refill
+        .as_mut()
+        .expect("ICP policy")
+        .ledger_canister_id = Some(Principal::from_slice(&[44; 29]).to_text());
+    assert!(matches!(
+        resolve_document(&override_input, BuildNetwork::Ic, Some(&public_catalog)),
+        Err(FleetInstallInputError::UnsafeIcpRefillOverride {
+            field: "fleet_subnet_roots.icp_refill.ledger_canister_id"
+        })
+    ));
+    override_input.fleet_subnet_roots[0]
+        .icp_refill
+        .as_mut()
+        .expect("ICP policy")
+        .allow_ic_system_canister_overrides = true;
+    resolve_document(&override_input, BuildNetwork::Ic, Some(&public_catalog))
+        .expect("explicit IC override safety acknowledgement");
+}
+
+#[test]
+fn protected_policy_changes_canonical_fleet_input_identity() {
+    let selector = CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+    };
+    let baseline = resolve_document(&document(selector.clone()), BuildNetwork::Local, None)
+        .expect("baseline policy");
+    let mut changed_document = document(selector);
+    changed_document.fleet_subnet_roots[0]
+        .root_funding
+        .as_mut()
+        .expect("root policy")
+        .cooldown_secs += 1;
+    let changed =
+        resolve_document(&changed_document, BuildNetwork::Local, None).expect("changed policy");
+
+    assert_ne!(baseline.canonical_sha256, changed.canonical_sha256);
 }
 
 #[test]
@@ -718,6 +925,11 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
             creation_funding: CreationFundingDocument::Cycles {
                 cycles: Cycles::new(2_000_000_000_000),
             },
+            root_funding: Some(CoordinatorRootFundingPolicyDocument {
+                minimum_reserve_cycles: Cycles::new(100_000_000),
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(10_000_000_000_000),
+            }),
         },
         fleet_subnet_roots: vec![FleetSubnetRootInputDocument {
             placement_subnet: application_subnet,
@@ -742,6 +954,27 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                 canister_cycles: Cycles::new(5_000_000_000_000),
                 imports: Vec::new(),
             },
+            root_funding: Some(FleetSubnetRootFundingPolicyDocument {
+                request_threshold: Cycles::new(50_000_000_000),
+                target_balance: Cycles::new(2_000_000_000_000),
+                cooldown_secs: 300,
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(10_000_000_000_000),
+            }),
+            icp_refill: Some(FleetSubnetRootIcpRefillPolicyDocument {
+                max_refill_e8s_per_call: 100_000_000,
+                window_secs: 86_400,
+                maximum_refill_e8s: 200_000_000,
+                minimum_icp_balance_e8s: 10_000_000,
+                min_xdr_permyriad_per_icp: Some(40_000),
+                ledger_canister_id: None,
+                cmc_canister_id: None,
+                allow_ic_system_canister_overrides: false,
+                automatic: Some(FleetSubnetRootAutomaticIcpRefillPolicyDocument {
+                    emergency_threshold: Cycles::new(42_200_000_000),
+                    target_balance: Cycles::new(1_000_000_000_000),
+                }),
+            }),
             root_creation_funding: CreationFundingDocument::Cycles {
                 cycles: Cycles::new(2_000_000_000_000),
             },
@@ -749,6 +982,18 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                 cycles: Cycles::new(2_000_000_000_000),
             },
         }],
+    }
+}
+
+fn assert_invalid_policy(document: &FleetInstallInputDocument, expected_field_suffix: &str) {
+    match resolve_document(document, BuildNetwork::Local, None) {
+        Err(FleetInstallInputError::InvalidFundingPolicy { field, .. }) => {
+            assert!(
+                field.ends_with(expected_field_suffix),
+                "unexpected invalid policy field: {field}"
+            );
+        }
+        result => panic!("expected invalid protected funding policy, got {result:?}"),
     }
 }
 
@@ -776,6 +1021,11 @@ subnet = "{application_subnet}"
 kind = "cycles"
 cycles = "2T"
 
+[coordinator.root_funding]
+minimum_reserve_cycles = "100000000"
+window_secs = 3600
+maximum_cycles = "10T"
+
 [[fleet_subnet_roots]]
 placement_subnet = "{application_subnet}"
 
@@ -787,6 +1037,24 @@ minimum_size = 3
 maximum_size = 10
 canister_cycles = "5T"
 imports = []
+
+[fleet_subnet_roots.root_funding]
+request_threshold = "50000000000"
+target_balance = "2T"
+cooldown_secs = 300
+window_secs = 3600
+maximum_cycles = "10T"
+
+[fleet_subnet_roots.icp_refill]
+max_refill_e8s_per_call = 100000000
+window_secs = 86400
+maximum_refill_e8s = 200000000
+minimum_icp_balance_e8s = 10000000
+min_xdr_permyriad_per_icp = 40000
+
+[fleet_subnet_roots.icp_refill.automatic]
+emergency_threshold = "42200000000"
+target_balance = "1T"
 
 [fleet_subnet_roots.limits]
 maximum_component_instances = 8

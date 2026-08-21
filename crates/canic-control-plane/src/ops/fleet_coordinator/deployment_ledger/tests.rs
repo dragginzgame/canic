@@ -420,6 +420,7 @@ fn root_binding(authority: FleetRegistryAuthority, root: u8) -> FleetSubnetRootB
         fleet_subnet_root: principal(root),
         component_admissions: vec![],
         component_topology_digest: ComponentTopologyDigest::from_bytes([root; 32]),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 4,
             maximum_registry_bytes: 1_024,

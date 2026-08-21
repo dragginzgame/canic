@@ -89,6 +89,7 @@ fn fixture() -> FleetSubnetRootDrainingReservationResponse {
                     },
                     maximum_group_placements: 14,
                 },
+                funding: crate::test::support::fleet_subnet_root_funding_authority(),
             },
         },
         coordinator,

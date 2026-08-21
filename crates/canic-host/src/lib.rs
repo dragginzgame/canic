@@ -58,16 +58,8 @@ pub(crate) fn cargo_command() -> Command {
     command
 }
 
-pub(crate) fn should_export_candid_artifacts(build_network: canic_core::ids::BuildNetwork) -> bool {
+pub(crate) fn should_embed_candid_metadata(build_network: canic_core::ids::BuildNetwork) -> bool {
     build_network == canic_core::ids::BuildNetwork::Local
-}
-
-pub(crate) fn remove_optional_file(path: &std::path::Path) -> std::io::Result<()> {
-    match std::fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(err),
-    }
 }
 
 #[cfg(test)]

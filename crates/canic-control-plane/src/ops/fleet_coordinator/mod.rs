@@ -6,6 +6,11 @@
 
 mod deployment_ledger;
 mod root_deletion;
+#[expect(
+    dead_code,
+    reason = "B3 grant ops are staged until the accepted workflow slice wires them"
+)]
+mod root_funding;
 
 use root_deletion::validate_root_deletion_history;
 
@@ -93,7 +98,11 @@ use canic_core::{
     },
     ids::{
         ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet, SubnetId,
+        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet,
+        MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
+    },
+    shared_support::fleet_funding_policy::{
+        validate_coordinator_root_funding_policy, validate_fleet_root_funding_capacity,
     },
 };
 use sha2::{Digest, Sha256};
@@ -223,6 +232,10 @@ impl FleetCoordinatorOps {
         args.component_deployment_configuration
             .digest()
             .map_err(|_error| InternalError::invalid_input())?;
+        if let Some(policy) = args.root_funding.as_ref() {
+            validate_coordinator_root_funding_policy(policy)
+                .map_err(|_error| InternalError::invalid_input())?;
+        }
         let component_topology = &args.component_deployment_configuration.component_topology;
         let registry = FleetRegistryOps::compile_genesis(
             &args.configured_app,
@@ -233,6 +246,7 @@ impl FleetCoordinatorOps {
             configured_app: args.configured_app,
             authority: args.authority,
             component_deployment_configuration: args.component_deployment_configuration,
+            root_funding: args.root_funding,
             registry,
             root_join_receipts: Vec::new(),
             root_snapshot_acknowledgements: Vec::new(),
@@ -1695,6 +1709,28 @@ impl FleetCoordinatorOps {
                 .component_topology,
             &current.registry,
         )?;
+        if current.registry.fleet_subnet_roots.len() > MAX_FLEET_ROOT_FUNDING_SLOTS {
+            return Err(InternalError::invariant());
+        }
+        match current.root_funding.as_ref() {
+            Some(policy) => {
+                validate_coordinator_root_funding_policy(policy)
+                    .map_err(|_error| InternalError::invariant())?;
+                validate_fleet_root_funding_capacity(
+                    policy,
+                    current
+                        .registry
+                        .fleet_subnet_roots
+                        .iter()
+                        .map(|root| &root.funding),
+                )
+                .map_err(|_error| InternalError::invariant())?;
+            }
+            None if !current.registry.fleet_subnet_roots.is_empty() => {
+                return Err(InternalError::invariant());
+            }
+            None => {}
+        }
         validate_root_join_receipts(&current)?;
         validate_root_snapshot_acknowledgements(&current)?;
         validate_registry_lifecycle_history(&current)?;

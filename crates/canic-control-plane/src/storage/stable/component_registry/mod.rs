@@ -470,6 +470,7 @@ impl RootFleetSubnetDrainingRecord {
             component_topology_digest: meta.root.component_topology_digest,
             active_release_set: meta.release_set,
             limits: meta.root.limits.clone(),
+            funding: meta.root.funding.clone(),
             status: FleetSubnetRootStatus::Active,
         };
         let reservation_is_valid = [

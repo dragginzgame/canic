@@ -1,9 +1,9 @@
-use super::should_export_candid_artifacts;
+use super::should_embed_candid_metadata;
 use canic_core::ids::BuildNetwork;
 
-// Keep public Candid export restricted to local/development environments.
+// Keep Candid metadata embedding restricted to local/development Wasm.
 #[test]
-fn candid_artifact_export_is_dev_only() {
-    assert!(should_export_candid_artifacts(BuildNetwork::Local));
-    assert!(!should_export_candid_artifacts(BuildNetwork::Ic));
+fn candid_metadata_embedding_is_dev_only() {
+    assert!(should_embed_candid_metadata(BuildNetwork::Local));
+    assert!(!should_embed_candid_metadata(BuildNetwork::Ic));
 }

@@ -5,10 +5,7 @@
 //! Boundary: config schema re-exports these data shapes for validated models.
 
 use crate::{
-    cdk::{
-        candid::{CandidType, Principal},
-        types::Cycles,
-    },
+    cdk::{candid::CandidType, types::Cycles},
     ids::{CanisterRole, ComponentSpecId},
 };
 use serde::{Deserialize, Serialize};
@@ -182,7 +179,6 @@ impl ComponentSpecConfig {
             kind: CanisterKind::Service,
             initial_cycles: self.initial_cycles.clone(),
             topup: self.topup.clone(),
-            icp_refill: None,
             cycles_funding: self.cycles_funding.clone(),
             scaling: self.scaling.clone(),
             sharding: self.sharding.clone(),
@@ -304,7 +300,6 @@ impl ComponentChildConfig {
             kind: self.kind.into(),
             initial_cycles: self.initial_cycles.clone(),
             topup: self.topup.clone(),
-            icp_refill: None,
             cycles_funding: self.cycles_funding.clone(),
             scaling: self.scaling.clone(),
             sharding: self.sharding.clone(),
@@ -399,7 +394,6 @@ pub fn implicit_wasm_store_canister_config() -> CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
@@ -418,7 +412,6 @@ pub fn implicit_root_canister_config() -> CanisterConfig {
         kind: CanisterKind::Root,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
@@ -529,9 +522,6 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub topup: Option<TopupPolicy>,
-
-    #[serde(default)]
-    pub icp_refill: Option<IcpRefillPolicy>,
 
     #[serde(default)]
     pub cycles_funding: CyclesFundingPolicyConfig,
@@ -713,31 +703,6 @@ impl Default for TopupPolicy {
             amount: defaults::topup_amount(),
         }
     }
-}
-
-///
-/// IcpRefillPolicy
-///
-/// Manual ICP-funded cycle refill policy for the root canister.
-/// Owned by config schema and consumed by ICP refill workflows.
-///
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct IcpRefillPolicy {
-    pub max_refill_e8s_per_call: u64,
-
-    #[serde(default)]
-    pub min_xdr_permyriad_per_icp: Option<u64>,
-
-    #[serde(default)]
-    pub ledger_canister_id: Option<Principal>,
-
-    #[serde(default)]
-    pub cmc_canister_id: Option<Principal>,
-
-    #[serde(default)]
-    pub allow_ic_system_canister_overrides: bool,
 }
 
 ///

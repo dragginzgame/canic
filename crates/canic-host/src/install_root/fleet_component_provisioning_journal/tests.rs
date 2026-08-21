@@ -279,6 +279,7 @@ fn install_plan(root: &Path) -> PersistedFleetInstallPlan {
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 creation_funding: PlannedCanisterCreationFunding::Cycles { cycles: 1 },
+                root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
             fleet_subnet_roots: Vec::new(),
         },

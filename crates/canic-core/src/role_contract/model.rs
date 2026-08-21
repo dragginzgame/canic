@@ -106,6 +106,7 @@ pub enum StateAllocationKey {
     TemplateChunkRefs,
     TemplateChunkPayloads,
     WasmStoreGcState,
+    FleetCoordinatorFunding,
     FleetCoordinatorRegistry,
     RootWasmStoreState,
     RootFleetRegistryMirror,

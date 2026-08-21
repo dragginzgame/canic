@@ -9,12 +9,12 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
-    remove_optional_file,
+    durable_io::write_bytes,
     role_contract::{
         PackageValidationMode, RolePackageValidation, finding_detail,
         resolve_built_in_wasm_store_contract, validate_built_in_wasm_store_package,
     },
-    should_export_candid_artifacts,
+    should_embed_candid_metadata,
 };
 use std::{
     fmt::Write as _,
@@ -92,9 +92,9 @@ pub fn build_bootstrap_wasm_store_artifact(
         context,
         &source.manifest_path,
         Some(profile.protocol_profile_digest),
-        should_export_candid_artifacts(context.build_network),
+        should_embed_candid_metadata(context.build_network),
     )?;
-    if should_export_candid_artifacts(context.build_network) {
+    if should_embed_candid_metadata(context.build_network) {
         let final_candid = extract_candid_bytes(&built_wasm_path)?;
         if final_candid != candid {
             return Err("Wasm Store Candid changed after protocol-profile binding".into());
@@ -108,14 +108,17 @@ pub fn build_bootstrap_wasm_store_artifact(
     fs::copy(&built_wasm_path, &wasm_path)?;
     let mut transforms = vec![maybe_shrink_wasm_artifact(&wasm_path)?];
     fs::write(profile_path, context.profile.target_dir_name())?;
-    if should_export_candid_artifacts(context.build_network) {
+    if should_embed_candid_metadata(context.build_network) {
         ensure_wasm_store_did(context, &source, &did_path)?;
-        if fs::read(&did_path)? != candid {
-            return Err("Wasm Store canonical Candid differs from its compiled profile".into());
-        }
+    } else {
+        write_bytes(&did_path, &candid)?;
+    }
+    if fs::read(&did_path)? != candid {
+        return Err("Wasm Store materialized Candid differs from its compiled profile".into());
+    }
+    if should_embed_candid_metadata(context.build_network) {
         transforms.push(embed_candid_metadata(&wasm_path, &did_path)?);
     } else {
-        remove_optional_file(&did_path)?;
         transforms.push(ArtifactTransformOutput::not_requested(
             ArtifactTransformKind::CandidMetadata,
         ));

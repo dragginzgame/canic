@@ -15,18 +15,19 @@ use crate::{
         candid::Nat,
         types::{Cycles, Principal},
     },
-    config::schema::IcpRefillPolicy,
     domain::policy::pure::icp_refill::{
         IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
         evaluate_manual_refill,
     },
     dto::icp_refill::IcpRefillRequest,
-    ids::BuildNetwork,
+    ids::{BuildNetwork, FleetSubnetRootIcpRefillPolicy},
     infra::ic::icp_refill::IcpRefillCanisterOverrides,
     ops::{
-        config::ConfigOps,
         ic::{IcOps, build_network::BuildNetworkOps, icp_refill::IcpRefillOps},
-        storage::{icp_refill::IcpRefillStoreOps, state::fleet::FleetStateOps},
+        storage::{
+            fleet_activation::FleetActivationOps, icp_refill::IcpRefillStoreOps,
+            state::fleet::FleetStateOps,
+        },
     },
 };
 use thiserror::Error as ThisError;
@@ -132,7 +133,7 @@ struct ManualRefillPreflight {
 
 impl ManualRefillPreflight {
     fn new(
-        policy: Option<&IcpRefillPolicy>,
+        policy: Option<&FleetSubnetRootIcpRefillPolicy>,
         request: &IcpRefillRequest,
         root_canister: Principal,
     ) -> Result<Self, InternalError> {
@@ -211,7 +212,7 @@ async fn prepare_context(
 }
 
 async fn configured_rate(
-    policy: Option<&IcpRefillPolicy>,
+    policy: Option<&FleetSubnetRootIcpRefillPolicy>,
     cmc_canister_id: Principal,
     mode: RateQueryMode,
 ) -> Result<Option<u64>, InternalError> {
@@ -223,21 +224,26 @@ async fn configured_rate(
     Ok(Some(response.data.xdr_permyriad_per_icp))
 }
 
-const fn policy_requires_rate(policy: Option<&IcpRefillPolicy>) -> bool {
+const fn policy_requires_rate(policy: Option<&FleetSubnetRootIcpRefillPolicy>) -> bool {
     matches!(
         policy,
-        Some(IcpRefillPolicy {
+        Some(FleetSubnetRootIcpRefillPolicy {
             min_xdr_permyriad_per_icp: Some(_),
             ..
         })
     )
 }
 
-const fn rate_required(policy: Option<&IcpRefillPolicy>, mode: RateQueryMode) -> bool {
+const fn rate_required(
+    policy: Option<&FleetSubnetRootIcpRefillPolicy>,
+    mode: RateQueryMode,
+) -> bool {
     matches!(mode, RateQueryMode::Always) || policy_requires_rate(policy)
 }
 
-fn refill_canister_overrides(policy: Option<&IcpRefillPolicy>) -> IcpRefillCanisterOverrides {
+fn refill_canister_overrides(
+    policy: Option<&FleetSubnetRootIcpRefillPolicy>,
+) -> IcpRefillCanisterOverrides {
     let Some(policy) = policy else {
         return IcpRefillCanisterOverrides::default();
     };
@@ -249,7 +255,7 @@ fn refill_canister_overrides(policy: Option<&IcpRefillPolicy>) -> IcpRefillCanis
     }
 }
 
-const fn icp_refill_policy_rules(policy: &IcpRefillPolicy) -> IcpRefillPolicyRules {
+const fn icp_refill_policy_rules(policy: &FleetSubnetRootIcpRefillPolicy) -> IcpRefillPolicyRules {
     IcpRefillPolicyRules {
         max_refill_e8s_per_call: policy.max_refill_e8s_per_call,
         min_xdr_permyriad_per_icp: policy.min_xdr_permyriad_per_icp,
@@ -268,8 +274,11 @@ fn estimate_cycles(amount_e8s: u64, xdr_permyriad_per_icp: u64) -> Cycles {
     Cycles::new(u128::from(amount_e8s).saturating_mul(u128::from(xdr_permyriad_per_icp)))
 }
 
-fn current_icp_refill_policy() -> Result<Option<IcpRefillPolicy>, InternalError> {
-    Ok(ConfigOps::current_canister()?.icp_refill)
+fn current_icp_refill_policy() -> Result<Option<FleetSubnetRootIcpRefillPolicy>, InternalError> {
+    FleetActivationOps::root_authority()
+        .map(|authority| authority.binding.funding.icp_refill)
+        .map_err(crate::ops::storage::StorageOpsError::from)
+        .map_err(Into::into)
 }
 
 fn require_icp_refill_configured() -> Result<(), InternalError> {
@@ -277,7 +286,9 @@ fn require_icp_refill_configured() -> Result<(), InternalError> {
     validate_icp_refill_configured(policy.as_ref())
 }
 
-fn validate_icp_refill_configured(policy: Option<&IcpRefillPolicy>) -> Result<(), InternalError> {
+fn validate_icp_refill_configured(
+    policy: Option<&FleetSubnetRootIcpRefillPolicy>,
+) -> Result<(), InternalError> {
     if policy.is_some() {
         Ok(())
     } else {

@@ -104,6 +104,7 @@ fn root(topology: &ComponentTopology) -> FleetSubnetRootEntry {
             manifest_digest: ReleaseSetDigest::from_bytes([8; 32]),
         },
         limits: root_limits(),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         status: FleetSubnetRootStatus::Joining,
     }
 }
