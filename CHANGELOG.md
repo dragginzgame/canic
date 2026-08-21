@@ -21,8 +21,8 @@ Detailed patch breakdown: [docs/changelog/0.107.md](docs/changelog/0.107.md)
   and installs, validates the effective ICP identity against the Fleet
   operator before builds, adopts `ic-query 0.42.0`'s stable snapshot-authority
   boundary on top of its modern Registry routing and complete typed failure
-  provenance, and closes the workspace lint and visibility cleanup before the
-  required human audit.
+  provenance, closes the workspace lint and visibility cleanup, and removes
+  two release-gate test races before the required human audit.
 - `0.107.1` introduced published typed Subnet-catalog failure propagation, but
   its closeout readiness was superseded when live collection exposed the
   upstream legacy-routing authority defect corrected by `0.107.2`.
