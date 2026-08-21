@@ -228,10 +228,6 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::FleetCoordinator,
-        StateAllocationKey::FleetCoordinatorFunding,
-    ),
-    capability_allocation(
-        RoleCapabilityKey::FleetCoordinator,
         StateAllocationKey::FleetCoordinatorRegistry,
     ),
     capability_allocation(
@@ -402,10 +398,6 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     ),
     feature_allocation(
         CanicFeatureKey::FleetCoordinatorCanister,
-        StateAllocationKey::FleetCoordinatorFunding,
-    ),
-    feature_allocation(
-        CanicFeatureKey::FleetCoordinatorCanister,
         StateAllocationKey::FleetCoordinatorRegistry,
     ),
     feature_allocation(
@@ -446,10 +438,6 @@ const BUILT_IN_ALLOCATIONS: &[BuiltInAllocation] = &[
     built_in_allocation(
         BuiltInRoleKind::FleetCoordinator,
         StateAllocationKey::CoreAuthorityRestoreFence,
-    ),
-    built_in_allocation(
-        BuiltInRoleKind::FleetCoordinator,
-        StateAllocationKey::FleetCoordinatorFunding,
     ),
     built_in_allocation(
         BuiltInRoleKind::FleetCoordinator,

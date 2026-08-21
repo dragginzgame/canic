@@ -145,6 +145,10 @@ macro_rules! canic_emit_root_command_endpoint {
         async fn canic_command(
             command: RootCommand,
         ) -> Result<RootCommandResponse, ::canic::Error> {
+            ::std::boxed::Box::pin(#[expect(
+                clippy::large_stack_frames,
+                reason = "the large root command dispatch future is immediately heap-boxed"
+            )] async move {
             if !$crate::__internal::core::ingress::payload::payload_within_limit(
                 $crate::__internal::cdk::raw::msg_arg_data_size(),
                 command.__canic_payload_max_bytes(),
@@ -614,6 +618,8 @@ macro_rules! canic_emit_root_command_endpoint {
                         .map(RootCommandResponse::UpsertIssuerRenewalTemplate)
                 }
             }
+            })
+            .await
         }
     };
 }

@@ -14,7 +14,6 @@ pub mod cycles;
 pub mod cycles_funding;
 pub mod env;
 pub mod fleet_activation;
-pub mod fleet_funding;
 pub mod icp_refill;
 pub mod intent;
 pub mod log;

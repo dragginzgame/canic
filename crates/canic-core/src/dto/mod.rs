@@ -40,7 +40,6 @@ pub mod cycles;
 pub mod env;
 pub mod error;
 pub mod fleet_activation;
-pub mod fleet_funding;
 pub mod fleet_registry;
 pub mod fleet_subnet_root;
 pub mod icp_refill;

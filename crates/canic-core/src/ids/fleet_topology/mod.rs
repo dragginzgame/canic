@@ -68,17 +68,11 @@ pub struct CyclesFundingBudget {
 /// Minimum post-grant Coordinator execution reserve established by the 0.108 M0 proof.
 pub const COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES: u128 = 100_000_000;
 
-/// Conservative current-Subnet reservation for one bounded 16 KiB funding command.
-pub const FLEET_ROOT_FUNDING_CALL_RESERVATION_CYCLES: u128 = 42_118_809_000;
-
 /// Minimum Root balance admitted for the Coordinator request and exact-retry path.
 pub const FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES: u128 = 42_200_000_000;
 
 /// Minimum Root balance admitted for automatic ICP-refill execution and recovery.
 pub const FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES: u128 = 42_200_000_000;
-
-/// Maximum registered roots represented by the bounded Coordinator funding ledger.
-pub const MAX_FLEET_ROOT_FUNDING_SLOTS: usize = 4_096;
 
 ///
 /// FleetCoordinatorRootFundingPolicy

@@ -6,11 +6,6 @@
 
 mod deployment_ledger;
 mod root_deletion;
-#[expect(
-    dead_code,
-    reason = "B3 grant ops are staged until the accepted workflow slice wires them"
-)]
-mod root_funding;
 
 use root_deletion::validate_root_deletion_history;
 
@@ -98,8 +93,7 @@ use canic_core::{
     },
     ids::{
         ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet,
-        MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
+        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet, SubnetId,
     },
     shared_support::fleet_funding_policy::{
         validate_coordinator_root_funding_policy, validate_fleet_root_funding_capacity,
@@ -1709,9 +1703,6 @@ impl FleetCoordinatorOps {
                 .component_topology,
             &current.registry,
         )?;
-        if current.registry.fleet_subnet_roots.len() > MAX_FLEET_ROOT_FUNDING_SLOTS {
-            return Err(InternalError::invariant());
-        }
         match current.root_funding.as_ref() {
             Some(policy) => {
                 validate_coordinator_root_funding_policy(policy)
