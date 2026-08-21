@@ -169,11 +169,15 @@ Coordinator, Store or standalone-local specialized artifacts:
 
 The original read-only Toko snapshot was clean `main` at
 `bf14a5d3d89be4335d3da2601e8a60128fde04df` and had no Canic integration or
-feedback identifier. A later read-only inspection at current Toko HEAD
-`2af2182f97cb21e220081d49169d6a006eff1adb` preserved its existing dirty user
-work and supplied concrete CANIC-009/CANIC-012 deployment feedback. The Canic
-correction owns those changes; no Toko file was changed. Acceptance criterion
-13 retains that read-only downstream boundary.
+feedback identifier. A later read-only inspection used a separate dirty Toko
+Miner worktree then based at
+`2af2182f97cb21e220081d49169d6a006eff1adb`, preserved its existing user work
+and supplied concrete CANIC-009/CANIC-012 deployment feedback. The final audit
+rechecked that dirty worktree when its base HEAD was
+`4cd7aa8c18e6edde4a9d28a3b4d23709ff542d3e`: CANIC-012/CANIC-013 were verified,
+and exact first-install and installed-Fleet blockers were recorded for
+CANIC-009/CANIC-011. No Toko or Toko Miner file was changed. That record
+satisfies acceptance criterion 13's blocker alternative.
 
 ## Focused Validation
 
@@ -346,10 +350,11 @@ cargo clippy --locked -p canic-core -p canic-host --all-targets -- -D warnings
   passed
 ```
 
-The automated correction did not rerun the complete validation gate; that
-remains part of the maintainer-owned release flow.
+At this evidence capture, the automated correction did not rerun the complete
+validation gate. The subsequent maintainer-requested closeout audit ran it in
+full and every requested target passed.
 
-## Remaining Boundary
+## Closeout Disposition
 
 B5-B7 implementation evidence is complete after the `0.107.2` correction and
 the closeout-feedback follow-up. Default planning is cache-only; explicit
@@ -358,15 +363,16 @@ and private-cache repair without deployment or IC update mutation. Install
 uses that policy automatically and both paths compile from stable snapshot
 authority while reporting acquisition provenance separately. Install then
 admits the exact effective Fleet-operator identity before build preparation.
-B5
-otherwise changes only the host dependency, host/CLI report path and
+B5 otherwise changes only the host dependency, host/CLI report path and
 deterministic host fixture. The accompanying compile-time hygiene narrows
-internal facade/macro
-visibility and makes dead code and stale lint expectations hard failures; it
+internal facade/macro visibility and makes dead code and stale lint
+expectations hard failures; it
 also deletes two redundant dependencies from the test-only IcyDB composition
 fixture and records only proven generated-code dependency exceptions. It does
 not alter generated macro output. Neither part alters the B7 managed/Root/
-Coordinator/Store/runtime-probe Wasm or Candid boundary recorded above. After
-the maintainer reruns the complete gate, the line is **ready for human 0.107
-closeout audit**. Do not begin 0.108 production before the maintainer requests
-and accepts that exact audit.
+Coordinator/Store/runtime-probe Wasm or Candid boundary recorded above. The
+subsequent complete gate passed. The initial closeout audit passed AC1-AC11 and
+AC13 and rejected only AC12's active-document residue; this evidence
+reconciliation removes the remaining historical ambiguity and is ready for
+the exact AC12 re-audit. Do not begin 0.108 production before the maintainer
+accepts 0.107 closeout.

@@ -46,6 +46,8 @@ pub mod state_contract;
     feature = "wasm-store-canister"
 ))]
 pub(crate) mod storage;
+#[cfg(test)]
+pub(crate) mod test_support;
 #[cfg(any(feature = "fleet-coordinator-canister", feature = "root-control-plane"))]
 pub(crate) mod view;
 #[cfg(any(

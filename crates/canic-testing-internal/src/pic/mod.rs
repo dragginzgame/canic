@@ -1,5 +1,12 @@
 //! Repo-only PocketIC fixtures layered on top of `ic-testkit`.
 
+use canic_core::{
+    cdk::types::Cycles,
+    ids::{
+        CyclesFundingBudget, FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy,
+    },
+};
 #[cfg(test)]
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -46,6 +53,31 @@ pub use root::{
 pub use startup::start_pocket_ic;
 
 pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
+
+pub(crate) const fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {
+    FleetCoordinatorRootFundingPolicy {
+        minimum_reserve_cycles: Cycles::new(100_000_000),
+        budget: CyclesFundingBudget {
+            window_secs: 3_600,
+            maximum_cycles: Cycles::new(10_000_000_000_000),
+        },
+    }
+}
+
+pub(crate) const fn root_funding_authority() -> FleetSubnetRootFundingAuthority {
+    FleetSubnetRootFundingAuthority {
+        root_funding: FleetSubnetRootFundingPolicy {
+            request_threshold: Cycles::new(50_000_000_000),
+            target_balance: Cycles::new(2_000_000_000_000),
+            cooldown_secs: 300,
+            budget: CyclesFundingBudget {
+                window_secs: 3_600,
+                maximum_cycles: Cycles::new(10_000_000_000_000),
+            },
+        },
+        icp_refill: None,
+    }
+}
 
 #[cfg(test)]
 static PIC_UNIT_TEST_SERIAL: Mutex<()> = Mutex::new(());

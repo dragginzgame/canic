@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- The test-only 0.108 B1 attached-cycles probe proves exact caller-bound root
-  acceptance, intent/call/receipt interruption and zero-accept replay with
-  automatic principal return, while retaining measured PocketIC call-cost and
-  operating-headroom inputs for maintainer acceptance before production work.
+## [0.108.0] - 2026-08-21 - Coordinator-Backed Root Funding
+
+Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
+
+- The accepted recovery proof and protected-policy hard cut establish exact
+  replay/refund semantics, measured operating floors and digest-bound
+  Coordinator/root funding authority without yet enabling runtime grants.
 
 ## [0.107.x] - 2026-08-20 - Fresh-Fleet Preflight And Runtime Admission
 

@@ -38,10 +38,15 @@ pub use fleet::{
     FleetBinding, FleetId, FleetIdParseError, FleetKey, FleetName, FleetNameParseError,
 };
 pub use fleet_topology::{
-    ComponentBinding, ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest,
-    CyclesFundingBudget, FleetCoordinatorBinding, FleetRegistryAuthority,
-    FleetSubnetCanisterPoolConfig, FleetSubnetRootBinding, FleetSubnetRootLimits,
-    FleetSubnetWasmStoreAuthority, ManagedCanisterBinding,
+    COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES, ComponentBinding,
+    ComponentChildBinding, ComponentSpecAdmission, ComponentTopologyDigest, CyclesFundingBudget,
+    FLEET_ROOT_FUNDING_CALL_RESERVATION_CYCLES, FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES,
+    FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES, FleetCoordinatorBinding,
+    FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority, FleetSubnetCanisterPoolConfig,
+    FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootBinding,
+    FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
+    FleetSubnetRootLimits, FleetSubnetWasmStoreAuthority, MAX_FLEET_ROOT_FUNDING_SLOTS,
+    ManagedCanisterBinding,
 };
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};

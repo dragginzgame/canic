@@ -114,6 +114,7 @@ fn root_binding(
         fleet_subnet_root: principal(7),
         component_admissions,
         component_topology_digest: projection.digest().expect("topology digest"),
+        funding: crate::test_support::fleet_subnet_root_funding_authority(),
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 8,
             maximum_registry_bytes: 16_777_216,

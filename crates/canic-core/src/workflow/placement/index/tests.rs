@@ -40,7 +40,6 @@ fn index_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
         kind: CanisterKind::Service,
         initial_cycles: Cycles::new(0),
         topup: None,
-        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,

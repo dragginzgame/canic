@@ -2240,6 +2240,7 @@ mod tests {
                 component_admissions: binding.component_admissions.clone(),
                 component_topology_digest: binding.component_topology_digest,
                 active_release_set: fixture.init_args.authority.initial_release_set,
+                funding: binding.funding.clone(),
                 limits: binding.limits.clone(),
                 status: FleetSubnetRootStatus::Joining,
             },
@@ -2515,6 +2516,7 @@ mod tests {
                 .app
                 .clone(),
             authority: fixture.init_args.authority.binding.authority.clone(),
+            root_funding: Some(crate::pic::coordinator_root_funding_policy()),
             component_deployment_configuration: config
                 .model()
                 .compile_component_deployment_configuration()

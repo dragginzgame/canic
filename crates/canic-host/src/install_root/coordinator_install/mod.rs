@@ -360,6 +360,7 @@ fn expected_genesis(
             configured_app: journal.fleet.app.clone(),
             authority,
             component_deployment_configuration: journal.component_deployment_configuration.clone(),
+            root_funding: journal.root_funding.clone(),
         },
         registry,
         manifest,
@@ -412,6 +413,7 @@ mod tests {
                         targets: Vec::new(),
                     },
                 },
+            root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
         };
         let root = crate::test_support::temp_dir("canic-binary-coordinator-install-args");
         let path = root.join(COORDINATOR_INSTALL_ARGS_FILE);

@@ -20,7 +20,8 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     ids::{
         CanonicalNetworkId, ComponentGroupDeploymentId, ComponentSpecAdmission,
-        ComponentTopologyDigest, CyclesFundingBudget, FleetBinding, FleetName,
+        ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
+        FleetCoordinatorRootFundingPolicy, FleetName, FleetSubnetRootFundingAuthority,
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseSetDigest,
         SubnetId,
     },
@@ -51,6 +52,7 @@ pub enum PlannedCanisterCreationFunding {
 pub struct PlannedFleetCoordinator {
     pub coordinator_subnet: SubnetId,
     pub creation_funding: PlannedCanisterCreationFunding,
+    pub root_funding: Option<FleetCoordinatorRootFundingPolicy>,
 }
 
 /// One explicit initial Component Group placement assigned to a planned root Subnet.
@@ -73,6 +75,7 @@ pub struct PlannedFleetSubnetRootInput {
     pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
     pub canister_pool_imports: Vec<Principal>,
     pub root_creation_funding: PlannedCanisterCreationFunding,
     pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
@@ -129,6 +132,7 @@ pub struct FreshFleetSubnetRootPlanV1 {
     pub component_topology_digest: ComponentTopologyDigest,
     #[serde(with = "root_limits_document")]
     pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
     pub canister_pool_imports: Vec<Principal>,
     pub root_creation_funding: PlannedCanisterCreationFunding,
     pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
@@ -384,6 +388,7 @@ pub struct PlannedFleetSubnetRoot {
     pub initial_release_set: FleetSubnetRootReleaseSet,
     #[serde(with = "root_limits_document")]
     pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
     pub canister_pool_imports: Vec<Principal>,
     pub root_creation_funding: PlannedCanisterCreationFunding,
     pub wasm_store_creation_funding: PlannedCanisterCreationFunding,

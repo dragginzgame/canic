@@ -367,6 +367,7 @@ fn init_payload_for_config(
         fleet_subnet_root: root_pid,
         component_admissions: admissions,
         component_topology_digest,
+        funding: super::root_funding_authority(),
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 1,
             maximum_registry_bytes: 1_048_576,

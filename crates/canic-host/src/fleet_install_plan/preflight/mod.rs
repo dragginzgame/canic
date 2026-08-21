@@ -61,6 +61,7 @@ pub fn compile_fresh_fleet_preflight(
             component_admissions: topology_root.component_admissions.clone(),
             component_topology_digest: topology_root.component_topology_digest,
             limits: topology_root.limits.clone(),
+            funding: input.funding.clone(),
             canister_pool_imports: input.canister_pool_imports.clone(),
             root_creation_funding: input.root_creation_funding.clone(),
             wasm_store_creation_funding: input.wasm_store_creation_funding.clone(),

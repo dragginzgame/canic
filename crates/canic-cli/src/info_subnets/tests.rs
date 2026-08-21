@@ -20,7 +20,8 @@ use canic_core::{
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootLimits,
+        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority,
+        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, FleetSubnetRootLimits,
         FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
 };
@@ -284,6 +285,18 @@ fn root(
                 [6; 32],
             )),
             manifest_digest: ReleaseSetDigest::from_bytes([5; 32]),
+        },
+        funding: FleetSubnetRootFundingAuthority {
+            root_funding: FleetSubnetRootFundingPolicy {
+                request_threshold: Cycles::new(50_000_000_000),
+                target_balance: Cycles::new(2_000_000_000_000),
+                cooldown_secs: 300,
+                budget: CyclesFundingBudget {
+                    window_secs: 3_600,
+                    maximum_cycles: Cycles::new(10_000_000_000_000),
+                },
+            },
+            icp_refill: None,
         },
         limits: FleetSubnetRootLimits {
             maximum_component_instances: 2,

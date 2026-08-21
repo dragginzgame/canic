@@ -167,7 +167,6 @@ impl ConfigTestBuilder {
             kind,
             initial_cycles: Cycles::new(0),
             topup: None,
-            icp_refill: None,
             cycles_funding: CyclesFundingPolicyConfig::default(),
             scaling: None,
             sharding: None,

@@ -757,6 +757,7 @@ pub(super) fn expected_root_authority(
             component_admissions: journal.root_plan.component_admissions.clone(),
             component_topology_digest: journal.root_plan.component_topology_digest,
             limits: journal.root_plan.limits.clone(),
+            funding: journal.root_plan.funding.clone(),
         },
         initial_release_set: journal.root_plan.initial_release_set,
         expected_module_hash: journal.expected_root_module_hash,
@@ -782,6 +783,7 @@ pub(super) fn expected_registry_join_entry(
         component_topology_digest: journal.root_plan.component_topology_digest,
         active_release_set: journal.root_plan.initial_release_set,
         limits: journal.root_plan.limits.clone(),
+        funding: journal.root_plan.funding.clone(),
         status: FleetSubnetRootStatus::Joining,
     })
 }
