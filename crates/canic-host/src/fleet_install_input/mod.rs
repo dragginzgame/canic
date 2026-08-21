@@ -65,8 +65,28 @@ pub struct ResolvedFleetInstallInput {
     pub canonical_sha256: String,
     pub operator: FreshFleetOperatorFundingEvidenceV1,
     pub catalog: FreshFleetCatalogEvidenceV1,
+    pub catalog_acquisition: FleetInstallCatalogAcquisitionV1,
     pub coordinator: PlannedFleetCoordinator,
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootInput>,
+}
+
+///
+/// FleetInstallCatalogAcquisitionV1
+///
+/// Transient cache provenance for one Fleet-input resolution, excluded from plan authority.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum FleetInstallCatalogAcquisitionV1 {
+    NotRequired {
+        network: String,
+    },
+    ValidatedCache {
+        cache_path: String,
+        cache_disposition: String,
+        collected_at: String,
+    },
 }
 
 ///
@@ -431,7 +451,7 @@ fn resolve_document_with_evidence(
 ) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
     validate_schema_version(document)?;
     let operator = resolve_operator(&document.operator, build_network, now_unix_secs)?;
-    let catalog_evidence = resolve_catalog_evidence(build_network, catalog)?;
+    let (catalog_evidence, catalog_acquisition) = resolve_catalog_evidence(build_network, catalog)?;
     let validated_catalog = catalog.map(|outcome| &outcome.catalog);
     let coordinator_subnet = resolve_coordinator_subnet(
         &document.coordinator.subnet,
@@ -466,6 +486,7 @@ fn resolve_document_with_evidence(
         canonical_sha256: canonical_sha256.to_string(),
         operator,
         catalog: catalog_evidence,
+        catalog_acquisition,
         coordinator,
         fleet_subnet_roots,
     })
@@ -566,25 +587,40 @@ const fn validate_operator_text(
 fn resolve_catalog_evidence(
     build_network: BuildNetwork,
     outcome: Option<&CatalogLoadOutcome>,
-) -> Result<FreshFleetCatalogEvidenceV1, FleetInstallInputError> {
+) -> Result<
+    (
+        FreshFleetCatalogEvidenceV1,
+        FleetInstallCatalogAcquisitionV1,
+    ),
+    FleetInstallInputError,
+> {
     if build_network != BuildNetwork::Ic {
-        return Ok(FreshFleetCatalogEvidenceV1::NotRequired {
-            network: build_network.to_string(),
-        });
+        let network = build_network.to_string();
+        return Ok((
+            FreshFleetCatalogEvidenceV1::NotRequired {
+                network: network.clone(),
+            },
+            FleetInstallCatalogAcquisitionV1::NotRequired { network },
+        ));
     }
     let outcome = outcome.ok_or_else(|| FleetInstallInputError::TrustedMetadataRequired {
         selector: "fresh-Fleet catalog evidence".to_string(),
     })?;
-    let authority = outcome.authority_evidence();
-    Ok(FreshFleetCatalogEvidenceV1::Validated {
-        network: outcome.catalog.provenance().network.clone(),
-        assurance: authority.assurance.as_str().to_string(),
-        source_endpoints: authority.source_endpoints,
-        cache_disposition: authority.cache_disposition.as_str().to_string(),
-        collected_at: outcome.catalog.provenance().fetched_at.clone(),
-        registry_version: authority.registry_version,
-        catalog_sha256: authority.catalog_digest,
-    })
+    let authority = outcome.snapshot_authority();
+    Ok((
+        FreshFleetCatalogEvidenceV1::Validated {
+            network: outcome.catalog.provenance().network.clone(),
+            assurance: authority.assurance.as_str().to_string(),
+            source_endpoints: authority.source_endpoints,
+            registry_version: authority.registry_version,
+            catalog_sha256: authority.catalog_digest,
+        },
+        FleetInstallCatalogAcquisitionV1::ValidatedCache {
+            cache_path: outcome.path.display().to_string(),
+            cache_disposition: outcome.disposition.as_str().to_string(),
+            collected_at: outcome.catalog.provenance().fetched_at.clone(),
+        },
+    ))
 }
 
 fn resolve_root_document(

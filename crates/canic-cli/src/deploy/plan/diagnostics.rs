@@ -101,14 +101,24 @@ pub(super) fn fresh_fleet_plan_blocker(
     fleet: &str,
     detail: impl Into<String>,
     source: crate::deploy::plan::report::PlanDiagnosticSource,
+    refresh_catalog: bool,
 ) -> PlanDiagnostic {
+    let next = if source == SOURCE_FLEET_CATALOG {
+        if refresh_catalog {
+            "inspect the typed catalog failure and repair the selected Registry or cache authority before retrying"
+        } else {
+            "rerun with --refresh-catalog to acquire missing or invalid mainnet catalog evidence"
+        }
+    } else {
+        "repair the Fleet input and fresh-Fleet authority before retrying"
+    };
     PlanDiagnostic {
         category: CATEGORY_TOPOLOGY,
         code: "fresh_fleet_plan_blocked".to_string(),
         severity: SEVERITY_BLOCKED,
         subject: fleet.to_string(),
         detail: detail.into(),
-        next: Some("repair the Fleet input and fresh-Fleet authority before retrying".to_string()),
+        next: Some(next.to_string()),
         source,
     }
 }

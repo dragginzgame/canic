@@ -7,7 +7,8 @@
 use serde::Serialize;
 
 use canic_host::{
-    deployment_truth::DeploymentPlanV1, fleet_install_input::SubnetCatalogLoadFailureEvidenceV1,
+    deployment_truth::DeploymentPlanV1,
+    fleet_install_input::{FleetInstallCatalogAcquisitionV1, SubnetCatalogLoadFailureEvidenceV1},
     fleet_install_plan::FreshFleetDeploymentPlanV1,
 };
 
@@ -68,6 +69,7 @@ pub(in crate::deploy) struct DeploymentPlanReport {
     pub(super) config_path: String,
     pub(super) status: PlanStatus,
     pub(super) comparison_status: ComparisonStatus,
+    pub(super) catalog_acquisition: Option<FleetInstallCatalogAcquisitionV1>,
     pub(super) catalog_failure: Option<SubnetCatalogLoadFailureEvidenceV1>,
     pub(super) fresh_fleet_plan: Option<FreshFleetDeploymentPlanV1>,
     pub(super) plan: DeploymentPlanV1,

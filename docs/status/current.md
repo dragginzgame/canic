@@ -233,8 +233,12 @@ domain-separated SHA-256 digest. Planning renders that decision; install
 recompiles it before allocation and binds it through same-release session,
 persisted Fleet plan, deployment truth, completion/rejection receipts and
 resume comparison. Changed source, balance or expected digest fails before an
-effect begins. B5 is complete on published crates.io `ic-query 0.41.2`: Canic
-uses its modern-first detailed cached/live results and exhaustively projects
+effect begins. B5's routing and detailed failure work is complete on published
+crates.io `ic-query 0.41.2`, and the open correction advances to `0.42.0` for
+stable snapshot authority, locked with checksum
+`311b60543bc5c09c961abe9612d2bf3e26e99ba8bcadb3c01d043056c544a318`.
+Canic uses its modern-first detailed cached/live results and exhaustively
+projects
 the typed request source/assurance, cache stage/disposition, pinned and
 returned Registry-value versions, exact failing endpoint/assurance, completed
 record reads, offending subject, code/category and truthful unknown-retry
@@ -248,10 +252,13 @@ maximum schema remains 8,417 bytes. Focused unit, Candid, source and managed-
 artifact checks pass, and the bounded PocketIC journey proves seeding,
 controller/Root separation, response-loss exact retry, conflict denial,
 immediate removal, restoration and application-session separation. Independent
-B7 proof is complete and reconciled with B5; the read-only Toko checkout remains at
+B7's original proof is complete and reconciled with B5; its historical
+read-only Toko snapshot was
 `bf14a5d3d89be4335d3da2601e8a60128fde04df` with no Canic integration or
-CANIC-011/012/013 identifiers, which is the accepted exact downstream evidence
-blocker rather than authority to edit it. Published `v0.107.1` carried the
+feedback identifiers. Newer downstream feedback was inspected read-only from
+Toko HEAD `2af2182f97cb21e220081d49169d6a006eff1adb` while preserving that
+repository's existing dirty user work; it is evidence, not authority to edit
+Toko. Published `v0.107.1` carried the
 first typed B5 projection, but a subsequent live upstream check found that
 `ic-query 0.41.0` could join the current Subnet list against retired legacy
 routing authority. The open `0.107.2` correction now locks published
@@ -263,6 +270,25 @@ fixtures. Canic consumes those builders in its Root-subnet fixture and retains
 the returned value version, exact failing endpoint/assurance, completed
 Registry reads, shard lower bound and value encoding in plan JSON/text. Old
 cache shapes fail closed and require refresh; there is no compatibility reader.
+Downstream closeout feedback identified that ordinary direct planning had no
+supported way to acquire that evidence in a fresh checkout. The open
+correction now adds explicit `deploy plan --refresh-catalog`: default planning
+remains cache-only, while the opt-in mode may issue public NNS Registry query
+calls and update only the private `.canic/ic-query` cache when it is missing or
+invalid. It cannot start a build, write deployment state or perform an IC
+update call. The authoritative plan consumes only stable Registry version,
+catalog digest, assurance and source endpoints; cache path, collection time
+and disposition are separate report provenance. The request and transient
+refresh state therefore do not perturb plan/install digest parity. Fresh
+install uses the same acquisition path automatically when its cache is missing
+or invalid.
+The same downstream feedback showed that install resolved anonymous, locked or
+wrong effective ICP credentials only after expensive builds. The correction
+now resolves the effective identity after exact plan recompilation and before
+release-build allocation or Wasm preparation, rejects anonymous and
+Fleet-operator-mismatched Principals, and reports
+`CANIC_ICP_IDENTITY_PASSWORD_FILE` as the non-interactive encrypted-identity
+remedy. Later creation-time controller observations remain in place.
 The open correction also makes dead code and stale lint expectations hard
 failures across every workspace member, narrows internal facade/proc-macro
 visibility and removes two redundant dependencies from the test-only IcyDB
@@ -788,7 +814,8 @@ physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
 terminal-disposition authorization exists. In 0.107, B2-B7 implementation and
-focused evidence are complete on published `ic-query 0.41.2`. Request and
+focused evidence retain `ic-query 0.41.2`'s routing/failure result and advance
+to `0.42.0` stable snapshot authority. Request and
 accept the exact human 0.107 closeout audit before 0.108 production
 implementation begins. The renumbered 0.108 root-funding B1 proof remains
 complete and ready for maintainer acceptance, but its production work waits

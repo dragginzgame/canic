@@ -148,8 +148,8 @@ fn deploy_plan_is_top_level_deploy_command() {
 
     let help = usage();
     assert!(help.contains("canic deploy plan demo"));
-    assert!(help.contains("Deploy commands are read-only"));
-    assert!(help.contains("fresh Fleet creation uses `canic install`"));
+    assert!(help.contains("Deploy commands do not perform IC update calls"));
+    assert!(help.contains("canic install"));
 }
 
 #[test]
@@ -158,10 +158,12 @@ fn deploy_plan_help_documents_no_mutation_contract() {
 
     assert!(help.contains("canic deploy plan <fleet> --app <app> --fleet-input <PATH>"));
     assert!(help.contains("canic --environment ic deploy plan demo --app demo --fleet-input"));
-    assert!(help.contains("Read-only"));
-    assert!(help.contains("deterministic local desired state"));
-    assert!(help.contains("without contacting the IC"));
-    assert!(help.contains("or authorizing mutation"));
+    assert!(help.contains("--refresh-catalog"));
+    assert!(help.contains("Read-only deployment planning"));
+    assert!(help.contains("existing validated catalog evidence"));
+    assert!(help.contains("NNS Registry queries"));
+    assert!(help.contains("private .canic/ic-query cache"));
+    assert!(help.contains("No mode builds, changes deployment state"));
     assert!(help.contains("Put the top-level --environment before deploy"));
     assert_eq!(help.matches("  canic deploy plan ").count(), 1);
 }
@@ -179,6 +181,7 @@ fn deploy_plan_options_parse_supported_surface() {
         OsString::from("fleet-input.toml"),
         OsString::from("--profile"),
         OsString::from("fast"),
+        OsString::from("--refresh-catalog"),
         OsString::from("--release-build"),
         OsString::from("01".repeat(32)),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
@@ -191,6 +194,7 @@ fn deploy_plan_options_parse_supported_surface() {
     assert!(options.json);
     assert_eq!(options.out, Some(PathBuf::from("deployment-plan.json")));
     assert_eq!(options.fleet_input, PathBuf::from("fleet-input.toml"));
+    assert!(options.refresh_catalog);
     assert_eq!(
         options.profile,
         Some(canic_host::canister_build::CanisterBuildProfile::Fast)
@@ -201,6 +205,20 @@ fn deploy_plan_options_parse_supported_surface() {
             .map(|identity| identity.to_string()),
         Some("01".repeat(32))
     );
+}
+
+#[test]
+fn deploy_plan_defaults_to_cache_only_catalog_loading() {
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+    ])
+    .expect("parse deploy plan options");
+
+    assert!(!options.refresh_catalog);
 }
 
 #[test]
@@ -329,6 +347,18 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     );
     assert_eq!(json["status"], "warning");
     assert_eq!(json["comparison_status"], "not_available");
+    assert_eq!(json["catalog_acquisition"]["kind"], "not_required");
+    assert_eq!(json["catalog_acquisition"]["network"], "local");
+    assert!(
+        json["fresh_fleet_plan"]["authority"]["catalog"]
+            .get("cache_disposition")
+            .is_none()
+    );
+    assert!(
+        json["fresh_fleet_plan"]["authority"]["catalog"]
+            .get("collected_at")
+            .is_none()
+    );
     assert_eq!(
         json["plan"]["deployment_identity"]["fleet_name"],
         "demo-local"
@@ -649,7 +679,7 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
-            icp_root,
+            icp_root: icp_root.clone(),
         },
     );
     let json = serde_json::to_value(&report).expect("report should serialize");
@@ -699,6 +729,7 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
             blocker["code"] == "fresh_fleet_plan_blocked" && blocker["source"] == "fleet_catalog"
         })
     }));
+    assert_catalog_refresh_remedy(&json);
     let text = deploy_plan::render_text(&report);
     assert!(text.contains("catalog failure provenance"));
     assert!(text.contains("no_effects_started: true"));
@@ -719,6 +750,36 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
         "demo",
         "deployment_plan_builder",
     );
+    assert!(!icp_root.join(".canic/ic-query").exists());
+}
+
+#[test]
+fn deploy_plan_catalog_acquisition_does_not_change_the_canonical_local_plan() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-catalog-acquisition-parity");
+    let base_args = [
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+    ];
+    let cache_only =
+        deploy_plan::DeployPlanOptions::parse(base_args.clone()).expect("parse cache-only options");
+    let mut refresh_args = base_args.to_vec();
+    refresh_args.push(OsString::from("--refresh-catalog"));
+    let refresh =
+        deploy_plan::DeployPlanOptions::parse(refresh_args).expect("parse refresh options");
+    let roots = deploy_plan::DeployPlanRoots {
+        workspace_root,
+        icp_root,
+    };
+
+    let cache_only_digest =
+        plan_digest_from_report(&deploy_plan::build_report(&cache_only, &roots));
+    let refreshed_digest = plan_digest_from_report(&deploy_plan::build_report(&refresh, &roots));
+
+    assert_eq!(refreshed_digest, cache_only_digest);
 }
 
 #[test]
@@ -973,6 +1034,7 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
             "config_path",
             "status",
             "comparison_status",
+            "catalog_acquisition",
             "catalog_failure",
             "fresh_fleet_plan",
             "plan",
@@ -1025,6 +1087,20 @@ fn plan_digest_from_report(report: &impl serde::Serialize) -> String {
         .to_string()
 }
 
+fn assert_catalog_refresh_remedy(report: &JsonValue) {
+    let blocker = report["blockers"]
+        .as_array()
+        .and_then(|blockers| {
+            blockers
+                .iter()
+                .find(|blocker| blocker["source"] == "fleet_catalog")
+        })
+        .expect("catalog blocker");
+    let next = blocker["next"].as_str().expect("catalog blocker remedy");
+    assert!(next.contains("--refresh-catalog"));
+    assert!(!next.contains("repair the Fleet input"));
+}
+
 #[test]
 fn deploy_plan_text_avoids_apply_safety_claims() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-text");
@@ -1049,6 +1125,8 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("Deployment plan"));
     assert!(text.contains("schema_version: 1"));
     assert!(text.contains("command: canic deploy plan"));
+    assert!(text.contains("catalog acquisition provenance"));
+    assert!(text.contains("kind: not_required"));
     assert!(text.contains("canonical fresh-Fleet decision"));
     assert!(text.contains("plan_digest: "));
     assert!(text.contains("operator_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));

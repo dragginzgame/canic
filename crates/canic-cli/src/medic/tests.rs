@@ -469,7 +469,11 @@ fn fleet_missing_points_to_deploy_plan() {
         .expect("missing Fleet check");
 
     assert_eq!(missing.status, MedicStatus::Fail);
-    assert!(missing.next.contains("canic deploy plan demo --app <app>"));
+    assert!(
+        missing
+            .next
+            .contains("canic deploy plan demo --app <app> --fleet-input <path>")
+    );
     assert!(
         missing
             .next

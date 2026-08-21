@@ -103,15 +103,20 @@ canic build <app> <role> --provenance <path>
 Inspect the desired deployment shape without mutation:
 
 ```text
-canic deploy plan <fleet> --app <app>
-canic deploy plan <fleet> --app <app> --json
-canic deploy plan <fleet> --app <app> --out <path>
+canic deploy plan <fleet> --app <app> --fleet-input <path>
+canic --environment ic deploy plan <fleet> --app <app> --fleet-input <path> --refresh-catalog
+canic deploy plan <fleet> --app <app> --fleet-input <path> --out <path>
 ```
 
 `canic deploy plan` emits a no-mutation `DeploymentPlanReport` with
 `schema_version = 1`. It is not an evidence envelope and does not create
 deployment truth. `--out` writes JSON only and does not create parent
-directories.
+directories. Mainnet planning is cache-only by default. The explicit
+`--refresh-catalog` mode may issue read-only NNS Registry queries and update
+only the private `.canic/ic-query` catalog cache when it is missing or invalid.
+The authoritative plan is compiled from stable validated snapshot authority;
+cache path, collection time and disposition remain separate report provenance
+so the digest stays reproducible during installation.
 
 Check a Fleet and save stable deployment evidence:
 

@@ -26,22 +26,26 @@ use clap::Command as ClapCommand;
 
 pub(super) const REPORT_COMMAND: &str = "canic deploy plan";
 
-const FLEET_ARG: &str = "fleet";
 const APP_ARG: &str = "app";
+const FLEET_ARG: &str = "fleet";
 const FLEET_INPUT_ARG: &str = "fleet-input";
 const JSON_ARG: &str = "json";
 const OUT_ARG: &str = "out";
 const PROFILE_ARG: &str = "profile";
+const REFRESH_CATALOG_ARG: &str = "refresh-catalog";
 const RELEASE_BUILD_ARG: &str = "release-build";
 
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo-local --app demo --fleet-input deployments/demo-local.toml
-  canic --environment ic deploy plan demo --app demo --fleet-input deployments/demo-ic.toml
+  canic --environment ic deploy plan demo --app demo --fleet-input deployments/demo-ic.toml --refresh-catalog
 
-Read-only: reports deterministic local desired state without contacting the IC
-or authorizing mutation. Put the top-level --environment before deploy to select
-the exact ICP target.";
+Read-only deployment planning. By default, existing validated catalog evidence
+is used without contacting the IC. --refresh-catalog may issue read-only public
+NNS Registry queries and update Canic's private .canic/ic-query cache when it is
+missing or invalid. No mode builds, changes deployment state, or performs an IC
+update call. Put the top-level --environment before deploy to select the exact
+ICP target.";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::deploy) struct DeployPlanOptions {
@@ -52,6 +56,7 @@ pub(in crate::deploy) struct DeployPlanOptions {
     pub(in crate::deploy) json: bool,
     pub(in crate::deploy) out: Option<PathBuf>,
     pub(in crate::deploy) profile: Option<CanisterBuildProfile>,
+    pub(in crate::deploy) refresh_catalog: bool,
     pub(in crate::deploy) release_build_id: Option<ReleaseBuildId>,
 }
 
@@ -80,6 +85,7 @@ impl DeployPlanOptions {
             json: matches.get_flag(JSON_ARG),
             out: path_option(&matches, OUT_ARG),
             profile: typed_option(&matches, PROFILE_ARG),
+            refresh_catalog: matches.get_flag(REFRESH_CATALOG_ARG),
             release_build_id: typed_option(&matches, RELEASE_BUILD_ARG),
         })
     }
@@ -98,7 +104,7 @@ impl DeployPlanRoots {
 pub(in crate::deploy) fn command() -> ClapCommand {
     ClapCommand::new("plan")
         .bin_name(REPORT_COMMAND)
-        .about("Explain the deterministic deployment plan without mutation")
+        .about("Explain the deterministic plan without deployment mutation")
         .disable_help_flag(true)
         .override_usage("canic deploy plan <fleet> --app <app> --fleet-input <PATH>")
         .arg(fleet_arg())
@@ -107,6 +113,7 @@ pub(in crate::deploy) fn command() -> ClapCommand {
         .arg(json_arg())
         .arg(out_arg())
         .arg(profile_arg())
+        .arg(refresh_catalog_arg())
         .arg(release_build_arg())
         .arg(internal_environment_arg())
         .after_help(DEPLOY_PLAN_HELP_AFTER)
@@ -158,6 +165,12 @@ fn profile_arg() -> clap::Arg {
         .num_args(1)
         .value_parser(clap::value_parser!(CanisterBuildProfile))
         .help("Canister wasm build profile; defaults to release")
+}
+
+fn refresh_catalog_arg() -> clap::Arg {
+    flag_arg(REFRESH_CATALOG_ARG)
+        .long(REFRESH_CATALOG_ARG)
+        .help("Refresh a missing or invalid mainnet Subnet Catalog with read-only Registry queries")
 }
 
 fn release_build_arg() -> clap::Arg {

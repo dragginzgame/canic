@@ -17,13 +17,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.107.md](docs/changelog/0.107.md)
 
-- `0.107.2` adopts `ic-query 0.41.2`'s modern Registry routing authority,
-  portable typed evidence builders and complete per-value failure provenance
-  through pre-effect plan JSON/text. It also makes dead code and stale lint
-  expectations hard failures across every workspace member and narrows
-  facade/proc-macro implementation visibility, removes two redundant test-only
-  composition dependencies and leaves the unused-dependency scan clean,
-  reopening closeout only for the required human audit.
+- `0.107.2` adds digest-stable live catalog acquisition for cold-cache plans
+  and installs, validates the effective ICP identity against the Fleet
+  operator before builds, adopts `ic-query 0.42.0`'s stable snapshot-authority
+  boundary on top of its modern Registry routing and complete typed failure
+  provenance, and closes the workspace lint and visibility cleanup before the
+  required human audit.
 - `0.107.1` introduced published typed Subnet-catalog failure propagation, but
   its closeout readiness was superseded when live collection exposed the
   upstream legacy-routing authority defect corrected by `0.107.2`.

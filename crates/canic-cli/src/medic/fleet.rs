@@ -211,7 +211,9 @@ fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> Medic
 }
 
 fn deploy_plan_next(fleet: &str, app: &str) -> String {
-    format!("run canic deploy plan {fleet} --app {app} to inspect desired Fleet shape")
+    format!(
+        "run canic deploy plan {fleet} --app {app} --fleet-input <path> to inspect desired Fleet shape"
+    )
 }
 
 fn runtime_inspection_next(resolution: &InstalledFleetResolution) -> String {

@@ -78,7 +78,10 @@ pub struct PlannedFleetSubnetRootInput {
     pub wasm_store_creation_funding: PlannedCanisterCreationFunding,
 }
 
-/// Explicit proof that fresh-Fleet preflight still precedes every effect boundary.
+/// Proof that preflight precedes build, deployment-state writes, and IC mutations.
+///
+/// Catalog evidence acquisition is an input-loading concern. Its private cache
+/// disposition is not part of this decision authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FreshFleetPreflightEffectsV1 {
@@ -203,8 +206,6 @@ pub enum FreshFleetCatalogEvidenceV1 {
         network: String,
         assurance: String,
         source_endpoints: Vec<String>,
-        cache_disposition: String,
-        collected_at: String,
         registry_version: u64,
         catalog_sha256: String,
     },

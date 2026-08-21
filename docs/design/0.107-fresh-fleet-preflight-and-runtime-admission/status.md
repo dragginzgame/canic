@@ -102,10 +102,14 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   session/finalized or workspace release source before release-build
   allocation. The later immutable Fleet-plan compiler reuses the same
   preflight rather than retaining a second topology/funding validator.
-- Mainnet preflight reads only existing validated catalog evidence: it makes no
-  network call and does not refresh or publish a cache. B5 later completed the
-  structured collector/provenance outcome; missing cache authority remains a
-  typed pre-effect blocker.
+- Direct mainnet planning is cache-only by default. The closeout correction
+  adds explicit `deploy plan --refresh-catalog`, while installation uses the
+  same live-capable acquisition path automatically. Both may issue public NNS
+  Registry query calls and update only the private `.canic/ic-query` cache when
+  it is missing or invalid. Both compile from stable validated snapshot
+  authority; cache path, collection time and disposition remain separate
+  report provenance. Missing cache authority remains a typed pre-effect
+  blocker for direct planning without the flag, with a direct refresh remedy.
 - Invalid Fleet schema and invalid Component admissions both reject in the
   Planning phase before `.canic/release-builds` exists. Focused pure-compiler,
   plan-report, install-ordering and no-allocation tests pass.
@@ -144,10 +148,12 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
 
 ## B5 Result
 
-- The exact locked production graph now resolves published crates.io
-  `ic-query 0.41.2`, checksum
-  `a9c7486d35030ca36b45636599da5f142b92bf51c548cf238d8567750376fded`.
-  It reconstructs the complete pinned `canister_ranges_*` family before
+- The exact locked production graph advances from published crates.io
+  `ic-query 0.41.2` to `0.42.0`. The former's checksum is
+  `a9c7486d35030ca36b45636599da5f142b92bf51c548cf238d8567750376fded`
+  and the latter locks at
+  `311b60543bc5c09c961abe9612d2bf3e26e99ba8bcadb3c01d043056c544a318`.
+  `0.41.2` reconstructs the complete pinned `canister_ranges_*` family before
   considering legacy routing and never falls back after a modern-family
   failure. Its detailed load result retains the request source and assurance,
   exact cache stage/disposition, pinned and returned Registry-value versions,
@@ -171,6 +177,21 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   cache trigger and unknown reason without calling it transient. The Root-
   subnet fixture cannot escape into a live refresh. Warning-denied host/CLI
   Clippy passes.
+- Direct `deploy plan` remains cache-only by default and exposes the live
+  detailed path only through `--refresh-catalog`. The opt-in path may update
+  the private catalog cache but cannot start a build, deployment-state
+  mutation or IC update call, closing the fresh-checkout planning gap reported
+  by the downstream acceptance rerun.
+- `ic-query 0.42.0` hard-cuts the combined authority accessor. Canic consumes
+  `snapshot_authority()` as canonical Registry-version/digest/assurance/source
+  identity while reporting load path, collection time and disposition as
+  transient acquisition provenance. Plan and install therefore preserve
+  digest parity without a compatibility adapter.
+- Install resolves the effective ICP identity after exact plan recompilation
+  and before release-build allocation or Wasm preparation. Anonymous, unusable
+  and Fleet-operator-mismatched identities reject at the Identity phase;
+  encrypted non-interactive execution receives the
+  `CANIC_ICP_IDENTITY_PASSWORD_FILE` remedy.
 
 ## B6 Result
 
@@ -212,20 +233,26 @@ No 0.106 B2 effect or sibling-repository mutation occurred.
   removal, response-loss replay, conflicts, restoration and application-
   session separation. Focused warning-denied Clippy passes for the owning core,
   facade, fixture and test target.
-- Read-only Toko remains clean `main` at
+- The original read-only Toko snapshot was clean `main` at
   `bf14a5d3d89be4335d3da2601e8a60128fde04df`, with no Canic integration or
-  CANIC-011/012/013 identifiers. Acceptance criterion 10 permits recording
-  this exact external evidence blocker; no downstream file was changed.
-- B7 is reconciled against the completed B5 result. The implementation batch
-  is ready for the required human closeout audit; the minor is not accepted or
+  CANIC identifiers. Newer downstream feedback supplied from a separate dirty
+  Toko working tree identified CANIC-009 and the cold-cache CANIC-012 gap; the
+  correction addresses both without modifying that working tree. Acceptance
+  criterion 13 retains the read-only downstream boundary.
+- B7 is reconciled against the completed B5 result and its downstream
+  cold-cache feedback: the explicit live catalog-acquisition mode is present,
+  ordinary planning remains cache-only, install acquires automatically and
+  effective identity admission precedes builds. The implementation batch is
+  ready for the required human closeout audit; the minor is not accepted or
   closed by this implementation status.
 
 ## Feedback Traceability
 
 | Feedback | Owning batches | Closeout proof |
 | --- | --- | --- |
+| CANIC-009 early install identity | B3-B4, B7 | effective ICP identity is usable, non-anonymous and equal to the Fleet-input operator before build preparation |
 | CANIC-011 runtime whitelist evolution | B1, B6, B7 | authorized bounded mutation plus denial, retry and restoration journeys |
-| CANIC-012 target/Fleet-input-complete plan | B1-B4, B7 | plan/install input and digest parity with pre-effect failures |
+| CANIC-012 target/Fleet-input-complete plan | B1-B4, B7 | plan/install input and stable snapshot-authority digest parity, cache-only plan default, explicit plan acquisition and automatic install acquisition |
 | CANIC-013 catalog inconsistency diagnostics | B1, B5, B7 | structured provenance and truthful retry/effect rendering |
 
 ## Next Authorized Action

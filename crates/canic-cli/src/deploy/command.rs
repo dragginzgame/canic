@@ -26,16 +26,17 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
     },
     DeploySubcommand {
         name: "plan",
-        about: "Explain the deterministic deployment plan without mutation",
+        about: "Explain the deterministic plan without deployment mutation",
     },
 ];
 
 const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic deploy plan demo --app demo
+  canic deploy plan demo --app demo --fleet-input deployments/demo.toml
 
-Deploy commands are read-only; fresh Fleet creation uses `canic install`.";
+Deploy commands do not perform IC update calls; fresh Fleet creation uses
+`canic install`.";
 
 pub fn deploy_command() -> ClapCommand {
     DEPLOY_COMMANDS

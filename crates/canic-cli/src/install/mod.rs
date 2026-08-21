@@ -40,7 +40,12 @@ Examples:
   canic install toko toko-local --fleet-input deployments/toko-local.toml
   canic install toko toko-test --fleet-input deployments/toko-test.toml --release-build <ID>
 
-Creates a fresh Fleet from the App config and required operator-owned Fleet input.";
+Creates a fresh Fleet from the App config and required operator-owned Fleet input.
+Before building, Canic refreshes missing or invalid mainnet catalog evidence,
+resolves the effective ICP identity, rejects anonymous or unusable credentials,
+and requires that Principal to equal the Fleet input operator. For encrypted
+non-interactive identities, set CANIC_ICP_IDENTITY_PASSWORD_FILE to an absolute
+operator-owned password file.";
 
 ///
 /// InstallCommandError

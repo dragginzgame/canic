@@ -17,8 +17,8 @@ use std::path::Path;
 use canic_host::{
     durable_io::create_new_bytes,
     fleet_install_input::{
-        SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFieldV1,
-        SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1,
+        FleetInstallCatalogAcquisitionV1, SubnetCatalogFailureCacheDispositionV1,
+        SubnetCatalogFieldV1, SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1,
         SubnetCatalogRefreshTriggerV1, SubnetCatalogRegistryRecordEvidenceV1,
         SubnetCatalogRegistryRecordKindV1, SubnetCatalogRegistryValueEncodingV1,
         SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1, SubnetCatalogSubjectV1,
@@ -109,6 +109,9 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
         String::new(),
     ];
 
+    if let Some(acquisition) = &report.catalog_acquisition {
+        append_catalog_acquisition(&mut lines, acquisition);
+    }
     if let Some(plan) = &report.fresh_fleet_plan {
         append_fresh_fleet_decision(&mut lines, plan);
     }
@@ -124,6 +127,30 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
     append_next_actions(&mut lines, &report.next_actions);
 
     lines.join("\n")
+}
+
+fn append_catalog_acquisition(
+    lines: &mut Vec<String>,
+    acquisition: &FleetInstallCatalogAcquisitionV1,
+) {
+    lines.push("catalog acquisition provenance".to_string());
+    match acquisition {
+        FleetInstallCatalogAcquisitionV1::NotRequired { network } => {
+            lines.push("  kind: not_required".to_string());
+            lines.push(format!("  network: {network}"));
+        }
+        FleetInstallCatalogAcquisitionV1::ValidatedCache {
+            cache_path,
+            cache_disposition,
+            collected_at,
+        } => {
+            lines.push("  kind: validated_cache".to_string());
+            lines.push(format!("  cache_path: {cache_path}"));
+            lines.push(format!("  cache_disposition: {cache_disposition}"));
+            lines.push(format!("  collected_at: {collected_at}"));
+        }
+    }
+    lines.push(String::new());
 }
 
 const fn catalog_failure_has_no_effects(failure: &SubnetCatalogLoadFailureEvidenceV1) -> bool {

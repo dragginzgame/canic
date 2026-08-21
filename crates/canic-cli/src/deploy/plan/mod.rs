@@ -19,7 +19,8 @@ use canic_host::deployment_truth::DeploymentAssumptionV1;
 use canic_host::{
     deployment_truth::{DeploymentPlanV1, LocalDeploymentPlanRequest},
     fleet_install_input::{
-        FleetInstallInputError, SubnetCatalogLoadFailureEvidenceV1,
+        FleetInstallCatalogAcquisitionV1, FleetInstallInputError,
+        SubnetCatalogLoadFailureEvidenceV1, load_and_resolve_fleet_install_input,
         load_and_resolve_fleet_install_input_for_preflight,
     },
     fleet_install_plan::{
@@ -90,16 +91,21 @@ pub(super) fn build_report(
     let fleet_input_path = plan_fleet_input_path(&roots.icp_root, options);
     let mut blockers = target_resolution_blockers(options, &config_path, &roots.icp_root);
     let target_resolved = blockers.is_empty();
+    let mut catalog_acquisition = None;
     let mut catalog_failure = None;
     let fresh_fleet_plan = if target_resolved {
         match build_fresh_fleet_plan(options, roots, &config_path, &fleet_input_path) {
-            Ok(plan) => Some(plan),
+            Ok(build) => {
+                catalog_acquisition = Some(build.catalog_acquisition);
+                Some(build.plan)
+            }
             Err(error) => {
                 catalog_failure = error.catalog_failure.map(|failure| *failure);
                 blockers.push(fresh_fleet_plan_blocker(
                     &options.fleet,
                     error.detail,
                     error.source,
+                    options.refresh_catalog,
                 ));
                 None
             }
@@ -156,6 +162,7 @@ pub(super) fn build_report(
         config_path: display_path(&config_path),
         status,
         comparison_status,
+        catalog_acquisition,
         catalog_failure,
         fresh_fleet_plan,
         plan,
@@ -173,15 +180,24 @@ fn build_fresh_fleet_plan(
     roots: &DeployPlanRoots,
     config_path: &Path,
     fleet_input_path: &Path,
-) -> Result<FreshFleetDeploymentPlanV1, FreshFleetPreflightBuildError> {
+) -> Result<FreshFleetPlanBuild, FreshFleetPreflightBuildError> {
     let config = AppConfigSnapshot::load(config_path)
         .map_err(|error| preflight_build_error(SOURCE_APP_CONFIG, error))?;
-    let input = load_and_resolve_fleet_install_input_for_preflight(
-        &roots.icp_root,
-        &options.environment,
-        fleet_input_path,
-    )
+    let input = if options.refresh_catalog {
+        load_and_resolve_fleet_install_input(
+            &roots.icp_root,
+            &options.environment,
+            fleet_input_path,
+        )
+    } else {
+        load_and_resolve_fleet_install_input_for_preflight(
+            &roots.icp_root,
+            &options.environment,
+            fleet_input_path,
+        )
+    }
     .map_err(fleet_input_preflight_build_error)?;
+    let catalog_acquisition = input.catalog_acquisition.clone();
     let (build_profile, release_build_id) = resolve_plan_release_source(options, roots)
         .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
     let fleet_name = options
@@ -212,11 +228,20 @@ fn build_fresh_fleet_plan(
         fleet_input: &input,
     })
     .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
-    compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+    let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight,
         authority,
     })
-    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))
+    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+    Ok(FreshFleetPlanBuild {
+        plan,
+        catalog_acquisition,
+    })
+}
+
+struct FreshFleetPlanBuild {
+    plan: FreshFleetDeploymentPlanV1,
+    catalog_acquisition: FleetInstallCatalogAcquisitionV1,
 }
 
 struct FreshFleetPreflightBuildError {
@@ -553,6 +578,26 @@ mod tests {
     }
 
     #[test]
+    fn catalog_acquisition_rendering_preserves_transient_provenance() {
+        let mut report = report_with_status(PlanStatus::Planned);
+        report.catalog_acquisition = Some(FleetInstallCatalogAcquisitionV1::ValidatedCache {
+            cache_path: ".canic/ic-query/subnet-catalog.json".to_string(),
+            cache_disposition: "refreshed_missing".to_string(),
+            collected_at: "2026-08-21T12:00:00Z".to_string(),
+        });
+
+        let json = render_json(&report).expect("render catalog acquisition JSON");
+        let text = render_text(&report);
+
+        assert!(json.contains("\"cache_disposition\": \"refreshed_missing\""));
+        assert!(text.contains("catalog acquisition provenance"));
+        assert!(text.contains("cache_path: .canic/ic-query/subnet-catalog.json"));
+        assert!(text.contains("cache_disposition: refreshed_missing"));
+        assert!(text.contains("collected_at: 2026-08-21T12:00:00Z"));
+        assert!(!json.contains("\"fresh_fleet_plan\": {"));
+    }
+
+    #[test]
     fn diagnostic_sort_order_is_deterministic() {
         let mut diagnostics = diagnostic_fixtures([
             "warning|config|z_config_gap|demo|deployment_plan_builder",
@@ -748,6 +793,7 @@ mod tests {
             config_path: "apps/demo/canic.toml".to_string(),
             status,
             comparison_status: ComparisonStatus::NotRequested,
+            catalog_acquisition: None,
             catalog_failure: None,
             fresh_fleet_plan: None,
             plan: plan_with_assumptions([]),
