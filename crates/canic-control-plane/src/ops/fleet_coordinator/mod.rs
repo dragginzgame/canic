@@ -98,7 +98,8 @@ use canic_core::{
         MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
     },
     shared_support::fleet_funding_policy::{
-        validate_coordinator_root_funding_policy, validate_fleet_root_funding_capacity,
+        validate_coordinator_root_funding_policy, validate_fleet_root_funding_admission,
+        validate_fleet_root_funding_capacity,
     },
 };
 use sha2::{Digest, Sha256};
@@ -1712,6 +1713,10 @@ impl FleetCoordinatorOps {
             Some(policy) => {
                 validate_coordinator_root_funding_policy(policy)
                     .map_err(|_error| InternalError::invariant())?;
+                for root in &current.registry.fleet_subnet_roots {
+                    validate_fleet_root_funding_admission(policy, &root.funding)
+                        .map_err(|_error| InternalError::invariant())?;
+                }
                 if current.registry_activation_receipt.is_some() {
                     validate_fleet_root_funding_capacity(
                         policy,

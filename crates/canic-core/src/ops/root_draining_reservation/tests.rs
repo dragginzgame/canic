@@ -20,7 +20,7 @@ fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {
         .expect("hash draining reservation");
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(hash),
-        "4a67c655880c5a363959f3a7b10eaca78f89180c868f0048ce9aee000c4d004d"
+        "3d9c741a198f5058ab84dab51a35f2ee8d895f9300538e5b86ed805b1ee50015"
     );
     response.reservation_hash = [99; 32];
     assert_eq!(

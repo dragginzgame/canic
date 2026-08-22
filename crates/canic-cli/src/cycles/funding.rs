@@ -579,6 +579,7 @@ fn icp_refill_label(status: &RemoteRootFundingStatus) -> String {
 const fn funding_profile_label(profile: FleetFundingProfile) -> &'static str {
     match profile {
         FleetFundingProfile::SingleSubnet => "single_subnet",
+        FleetFundingProfile::PreviewMultiSubnet => "preview_multi_subnet",
         FleetFundingProfile::MultiSubnet => "multi_subnet",
     }
 }

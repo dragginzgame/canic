@@ -342,24 +342,8 @@ pub fn validate_fleet_root_funding_capacity<'a>(
     roots: impl IntoIterator<Item = &'a FleetSubnetRootFundingAuthority>,
 ) -> Result<(), FleetFundingPolicyValidationError> {
     let roots = roots.into_iter().collect::<Vec<_>>();
-    if roots
-        .iter()
-        .any(|root| root.root_funding.funding_profile != coordinator.funding_profile)
-    {
-        return Err(FleetFundingPolicyValidationError::CoordinatorProfileMismatch);
-    }
-    let largest_target = roots
-        .iter()
-        .map(|root| root.root_funding.target_balance.to_u128())
-        .max()
-        .unwrap_or(0);
-    if coordinator.budget.maximum_cycles.to_u128() < largest_target {
-        return Err(FleetFundingPolicyValidationError::CoordinatorMaximumBelowLargestRootTarget);
-    }
-    if coordinator.maximum_automatic_cycles.to_u128() < largest_target {
-        return Err(
-            FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesBelowLargestRootTarget,
-        );
+    for root in &roots {
+        validate_fleet_root_funding_admission(coordinator, root)?;
     }
     let root_grants = roots.iter().try_fold(0_u32, |total, root| {
         total.checked_add(root.root_funding.maximum_automatic_grants)
@@ -376,9 +360,30 @@ pub fn validate_fleet_root_funding_capacity<'a>(
     Ok(())
 }
 
+/// Validate the Fleet-wide limits that must admit one Root before Registry activation.
+pub fn validate_fleet_root_funding_admission(
+    coordinator: &FleetCoordinatorRootFundingPolicy,
+    root: &FleetSubnetRootFundingAuthority,
+) -> Result<(), FleetFundingPolicyValidationError> {
+    if root.root_funding.funding_profile != coordinator.funding_profile {
+        return Err(FleetFundingPolicyValidationError::CoordinatorProfileMismatch);
+    }
+    let target = root.root_funding.target_balance.to_u128();
+    if coordinator.budget.maximum_cycles.to_u128() < target {
+        return Err(FleetFundingPolicyValidationError::CoordinatorMaximumBelowLargestRootTarget);
+    }
+    if coordinator.maximum_automatic_cycles.to_u128() < target {
+        return Err(
+            FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesBelowLargestRootTarget,
+        );
+    }
+    Ok(())
+}
+
 const fn profile_reserve(profile: FleetFundingProfile) -> u128 {
     match profile {
         FleetFundingProfile::SingleSubnet => 30 * TRILLION_CYCLES,
+        FleetFundingProfile::PreviewMultiSubnet => 80 * TRILLION_CYCLES,
         FleetFundingProfile::MultiSubnet => 2_000 * TRILLION_CYCLES,
     }
 }
@@ -386,6 +391,7 @@ const fn profile_reserve(profile: FleetFundingProfile) -> u128 {
 const fn profile_root_balances(profile: FleetFundingProfile) -> (u128, u128) {
     match profile {
         FleetFundingProfile::SingleSubnet => (10 * TRILLION_CYCLES, 30 * TRILLION_CYCLES),
+        FleetFundingProfile::PreviewMultiSubnet => (10 * TRILLION_CYCLES, 30 * TRILLION_CYCLES),
         FleetFundingProfile::MultiSubnet => (250 * TRILLION_CYCLES, 1_000 * TRILLION_CYCLES),
     }
 }
@@ -480,6 +486,44 @@ mod tests {
             validate_fleet_root_funding_capacity(&changed, [&root]),
             Err(FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesAboveRoots)
         );
+    }
+
+    #[test]
+    fn preview_multi_subnet_profile_admits_the_bounded_staging_envelope() {
+        let root = FleetSubnetRootFundingAuthority {
+            root_funding: FleetSubnetRootFundingPolicy {
+                funding_profile: FleetFundingProfile::PreviewMultiSubnet,
+                request_threshold: Cycles::new(10 * TRILLION_CYCLES),
+                target_balance: Cycles::new(30 * TRILLION_CYCLES),
+                cooldown_secs: THIRTY_DAYS_SECS,
+                budget: CyclesFundingBudget {
+                    window_secs: NINETY_DAYS_SECS,
+                    maximum_cycles: Cycles::new(30 * TRILLION_CYCLES),
+                },
+                maximum_automatic_grants: 2,
+                maximum_automatic_cycles: Cycles::new(60 * TRILLION_CYCLES),
+            },
+            icp_refill: None,
+        };
+        let coordinator = FleetCoordinatorRootFundingPolicy {
+            funding_profile: FleetFundingProfile::PreviewMultiSubnet,
+            minimum_reserve_cycles: Cycles::new(80 * TRILLION_CYCLES),
+            budget: CyclesFundingBudget {
+                window_secs: NINETY_DAYS_SECS,
+                maximum_cycles: Cycles::new(30 * TRILLION_CYCLES),
+            },
+            maximum_automatic_grants: 2,
+            maximum_automatic_cycles: Cycles::new(60 * TRILLION_CYCLES),
+        };
+
+        validate_coordinator_root_funding_policy(&coordinator)
+            .expect("bounded preview Coordinator policy");
+        validate_fleet_subnet_root_funding_authority(&root, false)
+            .expect("bounded preview Root policy");
+        validate_fleet_root_funding_admission(&coordinator, &root)
+            .expect("preview Coordinator admits the Root target");
+        validate_fleet_root_funding_capacity(&coordinator, [&root])
+            .expect("preview lifetime caps are mutually bounded");
     }
 
     fn authority() -> FleetSubnetRootFundingAuthority {

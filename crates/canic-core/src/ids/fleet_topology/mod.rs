@@ -70,6 +70,8 @@ pub struct CyclesFundingBudget {
 pub enum FleetFundingProfile {
     #[serde(rename = "single_subnet")]
     SingleSubnet,
+    #[serde(rename = "preview_multi_subnet")]
+    PreviewMultiSubnet,
     #[serde(rename = "multi_subnet")]
     MultiSubnet,
 }
@@ -338,12 +340,17 @@ mod tests {
 
     #[test]
     fn funding_profile_candid_spelling_roundtrips() {
-        let bytes = candid::encode_one(FleetFundingProfile::SingleSubnet)
-            .expect("encode funding profile Candid");
-        assert_eq!(
-            candid::decode_one::<FleetFundingProfile>(&bytes)
-                .expect("decode funding profile Candid"),
-            FleetFundingProfile::SingleSubnet
-        );
+        for profile in [
+            FleetFundingProfile::SingleSubnet,
+            FleetFundingProfile::PreviewMultiSubnet,
+            FleetFundingProfile::MultiSubnet,
+        ] {
+            let bytes = candid::encode_one(profile).expect("encode funding profile Candid");
+            assert_eq!(
+                candid::decode_one::<FleetFundingProfile>(&bytes)
+                    .expect("decode funding profile Candid"),
+                profile
+            );
+        }
     }
 }

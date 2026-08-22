@@ -295,7 +295,7 @@ fn initial_services_publish_as_one_canonical_registry_revision() {
                 .expect("published version")
                 .content_hash,
         ),
-        "661a74864e800dae9da3419122d587520971b6e580629eed9f0a918c850c62a2"
+        "da1bad606b4725d7b9de0ca10e24ad219b93b60248971ed946bc52eb0f4eca8c"
     );
 
     std::assert_matches!(
@@ -563,7 +563,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "88d950e6a112c8bea333bf69b8e40afb675024895654723a8def99945385fa95"
+        "b345dea97047a6545e7f034d76ef1f8dd98698420f2ec2f6f3bfaf7aa73522c2"
     );
 
     let mut changed_policy = registry;

@@ -343,6 +343,7 @@ fn funding_profile_check(resolution: &InstalledFleetFundingResolution) -> MedicC
 const fn funding_profile_label(profile: canic_core::ids::FleetFundingProfile) -> &'static str {
     match profile {
         canic_core::ids::FleetFundingProfile::SingleSubnet => "single_subnet",
+        canic_core::ids::FleetFundingProfile::PreviewMultiSubnet => "preview_multi_subnet",
         canic_core::ids::FleetFundingProfile::MultiSubnet => "multi_subnet",
     }
 }
