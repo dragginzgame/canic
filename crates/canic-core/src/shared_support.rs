@@ -10,7 +10,8 @@ pub mod icp_refill {
 pub mod fleet_funding_policy {
     pub use crate::model::fleet_funding_policy::{
         FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
-        validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
+        validate_fleet_root_funding_admission, validate_fleet_root_funding_capacity,
+        validate_fleet_subnet_root_funding_authority,
     };
     pub use crate::ops::fleet_funding_policy::{
         coordinator_root_funding_policy_hash, fleet_root_funding_operation_id,

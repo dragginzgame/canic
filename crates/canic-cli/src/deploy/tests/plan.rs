@@ -1149,7 +1149,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("canonical fresh-Fleet decision"));
     assert!(text.contains("plan_digest: "));
     assert!(text.contains("operator_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));
-    assert!(text.contains("maximum_operator_debit: 2100000000000000 cycles"));
+    assert!(text.contains("maximum_operator_debit: 140000000000000 cycles"));
     assert!(text.contains(
         "operator_balance_evidence: source=test_fixture observed_at=1782432100 valid_until=4102444800 fresh=true sufficient=true"
     ));
@@ -1160,7 +1160,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1"
     ));
     assert!(text.contains(
-        "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=1500000000000000 cycles maximum=1500000000000000 cycles"
+        "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=100000000000000 cycles maximum=100000000000000 cycles"
     ));
     assert!(text.contains("future apply preview (proposed operation labels; not executed)"));
     assert!(text.contains(

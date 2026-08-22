@@ -753,7 +753,7 @@ fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types
     for declaration in [
         "root_funding : opt FleetCoordinatorRootFundingPolicy;",
         "type FleetCoordinatorRootFundingPolicy = record {",
-        "type FleetFundingProfile = variant { multi_subnet; single_subnet };",
+        "type FleetFundingProfile = variant { multi_subnet; preview_multi_subnet; single_subnet };",
         "type FleetSubnetRootFundingAuthority = record {",
         "type FleetSubnetRootFundingPolicy = record {",
         "type FleetSubnetRootIcpRefillPolicy = record {",

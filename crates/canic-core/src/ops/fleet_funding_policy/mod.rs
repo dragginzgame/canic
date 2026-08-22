@@ -124,6 +124,7 @@ const fn funding_profile_tag(profile: FleetFundingProfile) -> u8 {
     match profile {
         FleetFundingProfile::SingleSubnet => 1,
         FleetFundingProfile::MultiSubnet => 2,
+        FleetFundingProfile::PreviewMultiSubnet => 3,
     }
 }
 

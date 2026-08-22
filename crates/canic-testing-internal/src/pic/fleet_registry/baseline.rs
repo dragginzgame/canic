@@ -2903,12 +2903,27 @@ mod tests {
             "Root timer inventory: declared={} scheduled={scheduled} expected_pool_state={expected:?}",
             status.timers.len()
         );
+        let root_topup = status
+            .timers
+            .iter()
+            .filter(|timer| timer.subsystem == "cycles" && timer.name == "topup")
+            .collect::<Vec<_>>();
         assert!(
-            status
-                .timers
+            root_topup.len() <= 1,
+            "Root must have at most one top-up timer"
+        );
+        if expected == TimerRegistrationStatus::Scheduled {
+            assert_eq!(
+                root_topup.len(),
+                1,
+                "an active Root must declare its funding timer"
+            );
+        }
+        assert!(
+            root_topup
                 .iter()
-                .all(|timer| timer.subsystem != "cycles" || timer.name != "topup"),
-            "Root without AutomaticTopup must not declare the top-up registration"
+                .all(|timer| timer.owner == "canic" && timer.registration == expected),
+            "Root funding timer must follow the authority snapshot fence"
         );
         for (subsystem, name) in [
             ("async_job_recovery", "watchdog"),

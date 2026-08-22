@@ -481,7 +481,7 @@ type FleetCoordinatorRootFundingPolicy = record {
   budget : CyclesFundingBudget;
 };
 // Protected physical-topology class that selects the minimum Root funding baseline.
-type FleetFundingProfile = variant { multi_subnet; single_subnet };
+type FleetFundingProfile = variant { multi_subnet; preview_multi_subnet; single_subnet };
 //
 // FleetKey
 //

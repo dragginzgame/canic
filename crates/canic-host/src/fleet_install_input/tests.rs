@@ -946,6 +946,53 @@ fn funding_profile_must_match_the_resolved_physical_topology() {
             resolved: FleetFundingProfile::MultiSubnet,
         })
     ));
+
+    input.funding_profile = FleetFundingProfile::PreviewMultiSubnet;
+    let coordinator_policy = input
+        .coordinator
+        .root_funding
+        .as_mut()
+        .expect("Coordinator funding policy");
+    coordinator_policy.minimum_reserve_cycles = Cycles::new(80 * TRILLION_CYCLES);
+    coordinator_policy.maximum_automatic_grants = 2;
+    coordinator_policy.maximum_automatic_cycles = Cycles::new(60 * TRILLION_CYCLES);
+    input.coordinator.creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(140 * TRILLION_CYCLES),
+    };
+    let root = &mut input.fleet_subnet_roots[0];
+    let root_policy = root.root_funding.as_mut().expect("Root funding policy");
+    root_policy.maximum_automatic_grants = 2;
+    root_policy.maximum_automatic_cycles = Cycles::new(60 * TRILLION_CYCLES);
+    root.icp_refill = None;
+
+    let resolved = resolve_document(&input, BuildNetwork::Local, None)
+        .expect("bounded preview multi-Subnet funding profile");
+    assert_eq!(
+        resolved.funding_profile,
+        FleetFundingProfile::PreviewMultiSubnet
+    );
+    assert_eq!(
+        resolved.coordinator.creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 140 * TRILLION_CYCLES
+        }
+    );
+    assert_eq!(
+        resolved
+            .coordinator
+            .root_funding
+            .expect("Coordinator funding policy")
+            .minimum_reserve_cycles,
+        Cycles::new(80 * TRILLION_CYCLES)
+    );
+    assert_eq!(
+        resolved.fleet_subnet_roots[0]
+            .funding
+            .root_funding
+            .maximum_automatic_cycles,
+        Cycles::new(60 * TRILLION_CYCLES)
+    );
+    assert!(resolved.fleet_subnet_roots[0].funding.icp_refill.is_none());
 }
 
 #[test]

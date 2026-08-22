@@ -624,7 +624,7 @@ fn resolve_document_with_evidence(
         )?);
     }
     let resolved_profile = resolved_funding_profile(coordinator_subnet, &fleet_subnet_roots);
-    if document.funding_profile != resolved_profile {
+    if !funding_profile_matches_topology(document.funding_profile, resolved_profile) {
         return Err(FleetInstallInputError::FundingProfileMismatch {
             configured: document.funding_profile,
             resolved: resolved_profile,
@@ -1277,6 +1277,22 @@ fn resolved_funding_profile(
     }
 }
 
+const fn funding_profile_matches_topology(
+    configured: FleetFundingProfile,
+    resolved: FleetFundingProfile,
+) -> bool {
+    matches!(
+        (configured, resolved),
+        (
+            FleetFundingProfile::SingleSubnet,
+            FleetFundingProfile::SingleSubnet
+        ) | (
+            FleetFundingProfile::PreviewMultiSubnet | FleetFundingProfile::MultiSubnet,
+            FleetFundingProfile::MultiSubnet
+        )
+    )
+}
+
 fn validate_funding_profile_baselines(
     profile: FleetFundingProfile,
     coordinator: &PlannedFleetCoordinator,
@@ -1285,6 +1301,7 @@ fn validate_funding_profile_baselines(
     let coordinator_nodes = coordinator.placement_cost.node_count;
     let coordinator_reserve_base = match profile {
         FleetFundingProfile::SingleSubnet => 30 * TRILLION_CYCLES,
+        FleetFundingProfile::PreviewMultiSubnet => 80 * TRILLION_CYCLES,
         FleetFundingProfile::MultiSubnet => 2_000 * TRILLION_CYCLES,
     };
     let coordinator_reserve = scale_profile_cycles(
@@ -1293,7 +1310,9 @@ fn validate_funding_profile_baselines(
         "coordinator minimum reserve",
     )?;
     let root_target_base = match profile {
-        FleetFundingProfile::SingleSubnet => 30 * TRILLION_CYCLES,
+        FleetFundingProfile::SingleSubnet | FleetFundingProfile::PreviewMultiSubnet => {
+            30 * TRILLION_CYCLES
+        }
         FleetFundingProfile::MultiSubnet => 1_000 * TRILLION_CYCLES,
     };
     let root_targets = roots
@@ -1308,7 +1327,9 @@ fn validate_funding_profile_baselines(
         .collect::<Result<Vec<_>, _>>()?;
     let fleet_window_minimum = match profile {
         FleetFundingProfile::SingleSubnet => root_targets.first().copied().unwrap_or(0),
-        FleetFundingProfile::MultiSubnet => checked_sum(&root_targets, "Fleet window maximum")?,
+        FleetFundingProfile::PreviewMultiSubnet | FleetFundingProfile::MultiSubnet => {
+            checked_sum(&root_targets, "Fleet window maximum")?
+        }
     };
     let coordinator_creation_minimum = match profile {
         FleetFundingProfile::SingleSubnet => scale_profile_cycles(
@@ -1316,6 +1337,16 @@ fn validate_funding_profile_baselines(
             coordinator_nodes,
             "Coordinator creation funding",
         )?,
+        FleetFundingProfile::PreviewMultiSubnet => coordinator_reserve
+            .checked_add(
+                coordinator
+                    .root_funding
+                    .as_ref()
+                    .map_or(0, |policy| policy.maximum_automatic_cycles.to_u128()),
+            )
+            .ok_or(FleetInstallInputError::FundingProfileOverflow {
+                field: "Coordinator creation funding",
+            })?,
         FleetFundingProfile::MultiSubnet => coordinator_reserve
             .checked_add(
                 checked_sum(&root_targets, "Coordinator creation funding")?
@@ -1362,6 +1393,11 @@ fn validate_root_funding_profile_baseline(
     let nodes = root.placement_cost.node_count;
     let (threshold_base, root_creation_base, store_creation_base) = match profile {
         FleetFundingProfile::SingleSubnet => (
+            10 * TRILLION_CYCLES,
+            30 * TRILLION_CYCLES,
+            10 * TRILLION_CYCLES,
+        ),
+        FleetFundingProfile::PreviewMultiSubnet => (
             10 * TRILLION_CYCLES,
             30 * TRILLION_CYCLES,
             10 * TRILLION_CYCLES,
