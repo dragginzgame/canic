@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-21
+Last updated: 2026-08-22
 
 ## Purpose
 
@@ -34,6 +34,36 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   until that line is implemented and published.
 
 ## Current Progress
+
+The published 0.108.0 checkpoint contains M0/M1 plus the urgent fresh-Fleet
+corrections. The open 0.108.1 draft completes B3-B8/M2-M7: exact registered-
+Root admission, full Registry-authority-bound operation identity, fixed and
+non-renewing budget/reserve accounting, durable two-sided journals,
+accept-once/zero-accept replay, recovery-first Coordinator funding, protected
+manual and terminal automatic ICP refill, exact installed-authority recovery,
+funding status/metrics, Medic and lifecycle/snapshot fences. The first
+human-owned closeout audit rejected the draft because the two funding legs
+still used unbounded calls, the ICP refill journal had no lifetime bound, the
+PocketIC matrix and B3-B8 evidence were incomplete, and active documentation
+overstated readiness. The correction uses bounded calls on both legs, caps the
+non-evicting Root refill journal at 4,096 lifetime identities, and adds real
+PocketIC single-/multi-Root accounting, non-renewing-cap, uncertain-call,
+direct-top-up, production Ledger/CMC replay, reserve-fallback, insufficient-ICP
+and rate-denial journeys. Evidence and targeted correction checks are complete;
+the maintainer must establish the immutable candidate before a fresh closeout
+audit. Versioning and publication remain pending that verdict and the
+maintainer release workflow. The maintainer's unrelated dependency range and
+host fixture changes remain outside this batch.
+
+The 2026-08-22 0.108 design amendment is implemented through B8. Protected
+input materializes topology-matched single-/multi-Subnet baselines, scales
+them rationally by current Registry node count, enforces one grant per 90-day
+default window and retains finite non-renewing automatic count/cycle caps. The
+Fiduciary-backed `recommended` Coordinator selector is removed; every
+Fiduciary Coordinator or Root placement requires an exact adjacent cost
+acknowledgement and emits retained high-cost evidence before plan and paid
+install effects. Corrected policy/hash/plan authority flows through Registry,
+stable accounting and generated interfaces before the sole Root timer runs.
 
 The compact diagnostic and role-owned Candid lines are published. Their
 read-only closeout audit confirmed the compact wire, typed runtime, host-only
@@ -344,8 +374,8 @@ ledger-transfer response loss and duplicate recovery, CMC-notify response loss
 and replay, then terminal completion. M1 recomputed the final 16 KiB
 `canic_command` envelope at 42,118,809,000 cycles and freezes both Root
 request/retry and automatic-refill floors at 42,200,000,000 cycles on PocketIC
-15.0.0 with pinned `ic-cdk 0.20.2`. The eventual command DTO must fit that
-frozen bound. Fixed epoch windows charge the reservation-time window, cooldown
+15.0.0 with pinned `ic-cdk 0.20.2`. The final command DTO fits that frozen
+bound. Fixed epoch windows charge the reservation-time window, cooldown
 starts at first accepted receipt, Draining has one lifecycle-owned funding
 fence, and receipt storage stays one current plus one last exact result per
 Root. B2/M1 is complete: strict schema-1 Fleet-input policy, central validation
@@ -353,10 +383,14 @@ and canonical hashes flow through plan, init, root authority and Registry;
 Coordinator genesis and root activation validate independent copies, and the
 unreachable generic `canic.toml` refill path is hard-cut. Generated Candid
 expands only the protected init/Registry data and adds no funding endpoint. B2
-is complete and included in the 0.108.0 checkpoint. Prematurely staged B3/M2
-Coordinator grant DTO, policy, stable allocation and operations were removed;
-B3 and later runtime-funding batches remain pending and do not ship in this
-checkpoint.
+is complete and included in the 0.108.0 checkpoint. B3/M2 through B5/M4 are
+complete in the open 0.108.1 draft: Coordinator grants and Root acceptance own
+exact durable two-sided journals; sparse topology-scaled policy, non-renewing
+caps and explicit Fiduciary acknowledgement flow through immutable authority;
+and the sole Root top-up timer resumes retained work before creating a request.
+B6/M5 through B8/M7 are complete in the open 0.108.1 draft and do not ship in
+0.108.0. They add the one-owner protected ICP refill path, operator and
+lifecycle surfaces, real PocketIC qualification and closeout handoff.
 
 Scheduled 0.109 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
@@ -421,9 +455,10 @@ accepted and B2 stays held pending its separately approved external run plan.
 accepted 0.106 B1 without the held B2 external effects. Its AC12 correction
 re-audit passed and the maintainer accepted the final closeout verdict.
 0.108 has completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
-protected policy and the urgent fresh-Fleet corrections form the source-ready
-0.108.0 checkpoint. B3/M2 and later funding batches remain pending without
-staged production source. 0.109
+protected policy and the urgent fresh-Fleet corrections form the published
+0.108.0 checkpoint. B3/M2 through B8/M7 are implementation-complete in the
+open 0.108.1 draft, with targeted qualification complete and the human 0.108
+closeout audit next. 0.109
 requires completed 0.108 plus application-retirement evidence; 0.110 requires
 accepted 0.109 and an exact
 released predecessor; and 0.111 requires accepted 0.110 closeout. Deferred
@@ -865,13 +900,13 @@ plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and
 terminal-disposition authorization exists. In 0.107, B2-B7 implementation,
 the prior full validation gate and the exact AC12 re-audit/maintainer
-acceptance are complete on `ic-query 0.42.0` stable snapshot authority. Run the
-maintainer-owned validation, version, tag and push flow for the combined
-0.108.0 B2 protected-policy and urgent fresh-Fleet correction checkpoint, then
-rerun the downstream fresh Toko Fleet installation from empty state against
-the published release. B3/M2 begins afterward as a new in-repository batch;
-none of its grant workflow ships in 0.108.0. Do not add a production pool
-contract, run any remote qualification effect or begin 0.109.
+acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
+published 0.108.0 checkpoint remains the downstream fresh-install baseline.
+The open 0.108.1 B3-B8 closeout corrections and targeted checks are complete.
+Establish the immutable corrected candidate, then run a fresh human-owned
+0.108 closeout audit. Do not add a production pool contract, run any remote
+qualification effect, version, publish or begin 0.109 before the audit verdict
+and maintainer-owned release workflow authorize it.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

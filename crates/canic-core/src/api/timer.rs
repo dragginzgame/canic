@@ -69,6 +69,13 @@ impl TimerApi {
         TimerAuthorityWorkflow::recover_expired_async_jobs(now_ns)
     }
 
+    /// Recover the base Root jobs plus its core-owned automatic cycle top-up attempt.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn recover_expired_root_async_jobs(now_ns: u64) -> u64 {
+        TimerAuthorityWorkflow::recover_expired_async_jobs_with_automatic_topup(now_ns)
+    }
+
     /// Schedule framework-owned lifecycle work and trap if runtime invariants reject it.
     #[doc(hidden)]
     pub fn defer_lifecycle_required(

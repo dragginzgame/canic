@@ -1,7 +1,7 @@
 use super::{cost_guard::*, execution::*, replay::*, *};
 use crate::{
     cdk::{candid::Nat, types::Principal},
-    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger},
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
     ops::{
@@ -14,7 +14,7 @@ use crate::{
         storage::replay::ReplayReceiptOps,
     },
     replay_policy::CostClass,
-    storage::stable::icp_refill::IcpRefillRecord,
+    storage::stable::icp_refill::{IcpRefillRecord, IcpRefillTriggerRecord},
     view::icp_refill::IcpRefillOperation,
 };
 use std::str::FromStr;
@@ -43,6 +43,8 @@ fn sample_record(status: IcpRefillStatus) -> IcpRefillRecord {
     IcpRefillRecord {
         id: 7,
         operation_id: [9; 32],
+        trigger: IcpRefillTriggerRecord::Manual,
+        policy_hash: [8; 32],
         source_canister: p(1),
         source_subaccount: Some([2; 32]),
         target_canister: p(3),
@@ -52,6 +54,8 @@ fn sample_record(status: IcpRefillStatus) -> IcpRefillRecord {
         cmc_to_account_subaccount: Some([6; 32]),
         amount_e8s: 100_000_000,
         fee_e8s: 10_000,
+        budget_window_start_secs: 3_600,
+        budget_reserved: true,
         memo: IcpRefillOps::topup_memo(),
         created_at_time_ns: 1_000,
         ledger_block_index: None,
@@ -71,6 +75,8 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
     IcpRefillOperation {
         id: record.id,
         operation_id: record.operation_id,
+        trigger: record.trigger.into(),
+        policy_hash: record.policy_hash,
         source_canister: record.source_canister,
         source_subaccount: record.source_subaccount,
         target_canister: record.target_canister,
@@ -80,6 +86,8 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
         cmc_to_account_subaccount: record.cmc_to_account_subaccount,
         amount_e8s: record.amount_e8s,
         fee_e8s: record.fee_e8s,
+        budget_window_start_secs: record.budget_window_start_secs,
+        budget_reserved: record.budget_reserved,
         memo: record.memo.clone(),
         created_at_time_ns: record.created_at_time_ns,
         ledger_block_index: record.ledger_block_index,
@@ -117,6 +125,8 @@ fn stored_record(id: u64, operation_byte: u8, status: IcpRefillStatus) -> IcpRef
 fn create_input(operation_byte: u8) -> IcpRefillRecordCreateInput {
     IcpRefillRecordCreateInput {
         operation_id: [operation_byte; 32],
+        trigger: IcpRefillTrigger::Manual,
+        policy_hash: [8; 32],
         source_canister: p(201),
         source_subaccount: Some([202; 32]),
         target_canister: p(203),
@@ -126,6 +136,7 @@ fn create_input(operation_byte: u8) -> IcpRefillRecordCreateInput {
         cmc_to_account_subaccount: Some([206; 32]),
         amount_e8s: 100_000_000,
         fee_e8s: 10_000,
+        budget_window_start_secs: 3_600,
         memo: IcpRefillOps::topup_memo(),
         created_at_time_ns: 1_000,
         now_ns: 1_000,
@@ -703,6 +714,41 @@ fn refill_retry_promotes_staged_response_without_ledger_call() {
         .into_receipt()
         .expect("receipt decodes");
     assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+    ReplayReceiptOps::reset_for_tests();
+}
+
+#[test]
+fn refill_retry_reuses_exact_receipt_after_unknown_external_effect() {
+    ReplayReceiptOps::reset_for_tests();
+    let request = request_with_operation(194);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.operation_id = request.operation_id;
+    let operation = operation_from_record(&record);
+    mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
+    crate::ops::replay::receipt::mark_recovery_required(
+        &token,
+        RecoveryReason::ExternalEffectStatusUnknown,
+        1_001,
+    )
+    .expect("mark unknown effect");
+
+    let IcpRefillReplayReservation::Fresh {
+        operation_id,
+        token: retry_token,
+    } = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_002))
+        .expect("exact retry must recover the durable operation")
+    else {
+        panic!("expected recoverable fresh reservation");
+    };
+    assert_eq!(operation_id, request.operation_id);
+    assert_eq!(retry_token.key(), token.key());
 
     ReplayReceiptOps::reset_for_tests();
 }

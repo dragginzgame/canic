@@ -65,14 +65,29 @@ pub struct CyclesFundingBudget {
     pub maximum_cycles: Cycles,
 }
 
+/// Protected physical-topology class that selects the minimum Root funding baseline.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetFundingProfile {
+    #[serde(rename = "single_subnet")]
+    SingleSubnet,
+    #[serde(rename = "multi_subnet")]
+    MultiSubnet,
+}
+
 /// Minimum post-grant Coordinator execution reserve established by the 0.108 M0 proof.
 pub const COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES: u128 = 100_000_000;
+
+/// Conservative current-cost reservation for one bounded 16 KiB funding command.
+pub const FLEET_ROOT_FUNDING_CALL_RESERVATION_CYCLES: u128 = 42_118_809_000;
 
 /// Minimum Root balance admitted for the Coordinator request and exact-retry path.
 pub const FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES: u128 = 42_200_000_000;
 
 /// Minimum Root balance admitted for automatic ICP-refill execution and recovery.
 pub const FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES: u128 = 42_200_000_000;
+
+/// Maximum registered roots represented by the bounded Coordinator funding ledger.
+pub const MAX_FLEET_ROOT_FUNDING_SLOTS: usize = 4_096;
 
 ///
 /// FleetCoordinatorRootFundingPolicy
@@ -83,8 +98,11 @@ pub const FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES: u128 = 42_200_000_000;
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetCoordinatorRootFundingPolicy {
+    pub funding_profile: FleetFundingProfile,
     pub minimum_reserve_cycles: Cycles,
     pub budget: CyclesFundingBudget,
+    pub maximum_automatic_grants: u32,
+    pub maximum_automatic_cycles: Cycles,
 }
 
 ///
@@ -96,10 +114,13 @@ pub struct FleetCoordinatorRootFundingPolicy {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetSubnetRootFundingPolicy {
+    pub funding_profile: FleetFundingProfile,
     pub request_threshold: Cycles,
     pub target_balance: Cycles,
     pub cooldown_secs: u64,
     pub budget: CyclesFundingBudget,
+    pub maximum_automatic_grants: u32,
+    pub maximum_automatic_cycles: Cycles,
 }
 
 ///
@@ -113,6 +134,8 @@ pub struct FleetSubnetRootFundingPolicy {
 pub struct FleetSubnetRootAutomaticIcpRefillPolicy {
     pub emergency_threshold: Cycles,
     pub target_balance: Cycles,
+    pub maximum_automatic_refills: u32,
+    pub maximum_automatic_refill_e8s: u64,
 }
 
 ///
@@ -307,4 +330,20 @@ pub struct ComponentChildBinding {
 pub enum ManagedCanisterBinding {
     Component(ComponentBinding),
     ComponentChild(ComponentChildBinding),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn funding_profile_candid_spelling_roundtrips() {
+        let bytes = candid::encode_one(FleetFundingProfile::SingleSubnet)
+            .expect("encode funding profile Candid");
+        assert_eq!(
+            candid::decode_one::<FleetFundingProfile>(&bytes)
+                .expect("decode funding profile Candid"),
+            FleetFundingProfile::SingleSubnet
+        );
+    }
 }

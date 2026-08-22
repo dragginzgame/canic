@@ -76,7 +76,11 @@ pub(super) fn reserve_icp_refill_replay(
 ) -> Result<IcpRefillReplayReservation, InternalError> {
     let operation_id = input.operation_id.into_bytes();
     match reserve_or_replay_receipt(input).map_err(map_icp_refill_replay_store_error)? {
-        ReplayReceiptDecision::Fresh(token) => Ok(IcpRefillReplayReservation::Fresh {
+        ReplayReceiptDecision::Fresh(token)
+        | ReplayReceiptDecision::RecoveryRequired {
+            token,
+            reason: RecoveryReason::ExternalEffectStatusUnknown,
+        } => Ok(IcpRefillReplayReservation::Fresh {
             operation_id,
             token: Box::new(token),
         }),
@@ -115,7 +119,7 @@ pub(super) fn reserve_icp_refill_replay(
         ReplayReceiptDecision::RecoveryRequired { .. } => {
             log_icp_refill_replay_conflict(operation_id, "recovery_required");
             Err(InternalError::public(
-                crate::diagnostics::codes::REQUEST_INVALID,
+                crate::diagnostics::codes::REQUEST_INCOMPLETE,
             ))
         }
         ReplayReceiptDecision::PendingActorQuotaExceeded { .. } => {

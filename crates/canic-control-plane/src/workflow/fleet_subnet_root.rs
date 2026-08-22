@@ -25,13 +25,17 @@ use crate::{
 };
 use candid::{Nat, Principal};
 use canic_core::{
-    api::{fleet_activation::FleetActivationApi, timer::TimerApi},
+    api::{
+        fleet_activation::FleetActivationApi, runtime::root_funding::RootFundingTimerApi,
+        timer::TimerApi,
+    },
     control_plane_support::{
         error::InternalError,
         model::replay::CommandKind,
         ops::{
             cost_guard::{CostGuardPermit, CostGuardRequest},
             ic::{IcOps, mgmt::MgmtOps},
+            icp_refill::IcpRefillStoreOps,
             root_draining_reservation::FleetSubnetRootDrainingReservationOps,
         },
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
@@ -610,6 +614,7 @@ async fn advance_root_removal_once(operation_id: [u8; 32]) -> Result<bool, Inter
     }
 
     if ComponentRegistryOps::root_final_inventory_if_present(operation_id)?.is_none() {
+        fence_root_funding_for_terminal_removal(operation_id)?;
         let component_registry =
             ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
         fleet_registry_mirror::advance_to_draining_for_root_removal(
@@ -627,6 +632,16 @@ async fn advance_root_removal_once(operation_id: [u8; 32]) -> Result<bool, Inter
 
     let inventory = ComponentRegistryOps::root_final_inventory(operation_id)?;
     Box::pin(advance_root_store_removal(operation_id, inventory)).await
+}
+
+fn fence_root_funding_for_terminal_removal(operation_id: [u8; 32]) -> Result<(), InternalError> {
+    if crate::workflow::root_funding::current_request()?.is_some()
+        || IcpRefillStoreOps::resumable_operation_count() != 0
+    {
+        return Err(InternalError::conflict());
+    }
+    ComponentRegistryOps::record_root_funding_fence(operation_id, IcOps::now_nanos())?;
+    RootFundingTimerApi::fence_for_deletion()
 }
 
 async fn advance_root_store_removal(

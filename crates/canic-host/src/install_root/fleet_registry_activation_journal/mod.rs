@@ -199,6 +199,25 @@ pub(super) fn record_registry_activation_verified(
     )
 }
 
+pub(super) fn load_verified_installed_registry(
+    fleet_install_plan: &PersistedFleetInstallPlan,
+) -> Result<FleetRegistry, FleetRegistryActivationJournalError> {
+    let path = journal_path(&fleet_install_plan.path);
+    let journal = load_required_journal(&path)?;
+    if journal.phase != FleetRegistryActivationPhase::Verified
+        || journal.fleet_install_plan_digest != fleet_install_plan.digest
+        || journal.active_registry.authority.binding.fleet != fleet_install_plan.plan.fleet
+        || journal.active_registry.authority.binding.coordinator_subnet
+            != fleet_install_plan.plan.coordinator.coordinator_subnet
+    {
+        return Err(invalid(
+            &path,
+            "verified active Registry differs from the Fleet install plan",
+        ));
+    }
+    Ok(journal.active_registry)
+}
+
 fn planned_journal(
     path: &Path,
     request: PlanFleetRegistryActivationRequest<'_>,

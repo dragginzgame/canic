@@ -7,10 +7,16 @@
 use crate::ids::{
     COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES,
     FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES, FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES,
-    FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority,
+    FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
+    FleetSubnetRootFundingPolicy,
 };
 use candid::Principal;
 use thiserror::Error as ThisError;
+
+const TRILLION_CYCLES: u128 = 1_000_000_000_000;
+const THIRTY_DAYS_SECS: u64 = 30 * 24 * 60 * 60;
+const NINETY_DAYS_SECS: u64 = 90 * 24 * 60 * 60;
+const MAXIMUM_AUTOMATIC_EVENTS: u32 = 4;
 
 /// Exact invariant rejected while admitting immutable Fleet funding policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ThisError)]
@@ -25,6 +31,22 @@ pub enum FleetFundingPolicyValidationError {
     CoordinatorMaximumZero,
     #[error("Coordinator Fleet-wide budget cannot admit the largest root target")]
     CoordinatorMaximumBelowLargestRootTarget,
+    #[error("Coordinator funding profile differs from a root funding profile")]
+    CoordinatorProfileMismatch,
+    #[error("Coordinator minimum reserve is below the funding-profile baseline")]
+    CoordinatorReserveBelowProfileBaseline,
+    #[error("Coordinator accounting window is below the funding-profile baseline")]
+    CoordinatorWindowBelowProfileBaseline,
+    #[error("Coordinator non-renewing automatic grant count must be positive")]
+    CoordinatorAutomaticGrantCountZero,
+    #[error("Coordinator non-renewing automatic grant count exceeds admitted root authority")]
+    CoordinatorAutomaticGrantCountAboveRoots,
+    #[error("Coordinator non-renewing automatic cycles must be positive")]
+    CoordinatorAutomaticCyclesZero,
+    #[error("Coordinator non-renewing automatic cycles cannot admit the largest root target")]
+    CoordinatorAutomaticCyclesBelowLargestRootTarget,
+    #[error("Coordinator non-renewing automatic cycles exceed admitted root authority")]
+    CoordinatorAutomaticCyclesAboveRoots,
     #[error("root request threshold must be positive")]
     RootRequestThresholdZero,
     #[error("root request threshold is below the measured request/recovery floor")]
@@ -41,6 +63,26 @@ pub enum FleetFundingPolicyValidationError {
     RootMaximumZero,
     #[error("root budget cannot admit its largest legitimate zero-balance grant")]
     RootMaximumBelowTargetBalance,
+    #[error("root request threshold is below the funding-profile baseline")]
+    RootRequestThresholdBelowProfileBaseline,
+    #[error("root target balance is below the funding-profile baseline")]
+    RootTargetBelowProfileBaseline,
+    #[error("root target/threshold gap is below the funding-profile baseline")]
+    RootTargetGapBelowProfileBaseline,
+    #[error("root cooldown is below the funding-profile baseline")]
+    RootCooldownBelowProfileBaseline,
+    #[error("root accounting window is below the funding-profile baseline")]
+    RootWindowBelowProfileBaseline,
+    #[error("root rolling window can admit two minimum threshold-triggered grants")]
+    RootWindowAdmitsTwoMinimumGrants,
+    #[error("root non-renewing automatic grant count must be between one and four")]
+    RootAutomaticGrantCountInvalid,
+    #[error("root non-renewing automatic cycles must be positive")]
+    RootAutomaticCyclesZero,
+    #[error("root non-renewing automatic cycles cannot admit one largest valid grant")]
+    RootAutomaticCyclesBelowTargetBalance,
+    #[error("root non-renewing automatic cycles exceed the count-bound reachable maximum")]
+    RootAutomaticCyclesAboveReachableMaximum,
     #[error("ICP per-call cap must be positive")]
     IcpPerCallMaximumZero,
     #[error("ICP accounting window must be positive")]
@@ -71,6 +113,12 @@ pub enum FleetFundingPolicyValidationError {
     AutomaticTargetNotAboveRequestThreshold,
     #[error("automatic target balance must not exceed the Coordinator target balance")]
     AutomaticTargetAboveRootTargetBalance,
+    #[error("automatic ICP refill count must be between one and four")]
+    AutomaticIcpRefillCountInvalid,
+    #[error("automatic ICP refill spend cap must be positive")]
+    AutomaticIcpRefillMaximumZero,
+    #[error("automatic ICP refill spend cap must admit one maximum per-call refill")]
+    AutomaticIcpRefillMaximumBelowPerCallMaximum,
 }
 
 /// Validate one immutable Coordinator treasury policy.
@@ -90,6 +138,18 @@ pub const fn validate_coordinator_root_funding_policy(
     if policy.budget.maximum_cycles.to_u128() == 0 {
         return Err(FleetFundingPolicyValidationError::CoordinatorMaximumZero);
     }
+    if policy.budget.window_secs < NINETY_DAYS_SECS {
+        return Err(FleetFundingPolicyValidationError::CoordinatorWindowBelowProfileBaseline);
+    }
+    if policy.minimum_reserve_cycles.to_u128() < profile_reserve(policy.funding_profile) {
+        return Err(FleetFundingPolicyValidationError::CoordinatorReserveBelowProfileBaseline);
+    }
+    if policy.maximum_automatic_grants == 0 {
+        return Err(FleetFundingPolicyValidationError::CoordinatorAutomaticGrantCountZero);
+    }
+    if policy.maximum_automatic_cycles.to_u128() == 0 {
+        return Err(FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesZero);
+    }
     Ok(())
 }
 
@@ -101,6 +161,32 @@ pub fn validate_fleet_subnet_root_funding_authority(
     let root = &authority.root_funding;
     let request_threshold = root.request_threshold.to_u128();
     let target_balance = root.target_balance.to_u128();
+    let (minimum_threshold, minimum_target) = profile_root_balances(root.funding_profile);
+    validate_root_balance_policy(root, minimum_threshold, minimum_target)?;
+
+    let Some(icp) = authority.icp_refill.as_ref() else {
+        return Ok(());
+    };
+    validate_icp_refill_policy(icp, ic_mainnet)?;
+
+    let Some(automatic) = icp.automatic.as_ref() else {
+        return Ok(());
+    };
+    validate_automatic_icp_refill_policy(
+        automatic,
+        request_threshold,
+        target_balance,
+        icp.max_refill_e8s_per_call,
+    )
+}
+
+fn validate_root_balance_policy(
+    root: &FleetSubnetRootFundingPolicy,
+    minimum_threshold: u128,
+    minimum_target: u128,
+) -> Result<(), FleetFundingPolicyValidationError> {
+    let request_threshold = root.request_threshold.to_u128();
+    let target_balance = root.target_balance.to_u128();
     let maximum_cycles = root.budget.maximum_cycles.to_u128();
     if request_threshold == 0 {
         return Err(FleetFundingPolicyValidationError::RootRequestThresholdZero);
@@ -108,17 +194,33 @@ pub fn validate_fleet_subnet_root_funding_authority(
     if request_threshold < FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES {
         return Err(FleetFundingPolicyValidationError::RootRequestThresholdBelowFloor);
     }
+    if request_threshold < minimum_threshold {
+        return Err(FleetFundingPolicyValidationError::RootRequestThresholdBelowProfileBaseline);
+    }
     if target_balance == 0 {
         return Err(FleetFundingPolicyValidationError::RootTargetBalanceZero);
     }
     if target_balance <= request_threshold {
         return Err(FleetFundingPolicyValidationError::RootTargetNotAboveRequestThreshold);
     }
+    if target_balance < minimum_target {
+        return Err(FleetFundingPolicyValidationError::RootTargetBelowProfileBaseline);
+    }
+    let target_gap = target_balance - request_threshold;
+    if target_gap < minimum_target - minimum_threshold {
+        return Err(FleetFundingPolicyValidationError::RootTargetGapBelowProfileBaseline);
+    }
     if root.cooldown_secs == 0 {
         return Err(FleetFundingPolicyValidationError::RootCooldownZero);
     }
+    if root.cooldown_secs < THIRTY_DAYS_SECS {
+        return Err(FleetFundingPolicyValidationError::RootCooldownBelowProfileBaseline);
+    }
     if root.budget.window_secs == 0 {
         return Err(FleetFundingPolicyValidationError::RootWindowZero);
+    }
+    if root.budget.window_secs < NINETY_DAYS_SECS {
+        return Err(FleetFundingPolicyValidationError::RootWindowBelowProfileBaseline);
     }
     if maximum_cycles == 0 {
         return Err(FleetFundingPolicyValidationError::RootMaximumZero);
@@ -126,10 +228,38 @@ pub fn validate_fleet_subnet_root_funding_authority(
     if maximum_cycles < target_balance {
         return Err(FleetFundingPolicyValidationError::RootMaximumBelowTargetBalance);
     }
+    if target_gap
+        .checked_mul(2)
+        .is_none_or(|two_grants| maximum_cycles >= two_grants)
+    {
+        return Err(FleetFundingPolicyValidationError::RootWindowAdmitsTwoMinimumGrants);
+    }
+    if root.maximum_automatic_grants == 0
+        || root.maximum_automatic_grants > MAXIMUM_AUTOMATIC_EVENTS
+    {
+        return Err(FleetFundingPolicyValidationError::RootAutomaticGrantCountInvalid);
+    }
+    let maximum_automatic_cycles = root.maximum_automatic_cycles.to_u128();
+    if maximum_automatic_cycles == 0 {
+        return Err(FleetFundingPolicyValidationError::RootAutomaticCyclesZero);
+    }
+    if maximum_automatic_cycles < target_balance {
+        return Err(FleetFundingPolicyValidationError::RootAutomaticCyclesBelowTargetBalance);
+    }
+    if target_balance
+        .checked_mul(u128::from(root.maximum_automatic_grants))
+        .is_none_or(|reachable| maximum_automatic_cycles > reachable)
+    {
+        return Err(FleetFundingPolicyValidationError::RootAutomaticCyclesAboveReachableMaximum);
+    }
 
-    let Some(icp) = authority.icp_refill.as_ref() else {
-        return Ok(());
-    };
+    Ok(())
+}
+
+fn validate_icp_refill_policy(
+    icp: &crate::ids::FleetSubnetRootIcpRefillPolicy,
+    ic_mainnet: bool,
+) -> Result<(), FleetFundingPolicyValidationError> {
     if icp.max_refill_e8s_per_call == 0 {
         return Err(FleetFundingPolicyValidationError::IcpPerCallMaximumZero);
     }
@@ -161,9 +291,15 @@ pub fn validate_fleet_subnet_root_funding_authority(
         return Err(FleetFundingPolicyValidationError::IcpOverrideUnsafe);
     }
 
-    let Some(automatic) = icp.automatic.as_ref() else {
-        return Ok(());
-    };
+    Ok(())
+}
+
+const fn validate_automatic_icp_refill_policy(
+    automatic: &crate::ids::FleetSubnetRootAutomaticIcpRefillPolicy,
+    request_threshold: u128,
+    target_balance: u128,
+    max_refill_e8s_per_call: u64,
+) -> Result<(), FleetFundingPolicyValidationError> {
     let emergency_threshold = automatic.emergency_threshold.to_u128();
     let automatic_target = automatic.target_balance.to_u128();
     if emergency_threshold == 0 {
@@ -184,6 +320,19 @@ pub fn validate_fleet_subnet_root_funding_authority(
     if automatic_target > target_balance {
         return Err(FleetFundingPolicyValidationError::AutomaticTargetAboveRootTargetBalance);
     }
+    if automatic.maximum_automatic_refills == 0
+        || automatic.maximum_automatic_refills > MAXIMUM_AUTOMATIC_EVENTS
+    {
+        return Err(FleetFundingPolicyValidationError::AutomaticIcpRefillCountInvalid);
+    }
+    if automatic.maximum_automatic_refill_e8s == 0 {
+        return Err(FleetFundingPolicyValidationError::AutomaticIcpRefillMaximumZero);
+    }
+    if automatic.maximum_automatic_refill_e8s < max_refill_e8s_per_call {
+        return Err(
+            FleetFundingPolicyValidationError::AutomaticIcpRefillMaximumBelowPerCallMaximum,
+        );
+    }
     Ok(())
 }
 
@@ -192,15 +341,52 @@ pub fn validate_fleet_root_funding_capacity<'a>(
     coordinator: &FleetCoordinatorRootFundingPolicy,
     roots: impl IntoIterator<Item = &'a FleetSubnetRootFundingAuthority>,
 ) -> Result<(), FleetFundingPolicyValidationError> {
+    let roots = roots.into_iter().collect::<Vec<_>>();
+    if roots
+        .iter()
+        .any(|root| root.root_funding.funding_profile != coordinator.funding_profile)
+    {
+        return Err(FleetFundingPolicyValidationError::CoordinatorProfileMismatch);
+    }
     let largest_target = roots
-        .into_iter()
+        .iter()
         .map(|root| root.root_funding.target_balance.to_u128())
         .max()
         .unwrap_or(0);
     if coordinator.budget.maximum_cycles.to_u128() < largest_target {
-        Err(FleetFundingPolicyValidationError::CoordinatorMaximumBelowLargestRootTarget)
-    } else {
-        Ok(())
+        return Err(FleetFundingPolicyValidationError::CoordinatorMaximumBelowLargestRootTarget);
+    }
+    if coordinator.maximum_automatic_cycles.to_u128() < largest_target {
+        return Err(
+            FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesBelowLargestRootTarget,
+        );
+    }
+    let root_grants = roots.iter().try_fold(0_u32, |total, root| {
+        total.checked_add(root.root_funding.maximum_automatic_grants)
+    });
+    if root_grants.is_none_or(|total| coordinator.maximum_automatic_grants > total) {
+        return Err(FleetFundingPolicyValidationError::CoordinatorAutomaticGrantCountAboveRoots);
+    }
+    let root_cycles = roots.iter().try_fold(0_u128, |total, root| {
+        total.checked_add(root.root_funding.maximum_automatic_cycles.to_u128())
+    });
+    if root_cycles.is_none_or(|total| coordinator.maximum_automatic_cycles.to_u128() > total) {
+        return Err(FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesAboveRoots);
+    }
+    Ok(())
+}
+
+const fn profile_reserve(profile: FleetFundingProfile) -> u128 {
+    match profile {
+        FleetFundingProfile::SingleSubnet => 30 * TRILLION_CYCLES,
+        FleetFundingProfile::MultiSubnet => 2_000 * TRILLION_CYCLES,
+    }
+}
+
+const fn profile_root_balances(profile: FleetFundingProfile) -> (u128, u128) {
+    match profile {
+        FleetFundingProfile::SingleSubnet => (10 * TRILLION_CYCLES, 30 * TRILLION_CYCLES),
+        FleetFundingProfile::MultiSubnet => (250 * TRILLION_CYCLES, 1_000 * TRILLION_CYCLES),
     }
 }
 
@@ -213,7 +399,7 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Cycles,
-        ids::{CyclesFundingBudget, FleetSubnetRootFundingPolicy},
+        ids::{CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingPolicy},
     };
 
     #[test]
@@ -238,18 +424,92 @@ mod tests {
         );
     }
 
+    #[test]
+    fn root_policy_rejects_invalid_nonrenewing_authority() {
+        let mut changed = authority();
+        changed.root_funding.maximum_automatic_grants = 0;
+        assert_eq!(
+            validate_fleet_subnet_root_funding_authority(&changed, false),
+            Err(FleetFundingPolicyValidationError::RootAutomaticGrantCountInvalid)
+        );
+
+        let mut changed = authority();
+        changed.root_funding.maximum_automatic_cycles =
+            Cycles::new(changed.root_funding.target_balance.to_u128() - 1);
+        assert_eq!(
+            validate_fleet_subnet_root_funding_authority(&changed, false),
+            Err(FleetFundingPolicyValidationError::RootAutomaticCyclesBelowTargetBalance)
+        );
+
+        let mut changed = authority();
+        changed.root_funding.maximum_automatic_cycles = Cycles::new(
+            changed.root_funding.target_balance.to_u128()
+                * u128::from(changed.root_funding.maximum_automatic_grants)
+                + 1,
+        );
+        assert_eq!(
+            validate_fleet_subnet_root_funding_authority(&changed, false),
+            Err(FleetFundingPolicyValidationError::RootAutomaticCyclesAboveReachableMaximum)
+        );
+    }
+
+    #[test]
+    fn fleet_capacity_binds_profiles_and_nonrenewing_caps() {
+        let root = authority();
+        let coordinator = coordinator_policy();
+        validate_fleet_root_funding_capacity(&coordinator, [&root])
+            .expect("one standard Root fits the Coordinator policy");
+
+        let mut changed = root.clone();
+        changed.root_funding.funding_profile = FleetFundingProfile::MultiSubnet;
+        assert_eq!(
+            validate_fleet_root_funding_capacity(&coordinator, [&changed]),
+            Err(FleetFundingPolicyValidationError::CoordinatorProfileMismatch)
+        );
+
+        let mut changed = coordinator.clone();
+        changed.maximum_automatic_grants = 5;
+        assert_eq!(
+            validate_fleet_root_funding_capacity(&changed, [&root]),
+            Err(FleetFundingPolicyValidationError::CoordinatorAutomaticGrantCountAboveRoots)
+        );
+
+        let mut changed = coordinator;
+        changed.maximum_automatic_cycles = Cycles::new(120_000_000_000_001);
+        assert_eq!(
+            validate_fleet_root_funding_capacity(&changed, [&root]),
+            Err(FleetFundingPolicyValidationError::CoordinatorAutomaticCyclesAboveRoots)
+        );
+    }
+
     fn authority() -> FleetSubnetRootFundingAuthority {
         FleetSubnetRootFundingAuthority {
             root_funding: FleetSubnetRootFundingPolicy {
-                request_threshold: Cycles::new(50_000_000_000),
-                target_balance: Cycles::new(60_000_000_000),
-                cooldown_secs: 300,
+                funding_profile: FleetFundingProfile::SingleSubnet,
+                request_threshold: Cycles::new(10_000_000_000_000),
+                target_balance: Cycles::new(30_000_000_000_000),
+                cooldown_secs: THIRTY_DAYS_SECS,
                 budget: CyclesFundingBudget {
-                    window_secs: 3_600,
-                    maximum_cycles: Cycles::new(100_000_000_000),
+                    window_secs: NINETY_DAYS_SECS,
+                    maximum_cycles: Cycles::new(30_000_000_000_000),
                 },
+                maximum_automatic_grants: 4,
+                maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
             },
             icp_refill: None,
+        }
+    }
+
+    fn coordinator_policy() -> FleetCoordinatorRootFundingPolicy {
+        FleetCoordinatorRootFundingPolicy {
+            funding_profile: FleetFundingProfile::SingleSubnet,
+            minimum_reserve_cycles: Cycles::new(30_000_000_000_000),
+            budget: CyclesFundingBudget {
+                window_secs: NINETY_DAYS_SECS,
+                maximum_cycles: Cycles::new(30_000_000_000_000),
+            },
+            maximum_automatic_grants: 4,
+            maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
         }
     }
 }

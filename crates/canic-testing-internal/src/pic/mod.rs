@@ -3,8 +3,8 @@
 use canic_core::{
     cdk::types::Cycles,
     ids::{
-        CyclesFundingBudget, FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootFundingPolicy,
+        CyclesFundingBudget, FleetCoordinatorRootFundingPolicy, FleetFundingProfile,
+        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
     },
 };
 #[cfg(test)]
@@ -56,24 +56,30 @@ pub(super) const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 200_000_000_000_000;
 
 pub(crate) const fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {
     FleetCoordinatorRootFundingPolicy {
-        minimum_reserve_cycles: Cycles::new(100_000_000),
+        funding_profile: FleetFundingProfile::SingleSubnet,
+        minimum_reserve_cycles: Cycles::new(30_000_000_000_000),
         budget: CyclesFundingBudget {
-            window_secs: 3_600,
-            maximum_cycles: Cycles::new(10_000_000_000_000),
+            window_secs: 90 * 24 * 60 * 60,
+            maximum_cycles: Cycles::new(30_000_000_000_000),
         },
+        maximum_automatic_grants: 4,
+        maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
     }
 }
 
 pub(crate) const fn root_funding_authority() -> FleetSubnetRootFundingAuthority {
     FleetSubnetRootFundingAuthority {
         root_funding: FleetSubnetRootFundingPolicy {
-            request_threshold: Cycles::new(50_000_000_000),
-            target_balance: Cycles::new(2_000_000_000_000),
-            cooldown_secs: 300,
+            funding_profile: FleetFundingProfile::SingleSubnet,
+            request_threshold: Cycles::new(10_000_000_000_000),
+            target_balance: Cycles::new(30_000_000_000_000),
+            cooldown_secs: 30 * 24 * 60 * 60,
             budget: CyclesFundingBudget {
-                window_secs: 3_600,
-                maximum_cycles: Cycles::new(10_000_000_000_000),
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(30_000_000_000_000),
             },
+            maximum_automatic_grants: 4,
+            maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
         },
         icp_refill: None,
     }

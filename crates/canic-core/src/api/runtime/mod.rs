@@ -1,4 +1,5 @@
 pub mod install;
+pub mod root_funding;
 
 use crate::{
     InternalError,

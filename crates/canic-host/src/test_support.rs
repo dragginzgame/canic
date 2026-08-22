@@ -8,32 +8,54 @@ use canic_core::{
     cdk::types::Cycles,
     ids::{
         CanonicalNetworkId, CyclesFundingBudget, FleetCoordinatorRootFundingPolicy,
-        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        FleetFundingProfile, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        SubnetId,
     },
 };
 
+use crate::fleet_install_plan::PlannedSubnetPlacementCostEvidence;
+
 pub fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {
     FleetCoordinatorRootFundingPolicy {
-        minimum_reserve_cycles: Cycles::new(100_000_000),
+        funding_profile: FleetFundingProfile::SingleSubnet,
+        minimum_reserve_cycles: Cycles::new(30_000_000_000_000),
         budget: CyclesFundingBudget {
-            window_secs: 3_600,
-            maximum_cycles: Cycles::new(10_000_000_000_000),
+            window_secs: 90 * 24 * 60 * 60,
+            maximum_cycles: Cycles::new(30_000_000_000_000),
         },
+        maximum_automatic_grants: 4,
+        maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
     }
 }
 
 pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority {
     FleetSubnetRootFundingAuthority {
         root_funding: FleetSubnetRootFundingPolicy {
-            request_threshold: Cycles::new(50_000_000_000),
-            target_balance: Cycles::new(2_000_000_000_000),
-            cooldown_secs: 300,
+            funding_profile: FleetFundingProfile::SingleSubnet,
+            request_threshold: Cycles::new(10_000_000_000_000),
+            target_balance: Cycles::new(30_000_000_000_000),
+            cooldown_secs: 30 * 24 * 60 * 60,
             budget: CyclesFundingBudget {
-                window_secs: 3_600,
-                maximum_cycles: Cycles::new(10_000_000_000_000),
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(30_000_000_000_000),
             },
+            maximum_automatic_grants: 4,
+            maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
         },
         icp_refill: None,
+    }
+}
+
+pub fn placement_cost(subnet: SubnetId) -> PlannedSubnetPlacementCostEvidence {
+    PlannedSubnetPlacementCostEvidence {
+        subnet,
+        catalog_sha256: None,
+        subnet_specialization: "not_required".to_string(),
+        node_count: 13,
+        cost_multiplier_numerator: 1,
+        cost_multiplier_denominator: 1,
+        acknowledge_fiduciary_cost: false,
+        warning: None,
     }
 }
 

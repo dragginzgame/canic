@@ -6,6 +6,7 @@
 
 use candid::CandidType;
 use canic_core::{
+    cdk::types::Cycles,
     control_plane_support::config::ComponentDeploymentConfiguration,
     dto::{
         authority_restore::AuthorityRestoreFenceStatusResponse,
@@ -13,6 +14,7 @@ use canic_core::{
         component_provisioning::{
             FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
         },
+        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
@@ -25,8 +27,12 @@ use canic_core::{
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
         role::{OperationReceipt, OperationStatusRequest, RoleOverviewResponse},
+        state::{SetCyclesFundingRequest, SetStateResponse},
     },
-    ids::{AppId, FleetCoordinatorRootFundingPolicy, FleetRegistryAuthority},
+    ids::{
+        AppId, FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetRegistryAuthority,
+        FleetSubnetRootFundingPolicy,
+    },
 };
 use serde::Deserialize;
 
@@ -55,7 +61,9 @@ pub enum CoordinatorCommand {
     PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionRequest),
     ProvisionComponents(FleetComponentProvisioningPrepareRequest),
     RemoveRoot(FleetSubnetRootDrainingReservationRequest),
+    RequestRootFunding(FleetRootFundingRequest),
     ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
+    SetRootFunding(SetCyclesFundingRequest),
 }
 
 /// Closed correlated success union for Fleet Coordinator commands.
@@ -72,19 +80,59 @@ pub enum CoordinatorCommandResponse {
     OperationAccepted(OperationReceipt),
     PrepareAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
     PrepareRootDeletionExecution(FleetSubnetRootDeletionExecutionResponse),
+    RequestRootFunding(FleetRootFundingResponse),
     ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
+    SetRootFunding(SetStateResponse<bool>),
 }
 
 /// Closed Coordinator observation selector carried by its single status query.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum CoordinatorStatusRequest {
     AuthorityRestore,
+    Funding,
     Operation(OperationStatusRequest),
     Overview,
     Registry,
     RegistryManifest,
     RegistryVersion,
     RootAcknowledgements,
+}
+
+/// Current spent and reserved cycles in one exact epoch-anchored funding window.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CoordinatorFundingWindowStatusResponse {
+    pub window_start_secs: u64,
+    pub spent_cycles: Cycles,
+    pub reserved_cycles: Cycles,
+}
+
+/// Controller-only funding usage and operation state for one registered Root.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CoordinatorRootFundingStatusResponse {
+    pub fleet_subnet_root: candid::Principal,
+    pub lifecycle_status: canic_core::dto::fleet_registry::FleetSubnetRootStatus,
+    pub policy_hash: [u8; 32],
+    pub policy: FleetSubnetRootFundingPolicy,
+    pub window: CoordinatorFundingWindowStatusResponse,
+    pub automatic_grants: u32,
+    pub automatic_cycles: Cycles,
+    pub last_successful_grant_at_ns: Option<u64>,
+    pub current_operation: Option<FleetRootFundingRequest>,
+    pub last_result: Option<FleetRootFundingResponse>,
+}
+
+/// Controller-only Coordinator treasury policy, headroom and per-Root usage.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CoordinatorFundingStatusResponse {
+    pub coordinator: candid::Principal,
+    pub current_cycles: Cycles,
+    pub funding_enabled: bool,
+    pub funding_profile: Option<FleetFundingProfile>,
+    pub policy: Option<FleetCoordinatorRootFundingPolicy>,
+    pub fleet_window: Option<CoordinatorFundingWindowStatusResponse>,
+    pub automatic_grants: u32,
+    pub automatic_cycles: Cycles,
+    pub roots: Vec<CoordinatorRootFundingStatusResponse>,
 }
 
 /// Coordinator-owned durable operation detail selected by one operation ID.
@@ -119,6 +167,7 @@ pub struct CoordinatorRootRemovalOperationStatus {
 )]
 pub enum CoordinatorStatusResponse {
     AuthorityRestore(AuthorityRestoreFenceStatusResponse),
+    Funding(CoordinatorFundingStatusResponse),
     Operation(CoordinatorOperationStatusResponse),
     Overview(RoleOverviewResponse),
     Registry(FleetRegistry),
@@ -136,6 +185,7 @@ mod tests {
     fn coordinator_status_request_is_one_closed_candid_variant() {
         let requests = [
             CoordinatorStatusRequest::AuthorityRestore,
+            CoordinatorStatusRequest::Funding,
             CoordinatorStatusRequest::Operation(OperationStatusRequest {
                 operation_id: [4; 32],
             }),

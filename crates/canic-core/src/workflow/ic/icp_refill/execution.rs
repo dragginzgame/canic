@@ -8,7 +8,7 @@ use crate::{
     InternalError,
     cdk::{candid::Nat, types::Principal},
     domain::{
-        icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+        icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger},
         policy::pure::icp_refill::IcpRefillPolicyViolation,
     },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
@@ -23,7 +23,7 @@ use crate::{
     },
     view::icp_refill::IcpRefillOperation,
     workflow::ic::icp_refill::{
-        MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
+        IcpRefillExecutionContext, MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
         cost_guard::{
             recover_icp_refill_cost_guard, require_icp_refill_cost_permit,
             reserve_icp_refill_cost_guard_if_needed,
@@ -44,11 +44,51 @@ pub(super) async fn execute_fresh_manual_refill(
     root_canister: Principal,
     token: &ReplayReceiptToken,
 ) -> Result<IcpRefillResponse, InternalError> {
-    let mut cost_permit = None;
-    let operation = match execute_manual_refill_operation(
+    execute_fresh_refill(
         request,
         operation_id,
         root_canister,
+        IcpRefillTrigger::Manual,
+        None,
+        token,
+    )
+    .await
+}
+
+pub(super) async fn execute_fresh_automatic_refill(
+    request: IcpRefillRequest,
+    operation_id: [u8; 32],
+    root_canister: Principal,
+    sequence: u64,
+    context: Option<IcpRefillExecutionContext>,
+    token: &ReplayReceiptToken,
+) -> Result<IcpRefillResponse, InternalError> {
+    execute_fresh_refill(
+        request,
+        operation_id,
+        root_canister,
+        IcpRefillTrigger::Automatic { sequence },
+        context,
+        token,
+    )
+    .await
+}
+
+async fn execute_fresh_refill(
+    request: IcpRefillRequest,
+    operation_id: [u8; 32],
+    root_canister: Principal,
+    trigger: IcpRefillTrigger,
+    prepared_context: Option<IcpRefillExecutionContext>,
+    token: &ReplayReceiptToken,
+) -> Result<IcpRefillResponse, InternalError> {
+    let mut cost_permit = None;
+    let operation = match execute_refill_operation(
+        request,
+        operation_id,
+        root_canister,
+        trigger,
+        prepared_context,
         token,
         &mut cost_permit,
     )
@@ -79,10 +119,12 @@ pub(super) async fn execute_fresh_manual_refill(
     Ok(response)
 }
 
-async fn execute_manual_refill_operation(
+async fn execute_refill_operation(
     request: IcpRefillRequest,
     operation_id: [u8; 32],
     root_canister: Principal,
+    trigger: IcpRefillTrigger,
+    prepared_context: Option<IcpRefillExecutionContext>,
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillOperation, InternalError> {
@@ -92,15 +134,32 @@ async fn execute_manual_refill_operation(
             root_canister,
             &operation,
         )?;
+        IcpRefillStoreOps::validate_operation_authority(
+            &operation,
+            trigger,
+            crate::workflow::ic::icp_refill::current_root_funding_policy_hash()?,
+        )?;
         return advance_operation(operation, token, cost_permit).await;
     }
 
-    let context =
-        prepare_context(&request, root_canister, RateQueryMode::WhenGateConfigured).await?;
+    let context = match prepared_context {
+        Some(context) => context,
+        None => {
+            prepare_context(
+                &request,
+                root_canister,
+                RateQueryMode::WhenGateConfigured,
+                trigger,
+            )
+            .await?
+        }
+    };
     validate_receipt_token(token).map_err(map_icp_refill_replay_store_error)?;
     let cmc_subaccount = IcpRefillOps::cmc_topup_subaccount(root_canister)?;
     let operation = create_or_get_operation(IcpRefillOperationCreateInput {
         operation_id,
+        trigger,
+        policy_hash: context.policy_hash,
         source_canister: root_canister,
         source_subaccount: request.source_subaccount,
         target_canister: root_canister,
@@ -110,6 +169,7 @@ async fn execute_manual_refill_operation(
         cmc_to_account_subaccount: Some(cmc_subaccount),
         amount_e8s: request.amount_e8s,
         fee_e8s: context.fee_e8s,
+        budget_window_start_secs: context.budget_window_start_secs,
         memo: IcpRefillOps::topup_memo(),
         created_at_time_ns: context.created_at_time_ns,
         now_ns: IcOps::now_nanos(),
@@ -323,9 +383,8 @@ pub(super) fn apply_transfer_error(
         TransferError::TooOld => {
             IcpRefillStoreOps::mark_transfer_window_stale(record_id, IcOps::now_nanos())
         }
-        other => IcpRefillStoreOps::mark_transfer_failed(
+        other => IcpRefillStoreOps::mark_transfer_rejected(
             record_id,
-            IcpRefillErrorCode::LedgerTransferFailed,
             other.to_string(),
             IcOps::now_nanos(),
         ),

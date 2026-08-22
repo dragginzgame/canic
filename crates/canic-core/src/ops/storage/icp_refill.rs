@@ -7,10 +7,13 @@
 use crate::{
     InternalError,
     cdk::types::Cycles,
-    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, icp_refill_outcome_is_resumable},
+    domain::icp_refill::{
+        IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger, icp_refill_outcome_is_resumable,
+    },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     storage::stable::icp_refill::{
         IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus, IcpRefillRecords,
+        IcpRefillTriggerRecord,
     },
     view::icp_refill::IcpRefillOperation,
 };
@@ -28,7 +31,6 @@ thread_local! {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct IcpRefillActiveKey {
     source_canister: Principal,
-    source_subaccount: Option<[u8; 32]>,
     target_canister: Principal,
 }
 
@@ -36,22 +38,24 @@ impl IcpRefillActiveKey {
     const fn from_record(record: &IcpRefillRecord) -> Self {
         Self {
             source_canister: record.source_canister,
-            source_subaccount: record.source_subaccount,
             target_canister: record.target_canister,
         }
     }
 
-    const fn new(
-        source_canister: Principal,
-        source_subaccount: Option<[u8; 32]>,
-        target_canister: Principal,
-    ) -> Self {
+    const fn new(source_canister: Principal, target_canister: Principal) -> Self {
         Self {
             source_canister,
-            source_subaccount,
             target_canister,
         }
     }
+}
+
+/// Durable policy usage projected from exact refill records.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct IcpRefillPolicyUsage {
+    pub window_reserved_e8s: u64,
+    pub automatic_completed_refills: u32,
+    pub automatic_completed_refill_e8s: u64,
 }
 
 ///
@@ -62,6 +66,7 @@ impl IcpRefillActiveKey {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpRefillMetricStatusCount {
+    pub trigger: IcpRefillTrigger,
     pub status: IcpRefillRecordStatus,
     pub error_code: Option<IcpRefillRecordErrorCode>,
     pub count: u64,
@@ -116,9 +121,20 @@ struct IcpRefillTargetTotals {
 struct IcpRefillDerivedIndex {
     operation_ids: BTreeMap<[u8; 32], u64>,
     active_operations: BTreeMap<IcpRefillActiveKey, u64>,
-    status_counts: BTreeMap<(IcpRefillRecordStatus, Option<IcpRefillRecordErrorCode>), u64>,
+    status_counts: BTreeMap<
+        (
+            IcpRefillTriggerRecord,
+            IcpRefillRecordStatus,
+            Option<IcpRefillRecordErrorCode>,
+        ),
+        u64,
+    >,
     error_counts: BTreeMap<IcpRefillRecordErrorCode, u64>,
     target_totals: BTreeMap<Principal, IcpRefillTargetTotals>,
+    window_reserved_e8s: BTreeMap<u64, u64>,
+    automatic_completed_refills: u32,
+    automatic_completed_refill_e8s: u64,
+    maximum_automatic_sequence: u64,
     max_id: u64,
 }
 
@@ -131,6 +147,9 @@ struct IcpRefillDerivedIndex {
 
 #[derive(Debug, ThisError)]
 pub enum IcpRefillRecordOpsError {
+    #[error("ICP refill record capacity exhausted at {maximum_records} records")]
+    CapacityExhausted { maximum_records: usize },
+
     #[error("ICP refill conflicts with active record {id} for the same source and target")]
     ConcurrentOperation { id: u64 },
 
@@ -155,6 +174,9 @@ pub enum IcpRefillRecordOpsError {
 
     #[error("ICP refill record id space exhausted")]
     IdOverflow,
+
+    #[error("ICP refill policy usage arithmetic overflow")]
+    PolicyUsageOverflow,
 
     #[error("ICP refill {index} index points to missing record {id}")]
     IndexRecordMissing { index: &'static str, id: u64 },
@@ -186,8 +208,10 @@ impl From<IcpRefillRecordOpsError> for InternalError {
             IcpRefillRecordOpsError::ConcurrentOperation { .. }
             | IcpRefillRecordOpsError::OperationConflict { .. }
             | IcpRefillRecordOpsError::RetryRequestMismatch { .. } => codes::REQUEST_CONFLICT,
-            IcpRefillRecordOpsError::CyclesSentOverflow { .. }
-            | IcpRefillRecordOpsError::IdOverflow => codes::CAPACITY_LIMIT,
+            IcpRefillRecordOpsError::CapacityExhausted { .. }
+            | IcpRefillRecordOpsError::CyclesSentOverflow { .. }
+            | IcpRefillRecordOpsError::IdOverflow
+            | IcpRefillRecordOpsError::PolicyUsageOverflow => codes::CAPACITY_LIMIT,
             IcpRefillRecordOpsError::DuplicateActiveIndex { .. }
             | IcpRefillRecordOpsError::DuplicateOperationIndex { .. } => codes::POSITION_DUPLICATE,
             IcpRefillRecordOpsError::IndexRecordMissing { .. } => codes::POSITION_UNAVAILABLE,
@@ -290,6 +314,24 @@ impl PartialEq<IcpRefillRecordErrorCode> for IcpRefillErrorCode {
     }
 }
 
+impl From<IcpRefillTrigger> for IcpRefillTriggerRecord {
+    fn from(trigger: IcpRefillTrigger) -> Self {
+        match trigger {
+            IcpRefillTrigger::Automatic { sequence } => Self::Automatic { sequence },
+            IcpRefillTrigger::Manual => Self::Manual,
+        }
+    }
+}
+
+impl From<IcpRefillTriggerRecord> for IcpRefillTrigger {
+    fn from(trigger: IcpRefillTriggerRecord) -> Self {
+        match trigger {
+            IcpRefillTriggerRecord::Automatic { sequence } => Self::Automatic { sequence },
+            IcpRefillTriggerRecord::Manual => Self::Manual,
+        }
+    }
+}
+
 ///
 /// IcpRefillRecordCreateInput
 ///
@@ -300,6 +342,8 @@ impl PartialEq<IcpRefillRecordErrorCode> for IcpRefillErrorCode {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpRefillRecordCreateInput {
     pub operation_id: [u8; 32],
+    pub trigger: IcpRefillTrigger,
+    pub policy_hash: [u8; 32],
     pub source_canister: Principal,
     pub source_subaccount: Option<[u8; 32]>,
     pub target_canister: Principal,
@@ -309,6 +353,7 @@ pub struct IcpRefillRecordCreateInput {
     pub cmc_to_account_subaccount: Option<[u8; 32]>,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
+    pub budget_window_start_secs: u64,
     pub memo: Vec<u8>,
     pub created_at_time_ns: u64,
     pub now_ns: u64,
@@ -324,6 +369,8 @@ pub struct IcpRefillRecordCreateInput {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpRefillOperationCreateInput {
     pub operation_id: [u8; 32],
+    pub trigger: IcpRefillTrigger,
+    pub policy_hash: [u8; 32],
     pub source_canister: Principal,
     pub source_subaccount: Option<[u8; 32]>,
     pub target_canister: Principal,
@@ -333,6 +380,7 @@ pub struct IcpRefillOperationCreateInput {
     pub cmc_to_account_subaccount: Option<[u8; 32]>,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
+    pub budget_window_start_secs: u64,
     pub memo: Vec<u8>,
     pub created_at_time_ns: u64,
     pub now_ns: u64,
@@ -342,6 +390,8 @@ impl From<IcpRefillOperationCreateInput> for IcpRefillRecordCreateInput {
     fn from(input: IcpRefillOperationCreateInput) -> Self {
         Self {
             operation_id: input.operation_id,
+            trigger: input.trigger,
+            policy_hash: input.policy_hash,
             source_canister: input.source_canister,
             source_subaccount: input.source_subaccount,
             target_canister: input.target_canister,
@@ -351,6 +401,7 @@ impl From<IcpRefillOperationCreateInput> for IcpRefillRecordCreateInput {
             cmc_to_account_subaccount: input.cmc_to_account_subaccount,
             amount_e8s: input.amount_e8s,
             fee_e8s: input.fee_e8s,
+            budget_window_start_secs: input.budget_window_start_secs,
             memo: input.memo,
             created_at_time_ns: input.created_at_time_ns,
             now_ns: input.now_ns,
@@ -404,18 +455,42 @@ impl IcpRefillStoreOps {
         Ok(())
     }
 
-    pub fn has_active_for_key(
+    pub fn validate_operation_authority(
+        operation: &IcpRefillOperation,
+        trigger: IcpRefillTrigger,
+        policy_hash: [u8; 32],
+    ) -> Result<(), InternalError> {
+        ensure_retry_field("trigger", trigger, operation.trigger)?;
+        ensure_retry_field("policy_hash", policy_hash, operation.policy_hash)
+    }
+
+    pub fn has_active_for_root(
         source_canister: Principal,
-        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
     ) -> Result<bool, InternalError> {
-        Ok(IcpRefillRecordOps::has_active_for_key(
+        Ok(IcpRefillRecordOps::has_active_for_root(
             source_canister,
-            source_subaccount,
             target_canister,
             except_operation_id,
         )?)
+    }
+
+    pub fn active_operation() -> Result<Option<IcpRefillOperation>, InternalError> {
+        Ok(IcpRefillRecordOps::active_operation()?.map(record_to_operation))
+    }
+
+    pub fn latest_operation() -> Result<Option<IcpRefillOperation>, InternalError> {
+        Ok(IcpRefillRecordOps::latest_operation()?.map(record_to_operation))
+    }
+
+    #[must_use]
+    pub fn policy_usage(window_start_secs: u64) -> IcpRefillPolicyUsage {
+        IcpRefillRecordOps::policy_usage(window_start_secs)
+    }
+
+    pub fn next_automatic_sequence() -> Result<u64, InternalError> {
+        Ok(IcpRefillRecordOps::next_automatic_sequence()?)
     }
 
     #[must_use]
@@ -500,6 +575,15 @@ impl IcpRefillStoreOps {
         now_ns: u64,
     ) -> Result<IcpRefillOperation, InternalError> {
         IcpRefillRecordOps::mark_transfer_failed(id, error_code, error_message, now_ns)
+            .map(record_to_operation)
+    }
+
+    pub fn mark_transfer_rejected(
+        id: u64,
+        error_message: String,
+        now_ns: u64,
+    ) -> Result<IcpRefillOperation, InternalError> {
+        IcpRefillRecordOps::mark_transfer_rejected(id, error_message, now_ns)
             .map(record_to_operation)
     }
 
@@ -623,6 +707,7 @@ impl IcpRefillDerivedIndex {
         record: &IcpRefillRecord,
     ) -> Result<(), IcpRefillRecordOpsError> {
         self.validate_record(record)?;
+        self.validate_policy_usage_replacement(previous, record)?;
         let previous_cycles_sent = previous.map(completed_cycles_sent).transpose()?;
         let cycles_sent = completed_cycles_sent(record)?;
         if let (Some(previous), Some(previous_cycles_sent)) = (previous, previous_cycles_sent) {
@@ -634,6 +719,7 @@ impl IcpRefillDerivedIndex {
 
     fn add_record(&mut self, record: &IcpRefillRecord) -> Result<(), IcpRefillRecordOpsError> {
         self.validate_record(record)?;
+        self.validate_policy_usage_replacement(None, record)?;
         let cycles_sent = completed_cycles_sent(record)?;
         self.add_record_unchecked(record, cycles_sent);
         Ok(())
@@ -671,7 +757,7 @@ impl IcpRefillDerivedIndex {
         }
         let status_count = self
             .status_counts
-            .entry((record.status, record.error_code))
+            .entry((record.trigger, record.status, record.error_code))
             .or_default();
         *status_count = status_count.saturating_add(1);
         if let Some(error_code) = record.error_code {
@@ -689,6 +775,28 @@ impl IcpRefillDerivedIndex {
         if record.status == IcpRefillRecordStatus::Completed && record.cycles_sent.is_some() {
             totals.completed_cycles_records = totals.completed_cycles_records.saturating_add(1);
         }
+        if record.budget_reserved {
+            let reserved = self
+                .window_reserved_e8s
+                .entry(record.budget_window_start_secs)
+                .or_default();
+            *reserved = reserved
+                .checked_add(record.amount_e8s)
+                .expect("validated ICP refill window usage");
+        }
+        if let IcpRefillTriggerRecord::Automatic { sequence } = record.trigger {
+            self.maximum_automatic_sequence = self.maximum_automatic_sequence.max(sequence);
+            if record.status == IcpRefillRecordStatus::Completed {
+                self.automatic_completed_refills = self
+                    .automatic_completed_refills
+                    .checked_add(1)
+                    .expect("validated automatic ICP refill count");
+                self.automatic_completed_refill_e8s = self
+                    .automatic_completed_refill_e8s
+                    .checked_add(record.amount_e8s)
+                    .expect("validated automatic ICP refill spend");
+            }
+        }
         self.max_id = self.max_id.max(record.id);
     }
 
@@ -700,7 +808,10 @@ impl IcpRefillDerivedIndex {
         if self.active_operations.get(&active_key) == Some(&record.id) {
             self.active_operations.remove(&active_key);
         }
-        decrement_count(&mut self.status_counts, &(record.status, record.error_code));
+        decrement_count(
+            &mut self.status_counts,
+            &(record.trigger, record.status, record.error_code),
+        );
         if let Some(error_code) = record.error_code {
             decrement_count(&mut self.error_counts, &error_code);
         }
@@ -716,6 +827,81 @@ impl IcpRefillDerivedIndex {
                 self.target_totals.remove(&record.target_canister);
             }
         }
+        if record.budget_reserved
+            && let Some(reserved) = self
+                .window_reserved_e8s
+                .get_mut(&record.budget_window_start_secs)
+        {
+            *reserved = reserved.saturating_sub(record.amount_e8s);
+            if *reserved == 0 {
+                self.window_reserved_e8s
+                    .remove(&record.budget_window_start_secs);
+            }
+        }
+        if matches!(record.trigger, IcpRefillTriggerRecord::Automatic { .. })
+            && record.status == IcpRefillRecordStatus::Completed
+        {
+            self.automatic_completed_refills = self.automatic_completed_refills.saturating_sub(1);
+            self.automatic_completed_refill_e8s = self
+                .automatic_completed_refill_e8s
+                .saturating_sub(record.amount_e8s);
+        }
+    }
+
+    fn validate_policy_usage_replacement(
+        &self,
+        previous: Option<&IcpRefillRecord>,
+        record: &IcpRefillRecord,
+    ) -> Result<(), IcpRefillRecordOpsError> {
+        let previous_window = previous.filter(|value| value.budget_reserved);
+        let retained_window = self
+            .window_reserved_e8s
+            .get(&record.budget_window_start_secs)
+            .copied()
+            .unwrap_or_default()
+            .saturating_sub(previous_window.map_or(0, |value| {
+                if value.budget_window_start_secs == record.budget_window_start_secs {
+                    value.amount_e8s
+                } else {
+                    0
+                }
+            }));
+        if record.budget_reserved {
+            retained_window
+                .checked_add(record.amount_e8s)
+                .ok_or(IcpRefillRecordOpsError::PolicyUsageOverflow)?;
+        }
+
+        let previous_completed_automatic = previous.is_some_and(record_is_completed_automatic);
+        let retained_count = self
+            .automatic_completed_refills
+            .saturating_sub(u32::from(previous_completed_automatic));
+        let retained_e8s = self.automatic_completed_refill_e8s.saturating_sub(
+            previous
+                .filter(|value| record_is_completed_automatic(value))
+                .map_or(0, |value| value.amount_e8s),
+        );
+        if record_is_completed_automatic(record) {
+            retained_count
+                .checked_add(1)
+                .ok_or(IcpRefillRecordOpsError::PolicyUsageOverflow)?;
+            retained_e8s
+                .checked_add(record.amount_e8s)
+                .ok_or(IcpRefillRecordOpsError::PolicyUsageOverflow)?;
+        }
+        Ok(())
+    }
+
+    fn policy_usage(&self, window_start_secs: u64) -> IcpRefillPolicyUsage {
+        IcpRefillPolicyUsage {
+            window_reserved_e8s: self
+                .window_reserved_e8s
+                .get(&window_start_secs)
+                .copied()
+                .unwrap_or_default(),
+            automatic_completed_refills: self.automatic_completed_refills,
+            automatic_completed_refill_e8s: self.automatic_completed_refill_e8s,
+        }
     }
 
     fn metric_snapshot(&self) -> IcpRefillMetricSnapshot {
@@ -723,11 +909,14 @@ impl IcpRefillDerivedIndex {
             statuses: self
                 .status_counts
                 .iter()
-                .map(|((status, error_code), count)| IcpRefillMetricStatusCount {
-                    status: *status,
-                    error_code: *error_code,
-                    count: *count,
-                })
+                .map(
+                    |((trigger, status, error_code), count)| IcpRefillMetricStatusCount {
+                        trigger: (*trigger).into(),
+                        status: *status,
+                        error_code: *error_code,
+                        count: *count,
+                    },
+                )
                 .collect(),
             errors: self
                 .error_counts
@@ -769,6 +958,11 @@ fn record_is_resumable(record: &IcpRefillRecord) -> bool {
     )
 }
 
+fn record_is_completed_automatic(record: &IcpRefillRecord) -> bool {
+    matches!(record.trigger, IcpRefillTriggerRecord::Automatic { .. })
+        && record.status == IcpRefillRecordStatus::Completed
+}
+
 fn completed_cycles_sent(record: &IcpRefillRecord) -> Result<u128, IcpRefillRecordOpsError> {
     if record.status != IcpRefillRecordStatus::Completed {
         return Ok(0);
@@ -793,9 +987,18 @@ fn completed_cycles_sent(record: &IcpRefillRecord) -> Result<u128, IcpRefillReco
 
 pub struct IcpRefillRecordOps;
 
+/// Maximum durable refill operations retained by one Root installation.
+///
+/// Every operation identity remains retained for lifetime replay safety. The
+/// bound therefore fails closed instead of evicting a terminal identity that
+/// a delayed caller could otherwise spend again. At the record codec's 4 KiB
+/// maximum this limits encoded record values to 16 MiB before BTree overhead.
+pub const MAX_ICP_REFILL_RECORDS: usize = 4_096;
+
 impl IcpRefillRecordOps {
     pub fn rebuild_indexes() -> Result<(), IcpRefillRecordOpsError> {
-        let records = IcpRefillRecords::data(0, usize::MAX)
+        ensure_record_capacity(IcpRefillRecords::len(), 0)?;
+        let records = IcpRefillRecords::data(0, MAX_ICP_REFILL_RECORDS)
             .entries
             .into_iter()
             .map(|entry| entry.record);
@@ -808,6 +1011,7 @@ impl IcpRefillRecordOps {
         record: IcpRefillRecord,
     ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
         let previous = IcpRefillRecords::get(record.id);
+        ensure_record_capacity(IcpRefillRecords::len(), u64::from(previous.is_none()))?;
         ICP_REFILL_DERIVED_INDEX
             .with_borrow_mut(|index| index.replace_record(previous.as_ref(), &record))?;
         Ok(IcpRefillRecords::insert(record))
@@ -845,19 +1049,47 @@ impl IcpRefillRecordOps {
         Ok(Some(record))
     }
 
-    pub fn has_active_for_key(
+    pub fn has_active_for_root(
         source_canister: Principal,
-        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
     ) -> Result<bool, IcpRefillRecordOpsError> {
-        Ok(Self::find_active_for_key(
-            source_canister,
-            source_subaccount,
-            target_canister,
-            Some(except_operation_id),
-        )?
-        .is_some())
+        Ok(
+            Self::find_active_for_root(
+                source_canister,
+                target_canister,
+                Some(except_operation_id),
+            )?
+            .is_some(),
+        )
+    }
+
+    pub fn active_operation() -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
+        let id = ICP_REFILL_DERIVED_INDEX
+            .with_borrow(|index| index.active_operations.values().next().copied());
+        id.map(|id| indexed_record("active operation", id))
+            .transpose()
+    }
+
+    pub fn latest_operation() -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
+        let id = ICP_REFILL_DERIVED_INDEX.with_borrow(|index| index.max_id);
+        if id == 0 {
+            return Ok(None);
+        }
+        indexed_record("latest operation", id).map(Some)
+    }
+
+    pub fn policy_usage(window_start_secs: u64) -> IcpRefillPolicyUsage {
+        ICP_REFILL_DERIVED_INDEX.with_borrow(|index| index.policy_usage(window_start_secs))
+    }
+
+    pub fn next_automatic_sequence() -> Result<u64, IcpRefillRecordOpsError> {
+        ICP_REFILL_DERIVED_INDEX.with_borrow(|index| {
+            index
+                .maximum_automatic_sequence
+                .checked_add(1)
+                .ok_or(IcpRefillRecordOpsError::IdOverflow)
+        })
     }
 
     #[must_use]
@@ -873,9 +1105,8 @@ impl IcpRefillRecordOps {
             return Ok(existing);
         }
 
-        if let Some(existing) = Self::find_active_for_key(
+        if let Some(existing) = Self::find_active_for_root(
             input.source_canister,
-            input.source_subaccount,
             input.target_canister,
             Some(input.operation_id),
         )? {
@@ -886,6 +1117,8 @@ impl IcpRefillRecordOps {
         let record = IcpRefillRecord {
             id,
             operation_id: input.operation_id,
+            trigger: input.trigger.into(),
+            policy_hash: input.policy_hash,
             source_canister: input.source_canister,
             source_subaccount: input.source_subaccount,
             target_canister: input.target_canister,
@@ -895,6 +1128,8 @@ impl IcpRefillRecordOps {
             cmc_to_account_subaccount: input.cmc_to_account_subaccount,
             amount_e8s: input.amount_e8s,
             fee_e8s: input.fee_e8s,
+            budget_window_start_secs: input.budget_window_start_secs,
+            budget_reserved: true,
             memo: input.memo,
             created_at_time_ns: input.created_at_time_ns,
             ledger_block_index: None,
@@ -914,13 +1149,12 @@ impl IcpRefillRecordOps {
         Ok(record)
     }
 
-    fn find_active_for_key(
+    fn find_active_for_root(
         source_canister: Principal,
-        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
         except_operation_id: Option<[u8; 32]>,
     ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
-        let key = IcpRefillActiveKey::new(source_canister, source_subaccount, target_canister);
+        let key = IcpRefillActiveKey::new(source_canister, target_canister);
         let id = ICP_REFILL_DERIVED_INDEX
             .with_borrow(|index| index.active_operations.get(&key).copied());
         let Some(id) = id else {
@@ -975,6 +1209,21 @@ impl IcpRefillRecordOps {
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
             set_failure(record, error_code, error_message);
+        })
+    }
+
+    pub fn mark_transfer_rejected(
+        id: u64,
+        error_message: String,
+        now_ns: u64,
+    ) -> Result<IcpRefillRecord, InternalError> {
+        update_record(id, now_ns, |record| {
+            record.budget_reserved = false;
+            set_failure(
+                record,
+                IcpRefillErrorCode::LedgerTransferFailed,
+                error_message,
+            );
         })
     }
 
@@ -1089,6 +1338,7 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
+            record.budget_reserved = false;
             set_failure(
                 record,
                 IcpRefillErrorCode::TransferWindowStale,
@@ -1116,6 +1366,21 @@ impl IcpRefillRecordOps {
             set_failure(record, IcpRefillErrorCode::NotifyMaxAttempts, error_message);
         })
     }
+}
+
+fn ensure_record_capacity(
+    record_count: u64,
+    additional_records: u64,
+) -> Result<(), IcpRefillRecordOpsError> {
+    if record_count
+        .checked_add(additional_records)
+        .is_none_or(|final_count| final_count > MAX_ICP_REFILL_RECORDS as u64)
+    {
+        return Err(IcpRefillRecordOpsError::CapacityExhausted {
+            maximum_records: MAX_ICP_REFILL_RECORDS,
+        });
+    }
+    Ok(())
 }
 
 fn next_id() -> Result<u64, IcpRefillRecordOpsError> {
@@ -1170,6 +1435,8 @@ fn ensure_compatible_operation(
     input: &IcpRefillRecordCreateInput,
 ) -> Result<(), IcpRefillRecordOpsError> {
     if existing.source_canister == input.source_canister
+        && existing.trigger == input.trigger.into()
+        && existing.policy_hash == input.policy_hash
         && existing.source_subaccount == input.source_subaccount
         && existing.target_canister == input.target_canister
         && existing.ledger_canister_id == input.ledger_canister_id
@@ -1178,6 +1445,7 @@ fn ensure_compatible_operation(
         && existing.cmc_to_account_subaccount == input.cmc_to_account_subaccount
         && existing.amount_e8s == input.amount_e8s
         && existing.fee_e8s == input.fee_e8s
+        && existing.budget_window_start_secs == input.budget_window_start_secs
         && existing.memo == input.memo
         && existing.created_at_time_ns == input.created_at_time_ns
     {
@@ -1224,6 +1492,8 @@ fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
     IcpRefillOperation {
         id: record.id,
         operation_id: record.operation_id,
+        trigger: record.trigger.into(),
+        policy_hash: record.policy_hash,
         source_canister: record.source_canister,
         source_subaccount: record.source_subaccount,
         target_canister: record.target_canister,
@@ -1233,6 +1503,8 @@ fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
         cmc_to_account_subaccount: record.cmc_to_account_subaccount,
         amount_e8s: record.amount_e8s,
         fee_e8s: record.fee_e8s,
+        budget_window_start_secs: record.budget_window_start_secs,
+        budget_reserved: record.budget_reserved,
         memo: record.memo,
         created_at_time_ns: record.created_at_time_ns,
         ledger_block_index: record.ledger_block_index,
@@ -1261,6 +1533,8 @@ mod tests {
         IcpRefillRecord {
             id,
             operation_id,
+            trigger: IcpRefillTriggerRecord::Manual,
+            policy_hash: [24; 32],
             source_canister: p(u8::try_from(id).expect("test id fits")),
             source_subaccount: None,
             target_canister: target,
@@ -1270,6 +1544,8 @@ mod tests {
             cmc_to_account_subaccount: Some([22; 32]),
             amount_e8s: id.saturating_mul(100),
             fee_e8s: 10_000,
+            budget_window_start_secs: 3_600,
+            budget_reserved: true,
             memo: vec![23],
             created_at_time_ns: id,
             ledger_block_index: None,
@@ -1323,9 +1599,8 @@ mod tests {
             Some(1)
         );
         assert!(
-            IcpRefillRecordOps::has_active_for_key(
+            IcpRefillRecordOps::has_active_for_root(
                 requested.source_canister,
-                requested.source_subaccount,
                 requested.target_canister,
                 [9; 32],
             )
@@ -1387,13 +1662,14 @@ mod tests {
     }
 
     #[test]
-    fn rebuild_rejects_duplicate_active_refill_identity() {
+    fn rebuild_rejects_manual_and_automatic_overlap_across_source_subaccounts() {
         let _guard = seams::lock();
         reset_records();
         let first = record(1, [7; 32], p(31));
         let mut second = record(2, [8; 32], first.target_canister);
         second.source_canister = first.source_canister;
-        second.source_subaccount = first.source_subaccount;
+        second.source_subaccount = Some([99; 32]);
+        second.trigger = IcpRefillTriggerRecord::Automatic { sequence: 1 };
         let _ = IcpRefillRecords::insert(first);
         let _ = IcpRefillRecords::insert(second);
 
@@ -1411,15 +1687,85 @@ mod tests {
     }
 
     #[test]
+    fn refill_window_reservation_releases_only_after_definite_no_effect() {
+        let _guard = seams::lock();
+        reset_records();
+        let first = record(1, [10; 32], p(34));
+        IcpRefillRecordOps::insert(first.clone()).expect("insert first reservation");
+        assert_eq!(
+            IcpRefillRecordOps::policy_usage(first.budget_window_start_secs).window_reserved_e8s,
+            first.amount_e8s
+        );
+
+        IcpRefillRecordOps::mark_transfer_rejected(1, "definite rejection".to_string(), 2)
+            .expect("release definite rejection");
+        assert_eq!(
+            IcpRefillRecordOps::policy_usage(first.budget_window_start_secs).window_reserved_e8s,
+            0
+        );
+
+        let mut uncertain = record(2, [11; 32], p(35));
+        uncertain.budget_window_start_secs = 7_200;
+        IcpRefillRecordOps::insert(uncertain.clone()).expect("insert uncertain reservation");
+        IcpRefillRecordOps::mark_transfer_failed(
+            uncertain.id,
+            IcpRefillErrorCode::InvalidLedgerBlockIndex,
+            "effect cannot be disproved".to_string(),
+            3,
+        )
+        .expect("retain uncertain reservation");
+        assert_eq!(
+            IcpRefillRecordOps::policy_usage(uncertain.budget_window_start_secs)
+                .window_reserved_e8s,
+            uncertain.amount_e8s
+        );
+        reset_records();
+    }
+
+    #[test]
+    fn automatic_usage_survives_rebuild_and_does_not_renew_with_the_window() {
+        let _guard = seams::lock();
+        reset_records();
+        let mut first = record(1, [12; 32], p(36));
+        first.trigger = IcpRefillTriggerRecord::Automatic { sequence: 1 };
+        first.status = IcpRefillRecordStatus::Completed;
+        first.cycles_sent = Some(Nat::from(1_000_u64));
+        let mut second = record(2, [13; 32], p(37));
+        second.trigger = IcpRefillTriggerRecord::Automatic { sequence: 2 };
+        second.status = IcpRefillRecordStatus::Completed;
+        second.cycles_sent = Some(Nat::from(2_000_u64));
+        second.budget_window_start_secs = 7_200;
+        let _ = IcpRefillRecords::insert(first.clone());
+        let _ = IcpRefillRecords::insert(second.clone());
+
+        IcpRefillRecordOps::rebuild_indexes().expect("rebuild automatic usage");
+
+        let first_window = IcpRefillRecordOps::policy_usage(3_600);
+        let second_window = IcpRefillRecordOps::policy_usage(7_200);
+        assert_eq!(first_window.window_reserved_e8s, first.amount_e8s);
+        assert_eq!(second_window.window_reserved_e8s, second.amount_e8s);
+        assert_eq!(first_window.automatic_completed_refills, 2);
+        assert_eq!(second_window.automatic_completed_refills, 2);
+        assert_eq!(
+            second_window.automatic_completed_refill_e8s,
+            first.amount_e8s + second.amount_e8s
+        );
+        assert_eq!(
+            IcpRefillRecordOps::next_automatic_sequence().expect("next sequence"),
+            3
+        );
+        reset_records();
+    }
+
+    #[test]
     fn terminal_transition_removes_active_index_and_updates_metrics() {
         let _guard = seams::lock();
         reset_records();
         let requested = record(1, [8; 32], p(33));
         IcpRefillRecordOps::insert(requested.clone()).expect("insert requested record");
         assert!(
-            IcpRefillRecordOps::has_active_for_key(
+            IcpRefillRecordOps::has_active_for_root(
                 requested.source_canister,
-                requested.source_subaccount,
                 requested.target_canister,
                 [9; 32],
             )
@@ -1429,9 +1775,8 @@ mod tests {
         IcpRefillRecordOps::mark_completed(1, 5_000, 2).expect("complete refill");
 
         assert!(
-            !IcpRefillRecordOps::has_active_for_key(
+            !IcpRefillRecordOps::has_active_for_root(
                 requested.source_canister,
-                requested.source_subaccount,
                 requested.target_canister,
                 [9; 32],
             )
@@ -1444,5 +1789,23 @@ mod tests {
             status.status == IcpRefillRecordStatus::Completed && status.count == 1
         }));
         reset_records();
+    }
+
+    #[test]
+    fn durable_record_capacity_allows_replay_updates_but_rejects_new_identity() {
+        assert!(ensure_record_capacity(MAX_ICP_REFILL_RECORDS as u64, 0).is_ok());
+        assert!(ensure_record_capacity(MAX_ICP_REFILL_RECORDS as u64 - 1, 1).is_ok());
+        assert!(matches!(
+            ensure_record_capacity(MAX_ICP_REFILL_RECORDS as u64, 1),
+            Err(IcpRefillRecordOpsError::CapacityExhausted {
+                maximum_records: MAX_ICP_REFILL_RECORDS
+            })
+        ));
+        assert!(matches!(
+            ensure_record_capacity(MAX_ICP_REFILL_RECORDS as u64 + 1, 0),
+            Err(IcpRefillRecordOpsError::CapacityExhausted {
+                maximum_records: MAX_ICP_REFILL_RECORDS
+            })
+        ));
     }
 }

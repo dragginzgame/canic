@@ -10,16 +10,18 @@ use crate::deploy::plan::{
     ASSUMPTION_PREFIX_UNSUPPORTED,
     command::DeployPlanOptions,
     report::{
-        CATEGORY_ARTIFACT, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY, CATEGORY_OBSERVATION,
-        CATEGORY_TOPOLOGY, CATEGORY_UNSUPPORTED_SHAPE, PlanDiagnostic, PlanDiagnosticCategory,
-        SEVERITY_BLOCKED, SEVERITY_UNSUPPORTED, SEVERITY_WARNING, SOURCE_CLI_ARG,
-        SOURCE_DEPLOYMENT_CONFIG, SOURCE_DEPLOYMENT_PLAN_BUILDER, SOURCE_FLEET_CATALOG,
+        CATEGORY_ARTIFACT, CATEGORY_AUTHORITY, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY,
+        CATEGORY_OBSERVATION, CATEGORY_TOPOLOGY, CATEGORY_UNSUPPORTED_SHAPE, PlanDiagnostic,
+        PlanDiagnosticCategory, SEVERITY_BLOCKED, SEVERITY_UNSUPPORTED, SEVERITY_WARNING,
+        SOURCE_CLI_ARG, SOURCE_DEPLOYMENT_CONFIG, SOURCE_DEPLOYMENT_PLAN_BUILDER,
+        SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT,
     },
 };
 use std::path::Path;
 
 use canic_host::{
     deployment_truth::{DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentPlanV1},
+    fleet_install_plan::FreshFleetDeploymentPlanV1,
     network::{NetworkIdentityError, resolve_canonical_network_id_from_root},
     release_set::read_app_config_identity,
 };
@@ -209,6 +211,41 @@ pub(super) fn plan_warnings(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
         .collect()
 }
 
+pub(super) fn fresh_fleet_placement_warnings(
+    plan: &FreshFleetDeploymentPlanV1,
+) -> Vec<PlanDiagnostic> {
+    let mut warnings = Vec::new();
+    if let Some(detail) = plan.preflight.coordinator.placement_cost.warning.as_ref() {
+        warnings.push(fiduciary_placement_warning(
+            "Fleet Coordinator".to_string(),
+            detail.clone(),
+        ));
+    }
+    warnings.extend(plan.preflight.fleet_subnet_roots.iter().filter_map(|root| {
+        root.placement_cost.warning.as_ref().map(|detail| {
+            fiduciary_placement_warning(
+                format!("Fleet Subnet Root {}", root.placement_subnet),
+                detail.clone(),
+            )
+        })
+    }));
+    warnings
+}
+
+fn fiduciary_placement_warning(subject: String, detail: String) -> PlanDiagnostic {
+    PlanDiagnostic {
+        category: CATEGORY_AUTHORITY,
+        code: "fiduciary_placement_cost".to_string(),
+        severity: SEVERITY_WARNING,
+        subject,
+        detail,
+        next: Some(
+            "review the acknowledged Fiduciary cost exposure before installation".to_string(),
+        ),
+        source: SOURCE_FLEET_INPUT,
+    }
+}
+
 fn fleet_catalog_warning_code(assumption: &DeploymentAssumptionV1) -> String {
     if assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing)
         || assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogReadFailed)
@@ -266,4 +303,24 @@ fn diagnostic_code(key: &str) -> String {
         }
     }
     code.trim_matches('_').to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fiduciary_cost_warning_remains_a_visible_fleet_input_warning() {
+        let warning = fiduciary_placement_warning(
+            "Fleet Coordinator".to_string(),
+            "WARNING: exact Fiduciary exposure".to_string(),
+        );
+
+        assert_eq!(warning.category, CATEGORY_AUTHORITY);
+        assert_eq!(warning.code, "fiduciary_placement_cost");
+        assert_eq!(warning.severity, SEVERITY_WARNING);
+        assert_eq!(warning.source, SOURCE_FLEET_INPUT);
+        assert!(warning.detail.starts_with("WARNING:"));
+        assert!(warning.next.is_some());
+    }
 }

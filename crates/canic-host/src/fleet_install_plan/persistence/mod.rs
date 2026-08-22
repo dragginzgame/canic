@@ -224,6 +224,7 @@ fn compile_plan(
             manifest.digest_planned(&preflight.component_topology, &topology_root, union)?;
         planned_roots.push(PlannedFleetSubnetRoot {
             placement_subnet: root.placement_subnet,
+            placement_cost: root.placement_cost.clone(),
             component_group_placements: root.component_group_placements.clone(),
             component_admissions: root.component_admissions.clone(),
             component_topology_digest: root.component_topology_digest,
@@ -391,6 +392,7 @@ fn topology_root(root: &PlannedFleetSubnetRoot) -> PlannedFleetSubnetRootTopolog
 fn fresh_root(root: &PlannedFleetSubnetRoot) -> FreshFleetSubnetRootPlanV1 {
     FreshFleetSubnetRootPlanV1 {
         placement_subnet: root.placement_subnet,
+        placement_cost: root.placement_cost.clone(),
         component_group_placements: root.component_group_placements.clone(),
         component_admissions: root.component_admissions.clone(),
         component_topology_digest: root.component_topology_digest,

@@ -1,6 +1,6 @@
 use crate::{cdk::types::Cycles, dto::prelude::*};
 
-pub use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus};
+pub use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger};
 
 /// Exact input shared by the Root's preview and durable refill commands.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -26,7 +26,7 @@ pub struct IcpRefillRequest {
 /// IcpRefillResponse
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub struct IcpRefillResponse {
     pub operation_id: [u8; 32],
     pub status: IcpRefillStatus,

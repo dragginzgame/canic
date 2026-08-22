@@ -80,6 +80,7 @@ use fleet_component_provisioning_install::{
     InstallFleetComponentsRequest, install_fleet_components_and_publish_catalog,
 };
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
+use fleet_registry_activation_journal::load_verified_installed_registry;
 use fleet_subnet_root_component_registry_preparation::{
     PrepareFleetSubnetRootComponentRegistriesRequest,
     prepare_and_verify_fleet_subnet_root_component_registries,
@@ -106,6 +107,12 @@ use plan_artifacts::emit_manifest_with_phase;
 use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
+
+pub(crate) fn load_verified_installed_fleet_registry(
+    fleet_install_plan: &PersistedFleetInstallPlan,
+) -> Result<canic_core::dto::fleet_registry::FleetRegistry, String> {
+    load_verified_installed_registry(fleet_install_plan).map_err(|error| error.to_string())
+}
 
 pub(super) fn root_component_provisioning_operation_id(install_operation_id: [u8; 32]) -> [u8; 32] {
     root_install_phase_operation_id(install_operation_id, b"component-provisioning")
@@ -373,6 +380,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         emitted_manifest.phase,
     )?;
     let icp_context = icp_context.with_local_replica(build_context.local_replica);
+    print_paid_effect_placement_warnings(&planned_install.plan.plan);
     let activation_started_at = Instant::now();
     install_current_fleet_infrastructure(&icp_context, &config_path, &planned_install)?;
     timings.activate_fleet = activation_started_at.elapsed();
@@ -870,7 +878,40 @@ fn print_fresh_fleet_decision(plan: &FreshFleetDeploymentPlanV1) {
             plan.plan_digest
         ),
     );
+    print_fresh_fleet_placement_warnings(plan);
     println!();
+}
+
+fn print_fresh_fleet_placement_warnings(plan: &FreshFleetDeploymentPlanV1) {
+    let style = TerminalStyle::detected();
+    if let Some(warning) = plan.preflight.coordinator.placement_cost.warning.as_deref() {
+        style.print_section("Fiduciary placement warning", warning);
+    }
+    for root in &plan.preflight.fleet_subnet_roots {
+        if let Some(warning) = root.placement_cost.warning.as_deref() {
+            style.print_section("Fiduciary placement warning", warning);
+        }
+    }
+}
+
+fn print_paid_effect_placement_warnings(plan: &crate::fleet_install_plan::FleetInstallPlan) {
+    let style = TerminalStyle::detected();
+    if let Some(warning) = plan.coordinator.placement_cost.warning.as_deref() {
+        style.print_section("Fiduciary paid-effect warning", warning);
+    }
+    for root in &plan.fleet_subnet_roots {
+        if let Some(warning) = root.placement_cost.warning.as_deref() {
+            style.print_section("Fiduciary paid-effect warning", warning);
+        }
+    }
+    if plan.coordinator.placement_cost.warning.is_some()
+        || plan
+            .fleet_subnet_roots
+            .iter()
+            .any(|root| root.placement_cost.warning.is_some())
+    {
+        println!();
+    }
 }
 
 fn print_install_identity(app: &str, fleet_name: &str) {

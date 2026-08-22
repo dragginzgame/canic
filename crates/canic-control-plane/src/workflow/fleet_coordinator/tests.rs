@@ -6,14 +6,15 @@
 use super::*;
 use crate::storage::stable::fleet_coordinator::{
     FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
-    FleetComponentProvisioningStateRecord, FleetCoordinatorRegistryData,
-    FleetCoordinatorRegistryStore,
+    FleetComponentProvisioningStateRecord, FleetCoordinatorFundingStore,
+    FleetCoordinatorRegistryData, FleetCoordinatorRegistryStore,
 };
 use crate::view::fleet_coordinator::{
     FleetComponentDirectoryConfirmationCallView, FleetComponentDirectoryConfirmationDisposition,
     FleetComponentProvisioningRootAcceptanceDisposition,
     FleetComponentProvisioningRootProvisionCallView,
     FleetComponentProvisioningRootProvisionDisposition, FleetComponentRuntimeActivationDisposition,
+    FleetRootFundingDisposition,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -55,6 +56,10 @@ use canic_core::{
             RootComponentPublicationEvidence, RootComponentPublicationRequest,
             RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
+        fleet_funding::{
+            FleetRootFundingAcceptanceReceipt, FleetRootFundingNoGrantReason,
+            FleetRootFundingRequest, FleetRootFundingResponse,
+        },
         fleet_registry::{
             FleetRegistryActivationRequest, FleetSubnetRootDeletionCompletionRequest,
             FleetSubnetRootDeletionExecutionRequest, FleetSubnetRootDeletionReadinessIntentRequest,
@@ -75,6 +80,9 @@ use canic_core::{
         FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding,
         FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
         ReleaseSetDigest, SubnetId,
+    },
+    shared_support::fleet_funding_policy::{
+        fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
     },
 };
 
@@ -460,6 +468,28 @@ fn protected_init_commits_exact_genesis_and_supports_exact_retry() {
         canic_core::diagnostics::codes::STATE_INVALID
     );
     FleetCoordinatorRegistryStore::import(durable);
+}
+
+#[test]
+fn rootless_coordinator_initializes_an_empty_disabled_capable_funding_ledger() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(8);
+    let mut args = init_args(coordinator);
+    args.root_funding = None;
+
+    FleetCoordinatorWorkflow::initialize(args, principal(9), true, coordinator)
+        .expect("initialize rootless Coordinator");
+    let funding = FleetCoordinatorFundingStore::export()
+        .current
+        .expect("empty funding ledger");
+    assert!(funding.funding_enabled);
+    assert!(funding.fleet_window.is_none());
+    assert!(funding.roots.is_empty());
+    assert!(
+        FleetCoordinatorOps::set_root_funding_enabled(false)
+            .expect("disable empty funding ledger")
+            .changed
+    );
 }
 
 #[test]
@@ -4757,5 +4787,354 @@ fn joining_entry(
             },
         },
         status: FleetSubnetRootStatus::Joining,
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one end-to-end durable grant and response-loss proof"
+)]
+fn coordinator_root_funding_reserves_replays_and_commits_one_exact_grant() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(70);
+    let (root, _, registry) = activate_two_roots(coordinator);
+    let now_ns = 3_700_000_000_000;
+    let coordinator_balance = 2_000_000_000_000_000;
+    let request = root_funding_request(coordinator, &root, registry, 1, 42_200_000_000);
+    let granted_cycles = request.requested_cycles.to_u128();
+
+    let call = match FleetCoordinatorOps::prepare_root_funding(
+        root.fleet_subnet_root,
+        request.clone(),
+        coordinator_balance,
+        now_ns,
+    )
+    .expect("prepare exact grant")
+    {
+        FleetRootFundingDisposition::Invoke(call) => call,
+        FleetRootFundingDisposition::Current(_) | FleetRootFundingDisposition::Reconcile(_) => {
+            panic!("fresh request must create one invocation")
+        }
+    };
+    assert_eq!(call.fleet_subnet_root, root.fleet_subnet_root);
+    assert_eq!(call.request.granted_cycles.to_u128(), granted_cycles);
+    let funding_status = FleetCoordinatorOps::root_funding_status(coordinator_balance, now_ns)
+        .expect("protected Coordinator funding status");
+    assert!(funding_status.funding_enabled);
+    assert_eq!(funding_status.current_cycles.to_u128(), coordinator_balance);
+    assert_eq!(funding_status.roots.len(), 2);
+    assert_eq!(
+        funding_status
+            .fleet_window
+            .as_ref()
+            .expect("Fleet window")
+            .reserved_cycles
+            .to_u128(),
+        granted_cycles
+    );
+    let root_status = funding_status
+        .roots
+        .iter()
+        .find(|status| status.fleet_subnet_root == root.fleet_subnet_root)
+        .expect("requesting Root status");
+    assert_eq!(
+        root_status
+            .current_operation
+            .as_ref()
+            .expect("current funding operation"),
+        &request
+    );
+    assert_eq!(root_status.window.reserved_cycles.to_u128(), granted_cycles);
+    FleetCoordinatorOps::require_root_funding_snapshot_resumable()
+        .expect_err("unresolved attached-cycles grant must fence Coordinator snapshot");
+
+    let reserved = FleetCoordinatorFundingStore::export();
+    let ledger = &reserved.current.as_ref().expect("funding state").roots[0];
+    assert_eq!(
+        ledger.current.as_ref().expect("active intent").request,
+        request
+    );
+    assert!(ledger.last.is_none());
+
+    assert!(matches!(
+        FleetCoordinatorOps::prepare_root_funding(
+            root.fleet_subnet_root,
+            request.clone(),
+            coordinator_balance,
+            now_ns + 1,
+        )
+        .expect("exact active retry"),
+        FleetRootFundingDisposition::Reconcile(_)
+    ));
+
+    let competing = root_funding_request(
+        coordinator,
+        &root,
+        request.expected_registry.clone(),
+        1,
+        42_200_000_001,
+    );
+    assert!(
+        FleetCoordinatorOps::prepare_root_funding(
+            root.fleet_subnet_root,
+            competing,
+            coordinator_balance,
+            now_ns + 2,
+        )
+        .is_err()
+    );
+
+    let receipt = FleetRootFundingAcceptanceReceipt {
+        request: call.request.clone(),
+        fleet_subnet_root: root.fleet_subnet_root,
+        coordinator,
+        accepted_at_ns: now_ns + 3,
+    };
+    let response = FleetCoordinatorOps::record_root_funding_acceptance(
+        root.fleet_subnet_root,
+        &call.request,
+        receipt,
+        now_ns + 4,
+    )
+    .expect("commit exact acceptance");
+    assert!(matches!(&response, FleetRootFundingResponse::Granted(_)));
+
+    let completed = FleetCoordinatorFundingStore::export();
+    FleetCoordinatorFundingStore::import(completed.clone());
+    let completed_record = completed.current.as_ref().expect("completed funding state");
+    assert_eq!(completed_record.automatic_grants, 1);
+    assert_eq!(completed_record.automatic_cycles.to_u128(), granted_cycles);
+    assert_eq!(
+        completed_record
+            .fleet_window
+            .as_ref()
+            .expect("Fleet spend")
+            .spent_cycles
+            .to_u128(),
+        granted_cycles
+    );
+    let ledger = &completed_record.roots[0];
+    assert_eq!(ledger.automatic_grants, 1);
+    assert_eq!(ledger.automatic_cycles.to_u128(), granted_cycles);
+    assert!(ledger.current.is_none());
+    assert_eq!(
+        ledger
+            .window
+            .as_ref()
+            .expect("Root spend")
+            .spent_cycles
+            .to_u128(),
+        granted_cycles
+    );
+    assert_eq!(ledger.last_successful_grant_at_ns, Some(now_ns + 3));
+    FleetCoordinatorOps::require_root_funding_snapshot_resumable()
+        .expect("terminal grant permits Coordinator snapshot");
+
+    match FleetCoordinatorOps::prepare_root_funding(
+        root.fleet_subnet_root,
+        request,
+        coordinator_balance,
+        now_ns + 5,
+    )
+    .expect("replay terminal result")
+    {
+        FleetRootFundingDisposition::Current(replayed) => assert_eq!(replayed, response),
+        FleetRootFundingDisposition::Invoke(_) | FleetRootFundingDisposition::Reconcile(_) => {
+            panic!("terminal retry must not create another transfer")
+        }
+    }
+    assert_eq!(FleetCoordinatorFundingStore::export(), completed);
+    assert!(
+        FleetCoordinatorOps::record_root_funding_acceptance(
+            root.fleet_subnet_root,
+            &call.request,
+            match response {
+                FleetRootFundingResponse::Granted(receipt) => receipt,
+                FleetRootFundingResponse::NoGrant(_) => panic!("expected granted receipt"),
+            },
+            now_ns + 6,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one end-to-end terminal denial and rejection proof"
+)]
+fn coordinator_root_funding_denials_and_rejections_are_terminal_without_spend() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(71);
+    let (root, _, registry) = activate_two_roots(coordinator);
+    let now_ns = 3_700_000_000_000;
+    let coordinator_balance = 2_000_000_000_000_000;
+
+    assert_eq!(
+        FleetCoordinatorOps::set_root_funding_enabled(false).expect("disable funding"),
+        canic_core::dto::state::SetStateResponse {
+            previous: true,
+            current: false,
+            changed: true,
+        }
+    );
+    let disabled = root_funding_request(coordinator, &root, registry.clone(), 1, 42_200_000_000);
+    let disabled_response = match FleetCoordinatorOps::prepare_root_funding(
+        root.fleet_subnet_root,
+        disabled,
+        coordinator_balance,
+        now_ns,
+    )
+    .expect("disabled decision")
+    {
+        FleetRootFundingDisposition::Current(response) => response,
+        FleetRootFundingDisposition::Invoke(_) | FleetRootFundingDisposition::Reconcile(_) => {
+            panic!("disabled funding cannot reserve")
+        }
+    };
+    assert!(matches!(
+        disabled_response,
+        FleetRootFundingResponse::NoGrant(ref receipt)
+            if receipt.reason == FleetRootFundingNoGrantReason::FundingDisabled
+    ));
+
+    FleetCoordinatorOps::set_root_funding_enabled(true).expect("enable funding");
+    let durable_before_substitution = FleetCoordinatorFundingStore::export();
+    let mut substituted_authority =
+        root_funding_request(coordinator, &root, registry.clone(), 2, 42_200_000_000);
+    substituted_authority
+        .expected_registry
+        .authority
+        .binding
+        .fleet
+        .app = AppId::from("substituted");
+    substituted_authority.operation_id = fleet_root_funding_operation_id(
+        coordinator,
+        root.fleet_subnet_root,
+        substituted_authority.operation_sequence,
+        &substituted_authority.expected_registry,
+        substituted_authority.observed_balance.to_u128(),
+        substituted_authority.requested_cycles.to_u128(),
+        substituted_authority.policy_hash,
+    );
+    let Err(authority_error) = FleetCoordinatorOps::prepare_root_funding(
+        root.fleet_subnet_root,
+        substituted_authority,
+        coordinator_balance,
+        now_ns + 1,
+    ) else {
+        panic!("substituted Registry authority must reject before retention");
+    };
+    assert_eq!(
+        authority_error.public_error().code(),
+        canic_core::diagnostics::codes::REQUEST_INVALID.raw_code()
+    );
+    assert_eq!(
+        FleetCoordinatorFundingStore::export(),
+        durable_before_substitution
+    );
+
+    let mut mismatched =
+        root_funding_request(coordinator, &root, registry.clone(), 2, 42_200_000_000);
+    mismatched.policy_hash = [99; 32];
+    mismatched.operation_id = fleet_root_funding_operation_id(
+        coordinator,
+        root.fleet_subnet_root,
+        mismatched.operation_sequence,
+        &mismatched.expected_registry,
+        mismatched.observed_balance.to_u128(),
+        mismatched.requested_cycles.to_u128(),
+        mismatched.policy_hash,
+    );
+    assert!(matches!(
+        FleetCoordinatorOps::prepare_root_funding(
+            root.fleet_subnet_root,
+            mismatched,
+            coordinator_balance,
+            now_ns + 2,
+        )
+        .expect("retain policy mismatch denial"),
+        FleetRootFundingDisposition::Current(FleetRootFundingResponse::NoGrant(receipt))
+            if receipt.reason == FleetRootFundingNoGrantReason::PolicyMismatch
+    ));
+
+    let request = root_funding_request(coordinator, &root, registry, 3, 42_200_000_000);
+    let call = match FleetCoordinatorOps::prepare_root_funding(
+        root.fleet_subnet_root,
+        request.clone(),
+        coordinator_balance,
+        now_ns + 3,
+    )
+    .expect("prepare successor")
+    {
+        FleetRootFundingDisposition::Invoke(call) => call,
+        FleetRootFundingDisposition::Current(_) | FleetRootFundingDisposition::Reconcile(_) => {
+            panic!("valid successor must reserve")
+        }
+    };
+    let rejected = FleetCoordinatorOps::record_root_funding_rejection(
+        root.fleet_subnet_root,
+        &call.request,
+        now_ns + 4,
+    )
+    .expect("record definite rejection");
+    assert!(matches!(
+        rejected,
+        FleetRootFundingResponse::NoGrant(ref receipt)
+            if receipt.reason == FleetRootFundingNoGrantReason::RootRejected
+    ));
+
+    let durable = FleetCoordinatorFundingStore::export();
+    let durable = durable.current.expect("funding state");
+    assert!(durable.fleet_window.is_none());
+    assert!(durable.roots[0].window.is_none());
+    assert!(durable.roots[0].current.is_none());
+    assert!(matches!(
+        FleetCoordinatorOps::prepare_root_funding(
+            root.fleet_subnet_root,
+            request,
+            coordinator_balance,
+            now_ns + 5,
+        )
+        .expect("replay rejection"),
+        FleetRootFundingDisposition::Current(response) if response == rejected
+    ));
+
+    assert!(FleetCoordinatorOps::authorize_root_funding_caller(Principal::anonymous()).is_err());
+    assert!(FleetCoordinatorOps::authorize_root_funding_caller(principal(99)).is_err());
+    assert!(FleetCoordinatorOps::authorize_root_funding_caller(coordinator).is_err());
+}
+
+fn root_funding_request(
+    coordinator: Principal,
+    root: &FleetSubnetRootEntry,
+    expected_registry: canic_core::dto::fleet_registry::FleetRegistryVersion,
+    operation_sequence: u64,
+    observed_balance: u128,
+) -> FleetRootFundingRequest {
+    let policy_hash = fleet_subnet_root_funding_policy_hash(&root.funding);
+    let requested_cycles = root
+        .funding
+        .root_funding
+        .target_balance
+        .to_u128()
+        .checked_sub(observed_balance)
+        .expect("fixture target exceeds observation");
+    FleetRootFundingRequest {
+        operation_id: fleet_root_funding_operation_id(
+            coordinator,
+            root.fleet_subnet_root,
+            operation_sequence,
+            &expected_registry,
+            observed_balance,
+            requested_cycles,
+            policy_hash,
+        ),
+        operation_sequence,
+        expected_registry,
+        observed_balance: Cycles::new(observed_balance),
+        requested_cycles: Cycles::new(requested_cycles),
+        policy_hash,
     }
 }

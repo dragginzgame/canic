@@ -289,6 +289,7 @@ mod tests {
                 Some(BuiltInRoleKind::FleetCoordinator),
                 &[
                     StateAllocationKey::CoreAuthorityRestoreFence,
+                    StateAllocationKey::FleetCoordinatorFunding,
                     StateAllocationKey::FleetCoordinatorRegistry,
                 ],
             )],
@@ -456,6 +457,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 ("authority_restore_fence", Some(59)),
+                ("fleet_coordinator_funding", Some(62)),
                 ("fleet_coordinator_registry", Some(15)),
             ]
         );
@@ -594,6 +596,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 ("authority_restore_fence", Some(59)),
+                ("fleet_coordinator_funding", Some(62)),
                 ("fleet_coordinator_registry", Some(15)),
             ]
         );

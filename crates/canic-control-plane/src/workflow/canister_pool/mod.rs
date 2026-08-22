@@ -227,7 +227,7 @@ pub fn dispatch_async_job_recovery() -> bool {
 
 fn run_recovery_watchdog() -> WatchdogRunResult {
     let now_ns = IcOps::now_nanos();
-    let mut recovered = TimerApi::recover_expired_async_jobs(now_ns);
+    let mut recovered = TimerApi::recover_expired_root_async_jobs(now_ns);
     if AsyncJobRecoveryOps::expired_deadline(AsyncJobOwner::CanisterPoolMaintenance, now_ns)
         .is_some()
         && dispatch_async_job_recovery()

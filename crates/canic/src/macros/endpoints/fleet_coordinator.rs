@@ -16,6 +16,9 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 ::canic::dto::fleet_coordinator::CoordinatorCommand::ProvisionComponents(_) => {
                     ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_COMPONENT_PROVISIONING_PLAN_CANONICAL_BYTES
                 }
+                ::canic::dto::fleet_coordinator::CoordinatorCommand::RequestRootFunding(_) => {
+                    ::canic::dto::fleet_funding::MAX_FLEET_ROOT_FUNDING_COMMAND_PAYLOAD_BYTES
+                }
                 _ => {
                     ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES
                 }
@@ -74,6 +77,9 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             if matches!(&command, CoordinatorCommand::AcknowledgeRootSnapshot(_)) {
                 $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_snapshot()?;
             }
+            if matches!(&command, CoordinatorCommand::RequestRootFunding(_)) {
+                $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::authorize_calling_root_funding()?;
+            }
             let controller_command = matches!(
                 &command,
                 CoordinatorCommand::ActivateRegistry(_)
@@ -84,6 +90,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                     | CoordinatorCommand::ProvisionComponents(_)
                     | CoordinatorCommand::RemoveRoot(_)
                     | CoordinatorCommand::ResumeAuthoritySnapshot(_)
+                    | CoordinatorCommand::SetRootFunding(_)
             );
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)
@@ -132,6 +139,10 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 CoordinatorStatusRequest::AuthorityRestore => {
                     $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::status()
                         .map(CoordinatorStatusResponse::AuthorityRestore)
+                }
+                CoordinatorStatusRequest::Funding => {
+                    $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::root_funding_status()
+                        .map(CoordinatorStatusResponse::Funding)
                 }
                 CoordinatorStatusRequest::Operation(request) => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::operation_status(

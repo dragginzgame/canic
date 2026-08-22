@@ -16,13 +16,18 @@ use crate::storage::stable::component_provisioning::{
     RootComponentOperationRecord, RootComponentProvisioningData,
     RootComponentProvisioningPlacementRecord, RootComponentProvisioningStateRecord,
 };
+#[cfg(feature = "root-control-plane")]
+use crate::storage::stable::root_funding::{RootFundingData, RootFundingRecord};
 use crate::storage::stable::{
     component_registry::{
         ComponentRegistryEntryRecord, ComponentRegistryPrincipalIndexRecord,
         RootComponentAllocationRecord, RootComponentDrainingRecord, RootComponentRegistryData,
         RootComponentRegistryStateRecord, RootComponentSubtreeRemovalCompletedLeafRecord,
     },
-    fleet_coordinator::{FleetCoordinatorRegistryData, FleetCoordinatorRegistryRecord},
+    fleet_coordinator::{
+        FleetCoordinatorFundingData, FleetCoordinatorFundingRecord, FleetCoordinatorRegistryData,
+        FleetCoordinatorRegistryRecord,
+    },
     fleet_registry_mirror::{RootFleetRegistryMirrorData, RootFleetRegistryMirrorStateRecord},
     state::root_wasm_store::{RootWasmStoreStateData, RootWasmStoreStateRecord},
     template::{
@@ -39,17 +44,19 @@ use canic_core::role_contract::allocation::memory::control_plane::{
     ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
     ROOT_CANISTER_POOL_STATE_ID, ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID,
     ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID, ROOT_COMPONENT_PROVISIONING_STATE_ID,
+    ROOT_FUNDING_ID,
 };
 use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
         allocation::memory::control_plane::{
-            FLEET_COORDINATOR_REGISTRY_ID, ROOT_COMPONENT_ALLOCATIONS_ID,
-            ROOT_COMPONENT_DRAINING_ID, ROOT_COMPONENT_PRINCIPAL_INDEX_ID,
-            ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
-            ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID, ROOT_FLEET_REGISTRY_MIRROR_ID,
-            ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID,
-            TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
+            FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
+            ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
+            ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
+            ROOT_COMPONENT_REGISTRY_STATE_ID, ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY_ID,
+            ROOT_FLEET_REGISTRY_MIRROR_ID, ROOT_WASM_STORE_STATE_ID, TEMPLATE_CHUNK_PAYLOADS_ID,
+            TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID,
+            WASM_STORE_GC_STATE_ID,
         },
     },
     state_contract::{
@@ -68,6 +75,25 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             FleetCoordinatorRegistryData::STATE_CONTRACT_NAME,
             190,
             "fleet_coordinator_registry_restores_exact_authority_and_canonical_head",
+        ),
+        descriptor(
+            StateAllocationKey::FleetCoordinatorFunding,
+            "fleet_coordinator_funding",
+            FLEET_COORDINATOR_FUNDING_ID,
+            FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
+            FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
+            191,
+            "fleet_coordinator_funding_restores_exact_reservations_and_terminal_results",
+        ),
+        #[cfg(feature = "root-control-plane")]
+        descriptor(
+            StateAllocationKey::RootFunding,
+            "root_funding",
+            ROOT_FUNDING_ID,
+            RootFundingRecord::STATE_CONTRACT_NAME,
+            RootFundingData::STATE_CONTRACT_NAME,
+            192,
+            "root_funding_restores_exact_current_request_and_terminal_result",
         ),
         descriptor(
             StateAllocationKey::RootFleetRegistryMirror,
@@ -250,7 +276,7 @@ fn root_component_draining_domain() -> StateDomainManifest {
         migration_policy: MigrationPolicy::NewDomain,
         restore_order: Some(201),
         post_upgrade_invariant: Some(
-            "root_component_draining_restores_exact_fence_quiescence_cursor_final_inventory_deletion_and_membership_removal"
+            "root_component_draining_restores_exact_funding_fence_quiescence_cursor_final_inventory_deletion_and_membership_removal"
                 .to_string(),
         ),
         migrations: Vec::new(),
@@ -422,6 +448,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         for expected in [
+            StateAllocationKey::FleetCoordinatorFunding,
             StateAllocationKey::FleetCoordinatorRegistry,
             StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
@@ -443,6 +470,11 @@ mod tests {
         let descriptors = canic_control_plane_state_descriptors();
 
         for (allocation, record, snapshot) in [
+            (
+                StateAllocationKey::FleetCoordinatorFunding,
+                FleetCoordinatorFundingRecord::STATE_CONTRACT_NAME,
+                FleetCoordinatorFundingData::STATE_CONTRACT_NAME,
+            ),
             (
                 StateAllocationKey::FleetCoordinatorRegistry,
                 FleetCoordinatorRegistryRecord::STATE_CONTRACT_NAME,

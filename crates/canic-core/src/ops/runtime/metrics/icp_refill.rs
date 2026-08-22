@@ -34,6 +34,7 @@ pub(super) fn entries_from_snapshot(snapshot: &IcpRefillMetricSnapshot) -> Vec<M
             count_entry(
                 vec![
                     "icp_refill".to_string(),
+                    trigger_label(status.trigger).to_string(),
                     record_phase(status.status, status.error_code).to_string(),
                     "status".to_string(),
                     status_label(status.status).to_string(),
@@ -80,6 +81,13 @@ pub(super) fn entries_from_snapshot(snapshot: &IcpRefillMetricSnapshot) -> Vec<M
         })
     }));
     entries
+}
+
+const fn trigger_label(trigger: crate::domain::icp_refill::IcpRefillTrigger) -> &'static str {
+    match trigger {
+        crate::domain::icp_refill::IcpRefillTrigger::Automatic { .. } => "automatic",
+        crate::domain::icp_refill::IcpRefillTrigger::Manual => "manual",
+    }
 }
 
 const fn count_entry(labels: Vec<String>, count: u64) -> MetricEntry {

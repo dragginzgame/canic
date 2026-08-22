@@ -9,8 +9,9 @@ use crate::{
         ShardingConfig, StandardsCanisterConfig,
     },
     ids::{
-        CanisterRole, CanonicalNetworkId, ComponentSpecId, CyclesFundingBudget, FleetId, FleetKey,
-        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        CanisterRole, CanonicalNetworkId, ComponentSpecId, CyclesFundingBudget,
+        FleetFundingProfile, FleetId, FleetKey, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy,
     },
     ops::runtime::env::EnvOps,
     storage::stable::env::{EnvData, EnvRecord},
@@ -30,13 +31,16 @@ pub fn fleet_key(byte: u8) -> FleetKey {
 pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority {
     FleetSubnetRootFundingAuthority {
         root_funding: FleetSubnetRootFundingPolicy {
-            request_threshold: Cycles::new(50_000_000_000),
-            target_balance: Cycles::new(60_000_000_000),
-            cooldown_secs: 300,
+            funding_profile: FleetFundingProfile::SingleSubnet,
+            request_threshold: Cycles::new(10_000_000_000_000),
+            target_balance: Cycles::new(30_000_000_000_000),
+            cooldown_secs: 30 * 24 * 60 * 60,
             budget: CyclesFundingBudget {
-                window_secs: 3_600,
-                maximum_cycles: Cycles::new(100_000_000_000),
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(30_000_000_000_000),
             },
+            maximum_automatic_grants: 4,
+            maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
         },
         icp_refill: None,
     }

@@ -24,7 +24,10 @@ use crate::ops::storage::{
 use crate::{
     InternalError,
     log::Topic,
-    ops::runtime::{env::EnvOps, memory::MemoryRegistryOps},
+    ops::{
+        ic::IcOps,
+        runtime::{env::EnvOps, memory::MemoryRegistryOps},
+    },
     workflow,
 };
 
@@ -64,13 +67,35 @@ impl RuntimeWorkflow {
         EnvOps::require_root().map_err(|_err| InternalError::invariant())?;
 
         // Start shared runtime owners before root-only services.
-        workflow::runtime::log::LogRetentionWorkflow::start()?;
-        workflow::runtime::intent::IntentCleanupWorkflow::start()?;
+        start_root_service(
+            "log_retention",
+            workflow::runtime::log::LogRetentionWorkflow::start(),
+        )?;
+        start_root_service(
+            "intent_cleanup",
+            workflow::runtime::intent::IntentCleanupWorkflow::start(),
+        )?;
 
         // root-only services
-        workflow::runtime::auth::RuntimeAuthWorkflow::reconcile_root_issuer_renewal()?;
+        start_root_service("cycles", workflow::runtime::cycles::CycleWorkflow::start())?;
+        start_root_service(
+            "issuer_renewal",
+            workflow::runtime::auth::RuntimeAuthWorkflow::reconcile_root_issuer_renewal(),
+        )?;
         Ok(())
     }
+}
+
+fn start_root_service(
+    service: &str,
+    result: Result<(), InternalError>,
+) -> Result<(), InternalError> {
+    if let Err(error) = &result {
+        let message =
+            format!("Root runtime service startup failed service={service} error={error}");
+        IcOps::println(&message);
+    }
+    result
 }
 
 pub(super) fn log_memory_summary() {

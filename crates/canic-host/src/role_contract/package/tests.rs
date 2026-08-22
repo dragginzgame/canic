@@ -675,7 +675,8 @@ fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
 
 #[test]
 fn qualification_harness_packages_are_test_only_leaves() {
-    const HARNESS_PACKAGES: [&str; 3] = [
+    const HARNESS_PACKAGES: [&str; 4] = [
+        "canic_icydb_lifecycle_probe",
         "cycles_ledger_stub",
         "payload_limit_probe",
         "root_funding_probe",
@@ -688,27 +689,10 @@ fn qualification_harness_packages_are_test_only_leaves() {
     let metadata = cargo_metadata_catalog_for_manifest(&workspace.join("Cargo.toml"), true, false)
         .expect("read locked workspace metadata");
     for package_name in HARNESS_PACKAGES {
-        let packages = metadata
-            .packages
-            .iter()
-            .filter(|package| package.name == package_name)
-            .collect::<Vec<_>>();
-        let [package] = packages.as_slice() else {
-            panic!("qualification package `{package_name}` must resolve exactly once");
-        };
-        assert!(
-            package
-                .manifest_path
-                .starts_with(workspace.join("canisters/test")),
-            "qualification package `{package_name}` must remain under canisters/test"
-        );
-        let manifest = fs::read_to_string(&package.manifest_path)
-            .expect("read qualification package manifest");
-        assert!(
-            manifest
-                .lines()
-                .any(|line| line.trim() == "publish = false"),
-            "qualification package `{package_name}` must remain unpublished"
+        assert_unpublished_package_under(
+            &metadata,
+            package_name,
+            &workspace.join("canisters/test"),
         );
         assert!(
             metadata.packages.iter().all(|candidate| {
@@ -738,6 +722,170 @@ fn qualification_harness_packages_are_test_only_leaves() {
             }
         }
     }
+}
+
+#[test]
+fn icydb_dependency_graph_is_confined_to_the_test_fixture() {
+    const FIXTURE_PACKAGES: [&str; 2] = [
+        "canic-icydb-lifecycle-schema",
+        "canic_icydb_lifecycle_probe",
+    ];
+
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("canonical workspace root");
+    let fixture_root = workspace.join("canisters/test/canic_icydb_lifecycle_probe");
+    let metadata = cargo_metadata_catalog_for_manifest(&workspace.join("Cargo.toml"), true, false)
+        .expect("read locked workspace metadata");
+
+    for package_name in FIXTURE_PACKAGES {
+        assert_unpublished_package_under(&metadata, package_name, &fixture_root);
+    }
+
+    let icydb_edges = workspace_dependency_edges(&metadata, &workspace, |dependency| {
+        dependency == "icydb" || dependency.starts_with("icydb-")
+    });
+    let expected_icydb_edges = [
+        ("canic-icydb-lifecycle-schema", "normal", "icydb-model"),
+        ("canic_icydb_lifecycle_probe", "build", "icydb"),
+        ("canic_icydb_lifecycle_probe", "normal", "icydb"),
+    ]
+    .into_iter()
+    .map(|(package, kind, dependency)| {
+        (
+            package.to_string(),
+            kind.to_string(),
+            dependency.to_string(),
+        )
+    })
+    .collect();
+    assert_eq!(
+        icydb_edges, expected_icydb_edges,
+        "IcyDB-family dependencies must remain inside the exact test fixture"
+    );
+    assert_eq!(
+        workspace_reverse_consumers_of_icydb(&metadata, &workspace),
+        BTreeSet::from([
+            "canic-icydb-lifecycle-schema".to_string(),
+            "canic_icydb_lifecycle_probe".to_string(),
+        ]),
+        "no production workspace package may reach IcyDB transitively"
+    );
+
+    let fixture_edges = workspace_dependency_edges(&metadata, &workspace, |dependency| {
+        FIXTURE_PACKAGES.contains(&dependency)
+    });
+    assert_eq!(
+        fixture_edges,
+        BTreeSet::from([(
+            "canic_icydb_lifecycle_probe".to_string(),
+            "build".to_string(),
+            "canic-icydb-lifecycle-schema".to_string(),
+        )]),
+        "no package outside the test fixture may depend on its IcyDB enclave"
+    );
+}
+
+fn workspace_dependency_edges(
+    metadata: &CargoMetadata,
+    workspace: &Path,
+    include: impl Fn(&str) -> bool,
+) -> BTreeSet<(String, String, String)> {
+    metadata
+        .packages
+        .iter()
+        .filter(|package| package.manifest_path.starts_with(workspace))
+        .flat_map(|package| {
+            package
+                .dependencies
+                .iter()
+                .filter(|dependency| include(&dependency.name))
+                .map(|dependency| {
+                    (
+                        package.name.clone(),
+                        dependency
+                            .kind
+                            .clone()
+                            .unwrap_or_else(|| "normal".to_string()),
+                        dependency.name.clone(),
+                    )
+                })
+        })
+        .collect()
+}
+
+fn workspace_reverse_consumers_of_icydb(
+    metadata: &CargoMetadata,
+    workspace: &Path,
+) -> BTreeSet<String> {
+    let packages_by_id = metadata
+        .packages
+        .iter()
+        .map(|package| (package.id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    let resolve = metadata
+        .resolve
+        .as_ref()
+        .expect("locked workspace metadata must include the resolved graph");
+    let mut reverse_edges = BTreeMap::<&str, BTreeSet<&str>>::new();
+    for node in &resolve.nodes {
+        for dependency in &node.deps {
+            reverse_edges
+                .entry(dependency.pkg.as_str())
+                .or_default()
+                .insert(node.id.as_str());
+        }
+    }
+
+    let mut reachable = metadata
+        .packages
+        .iter()
+        .filter(|package| package.name == "icydb" || package.name.starts_with("icydb-"))
+        .map(|package| package.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut pending = reachable.iter().copied().collect::<Vec<_>>();
+    while let Some(package_id) = pending.pop() {
+        for dependent in reverse_edges.get(package_id).into_iter().flatten() {
+            if reachable.insert(dependent) {
+                pending.push(dependent);
+            }
+        }
+    }
+
+    reachable
+        .into_iter()
+        .filter_map(|package_id| packages_by_id.get(package_id))
+        .filter(|package| package.manifest_path.starts_with(workspace))
+        .map(|package| package.name.clone())
+        .collect()
+}
+
+fn assert_unpublished_package_under(
+    metadata: &CargoMetadata,
+    package_name: &str,
+    required_root: &Path,
+) {
+    let packages = metadata
+        .packages
+        .iter()
+        .filter(|package| package.name == package_name)
+        .collect::<Vec<_>>();
+    let [package] = packages.as_slice() else {
+        panic!("test-only package `{package_name}` must resolve exactly once");
+    };
+    assert!(
+        package.manifest_path.starts_with(required_root),
+        "test-only package `{package_name}` must remain under {}",
+        required_root.display()
+    );
+    let manifest = fs::read_to_string(&package.manifest_path).expect("read test package manifest");
+    assert!(
+        manifest
+            .lines()
+            .any(|line| line.trim() == "publish = false"),
+        "test-only package `{package_name}` must remain unpublished"
+    );
 }
 
 #[test]

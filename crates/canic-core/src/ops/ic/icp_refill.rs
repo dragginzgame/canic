@@ -11,8 +11,8 @@ use crate::{
         IcInfraError,
         icp_refill::{
             IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
-            IcpXdrConversionRateResponse, NotifyTopUpArg, NotifyTopUpError, TransferArg,
-            TransferError,
+            IcpXdrConversionRateResponse, Icrc1Account, NotifyTopUpArg, NotifyTopUpError,
+            TransferArg, TransferError,
         },
     },
     ops::{OpsError, cost_guard::CostGuardPermit},
@@ -75,6 +75,13 @@ impl IcpRefillOps {
 
     pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, InternalError> {
         map_infra(IcpRefillInfra::icrc1_decimals(ledger_id).await)
+    }
+
+    pub async fn icrc1_balance_of(
+        ledger_id: Principal,
+        account: Icrc1Account,
+    ) -> Result<Nat, InternalError> {
+        map_infra(IcpRefillInfra::icrc1_balance_of(ledger_id, account).await)
     }
 
     pub async fn icrc1_transfer(

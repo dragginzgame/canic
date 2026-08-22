@@ -6,6 +6,7 @@ use crate::{
     cycles::CyclesCommandError,
     support::icp_target::IcpTargetOptions,
 };
+use canic_core::cdk::types::Principal;
 use canic_core::cdk::utils::hash::decode_hex;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -16,6 +17,7 @@ const FROM_SUBACCOUNT_ARG: &str = "from-subaccount";
 const ICP_E8S_ARG: &str = "icp-e8s";
 const JSON_ARG: &str = "json";
 const OPERATION_ID_ARG: &str = "operation-id";
+const ROOT_PRINCIPAL_ARG: &str = "root-principal";
 
 ///
 /// ConvertOptions
@@ -25,6 +27,7 @@ const OPERATION_ID_ARG: &str = "operation-id";
 pub(super) struct ConvertOptions {
     pub(super) target: IcpTargetOptions,
     pub(super) fleet: String,
+    pub(super) root_principal: Principal,
     pub(super) amount_e8s: u64,
     pub(super) source_subaccount: Option<[u8; 32]>,
     pub(super) operation_id: Option<[u8; 32]>,
@@ -42,6 +45,8 @@ impl ConvertOptions {
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
             fleet: required_string(&matches, FLEET_ARG),
+            root_principal: typed_option(&matches, ROOT_PRINCIPAL_ARG)
+                .expect("required Root Principal is present after Clap validation"),
             amount_e8s: typed_option(&matches, ICP_E8S_ARG)
                 .expect("required ICP amount is present after Clap validation"),
             source_subaccount: typed_option(&matches, FROM_SUBACCOUNT_ARG),
@@ -83,6 +88,12 @@ fn command() -> ClapCommand {
         .disable_help_flag(true)
         .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(
+            value_arg(ROOT_PRINCIPAL_ARG)
+                .value_name(ROOT_PRINCIPAL_ARG)
+                .value_parser(clap::value_parser!(Principal))
+                .required(true),
+        )
+        .arg(
             value_arg(ICP_E8S_ARG)
                 .long(ICP_E8S_ARG)
                 .value_name("e8s")
@@ -123,6 +134,7 @@ mod tests {
         let subaccount = "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f";
         let options = ConvertOptions::parse([
             OsString::from("demo"),
+            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
             OsString::from("--icp-e8s"),
             OsString::from("100_000_000"),
             OsString::from("--from-subaccount"),
@@ -135,6 +147,10 @@ mod tests {
         .expect("parse convert");
 
         assert_eq!(options.fleet, "demo");
+        assert_eq!(
+            options.root_principal.to_text(),
+            "rrkah-fqaaa-aaaaa-aaaaq-cai"
+        );
         assert_eq!(options.amount_e8s, 100_000_000);
         assert_eq!(
             options.operation_id.map(hex_bytes).as_deref(),
@@ -151,7 +167,10 @@ mod tests {
     #[test]
     fn rejects_missing_icp_amount() {
         std::assert_matches!(
-            ConvertOptions::parse([OsString::from("demo")]),
+            ConvertOptions::parse([
+                OsString::from("demo"),
+                OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai")
+            ]),
             Err(CyclesCommandError::Usage(_))
         );
     }
@@ -161,6 +180,7 @@ mod tests {
         std::assert_matches!(
             ConvertOptions::parse([
                 OsString::from("demo"),
+                OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
                 OsString::from("--icp-e8s"),
                 OsString::from("1"),
                 OsString::from("--operation-id"),

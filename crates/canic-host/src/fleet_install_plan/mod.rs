@@ -29,7 +29,7 @@ pub use model::{
     FreshFleetPreflightV1, FreshFleetReleaseSourceV1, FreshFleetSubnetRootPlanV1,
     PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet, PlannedCanisterCreationFunding,
     PlannedComponentGroupPlacementAssignment, PlannedFleetCoordinator, PlannedFleetSubnetRoot,
-    PlannedFleetSubnetRootInput,
+    PlannedFleetSubnetRootInput, PlannedSubnetPlacementCostEvidence,
 };
 pub use persistence::{compile_and_persist_fleet_install_plan, load_persisted_fleet_install_plan};
 pub use preflight::{FRESH_FLEET_PREFLIGHT_SCHEMA_VERSION, compile_fresh_fleet_preflight};

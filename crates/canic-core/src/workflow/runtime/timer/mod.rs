@@ -117,13 +117,10 @@ impl TimerAuthorityWorkflow {
         )
     }
 
-    /// Arm the same watchdog with the compile-selected automatic top-up recovery owner.
+    /// Arm the same watchdog with the active role's automatic top-up recovery owner.
     pub(crate) fn ensure_async_job_recovery_watchdog_with_automatic_topup() -> Result<(), TimerError>
     {
         require_active()?;
-        if EnvOps::is_root() {
-            return Err(TimerError::WrongPolicy);
-        }
         reconcile_core_recovery_watchdog(
             TimerReconcileState::Scheduled,
             Self::recover_expired_async_jobs_with_automatic_topup,
@@ -141,6 +138,7 @@ impl TimerAuthorityWorkflow {
             runtime::auth::RuntimeAuthWorkflow::claimed_root_issuer_renewal_timer_identity()?,
             runtime::intent::IntentCleanupWorkflow::claimed_timer_identity()?,
             runtime::log::LogRetentionWorkflow::claimed_timer_identity()?,
+            runtime::cycles::CycleWorkflow::claimed_timer_identity()?,
             PlacementAcknowledgementWorkflow::claimed_timer_identity()?,
             claimed_core_recovery_watchdog_identity()?,
         ]
@@ -177,6 +175,7 @@ impl TimerAuthorityWorkflow {
         runtime::auth::RuntimeAuthWorkflow::cancel_root_issuer_renewal_timer()?;
         runtime::intent::IntentCleanupWorkflow::cancel_timer()?;
         runtime::log::LogRetentionWorkflow::cancel_timer()?;
+        runtime::cycles::CycleWorkflow::cancel_timer()?;
         PlacementAcknowledgementWorkflow::cancel_timer()?;
         cancel_core_recovery_watchdog()?;
         Ok(())
@@ -260,6 +259,10 @@ fn require_no_active_async_job_attempts() -> Result<(), TimerError> {
         (
             AsyncJobOwner::CanisterPoolMaintenance,
             canister_pool_timer_identity()?,
+        ),
+        (
+            AsyncJobOwner::CycleTopup,
+            runtime::cycles::CycleWorkflow::timer_identity()?,
         ),
     ];
     for (owner, identity) in owners {

@@ -21,9 +21,9 @@ use canic_core::{
     ids::{
         CanonicalNetworkId, ComponentGroupDeploymentId, ComponentSpecAdmission,
         ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorRootFundingPolicy, FleetName, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseSetDigest,
-        SubnetId,
+        FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetName,
+        FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
+        ReleaseBuildId, ReleaseSetDigest, SubnetId,
     },
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
@@ -51,8 +51,23 @@ pub enum PlannedCanisterCreationFunding {
 #[serde(deny_unknown_fields)]
 pub struct PlannedFleetCoordinator {
     pub coordinator_subnet: SubnetId,
+    pub placement_cost: PlannedSubnetPlacementCostEvidence,
     pub creation_funding: PlannedCanisterCreationFunding,
     pub root_funding: Option<FleetCoordinatorRootFundingPolicy>,
+}
+
+/// Trusted physical-placement and explicit Fiduciary cost authority retained in the plan.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlannedSubnetPlacementCostEvidence {
+    pub subnet: SubnetId,
+    pub catalog_sha256: Option<String>,
+    pub subnet_specialization: String,
+    pub node_count: u64,
+    pub cost_multiplier_numerator: u64,
+    pub cost_multiplier_denominator: u64,
+    pub acknowledge_fiduciary_cost: bool,
+    pub warning: Option<String>,
 }
 
 /// One explicit initial Component Group placement assigned to a planned root Subnet.
@@ -72,6 +87,7 @@ pub struct PlannedComponentGroupPlacementAssignment {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlannedFleetSubnetRootInput {
     pub placement_subnet: SubnetId,
+    pub placement_cost: PlannedSubnetPlacementCostEvidence,
     pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<RootComponentAdmissionInput>,
     pub limits: FleetSubnetRootLimits,
@@ -127,6 +143,7 @@ pub struct FreshFleetPreflightRequest<'a> {
 #[serde(deny_unknown_fields)]
 pub struct FreshFleetSubnetRootPlanV1 {
     pub placement_subnet: SubnetId,
+    pub placement_cost: PlannedSubnetPlacementCostEvidence,
     pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,
@@ -149,6 +166,7 @@ pub struct FreshFleetPreflightV1 {
     pub schema_version: u16,
     pub app: String,
     pub fleet_name: FleetName,
+    pub funding_profile: FleetFundingProfile,
     pub coordinator: PlannedFleetCoordinator,
     pub fleet_subnet_roots: Vec<FreshFleetSubnetRootPlanV1>,
     pub build_profile: String,
@@ -382,6 +400,7 @@ pub enum FreshFleetDeploymentPlanError {
 #[serde(deny_unknown_fields)]
 pub struct PlannedFleetSubnetRoot {
     pub placement_subnet: SubnetId,
+    pub placement_cost: PlannedSubnetPlacementCostEvidence,
     pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,

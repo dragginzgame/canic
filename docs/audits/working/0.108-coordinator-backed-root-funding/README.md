@@ -1,18 +1,22 @@
-# Canic 0.108 Recovery, Admission And Protected Policy Evidence
+# Canic 0.108 Coordinator-Backed Root Funding Evidence
 
-Date: 2026-08-21
-State: M0 accepted 2026-08-21; M1 protected-policy hard cut complete
+Date: 2026-08-22
+State: M0 accepted 2026-08-21; M1 complete in published 0.108.0; B3-B8
+closeout corrections applied to the open 0.108.1 working draft
 
 ## Authority And Scope
 
-This record supports M0 and M1 of the accepted
+The historical first part of this record supports M0 and M1 of the accepted
 [0.108 design](../../../design/0.108-coordinator-backed-root-funding/0.108-design.md).
 M0 adds one unpublished test-only Canister and one serial PocketIC integration
 target. M1 adds protected policy to the existing Fleet-input, plan, init,
 root-authority and Registry contracts, but no runtime grant state machine,
 timer, treasury ledger or public endpoint.
 
-The final checkpoint reconciliation starts from `main` at
+The closeout-correction section below covers B3-B8/M2-M7 in the open 0.108.1
+draft. It does not rewrite M0/M1 history or claim that 0.108.1 is published.
+
+The published checkpoint reconciliation starts from `main` at
 `5523280c7c1b081d455c69fb551448c4cf9212f7`. The observed toolchain is
 Rust/Cargo 1.97.1 with MSRV 1.91.0 and PocketIC 15.0.0. The exact test Wasm
 build fingerprint after the final M1 payload-bound recomputation is
@@ -237,6 +241,125 @@ Final 0.108.0 checkpoint reconciliation on 2026-08-21:
 The first 2026-08-21 pinned server start was denied a sandbox loopback bind and
 reached no product behavior. The approved local-only server and targeted test
 above are the behavioral result.
+
+## B3-B8 Closeout Correction
+
+The first human-owned closeout audit rejected the open 0.108.1 draft. The
+correction is based on published `v0.108.0` commit
+`187dacd4f3c07b3077513bc9d9148fe7261fa4ff`; during correction that commit is
+also `HEAD` on `main`, so all 0.108.1 work is an uncommitted working-tree
+draft. This record therefore identifies the reproducible source base and exact
+test names without pretending the draft has an immutable revision. The
+maintainer must establish the final candidate commit before the re-audit.
+Unrelated pre-existing dependency-range and host-fixture changes remain in the
+same working tree and are not 0.108 funding evidence.
+
+The audit corrections are:
+
+- both value-bearing funding legs now use
+  `ic_cdk::call::Call::bounded_wait`: Root to exact installed Coordinator for
+  `RequestRootFunding`, then Coordinator to the authenticated current Root for
+  `AcceptFunding` with the exact attached amount. Snapshot acknowledgement
+  remains a separate non-value-bearing call;
+- the Root-owned ICP journal retains at most 4,096 lifetime operation
+  identities. Terminal records are not evicted, exact replacement/replay at
+  capacity remains valid, and a new identity fails with `CAPACITY_LIMIT`;
+- PocketIC 15's built-in production ICP Ledger and CMC now own value-transfer
+  semantics. The local refill stub remains only for deterministic adapter and
+  fault-classification tests; and
+- this record, the design status, active handoff, changelog and runbook now
+  distinguish published 0.108.0, the rejected draft, the corrected open draft
+  and the still-required human re-audit.
+
+### M0-M7 / B1-B8 Traceability
+
+| Milestone / batch | Requirement | Implementation/evidence | Result |
+| --- | --- | --- | --- |
+| M0 / B1 | Attached-cycle atomicity, refund, response-loss replay and measured bounded-call floor | Test-only `root_funding_probe`; accepted PocketIC interruption matrix and 42.2B-cycle floors above | Accepted; assumptions retained because production now uses the same bounded-call and accept-zero primitives |
+| M1 / B2 | Protected policy, canonical hashing/propagation and generic refill hard cut | Fleet-input/model/hash/plan/init/Registry validation and published 0.108.0 evidence above | Complete in 0.108.0 |
+| M2 / B3 | Sole Coordinator grant authority, reserve/windows, durable current/last result | `ops/fleet_coordinator/root_funding.rs`, Coordinator stable ID 62, workflow authority/replay tests, one- and two-Root PocketIC journeys | Pass in corrected draft |
+| M3 / B4 | Root-owned request journal and exact accept-once command | `ops/root_funding`, Root stable ID 63, restart/zero-accept tests and accepted M0 callback-loss proof | Pass in corrected draft |
+| M4 / B5 | One Root timer, recovery-first ordering, finite non-renewing caps and unchanged descendant owner | `workflow/runtime/cycles`, timer/lifecycle guards, 91-day cap PocketIC journey and non-Root parent-funding unit proof | Pass in corrected draft |
+| M5 / B6 | One manual/automatic Ledger/CMC replay owner, floor/reserve/caps and terminal fallback | `workflow/ic/icp_refill`, stable ID 39, 4,096-record bound, built-in Ledger/CMC replay, fallback and no-spend journeys | Pass in corrected draft |
+| M6 / B7 | Exact installed-authority recovery, protected status/CLI/Medic and lifecycle/snapshot fences | Host resolver, role status/Candid, CLI/Medic and snapshot/lifecycle focused suites | Pass in corrected draft; final rerun listed below |
+| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Pass in corrected draft; human re-audit remains required |
+
+### Corrected PocketIC Matrix
+
+The governed runner starts only the pinned local PocketIC server. No external
+Ledger, CMC, canister, network or funding effect occurs.
+
+| Design journey | Direct evidence | Result |
+| --- | --- | --- |
+| One active Root receives one exact grant | `real_coordinator_funds_one_active_root_exactly_once` | Pass |
+| Two Roots use independent limits and one Fleet budget | `two_roots_use_independent_limits_and_one_coordinator_budget` | Pass |
+| Reserve blocks a valid grant | `terminal_coordinator_reserve_denial_runs_one_real_icp_fallback` retains the exact no-grant reason before fallback | Pass |
+| Response loss converges without a second transfer | Accepted M0 post-commit loss/replay plus production bounded-call wiring; built-in Ledger/CMC exact replay separately proves value idempotency | Pass; no mock-only value claim |
+| One Root cannot receive a second automatic grant | `automatic_grant_cap_never_renews_after_the_ninety_day_window` plus pure cooldown/window policy cases | Pass |
+| Window rollover cannot renew the lifetime cap | Same 91-day journey retains count/result/current state | Pass |
+| Terminal no-grant runs one real ICP conversion | `terminal_coordinator_reserve_denial_runs_one_real_icp_fallback` uses PocketIC's production Ledger and CMC | Pass |
+| Uncertain grant suppresses ICP fallback | `uncertain_grant_suppresses_icp_and_direct_topup_remains_available` | Pass |
+| Insufficient ICP and rate denial spend nothing | `insufficient_real_icp_spends_nothing_and_creates_no_refill`; `real_rate_gate_denial_spends_no_icp_and_creates_no_refill` | Pass |
+| Refilled Root preserves descendant funding ownership | The fallback journey holds one real registered Component stopped until refill completion, then sends its exact structural capability request; the Root deposits 5T once and exact replay deposits zero more | Pass |
+| Stopped automatic path permits direct recovery | `uncertain_grant_suppresses_icp_and_direct_topup_remains_available` stops the Coordinator, retains the Root operation and applies an exact direct top-up without mutating the journal | Pass |
+
+The separate
+`production_ledger_and_cmc_exact_replay_never_duplicates_value` journey sends
+one exact transfer to the CMC top-up subaccount, observes the production
+Ledger's duplicate binding to the same block, notifies the CMC twice and proves
+the second notification adds zero cycles. This is the positive value-transfer
+evidence behind the replay claim; unit stubs are not substituted for it.
+
+### Correction Validation
+
+Executed locally on 2026-08-22 against the working draft:
+
+- `cargo test --locked -p canic-control-plane root_funding --lib`: pass, 12
+  focused Coordinator/Root authority, replay and state tests.
+- `cargo test --locked -p canic-core icp_refill --lib`: pass, 81 focused
+  policy, journal, replay and capacity tests.
+- Governed targeted PocketIC runs through
+  `bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic <test-name>`:
+  `real_coordinator_funds_one_active_root_exactly_once`,
+  `two_roots_use_independent_limits_and_one_coordinator_budget`,
+  `automatic_grant_cap_never_renews_after_the_ninety_day_window`,
+  `terminal_coordinator_reserve_denial_runs_one_real_icp_fallback`,
+  `uncertain_grant_suppresses_icp_and_direct_topup_remains_available`,
+  `production_ledger_and_cmc_exact_replay_never_duplicates_value`,
+  `real_rate_gate_denial_spends_no_icp_and_creates_no_refill`, and
+  `insufficient_real_icp_spends_nothing_and_creates_no_refill`: pass.
+- `cargo test --locked -p canic --test protocol_surface`: pass, 40 public
+  protocol, checked-in Coordinator Candid and role-ingress checks.
+- `cargo test --locked -p canic-cli funding`: pass, 4 focused CLI tests;
+  `cargo test --locked -p canic-cli --test subcommand_order`: pass, 1 recursive
+  help-order and example-count check.
+- `cargo test --locked -p canic-host funding --lib`: pass, 12 protected-input,
+  plan/hash and generated role-state checks;
+  `cargo test --locked -p canic-host fiduciary --lib`: pass, 1 exact
+  placement-acknowledgement check; and
+  `cargo test --locked -p canic-host recommended_coordinator_selector_is_a_hard_decode_cut --lib`:
+  pass, 1 hard-cut check.
+- `cargo test --locked -p canic-core role_contract --lib`: pass, 21 role and
+  allocation-owner checks; `cargo test --locked -p canic-core memory::policy --lib`:
+  pass, 6 memory-map policy checks.
+- `cargo test --locked -p canic-core --test lifecycle_boundary_guard`: pass, 7;
+  `cargo test --locked -p canic-core --test timer_inventory_guard`: pass, 16;
+  and `cargo test --locked -p canic-control-plane state_contract --lib`: pass,
+  4.
+- `cargo clippy --locked -p canic-core -p canic-control-plane -p canic-testing-internal --lib --tests -- -D warnings`:
+  pass; `cargo clippy --locked -p canic -p canic-cli -p canic-host --lib --tests -- -D warnings`:
+  pass.
+- `cargo fmt --all -- --check`, `git diff --check`,
+  `make current-document-semantics-gate`,
+  `cargo test --locked -p canic --test changelog_governance`,
+  `bash -n scripts/ci/run-workspace-tests.sh`, and
+  `bash scripts/ci/check-workspace-test-inventory.sh`: pass; the inventory
+  remains 39 targets, 30 parallel and 9 serial PocketIC.
+
+The complete maintainer-owned validation/release matrix was not run and is not
+claimed here. The correction evidence is complete for a fresh human-owned
+closeout audit after the maintainer establishes the immutable candidate
+revision; it does not claim versioning, publication or remote qualification.
 
 ## M0 Disposition
 

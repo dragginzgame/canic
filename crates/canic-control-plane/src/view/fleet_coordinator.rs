@@ -5,11 +5,27 @@
 //! Boundary: ops returns one exact current result or root call authority.
 
 use candid::Principal;
-use canic_core::dto::component_provisioning::{
-    FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
-    RootComponentDirectorySynchronizationRequest, RootComponentProvisioningAcceptanceRequest,
-    RootComponentProvisioningAdvanceRequest, RootComponentPublicationRequest,
+use canic_core::dto::{
+    component_provisioning::{
+        FleetComponentProvisioningStatusResponse, RootComponentActivationRequest,
+        RootComponentDirectorySynchronizationRequest, RootComponentProvisioningAcceptanceRequest,
+        RootComponentProvisioningAdvanceRequest, RootComponentPublicationRequest,
+    },
+    fleet_funding::{FleetRootFundingAcceptanceRequest, FleetRootFundingResponse},
 };
+
+/// One exact attached-cycles call derived from a durable Coordinator reservation.
+pub struct FleetRootFundingCallView {
+    pub fleet_subnet_root: Principal,
+    pub request: FleetRootFundingAcceptanceRequest,
+}
+
+/// Coordinator disposition for one authenticated Root funding request.
+pub enum FleetRootFundingDisposition {
+    Current(FleetRootFundingResponse),
+    Invoke(FleetRootFundingCallView),
+    Reconcile(FleetRootFundingCallView),
+}
 
 /// One exact root acceptance call derived only from the durable Coordinator plan.
 pub struct FleetComponentProvisioningRootAcceptanceCallView {

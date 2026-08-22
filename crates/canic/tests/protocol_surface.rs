@@ -747,17 +747,27 @@ fn fleet_coordinator_canonical_did_parses() {
 }
 
 #[test]
-fn fleet_coordinator_candid_contains_only_the_protected_policy_type_expansion() {
+fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types() {
     let did =
         read_text(&workspace_root().join("crates/canic-fleet-coordinator/fleet_coordinator.did"));
     for declaration in [
         "root_funding : opt FleetCoordinatorRootFundingPolicy;",
         "type FleetCoordinatorRootFundingPolicy = record {",
+        "type FleetFundingProfile = variant { multi_subnet; single_subnet };",
         "type FleetSubnetRootFundingAuthority = record {",
         "type FleetSubnetRootFundingPolicy = record {",
         "type FleetSubnetRootIcpRefillPolicy = record {",
         "type FleetSubnetRootAutomaticIcpRefillPolicy = record {",
         "funding : FleetSubnetRootFundingAuthority;",
+        "type FleetRootFundingAcceptanceReceipt = record {",
+        "type FleetRootFundingAcceptanceRequest = record {",
+        "type FleetRootFundingNoGrantReason = variant {",
+        "type FleetRootFundingRequest = record {",
+        "type FleetRootFundingResponse = variant {",
+        "maximum_automatic_grants : nat32;",
+        "maximum_automatic_cycles : nat;",
+        "maximum_automatic_refills : nat32;",
+        "maximum_automatic_refill_e8s : nat64;",
     ] {
         assert!(
             did.contains(declaration),
@@ -791,7 +801,9 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
         "PrepareRootDeletionExecution",
         "ProvisionComponents",
         "RemoveRoot",
+        "RequestRootFunding",
         "ResumeAuthoritySnapshot",
+        "SetRootFunding",
     ] {
         assert!(
             request.contains(variant),
@@ -800,7 +812,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
     }
     assert_eq!(
         request.lines().filter(|line| line.contains(';')).count(),
-        9,
+        11,
         "CoordinatorCommand acquired an unreviewed variant:\n{request}"
     );
 }
@@ -817,6 +829,7 @@ fn fleet_coordinator_status_surface_is_profile_exact() {
 
     for variant in [
         "AuthorityRestore",
+        "Funding",
         // Candid is structural: the extractor deduplicates the identical
         // OperationStatusRequest and OperationReceipt records under this name.
         "Operation : OperationReceipt",
@@ -833,7 +846,7 @@ fn fleet_coordinator_status_surface_is_profile_exact() {
     }
     assert_eq!(
         request.lines().filter(|line| line.contains(';')).count(),
-        7,
+        8,
         "CoordinatorStatusRequest acquired an unreviewed variant:\n{request}"
     );
     assert!(
@@ -944,6 +957,7 @@ fn root_and_coordinator_role_ingress_are_command_status_only() {
 
     let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
     for variant in [
+        "AcceptFunding(",
         "ProvisionComponent(",
         "ProvisionComponents(",
         "RemoveComponent(",
@@ -999,6 +1013,8 @@ fn assert_coordinator_ingress_is_command_status_only() {
         "JoinRoot(",
         "ProvisionComponents(",
         "RemoveRoot(",
+        "RequestRootFunding(",
+        "SetRootFunding(",
     ] {
         assert!(
             coordinator.contains(variant),
@@ -1877,6 +1893,7 @@ fn root_and_coordinator_commands_authorize_before_state_gates_or_dispatch() {
         .expect("Root authority-restore gate");
     for authorization in [
         "access::auth::is_controller(caller)",
+        "authorize_root_funding_caller(caller)",
         "authorize_fleet_subnet_root_removal_caller(",
         "ActiveComponentMemberPredicate",
         "authorize_component_child_caller(request, caller)",
@@ -1904,6 +1921,7 @@ fn root_and_coordinator_commands_authorize_before_state_gates_or_dispatch() {
         .find("AuthorityRestoreApi::require_command_variant_allowed")
         .expect("Coordinator authority-restore gate");
     for authorization in [
+        "authorize_calling_root_funding()",
         "authorize_calling_root_snapshot()",
         "access::auth::is_controller(caller)",
     ] {

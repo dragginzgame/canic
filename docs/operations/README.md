@@ -14,6 +14,9 @@ validation notes.
 - [Recovery and retry runbooks](recovery-retry-runbooks.md) document safe
   operator recovery decisions for replay-sensitive failures and uncertain
   operations.
+- [Fleet funding operations](fleet-funding.md) documents Coordinator-owned Root
+  funding, direct infrastructure top-up, Root ICP conversion and recovery
+  fences.
 - [Destructive reinstall recovery](destructive-reinstall-recovery.md) defines
   dependency-closure reinstall rules for placement managers and their children.
 - [Release package and install validation](release-package-install-validation.md)

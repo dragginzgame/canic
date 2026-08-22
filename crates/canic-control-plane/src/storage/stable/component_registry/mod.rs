@@ -250,6 +250,7 @@ pub struct RootFleetSubnetDrainingRecord {
     pub known_created_component_canisters: u32,
     pub root_registry_encoded_bytes: u64,
     pub started_at_ns: u64,
+    pub funding_fenced_at_ns: Option<u64>,
     pub final_inventory_intent: Option<RootFleetSubnetFinalInventoryIntentRecord>,
     pub final_inventory: Option<RootFleetSubnetFinalInventoryRecord>,
     pub removal_publication: Option<RootFleetSubnetRemovalPublicationRecord>,
@@ -463,16 +464,7 @@ impl RootFleetSubnetDrainingRecord {
         let registry_is_covered =
             registry_covers_preparation(&meta.prepared_against_registry, &self.active_registry);
         let operation_is_valid = self.operation_id != [0; 32];
-        let expected_root = FleetSubnetRootEntry {
-            placement_subnet: meta.root.placement_subnet,
-            fleet_subnet_root: meta.root.fleet_subnet_root,
-            component_admissions: meta.root.component_admissions.clone(),
-            component_topology_digest: meta.root.component_topology_digest,
-            active_release_set: meta.release_set,
-            limits: meta.root.limits.clone(),
-            funding: meta.root.funding.clone(),
-            status: FleetSubnetRootStatus::Active,
-        };
+        let expected_root = active_root_entry(meta);
         let reservation_is_valid = [
             self.reservation.request.operation_id == self.operation_id,
             self.reservation.request.expected_registry == self.active_registry,
@@ -487,6 +479,11 @@ impl RootFleetSubnetDrainingRecord {
         let sequence_is_valid = self.next_allocation_sequence > 0;
         let bytes_are_bounded =
             self.root_registry_encoded_bytes <= meta.root.limits.maximum_registry_bytes;
+        let funding_fence_is_valid = self
+            .funding_fenced_at_ns
+            .is_none_or(|fenced_at_ns| fenced_at_ns >= self.started_at_ns);
+        let terminal_work_requires_fence =
+            self.final_inventory_intent.is_none() || self.funding_fenced_at_ns.is_some();
         let final_inventory_intent_is_valid = self
             .final_inventory_intent
             .as_ref()
@@ -539,6 +536,8 @@ impl RootFleetSubnetDrainingRecord {
             time_is_valid,
             sequence_is_valid,
             bytes_are_bounded,
+            funding_fence_is_valid,
+            terminal_work_requires_fence,
             final_inventory_intent_is_valid,
             final_inventory_is_valid,
             removal_publication_is_valid,
@@ -561,6 +560,7 @@ impl RootFleetSubnetDrainingRecord {
         [
             self.is_valid_for_current(meta),
             inventory_is_exact,
+            self.funding_fenced_at_ns.is_none(),
             self.final_inventory_intent.is_none(),
             self.final_inventory.is_none(),
             self.removal_publication.is_none(),
@@ -579,6 +579,20 @@ impl RootFleetSubnetDrainingRecord {
 }
 
 #[cfg(feature = "root-control-plane")]
+fn active_root_entry(meta: &RootComponentRegistryMetaRecord) -> FleetSubnetRootEntry {
+    FleetSubnetRootEntry {
+        placement_subnet: meta.root.placement_subnet,
+        fleet_subnet_root: meta.root.fleet_subnet_root,
+        component_admissions: meta.root.component_admissions.clone(),
+        component_topology_digest: meta.root.component_topology_digest,
+        active_release_set: meta.release_set,
+        limits: meta.root.limits.clone(),
+        funding: meta.root.funding.clone(),
+        status: FleetSubnetRootStatus::Active,
+    }
+}
+
+#[cfg(feature = "root-control-plane")]
 impl RootFleetSubnetFinalInventoryIntentRecord {
     fn is_valid_for_current(
         &self,
@@ -593,6 +607,9 @@ impl RootFleetSubnetFinalInventoryIntentRecord {
             self.terminal_component_history_hash != [0; 32],
             self.root_registry_encoded_bytes == meta.encoded_bytes,
             self.prepared_at_ns >= draining.started_at_ns,
+            draining
+                .funding_fenced_at_ns
+                .is_some_and(|fenced_at_ns| self.prepared_at_ns >= fenced_at_ns),
         ]
         .into_iter()
         .all(|valid| valid)
@@ -2907,6 +2924,45 @@ impl RootComponentRegistryStore {
             }
             let mut next = current.clone();
             next.root_draining = Some(record);
+            state.current = Some(next);
+            cell.set(state);
+            Ok(RootComponentRegistryCommitOutcome::Committed)
+        })
+    }
+
+    pub(crate) fn record_root_funding_fence(
+        expected: &RootComponentRegistryMetaRecord,
+        fenced_at_ns: u64,
+    ) -> Result<RootComponentRegistryCommitOutcome, RootComponentRegistryCommitError> {
+        ROOT_COMPONENT_REGISTRY.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            let current = state
+                .current
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            let draining = current
+                .root_draining
+                .as_ref()
+                .ok_or(RootComponentRegistryCommitError::ConflictingState)?;
+            if draining.funding_fenced_at_ns == Some(fenced_at_ns) {
+                return Ok(RootComponentRegistryCommitOutcome::Existing);
+            }
+            let transition_is_exact = [
+                current == expected,
+                draining.funding_fenced_at_ns.is_none(),
+                draining.final_inventory_intent.is_none(),
+                fenced_at_ns >= draining.started_at_ns,
+            ]
+            .into_iter()
+            .all(|valid| valid);
+            if !transition_is_exact {
+                return Err(RootComponentRegistryCommitError::ConflictingState);
+            }
+            let mut next = current.clone();
+            next.root_draining
+                .as_mut()
+                .expect("validated root draining authority")
+                .funding_fenced_at_ns = Some(fenced_at_ns);
             state.current = Some(next);
             cell.set(state);
             Ok(RootComponentRegistryCommitOutcome::Committed)

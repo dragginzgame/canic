@@ -9,7 +9,10 @@ mod tests;
 
 use crate::{
     dto::{
-        fleet_coordinator::{CoordinatorOperationStatusResponse, FleetCoordinatorInitArgs},
+        fleet_coordinator::{
+            CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
+            FleetCoordinatorInitArgs,
+        },
         root::RootRemovalOperationStatus,
     },
     ops::fleet_coordinator::FleetCoordinatorOps,
@@ -21,6 +24,7 @@ use crate::{
         FleetComponentProvisioningRootProvisionCallView,
         FleetComponentProvisioningRootProvisionDisposition,
         FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
+        FleetRootFundingCallView, FleetRootFundingDisposition,
     },
 };
 use candid::{CandidType, Principal};
@@ -40,6 +44,9 @@ use canic_core::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningStatusResponse,
         },
         error::Error,
+        fleet_funding::{
+            FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
+        },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
@@ -52,6 +59,7 @@ use canic_core::{
             FleetSubnetRootSnapshotAcknowledgement, FleetSubnetRootSnapshotAcknowledgementRequest,
         },
         role::{OperationReceipt, OperationStatusRequest, RootRemovalRequest},
+        state::SetStateResponse,
     },
     protocol,
 };
@@ -60,6 +68,7 @@ use std::time::Duration;
 
 #[derive(CandidType)]
 enum RemoteRootCommand {
+    AcceptFunding(canic_core::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
     ProvisionComponents(RootComponentProvisioningAcceptanceRequest),
     RemoveRoot(RootRemovalRequest),
     SynchronizeComponentDirectories(RootComponentDirectorySynchronizationRequest),
@@ -67,6 +76,7 @@ enum RemoteRootCommand {
 
 #[derive(CandidType, Deserialize)]
 enum RemoteRootCommandResponse {
+    AcceptFunding(Box<FleetRootFundingAcceptanceReceipt>),
     OperationAccepted(Box<OperationReceipt>),
     SynchronizeComponentDirectories(Box<RootComponentDirectorySynchronizationResponse>),
 }
@@ -107,6 +117,10 @@ impl FleetCoordinatorWorkflow {
         FleetCoordinatorOps::authorize_root_snapshot_caller(caller)
     }
 
+    pub(crate) fn authorize_root_funding_caller(caller: Principal) -> Result<(), InternalError> {
+        FleetCoordinatorOps::authorize_root_funding_caller(caller)
+    }
+
     #[cfg(test)]
     pub(crate) fn operation_status(
         operation_id: [u8; 32],
@@ -138,7 +152,64 @@ impl FleetCoordinatorWorkflow {
         }
         let record = FleetCoordinatorOps::compile_genesis(args, coordinator_canister)?;
         FleetCoordinatorOps::commit_genesis(record)?;
+        let funding = FleetCoordinatorOps::compile_funding_genesis();
+        FleetCoordinatorOps::commit_funding_genesis(funding)?;
         Ok(())
+    }
+
+    /// Decide and execute one exact registered-Root funding operation.
+    pub(crate) async fn request_root_funding(
+        caller: Principal,
+        request: FleetRootFundingRequest,
+    ) -> Result<FleetRootFundingResponse, InternalError> {
+        Self::authorize_root_funding_caller(caller)?;
+        let disposition = FleetCoordinatorOps::prepare_root_funding(
+            caller,
+            request,
+            IcOps::canister_cycle_balance().to_u128(),
+            IcOps::now_nanos(),
+        )?;
+        let call = match disposition {
+            FleetRootFundingDisposition::Current(response) => return Ok(response),
+            FleetRootFundingDisposition::Invoke(call)
+            | FleetRootFundingDisposition::Reconcile(call) => call,
+        };
+        let fleet_subnet_root = call.fleet_subnet_root;
+        let acceptance_request = call.request.clone();
+        match call_root_funding_acceptance(call).await? {
+            FleetRootFundingCallOutcome::Accepted(receipt) => {
+                FleetCoordinatorOps::record_root_funding_acceptance(
+                    fleet_subnet_root,
+                    &acceptance_request,
+                    *receipt,
+                    IcOps::now_nanos(),
+                )
+            }
+            FleetRootFundingCallOutcome::Rejected => {
+                FleetCoordinatorOps::record_root_funding_rejection(
+                    fleet_subnet_root,
+                    &acceptance_request,
+                    IcOps::now_nanos(),
+                )
+            }
+        }
+    }
+
+    pub(crate) fn set_root_funding_enabled(
+        enabled: bool,
+    ) -> Result<SetStateResponse<bool>, InternalError> {
+        FleetCoordinatorOps::set_root_funding_enabled(enabled)
+    }
+
+    pub(crate) fn require_root_funding_snapshot_resumable() -> Result<(), InternalError> {
+        FleetCoordinatorOps::require_root_funding_snapshot_resumable()
+    }
+
+    pub(crate) fn root_funding_status() -> Result<CoordinatorFundingStatusResponse, InternalError> {
+        FleetCoordinatorOps::root_funding_status(
+            IcOps::canister_cycle_balance().to_u128(),
+            IcOps::now_nanos(),
+        )
     }
 
     pub(crate) fn registry() -> Result<FleetRegistry, InternalError> {
@@ -334,7 +405,8 @@ impl FleetCoordinatorWorkflow {
                 schedule_coordinator_root_removal(receipt.operation_id, Duration::ZERO);
                 Ok(*receipt)
             }
-            RemoteRootCommandResponse::OperationAccepted(_)
+            RemoteRootCommandResponse::AcceptFunding(_)
+            | RemoteRootCommandResponse::OperationAccepted(_)
             | RemoteRootCommandResponse::SynchronizeComponentDirectories(_) => {
                 Err(InternalError::conflict())
             }
@@ -748,6 +820,30 @@ async fn accept_root_component_provisioning(
     }
 }
 
+enum FleetRootFundingCallOutcome {
+    Accepted(Box<FleetRootFundingAcceptanceReceipt>),
+    Rejected,
+}
+
+async fn call_root_funding_acceptance(
+    call: FleetRootFundingCallView,
+) -> Result<FleetRootFundingCallOutcome, InternalError> {
+    let granted_cycles = call.request.granted_cycles.to_u128();
+    let result = CallOps::bounded_wait(call.fleet_subnet_root, protocol::CANIC_COMMAND)
+        .with_arg(RemoteRootCommand::AcceptFunding(call.request))?
+        .with_cycles(granted_cycles)
+        .execute()
+        .await?;
+    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+    match response {
+        Ok(RemoteRootCommandResponse::AcceptFunding(receipt)) => {
+            Ok(FleetRootFundingCallOutcome::Accepted(receipt))
+        }
+        Err(_) => Ok(FleetRootFundingCallOutcome::Rejected),
+        Ok(_) => Err(InternalError::conflict()),
+    }
+}
+
 async fn advance_root_component_provisioning(
     call: FleetComponentProvisioningRootProvisionCallView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
@@ -824,7 +920,8 @@ async fn advance_root_component_directories(
                 RemoteRootCommandResponse::SynchronizeComponentDirectories(response) => Ok(
                     RootComponentDirectoryAdvanceResponse::Synchronization(*response),
                 ),
-                RemoteRootCommandResponse::OperationAccepted(_) => Err(InternalError::conflict()),
+                RemoteRootCommandResponse::AcceptFunding(_)
+                | RemoteRootCommandResponse::OperationAccepted(_) => Err(InternalError::conflict()),
             }
         }
     }

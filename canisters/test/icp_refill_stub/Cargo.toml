@@ -1,0 +1,22 @@
+[package]
+name = "icp_refill_stub"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[package.metadata.cargo-machete]
+# `candid::Deserialize` expands against the destination crate's direct `serde`
+# dependency.
+ignored = ["serde"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true
