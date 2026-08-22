@@ -6,6 +6,7 @@
 
 use crate::{
     InternalError,
+    domain::icp_refill::IcpRefillTrigger,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest, IcpRefillResponse},
     ops::ic::IcOps,
     workflow::ic::icp_refill::{
@@ -28,7 +29,13 @@ impl IcpRefillWorkflow {
         validate_manual_request_shape(&request, true)?;
         require_icp_refill_configured()?;
         let root_canister = IcOps::canister_self();
-        let context = prepare_context(&request, root_canister, RateQueryMode::Always).await?;
+        let context = prepare_context(
+            &request,
+            root_canister,
+            RateQueryMode::Always,
+            IcpRefillTrigger::Manual,
+        )
+        .await?;
 
         Ok(IcpRefillDryRun {
             operation_id: request.operation_id,

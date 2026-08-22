@@ -41,8 +41,8 @@ use std::{
 use command::REPORT_COMMAND;
 pub(super) use command::{DeployPlanOptions, DeployPlanRoots, usage};
 use diagnostics::{
-    fresh_fleet_plan_blocker, plan_assumptions, plan_blockers, plan_warnings,
-    target_resolution_blockers,
+    fresh_fleet_placement_warnings, fresh_fleet_plan_blocker, plan_assumptions, plan_blockers,
+    plan_warnings, target_resolution_blockers,
 };
 use evidence::verified_facts;
 #[cfg(test)]
@@ -130,6 +130,9 @@ pub(super) fn build_report(
     }
     let mut assumptions = plan_assumptions(&plan);
     let mut warnings = plan_warnings(&plan);
+    if let Some(fresh_fleet_plan) = fresh_fleet_plan.as_ref() {
+        warnings.extend(fresh_fleet_placement_warnings(fresh_fleet_plan));
+    }
     let mut verified_facts = verified_facts(
         options,
         &config_path,

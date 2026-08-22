@@ -177,6 +177,7 @@ fn authorities(
             application_artifact_union_digest: [6; 32],
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
+                placement_cost: crate::test_support::placement_cost(subnet(1)),
                 creation_funding: funding(),
                 root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },
@@ -195,6 +196,7 @@ fn planned_root(
 ) -> PlannedFleetSubnetRoot {
     PlannedFleetSubnetRoot {
         placement_subnet,
+        placement_cost: crate::test_support::placement_cost(placement_subnet),
         component_group_placements: ordinal
             .map(|ordinal| PlannedComponentGroupPlacementAssignment {
                 deployment: "cells".parse().expect("deployment ID"),

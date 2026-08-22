@@ -588,6 +588,7 @@ fn fixture(root: &Path) -> Fixture {
         .expect("topology digest");
     let root_plan = PlannedFleetSubnetRoot {
         placement_subnet: subnet(2),
+        placement_cost: crate::test_support::placement_cost(subnet(2)),
         component_group_placements: Vec::new(),
         component_admissions: vec![admission],
         component_topology_digest: topology_digest,
@@ -630,6 +631,7 @@ fn fixture(root: &Path) -> Fixture {
             application_artifact_union_digest: [3; 32],
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
+                placement_cost: crate::test_support::placement_cost(subnet(1)),
                 creation_funding: PlannedCanisterCreationFunding::Cycles {
                     cycles: 2_000_000_000_000,
                 },

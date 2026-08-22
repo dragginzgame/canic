@@ -278,6 +278,7 @@ fn install_plan(root: &Path) -> PersistedFleetInstallPlan {
             application_artifact_union_digest: [9; 32],
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
+                placement_cost: crate::test_support::placement_cost(subnet(1)),
                 creation_funding: PlannedCanisterCreationFunding::Cycles { cycles: 1 },
                 root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },

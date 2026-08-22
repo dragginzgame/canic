@@ -9,11 +9,15 @@ use crate::ops::{
     storage::state::root_wasm_store::RootWasmStoreStateOps,
 };
 use canic_core::{
+    api::{fleet_activation::FleetActivationApi, runtime::root_funding::RootFundingTimerApi},
     cdk::types::Principal,
     control_plane_support::{
         error::InternalError, ops::ic::IcOps, workflow::state::execute_fleet_command_to,
     },
-    dto::state::{FleetCommand, FleetCommandResponse},
+    dto::{
+        fleet_activation::FleetActivationPhase,
+        state::{FleetCommand, FleetCommandResponse},
+    },
 };
 use std::collections::BTreeSet;
 
@@ -82,8 +86,21 @@ pub struct FleetStateWorkflow;
 impl FleetStateWorkflow {
     pub async fn execute_command(cmd: FleetCommand) -> Result<FleetCommandResponse, InternalError> {
         let targets = RootStateCascadeTargets::current()?.into_vec();
-        execute_fleet_command_to(cmd, &targets).await
+        let response = execute_fleet_command_to(cmd, &targets).await?;
+        if matches!(cmd, FleetCommand::SetCyclesFundingEnabled(_)) {
+            let activation =
+                FleetActivationApi::status().map_err(InternalError::observed_public)?;
+            if should_reconcile_root_funding(cmd, activation.phase) {
+                RootFundingTimerApi::reconcile().map_err(InternalError::observed_public)?;
+            }
+        }
+        Ok(response)
     }
+}
+
+const fn should_reconcile_root_funding(command: FleetCommand, phase: FleetActivationPhase) -> bool {
+    matches!(command, FleetCommand::SetCyclesFundingEnabled(_))
+        && matches!(phase, FleetActivationPhase::Active)
 }
 
 const fn invalid_root_child(
@@ -143,5 +160,21 @@ mod tests {
             canic_core::diagnostics::codes::STATE_INVALID
         );
         assert_eq!(root.code(), canic_core::diagnostics::codes::STATE_INVALID);
+    }
+
+    #[test]
+    fn root_funding_switch_reconciles_only_after_activation() {
+        assert!(should_reconcile_root_funding(
+            FleetCommand::SetCyclesFundingEnabled(true),
+            FleetActivationPhase::Active,
+        ));
+        assert!(!should_reconcile_root_funding(
+            FleetCommand::SetCyclesFundingEnabled(true),
+            FleetActivationPhase::Prepared,
+        ));
+        assert!(!should_reconcile_root_funding(
+            FleetCommand::SetStatus(canic_core::dto::state::FleetStatus::Active),
+            FleetActivationPhase::Active,
+        ));
     }
 }

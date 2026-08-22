@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 MODE="${1:-full}"
+TARGETED_POCKETIC_TEST="${2:-}"
 SUMMARY_LABELS=()
 SUMMARY_DURATIONS=()
 SUMMARY_KINDS=()
@@ -17,8 +18,14 @@ POCKET_IC_SERVER_PID=""
 
 case "$MODE" in
     fast | full | ordinary | pocketic) ;;
+    targeted-pocketic)
+        if [[ -z "$TARGETED_POCKETIC_TEST" ]]; then
+            echo "targeted-pocketic requires one exact canic-testing-internal lib test" >&2
+            exit 2
+        fi
+        ;;
     *)
-        echo "usage: $0 <fast|full|ordinary|pocketic>" >&2
+        echo "usage: $0 <fast|full|ordinary|pocketic|targeted-pocketic> [exact-test]" >&2
         exit 2
         ;;
 esac
@@ -368,7 +375,7 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     # Role-package contract tests inspect the Wasm graph with locked offline Cargo
     # metadata. Populate the complete locked graph once so results do not depend on
     # whether the restored Cargo cache contains every target and host/build package.
-    if [[ ("$MODE" == "full" || "$MODE" == "pocketic") && -z "${POCKET_IC_BIN:-}" ]]; then
+    if [[ ("$MODE" == "full" || "$MODE" == "pocketic" || "$MODE" == "targeted-pocketic") && -z "${POCKET_IC_BIN:-}" ]]; then
         POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"
         export POCKET_IC_BIN
         echo "==> using pinned PocketIC server binary: $POCKET_IC_BIN"
@@ -382,7 +389,7 @@ fi
 # Run ordinary unit/lib/bin tests with libtest's default parallelism. The
 # internal harness remains separate because its library contains PocketIC
 # journeys protected by process-local fixture serialization.
-if [[ "$MODE" != "pocketic" ]]; then
+if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
     run_parallel_test \
         "workspace parallel lib/bin tests" \
         --workspace \
@@ -405,7 +412,7 @@ if [[ "$MODE" == "fast" ]]; then
     exit 0
 fi
 
-if [[ "$MODE" != "pocketic" ]]; then
+if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
     # Every checked-in top-level integration target is classified by the
     # guarded inventory. Parallel-safe targets form an independently runnable
     # CI lane before the expensive PocketIC work.
@@ -425,6 +432,18 @@ if [[ "$MODE" != "pocketic" ]]; then
 fi
 
 start_owned_pocketic_server
+
+if [[ "$MODE" == "targeted-pocketic" ]]; then
+    run_serial_pocketic_test \
+        "targeted canic-testing-internal PocketIC proof" \
+        -p canic-testing-internal \
+        --lib \
+        "$TARGETED_POCKETIC_TEST" \
+        -- \
+        --exact
+    finish_test_run
+    exit 0
+fi
 
 # The internal library owns several PocketIC journeys in its adjacent unit
 # tests. Run the deployment-restore and destructive autonomous-removal proofs

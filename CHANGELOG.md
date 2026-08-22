@@ -8,13 +8,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.108.0] - 2026-08-21 - Coordinator-Backed Root Funding
+## [0.108.x] - Coordinator-Backed Root Funding
 
 Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
 
-- Establishes accepted replay/refund semantics, protected Coordinator/root
-  funding policy and distinct fresh-install provisioning authority without yet
-  enabling runtime grants.
+- `0.108.1` adds the two-sided Coordinator/Root runtime grant journal, exact
+  registered-Root admission, reserve-aware attached-cycle calls,
+  accept-once/zero-accept replay, topology-scaled finite automatic authority,
+  exact Fiduciary cost acknowledgement and the sole recovery-first Root funding
+  timer. It completes protected manual and terminal automatic ICP refill with
+  durable Ledger/CMC replay and shared caps, explicit installed-Root recovery,
+  protected funding status/metrics, Medic and lifecycle/snapshot fences; real
+  PocketIC journeys prove single- and multi-Root Coordinator accounting,
+  non-renewing caps, uncertain-call suppression, real Ledger/CMC replay,
+  reserve-denial ICP fallback and no-spend policy denials.
+- `0.108.0` establishes accepted replay/refund semantics, protected
+  Coordinator/root funding policy and distinct fresh-install provisioning
+  authority without yet enabling runtime grants.
 
 ## [0.107.x] - 2026-08-20 - Fresh-Fleet Preflight And Runtime Admission
 

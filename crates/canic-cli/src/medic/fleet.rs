@@ -18,8 +18,8 @@ use canic_host::{
     fleet_catalog::FleetCatalogEntryV1,
     icp_config::resolve_current_canic_icp_root,
     installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution, InstalledFleetSource,
-        resolve_installed_fleet_from_root,
+        InstalledFleetError, InstalledFleetFundingResolution, InstalledFleetRequest,
+        resolve_installed_fleet_funding_from_root,
     },
 };
 
@@ -84,6 +84,7 @@ pub(super) fn installed_fleet_checks(
         check_config_path(icp_root, fleet),
         coordinator,
         check_fleet_registry_observation(icp_root, fleet, environment, coordinator_present),
+        check_funding_profile_observation(icp_root, fleet, environment, coordinator_present),
         check_coordinator_readiness_not_evaluated(coordinator_present),
     ]
 }
@@ -150,7 +151,7 @@ fn check_fleet_registry_observation(
         environment: environment.to_string(),
     };
 
-    match resolve_installed_fleet_from_root(&request, root) {
+    match resolve_installed_fleet_funding_from_root(&request, root) {
         Ok(resolution) => fleet_registry_observed_check(&resolution),
         Err(err) => fleet_registry_error_check(err),
     }
@@ -173,16 +174,21 @@ pub(super) fn check_fleet_registry_not_evaluated(coordinator_present: bool) -> M
     )
 }
 
-fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> MedicCheck {
-    let entries = resolution.registry.entries.len();
-    let roles = resolution.topology.roles_by_canister.len();
+fn fleet_registry_observed_check(resolution: &InstalledFleetFundingResolution) -> MedicCheck {
+    let current_roots = resolution
+        .roots
+        .iter()
+        .filter(|root| {
+            root.status != canic_core::dto::fleet_registry::FleetSubnetRootStatus::Removed
+        })
+        .count();
     let detail = format!(
-        "root={}; entries={entries}; roles={roles}",
-        resolution.registry.root_canister_id
+        "coordinator={}; roots={}; current_roots={current_roots}",
+        resolution.coordinator_canister_id,
+        resolution.roots.len(),
     );
-    let source = installed_fleet_source_for_medic(resolution.source);
 
-    if entries == 0 {
+    if current_roots == 0 {
         return MedicCheck::warn(
             MedicCategory::Topology,
             "fleet_registry_empty",
@@ -196,7 +202,7 @@ fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> Medic
                 ),
                 resolution.fleet.fleet_name
             ),
-            source,
+            MedicSource::InstalledFleet,
         );
     }
 
@@ -205,9 +211,140 @@ fn fleet_registry_observed_check(resolution: &InstalledFleetResolution) -> Medic
         "fleet_registry_observed",
         "registry",
         detail,
-        runtime_inspection_next(resolution),
-        source,
+        format!(
+            "run canic cycles topup {} coordinator <amount> for Coordinator recovery",
+            resolution.fleet.fleet_name
+        ),
+        MedicSource::InstalledFleet,
     )
+}
+
+fn check_funding_profile_observation(
+    icp_root: Option<&Path>,
+    fleet: &FleetCatalogEntryV1,
+    environment: &str,
+    coordinator_present: bool,
+) -> MedicCheck {
+    if !coordinator_present {
+        return MedicCheck::not_evaluated(
+            MedicCategory::Funding,
+            "funding_profile_not_evaluated",
+            "funding",
+            "funding authority was not evaluated because the Coordinator principal is missing",
+            "repair the installed Fleet catalog authority",
+            MedicSource::InstalledFleet,
+        );
+    }
+    let Some(root) = icp_root else {
+        return MedicCheck::not_evaluated(
+            MedicCategory::Funding,
+            "funding_profile_not_evaluated",
+            "funding",
+            "funding authority lookup skipped because the workspace root was not resolved",
+            "run from a Canic workspace root",
+            MedicSource::InstalledFleet,
+        );
+    };
+    let request = InstalledFleetRequest {
+        fleet: fleet.fleet_name.to_string(),
+        environment: environment.to_string(),
+    };
+    match resolve_installed_fleet_funding_from_root(&request, root) {
+        Ok(resolution) => funding_profile_check(&resolution),
+        Err(error) => MedicCheck::fail(
+            MedicCategory::Funding,
+            "funding_profile_invalid",
+            "funding",
+            error.to_string(),
+            "restore the digest-bound Fleet plan and verified activation journal",
+            MedicSource::InstalledFleet,
+        ),
+    }
+}
+
+fn funding_profile_check(resolution: &InstalledFleetFundingResolution) -> MedicCheck {
+    let Some(policy) = resolution.coordinator_root_funding.as_ref() else {
+        return MedicCheck::fail(
+            MedicCategory::Funding,
+            "funding_policy_missing",
+            "funding",
+            "installed Fleet authority has no Coordinator Root-funding policy",
+            "reinstall from an exact protected 0.108 Fleet input",
+            MedicSource::InstalledFleet,
+        );
+    };
+    if resolution
+        .roots
+        .iter()
+        .any(|root| root.funding.root_funding.funding_profile != policy.funding_profile)
+    {
+        return MedicCheck::fail(
+            MedicCategory::Funding,
+            "funding_profile_mismatch",
+            "funding",
+            "Coordinator and Root funding profiles disagree",
+            "do not deploy; rebuild the fresh Fleet plan from protected input",
+            MedicSource::InstalledFleet,
+        );
+    }
+    let automatic_icp_roots = resolution
+        .roots
+        .iter()
+        .filter(|root| {
+            root.funding
+                .icp_refill
+                .as_ref()
+                .is_some_and(|refill| refill.automatic.is_some())
+        })
+        .count();
+    let detail = format!(
+        "profile={}; roots={}; automatic_icp_roots={automatic_icp_roots}; fleet_auto_grants={}; fleet_auto_cycles={}",
+        funding_profile_label(policy.funding_profile),
+        resolution.roots.len(),
+        policy.maximum_automatic_grants,
+        policy.maximum_automatic_cycles,
+    );
+    let mut fiduciary_warnings = resolution
+        .coordinator_placement_cost
+        .warning
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    fiduciary_warnings.extend(
+        resolution
+            .roots
+            .iter()
+            .filter_map(|root| root.placement_cost.warning.clone()),
+    );
+    if fiduciary_warnings.is_empty() {
+        MedicCheck::pass(
+            MedicCategory::Funding,
+            "funding_profile_verified",
+            "funding",
+            detail,
+            format!(
+                "use canic cycles topup {} coordinator <amount> or an explicit current Root Principal for break-glass recovery",
+                resolution.fleet.fleet_name
+            ),
+            MedicSource::InstalledFleet,
+        )
+    } else {
+        MedicCheck::warn(
+            MedicCategory::Funding,
+            "fiduciary_funding_cost_acknowledged",
+            "funding",
+            format!("{detail}; {}", fiduciary_warnings.join("; ")),
+            "retain explicit Fiduciary cost acknowledgement and monitor treasury headroom",
+            MedicSource::InstalledFleet,
+        )
+    }
+}
+
+const fn funding_profile_label(profile: canic_core::ids::FleetFundingProfile) -> &'static str {
+    match profile {
+        canic_core::ids::FleetFundingProfile::SingleSubnet => "single_subnet",
+        canic_core::ids::FleetFundingProfile::MultiSubnet => "multi_subnet",
+    }
 }
 
 fn deploy_plan_next(fleet: &str, app: &str) -> String {
@@ -216,55 +353,8 @@ fn deploy_plan_next(fleet: &str, app: &str) -> String {
     )
 }
 
-fn runtime_inspection_next(resolution: &InstalledFleetResolution) -> String {
-    let fleet = &resolution.fleet.fleet_name;
-    let mut roles = resolution
-        .topology
-        .roles_by_canister
-        .values()
-        .cloned()
-        .collect::<Vec<_>>();
-    roles.sort();
-    roles.dedup();
-
-    if let Some(role) = roles
-        .iter()
-        .find(|role| role.as_str() == "root")
-        .or_else(|| roles.first())
-    {
-        return format!(
-            "run canic inspect fleet {fleet} --role {role} to inspect runtime-observed status for one explicit role"
-        );
-    }
-
-    let mut canisters = resolution
-        .registry
-        .entries
-        .iter()
-        .map(|entry| entry.pid.clone())
-        .collect::<Vec<_>>();
-    canisters.sort();
-    canisters.dedup();
-
-    canisters.first().map_or_else(
-        || "none".to_string(),
-        |canister| {
-            format!(
-                "run canic inspect canister {canister} to inspect runtime-observed status for one explicit canister"
-            )
-        },
-    )
-}
-
 pub(super) fn deploy_plan_then(fleet: &str, next: impl AsRef<str>) -> String {
     format!("{}; {}", deploy_plan_next(fleet, "<app>"), next.as_ref())
-}
-
-const fn installed_fleet_source_for_medic(source: InstalledFleetSource) -> MedicSource {
-    match source {
-        InstalledFleetSource::LocalReplica => MedicSource::LocalReplica,
-        InstalledFleetSource::IcpCli => MedicSource::IcpCli,
-    }
 }
 
 fn fleet_registry_error_check(error: InstalledFleetError) -> MedicCheck {

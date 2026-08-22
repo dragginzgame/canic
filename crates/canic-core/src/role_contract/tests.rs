@@ -117,6 +117,8 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
         (StateAllocationKey::CoreRuntimeWhitelist, vec![61]),
+        (StateAllocationKey::FleetCoordinatorFunding, vec![62]),
+        (StateAllocationKey::RootFunding, vec![63]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -155,6 +157,12 @@ fn canonical_allocations_form_packed_owner_ledgers() {
         ids(AllocationOwner::CanicControlPlane),
         (allocation::CANIC_CONTROL_PLANE_MIN_ID
             ..=allocation::memory::control_plane::ROOT_COMPONENT_PROVISIONING_STATE_ID)
+            .chain(std::iter::once(
+                allocation::memory::control_plane::FLEET_COORDINATOR_FUNDING_ID,
+            ))
+            .chain(std::iter::once(
+                allocation::memory::control_plane::ROOT_FUNDING_ID,
+            ))
             .collect::<Vec<_>>()
     );
     assert_eq!(
@@ -535,7 +543,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60,
+            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60, 63,
         ]
     );
 }
@@ -565,7 +573,7 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
 }
 
 #[test]
-fn built_in_fleet_coordinator_selects_registry_and_restore_fence() {
+fn built_in_fleet_coordinator_selects_registry_funding_and_restore_fence() {
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
         declared_features: BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister]),
@@ -575,7 +583,7 @@ fn built_in_fleet_coordinator_selects_registry_and_restore_fence() {
         panic!("built-in Fleet Coordinator contract should resolve");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59]);
+    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59, 62]);
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])

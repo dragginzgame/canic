@@ -150,6 +150,9 @@ fn persisted_plan(root: &Path) -> PersistedFleetInstallPlan {
             application_artifact_union_digest: [3; 32],
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[90])),
+                placement_cost: crate::test_support::placement_cost(SubnetId::from_principal(
+                    Principal::from_slice(&[90]),
+                )),
                 creation_funding: PlannedCanisterCreationFunding::Cycles {
                     cycles: 2_000_000_000_000,
                 },

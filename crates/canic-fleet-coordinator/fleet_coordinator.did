@@ -219,7 +219,9 @@ type ComponentTopology = record {
 type CoordinatorCommand = variant {
   JoinRoot : FleetSubnetRootJoinRequest;
   ActivateRegistry : FleetRegistryActivationRequest;
+  SetRootFunding : SetCyclesFundingRequest;
   AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgementRequest;
+  RequestRootFunding : FleetRootFundingRequest;
   PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionRequest;
   ResumeAuthoritySnapshot : AuthoritySnapshotRequest;
   ProvisionComponents : FleetComponentProvisioningPrepareRequest;
@@ -231,17 +233,50 @@ type CoordinatorCommand = variant {
 type CoordinatorCommandResponse = variant {
   JoinRoot : FleetSubnetRootJoinResponse;
   ActivateRegistry : FleetRegistryActivationResponse;
+  SetRootFunding : SetStateResponse;
   AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgement;
+  RequestRootFunding : FleetRootFundingResponse;
   PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionResponse;
   ResumeAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
   OperationAccepted : OperationReceipt;
   CompleteRootDeletion : FleetSubnetRootDeletionResponse;
   PrepareAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
 };
+// Controller-only Coordinator treasury policy, headroom and per-Root usage.
+type CoordinatorFundingStatusResponse = record {
+  funding_enabled : bool;
+  automatic_grants : nat32;
+  current_cycles : nat;
+  fleet_window : opt CoordinatorFundingWindowStatusResponse;
+  funding_profile : opt FleetFundingProfile;
+  automatic_cycles : nat;
+  roots : vec CoordinatorRootFundingStatusResponse;
+  coordinator : principal;
+  policy : opt FleetCoordinatorRootFundingPolicy;
+};
+// Current spent and reserved cycles in one exact epoch-anchored funding window.
+type CoordinatorFundingWindowStatusResponse = record {
+  spent_cycles : nat;
+  window_start_secs : nat64;
+  reserved_cycles : nat;
+};
 // Coordinator-owned durable operation detail selected by one operation ID.
 type CoordinatorOperationStatusResponse = variant {
   RootRemoval : CoordinatorRootRemovalOperationStatus;
   ComponentProvisioning : FleetComponentProvisioningStatusResponse;
+};
+// Controller-only funding usage and operation state for one registered Root.
+type CoordinatorRootFundingStatusResponse = record {
+  automatic_grants : nat32;
+  window : CoordinatorFundingWindowStatusResponse;
+  last_result : opt FleetRootFundingResponse;
+  last_successful_grant_at_ns : opt nat64;
+  automatic_cycles : nat;
+  policy_hash : blob;
+  fleet_subnet_root : principal;
+  current_operation : opt FleetRootFundingRequest;
+  lifecycle_status : FleetSubnetRootStatus;
+  policy : FleetSubnetRootFundingPolicy;
 };
 // Coordinator-owned progress across the existing durable root-removal boundaries.
 type CoordinatorRootRemovalOperationStatus = record {
@@ -261,6 +296,7 @@ type CoordinatorStatusRequest = variant {
   Operation : OperationReceipt;
   RegistryManifest;
   Registry;
+  Funding;
   AuthorityRestore;
   RegistryVersion;
 };
@@ -271,6 +307,7 @@ type CoordinatorStatusResponse = variant {
   Operation : CoordinatorOperationStatusResponse;
   RegistryManifest : FleetRegistryManifest;
   Registry : FleetRegistry;
+  Funding : CoordinatorFundingStatusResponse;
   AuthorityRestore : AuthorityRestoreFenceStatusResponse;
   RegistryVersion : FleetRegistryVersion;
 };
@@ -437,9 +474,14 @@ type FleetCoordinatorInitArgs = record {
 // Immutable Fleet-wide reserve and grant-budget authority installed into one Coordinator.
 //
 type FleetCoordinatorRootFundingPolicy = record {
+  maximum_automatic_cycles : nat;
   minimum_reserve_cycles : nat;
+  funding_profile : FleetFundingProfile;
+  maximum_automatic_grants : nat32;
   budget : CyclesFundingBudget;
 };
+// Protected physical-topology class that selects the minimum Root funding baseline.
+type FleetFundingProfile = variant { multi_subnet; single_subnet };
 //
 // FleetKey
 //
@@ -504,6 +546,57 @@ type FleetRegistryVersion = record {
   content_hash : blob;
   authority : FleetRegistryAuthority;
   revision : nat64;
+};
+// Root-authored exact receipt for one fresh or replayed grant acceptance.
+type FleetRootFundingAcceptanceReceipt = record {
+  request : FleetRootFundingAcceptanceRequest;
+  accepted_at_ns : nat64;
+  fleet_subnet_root : principal;
+  coordinator : principal;
+};
+// Coordinator-authored exact same-Root acceptance request carrying cycles.
+type FleetRootFundingAcceptanceRequest = record {
+  operation_sequence : nat64;
+  granted_cycles : nat;
+  operation_id : blob;
+  policy_hash : blob;
+  observed_balance : nat;
+  expected_registry : FleetRegistryVersion;
+};
+// Terminal reason that one authenticated request transferred no cycles.
+type FleetRootFundingNoGrantReason = variant {
+  RootWindowExhausted;
+  FundingDisabled;
+  FleetAutomaticCapExhausted;
+  CooldownActive;
+  RootRejected;
+  RootAutomaticCapExhausted;
+  RootIneligible;
+  RegistryStale;
+  InvalidRequest;
+  FleetWindowExhausted;
+  CoordinatorReserveUnavailable;
+  PolicyMismatch;
+};
+// Durable exact zero-transfer result for one Root operation.
+type FleetRootFundingNoGrantReceipt = record {
+  decided_at_ns : nat64;
+  request : FleetRootFundingRequest;
+  reason : FleetRootFundingNoGrantReason;
+};
+// Root-authored request for one exact Coordinator operating-cycle decision.
+type FleetRootFundingRequest = record {
+  operation_sequence : nat64;
+  operation_id : blob;
+  policy_hash : blob;
+  observed_balance : nat;
+  requested_cycles : nat;
+  expected_registry : FleetRegistryVersion;
+};
+// Exact terminal outcome returned to the authenticated requesting Root.
+type FleetRootFundingResponse = variant {
+  NoGrant : FleetRootFundingNoGrantReceipt;
+  Granted : FleetRootFundingAcceptanceReceipt;
 };
 // Complete configured member set for one logical Fleet service.
 //
@@ -574,7 +667,9 @@ type FleetSubnetCanisterPoolConfig = record {
 // Optional emergency trigger and target subordinate to one root's ICP-refill policy.
 //
 type FleetSubnetRootAutomaticIcpRefillPolicy = record {
+  maximum_automatic_refills : nat32;
   target_balance : nat;
+  maximum_automatic_refill_e8s : nat64;
   emergency_threshold : nat;
 };
 //
@@ -783,8 +878,11 @@ type FleetSubnetRootFundingAuthority = record {
 // Immutable Coordinator-grant thresholds and budget for one registered root.
 //
 type FleetSubnetRootFundingPolicy = record {
+  maximum_automatic_cycles : nat;
+  funding_profile : FleetFundingProfile;
   target_balance : nat;
   request_threshold : nat;
+  maximum_automatic_grants : nat32;
   budget : CyclesFundingBudget;
   cooldown_secs : nat64;
 };
@@ -912,6 +1010,13 @@ type RoleOverviewResponse = record {
   role : text;
   bootstrap : BootstrapStatusResponse;
   protocol_profile_digest : blob;
+};
+// Explicit input for changing automatic cycles funding.
+type SetCyclesFundingRequest = record { enabled : bool };
+type SetStateResponse = record {
+  previous : bool;
+  current : bool;
+  changed : bool;
 };
 service : (FleetCoordinatorInitArgs) -> {
   canic_command : (CoordinatorCommand) -> (Result);

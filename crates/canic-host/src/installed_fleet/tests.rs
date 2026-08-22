@@ -87,3 +87,23 @@ fn coordinator_catalog_rejects_the_removed_single_root_topology_resolver() {
     ));
     fs::remove_dir_all(root).expect("remove test directory");
 }
+
+#[test]
+fn explicit_root_selection_rejects_foreign_and_removed_principals() {
+    let active = Principal::from_slice(&[10; 29]);
+    let draining = Principal::from_slice(&[11; 29]);
+    let removed = Principal::from_slice(&[12; 29]);
+    let roots = [
+        (active, FleetSubnetRootStatus::Active),
+        (draining, FleetSubnetRootStatus::Draining),
+        (removed, FleetSubnetRootStatus::Removed),
+    ];
+
+    assert_eq!(select_current_root(roots, active), Some(active));
+    assert_eq!(select_current_root(roots, draining), Some(draining));
+    assert_eq!(select_current_root(roots, removed), None);
+    assert_eq!(
+        select_current_root(roots, Principal::from_slice(&[13; 29])),
+        None
+    );
+}

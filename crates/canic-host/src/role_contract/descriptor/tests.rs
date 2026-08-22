@@ -126,15 +126,59 @@ fn wasm_store_materializes_template_and_gc_state() {
 }
 
 #[test]
-fn fleet_coordinator_materializes_only_its_registry_state() {
-    let key = StateAllocationKey::FleetCoordinatorRegistry;
-    let definition = allocation_definitions()
-        .iter()
-        .find(|definition| definition.key == key)
-        .expect("definition");
+fn fleet_coordinator_materializes_its_registry_and_funding_state() {
+    let keys = [
+        StateAllocationKey::FleetCoordinatorFunding,
+        StateAllocationKey::FleetCoordinatorRegistry,
+    ];
     let contract = ResolvedRoleContract {
         role: canic_core::ids::CanisterRole::FLEET_COORDINATOR,
         built_in: Some(BuiltInRoleKind::FleetCoordinator),
+        capabilities: BTreeSet::new(),
+        required_features: BTreeSet::new(),
+        effective_features: BTreeSet::new(),
+        allocations: keys
+            .into_iter()
+            .map(|key| {
+                let definition = allocation_definitions()
+                    .iter()
+                    .find(|definition| definition.key == key)
+                    .expect("definition");
+                ResolvedStateAllocation {
+                    key,
+                    owner: definition.owner,
+                    memory_ids: definition.memory_ids.to_vec(),
+                    selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
+                        BuiltInRoleKind::FleetCoordinator,
+                    )]),
+                }
+            })
+            .collect(),
+    };
+
+    let manifest = materialize_state_manifest(&[contract]).expect("manifest");
+    assert_eq!(manifest.roles.len(), 1);
+    assert_eq!(manifest.roles[0].state.len(), 2);
+    assert_eq!(
+        manifest.roles[0]
+            .state
+            .iter()
+            .filter_map(|domain| domain.memory_id)
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([15, 62])
+    );
+}
+
+#[test]
+fn root_materializes_its_independent_funding_journal() {
+    let key = StateAllocationKey::RootFunding;
+    let definition = allocation_definitions()
+        .iter()
+        .find(|definition| definition.key == key)
+        .expect("Root funding definition");
+    let contract = ResolvedRoleContract {
+        role: canic_core::ids::CanisterRole::ROOT,
+        built_in: None,
         capabilities: BTreeSet::new(),
         required_features: BTreeSet::new(),
         effective_features: BTreeSet::new(),
@@ -142,8 +186,8 @@ fn fleet_coordinator_materializes_only_its_registry_state() {
             key,
             owner: definition.owner,
             memory_ids: definition.memory_ids.to_vec(),
-            selected_by: BTreeSet::from([SelectionProvenance::BuiltInRole(
-                BuiltInRoleKind::FleetCoordinator,
+            selected_by: BTreeSet::from([SelectionProvenance::Capability(
+                canic_core::role_contract::RoleCapabilityKey::RootControlPlane,
             )]),
         }],
     };
@@ -151,5 +195,6 @@ fn fleet_coordinator_materializes_only_its_registry_state() {
     let manifest = materialize_state_manifest(&[contract]).expect("manifest");
     assert_eq!(manifest.roles.len(), 1);
     assert_eq!(manifest.roles[0].state.len(), 1);
-    assert_eq!(manifest.roles[0].state[0].memory_id, Some(15));
+    assert_eq!(manifest.roles[0].state[0].domain, "root_funding");
+    assert_eq!(manifest.roles[0].state[0].memory_id, Some(63));
 }

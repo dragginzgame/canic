@@ -1,7 +1,10 @@
 //! Prepared-root Fleet Registry and Component Registry PocketIC journey.
 
 #[cfg(test)]
-use super::build::build_mainnet_refill_wasms;
+use super::build::{
+    build_icp_refill_pic, build_icp_refill_stub_wasm, build_mainnet_refill_wasms,
+    build_two_root_pic,
+};
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
 };
@@ -65,6 +68,8 @@ mod tests {
         Error,
         dto::fleet_activation::{FleetActivationPhase, FleetActivationResumeRequest},
     };
+    #[cfg(test)]
+    use canic_control_plane::dto::root::RootFundingStatusResponse;
     use canic_control_plane::{
         dto::template::{
             StoreCommand, StoreCommandResponse, TemplateChunkInput, TemplateChunkSetInfoResponse,
@@ -82,7 +87,22 @@ mod tests {
             WasmStoreBinding,
         },
     };
-    use canic_core::cdk::utils::hash::{hex_bytes, wasm_hash};
+    #[cfg(test)]
+    use canic_core::{
+        cdk::types::Cycles,
+        dto::{
+            fleet_funding::{FleetRootFundingNoGrantReason, FleetRootFundingResponse},
+            icp_refill::{IcpRefillStatus, IcpRefillTrigger},
+        },
+        ids::{
+            CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootAutomaticIcpRefillPolicy,
+            FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
+        },
+    };
+    use canic_core::{
+        cdk::utils::hash::{hex_bytes, wasm_hash},
+        ids::{FleetCoordinatorRootFundingPolicy, FleetSubnetRootFundingAuthority},
+    };
     use canic_host::release_set::AppConfigSnapshot;
     use flate2::{Compression, write::GzEncoder};
     use std::{
@@ -147,6 +167,8 @@ mod tests {
         PrepareFleetActivation,
         ProvisionComponent(RootComponentAllocationRequest),
         #[cfg(test)]
+        RespondCapability(canic::dto::capability::RootCapabilityEnvelopeV1),
+        #[cfg(test)]
         ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
         ResumeFleetActivation(FleetActivationResumeRequest),
         SynchronizeRegistry(FleetSubnetRootRegistrySyncRequest),
@@ -165,6 +187,8 @@ mod tests {
         PrepareComponentRegistry(RootComponentRegistryStatusResponse),
         #[cfg(test)]
         ResumeAuthoritySnapshot(AuthorityRestoreFenceStatusResponse),
+        #[cfg(test)]
+        RespondCapability(canic::dto::capability::RootCapabilityResponseV1),
     }
 
     #[derive(CandidType)]
@@ -172,6 +196,8 @@ mod tests {
         #[cfg(test)]
         AuthorityRestore,
         FleetAuthority,
+        #[cfg(test)]
+        Funding,
         Inventory,
         Operation(OperationStatusRequest),
         Pool(CanisterPoolStatusRequest),
@@ -188,6 +214,8 @@ mod tests {
         #[cfg(test)]
         AuthorityRestore(AuthorityRestoreFenceStatusResponse),
         FleetAuthority(FleetSubnetRootAuthority),
+        #[cfg(test)]
+        Funding(RootFundingStatusResponse),
         Inventory(FleetSubnetRootCanisterSummary),
         Operation(RootOperationStatusResponse),
         Pool(CanisterPoolResponse),
@@ -258,6 +286,35 @@ mod tests {
     ) -> Result<RootCommandResponseFragment, Error> {
         pic.update_candid(root, canic::protocol::CANIC_COMMAND, (command,))
             .expect("Root command transport")
+    }
+
+    #[cfg(test)]
+    fn request_descendant_funding(
+        pic: &PocketIc,
+        root: Principal,
+        descendant: Principal,
+        request: canic::dto::capability::RootCapabilityEnvelopeV1,
+    ) -> u128 {
+        let response: Result<RootCommandResponseFragment, Error> = pic
+            .update_candid_as(
+                root,
+                descendant,
+                canic::protocol::CANIC_COMMAND,
+                (RootCommandFragment::RespondCapability(request),),
+            )
+            .expect("request exact descendant funding from Root");
+        let RootCommandResponseFragment::RespondCapability(response) =
+            response.expect("Root accepts registered descendant funding request")
+        else {
+            panic!("Root returned a differently correlated capability response");
+        };
+        let canic::dto::rpc::Response::Cycles(canic::dto::rpc::CyclesResponse::Transferred {
+            cycles_transferred,
+        }) = response.response
+        else {
+            panic!("Root returned a differently correlated cycles response");
+        };
+        cycles_transferred
     }
 
     fn root_status(
@@ -754,6 +811,7 @@ mod tests {
     struct BootstrappedRootFixture {
         root_id: Principal,
         init_args: FleetSubnetRootInitArgs,
+        coordinator_root_funding: FleetCoordinatorRootFundingPolicy,
         request: RootStoreBootstrapRequest,
         response: RootStoreBootstrapResponse,
     }
@@ -770,6 +828,18 @@ mod tests {
         expected_root: Principal,
         expected_subnet: Principal,
         pending_first_index: Option<u64>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    enum IcpRefillStubInit {
+        Ledger {
+            balance_e8s: u64,
+        },
+        Cmc {
+            xdr_permyriad_per_icp: u64,
+            cycles_per_notify: u128,
+        },
     }
 
     #[cfg(test)]
@@ -838,6 +908,405 @@ mod tests {
     #[test]
     fn uncertain_mainnet_refill_reuses_the_exact_paid_request() {
         assert_mainnet_refill(true, 2);
+    }
+
+    #[test]
+    fn real_coordinator_funds_one_active_root_exactly_once() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_root_funding_journey(false, 30_000_000_000_000);
+        let status = await_root_funding(&fixture, |status| status.last_result.is_some());
+        let Some(FleetRootFundingResponse::Granted(grant)) = status.last_result.as_ref() else {
+            panic!(
+                "real Root must retain one Coordinator grant, got {:?}",
+                status.last_result
+            );
+        };
+        assert_eq!(grant.request.operation_sequence, 1);
+        assert_eq!(status.current_operation, None);
+        assert_eq!(status.automatic_grants, 1);
+        assert_eq!(status.automatic_cycles, grant.request.granted_cycles);
+        assert!(fixture.pic.cycle_balance(fixture.root) > fixture.root_balance_before_activation);
+
+        let CoordinatorStatusResponse::Funding(coordinator) = coordinator_status(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::Funding,
+        )
+        .expect("query protected Coordinator funding status") else {
+            panic!("Coordinator returned a differently correlated funding status");
+        };
+        let root = coordinator.roots.first().expect("one registered Root");
+        assert_eq!(root.last_result, status.last_result);
+        assert_eq!(root.automatic_grants, 1);
+        assert_eq!(root.window.spent_cycles, grant.request.granted_cycles);
+        assert_eq!(root.window.reserved_cycles, Cycles::new(0));
+
+        for _ in 0..8 {
+            fixture.pic.advance_time(Duration::from_mins(1));
+            fixture.pic.tick();
+        }
+        let replay_safe = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(replay_safe.automatic_grants, 1);
+        assert_eq!(replay_safe.last_result, status.last_result);
+    }
+
+    #[test]
+    fn two_roots_use_independent_limits_and_one_coordinator_budget() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_multi_root_funding_journey();
+
+        let mut root_statuses = fixture
+            .roots
+            .map(|root| root_funding_status(&fixture.pic, root));
+        for _ in 0..64 {
+            if root_statuses.iter().all(|status| {
+                matches!(
+                    status.last_result,
+                    Some(FleetRootFundingResponse::Granted(_))
+                )
+            }) {
+                break;
+            }
+            fixture.pic.advance_time(Duration::from_mins(1));
+            fixture.pic.tick();
+            root_statuses = fixture
+                .roots
+                .map(|root| root_funding_status(&fixture.pic, root));
+        }
+
+        let mut expected_fleet_spend = 0_u128;
+        for (root, status) in fixture.roots.into_iter().zip(&root_statuses) {
+            let Some(FleetRootFundingResponse::Granted(grant)) = status.last_result.as_ref() else {
+                panic!("each registered Root must retain one grant, got {status:?}");
+            };
+            assert_eq!(status.fleet_subnet_root, root);
+            assert_eq!(grant.request.operation_sequence, 1);
+            assert_eq!(status.current_operation, None);
+            assert_eq!(status.automatic_grants, 1);
+            assert_eq!(status.automatic_cycles, grant.request.granted_cycles);
+            expected_fleet_spend = expected_fleet_spend
+                .checked_add(grant.request.granted_cycles.to_u128())
+                .expect("two Root grants fit in u128");
+        }
+
+        let CoordinatorStatusResponse::Funding(coordinator) = coordinator_status(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::Funding,
+        )
+        .expect("query multi-Root Coordinator funding status") else {
+            panic!("Coordinator returned a differently correlated funding status");
+        };
+        assert_eq!(coordinator.automatic_grants, 2);
+        assert_eq!(coordinator.automatic_cycles.to_u128(), expected_fleet_spend);
+        let fleet_window = coordinator
+            .fleet_window
+            .expect("active multi-Root Coordinator funding window");
+        assert_eq!(fleet_window.spent_cycles.to_u128(), expected_fleet_spend);
+        assert_eq!(fleet_window.reserved_cycles, Cycles::new(0));
+        assert_eq!(coordinator.roots.len(), 2);
+        for root in fixture.roots {
+            let status = coordinator
+                .roots
+                .iter()
+                .find(|status| status.fleet_subnet_root == root)
+                .expect("registered Root funding projection");
+            assert_eq!(status.automatic_grants, 1);
+            assert_eq!(status.window.reserved_cycles, Cycles::new(0));
+            assert!(status.window.spent_cycles.to_u128() > 0);
+        }
+    }
+
+    #[test]
+    fn automatic_grant_cap_never_renews_after_the_ninety_day_window() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_root_funding_journey_with_policy(
+            false,
+            30_000_000_000_000,
+            |root, coordinator| {
+                root.root_funding.maximum_automatic_grants = 1;
+                root.root_funding.maximum_automatic_cycles =
+                    root.root_funding.target_balance.clone();
+                coordinator.maximum_automatic_grants = 1;
+                coordinator.maximum_automatic_cycles = root.root_funding.target_balance.clone();
+            },
+        );
+        let granted = await_root_funding(&fixture, |status| {
+            matches!(
+                status.last_result,
+                Some(FleetRootFundingResponse::Granted(_))
+            )
+        });
+        assert_eq!(granted.automatic_grants, 1);
+        assert_eq!(granted.root_policy.maximum_automatic_grants, 1);
+        let terminal = granted.last_result;
+
+        fixture.pic.advance_time(Duration::from_hours(91 * 24));
+        for _ in 0..4 {
+            fixture.pic.tick();
+        }
+        let after_rollover = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(after_rollover.automatic_grants, 1);
+        assert_eq!(after_rollover.root_policy.maximum_automatic_grants, 1);
+        assert_eq!(after_rollover.last_result, terminal);
+        assert_eq!(after_rollover.current_operation, None);
+    }
+
+    #[test]
+    fn terminal_coordinator_reserve_denial_runs_one_real_icp_fallback() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_system_icp_funding_journey(490_000_000_000_000);
+        fixture
+            .pic
+            .stop_canister(fixture.descendant, Some(fixture.root))
+            .expect("stop descendant until the Root refill completes");
+        let status = await_root_funding(&fixture, |status| {
+            status
+                .latest_icp_refill
+                .as_ref()
+                .is_some_and(|refill| refill.response.status == IcpRefillStatus::Completed)
+        });
+        let Some(FleetRootFundingResponse::NoGrant(no_grant)) = status.last_result.as_ref() else {
+            panic!("Root must retain the terminal Coordinator no-grant");
+        };
+        assert_eq!(
+            no_grant.reason,
+            FleetRootFundingNoGrantReason::CoordinatorReserveUnavailable
+        );
+        let refill = status
+            .latest_icp_refill
+            .as_ref()
+            .expect("one terminal automatic refill");
+        assert!(matches!(refill.trigger, IcpRefillTrigger::Automatic { .. }));
+        assert_eq!(refill.response.status, IcpRefillStatus::Completed);
+        assert!(refill.response.ledger_block_index.is_some());
+        assert!(
+            refill
+                .response
+                .cycles_sent
+                .as_ref()
+                .is_some_and(|cycles| { cycles > &Nat::from(0_u8) })
+        );
+        assert!(!refill.resumable);
+        assert_eq!(status.automatic_grants, 0);
+        assert_eq!(status.automatic_icp_refills, 1);
+        assert_eq!(status.automatic_icp_refill_e8s, refill.amount_e8s);
+        assert!(fixture.pic.cycle_balance(fixture.root) > fixture.root_balance_before_activation);
+
+        let descendant_cycles_before = fixture.pic.cycle_balance(fixture.descendant);
+        let request_id = [0x5a; 32];
+        let issued_at_ns = fixture.pic.get_time().as_nanos_since_unix_epoch();
+        let request = canic::dto::capability::RootCapabilityEnvelopeV1 {
+            service: canic::dto::capability::CapabilityService::Root,
+            capability_version: canic::dto::capability::CAPABILITY_VERSION_V1,
+            capability: canic::dto::rpc::Request::Cycles(canic::dto::rpc::CyclesRequest {
+                cycles: 5_000_000_000_000,
+                metadata: None,
+            }),
+            proof: canic::dto::capability::CapabilityProof::Structural,
+            metadata: canic::dto::capability::CapabilityRequestMetadata {
+                request_id,
+                issued_at_ns,
+                ttl_ns: 300_000_000_000,
+            },
+        };
+        let transferred = request_descendant_funding(
+            &fixture.pic,
+            fixture.root,
+            fixture.descendant,
+            request.clone(),
+        );
+        assert_eq!(transferred, 5_000_000_000_000);
+        let descendant_cycles_after = fixture.pic.cycle_balance(fixture.descendant);
+        assert_eq!(
+            descendant_cycles_after,
+            descendant_cycles_before + transferred
+        );
+        let replayed =
+            request_descendant_funding(&fixture.pic, fixture.root, fixture.descendant, request);
+        assert_eq!(replayed, transferred);
+        assert_eq!(
+            fixture.pic.cycle_balance(fixture.descendant),
+            descendant_cycles_after
+        );
+    }
+
+    #[test]
+    fn real_rate_gate_denial_spends_no_icp_and_creates_no_refill() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_system_icp_funding_journey_with_policy(490_000_000_000_000, |policy| {
+            policy.min_xdr_permyriad_per_icp = Some(u64::MAX);
+        });
+        let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
+            .expect("canonical ICP Ledger principal");
+        let before_icp = real_icp_balance(&fixture.pic, ledger, fixture.root);
+        let before_cycles = fixture.pic.cycle_balance(fixture.root);
+
+        let denied = await_root_funding(&fixture, |status| {
+            matches!(
+                status.last_result,
+                Some(FleetRootFundingResponse::NoGrant(ref result))
+                    if result.reason
+                        == FleetRootFundingNoGrantReason::CoordinatorReserveUnavailable
+            )
+        });
+        for _ in 0..8 {
+            fixture.pic.advance_time(Duration::from_mins(1));
+            fixture.pic.tick();
+        }
+        let after = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(after.last_result, denied.last_result);
+        assert!(after.latest_icp_refill.is_none());
+        assert_eq!(after.automatic_icp_refills, 0);
+        assert_eq!(after.automatic_icp_refill_e8s, 0);
+        assert_eq!(
+            real_icp_balance(&fixture.pic, ledger, fixture.root),
+            before_icp
+        );
+        assert!(fixture.pic.cycle_balance(fixture.root) <= before_cycles);
+    }
+
+    #[test]
+    fn insufficient_real_icp_spends_nothing_and_creates_no_refill() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_system_icp_funding_journey_with_balance_and_policy(
+            490_000_000_000_000,
+            5_000_000,
+            |_| {},
+        );
+        let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
+            .expect("canonical ICP Ledger principal");
+        let before_icp = real_icp_balance(&fixture.pic, ledger, fixture.root);
+        let before_cycles = fixture.pic.cycle_balance(fixture.root);
+
+        let denied = await_root_funding(&fixture, |status| {
+            matches!(
+                status.last_result,
+                Some(FleetRootFundingResponse::NoGrant(ref result))
+                    if result.reason
+                        == FleetRootFundingNoGrantReason::CoordinatorReserveUnavailable
+            )
+        });
+        for _ in 0..8 {
+            fixture.pic.advance_time(Duration::from_mins(1));
+            fixture.pic.tick();
+        }
+        let after = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(after.last_result, denied.last_result);
+        assert!(after.latest_icp_refill.is_none());
+        assert_eq!(after.automatic_icp_refills, 0);
+        assert_eq!(after.automatic_icp_refill_e8s, 0);
+        assert_eq!(
+            real_icp_balance(&fixture.pic, ledger, fixture.root),
+            before_icp
+        );
+        assert!(fixture.pic.cycle_balance(fixture.root) <= before_cycles);
+    }
+
+    #[test]
+    fn uncertain_grant_suppresses_icp_and_direct_topup_remains_available() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_system_icp_funding_journey(30_000_000_000_000);
+        let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
+            .expect("canonical ICP Ledger principal");
+        let before_icp = real_icp_balance(&fixture.pic, ledger, fixture.root);
+        fixture
+            .pic
+            .stop_canister(fixture.coordinator, None)
+            .expect("stop Coordinator before the first funding request");
+
+        for _ in 0..8 {
+            fixture.pic.advance_time(Duration::from_mins(1));
+            fixture.pic.tick();
+        }
+        let status = root_funding_status(&fixture.pic, fixture.root);
+        assert!(status.current_operation.is_some());
+        assert!(status.last_result.is_none());
+        assert!(status.latest_icp_refill.is_none());
+        assert_eq!(status.automatic_icp_refills, 0);
+        assert_eq!(status.automatic_icp_refill_e8s, 0);
+        assert_eq!(
+            real_icp_balance(&fixture.pic, ledger, fixture.root),
+            before_icp
+        );
+
+        let retained_request = status.current_operation;
+        let before_topup = fixture.pic.cycle_balance(fixture.root);
+        fixture.pic.add_cycles(fixture.root, 100_000_000_000_000);
+        assert_eq!(
+            fixture.pic.cycle_balance(fixture.root),
+            before_topup + 100_000_000_000_000
+        );
+        let after_topup = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(after_topup.current_operation, retained_request);
+        assert!(after_topup.last_result.is_none());
+        assert!(after_topup.latest_icp_refill.is_none());
+    }
+
+    #[test]
+    fn production_ledger_and_cmc_exact_replay_never_duplicates_value() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let pic = build_icp_refill_pic();
+        let subnet = *pic
+            .topology()
+            .get_app_subnets()
+            .first()
+            .expect("one application Subnet");
+        let target = pic.create_canister_on_subnet(None, None, subnet);
+        pic.add_cycles(target, 1_000_000_000_000);
+        let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
+            .expect("canonical ICP Ledger principal");
+        let cmc =
+            Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai").expect("canonical CMC principal");
+        let fee: Nat = pic
+            .query_candid(ledger, "icrc1_fee", ())
+            .expect("query production ICP Ledger fee");
+        let request = QualificationIcrc1TransferArg {
+            from_subaccount: None,
+            to: QualificationIcrc1Account {
+                owner: cmc,
+                subaccount: Some(qualification_cmc_topup_subaccount(target)),
+            },
+            fee: Some(fee),
+            created_at_time: Some(pic.get_time().as_nanos_since_unix_epoch()),
+            memo: Some(b"TPUP\0\0\0\0".to_vec()),
+            amount: Nat::from(100_000_000_u64),
+        };
+        let first: Result<Nat, QualificationIcrc1TransferError> = pic
+            .update_candid(ledger, "icrc1_transfer", (&request,))
+            .expect("execute production ICP Ledger transfer");
+        let block_index = first.expect("first production transfer must succeed");
+        let duplicate: Result<Nat, QualificationIcrc1TransferError> = pic
+            .update_candid(ledger, "icrc1_transfer", (&request,))
+            .expect("replay production ICP Ledger transfer");
+        assert!(matches!(
+            duplicate,
+            Err(QualificationIcrc1TransferError::Duplicate { duplicate_of })
+                if duplicate_of == block_index
+        ));
+
+        let block_index = block_index
+            .to_string()
+            .parse::<u64>()
+            .expect("production block index fits u64");
+        let notify = QualificationNotifyTopUpArg {
+            block_index,
+            canister_id: target,
+        };
+        let cycles_before = pic.cycle_balance(target);
+        let first_notify: Result<Nat, QualificationNotifyTopUpError> = pic
+            .update_candid(cmc, "notify_top_up", (&notify,))
+            .expect("execute production CMC notification");
+        let minted = first_notify.expect("first production CMC notification must succeed");
+        assert!(minted > 0_u8);
+        let cycles_after_first = pic.cycle_balance(target);
+        assert!(cycles_after_first > cycles_before);
+
+        let replay: Result<Nat, QualificationNotifyTopUpError> = pic
+            .update_candid(cmc, "notify_top_up", (&notify,))
+            .expect("replay production CMC notification");
+        assert!(replay.is_ok());
+        assert_eq!(pic.cycle_balance(target), cycles_after_first);
     }
 
     #[test]
@@ -950,6 +1419,585 @@ mod tests {
             .expect("observe destination-controlled asset");
         assert_eq!(terminal.module_hash, None);
         assert_eq!(terminal.settings.controllers, vec![destination_root]);
+    }
+
+    #[cfg(test)]
+    struct RootFundingJourneyFixture {
+        pic: PocketIc,
+        coordinator: Principal,
+        root: Principal,
+        descendant: Principal,
+        root_balance_before_activation: u128,
+    }
+
+    #[cfg(test)]
+    struct MultiRootFundingJourneyFixture {
+        pic: PocketIc,
+        coordinator: Principal,
+        roots: [Principal; 2],
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    struct QualificationIcrc1Account {
+        owner: Principal,
+        subaccount: Option<[u8; 32]>,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    struct QualificationIcrc1TransferArg {
+        from_subaccount: Option<[u8; 32]>,
+        to: QualificationIcrc1Account,
+        fee: Option<Nat>,
+        created_at_time: Option<u64>,
+        memo: Option<Vec<u8>>,
+        amount: Nat,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Debug, Deserialize)]
+    enum QualificationIcrc1TransferError {
+        BadBurn { min_burn_amount: Nat },
+        BadFee { expected_fee: Nat },
+        CreatedInFuture { ledger_time: u64 },
+        Duplicate { duplicate_of: Nat },
+        GenericError { error_code: Nat, message: String },
+        InsufficientFunds { balance: Nat },
+        TemporarilyUnavailable,
+        TooOld,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    struct QualificationNotifyTopUpArg {
+        block_index: u64,
+        canister_id: Principal,
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Debug, Deserialize)]
+    enum QualificationNotifyTopUpError {
+        Refunded {
+            block_index: Option<u64>,
+            reason: String,
+        },
+        InvalidTransaction(String),
+        Other {
+            error_code: u64,
+            error_message: String,
+        },
+        Processing,
+        TransactionTooOld(u64),
+    }
+
+    #[cfg(test)]
+    fn setup_root_funding_journey(
+        with_automatic_icp: bool,
+        coordinator_reserve_cycles: u128,
+    ) -> RootFundingJourneyFixture {
+        setup_root_funding_journey_with_policy(
+            with_automatic_icp,
+            coordinator_reserve_cycles,
+            |_, _| {},
+        )
+    }
+
+    #[cfg(test)]
+    fn setup_root_funding_journey_with_policy(
+        with_automatic_icp: bool,
+        coordinator_reserve_cycles: u128,
+        configure: impl FnOnce(
+            &mut FleetSubnetRootFundingAuthority,
+            &mut FleetCoordinatorRootFundingPolicy,
+        ),
+    ) -> RootFundingJourneyFixture {
+        let root_wasm = build_test_root_wasm();
+        let refill_stub_wasm = build_icp_refill_stub_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let subnet = *pic
+            .topology()
+            .get_app_subnets()
+            .first()
+            .expect("one application Subnet");
+        let ledger = pic.create_canister_on_subnet(None, None, subnet);
+        let cmc = pic.create_canister_on_subnet(None, None, subnet);
+        pic.add_cycles(ledger, 10_000_000_000_000);
+        pic.add_cycles(cmc, 100_000_000_000_000);
+        pic.install_canister(
+            ledger,
+            refill_stub_wasm.clone(),
+            encode_one(IcpRefillStubInit::Ledger {
+                balance_e8s: 500_000_000,
+            })
+            .expect("encode ICP Ledger fixture"),
+            None,
+        );
+        pic.install_canister(
+            cmc,
+            refill_stub_wasm,
+            encode_one(IcpRefillStubInit::Cmc {
+                xdr_permyriad_per_icp: 1_000_000,
+                cycles_per_notify: 50_000_000_000_000,
+            })
+            .expect("encode CMC fixture"),
+            None,
+        );
+
+        let coordinator = pic.create_canister_on_subnet(None, None, subnet);
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let mut funding = root_funding_journey_authority(with_automatic_icp, ledger, cmc);
+        let mut coordinator_root_funding = FleetCoordinatorRootFundingPolicy {
+            funding_profile: FleetFundingProfile::SingleSubnet,
+            minimum_reserve_cycles: Cycles::new(coordinator_reserve_cycles),
+            budget: CyclesFundingBudget {
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(450_000_000_000_000),
+            },
+            maximum_automatic_grants: 4,
+            maximum_automatic_cycles: Cycles::new(880_000_000_000_000),
+        };
+        configure(&mut funding, &mut coordinator_root_funding);
+        let root_fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                coordinator_subnet: Some(subnet),
+                root_subnet: Some(subnet),
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: Some(funding),
+                coordinator_root_funding: Some(coordinator_root_funding),
+            },
+            create_prepaid_pool_assets,
+        );
+        reset_prepaid_pool_assets(&pic, root_fixture.root_id);
+        install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &root_fixture);
+        let (joining_version, sync_request) =
+            join_and_synchronize_root(&pic, coordinator, &root_fixture);
+        let root_balance_before_activation = pic.cycle_balance(root_fixture.root_id);
+        let active_components = assert_registry_and_root_runtime_activation(
+            &pic,
+            coordinator,
+            &root_fixture,
+            joining_version,
+            sync_request,
+        );
+        RootFundingJourneyFixture {
+            pic,
+            coordinator,
+            root: root_fixture.root_id,
+            descendant: active_components.issuer.canister_id,
+            root_balance_before_activation,
+        }
+    }
+
+    #[cfg(test)]
+    fn setup_system_icp_funding_journey(
+        coordinator_reserve_cycles: u128,
+    ) -> RootFundingJourneyFixture {
+        setup_system_icp_funding_journey_with_policy(coordinator_reserve_cycles, |_| {})
+    }
+
+    #[cfg(test)]
+    fn setup_system_icp_funding_journey_with_policy(
+        coordinator_reserve_cycles: u128,
+        configure: impl FnOnce(&mut FleetSubnetRootIcpRefillPolicy),
+    ) -> RootFundingJourneyFixture {
+        setup_system_icp_funding_journey_with_balance_and_policy(
+            coordinator_reserve_cycles,
+            100_000_000_000,
+            configure,
+        )
+    }
+
+    #[cfg(test)]
+    fn setup_system_icp_funding_journey_with_balance_and_policy(
+        coordinator_reserve_cycles: u128,
+        ledger_balance_e8s: u64,
+        configure: impl FnOnce(&mut FleetSubnetRootIcpRefillPolicy),
+    ) -> RootFundingJourneyFixture {
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_icp_refill_pic();
+        let subnet = *pic
+            .topology()
+            .get_app_subnets()
+            .first()
+            .expect("one application Subnet");
+        let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
+            .expect("canonical ICP Ledger principal");
+        let cmc =
+            Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai").expect("canonical CMC principal");
+
+        let coordinator = pic.create_canister_on_subnet(None, None, subnet);
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let mut funding = root_funding_journey_authority(true, ledger, cmc);
+        let icp_refill = funding
+            .icp_refill
+            .as_mut()
+            .expect("system ICP journey enables refill policy");
+        icp_refill.max_refill_e8s_per_call = 100_000_000_000;
+        icp_refill.maximum_refill_e8s = 200_000_000_000;
+        icp_refill.min_xdr_permyriad_per_icp = None;
+        icp_refill
+            .automatic
+            .as_mut()
+            .expect("system ICP journey enables automatic refill")
+            .maximum_automatic_refill_e8s = 200_000_000_000;
+        configure(icp_refill);
+        let coordinator_root_funding = FleetCoordinatorRootFundingPolicy {
+            funding_profile: FleetFundingProfile::SingleSubnet,
+            minimum_reserve_cycles: Cycles::new(coordinator_reserve_cycles),
+            budget: CyclesFundingBudget {
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(450_000_000_000_000),
+            },
+            maximum_automatic_grants: 4,
+            maximum_automatic_cycles: Cycles::new(880_000_000_000_000),
+        };
+        let root_fixture = install_bootstrapped_root_on_subnet_with_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            BootstrappedRootPlacement {
+                coordinator_subnet: Some(subnet),
+                root_subnet: Some(subnet),
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: Some(funding),
+                coordinator_root_funding: Some(coordinator_root_funding),
+            },
+            create_prepaid_pool_assets,
+        );
+        fund_real_icp_ledger_account(&pic, ledger, root_fixture.root_id, ledger_balance_e8s);
+        reset_prepaid_pool_assets(&pic, root_fixture.root_id);
+        install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &root_fixture);
+        let (joining_version, sync_request) =
+            join_and_synchronize_root(&pic, coordinator, &root_fixture);
+        let root_balance_before_activation = pic.cycle_balance(root_fixture.root_id);
+        let active_components = assert_registry_and_root_runtime_activation(
+            &pic,
+            coordinator,
+            &root_fixture,
+            joining_version,
+            sync_request,
+        );
+        RootFundingJourneyFixture {
+            pic,
+            coordinator,
+            root: root_fixture.root_id,
+            descendant: active_components.issuer.canister_id,
+            root_balance_before_activation,
+        }
+    }
+
+    #[cfg(test)]
+    fn setup_multi_root_funding_journey() -> MultiRootFundingJourneyFixture {
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let pic = build_two_root_pic();
+        let mut subnets = pic.topology().get_app_subnets();
+        subnets.sort_by_key(|subnet| SubnetId::from_principal(*subnet));
+        let [first_subnet, second_subnet] = subnets.as_slice() else {
+            panic!("two-Root fixture requires exactly two application Subnets");
+        };
+        let coordinator = pic.create_canister_on_subnet(None, None, *first_subnet);
+        pic.add_cycles(coordinator, 5_000_000_000_000_000);
+        let funding = multi_root_funding_authority();
+        let coordinator_policy = FleetCoordinatorRootFundingPolicy {
+            funding_profile: FleetFundingProfile::MultiSubnet,
+            minimum_reserve_cycles: Cycles::new(2_000_000_000_000_000),
+            budget: CyclesFundingBudget {
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(2_000_000_000_000_000),
+            },
+            maximum_automatic_grants: 8,
+            maximum_automatic_cycles: Cycles::new(8_000_000_000_000_000),
+        };
+        let install_root = |subnet| {
+            install_bootstrapped_root_on_subnet_with_pool_setup(
+                &pic,
+                root_wasm.clone(),
+                coordinator,
+                build_root_store_fixture(),
+                BootstrappedRootPlacement {
+                    coordinator_subnet: Some(*first_subnet),
+                    root_subnet: Some(subnet),
+                    component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
+                    fleet_id: Some(FleetId::from_generated_bytes([0x78; 32])),
+                    funding: Some(funding.clone()),
+                    coordinator_root_funding: Some(coordinator_policy.clone()),
+                },
+                create_prepaid_pool_assets,
+            )
+        };
+        let first = install_root(*first_subnet);
+        let second = install_root(*second_subnet);
+        reset_prepaid_pool_assets(&pic, first.root_id);
+        reset_prepaid_pool_assets(&pic, second.root_id);
+        install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &first);
+        activate_multi_root_registry(&pic, coordinator, [&first, &second]);
+
+        MultiRootFundingJourneyFixture {
+            pic,
+            coordinator,
+            roots: [first.root_id, second.root_id],
+        }
+    }
+
+    #[cfg(test)]
+    const fn multi_root_funding_authority() -> FleetSubnetRootFundingAuthority {
+        FleetSubnetRootFundingAuthority {
+            root_funding: FleetSubnetRootFundingPolicy {
+                funding_profile: FleetFundingProfile::MultiSubnet,
+                request_threshold: Cycles::new(250_000_000_000_000),
+                target_balance: Cycles::new(1_000_000_000_000_000),
+                cooldown_secs: 30 * 24 * 60 * 60,
+                budget: CyclesFundingBudget {
+                    window_secs: 90 * 24 * 60 * 60,
+                    maximum_cycles: Cycles::new(1_000_000_000_000_000),
+                },
+                maximum_automatic_grants: 4,
+                maximum_automatic_cycles: Cycles::new(4_000_000_000_000_000),
+            },
+            icp_refill: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn activate_multi_root_registry(
+        pic: &PocketIc,
+        coordinator: Principal,
+        fixtures: [&BootstrappedRootFixture; 2],
+    ) {
+        let CoordinatorStatusResponse::RegistryVersion(mut version) =
+            coordinator_status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
+                .expect("query multi-Root Registry genesis")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
+        for fixture in fixtures {
+            let binding = &fixture.init_args.authority.binding;
+            let request = FleetSubnetRootJoinRequest {
+                expected_registry: version,
+                entry: FleetSubnetRootEntry {
+                    placement_subnet: binding.placement_subnet,
+                    fleet_subnet_root: fixture.root_id,
+                    component_admissions: binding.component_admissions.clone(),
+                    component_topology_digest: binding.component_topology_digest,
+                    active_release_set: fixture.init_args.authority.initial_release_set,
+                    funding: binding.funding.clone(),
+                    limits: binding.limits.clone(),
+                    status: FleetSubnetRootStatus::Joining,
+                },
+            };
+            let CoordinatorCommandResponse::JoinRoot(joined) =
+                coordinator_command(pic, coordinator, CoordinatorCommand::JoinRoot(request))
+                    .expect("join one Root to the multi-Root Registry")
+            else {
+                panic!("Coordinator returned a differently correlated join response");
+            };
+            version = joined.version;
+        }
+
+        let sync_requests: [FleetSubnetRootRegistrySyncRequest; 2] =
+            std::array::from_fn(|index| FleetSubnetRootRegistrySyncRequest {
+                operation_id: [u8::try_from(index + 1).expect("two operation identities fit u8");
+                    32],
+                expected_registry: version.clone(),
+                store_bootstrap: fixtures[index].request.clone(),
+            });
+        for (fixture, request) in fixtures.into_iter().zip(sync_requests.iter()) {
+            let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
+                pic,
+                fixture.root_id,
+                RootCommandFragment::SynchronizeRegistry(request.clone()),
+            )
+            .expect("synchronize one Root to the final multi-Root Registry") else {
+                panic!("Root returned a differently correlated synchronization response");
+            };
+            assert_eq!(receipt.operation_id, request.operation_id);
+        }
+
+        let CoordinatorCommandResponse::ActivateRegistry(activated) = coordinator_command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ActivateRegistry(FleetRegistryActivationRequest {
+                expected_registry: version,
+            }),
+        )
+        .expect("activate the multi-Root Registry") else {
+            panic!("Coordinator returned a differently correlated activation response");
+        };
+        for (index, (fixture, request)) in fixtures.into_iter().zip(sync_requests).enumerate() {
+            let mut mirror_active = false;
+            for _ in 0..32 {
+                let RootStatusResponseFragment::Operation(
+                    RootOperationStatusResponse::SynchronizeRegistry(status),
+                ) = root_status(
+                    pic,
+                    fixture.root_id,
+                    RootStatusRequestFragment::Operation(OperationStatusRequest {
+                        operation_id: request.operation_id,
+                    }),
+                )
+                .expect("query multi-Root Registry synchronization")
+                else {
+                    panic!("Root returned a differently correlated synchronization status");
+                };
+                if status.activation.is_some() {
+                    mirror_active = true;
+                    break;
+                }
+                pic.advance_time(Duration::from_secs(1));
+                pic.tick();
+            }
+            assert!(
+                mirror_active,
+                "each Root must activate the final multi-Root Registry mirror"
+            );
+            prepare_component_registry(
+                pic,
+                fixture,
+                RootComponentRegistryPreparationRequest {
+                    store_bootstrap: fixture.request.clone(),
+                    expected_fleet_registry: activated.version.clone(),
+                },
+            );
+            let operation_byte = u8::try_from(index + 3).expect("two operation identities fit u8");
+            let component = provision_component(pic, fixture, [operation_byte; 32]);
+            assert_eq!(component.allocation_sequence, 1);
+            assert_eq!(component.phase, RootComponentAllocationPhase::Committed);
+            activate_root(pic, fixture.root_id);
+        }
+    }
+
+    #[cfg(test)]
+    fn fund_real_icp_ledger_account(
+        pic: &PocketIc,
+        ledger: Principal,
+        owner: Principal,
+        amount_e8s: u64,
+    ) {
+        let transfer: Result<Nat, QualificationIcrc1TransferError> = pic
+            .update_candid(
+                ledger,
+                "icrc1_transfer",
+                (QualificationIcrc1TransferArg {
+                    from_subaccount: None,
+                    to: QualificationIcrc1Account {
+                        owner,
+                        subaccount: None,
+                    },
+                    fee: None,
+                    created_at_time: None,
+                    memo: None,
+                    amount: Nat::from(amount_e8s),
+                },),
+            )
+            .expect("fund Root account through the production ICP Ledger");
+        transfer.expect("production ICP Ledger transfer must succeed");
+    }
+
+    #[cfg(test)]
+    fn real_icp_balance(pic: &PocketIc, ledger: Principal, owner: Principal) -> Nat {
+        pic.query_candid(
+            ledger,
+            "icrc1_balance_of",
+            (QualificationIcrc1Account {
+                owner,
+                subaccount: None,
+            },),
+        )
+        .expect("query production ICP Ledger balance")
+    }
+
+    #[cfg(test)]
+    fn qualification_cmc_topup_subaccount(target: Principal) -> [u8; 32] {
+        let bytes = target.as_slice();
+        assert!(bytes.len() <= 31, "CMC top-up target principal must fit");
+        let mut subaccount = [0_u8; 32];
+        subaccount[0] = u8::try_from(bytes.len()).expect("principal length fits u8");
+        subaccount[1..=bytes.len()].copy_from_slice(bytes);
+        subaccount
+    }
+
+    #[cfg(test)]
+    fn root_funding_journey_authority(
+        with_automatic_icp: bool,
+        ledger: Principal,
+        cmc: Principal,
+    ) -> FleetSubnetRootFundingAuthority {
+        FleetSubnetRootFundingAuthority {
+            root_funding: FleetSubnetRootFundingPolicy {
+                funding_profile: FleetFundingProfile::SingleSubnet,
+                request_threshold: Cycles::new(210_000_000_000_000),
+                target_balance: Cycles::new(450_000_000_000_000),
+                cooldown_secs: 30 * 24 * 60 * 60,
+                budget: CyclesFundingBudget {
+                    window_secs: 90 * 24 * 60 * 60,
+                    maximum_cycles: Cycles::new(450_000_000_000_000),
+                },
+                maximum_automatic_grants: 4,
+                maximum_automatic_cycles: Cycles::new(880_000_000_000_000),
+            },
+            icp_refill: with_automatic_icp.then_some(FleetSubnetRootIcpRefillPolicy {
+                max_refill_e8s_per_call: 200_000_000,
+                window_secs: 24 * 60 * 60,
+                maximum_refill_e8s: 400_000_000,
+                minimum_icp_balance_e8s: 10_000_000,
+                min_xdr_permyriad_per_icp: Some(500_000),
+                ledger_canister_id: Some(ledger),
+                cmc_canister_id: Some(cmc),
+                allow_ic_system_canister_overrides: true,
+                automatic: Some(FleetSubnetRootAutomaticIcpRefillPolicy {
+                    emergency_threshold: Cycles::new(200_000_000_000_000),
+                    target_balance: Cycles::new(300_000_000_000_000),
+                    maximum_automatic_refills: 4,
+                    maximum_automatic_refill_e8s: 400_000_000,
+                }),
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    fn root_funding_status(pic: &PocketIc, root: Principal) -> RootFundingStatusResponse {
+        let RootStatusResponseFragment::Funding(status) =
+            root_status(pic, root, RootStatusRequestFragment::Funding)
+                .expect("query protected Root funding status")
+        else {
+            panic!("Root returned a differently correlated funding status");
+        };
+        status
+    }
+
+    #[cfg(test)]
+    fn await_root_funding(
+        fixture: &RootFundingJourneyFixture,
+        complete: impl Fn(&RootFundingStatusResponse) -> bool,
+    ) -> RootFundingStatusResponse {
+        for _ in 0..128 {
+            let status = root_funding_status(&fixture.pic, fixture.root);
+            if complete(&status) {
+                return status;
+            }
+            fixture.pic.advance_time(Duration::from_mins(1));
+            fixture.pic.tick();
+        }
+        report_canister_diagnostics(
+            &fixture.pic,
+            fixture.root,
+            Principal::anonymous(),
+            "Root protected funding journey",
+        );
+        panic!("Root protected funding journey did not become terminal");
     }
 
     #[cfg(test)]
@@ -2516,7 +3564,7 @@ mod tests {
                 .app
                 .clone(),
             authority: fixture.init_args.authority.binding.authority.clone(),
-            root_funding: Some(crate::pic::coordinator_root_funding_policy()),
+            root_funding: Some(fixture.coordinator_root_funding.clone()),
             component_deployment_configuration: config
                 .model()
                 .compile_component_deployment_configuration()
@@ -2846,6 +3894,8 @@ mod tests {
         root_subnet: Option<Principal>,
         component_admission_limits: Option<RootComponentAdmissionLimits>,
         fleet_id: Option<FleetId>,
+        funding: Option<FleetSubnetRootFundingAuthority>,
+        coordinator_root_funding: Option<FleetCoordinatorRootFundingPolicy>,
     }
 
     #[cfg_attr(
@@ -2881,6 +3931,8 @@ mod tests {
                 root_subnet: Some(placement_subnet),
                 component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
                 fleet_id: Some(FleetId::from_generated_bytes([fleet_id_byte; 32])),
+                funding: None,
+                coordinator_root_funding: None,
             },
             create_prepaid_pool_assets,
         );
@@ -2908,6 +3960,8 @@ mod tests {
                 root_subnet: None,
                 component_admission_limits: None,
                 fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
             },
             pool_setup,
         )
@@ -2963,6 +4017,9 @@ mod tests {
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        if let Some(funding) = placement.funding.clone() {
+            init_args.authority.binding.funding = funding;
+        }
         bind_fixture_fleet_id(&mut init_args, placement.fleet_id);
         if let Some(component_admission_limits) = placement.component_admission_limits {
             for admission in &mut init_args.authority.binding.component_admissions {
@@ -3011,6 +4068,9 @@ mod tests {
         BootstrappedRootFixture {
             root_id,
             init_args,
+            coordinator_root_funding: placement
+                .coordinator_root_funding
+                .unwrap_or_else(crate::pic::coordinator_root_funding_policy),
             request,
             response,
         }

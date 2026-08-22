@@ -101,6 +101,7 @@ use canic_core::{
         fleet_registry::{
             FleetDirectorySnapshot, FleetRegistryVersion,
             FleetSubnetRootDrainingReservationResponse, FleetSubnetRootRemovalPublicationResponse,
+            FleetSubnetRootStatus,
         },
         fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
         root_store::RootStoreBootstrapRequest,
@@ -1489,6 +1490,7 @@ impl ComponentRegistryOps {
             known_created_component_canisters: current.known_created_component_canisters,
             root_registry_encoded_bytes: current.encoded_bytes,
             started_at_ns,
+            funding_fenced_at_ns: None,
             final_inventory_intent: None,
             final_inventory: None,
             removal_publication: None,
@@ -1528,6 +1530,27 @@ impl ComponentRegistryOps {
             return Err(InternalError::conflict());
         }
         Ok(Some(root_draining_record_to_view(record.clone())))
+    }
+
+    /// Resolve funding eligibility from the exact local lifecycle fence and Registry state.
+    pub(crate) fn root_funding_eligible(
+        status: FleetSubnetRootStatus,
+    ) -> Result<bool, InternalError> {
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current.root_draining.as_ref();
+        if let Some(draining) = draining {
+            validate_root_draining_record(&current, draining)?;
+        }
+        match status {
+            FleetSubnetRootStatus::Active => {
+                Ok(draining.is_none_or(|draining| draining.funding_fenced_at_ns.is_none()))
+            }
+            FleetSubnetRootStatus::Draining => draining
+                .map(|draining| draining.funding_fenced_at_ns.is_none())
+                .ok_or_else(InternalError::invariant),
+            FleetSubnetRootStatus::Joining | FleetSubnetRootStatus::Removed => Ok(false),
+        }
     }
 
     pub(crate) fn validate_published_root_draining(
@@ -1597,6 +1620,32 @@ impl ComponentRegistryOps {
             terminal_root_inventory_plan(&current, draining, operation_id, &intent.registry)?;
         validate_root_final_inventory_intent_record(&current, draining, intent, &plan)?;
         Ok(Some(intent.registry.clone()))
+    }
+
+    pub(crate) fn record_root_funding_fence(
+        operation_id: [u8; 32],
+        fenced_at_ns: u64,
+    ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        if fenced_at_ns == 0 {
+            return Err(InternalError::invalid_input());
+        }
+        let current =
+            RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
+        let draining = current
+            .root_draining
+            .as_ref()
+            .ok_or_else(InternalError::unavailable)?;
+        validate_root_draining_record(&current, draining)?;
+        if draining.operation_id != operation_id {
+            return Err(InternalError::conflict());
+        }
+        if draining.funding_fenced_at_ns.is_some() {
+            return Ok(root_draining_record_to_view(draining.clone()));
+        }
+        RootComponentRegistryStore::record_root_funding_fence(&current, fenced_at_ns).map_err(
+            |RootComponentRegistryCommitError::ConflictingState| InternalError::conflict(),
+        )?;
+        Self::root_draining(operation_id)
     }
 
     pub(crate) fn begin_root_final_inventory(
@@ -6466,6 +6515,9 @@ fn terminal_root_inventory_plan(
     operation_id: [u8; 32],
     expected_registry: &FleetRegistryVersion,
 ) -> Result<RootFleetSubnetFinalInventoryPlan, InternalError> {
+    if draining.funding_fenced_at_ns.is_none() {
+        return Err(InternalError::conflict());
+    }
     ensure_terminal_root_request(draining, operation_id, expected_registry)?;
     ensure_terminal_root_counters(current)?;
     ensure_terminal_root_indexes_are_empty()?;
@@ -7122,6 +7174,7 @@ fn root_draining_record_to_view(
         known_created_component_canisters: record.known_created_component_canisters,
         root_registry_encoded_bytes: record.root_registry_encoded_bytes,
         started_at_ns: record.started_at_ns,
+        funding_fenced_at_ns: record.funding_fenced_at_ns,
         final_inventory: record
             .final_inventory
             .map(root_final_inventory_record_to_view),
@@ -12401,6 +12454,22 @@ mod tests {
             revision: prepared_registry.revision + 1,
             content_hash: [12; 32],
         };
+        assert!(
+            ComponentRegistryOps::root_funding_eligible(FleetSubnetRootStatus::Draining)
+                .expect("pre-fence draining funding eligibility")
+        );
+        ComponentRegistryOps::prepare_root_final_inventory([10; 32], &published_registry)
+            .expect_err("terminal inventory must wait for the durable funding fence");
+        let fenced = ComponentRegistryOps::record_root_funding_fence([10; 32], 12)
+            .expect("record root funding fence");
+        assert_eq!(fenced.funding_fenced_at_ns, Some(12));
+        assert!(
+            !ComponentRegistryOps::root_funding_eligible(FleetSubnetRootStatus::Draining)
+                .expect("post-fence draining funding eligibility")
+        );
+        let replayed_fence = ComponentRegistryOps::record_root_funding_fence([10; 32], 13)
+            .expect("replay root funding fence");
+        assert_eq!(replayed_fence.funding_fenced_at_ns, Some(12));
         let plan =
             ComponentRegistryOps::prepare_root_final_inventory([10; 32], &published_registry)
                 .expect("empty root is terminal");

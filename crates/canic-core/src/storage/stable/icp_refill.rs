@@ -82,6 +82,13 @@ pub enum IcpRefillRecordErrorCode {
     TransferWindowStale,
 }
 
+/// Stable owner and monotonic trigger identity for one ICP-refill operation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum IcpRefillTriggerRecord {
+    Automatic { sequence: u64 },
+    Manual,
+}
+
 ///
 /// IcpRefillRecord
 ///
@@ -93,6 +100,8 @@ pub enum IcpRefillRecordErrorCode {
 pub struct IcpRefillRecord {
     pub id: u64,
     pub operation_id: [u8; 32],
+    pub trigger: IcpRefillTriggerRecord,
+    pub policy_hash: [u8; 32],
     pub source_canister: Principal,
     pub source_subaccount: Option<[u8; 32]>,
     pub target_canister: Principal,
@@ -102,6 +111,8 @@ pub struct IcpRefillRecord {
     pub cmc_to_account_subaccount: Option<[u8; 32]>,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
+    pub budget_window_start_secs: u64,
+    pub budget_reserved: bool,
     pub memo: Vec<u8>,
     pub created_at_time_ns: u64,
     pub ledger_block_index: Option<u64>,
@@ -179,6 +190,11 @@ impl IcpRefillRecords {
     }
 
     #[must_use]
+    pub(crate) fn len() -> u64 {
+        ICP_REFILL_RECORDS.with_borrow(|records| records.map.len())
+    }
+
+    #[must_use]
     pub(crate) fn data(offset: usize, limit: usize) -> IcpRefillRecordsData {
         IcpRefillRecordsData {
             entries: ICP_REFILL_RECORDS.with_borrow(|records| {
@@ -228,27 +244,31 @@ mod tests {
         let record = IcpRefillRecord {
             id: 1,
             operation_id: [2; 32],
-            source_canister: seams::p(3),
-            source_subaccount: Some([4; 32]),
-            target_canister: seams::p(5),
-            ledger_canister_id: seams::p(6),
-            cmc_canister_id: seams::p(7),
-            cmc_to_account_owner: seams::p(8),
-            cmc_to_account_subaccount: Some([9; 32]),
+            trigger: IcpRefillTriggerRecord::Automatic { sequence: 1 },
+            policy_hash: [3; 32],
+            source_canister: seams::p(4),
+            source_subaccount: Some([5; 32]),
+            target_canister: seams::p(6),
+            ledger_canister_id: seams::p(7),
+            cmc_canister_id: seams::p(8),
+            cmc_to_account_owner: seams::p(9),
+            cmc_to_account_subaccount: Some([10; 32]),
             amount_e8s: 10,
             fee_e8s: 11,
-            memo: vec![12],
-            created_at_time_ns: 13,
-            ledger_block_index: Some(14),
-            notify_attempts: 15,
-            cycles_sent: Some(Nat::from(16_u64)),
+            budget_window_start_secs: 12,
+            budget_reserved: true,
+            memo: vec![13],
+            created_at_time_ns: 14,
+            ledger_block_index: Some(15),
+            notify_attempts: 16,
+            cycles_sent: Some(Nat::from(17_u64)),
             status: IcpRefillRecordStatus::Completed,
             error_code: None,
             error_message: None,
             refund_block_index: None,
             transaction_too_old_min_block_index: None,
-            created_at_ns: 17,
-            updated_at_ns: 18,
+            created_at_ns: 18,
+            updated_at_ns: 19,
         };
         IcpRefillRecords::insert(record);
 

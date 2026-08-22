@@ -517,6 +517,10 @@ fn cycles_topup_metrics_are_exposed() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the metric projection journey keeps one record-state assertion matrix together"
+)]
 fn icp_refill_metrics_project_bounded_record_state() {
     let target = Principal::from_slice(&[22; 29]);
     let other_target = Principal::from_slice(&[23; 29]);
@@ -525,11 +529,13 @@ fn icp_refill_metrics_project_bounded_record_state() {
         entries_from_snapshot(&IcpRefillMetricSnapshot {
             statuses: vec![
                 IcpRefillMetricStatusCount {
+                    trigger: crate::domain::icp_refill::IcpRefillTrigger::Automatic { sequence: 1 },
                     status: IcpRefillRecordStatus::Completed,
                     error_code: None,
                     count: 1,
                 },
                 IcpRefillMetricStatusCount {
+                    trigger: crate::domain::icp_refill::IcpRefillTrigger::Manual,
                     status: IcpRefillRecordStatus::Failed,
                     error_code: Some(IcpRefillRecordErrorCode::NotifyFailed),
                     count: 2,
@@ -559,6 +565,7 @@ fn icp_refill_metrics_project_bounded_record_state() {
         &[
             "cycles_funding",
             "icp_refill",
+            "automatic",
             "notify",
             "status",
             "completed",
@@ -567,7 +574,14 @@ fn icp_refill_metrics_project_bounded_record_state() {
     );
     assert_metric_count(
         &entries,
-        &["cycles_funding", "icp_refill", "notify", "status", "failed"],
+        &[
+            "cycles_funding",
+            "icp_refill",
+            "manual",
+            "notify",
+            "status",
+            "failed",
+        ],
         2,
     );
     assert_metric_count(

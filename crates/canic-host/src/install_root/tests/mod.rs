@@ -302,7 +302,7 @@ fn install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence
 
     let changed_input =
         valid_single_component_fleet_input().replace("cycles = \"100T\"", "cycles = \"101T\"");
-    fs::write(&input_path, changed_input).expect("change balance observation");
+    fs::write(&input_path, changed_input).expect("change Coordinator creation funding");
     let error = prepare_current_fresh_fleet_preflight(
         &root,
         &root,
@@ -611,6 +611,7 @@ maximum_instances = 1
 
 fn invalid_root_only_fleet_input() -> &'static str {
     r#"schema_version = 1
+funding_profile = "single_subnet"
 
 [operator]
 principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
@@ -621,23 +622,27 @@ valid_until_unix_secs = 4102444800
 
 [operator.balance]
 kind = "cycles"
-cycles = "100T"
+cycles = "5000T"
 
 [coordinator.subnet]
 kind = "explicit"
 subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+acknowledge_fiduciary_cost = false
 
 [coordinator.creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "100T"
 
 [coordinator.root_funding]
-minimum_reserve_cycles = "100000000"
-window_secs = 3600
-maximum_cycles = "10T"
+minimum_reserve_cycles = "30T"
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 4
+maximum_automatic_cycles = "120T"
 
 [[fleet_subnet_roots]]
 placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+acknowledge_fiduciary_cost = false
 
 [fleet_subnet_roots.component_admissions]
 unknown = 1
@@ -659,19 +664,21 @@ canister_cycles = "1T"
 imports = []
 
 [fleet_subnet_roots.root_funding]
-request_threshold = "50000000000"
-target_balance = "2T"
-cooldown_secs = 300
-window_secs = 3600
-maximum_cycles = "10T"
+request_threshold = "10T"
+target_balance = "30T"
+cooldown_secs = 2592000
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 4
+maximum_automatic_cycles = "120T"
 
 [fleet_subnet_roots.root_creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "30T"
 
 [fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "10T"
 "#
 }
 

@@ -57,6 +57,18 @@ impl IcOps {
         ic_cdk::api::msg_caller()
     }
 
+    /// Return cycles attached to the current call that remain unaccepted.
+    #[must_use]
+    pub fn msg_cycles_available() -> u128 {
+        ic_cdk::api::msg_cycles_available()
+    }
+
+    /// Accept at most the requested cycles from the current call.
+    #[must_use]
+    pub fn msg_cycles_accept(max_amount: u128) -> u128 {
+        ic_cdk::api::msg_cycles_accept(max_amount)
+    }
+
     /// Return the physical Subnet currently executing this canister.
     #[must_use]
     pub fn subnet_self() -> Principal {

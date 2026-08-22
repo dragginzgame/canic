@@ -4,7 +4,7 @@
 //! Does not own: stable storage records, workflow decisions, or DTO responses.
 //! Boundary: internal view used between storage ops and ICP refill workflows.
 
-use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus};
+use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, IcpRefillTrigger};
 use candid::{Nat, Principal};
 
 ///
@@ -18,6 +18,8 @@ use candid::{Nat, Principal};
 pub struct IcpRefillOperation {
     pub id: u64,
     pub operation_id: [u8; 32],
+    pub trigger: IcpRefillTrigger,
+    pub policy_hash: [u8; 32],
     pub source_canister: Principal,
     pub source_subaccount: Option<[u8; 32]>,
     pub target_canister: Principal,
@@ -27,6 +29,8 @@ pub struct IcpRefillOperation {
     pub cmc_to_account_subaccount: Option<[u8; 32]>,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
+    pub budget_window_start_secs: u64,
+    pub budget_reserved: bool,
     pub memo: Vec<u8>,
     pub created_at_time_ns: u64,
     pub ledger_block_index: Option<u64>,

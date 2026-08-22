@@ -14,6 +14,7 @@ macro_rules! canic_emit_root_command_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommand {
+            AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
             AdoptStore(::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest),
             BootstrapStore(::canic::dto::root_store::RootStoreBootstrapRequest),
             GetOrCreateDelegationProof,
@@ -63,6 +64,7 @@ macro_rules! canic_emit_root_command_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommandResponse {
+            AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceReceipt),
             GetOrCreateDelegationProof(::canic::dto::auth::RootDelegationProofBatchProof),
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
@@ -198,6 +200,10 @@ macro_rules! canic_emit_root_command_endpoint {
                 )?;
             }
 
+            if matches!(&command, RootCommand::AcceptFunding(_)) {
+                $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_root_funding_caller(caller)?;
+            }
+
             if matches!(&command, RootCommand::GetOrCreateDelegationProof) {
                 use $crate::__internal::core::access::expr::AsyncAccessPredicate as _;
                 let context = $crate::__internal::core::access::expr::AccessContext {
@@ -267,7 +273,8 @@ macro_rules! canic_emit_root_command_endpoint {
             )?;
             let prepared_command = matches!(
                 &command,
-                RootCommand::AdoptStore(_)
+                RootCommand::AcceptFunding(_)
+                    | RootCommand::AdoptStore(_)
                     | RootCommand::BootstrapStore(_)
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
@@ -287,6 +294,10 @@ macro_rules! canic_emit_root_command_endpoint {
                 prepared_command,
             )?;
             match command {
+                RootCommand::AcceptFunding(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_root_funding(request)
+                        .map(RootCommandResponse::AcceptFunding)
+                }
                 RootCommand::AdoptStore(request) => {
                     let operation_id = request.operation_id;
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::adopt_fleet_subnet_wasm_store(request).await?;
@@ -650,6 +661,7 @@ macro_rules! canic_emit_root_status_endpoint {
             CycleHistory(::canic::dto::page::PageRequest),
             FleetAuthority,
             FleetState,
+            Funding,
             Health,
             Inventory,
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
@@ -691,6 +703,7 @@ macro_rules! canic_emit_root_status_endpoint {
             ),
             FleetAuthority(::canic::dto::fleet_subnet_root::FleetSubnetRootAuthority),
             FleetState(::canic::dto::state::FleetStateResponse),
+            Funding(::canic::dto::root::RootFundingStatusResponse),
             Health(::canic::dto::runtime::CanicHealthStatus),
             Inventory(::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary),
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusResponse),
@@ -744,6 +757,7 @@ macro_rules! canic_emit_root_status_endpoint {
                 | RootStatusRequest::Config
                 | RootStatusRequest::FleetAuthority
                 | RootStatusRequest::FleetState
+                | RootStatusRequest::Funding
                 | RootStatusRequest::Health
                 | RootStatusRequest::Inventory
                 | RootStatusRequest::IssuerRenewal(_)
@@ -802,6 +816,10 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::FleetState => Ok(RootStatusResponse::FleetState(
                     $crate::__internal::core::api::state::FleetStateQuery::snapshot(),
                 )),
+                RootStatusRequest::Funding => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_funding_status()
+                        .map(RootStatusResponse::Funding)
+                }
                 RootStatusRequest::Health => Ok(RootStatusResponse::Health(
                     $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
                         $crate::__internal::cdk::api::time(),

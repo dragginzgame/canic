@@ -76,6 +76,10 @@ fn journal_recovers_exact_atomic_registry_activation_evidence() {
             .journal,
         verified.journal
     );
+    assert_eq!(
+        load_verified_installed_registry(&plan).expect("load verified installed Registry"),
+        verified.journal.active_registry
+    );
 }
 
 #[test]
@@ -157,6 +161,7 @@ fn fixture(root: &Path) -> (PersistedFleetInstallPlan, ComponentTopology, FleetR
         .expect("topology digest");
     let root_plan = PlannedFleetSubnetRoot {
         placement_subnet: subnet(2),
+        placement_cost: crate::test_support::placement_cost(subnet(2)),
         component_group_placements: Vec::new(),
         component_admissions: vec![admission.clone()],
         component_topology_digest: topology_digest,
@@ -175,6 +180,7 @@ fn fixture(root: &Path) -> (PersistedFleetInstallPlan, ComponentTopology, FleetR
             application_artifact_union_digest: [3; 32],
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
+                placement_cost: crate::test_support::placement_cost(subnet(1)),
                 creation_funding: funding(),
                 root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
             },

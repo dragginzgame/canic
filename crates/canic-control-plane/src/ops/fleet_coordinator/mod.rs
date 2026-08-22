@@ -6,6 +6,7 @@
 
 mod deployment_ledger;
 mod root_deletion;
+mod root_funding;
 
 use root_deletion::validate_root_deletion_history;
 
@@ -93,7 +94,8 @@ use canic_core::{
     },
     ids::{
         ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
-        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet, SubnetId,
+        ComponentTopologyDigest, FleetRegistryAuthority, FleetSubnetRootReleaseSet,
+        MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
     },
     shared_support::fleet_funding_policy::{
         validate_coordinator_root_funding_policy, validate_fleet_root_funding_capacity,
@@ -1703,19 +1705,24 @@ impl FleetCoordinatorOps {
                 .component_topology,
             &current.registry,
         )?;
+        if current.registry.fleet_subnet_roots.len() > MAX_FLEET_ROOT_FUNDING_SLOTS {
+            return Err(InternalError::invariant());
+        }
         match current.root_funding.as_ref() {
             Some(policy) => {
                 validate_coordinator_root_funding_policy(policy)
                     .map_err(|_error| InternalError::invariant())?;
-                validate_fleet_root_funding_capacity(
-                    policy,
-                    current
-                        .registry
-                        .fleet_subnet_roots
-                        .iter()
-                        .map(|root| &root.funding),
-                )
-                .map_err(|_error| InternalError::invariant())?;
+                if current.registry_activation_receipt.is_some() {
+                    validate_fleet_root_funding_capacity(
+                        policy,
+                        current
+                            .registry
+                            .fleet_subnet_roots
+                            .iter()
+                            .map(|root| &root.funding),
+                    )
+                    .map_err(|_error| InternalError::invariant())?;
+                }
             }
             None if !current.registry.fleet_subnet_roots.is_empty() => {
                 return Err(InternalError::invariant());

@@ -6,6 +6,8 @@ use ic_testkit::artifacts::{
     test_target_dir as artifact_test_target_dir,
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
+#[cfg(test)]
+use pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -24,9 +26,13 @@ use super::fixture::progress;
 const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 #[cfg(test)]
 const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
+#[cfg(test)]
+const ICP_REFILL_STUB_PACKAGE: &str = "icp_refill_stub";
 static BUILD_ONCE: Once = Once::new();
 #[cfg(test)]
 static MAINNET_REFILL_BUILD_ONCE: Once = Once::new();
+#[cfg(test)]
+static ICP_REFILL_STUB_BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 // Build the test root wasm.
@@ -64,6 +70,26 @@ pub(super) fn build_mainnet_refill_wasms() -> (Vec<u8>, Vec<u8>) {
     )
 }
 
+/// Build the exact ICP Ledger/CMC boundary stub without rebuilding a production Root.
+#[cfg(test)]
+pub(super) fn build_icp_refill_stub_wasm() -> Vec<u8> {
+    let workspace_root = workspace_root();
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let target_dir = test_target_dir(&workspace_root).join("icp-refill-stub");
+    ICP_REFILL_STUB_BUILD_ONCE.call_once_force(|_| {
+        build_internal_test_wasm_canisters_with_env(
+            &workspace_root,
+            &target_dir,
+            &[ICP_REFILL_STUB_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[("ICP_ENVIRONMENT", "ic")],
+        );
+    });
+    read_built_wasm(&target_dir, ICP_REFILL_STUB_PACKAGE)
+}
+
 // Build and read the exact release-qualified sibling wasm_store artifact.
 pub(super) fn build_test_wasm_store_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
@@ -86,6 +112,41 @@ pub(super) fn build_pic() -> PocketIc {
             .with_application_subnet(),
     );
     progress("PocketIC instance ready");
+    pic
+}
+
+// Build one Fleet fixture with two distinct application Subnets.
+#[cfg(test)]
+pub(super) fn build_two_root_pic() -> PocketIc {
+    progress("starting two-Root PocketIC instance");
+    let pic = start_pocket_ic(
+        PocketIcBuilder::new()
+            .with_ii_subnet()
+            .with_application_subnet()
+            .with_application_subnet(),
+    );
+    progress("two-Root PocketIC instance ready");
+    pic
+}
+
+// Build one PocketIC instance with its production ICP Ledger and CMC system
+// canisters. This is the value-transfer fixture for Root ICP refill journeys;
+// repository stubs remain available only for deterministic adapter tests.
+#[cfg(test)]
+pub(super) fn build_icp_refill_pic() -> PocketIc {
+    progress("starting PocketIC instance with ICP Ledger and CMC");
+    let default_config = Some(IcpFeaturesConfig::DefaultConfig);
+    let pic = start_pocket_ic(
+        PocketIcBuilder::new()
+            .with_ii_subnet()
+            .with_application_subnet()
+            .with_icp_features(IcpFeatures {
+                cycles_minting: default_config.clone(),
+                icp_token: default_config,
+                ..IcpFeatures::default()
+            }),
+    );
+    progress("PocketIC instance with ICP Ledger and CMC ready");
     pic
 }
 

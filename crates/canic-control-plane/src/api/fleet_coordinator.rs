@@ -20,6 +20,7 @@ use canic_core::{
             FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
         },
         error::Error,
+        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
@@ -30,6 +31,7 @@ use canic_core::{
             FleetSubnetRootJoinResponse, FleetSubnetRootSnapshotAcknowledgement,
             FleetSubnetRootSnapshotAcknowledgementRequest,
         },
+        state::{SetCyclesFundingRequest, SetStateResponse},
     },
 };
 use ic_cdk::api::{canister_self, is_controller, msg_caller};
@@ -46,6 +48,11 @@ impl FleetCoordinatorApi {
     /// Authorize an exact joining Root before command workflow dispatch.
     pub fn authorize_calling_root_snapshot() -> Result<(), Error> {
         FleetCoordinatorWorkflow::authorize_root_snapshot_caller(msg_caller()).map_err(Into::into)
+    }
+
+    /// Authorize the exact registered Root before any Coordinator treasury observation.
+    pub fn authorize_calling_root_funding() -> Result<(), Error> {
+        FleetCoordinatorWorkflow::authorize_root_funding_caller(msg_caller()).map_err(Into::into)
     }
 
     /// Authorize a controller or exact snapshot Root before status workflow dispatch.
@@ -85,6 +92,11 @@ impl FleetCoordinatorApi {
         .map_err(Into::into)
     }
 
+    pub fn root_funding_status()
+    -> Result<crate::dto::fleet_coordinator::CoordinatorFundingStatusResponse, Error> {
+        FleetCoordinatorWorkflow::root_funding_status().map_err(Into::into)
+    }
+
     /// Dispatch one closed Coordinator command and preserve its exact response correlation.
     pub async fn command(command: CoordinatorCommand) -> Result<CoordinatorCommandResponse, Error> {
         match command {
@@ -103,6 +115,8 @@ impl FleetCoordinatorApi {
                 Self::join_root(request).map(CoordinatorCommandResponse::JoinRoot)
             }
             CoordinatorCommand::PrepareAuthoritySnapshot(request) => {
+                FleetCoordinatorWorkflow::require_root_funding_snapshot_resumable()
+                    .map_err(Error::from)?;
                 canic_core::api::authority_restore::AuthorityRestoreApi::prepare_coordinator_snapshot(
                     request,
                 )
@@ -124,6 +138,11 @@ impl FleetCoordinatorApi {
                     .map(CoordinatorCommandResponse::OperationAccepted)
                     .map_err(Into::into)
             }
+            CoordinatorCommand::RequestRootFunding(request) => {
+                Self::request_calling_root_funding(request)
+                    .await
+                    .map(CoordinatorCommandResponse::RequestRootFunding)
+            }
             CoordinatorCommand::ResumeAuthoritySnapshot(request) => {
                 canic_core::api::authority_restore::AuthorityRestoreApi::resume_coordinator_snapshot(
                     request,
@@ -131,7 +150,23 @@ impl FleetCoordinatorApi {
                 .await
                 .map(CoordinatorCommandResponse::ResumeAuthoritySnapshot)
             }
+            CoordinatorCommand::SetRootFunding(request) => Self::set_root_funding(request)
+                .map(CoordinatorCommandResponse::SetRootFunding),
         }
+    }
+
+    pub async fn request_calling_root_funding(
+        request: FleetRootFundingRequest,
+    ) -> Result<FleetRootFundingResponse, Error> {
+        FleetCoordinatorWorkflow::request_root_funding(msg_caller(), request)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub fn set_root_funding(
+        request: SetCyclesFundingRequest,
+    ) -> Result<SetStateResponse<bool>, Error> {
+        FleetCoordinatorWorkflow::set_root_funding_enabled(request.enabled).map_err(Into::into)
     }
 
     pub fn registry() -> Result<FleetRegistry, Error> {

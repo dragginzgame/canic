@@ -156,6 +156,7 @@ fn root_input(
 ) -> PlannedFleetSubnetRootInput {
     PlannedFleetSubnetRootInput {
         placement_subnet: subnet(subnet_byte),
+        placement_cost: crate::test_support::placement_cost(subnet(subnet_byte)),
         component_group_placements: Vec::new(),
         component_admissions: admissions,
         limits: limits(),
@@ -180,6 +181,7 @@ fn group_assignment(ordinal: u32) -> PlannedComponentGroupPlacementAssignment {
 fn coordinator() -> PlannedFleetCoordinator {
     PlannedFleetCoordinator {
         coordinator_subnet: subnet(4),
+        placement_cost: crate::test_support::placement_cost(subnet(4)),
         creation_funding: PlannedCanisterCreationFunding::Icp { e8s: 25_000_000 },
         root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
     }
@@ -309,6 +311,7 @@ fn complete_group_preflight() -> FreshFleetPreflightV1 {
     let config = group_config();
     let coordinator = PlannedFleetCoordinator {
         coordinator_subnet: subnet(4),
+        placement_cost: crate::test_support::placement_cost(subnet(4)),
         creation_funding: PlannedCanisterCreationFunding::Cycles { cycles: 100 },
         root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
     };

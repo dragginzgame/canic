@@ -598,7 +598,8 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     assert!(workspace_manifest.contains("ic-timers = \"=0.6.1\""));
-    assert!(workspace_manifest.contains("icydb = { version = \"=0.230.2\""));
+    assert!(workspace_manifest.contains("icydb = { version = \"0.230\""));
+    assert!(workspace_manifest.contains("icydb-model = \"0.230\""));
     assert!(!workspace_manifest.contains("ic-cdk-timers ="));
 
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
@@ -1110,7 +1111,7 @@ const fn control_plane_ownership() -> [(&'static str, OwnershipClass); 8] {
     ]
 }
 
-const fn core_boundary_ownership() -> [(&'static str, OwnershipClass); 10] {
+const fn core_boundary_ownership() -> [(&'static str, OwnershipClass); 11] {
     use OwnershipClass::{
         DomainAsyncJobRecovery as Recovery, DtoOrMetricsProjection as Projection,
         PrivateLifecycleConsumer as Lifecycle,
@@ -1118,6 +1119,10 @@ const fn core_boundary_ownership() -> [(&'static str, OwnershipClass); 10] {
 
     [
         ("crates/canic-core/src/api/runtime/mod.rs", Projection),
+        (
+            "crates/canic-core/src/api/runtime/root_funding.rs",
+            Lifecycle,
+        ),
         ("crates/canic-core/src/api/timer.rs", Lifecycle),
         ("crates/canic-core/src/control_plane_support.rs", Recovery),
         ("crates/canic-core/src/domain/runtime.rs", Projection),

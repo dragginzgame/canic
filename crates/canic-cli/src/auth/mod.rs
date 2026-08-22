@@ -124,7 +124,9 @@ impl AuthCommandError {
             | Self::InstalledFleet(
                 InstalledFleetError::NoInstalledFleet { .. }
                 | InstalledFleetError::FleetCatalog(_)
-                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. },
+                | InstalledFleetError::CoordinatorAnchoredTopologyUnavailable { .. }
+                | InstalledFleetError::InstalledAuthority(_)
+                | InstalledFleetError::RootNotInFleet { .. },
             )
             | Self::IcpRoot(_)
             | Self::CandidUnavailable { .. }

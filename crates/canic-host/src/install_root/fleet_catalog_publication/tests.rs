@@ -193,11 +193,13 @@ fn fixture(name: &str) -> Fixture {
         application_artifact_union_digest: [3; 32],
         coordinator: PlannedFleetCoordinator {
             coordinator_subnet: subnet(1),
+            placement_cost: crate::test_support::placement_cost(subnet(1)),
             creation_funding: funding(),
             root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
         },
         fleet_subnet_roots: vec![PlannedFleetSubnetRoot {
             placement_subnet: subnet(2),
+            placement_cost: crate::test_support::placement_cost(subnet(2)),
             component_group_placements: Vec::new(),
             component_admissions: vec![admission.clone()],
             component_topology_digest: topology_digest,

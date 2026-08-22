@@ -5,15 +5,19 @@ use crate::{
     },
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
-    cycles::{CyclesCommandError, convert},
+    cycles::{CyclesCommandError, convert, funding},
     support::icp_target::IcpTargetOptions,
     version_text,
 };
+use canic_core::cdk::types::Principal;
 use canic_host::{
     format::cycles_tc,
     icp::{command_display, run_output_with_stderr},
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
+    installed_fleet::{
+        InstalledFleetRequest, resolve_installed_fleet_coordinator_from_root,
+        resolve_installed_fleet_from_root, resolve_installed_fleet_root_from_root,
+    },
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
@@ -27,6 +31,7 @@ use std::{ffi::OsString, path::Path};
 enum WalletCommandKind {
     Balance,
     Convert,
+    Funding,
     Mint,
     Topup,
     Transfer,
@@ -37,6 +42,7 @@ impl WalletCommandKind {
         match self {
             Self::Balance => "balance",
             Self::Convert => "convert",
+            Self::Funding => "funding",
             Self::Mint => "mint",
             Self::Topup => "topup",
             Self::Transfer => "transfer",
@@ -47,6 +53,7 @@ impl WalletCommandKind {
         match command.as_bytes() {
             b"balance" => Some(Self::Balance),
             b"convert" => Some(Self::Convert),
+            b"funding" => Some(Self::Funding),
             b"mint" => Some(Self::Mint),
             b"topup" => Some(Self::Topup),
             b"transfer" => Some(Self::Transfer),
@@ -58,13 +65,14 @@ impl WalletCommandKind {
 const WALLET_COMMANDS: &[WalletCommandKind] = &[
     WalletCommandKind::Balance,
     WalletCommandKind::Convert,
+    WalletCommandKind::Funding,
     WalletCommandKind::Mint,
     WalletCommandKind::Topup,
     WalletCommandKind::Transfer,
 ];
 
 const AMOUNT_ARG: &str = "amount";
-const CANISTER_OR_ROLE_ARG: &str = "canister-or-role";
+const INFRASTRUCTURE_TARGET_ARG: &str = "infrastructure-target";
 const CYCLES_AMOUNT_ARG: &str = "cycles-amount";
 const FLEET_ARG: &str = "fleet";
 const DRY_RUN_ARG: &str = "dry-run";
@@ -85,14 +93,15 @@ Usage: canic cycles <command> [OPTIONS]
 Commands:
   balance   Display the selected identity cycles balance
   convert   Convert ICP held by an installed Fleet Subnet Root to cycles for that root
+  funding   Inspect protected Coordinator and Root funding headroom
   mint      Convert ICP to cycles
-  topup     Top up an installed Fleet canister
+  topup     Top up an installed Fleet Coordinator or Root
   transfer  Transfer cycles to a principal or Canic Fleet target
   help      Print this message or the help of the given subcommand(s)
 
 Examples:
   canic cycles balance
-  canic cycles topup demo app 4T
+  canic cycles topup demo coordinator 4T
   canic cycles transfer 4T demo/app";
 
 ///
@@ -146,7 +155,7 @@ struct TransferOptions {
 struct TopupOptions {
     target: IcpTargetOptions,
     fleet: String,
-    canister_or_role: String,
+    infrastructure_target: String,
     amount_cycles: u128,
     json: bool,
     dry_run: bool,
@@ -182,6 +191,12 @@ pub(super) fn run_cycles_command(
                 return Ok(());
             }
             convert::run(args)
+        }
+        WalletCommandKind::Funding => {
+            if print_help_or_version(&args, funding::usage, version_text()) {
+                return Ok(());
+            }
+            funding::run(args)
         }
         WalletCommandKind::Mint => {
             if print_help_or_version(&args, mint_usage, version_text()) {
@@ -288,7 +303,7 @@ impl TopupOptions {
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
             fleet: required_string(&matches, FLEET_ARG),
-            canister_or_role: required_string(&matches, CANISTER_OR_ROLE_ARG),
+            infrastructure_target: required_string(&matches, INFRASTRUCTURE_TARGET_ARG),
             amount_cycles: required_typed(&matches, AMOUNT_ARG),
             json: matches.get_flag(JSON_ARG),
             dry_run: matches.get_flag(DRY_RUN_ARG),
@@ -358,13 +373,27 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
 
 fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let installed = resolve_fleet(&options.target, &root, &options.fleet)?;
-    let target = resolve_canister_target(
-        &options.fleet,
-        &options.canister_or_role,
-        &installed.topology.root_canister_id,
-        &installed.registry.entries,
-    )?;
+    let request = InstalledFleetRequest {
+        fleet: options.fleet.clone(),
+        environment: options.target.environment.clone(),
+    };
+    let target = if options.infrastructure_target == "coordinator" {
+        let installed = resolve_installed_fleet_coordinator_from_root(&request, &root)?;
+        ResolvedCanisterTarget {
+            canister_id: installed.coordinator_canister_id.to_text(),
+            role: Some("coordinator".to_string()),
+        }
+    } else {
+        let selected_root = options
+            .infrastructure_target
+            .parse::<Principal>()
+            .map_err(|_| CyclesCommandError::Usage(topup_usage()))?;
+        let installed = resolve_installed_fleet_root_from_root(&request, selected_root, &root)?;
+        ResolvedCanisterTarget {
+            canister_id: installed.root_canister_id.to_text(),
+            role: Some("root".to_string()),
+        }
+    };
     let icp = options.target.icp_cli(&root);
     if options.dry_run {
         println!(
@@ -483,32 +512,6 @@ fn resolve_role_entry<'a>(
             fleet: fleet.to_string(),
             role: role.to_string(),
         }),
-    }
-}
-
-fn resolve_canister_target(
-    fleet: &str,
-    target: &str,
-    root_canister_id: &str,
-    registry: &[RegistryEntry],
-) -> Result<ResolvedCanisterTarget, CyclesCommandError> {
-    if target == "root" || target == root_canister_id {
-        return Ok(ResolvedCanisterTarget {
-            canister_id: root_canister_id.to_string(),
-            role: Some("root".to_string()),
-        });
-    }
-    if let Some(entry) = registry.iter().find(|entry| entry.pid == target) {
-        return Ok(resolved_target_from_entry(entry));
-    }
-    let entry = resolve_role_entry(fleet, target, registry)?;
-    Ok(resolved_target_from_entry(entry))
-}
-
-fn resolved_target_from_entry(entry: &RegistryEntry) -> ResolvedCanisterTarget {
-    ResolvedCanisterTarget {
-        canister_id: entry.pid.clone(),
-        role: entry.role.clone(),
     }
 }
 
@@ -664,13 +667,15 @@ fn transfer_command() -> ClapCommand {
 fn topup_command() -> ClapCommand {
     ClapCommand::new(WalletCommandKind::Topup.label())
         .bin_name("canic cycles topup")
-        .about("Top up cycles for one installed Fleet canister")
+        .about("Top up one installed Fleet Coordinator or explicit Root")
         .disable_help_flag(true)
         .arg(value_arg(FLEET_ARG).value_name(FLEET_ARG).required(true))
         .arg(
-            value_arg(CANISTER_OR_ROLE_ARG)
-                .value_name(CANISTER_OR_ROLE_ARG)
-                .required(true),
+            value_arg(INFRASTRUCTURE_TARGET_ARG)
+                .value_name("coordinator-or-root-principal")
+                .value_parser(clap::builder::ValueParser::new(parse_infrastructure_target))
+                .required(true)
+                .help("Use coordinator or one explicit current Fleet Subnet Root Principal"),
         )
         .arg(
             value_arg(AMOUNT_ARG)
@@ -682,6 +687,14 @@ fn topup_command() -> ClapCommand {
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
+}
+
+fn parse_infrastructure_target(value: &str) -> Result<String, String> {
+    if value == "coordinator" || value.parse::<Principal>().is_ok() {
+        Ok(value.to_string())
+    } else {
+        Err("expected coordinator or one explicit Root Principal".to_string())
+    }
 }
 
 fn balance_usage() -> String {
@@ -765,28 +778,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn resolves_root_as_canister_target() {
-        let registry = vec![registry_entry("child-principal", "app")];
-
-        let root = resolve_canister_target("demo", "root", "root-principal", &registry)
-            .expect("resolve root");
-
-        assert_eq!(
-            root,
-            ResolvedCanisterTarget {
-                canister_id: "root-principal".to_string(),
-                role: Some("root".to_string()),
-            }
-        );
-    }
-
     // Keep canister top-up available under the cycles family instead of a custom top-level command.
     #[test]
     fn parses_cycles_topup_options() {
         let options = TopupOptions::parse([
             OsString::from("demo"),
-            OsString::from("app"),
+            OsString::from("coordinator"),
             OsString::from("4T"),
             OsString::from("--dry-run"),
             OsString::from("--json"),
@@ -794,10 +791,30 @@ mod tests {
         .expect("parse topup");
 
         assert_eq!(options.fleet, "demo");
-        assert_eq!(options.canister_or_role, "app");
+        assert_eq!(options.infrastructure_target, "coordinator");
         assert_eq!(options.amount_cycles, 4_000_000_000_000);
         assert!(options.dry_run);
         assert!(options.json);
+    }
+
+    #[test]
+    fn topup_rejects_generic_roles_and_accepts_explicit_root_principals() {
+        assert!(
+            TopupOptions::parse([
+                OsString::from("demo"),
+                OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+                OsString::from("4T"),
+            ])
+            .is_ok()
+        );
+        assert!(
+            TopupOptions::parse([
+                OsString::from("demo"),
+                OsString::from("app"),
+                OsString::from("4T"),
+            ])
+            .is_err()
+        );
     }
 
     // Role resolution must not silently choose between same-role canisters.

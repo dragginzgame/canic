@@ -75,6 +75,12 @@ use std::time::Duration;
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    /// Return protected Root funding state after endpoint-level controller authentication.
+    pub fn root_funding_status()
+    -> Result<crate::dto::root::RootFundingStatusResponse, canic_core::dto::error::Error> {
+        crate::workflow::root_funding::status().map_err(Into::into)
+    }
+
     /// Suspend the exact Root control-plane owners before core authority sealing.
     pub async fn prepare_authority_snapshot(
         request: canic_core::dto::authority_restore::AuthoritySnapshotRequest,
@@ -82,6 +88,8 @@ impl LifecycleApi {
         canic_core::dto::authority_restore::AuthorityRestoreFenceStatusResponse,
         canic_core::dto::error::Error,
     > {
+        crate::workflow::root_funding::require_authority_snapshot_resumable()
+            .map_err(canic_core::dto::error::Error::from)?;
         canic_core::api::timer::TimerApi::require_root_authority_snapshot_resumable().map_err(
             |_error| canic_core::control_plane_support::error::InternalError::invariant(),
         )?;
@@ -147,6 +155,7 @@ impl LifecycleApi {
         let canister_pool_imports = args.canister_pool_imports.clone();
         let wasm_store = args.authority.wasm_store_authority.wasm_store;
         crate::runtime::install::register_template_module_source_resolver();
+        crate::runtime::root_funding::register();
         canic_core::api::lifecycle::root::LifecycleApi::init_root_canister_before_bootstrap(
             args,
             embedded_release_build_id,
@@ -154,6 +163,9 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
+        crate::workflow::root_funding::initialize().unwrap_or_else(|error| {
+            ic_cdk::trap(format!("Root funding initialization failed: {error}"))
+        });
         crate::workflow::canister_pool::declare();
         let now_ns = canic_core::control_plane_support::ops::ic::IcOps::now_nanos();
         crate::ops::canister_pool::CanisterPoolOps::initialize_store(wasm_store, now_ns)
@@ -172,6 +184,23 @@ impl LifecycleApi {
     pub fn fleet_subnet_root_authority()
     -> Result<FleetSubnetRootAuthority, canic_core::dto::error::Error> {
         canic_core::api::fleet_activation::FleetActivationApi::root_authority()
+    }
+
+    /// Authenticate one Root funding acceptance before protected workflow reads.
+    pub fn authorize_root_funding_caller(
+        caller: candid::Principal,
+    ) -> Result<(), canic_core::dto::error::Error> {
+        crate::workflow::root_funding::authorize_coordinator(caller).map_err(Into::into)
+    }
+
+    /// Accept one exact Coordinator grant or return its zero-accept replay receipt.
+    pub fn accept_root_funding(
+        request: canic_core::dto::fleet_funding::FleetRootFundingAcceptanceRequest,
+    ) -> Result<
+        canic_core::dto::fleet_funding::FleetRootFundingAcceptanceReceipt,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_funding::accept(request).map_err(Into::into)
     }
 
     pub fn fleet_subnet_root_canister_summary()
@@ -791,6 +820,7 @@ impl LifecycleApi {
         config_path: &str,
     ) -> bool {
         crate::runtime::install::register_template_module_source_resolver();
+        crate::runtime::root_funding::register();
         let active =
             canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
                 config,

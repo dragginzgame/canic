@@ -70,6 +70,7 @@ pub struct RootFleetSubnetDrainingView {
     pub known_created_component_canisters: u32,
     pub root_registry_encoded_bytes: u64,
     pub started_at_ns: u64,
+    pub funding_fenced_at_ns: Option<u64>,
     pub final_inventory: Option<RootFleetSubnetFinalInventoryView>,
     pub removal_publication: Option<RootFleetSubnetRemovalPublicationView>,
     pub store_reclamation_intent: Option<RootFleetSubnetStoreReclamationIntentView>,

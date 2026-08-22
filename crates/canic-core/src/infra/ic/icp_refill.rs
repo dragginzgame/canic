@@ -27,7 +27,7 @@ const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 /// Raw ICRC-1 account payload used only by the ICP ledger adapter.
 ///
 
-#[derive(CandidType)]
+#[derive(CandidType, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Icrc1Account {
     pub owner: Principal,
     pub subaccount: Option<[u8; 32]>,
@@ -319,6 +319,18 @@ impl IcpRefillInfra {
     /// Query `icrc1_decimals` on the selected ICP ledger.
     pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, IcInfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_decimals")
+            .execute()
+            .await?
+            .candid()
+    }
+
+    /// Query the exact source account balance on the selected ICP ledger.
+    pub async fn icrc1_balance_of(
+        ledger_id: Principal,
+        account: Icrc1Account,
+    ) -> Result<Nat, IcInfraError> {
+        Call::unbounded_wait(ledger_id, "icrc1_balance_of")
+            .with_arg(account)?
             .execute()
             .await?
             .candid()

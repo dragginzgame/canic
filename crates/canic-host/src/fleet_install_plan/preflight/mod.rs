@@ -57,6 +57,7 @@ pub fn compile_fresh_fleet_preflight(
         )?;
         fleet_subnet_roots.push(FreshFleetSubnetRootPlanV1 {
             placement_subnet: topology_root.placement_subnet,
+            placement_cost: input.placement_cost.clone(),
             component_group_placements: input.component_group_placements.clone(),
             component_admissions: topology_root.component_admissions.clone(),
             component_topology_digest: topology_root.component_topology_digest,
@@ -87,6 +88,10 @@ pub fn compile_fresh_fleet_preflight(
         schema_version: FRESH_FLEET_PREFLIGHT_SCHEMA_VERSION,
         app: request.app.to_string(),
         fleet_name: request.fleet_name.clone(),
+        funding_profile: request.coordinator.root_funding.as_ref().map_or(
+            canic_core::ids::FleetFundingProfile::SingleSubnet,
+            |policy| policy.funding_profile,
+        ),
         coordinator: request.coordinator.clone(),
         fleet_subnet_roots,
         build_profile: request.build_profile.target_dir_name().to_string(),

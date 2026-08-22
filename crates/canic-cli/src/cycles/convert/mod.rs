@@ -4,13 +4,11 @@ mod pending;
 mod request;
 mod response;
 
-use crate::cycles::{
-    CyclesCommandError,
-    wallet::{ResolvedCanisterTarget, resolve_fleet},
-};
+use crate::cycles::{CyclesCommandError, wallet::ResolvedCanisterTarget};
 use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::{
     icp_config::resolve_current_canic_icp_root,
+    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_root_from_root},
     protocol_binding::resolve_infrastructure_protocol_binding,
     release_set::{CanicInfrastructureRole, load_persisted_canic_infrastructure_artifact_manifest},
 };
@@ -39,9 +37,16 @@ pub(super) fn usage() -> String {
 
 fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
-    let installed = resolve_fleet(&options.target, &root, &options.fleet)?;
+    let installed = resolve_installed_fleet_root_from_root(
+        &InstalledFleetRequest {
+            fleet: options.fleet.clone(),
+            environment: options.target.environment.clone(),
+        },
+        options.root_principal,
+        &root,
+    )?;
     let root_target = ResolvedCanisterTarget {
-        canister_id: installed.topology.root_canister_id,
+        canister_id: installed.root_canister_id.to_text(),
         role: Some("root".to_string()),
     };
     let icp = options.target.icp_cli(&root);
@@ -136,6 +141,7 @@ fn write_dry_run(
             "{}",
             serde_json::json!({
                 "fleet": options.fleet,
+                "selected_root_principal": options.root_principal,
                 "root_canister_id": root.canister_id,
                 "source_subaccount": options.source_subaccount.map(hex_bytes),
                 "amount_e8s": options.amount_e8s,

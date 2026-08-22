@@ -1,4 +1,5 @@
 mod convert;
+mod funding;
 mod model;
 mod options;
 mod parse;
@@ -67,6 +68,21 @@ pub enum CyclesCommandError {
 
     #[error("ICP refill request rejected: {diagnostic}")]
     IcpRefillRejected {
+        code: DiagnosticCode,
+        diagnostic: String,
+    },
+
+    #[error("installed Fleet funding authority is invalid: {0}")]
+    FundingAuthority(String),
+
+    #[error("failed to decode funding status Candid: {0}")]
+    FundingResponseCandid(#[source] candid::Error),
+
+    #[error("failed to decode funding status hex: {0}")]
+    FundingResponseHex(#[source] DecodeHexError),
+
+    #[error("funding status request rejected: {diagnostic}")]
+    FundingRejected {
         code: DiagnosticCode,
         diagnostic: String,
     },

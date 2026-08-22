@@ -46,6 +46,7 @@ name = "demo"
 "#;
 
 const SAMPLE_FLEET_INPUT: &str = r#"schema_version = 1
+funding_profile = "single_subnet"
 
 [operator]
 principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
@@ -56,23 +57,27 @@ valid_until_unix_secs = 4102444800
 
 [operator.balance]
 kind = "cycles"
-cycles = "100T"
+cycles = "5000T"
 
 [coordinator.subnet]
 kind = "explicit"
 subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+acknowledge_fiduciary_cost = false
 
 [coordinator.creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "100T"
 
 [coordinator.root_funding]
-minimum_reserve_cycles = "100000000"
-window_secs = 3600
-maximum_cycles = "10T"
+minimum_reserve_cycles = "30T"
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 4
+maximum_automatic_cycles = "120T"
 
 [[fleet_subnet_roots]]
 placement_subnet = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae"
+acknowledge_fiduciary_cost = false
 
 [fleet_subnet_roots.component_admissions]
 user_hub = 1
@@ -94,19 +99,21 @@ canister_cycles = "1T"
 imports = []
 
 [fleet_subnet_roots.root_funding]
-request_threshold = "50000000000"
-target_balance = "2T"
-cooldown_secs = 300
-window_secs = 3600
-maximum_cycles = "10T"
+request_threshold = "10T"
+target_balance = "30T"
+cooldown_secs = 2592000
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 4
+maximum_automatic_cycles = "120T"
 
 [fleet_subnet_roots.root_creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "30T"
 
 [fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "10T"
 "#;
 
 const POOL_CONFIG: &str = r#"
@@ -1142,7 +1149,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("canonical fresh-Fleet decision"));
     assert!(text.contains("plan_digest: "));
     assert!(text.contains("operator_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));
-    assert!(text.contains("maximum_operator_debit: 6000000000000 cycles"));
+    assert!(text.contains("maximum_operator_debit: 2100000000000000 cycles"));
     assert!(text.contains(
         "operator_balance_evidence: source=test_fixture observed_at=1782432100 valid_until=4102444800 fresh=true sufficient=true"
     ));
@@ -1153,7 +1160,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1"
     ));
     assert!(text.contains(
-        "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=2000000000000 cycles maximum=2000000000000 cycles"
+        "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=1500000000000000 cycles maximum=1500000000000000 cycles"
     ));
     assert!(text.contains("future apply preview (proposed operation labels; not executed)"));
     assert!(text.contains(

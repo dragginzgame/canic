@@ -15,6 +15,7 @@ pub mod memory;
 pub mod metrics;
 pub mod ready;
 pub mod recent_failure;
+pub mod root_funding;
 
 use crate::InternalError;
 use thiserror::Error as ThisError;

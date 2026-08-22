@@ -10,6 +10,13 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
+/// Durable owner that initiated one Root ICP-refill operation.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IcpRefillTrigger {
+    Automatic { sequence: u64 },
+    Manual,
+}
+
 ///
 /// IcpRefillStatus
 ///

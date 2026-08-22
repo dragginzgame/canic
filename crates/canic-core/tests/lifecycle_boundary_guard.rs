@@ -132,7 +132,7 @@ fn root_post_upgrade_schedules_services_and_hooks_only_when_active() {
 }
 
 #[test]
-fn automatic_topup_reachability_requires_the_compiled_capability() {
+fn automatic_topup_reachability_is_exactly_role_owned() {
     let start = read_source("crates/canic/src/macros/start.rs");
     let nonroot = macro_section(
         &start,
@@ -162,10 +162,10 @@ fn automatic_topup_reachability_requires_the_compiled_capability() {
     let runtime = read_source("crates/canic-core/src/workflow/runtime/mod.rs");
     assert!(!function_body(&runtime, "start_all").contains("CycleWorkflow"));
     assert!(function_body(&runtime, "start_all_with_automatic_topup").contains("CycleWorkflow"));
-    assert!(!function_body(&runtime, "start_all_root").contains("CycleWorkflow"));
+    assert!(function_body(&runtime, "start_all_root").contains("CycleWorkflow"));
 
     let timer = read_source("crates/canic-core/src/workflow/runtime/timer/mod.rs");
-    assert!(!function_body(&timer, "suspend_root").contains("CycleWorkflow"));
+    assert!(function_body(&timer, "suspend_root").contains("CycleWorkflow"));
     assert!(!function_body(&timer, "recover_expired_async_jobs").contains("CycleWorkflow"));
     assert!(
         function_body(&timer, "recover_expired_async_jobs_with_automatic_topup")
@@ -176,6 +176,15 @@ fn automatic_topup_reachability_requires_the_compiled_capability() {
     assert!(
         !topology.contains("CycleWorkflow"),
         "topology linkage alone must not grant automatic top-up custody"
+    );
+
+    let root_lifecycle = read_source("crates/canic-control-plane/src/api/lifecycle.rs");
+    assert_eq!(
+        root_lifecycle
+            .matches("crate::runtime::root_funding::register();")
+            .count(),
+        2,
+        "Root init and post-upgrade must register the authority driver before core startup"
     );
 }
 

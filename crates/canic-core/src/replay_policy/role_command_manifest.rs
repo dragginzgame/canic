@@ -21,6 +21,13 @@ use crate::replay_policy::{
 /// Canonical replay-policy rows for Fleet Subnet Root command variants.
 pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
     replay_protected(
+        "AcceptFunding",
+        "fleet_root_funding.accept.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
+    replay_protected(
         "AdoptStore",
         "root.adopt_store.v1",
         CostClass::None,
@@ -224,10 +231,18 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
         None,
         None,
     ),
+    replay_protected(
+        "RequestRootFunding",
+        "fleet_root_funding.request.v1",
+        CostClass::ValueTransfer,
+        Some(VALUE_TRANSFER_QUOTA_V1),
+        Some(VALUE_TRANSFER_RESERVE_V1),
+    ),
     response_idempotent(
         "ResumeAuthoritySnapshot",
         "authority_restore.resume_snapshot.v1",
     ),
+    response_idempotent("SetRootFunding", "fleet_root_funding.set_enabled.v1"),
 ];
 
 /// Canonical replay-policy rows for managed Canister command variants.

@@ -33,6 +33,7 @@ const PLAYGROUND_INPUT: &str = include_str!("../../../../deployments/demos/playg
 fn operator_balance_validity_is_strict_and_bounded() {
     let input = document(CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     });
 
     let fresh = resolve_operator(
@@ -85,7 +86,7 @@ fn disposable_root_deletion_proof_input_resolves_one_bounded_mainnet_root() {
     assert_eq!(
         resolved.coordinator.creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 3_000_000_000_000
+            cycles: 100_000_000_000_000
         }
     );
     let [root] = resolved.fleet_subnet_roots.as_slice() else {
@@ -105,13 +106,13 @@ fn disposable_root_deletion_proof_input_resolves_one_bounded_mainnet_root() {
     assert_eq!(
         root.root_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 5_000_000_000_000
+            cycles: 30_000_000_000_000
         }
     );
     assert_eq!(
         root.wasm_store_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 3_000_000_000_000
+            cycles: 10_000_000_000_000
         }
     );
 }
@@ -161,13 +162,13 @@ fn playground_input_resolves_one_reusable_mainnet_root() {
     assert_eq!(
         root.root_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 20_000_000_000_000
+            cycles: 30_000_000_000_000
         }
     );
     assert_eq!(
         root.wasm_store_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 3_000_000_000_000
+            cycles: 10_000_000_000_000
         }
     );
 }
@@ -177,6 +178,7 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
     let application_subnet = subnet_text(7);
     let document = document(CoordinatorSubnetSelector::Explicit {
         subnet: application_subnet.clone(),
+        acknowledge_fiduciary_cost: false,
     });
 
     let resolved =
@@ -189,7 +191,7 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
     assert_eq!(
         resolved.coordinator.creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 2_000_000_000_000
+            cycles: 100_000_000_000_000
         }
     );
     assert_eq!(
@@ -206,13 +208,13 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
     assert_eq!(
         resolved.fleet_subnet_roots[0].root_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 2_000_000_000_000
+            cycles: 30_000_000_000_000
         }
     );
     assert_eq!(
         resolved.fleet_subnet_roots[0].wasm_store_creation_funding,
         PlannedCanisterCreationFunding::Cycles {
-            cycles: 2_000_000_000_000
+            cycles: 10_000_000_000_000
         }
     );
     assert_eq!(
@@ -231,7 +233,7 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
             .as_ref()
             .expect("automatic root ICP policy")
             .emergency_threshold,
-        Cycles::new(FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES)
+        Cycles::new(5_000_000_000_000)
     );
     assert_eq!(
         resolved.fleet_subnet_roots[0].component_admissions,
@@ -246,6 +248,7 @@ fn local_document_resolves_exact_explicit_placement_and_cycles() {
 fn protected_funding_policies_are_required_for_every_planned_root() {
     let selector = CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     };
     let mut missing_coordinator = document(selector.clone());
     missing_coordinator.coordinator.root_funding = None;
@@ -268,6 +271,7 @@ fn protected_funding_policies_are_required_for_every_planned_root() {
 fn protected_funding_policy_rejects_underfloor_and_unfundable_values() {
     let selector = CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     };
 
     let mut coordinator_reserve = document(selector.clone());
@@ -314,13 +318,18 @@ fn protected_funding_policy_rejects_underfloor_and_unfundable_values() {
         .as_mut()
         .expect("Coordinator policy")
         .maximum_cycles = Cycles::new(1_000_000_000_000);
-    assert_invalid_policy(&fleet_budget, "coordinator.root_funding.maximum_cycles");
+    assert!(matches!(
+        resolve_document(&fleet_budget, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::FundingProfileMinimum { ref owner, .. })
+            if owner == "Fleet window maximum"
+    ));
 }
 
 #[test]
 fn automatic_icp_policy_rejects_invalid_thresholds_caps_and_unsafe_ic_overrides() {
     let selector = CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     };
 
     let mut emergency_floor = document(selector.clone());
@@ -408,6 +417,7 @@ fn automatic_icp_policy_rejects_invalid_thresholds_caps_and_unsafe_ic_overrides(
 fn protected_policy_changes_canonical_fleet_input_identity() {
     let selector = CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     };
     let baseline = resolve_document(&document(selector.clone()), BuildNetwork::Local, None)
         .expect("baseline policy");
@@ -428,6 +438,7 @@ fn local_document_preserves_explicit_component_group_placement_ordinals() {
     let application_subnet = subnet_text(7);
     let mut document = document(CoordinatorSubnetSelector::Explicit {
         subnet: application_subnet,
+        acknowledge_fiduciary_cost: false,
     });
     document.fleet_subnet_roots[0]
         .component_group_placements
@@ -452,6 +463,7 @@ fn group_placement_ceiling_is_required_and_zero_remains_an_explicit_fence() {
 
     let mut document = document(CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     });
     document.fleet_subnet_roots[0]
         .limits
@@ -467,7 +479,7 @@ fn group_placement_ceiling_is_required_and_zero_remains_an_explicit_fence() {
 }
 
 #[test]
-fn public_recommended_and_profile_select_exact_unique_application_subnets() {
+fn public_profile_selects_one_exact_application_subnet() {
     let application_subnet = subnet_text(7);
     let catalog = catalog(vec![
         info(
@@ -489,20 +501,10 @@ fn public_recommended_and_profile_select_exact_unique_application_subnets() {
             "european",
         ),
     ]);
-    let recommended = resolve_document(
-        &document(CoordinatorSubnetSelector::Recommended),
-        BuildNetwork::Ic,
-        Some(&catalog),
-    )
-    .expect("resolve recommended");
-    assert_eq!(
-        recommended.coordinator.coordinator_subnet,
-        subnet(FIDUCIARY_SUBNET)
-    );
-
     let profile = resolve_document(
         &document(CoordinatorSubnetSelector::Profile {
-            profile: "european".to_string(),
+            profile: "application".to_string(),
+            acknowledge_fiduciary_cost: false,
         }),
         BuildNetwork::Ic,
         Some(&catalog),
@@ -510,8 +512,20 @@ fn public_recommended_and_profile_select_exact_unique_application_subnets() {
     .expect("resolve profile");
     assert_eq!(
         profile.coordinator.coordinator_subnet,
-        subnet(EUROPEAN_SUBNET)
+        subnet(&application_subnet)
     );
+}
+
+#[test]
+fn recommended_coordinator_selector_is_a_hard_decode_cut() {
+    let input = input_toml().replace(
+        &format!(
+            "kind = \"explicit\"\nsubnet = \"{}\"\nacknowledge_fiduciary_cost = false",
+            subnet_text(7)
+        ),
+        "kind = \"recommended\"",
+    );
+    assert!(toml::from_slice::<FleetInstallInputDocument>(input.as_bytes()).is_err());
 }
 
 #[test]
@@ -569,6 +583,7 @@ fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
     let system_subnet = subnet_text(8);
     let mut input = document(CoordinatorSubnetSelector::Explicit {
         subnet: system_subnet.clone(),
+        acknowledge_fiduciary_cost: false,
     });
     input.coordinator.creation_funding = CreationFundingDocument::Icp { e8s: 100_000_000 };
     input.fleet_subnet_roots[0].placement_subnet = system_subnet.clone();
@@ -600,10 +615,13 @@ fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
 }
 
 #[test]
-fn nonpublic_network_rejects_derived_selectors_and_icp_funding() {
+fn nonpublic_network_rejects_profile_selectors_and_icp_funding() {
     assert!(matches!(
         resolve_document(
-            &document(CoordinatorSubnetSelector::Recommended),
+            &document(CoordinatorSubnetSelector::Profile {
+                profile: "application".to_string(),
+                acknowledge_fiduciary_cost: false,
+            }),
             BuildNetwork::Local,
             None
         ),
@@ -613,6 +631,7 @@ fn nonpublic_network_rejects_derived_selectors_and_icp_funding() {
     let application_subnet = subnet_text(7);
     let mut input = document(CoordinatorSubnetSelector::Explicit {
         subnet: application_subnet,
+        acknowledge_fiduciary_cost: false,
     });
     input.coordinator.creation_funding = CreationFundingDocument::Icp { e8s: 1 };
     assert!(matches!(
@@ -634,6 +653,7 @@ fn public_resolution_rejects_ineligible_and_ambiguous_subnets() {
     let cloud_subnet = subnet_text(9);
     let input = document(CoordinatorSubnetSelector::Explicit {
         subnet: cloud_subnet.clone(),
+        acknowledge_fiduciary_cost: false,
     });
     let cloud_catalog = catalog(vec![info(
         &cloud_subnet,
@@ -664,6 +684,7 @@ fn public_resolution_rejects_ineligible_and_ambiguous_subnets() {
         resolve_document(
             &document(CoordinatorSubnetSelector::Profile {
                 profile: "application".to_string(),
+                acknowledge_fiduciary_cost: false,
             }),
             BuildNetwork::Ic,
             Some(&ambiguous_catalog)
@@ -722,7 +743,7 @@ fn loader_decodes_the_document_shape_and_cycle_shorthand() {
     assert_eq!(
         document.coordinator.creation_funding,
         CreationFundingDocument::Cycles {
-            cycles: Cycles::new(2_000_000_000_000)
+            cycles: Cycles::new(100_000_000_000_000)
         }
     );
     assert_eq!(
@@ -735,13 +756,13 @@ fn loader_decodes_the_document_shape_and_cycle_shorthand() {
     assert_eq!(
         document.fleet_subnet_roots[0].root_creation_funding,
         CreationFundingDocument::Cycles {
-            cycles: Cycles::new(2_000_000_000_000)
+            cycles: Cycles::new(30_000_000_000_000)
         }
     );
     assert_eq!(
         document.fleet_subnet_roots[0].wasm_store_creation_funding,
         CreationFundingDocument::Cycles {
-            cycles: Cycles::new(2_000_000_000_000)
+            cycles: Cycles::new(10_000_000_000_000)
         }
     );
     fs::remove_dir_all(root).expect("remove temp root");
@@ -770,6 +791,7 @@ fn loader_hard_cuts_the_ambiguous_root_creation_funding_field() {
 fn pool_imports_are_unique_across_fleet_subnet_roots() {
     let mut input = document(CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     });
     let imported = Principal::from_slice(&[44; 29]).to_text();
     input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.clone()];
@@ -799,6 +821,7 @@ fn pool_import_rejects_reserved_principals() {
 fn pool_policy_rejects_invalid_capacity_and_funding() {
     let selector = CoordinatorSubnetSelector::Explicit {
         subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
     };
     let mut cases = Vec::new();
 
@@ -843,6 +866,7 @@ fn ic_pool_imports_require_exact_root_subnet_routing() {
     let imported = Principal::from_slice(&[44; 29]);
     let mut input = document(CoordinatorSubnetSelector::Explicit {
         subnet: root_subnet.clone(),
+        acknowledge_fiduciary_cost: false,
     });
     input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.to_text()];
     let subnets = vec![
@@ -891,6 +915,7 @@ fn ic_pool_imports_fail_closed_without_routing_evidence() {
     let imported = Principal::from_slice(&[44; 29]);
     let mut input = document(CoordinatorSubnetSelector::Explicit {
         subnet: root_subnet.clone(),
+        acknowledge_fiduciary_cost: false,
     });
     input.fleet_subnet_roots[0].canister_pool.imports = vec![imported.to_text()];
     let catalog = catalog(vec![info(
@@ -906,10 +931,164 @@ fn ic_pool_imports_fail_closed_without_routing_evidence() {
     ));
 }
 
+#[test]
+fn funding_profile_must_match_the_resolved_physical_topology() {
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
+    });
+    input.fleet_subnet_roots[0].placement_subnet = subnet_text(8);
+
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Local, None),
+        Err(FleetInstallInputError::FundingProfileMismatch {
+            configured: FleetFundingProfile::SingleSubnet,
+            resolved: FleetFundingProfile::MultiSubnet,
+        })
+    ));
+}
+
+#[test]
+fn fiduciary_acknowledgement_is_exact_per_placement_and_retained_with_warning() {
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: FIDUCIARY_SUBNET.to_string(),
+        acknowledge_fiduciary_cost: false,
+    });
+    input.fleet_subnet_roots[0].placement_subnet = FIDUCIARY_SUBNET.to_string();
+    let fiduciary_catalog = catalog(vec![info(
+        FIDUCIARY_SUBNET,
+        SubnetKind::Application,
+        SubnetSpecialization::Fiduciary,
+        "fiduciary",
+    )]);
+
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&fiduciary_catalog)),
+        Err(FleetInstallInputError::FiduciaryCostAcknowledgementRequired { ref owner, .. })
+            if owner == "Fleet Coordinator"
+    ));
+
+    input.coordinator.subnet = CoordinatorSubnetSelector::Explicit {
+        subnet: FIDUCIARY_SUBNET.to_string(),
+        acknowledge_fiduciary_cost: true,
+    };
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&fiduciary_catalog)),
+        Err(FleetInstallInputError::FiduciaryCostAcknowledgementRequired { ref owner, .. })
+            if owner.starts_with("Fleet Subnet Root")
+    ));
+
+    input.fleet_subnet_roots[0].acknowledge_fiduciary_cost = true;
+    let resolved = resolve_document(&input, BuildNetwork::Ic, Some(&fiduciary_catalog))
+        .expect("both exact Fiduciary acknowledgements admit the plan");
+    let coordinator_evidence = &resolved.coordinator.placement_cost;
+    assert!(coordinator_evidence.acknowledge_fiduciary_cost);
+    assert!(coordinator_evidence.catalog_sha256.is_some());
+    let warning = coordinator_evidence
+        .warning
+        .as_deref()
+        .expect("warning retained");
+    assert!(warning.contains("Fleet Coordinator"));
+    assert!(warning.contains(FIDUCIARY_SUBNET));
+    assert!(warning.contains("node_count=13"));
+    assert!(warning.contains("cost_multiplier=13/13"));
+    assert!(warning.contains("creation_funding=100000000000000 cycles"));
+    assert!(warning.contains("maximum_automatic_exposure=120000000000000 cycles"));
+    assert!(
+        resolved.fleet_subnet_roots[0]
+            .placement_cost
+            .warning
+            .is_some()
+    );
+
+    let application_subnet = subnet_text(7);
+    let mut stale_ack = document(CoordinatorSubnetSelector::Explicit {
+        subnet: application_subnet.clone(),
+        acknowledge_fiduciary_cost: true,
+    });
+    stale_ack.fleet_subnet_roots[0].placement_subnet = application_subnet.clone();
+    let application_catalog = catalog(vec![info(
+        &application_subnet,
+        SubnetKind::Application,
+        SubnetSpecialization::None,
+        "application",
+    )]);
+    assert!(matches!(
+        resolve_document(&stale_ack, BuildNetwork::Ic, Some(&application_catalog)),
+        Err(FleetInstallInputError::UnexpectedFiduciaryCostAcknowledgement { .. })
+    ));
+}
+
+#[test]
+fn profile_baselines_scale_rationally_and_round_up_to_ten_tcycles() {
+    let application_subnet = subnet_text(7);
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: application_subnet.clone(),
+        acknowledge_fiduciary_cost: false,
+    });
+    input.fleet_subnet_roots[0].icp_refill = None;
+    let mut large = info(
+        &application_subnet,
+        SubnetKind::Application,
+        SubnetSpecialization::None,
+        "application",
+    );
+    large.node_count = Some(34);
+    let large_catalog = catalog(vec![large]);
+
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&large_catalog)),
+        Err(FleetInstallInputError::FundingProfileMinimum { .. })
+    ));
+
+    input.coordinator.creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(270 * TRILLION_CYCLES),
+    };
+    let coordinator = input
+        .coordinator
+        .root_funding
+        .as_mut()
+        .expect("Coordinator policy");
+    coordinator.minimum_reserve_cycles = Cycles::new(80 * TRILLION_CYCLES);
+    coordinator.maximum_cycles = Cycles::new(80 * TRILLION_CYCLES);
+    coordinator.maximum_automatic_cycles = Cycles::new(320 * TRILLION_CYCLES);
+    let root = &mut input.fleet_subnet_roots[0];
+    root.root_creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(80 * TRILLION_CYCLES),
+    };
+    root.wasm_store_creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(30 * TRILLION_CYCLES),
+    };
+    let root_policy = root.root_funding.as_mut().expect("Root policy");
+    root_policy.request_threshold = Cycles::new(30 * TRILLION_CYCLES);
+    root_policy.target_balance = Cycles::new(80 * TRILLION_CYCLES);
+    root_policy.maximum_cycles = Cycles::new(80 * TRILLION_CYCLES);
+    root_policy.maximum_automatic_cycles = Cycles::new(320 * TRILLION_CYCLES);
+
+    let resolved = resolve_document(&input, BuildNetwork::Ic, Some(&large_catalog))
+        .expect("34-node materialized values pass");
+    assert_eq!(resolved.coordinator.placement_cost.node_count, 34);
+    assert_eq!(
+        resolved
+            .coordinator
+            .placement_cost
+            .cost_multiplier_numerator,
+        34
+    );
+    assert_eq!(
+        resolved
+            .coordinator
+            .placement_cost
+            .cost_multiplier_denominator,
+        13
+    );
+}
+
 fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
     let application_subnet = subnet_text(7);
     FleetInstallInputDocument {
         schema_version: 1,
+        funding_profile: FleetFundingProfile::SingleSubnet,
         operator: OperatorFundingDocument {
             principal: subnet_text(9),
             funding_account: "test-operator".to_string(),
@@ -917,22 +1096,25 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
             observed_at_unix_secs: FIXTURE_NOW_UNIX_SECS,
             valid_until_unix_secs: FIXTURE_NOW_UNIX_SECS + 300,
             balance: CreationFundingDocument::Cycles {
-                cycles: Cycles::new(100_000_000_000_000),
+                cycles: Cycles::new(5_000_000_000_000_000),
             },
         },
         coordinator: CoordinatorInputDocument {
             subnet: selector,
             creation_funding: CreationFundingDocument::Cycles {
-                cycles: Cycles::new(2_000_000_000_000),
+                cycles: Cycles::new(100_000_000_000_000),
             },
             root_funding: Some(CoordinatorRootFundingPolicyDocument {
-                minimum_reserve_cycles: Cycles::new(100_000_000),
-                window_secs: 3_600,
-                maximum_cycles: Cycles::new(10_000_000_000_000),
+                minimum_reserve_cycles: Cycles::new(30_000_000_000_000),
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(30_000_000_000_000),
+                maximum_automatic_grants: 4,
+                maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
             }),
         },
         fleet_subnet_roots: vec![FleetSubnetRootInputDocument {
             placement_subnet: application_subnet,
+            acknowledge_fiduciary_cost: false,
             component_group_placements: BTreeMap::new(),
             component_admissions: BTreeMap::from([(
                 "users".parse().expect("valid Component Spec ID"),
@@ -955,11 +1137,13 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                 imports: Vec::new(),
             },
             root_funding: Some(FleetSubnetRootFundingPolicyDocument {
-                request_threshold: Cycles::new(50_000_000_000),
-                target_balance: Cycles::new(2_000_000_000_000),
-                cooldown_secs: 300,
-                window_secs: 3_600,
-                maximum_cycles: Cycles::new(10_000_000_000_000),
+                request_threshold: Cycles::new(10_000_000_000_000),
+                target_balance: Cycles::new(30_000_000_000_000),
+                cooldown_secs: 30 * 24 * 60 * 60,
+                window_secs: 90 * 24 * 60 * 60,
+                maximum_cycles: Cycles::new(30_000_000_000_000),
+                maximum_automatic_grants: 4,
+                maximum_automatic_cycles: Cycles::new(120_000_000_000_000),
             }),
             icp_refill: Some(FleetSubnetRootIcpRefillPolicyDocument {
                 max_refill_e8s_per_call: 100_000_000,
@@ -971,15 +1155,17 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
                 cmc_canister_id: None,
                 allow_ic_system_canister_overrides: false,
                 automatic: Some(FleetSubnetRootAutomaticIcpRefillPolicyDocument {
-                    emergency_threshold: Cycles::new(42_200_000_000),
-                    target_balance: Cycles::new(1_000_000_000_000),
+                    emergency_threshold: Cycles::new(5_000_000_000_000),
+                    target_balance: Cycles::new(20_000_000_000_000),
+                    maximum_automatic_refills: 4,
+                    maximum_automatic_refill_e8s: 400_000_000,
                 }),
             }),
             root_creation_funding: CreationFundingDocument::Cycles {
-                cycles: Cycles::new(2_000_000_000_000),
+                cycles: Cycles::new(30_000_000_000_000),
             },
             wasm_store_creation_funding: CreationFundingDocument::Cycles {
-                cycles: Cycles::new(2_000_000_000_000),
+                cycles: Cycles::new(10_000_000_000_000),
             },
         }],
     }
@@ -1001,6 +1187,7 @@ fn input_toml() -> String {
     let application_subnet = subnet_text(7);
     format!(
         r#"schema_version = 1
+funding_profile = "single_subnet"
 
 [operator]
 principal = "{}"
@@ -1011,23 +1198,27 @@ valid_until_unix_secs = 4102444800
 
 [operator.balance]
 kind = "cycles"
-cycles = "100T"
+cycles = "5000T"
 
 [coordinator.subnet]
 kind = "explicit"
 subnet = "{application_subnet}"
+acknowledge_fiduciary_cost = false
 
 [coordinator.creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "100T"
 
 [coordinator.root_funding]
-minimum_reserve_cycles = "100000000"
-window_secs = 3600
-maximum_cycles = "10T"
+minimum_reserve_cycles = "30T"
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 4
+maximum_automatic_cycles = "120T"
 
 [[fleet_subnet_roots]]
 placement_subnet = "{application_subnet}"
+acknowledge_fiduciary_cost = false
 
 [fleet_subnet_roots.component_admissions]
 users = 8
@@ -1039,11 +1230,13 @@ canister_cycles = "5T"
 imports = []
 
 [fleet_subnet_roots.root_funding]
-request_threshold = "50000000000"
-target_balance = "2T"
-cooldown_secs = 300
-window_secs = 3600
-maximum_cycles = "10T"
+request_threshold = "10T"
+target_balance = "30T"
+cooldown_secs = 2592000
+window_secs = 7776000
+maximum_cycles = "30T"
+maximum_automatic_grants = 4
+maximum_automatic_cycles = "120T"
 
 [fleet_subnet_roots.icp_refill]
 max_refill_e8s_per_call = 100000000
@@ -1053,8 +1246,10 @@ minimum_icp_balance_e8s = 10000000
 min_xdr_permyriad_per_icp = 40000
 
 [fleet_subnet_roots.icp_refill.automatic]
-emergency_threshold = "42200000000"
-target_balance = "1T"
+emergency_threshold = "5T"
+target_balance = "20T"
+maximum_automatic_refills = 4
+maximum_automatic_refill_e8s = 400000000
 
 [fleet_subnet_roots.limits]
 maximum_component_instances = 8
@@ -1068,11 +1263,11 @@ maximum_cycles = "10T"
 
 [fleet_subnet_roots.root_creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "30T"
 
 [fleet_subnet_roots.wasm_store_creation_funding]
 kind = "cycles"
-cycles = "2T"
+cycles = "10T"
 "#,
         subnet_text(9)
     )

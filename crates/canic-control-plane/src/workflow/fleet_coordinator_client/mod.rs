@@ -10,6 +10,7 @@ use canic_core::{
     control_plane_support::{error::InternalError, ops::ic::call::CallOps},
     dto::{
         error::Error,
+        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
         fleet_registry::{
             FleetRegistry, FleetSubnetRootSnapshotAcknowledgement,
             FleetSubnetRootSnapshotAcknowledgementRequest,
@@ -23,11 +24,13 @@ use serde::Deserialize;
 #[derive(CandidType)]
 enum CoordinatorCommandFragment {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgementRequest),
+    RequestRootFunding(FleetRootFundingRequest),
 }
 
 #[derive(CandidType, Deserialize)]
 enum CoordinatorCommandResponseFragment {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgement),
+    RequestRootFunding(FleetRootFundingResponse),
 }
 
 #[derive(CandidType)]
@@ -87,12 +90,32 @@ pub(super) async fn acknowledge_root_snapshot(
     coordinator: Principal,
     request: FleetSubnetRootSnapshotAcknowledgementRequest,
 ) -> Result<FleetSubnetRootSnapshotAcknowledgement, InternalError> {
-    let CoordinatorCommandResponseFragment::AcknowledgeRootSnapshot(response) = call(
+    match call(
         coordinator,
         CoordinatorCommandFragment::AcknowledgeRootSnapshot(request),
     )
-    .await?;
-    Ok(response)
+    .await?
+    {
+        CoordinatorCommandResponseFragment::AcknowledgeRootSnapshot(response) => Ok(response),
+        CoordinatorCommandResponseFragment::RequestRootFunding(_) => Err(InternalError::conflict()),
+    }
+}
+
+pub(super) async fn request_root_funding(
+    coordinator: Principal,
+    request: FleetRootFundingRequest,
+) -> Result<FleetRootFundingResponse, InternalError> {
+    let call = CallOps::bounded_wait(coordinator, protocol::CANIC_COMMAND)
+        .with_arg(CoordinatorCommandFragment::RequestRootFunding(request))?
+        .execute()
+        .await?;
+    let result: Result<CoordinatorCommandResponseFragment, Error> = call.candid()?;
+    match result.map_err(InternalError::observed_public)? {
+        CoordinatorCommandResponseFragment::RequestRootFunding(response) => Ok(response),
+        CoordinatorCommandResponseFragment::AcknowledgeRootSnapshot(_) => {
+            Err(InternalError::conflict())
+        }
+    }
 }
 
 async fn call(
