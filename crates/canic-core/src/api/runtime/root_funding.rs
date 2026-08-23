@@ -11,6 +11,22 @@ impl RootFundingTimerApi {
         crate::workflow::runtime::cycles::CycleWorkflow::start().map_err(Into::into)
     }
 
+    /// Disarm the sole timer only when no funding or refill attempt is executing.
+    pub fn prepare_policy_rotation_fence() -> Result<(), crate::error::InternalError> {
+        use crate::{
+            ops::storage::{async_job_recovery::AsyncJobOwner, icp_refill::IcpRefillStoreOps},
+            workflow::runtime::async_job::AsyncJobWorkflow,
+        };
+
+        if AsyncJobWorkflow::has_active_attempt(AsyncJobOwner::CycleTopup)
+            || IcpRefillStoreOps::resumable_operation_count() != 0
+        {
+            return Err(crate::error::InternalError::conflict());
+        }
+        crate::workflow::runtime::cycles::CycleWorkflow::cancel_timer()?;
+        Ok(())
+    }
+
     /// Durably disable and disarm new Root funding before terminal deletion work.
     pub fn fence_for_deletion() -> Result<(), crate::error::InternalError> {
         use crate::{

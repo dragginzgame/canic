@@ -97,6 +97,17 @@ impl FleetActivationWorkflow {
             .map_err(Into::into)
     }
 
+    /// Replace only an exact protected Root funding authority during a fenced rotation.
+    pub fn replace_root_funding_authority(
+        expected: &crate::ids::FleetSubnetRootFundingAuthority,
+        next: crate::ids::FleetSubnetRootFundingAuthority,
+    ) -> Result<FleetSubnetRootAuthority, InternalError> {
+        EnvOps::require_root()?;
+        FleetActivationOps::replace_root_funding_authority(expected, next)
+            .map_err(StorageOpsError::from)
+            .map_err(Into::into)
+    }
+
     pub fn wasm_store_authority() -> Result<FleetSubnetWasmStoreAuthority, InternalError> {
         EnvOps::deny_root()?;
         FleetActivationOps::wasm_store_authority()

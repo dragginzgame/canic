@@ -218,10 +218,13 @@ type ComponentTopology = record {
 // Closed controller command union for the Fleet Coordinator.
 type CoordinatorCommand = variant {
   JoinRoot : FleetSubnetRootJoinRequest;
+  StageFundingPolicyRotationRoot : FleetFundingPolicyRotationStageRootRequest;
   ActivateRegistry : FleetRegistryActivationRequest;
   SetRootFunding : SetCyclesFundingRequest;
   AcknowledgeRootSnapshot : FleetSubnetRootSnapshotAcknowledgementRequest;
   RequestRootFunding : FleetRootFundingRequest;
+  BeginFundingPolicyRotation : FleetFundingPolicyRotationBeginRequest;
+  ApplyFundingPolicyRotation : FleetFundingPolicyRotationApplyRequest;
   PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionRequest;
   ResumeAuthoritySnapshot : AuthoritySnapshotRequest;
   ProvisionComponents : FleetComponentProvisioningPrepareRequest;
@@ -244,15 +247,22 @@ type CoordinatorCommandResponse = variant {
 };
 // Controller-only Coordinator treasury policy, headroom and per-Root usage.
 type CoordinatorFundingStatusResponse = record {
+  rotation : opt FleetFundingPolicyRotationStatusResponse;
   funding_enabled : bool;
   automatic_grants : nat32;
   current_cycles : nat;
   fleet_window : opt CoordinatorFundingWindowStatusResponse;
+  rotation_checkpoint_root_count : nat32;
+  historical_automatic_grants : nat64;
   funding_profile : opt FleetFundingProfile;
+  policy_generation : nat64;
   automatic_cycles : nat;
+  rotation_checkpoint_count : nat32;
+  historical_automatic_cycles : nat;
   roots : vec CoordinatorRootFundingStatusResponse;
   coordinator : principal;
   policy : opt FleetCoordinatorRootFundingPolicy;
+  rotation_checkpoint_root_capacity_remaining : nat32;
 };
 // Current spent and reserved cycles in one exact epoch-anchored funding window.
 type CoordinatorFundingWindowStatusResponse = record {
@@ -262,6 +272,7 @@ type CoordinatorFundingWindowStatusResponse = record {
 };
 // Coordinator-owned durable operation detail selected by one operation ID.
 type CoordinatorOperationStatusResponse = variant {
+  FundingPolicyRotation : FleetFundingPolicyRotationStatusResponse;
   RootRemoval : CoordinatorRootRemovalOperationStatus;
   ComponentProvisioning : FleetComponentProvisioningStatusResponse;
 };
@@ -270,11 +281,13 @@ type CoordinatorRootFundingStatusResponse = record {
   automatic_grants : nat32;
   window : CoordinatorFundingWindowStatusResponse;
   last_result : opt FleetRootFundingResponse;
+  historical_automatic_grants : nat64;
   last_successful_grant_at_ns : opt nat64;
   automatic_cycles : nat;
   policy_hash : blob;
   fleet_subnet_root : principal;
   current_operation : opt FleetRootFundingRequest;
+  historical_automatic_cycles : nat;
   lifecycle_status : FleetSubnetRootStatus;
   policy : FleetSubnetRootFundingPolicy;
 };
@@ -480,8 +493,110 @@ type FleetCoordinatorRootFundingPolicy = record {
   maximum_automatic_grants : nat32;
   budget : CyclesFundingBudget;
 };
+// Start or exactly resume the fully staged rotation operation.
+type FleetFundingPolicyRotationApplyRequest = record {
+  plan_digest : blob;
+  operation_id : blob;
+  expected_predecessor_generation : nat64;
+};
+// Begin staging one accepted no-effect rotation plan.
+type FleetFundingPolicyRotationBeginRequest = record {
+  plan_digest : blob;
+  operation_id : blob;
+  header : FleetFundingPolicyRotationPlanHeader;
+};
+// Sole future value source authorized by a funding-policy rotation.
+type FleetFundingPolicyRotationFundingSource = variant { CoordinatorTreasury };
+// Exact protected physical-placement evidence reviewed for one rotation.
+type FleetFundingPolicyRotationPlacementEvidence = record {
+  node_count : nat64;
+  cost_multiplier_numerator : nat64;
+  acknowledge_fiduciary_cost : bool;
+  cost_multiplier_denominator : nat64;
+  subnet : principal;
+  fiduciary : bool;
+};
+// Immutable header of one no-effect operator-reviewed rotation plan.
+type FleetFundingPolicyRotationPlanHeader = record {
+  topology_catalog_digest : blob;
+  funding_source : FleetFundingPolicyRotationFundingSource;
+  predecessor_coordinator_policy_hash : blob;
+  apply_operator_debit : nat;
+  maximum_new_automatic_cycles : nat;
+  coordinator_placement : FleetFundingPolicyRotationPlacementEvidence;
+  successor_generation : nat64;
+  predecessor_usage : FleetFundingPolicyUsage;
+  proposed_coordinator_policy : FleetCoordinatorRootFundingPolicy;
+  affected_root_count : nat32;
+  predecessor_generation : nat64;
+  predecessor_registry : FleetRegistryVersion;
+  roots_digest : blob;
+};
+// Terminal Coordinator receipt for a converged policy generation.
+type FleetFundingPolicyRotationReceipt = record {
+  successor_registry : FleetRegistryVersion;
+  plan_digest : blob;
+  completed_at_ns : nat64;
+  successor_policy_set_hash : blob;
+  retained_historical_automatic_grants : nat64;
+  operation_id : blob;
+  apply_operator_debit : nat;
+  maximum_new_automatic_cycles : nat;
+  successor_generation : nat64;
+  retained_historical_automatic_cycles : nat;
+  affected_root_count : nat32;
+  predecessor_generation : nat64;
+  predecessor_registry : FleetRegistryVersion;
+};
+// Exact current and proposed authority for one affected Root.
+type FleetFundingPolicyRotationRootPlan = record {
+  proposed_policy : FleetSubnetRootFundingPolicy;
+  placement : FleetFundingPolicyRotationPlacementEvidence;
+  fleet_subnet_root : principal;
+  predecessor_usage : FleetFundingPolicyUsage;
+  predecessor_policy_hash : blob;
+};
+// Stage one digest-bound Root policy beneath the current rotation.
+type FleetFundingPolicyRotationStageRootRequest = record {
+  plan_digest : blob;
+  root : FleetFundingPolicyRotationRootPlan;
+  operation_id : blob;
+};
+// Protected durable phase of one Coordinator-owned policy rotation.
+type FleetFundingPolicyRotationStatusPhase = variant {
+  PreparingRoots : record {
+    expected_root_count : nat32;
+    prepared_root_count : nat32;
+  };
+  ActivatingRoots : record {
+    successor_registry : FleetRegistryVersion;
+    activated_root_count : nat32;
+    expected_root_count : nat32;
+  };
+  Completed : FleetFundingPolicyRotationReceipt;
+  Staging : record { expected_root_count : nat32; staged_root_count : nat32 };
+};
+// Controller-only status of one exact current or terminal rotation.
+type FleetFundingPolicyRotationStatusResponse = record {
+  plan_digest : blob;
+  operation_id : blob;
+  successor_generation : nat64;
+  phase : FleetFundingPolicyRotationStatusPhase;
+  predecessor_generation : nat64;
+};
+// Current-generation and retained predecessor automatic-funding usage.
+type FleetFundingPolicyUsage = record {
+  generation_automatic_cycles : nat;
+  historical_automatic_grants : nat64;
+  generation_automatic_grants : nat32;
+  historical_automatic_cycles : nat;
+};
 // Protected physical-topology class that selects the minimum Root funding baseline.
-type FleetFundingProfile = variant { multi_subnet; preview_multi_subnet; single_subnet };
+type FleetFundingProfile = variant {
+  multi_subnet;
+  preview_multi_subnet;
+  single_subnet;
+};
 //
 // FleetKey
 //

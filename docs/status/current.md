@@ -36,12 +36,13 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 ## Current Progress
 
 The published 0.108.0 checkpoint contains M0/M1 plus the urgent fresh-Fleet
-corrections. The open 0.108.1 draft completes B3-B8/M2-M7: exact registered-
+corrections. The open 0.108.1 draft completes B3-B9/M2-M8: exact registered-
 Root admission, full Registry-authority-bound operation identity, fixed and
 non-renewing budget/reserve accounting, durable two-sided journals,
 accept-once/zero-accept replay, recovery-first Coordinator funding, protected
 manual and terminal automatic ICP refill, exact installed-authority recovery,
-funding status/metrics, Medic and lifecycle/snapshot fences. The first
+funding status/metrics, Medic, lifecycle/snapshot fences and explicit funding-
+policy generation rotation. The first
 human-owned closeout audit rejected the draft because the two funding legs
 still used unbounded calls, the ICP refill journal had no lifetime bound, the
 PocketIC matrix and B3-B8 evidence were incomplete, and active documentation
@@ -49,21 +50,45 @@ overstated readiness. The correction uses bounded calls on both legs, caps the
 non-evicting Root refill journal at 4,096 lifetime identities, and adds real
 PocketIC single-/multi-Root accounting, non-renewing-cap, uncertain-call,
 direct-top-up, production Ledger/CMC replay, reserve-fallback, insufficient-ICP
-and rate-denial journeys. Evidence and targeted correction checks are complete;
-the maintainer must establish the immutable candidate before a fresh closeout
-audit. Versioning and publication remain pending that verdict and the
-maintainer release workflow. The maintainer's unrelated dependency range and
-host fixture changes remain outside this batch.
+and rate-denial journeys. The maintainer's first candidate validation exposed
+stale CLI/hash/timer expectations and one real pre-activation Root-admission
+defect; its follow-up exposed duplicated-match Clippy failures. Those
+candidate defects are corrected and focused regressions pass. The complete
+maintainer gate must be rerun against the final immutable candidate before a
+fresh closeout audit. Versioning and publication remain pending that verdict
+and the maintainer release workflow.
 
-The 2026-08-22 0.108 design amendment is implemented through B8. Protected
-input materializes topology-matched single-/multi-Subnet baselines, scales
-them rationally by current Registry node count, enforces one grant per 90-day
-default window and retains finite non-renewing automatic count/cycle caps. The
-Fiduciary-backed `recommended` Coordinator selector is removed; every
-Fiduciary Coordinator or Root placement requires an exact adjacent cost
-acknowledgement and emits retained high-cost evidence before plan and paid
-install effects. Corrected policy/hash/plan authority flows through Registry,
-stable accounting and generated interfaces before the sole Root timer runs.
+The 2026-08-22 0.108 design amendments are implemented through B9. Protected
+input materializes topology-matched single-Subnet, bounded preview multi-
+Subnet and professional multi-Subnet baselines, scales them rationally by
+current Registry node count, enforces one grant per 90-day default window and
+retains finite non-renewing automatic count/cycle caps. The recommended
+one-Root preview is 140T Coordinator creation, 80T reserve, 30T Root creation,
+10T Store creation and a two-grant/60T lifetime cap: 180T initial total with
+automatic ICP disabled. The Fiduciary-backed `recommended` Coordinator
+selector is removed; every Fiduciary Coordinator or Root placement requires
+an exact adjacent cost acknowledgement and emits retained high-cost evidence
+before plan and paid install effects. Corrected policy/hash/plan authority
+flows through Registry, stable accounting and generated interfaces before the
+sole Root timer runs.
+
+Accepted CANIC-019 adds one controller-reviewed same-release escape from an
+exhausted generation without weakening those finite caps. A no-effect CLI plan
+binds the exact installed Fleet, predecessor Registry/generation/policy and
+usage, resolved placement evidence, proposed successor authority, zero operator
+debit and maximum new exposure. Apply uses one Coordinator-owned durable fence
+and idempotent Root prepare/activate receipts. Prior cumulative usage and grant
+sequences remain monotonic, automatic effects stay fenced until convergence,
+and application Registry state remains owned by its existing lifecycle. The
+non-evicting completed history is bounded to 4,096 total Root checkpoint
+entries and fails closed when a successor will not fit. Every retained
+checkpoint binds the complete plan for exact historical replay. Root activation
+recovers across the temporary successor-protected/predecessor-mirror split,
+and successor budgets preflight retained fixed-window spend. The corrected
+32 MiB Coordinator cell covers the measured 25,315,095-byte worst fragmented
+history. Focused unit, stable-capacity, generated-surface and real PocketIC
+exhausted-to-successor evidence passes; the complete maintainer validation gate
+and human closeout audit remain pending for the final immutable candidate.
 
 The compact diagnostic and role-owned Candid lines are published. Their
 read-only closeout audit confirmed the compact wire, typed runtime, host-only
@@ -390,7 +415,10 @@ caps and explicit Fiduciary acknowledgement flow through immutable authority;
 and the sole Root top-up timer resumes retained work before creating a request.
 B6/M5 through B8/M7 are complete in the open 0.108.1 draft and do not ship in
 0.108.0. They add the one-owner protected ICP refill path, operator and
-lifecycle surfaces, real PocketIC qualification and closeout handoff.
+lifecycle surfaces, real PocketIC qualification and closeout handoff. B9/M8
+adds explicit same-release funding-policy generation rotation with one durable
+Coordinator fence, bounded retained checkpoints and unchanged application
+state; it also remains confined to the open 0.108.1 draft.
 
 Scheduled 0.109 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
@@ -456,9 +484,10 @@ accepted 0.106 B1 without the held B2 external effects. Its AC12 correction
 re-audit passed and the maintainer accepted the final closeout verdict.
 0.108 has completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
 protected policy and the urgent fresh-Fleet corrections form the published
-0.108.0 checkpoint. B3/M2 through B8/M7 are implementation-complete in the
-open 0.108.1 draft, with targeted qualification complete and the human 0.108
-closeout audit next. 0.109
+0.108.0 checkpoint. B3/M2 through B9/M8 are implementation-complete in the
+open 0.108.1 draft; post-validation candidate corrections and the CANIC-019
+amendment have focused passing evidence, while the final maintainer gate and
+human 0.108 closeout audit remain next. 0.109
 requires completed 0.108 plus application-retirement evidence; 0.110 requires
 accepted 0.109 and an exact
 released predecessor; and 0.111 requires accepted 0.110 closeout. Deferred
@@ -902,9 +931,11 @@ terminal-disposition authorization exists. In 0.107, B2-B7 implementation,
 the prior full validation gate and the exact AC12 re-audit/maintainer
 acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 published 0.108.0 checkpoint remains the downstream fresh-install baseline.
-The open 0.108.1 B3-B8 closeout corrections and targeted checks are complete.
-Establish the immutable corrected candidate, then run a fresh human-owned
-0.108 closeout audit. Do not add a production pool contract, run any remote
+The open 0.108.1 B3-B9 closeout corrections, CANIC-019 policy-generation
+rotation and focused checks are complete. Establish the immutable corrected
+candidate, rerun the complete maintainer-owned validation gate and then run a
+fresh human-owned 0.108 closeout audit. Do not add a production pool contract,
+run any remote
 qualification effect, version, publish or begin 0.109 before the audit verdict
 and maintainer-owned release workflow authorize it.
 Do not reopen compact diagnostics with JSON, generic handling metadata,

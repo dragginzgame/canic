@@ -9,6 +9,7 @@ use crate::{
     storage::stable::root_funding::{
         ROOT_FUNDING_SCHEMA_VERSION, RootFundingActiveOperationRecord,
         RootFundingActivePhaseRecord, RootFundingCommitError, RootFundingCommitOutcome,
+        RootFundingPolicyRotationRecord, RootFundingPolicyRotationTerminalRecord,
         RootFundingRecord, RootFundingStore, RootFundingTerminalOperationRecord,
     },
     view::root_funding::{RootFundingAcceptanceDisposition, RootFundingAuthorityView},
@@ -17,11 +18,13 @@ use canic_core::{
     cdk::types::Cycles,
     control_plane_support::{error::InternalError, ops::icp_refill::IcpRefillStoreOps},
     dto::fleet_funding::{
+        FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
         FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
         FleetRootFundingRequest, FleetRootFundingResponse,
     },
     shared_support::fleet_funding_policy::{
         fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
+        validate_fleet_subnet_root_funding_authority,
     },
 };
 
@@ -47,6 +50,9 @@ impl RootFundingOps {
         opened_at_ns: u64,
     ) -> Result<FleetRootFundingRequest, InternalError> {
         let current = current(authority)?;
+        if current.rotation_current.is_some() {
+            return Err(InternalError::conflict());
+        }
         if let Some(active) = current.current.as_ref() {
             return Ok(active.request.clone());
         }
@@ -106,6 +112,209 @@ impl RootFundingOps {
         Ok(current(authority)?.current.map(|active| active.request))
     }
 
+    pub(crate) fn policy_rotation_in_progress() -> bool {
+        RootFundingStore::export()
+            .current
+            .is_some_and(|record| record.rotation_current.is_some())
+    }
+
+    /// Return an exact prepare replay without disturbing the already-correct timer state.
+    pub(crate) fn policy_rotation_prepare_replay(
+        authority: &RootFundingAuthorityView,
+        request: &FleetFundingPolicyRotationRootPrepareRequest,
+    ) -> Result<Option<FleetFundingPolicyRotationRootReceipt>, InternalError> {
+        let current = current(authority)?;
+        if let Some(last) = current.rotation_last.as_ref()
+            && &last.request == request
+        {
+            return Ok(Some(last.receipt.clone()));
+        }
+        if let Some(active) = current.rotation_current.as_ref() {
+            if &active.request == request {
+                return Ok(Some(active.prepared_receipt.clone()));
+            }
+            return Err(InternalError::conflict());
+        }
+        Ok(None)
+    }
+
+    /// Prepare or exactly replay the sole Root-owned rotation fence.
+    pub(crate) fn prepare_policy_rotation(
+        authority: &RootFundingAuthorityView,
+        request: FleetFundingPolicyRotationRootPrepareRequest,
+        recorded_at_ns: u64,
+    ) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
+        let current = current(authority)?;
+        if let Some(last) = current.rotation_last.as_ref()
+            && last.request == request
+        {
+            return Ok(last.receipt.clone());
+        }
+        if let Some(active) = current.rotation_current.as_ref() {
+            if active.request == request {
+                return Ok(active.prepared_receipt.clone());
+            }
+            return Err(InternalError::conflict());
+        }
+        let policy_hash = fleet_subnet_root_funding_policy_hash(&authority.funding);
+        let usage = &request.root.predecessor_usage;
+        let current_usage = canic_core::dto::fleet_funding::FleetFundingPolicyUsage {
+            historical_automatic_grants: current.historical_automatic_grants,
+            historical_automatic_cycles: current.historical_automatic_cycles.clone(),
+            generation_automatic_grants: current.automatic_grants,
+            generation_automatic_cycles: current.automatic_cycles.clone(),
+        };
+        let usage_matches = usage == &current_usage;
+        if request.operation_id == [0; 32]
+            || request.plan_digest == [0; 32]
+            || request.root.fleet_subnet_root != authority.fleet_subnet_root
+            || request.predecessor_registry != authority.registry
+            || request.predecessor_generation != current.policy_generation
+            || request
+                .predecessor_generation
+                .checked_add(1)
+                .is_none_or(|generation| generation != request.successor_generation)
+            || request.root.predecessor_policy_hash != policy_hash
+            || !usage_matches
+            || current.current.is_some()
+            || !authority.funding_eligible
+        {
+            return Err(InternalError::conflict());
+        }
+        let mut next_authority = authority.funding.clone();
+        next_authority.root_funding = request.root.proposed_policy.clone();
+        validate_fleet_subnet_root_funding_authority(&next_authority, false)
+            .map_err(|_| InternalError::invalid_input())?;
+        let receipt = FleetFundingPolicyRotationRootReceipt {
+            operation_id: request.operation_id,
+            plan_digest: request.plan_digest,
+            fleet_subnet_root: authority.fleet_subnet_root,
+            predecessor_generation: request.predecessor_generation,
+            successor_generation: request.successor_generation,
+            prepared: true,
+            activated: false,
+            recorded_at_ns,
+        };
+        let mut next = current.clone();
+        next.rotation_current = Some(RootFundingPolicyRotationRecord {
+            request,
+            prepared_receipt: receipt.clone(),
+        });
+        let next = validate_record(authority, next)?;
+        commit_transition(&current, next)?;
+        Ok(receipt)
+    }
+
+    /// Return the exact prepared rotation without consulting a possibly mixed mirror.
+    pub(crate) fn prepared_policy_rotation()
+    -> Result<RootFundingPolicyRotationRecord, InternalError> {
+        RootFundingStore::export()
+            .current
+            .and_then(|record| record.rotation_current)
+            .ok_or_else(InternalError::unavailable)
+    }
+
+    /// Return an exact completed activation replay before consulting active state.
+    pub(crate) fn completed_policy_rotation(
+        authority: &RootFundingAuthorityView,
+        request: &canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
+    ) -> Result<Option<FleetFundingPolicyRotationRootReceipt>, InternalError> {
+        let raw = RootFundingStore::export()
+            .current
+            .ok_or_else(InternalError::unavailable)?;
+        let Some(last) = raw.rotation_last.as_ref() else {
+            return Ok(None);
+        };
+        let prepared = &last.request;
+        if last.receipt.operation_id != request.operation_id
+            || last.receipt.plan_digest != request.plan_digest
+            || last.receipt.fleet_subnet_root != request.fleet_subnet_root
+            || last.receipt.predecessor_generation != request.predecessor_generation
+            || last.receipt.successor_generation != request.successor_generation
+        {
+            return Ok(None);
+        }
+        if prepared.operation_id != request.operation_id
+            || prepared.plan_digest != request.plan_digest
+            || prepared.predecessor_registry != request.predecessor_registry
+            || prepared.predecessor_generation != request.predecessor_generation
+            || prepared.successor_generation != request.successor_generation
+            || prepared.root.fleet_subnet_root != request.fleet_subnet_root
+            || authority.registry != request.successor_registry
+            || authority.fleet_subnet_root != request.fleet_subnet_root
+            || raw.policy_generation != request.successor_generation
+        {
+            return Err(InternalError::conflict());
+        }
+        Ok(Some(last.receipt.clone()))
+    }
+
+    /// Commit the successor generation after protected authority and mirror converge.
+    pub(crate) fn complete_policy_rotation(
+        authority: &RootFundingAuthorityView,
+        operation_id: [u8; 32],
+        plan_digest: [u8; 32],
+        recorded_at_ns: u64,
+    ) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
+        let raw = RootFundingStore::export()
+            .current
+            .ok_or_else(InternalError::unavailable)?;
+        if let Some(last) = raw.rotation_last.as_ref()
+            && last.receipt.operation_id == operation_id
+            && last.receipt.plan_digest == plan_digest
+            && last.receipt.activated
+        {
+            return Ok(last.receipt.clone());
+        }
+        let rotation = raw
+            .rotation_current
+            .as_ref()
+            .ok_or_else(InternalError::conflict)?;
+        let request = &rotation.request;
+        let mut expected_authority = authority.funding.clone();
+        expected_authority.root_funding = request.root.proposed_policy.clone();
+        if request.operation_id != operation_id
+            || request.plan_digest != plan_digest
+            || request.root.fleet_subnet_root != authority.fleet_subnet_root
+            || request.successor_generation != raw.policy_generation.saturating_add(1)
+            || expected_authority != authority.funding
+        {
+            return Err(InternalError::conflict());
+        }
+        let mut next = raw.clone();
+        next.policy_generation = request.successor_generation;
+        next.historical_automatic_grants = next
+            .historical_automatic_grants
+            .checked_add(u64::from(next.automatic_grants))
+            .ok_or_else(InternalError::invariant)?;
+        next.historical_automatic_cycles = next
+            .historical_automatic_cycles
+            .to_u128()
+            .checked_add(next.automatic_cycles.to_u128())
+            .ok_or_else(InternalError::invariant)?
+            .into();
+        next.automatic_grants = 0;
+        next.automatic_cycles = 0_u128.into();
+        let receipt = FleetFundingPolicyRotationRootReceipt {
+            operation_id,
+            plan_digest,
+            fleet_subnet_root: authority.fleet_subnet_root,
+            predecessor_generation: request.predecessor_generation,
+            successor_generation: request.successor_generation,
+            prepared: true,
+            activated: true,
+            recorded_at_ns,
+        };
+        next.rotation_current = None;
+        next.rotation_last = Some(RootFundingPolicyRotationTerminalRecord {
+            request: request.clone(),
+            receipt: receipt.clone(),
+        });
+        let next = validate_record(authority, next)?;
+        commit_transition(&raw, next)?;
+        Ok(receipt)
+    }
+
     pub(crate) fn status(
         authority: &RootFundingAuthorityView,
         cycles_funding_enabled: bool,
@@ -146,13 +355,20 @@ impl RootFundingOps {
             funding_eligible: authority.funding_eligible,
             cycles_funding_enabled,
             current_cycles: Cycles::new(current_cycles),
+            policy_generation: funding.policy_generation,
             funding_profile: authority.funding.root_funding.funding_profile,
             policy_hash: fleet_subnet_root_funding_policy_hash(&authority.funding),
             root_policy: authority.funding.root_funding.clone(),
             current_operation: funding.current.map(|active| active.request),
             last_result: funding.last.map(|last| last.response),
+            historical_automatic_grants: funding.historical_automatic_grants,
+            historical_automatic_cycles: funding.historical_automatic_cycles,
             automatic_grants: funding.automatic_grants,
             automatic_cycles: funding.automatic_cycles,
+            rotation_current: funding
+                .rotation_current
+                .map(|rotation| rotation.prepared_receipt),
+            rotation_last: funding.rotation_last.map(|rotation| rotation.receipt),
             icp_refill_policy: authority.funding.icp_refill.clone(),
             icp_window_start_secs,
             icp_window_reserved_e8s,
@@ -302,21 +518,30 @@ fn validate_record_without_authority(
     record: RootFundingRecord,
 ) -> Result<RootFundingRecord, InternalError> {
     if record.schema_version != ROOT_FUNDING_SCHEMA_VERSION
+        || record.policy_generation != 1
+        || record.historical_automatic_grants != 0
+        || record.historical_automatic_cycles.to_u128() != 0
         || record.automatic_grants != 0
         || record.automatic_cycles.to_u128() != 0
         || record.current.is_some()
         || record.last.is_some()
+        || record.rotation_current.is_some()
+        || record.rotation_last.is_some()
     {
         return Err(InternalError::invariant());
     }
     Ok(record)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one Root journal validator composes funding and rotation invariants"
+)]
 fn validate_record(
     authority: &RootFundingAuthorityView,
     record: RootFundingRecord,
 ) -> Result<RootFundingRecord, InternalError> {
-    if record.schema_version != ROOT_FUNDING_SCHEMA_VERSION {
+    if record.schema_version != ROOT_FUNDING_SCHEMA_VERSION || record.policy_generation == 0 {
         return Err(InternalError::invariant());
     }
     if record.automatic_grants > authority.funding.root_funding.maximum_automatic_grants
@@ -336,7 +561,7 @@ fn validate_record(
         return Err(InternalError::invariant());
     }
     if let Some(last) = record.last.as_ref() {
-        validate_request(authority, &last.request)?;
+        validate_request_identity(authority, &last.request)?;
         if response_request(&last.response) != last.request
             || last.completed_at_ns < last.opened_at_ns
         {
@@ -375,15 +600,57 @@ fn validate_record(
             return Err(InternalError::invariant());
         }
     }
+    if let Some(last) = record.rotation_last.as_ref()
+        && (last.receipt.operation_id == [0; 32]
+            || last.receipt.plan_digest == [0; 32]
+            || !last.receipt.prepared
+            || !last.receipt.activated
+            || last.receipt.fleet_subnet_root != authority.fleet_subnet_root
+            || last.receipt.successor_generation > record.policy_generation
+            || last.receipt.predecessor_generation.checked_add(1)
+                != Some(last.receipt.successor_generation)
+            || !rotation_receipt_matches(&last.receipt, &last.request)
+            || last.request.successor_generation != record.policy_generation
+            || last.request.root.proposed_policy != authority.funding.root_funding
+            || last.request.predecessor_registry.authority != authority.registry.authority)
+    {
+        return Err(InternalError::invariant());
+    }
+    if let Some(rotation) = record.rotation_current.as_ref() {
+        let request = &rotation.request;
+        let usage = &request.root.predecessor_usage;
+        if record.current.is_some()
+            || request.operation_id == [0; 32]
+            || request.plan_digest == [0; 32]
+            || request.root.fleet_subnet_root != authority.fleet_subnet_root
+            || request.predecessor_registry != authority.registry
+            || request.predecessor_generation != record.policy_generation
+            || request.predecessor_generation.checked_add(1) != Some(request.successor_generation)
+            || request.root.predecessor_policy_hash
+                != fleet_subnet_root_funding_policy_hash(&authority.funding)
+            || usage.historical_automatic_grants != record.historical_automatic_grants
+            || usage.historical_automatic_cycles != record.historical_automatic_cycles
+            || usage.generation_automatic_grants != record.automatic_grants
+            || usage.generation_automatic_cycles != record.automatic_cycles
+            || !rotation_receipt_matches(&rotation.prepared_receipt, request)
+            || !rotation.prepared_receipt.prepared
+            || rotation.prepared_receipt.activated
+        {
+            return Err(InternalError::invariant());
+        }
+        let mut successor = authority.funding.clone();
+        successor.root_funding = request.root.proposed_policy.clone();
+        validate_fleet_subnet_root_funding_authority(&successor, false)
+            .map_err(|_| InternalError::invariant())?;
+    }
     Ok(record)
 }
 
-fn validate_request(
+fn validate_request_identity(
     authority: &RootFundingAuthorityView,
     request: &FleetRootFundingRequest,
 ) -> Result<(), InternalError> {
     let coordinator = authority.registry.authority.binding.coordinator;
-    let policy_hash = fleet_subnet_root_funding_policy_hash(&authority.funding);
     let expected_id = fleet_root_funding_operation_id(
         coordinator,
         authority.fleet_subnet_root,
@@ -393,14 +660,28 @@ fn validate_request(
         request.requested_cycles.to_u128(),
         request.policy_hash,
     );
+    if request.operation_sequence == 0
+        || request.operation_id != expected_id
+        || request.expected_registry.authority != authority.registry.authority
+        || request.requested_cycles.to_u128() == 0
+    {
+        return Err(InternalError::invariant());
+    }
+    Ok(())
+}
+
+fn validate_request(
+    authority: &RootFundingAuthorityView,
+    request: &FleetRootFundingRequest,
+) -> Result<(), InternalError> {
+    validate_request_identity(authority, request)?;
+    let policy_hash = fleet_subnet_root_funding_policy_hash(&authority.funding);
     let target_matches = request
         .observed_balance
         .to_u128()
         .checked_add(request.requested_cycles.to_u128())
         == Some(authority.funding.root_funding.target_balance.to_u128());
     if request.operation_sequence == 0
-        || request.operation_id != expected_id
-        || request.expected_registry.authority != authority.registry.authority
         || request.policy_hash != policy_hash
         || request.requested_cycles.to_u128() == 0
         || request.observed_balance.to_u128()
@@ -410,6 +691,17 @@ fn validate_request(
         return Err(InternalError::invariant());
     }
     Ok(())
+}
+
+fn rotation_receipt_matches(
+    receipt: &FleetFundingPolicyRotationRootReceipt,
+    request: &FleetFundingPolicyRotationRootPrepareRequest,
+) -> bool {
+    receipt.operation_id == request.operation_id
+        && receipt.plan_digest == request.plan_digest
+        && receipt.fleet_subnet_root == request.root.fleet_subnet_root
+        && receipt.predecessor_generation == request.predecessor_generation
+        && receipt.successor_generation == request.successor_generation
 }
 
 fn acceptance_request(request: &FleetRootFundingRequest) -> FleetRootFundingAcceptanceRequest {

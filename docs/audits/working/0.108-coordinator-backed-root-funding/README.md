@@ -1,8 +1,8 @@
 # Canic 0.108 Coordinator-Backed Root Funding Evidence
 
 Date: 2026-08-22
-State: M0 accepted 2026-08-21; M1 complete in published 0.108.0; B3-B8
-closeout corrections applied to the open 0.108.1 working draft
+State: M0 accepted 2026-08-21; M1 complete in published 0.108.0; B3-B9
+closeout corrections and CANIC-019 applied to the open 0.108.1 working draft
 
 ## Authority And Scope
 
@@ -13,7 +13,7 @@ target. M1 adds protected policy to the existing Fleet-input, plan, init,
 root-authority and Registry contracts, but no runtime grant state machine,
 timer, treasury ledger or public endpoint.
 
-The closeout-correction section below covers B3-B8/M2-M7 in the open 0.108.1
+The closeout-correction section below covers B3-B9/M2-M8 in the open 0.108.1
 draft. It does not rewrite M0/M1 history or claim that 0.108.1 is published.
 
 The published checkpoint reconciliation starts from `main` at
@@ -242,17 +242,18 @@ The first 2026-08-21 pinned server start was denied a sandbox loopback bind and
 reached no product behavior. The approved local-only server and targeted test
 above are the behavioral result.
 
-## B3-B8 Closeout Correction
+## B3-B9 Closeout Correction
 
 The first human-owned closeout audit rejected the open 0.108.1 draft. The
-correction is based on published `v0.108.0` commit
-`187dacd4f3c07b3077513bc9d9148fe7261fa4ff`; during correction that commit is
-also `HEAD` on `main`, so all 0.108.1 work is an uncommitted working-tree
-draft. This record therefore identifies the reproducible source base and exact
-test names without pretending the draft has an immutable revision. The
-maintainer must establish the final candidate commit before the re-audit.
-Unrelated pre-existing dependency-range and host-fixture changes remain in the
-same working tree and are not 0.108 funding evidence.
+correction starts from published `v0.108.0` commit
+`187dacd4f3c07b3077513bc9d9148fe7261fa4ff`. The current local candidate is
+`d4e18003248b085d05dc431153da3efa998dc119` on `main`, followed by the dirty
+working-tree corrections recorded below. The revision is two commits ahead of
+`origin/main`; neither those commits nor the working-tree correction are a
+published 0.108.1 release. The maintainer must establish the final immutable
+candidate before re-audit. This record names the exact reproducible base and
+focused tests without treating a local commit or passing subset as release
+truth.
 
 The audit corrections are:
 
@@ -271,7 +272,7 @@ The audit corrections are:
   distinguish published 0.108.0, the rejected draft, the corrected open draft
   and the still-required human re-audit.
 
-### M0-M7 / B1-B8 Traceability
+### M0-M8 / B1-B9 Traceability
 
 | Milestone / batch | Requirement | Implementation/evidence | Result |
 | --- | --- | --- | --- |
@@ -282,7 +283,8 @@ The audit corrections are:
 | M4 / B5 | One Root timer, recovery-first ordering, finite non-renewing caps and unchanged descendant owner | `workflow/runtime/cycles`, timer/lifecycle guards, 91-day cap PocketIC journey and non-Root parent-funding unit proof | Pass in corrected draft |
 | M5 / B6 | One manual/automatic Ledger/CMC replay owner, floor/reserve/caps and terminal fallback | `workflow/ic/icp_refill`, stable ID 39, 4,096-record bound, built-in Ledger/CMC replay, fallback and no-spend journeys | Pass in corrected draft |
 | M6 / B7 | Exact installed-authority recovery, protected status/CLI/Medic and lifecycle/snapshot fences | Host resolver, role status/Candid, CLI/Medic and snapshot/lifecycle focused suites | Pass in corrected draft; final rerun listed below |
-| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Pass in corrected draft; human re-audit remains required |
+| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Prior evidence passes; post-validation correction still requires the final maintainer gate and human re-audit |
+| M8 / B9 | Explicit same-release funding-policy generation rotation with retained predecessor usage and application state | Exact plan/hash validation, Coordinator/Root durable fences and receipts, bounded stable checkpoints, CLI/Candid surfaces, interruption/replay unit proof and governed exhausted-to-successor PocketIC journey | Pass in corrected open draft; final maintainer gate and human re-audit remain required |
 
 ### Corrected PocketIC Matrix
 
@@ -356,10 +358,136 @@ Executed locally on 2026-08-22 against the working draft:
   `bash scripts/ci/check-workspace-test-inventory.sh`: pass; the inventory
   remains 39 targets, 30 parallel and 9 serial PocketIC.
 
-The complete maintainer-owned validation/release matrix was not run and is not
-claimed here. The correction evidence is complete for a fresh human-owned
-closeout audit after the maintainer establishes the immutable candidate
-revision; it does not claim versioning, publication or remote qualification.
+The complete maintainer-owned validation/release matrix was not run in this
+focused correction pass and is not claimed here. The post-validation section
+below supersedes this pass's initial readiness handoff; neither section claims
+versioning, publication or remote qualification.
+
+### Post-Validation Candidate Correction
+
+The maintainer's first complete local validation attempt against the local
+0.108.1 candidate found eight deterministic failures rather than a runtime or
+remote effect:
+
+- the CLI plan fixture still expected an obsolete 2,100 Tcycle maximum debit
+  and 1,500 Tcycle Coordinator allocation;
+- pre-activation Root join did not yet enforce one Root's exact profile,
+  Fleet-window target capacity and Fleet lifetime-cycle capacity;
+- five canonical plan, Registry, service-binding and draining fixtures retained
+  hashes from the predecessor policy shape; and
+- the deployment/restore proof still expected a funding-disabled Root to omit
+  the canonical top-up timer declaration rather than declare it unregistered.
+
+Those defects are corrected in local commit
+`d4e18003248b085d05dc431153da3efa998dc119`. The follow-up maintainer validation
+reached warning-denied Clippy and found a duplicated Single/preview profile
+match arm; the focused rerun exposed the same masked lint in host validation.
+The dirty working-tree correction merges both arms, appends the new profile
+after the two existing enum variants so their serialized ordinals stay
+unchanged, updates the resulting multi-profile draining hash and strengthens
+the preview test to assert the complete 180 Tcycle staging envelope.
+
+Focused post-validation reruns on 2026-08-22:
+
+- `cargo clippy --locked -p canic-core -p canic-host --lib --tests -- -D warnings`:
+  pass.
+- `cargo test --locked -p canic-core fleet_funding --lib`: pass, 16 tests.
+- Exact core plan, Registry manifest, initial-services, service-binding and
+  Root-draining hash regressions: pass, one test each.
+- Exact pre-activation Root-admission regression: pass.
+- Exact host physical-topology/preview-profile regression: pass and asserts
+  140T Coordinator creation, 80T reserve, 30T Root creation, 10T Store
+  creation, 10T/30T request/target, 30-/90-day periods, 30T window, two/60T
+  non-renewing cap and absent ICP policy.
+- Exact CLI deployment-plan regression: pass.
+- `cargo test --locked -p canic --test protocol_surface`: pass, 40 tests,
+  including the checked-in Coordinator Candid profile variant.
+
+The complete maintainer validation attempt began before the final dirty
+corrections and is not evidence for this exact working tree. It must be rerun
+by the maintainer after the final candidate is made immutable. No remote
+qualification or value-transfer effect was performed by these corrections.
+
+### CANIC-019 / B9 Policy-Generation Rotation Evidence
+
+The accepted amendment adds an explicit same-release rotation rather than a
+renewable timer or mutable reset. Planning is read-only and binds the exact
+installed Fleet, predecessor Registry/generation/policy hashes and usage,
+placement evidence, proposed successor policies, maximum new exposure, zero
+operator debit and Coordinator-treasury source. Apply is controller-protected.
+One Coordinator durable operation fences automatic work, prepares all affected
+Roots, publishes one successor Registry generation and activates each Root
+through exact idempotent receipts. Historical usage, operation sequences,
+application Registry state and descendant-funding ownership remain monotonic.
+
+Completed checkpoints are non-evicting and bounded to 4,096 total Root entries
+across all rotations. Protected status reports checkpoint count, Root-entry
+count and remaining capacity. CLI planning refuses a successor whose affected
+Roots will not fit. Every checkpoint retains the complete plan so exact begin,
+stage, apply and status replay remains available after later rotations and
+payload drift rejects. Coordinator stable-capacity evidence covers a maximum
+active rotation, one maximum-width completed checkpoint and the larger
+25,315,095-byte worst case of 4,096 one-Root checkpoints inside the corrected
+32 MiB cell. Root state retains only one current and one terminal rotation
+record.
+
+Focused validation executed locally on 2026-08-22 against `main` HEAD
+`d4e18003248b085d05dc431153da3efa998dc119` plus the recorded dirty draft:
+
+- `cargo test --locked -p canic-core rotation_plan_`: pass, 2 tests.
+- `cargo test --locked -p canic-control-plane policy_rotation`: pass, 4 Root
+  and Coordinator prepare/activate, replay and retained-usage tests.
+- `cargo test --locked -p canic-control-plane coordinator_policy_rotation_converges_once_and_preserves_application_registry_state`:
+  pass. It covers stale begin, exact begin/stage/apply replay, kill-switch and
+  concurrent-operation fencing, every durable phase, Registry recovery from
+  retained checkpoints, corrupt-checkpoint rejection, exact old-operation
+  replay and payload-drift denial after two successive rotations, and writable
+  post-rotation Root draining lifecycle state.
+- `cargo test --locked -p canic-control-plane maximum_root_funding_ledger_fits_its_stable_cell_bound`:
+  pass. The strengthened test first measured the prior 16 MiB bound as too
+  small for the valid 25,315,095-byte maximally fragmented history; after the
+  bound correction it proves the maximum live grant ledger, maximum active
+  rotation, one 4,096-Root checkpoint and 4,096 one-Root checkpoints all fit
+  32 MiB. `cargo test --locked -p canic-control-plane maximum_format_root_journal_fits_its_stable_bound`:
+  pass.
+- `cargo test --locked -p canic-cli funding_`: pass, 5 CLI plan/apply/status
+  parsing and digest checks.
+- `cargo test --locked -p canic --test protocol_surface coordinator_protected_funding_candid_types_are_explicit`,
+  `cargo test --locked -p canic --test protocol_surface root_and_coordinator_funding_ingress_are_declared` and
+  `cargo test --locked -p canic --test protocol_surface coordinator_command_surface_is_exact`:
+  pass. The checked-in Coordinator Candid exposes the exact status and command
+  additions; the command surface contains 14 maintained variants.
+- `cargo clippy --locked -p canic-core -p canic-control-plane -p canic-host -p canic-cli -p canic -p canic-testing-internal --all-targets -- -D warnings`:
+  pass after the retained-plan, mixed-state recovery and fragmented-capacity
+  corrections for every package changed by B9.
+- `CARGO_INCREMENTAL=0 bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic pic::fleet_registry::baseline::tests::explicit_policy_rotation_reopens_exhausted_automatic_funding_once`:
+  pass, 1 test in 141.27 test seconds and 200 seconds for the governed suite.
+  The governed local PocketIC journey exhausts
+  generation one, advances 91 days without renewal, rotates to exact generation
+  two, preserves registered application state, replays terminal begin/stage/
+  apply without a second checkpoint, rejects drifted terminal begin/stage
+  payloads, drains through the two existing descendant limits and observes
+  only monotonic funding operation sequence two.
+- Representative generated Root and Coordinator debug artifacts rebuild from
+  the corrected source. The Coordinator refresh leaves the checked-in
+  canonical DID exact, and `cargo test --locked -p canic --test
+  protocol_surface fleet_coordinator` passes all four matching surface checks.
+
+The first real-canister run exposed two implementation defects that unit
+fixtures had not represented: a terminal fresh-Fleet provisioning receipt was
+mistaken for active provisioning, and exact terminal Stage replay was rejected
+while Begin/Apply replay succeeded. Closeout review then found four additional
+local defects: Root activation consulted the split authority/mirror view before
+its prepared recovery record; old completed commands were replayable only from
+the most recent receipt and did not bind full payload; delayed exact Root
+prepare replay could disarm the successor timer; and a one-checkpoint capacity
+fixture did not represent maximally fragmented retained history. The final
+implementation corrects those boundaries, preflights retained fixed-window
+spend, stores each exact plan and raises the measured cell bound to 32 MiB. The
+passing governed journey exercises the real-canister corrections. It used only
+the pinned local PocketIC server; no external Ledger, CMC, canister, network or
+funding effect occurred. The complete maintainer validation gate remains unrun
+for this final dirty draft and is not claimed by this focused evidence.
 
 ## M0 Disposition
 

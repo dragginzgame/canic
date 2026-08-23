@@ -29,6 +29,11 @@ const DISPOSABLE_ROOT_DELETION_PROOF_INPUT: &str =
     include_str!("../../../../deployments/0.100-root-deletion-proof.toml");
 const PLAYGROUND_INPUT: &str = include_str!("../../../../deployments/demos/playground-ic.toml");
 
+#[derive(Deserialize)]
+struct FundingProfileOnlyDocument {
+    funding_profile: FleetFundingProfile,
+}
+
 #[test]
 fn operator_balance_validity_is_strict_and_bounded() {
     let input = document(CoordinatorSubnetSelector::Explicit {
@@ -946,7 +951,15 @@ fn funding_profile_must_match_the_resolved_physical_topology() {
             resolved: FleetFundingProfile::MultiSubnet,
         })
     ));
+}
 
+#[test]
+fn preview_multi_subnet_profile_resolves_the_bounded_staging_envelope() {
+    let mut input = document(CoordinatorSubnetSelector::Explicit {
+        subnet: subnet_text(7),
+        acknowledge_fiduciary_cost: false,
+    });
+    input.fleet_subnet_roots[0].placement_subnet = subnet_text(8);
     input.funding_profile = FleetFundingProfile::PreviewMultiSubnet;
     let coordinator_policy = input
         .coordinator
@@ -965,6 +978,10 @@ fn funding_profile_must_match_the_resolved_physical_topology() {
     root_policy.maximum_automatic_cycles = Cycles::new(60 * TRILLION_CYCLES);
     root.icp_refill = None;
 
+    let decoded: FundingProfileOnlyDocument =
+        toml::from_str("funding_profile = \"preview_multi_subnet\"")
+            .expect("decode preview funding-profile spelling");
+    assert_eq!(decoded.funding_profile, input.funding_profile);
     let resolved = resolve_document(&input, BuildNetwork::Local, None)
         .expect("bounded preview multi-Subnet funding profile");
     assert_eq!(
@@ -977,22 +994,62 @@ fn funding_profile_must_match_the_resolved_physical_topology() {
             cycles: 140 * TRILLION_CYCLES
         }
     );
+    let coordinator_policy = resolved
+        .coordinator
+        .root_funding
+        .as_ref()
+        .expect("Coordinator funding policy");
     assert_eq!(
-        resolved
-            .coordinator
-            .root_funding
-            .expect("Coordinator funding policy")
-            .minimum_reserve_cycles,
+        coordinator_policy.minimum_reserve_cycles,
         Cycles::new(80 * TRILLION_CYCLES)
     );
     assert_eq!(
-        resolved.fleet_subnet_roots[0]
-            .funding
-            .root_funding
-            .maximum_automatic_cycles,
+        coordinator_policy.budget,
+        CyclesFundingBudget {
+            window_secs: 90 * 24 * 60 * 60,
+            maximum_cycles: Cycles::new(30 * TRILLION_CYCLES),
+        }
+    );
+    assert_eq!(coordinator_policy.maximum_automatic_grants, 2);
+    assert_eq!(
+        coordinator_policy.maximum_automatic_cycles,
         Cycles::new(60 * TRILLION_CYCLES)
     );
-    assert!(resolved.fleet_subnet_roots[0].funding.icp_refill.is_none());
+    let root = &resolved.fleet_subnet_roots[0];
+    assert_eq!(
+        root.root_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 30 * TRILLION_CYCLES
+        }
+    );
+    assert_eq!(
+        root.wasm_store_creation_funding,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: 10 * TRILLION_CYCLES
+        }
+    );
+    assert_eq!(
+        root.funding.root_funding.request_threshold,
+        Cycles::new(10 * TRILLION_CYCLES)
+    );
+    assert_eq!(
+        root.funding.root_funding.target_balance,
+        Cycles::new(30 * TRILLION_CYCLES)
+    );
+    assert_eq!(root.funding.root_funding.cooldown_secs, 30 * 24 * 60 * 60);
+    assert_eq!(
+        root.funding.root_funding.budget,
+        CyclesFundingBudget {
+            window_secs: 90 * 24 * 60 * 60,
+            maximum_cycles: Cycles::new(30 * TRILLION_CYCLES),
+        }
+    );
+    assert_eq!(root.funding.root_funding.maximum_automatic_grants, 2);
+    assert_eq!(
+        root.funding.root_funding.maximum_automatic_cycles,
+        Cycles::new(60 * TRILLION_CYCLES)
+    );
+    assert!(root.funding.icp_refill.is_none());
 }
 
 #[test]

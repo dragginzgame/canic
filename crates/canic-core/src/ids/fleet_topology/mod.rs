@@ -70,10 +70,10 @@ pub struct CyclesFundingBudget {
 pub enum FleetFundingProfile {
     #[serde(rename = "single_subnet")]
     SingleSubnet,
-    #[serde(rename = "preview_multi_subnet")]
-    PreviewMultiSubnet,
     #[serde(rename = "multi_subnet")]
     MultiSubnet,
+    #[serde(rename = "preview_multi_subnet")]
+    PreviewMultiSubnet,
 }
 
 /// Minimum post-grant Coordinator execution reserve established by the 0.108 M0 proof.

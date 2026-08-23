@@ -57,6 +57,11 @@ use canic_core::{
             RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
         fleet_funding::{
+            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+            FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
+            FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationPlanHeader,
+            FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationRootReceipt,
+            FleetFundingPolicyRotationStageRootRequest, FleetFundingPolicyUsage,
             FleetRootFundingAcceptanceReceipt, FleetRootFundingNoGrantReason,
             FleetRootFundingRequest, FleetRootFundingResponse,
         },
@@ -77,11 +82,13 @@ use canic_core::{
     ids::{
         AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupPlacementId,
         ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding,
-        FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce,
-        ReleaseSetDigest, SubnetId,
+        FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
+        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId,
+        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
     shared_support::fleet_funding_policy::{
+        coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
+        fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
         fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
     },
 };
@@ -4788,6 +4795,563 @@ fn joining_entry(
         },
         status: FleetSubnetRootStatus::Joining,
     }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one end-to-end staged rotation and interruption replay proof"
+)]
+fn coordinator_policy_rotation_converges_once_and_preserves_application_registry_state() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(68);
+    let (first, second, predecessor_registry) = activate_two_roots(coordinator);
+    let application_before = FleetCoordinatorWorkflow::registry().expect("predecessor Registry");
+    let window_ns = first
+        .funding
+        .root_funding
+        .budget
+        .window_secs
+        .checked_mul(1_000_000_000)
+        .expect("window nanoseconds");
+    for operation_sequence in 1..=first.funding.root_funding.maximum_automatic_grants {
+        let now_ns = u64::from(operation_sequence)
+            .checked_mul(window_ns)
+            .expect("grant observation time");
+        let request = root_funding_request(
+            coordinator,
+            &first,
+            predecessor_registry.clone(),
+            u64::from(operation_sequence),
+            0,
+        );
+        let call = match FleetCoordinatorOps::prepare_root_funding(
+            first.fleet_subnet_root,
+            request,
+            2_000_000_000_000_000,
+            now_ns,
+        )
+        .expect("prepare reachable predecessor grant")
+        {
+            FleetRootFundingDisposition::Invoke(call) => call,
+            FleetRootFundingDisposition::Current(_) | FleetRootFundingDisposition::Reconcile(_) => {
+                panic!("fresh predecessor grant must invoke")
+            }
+        };
+        let receipt = FleetRootFundingAcceptanceReceipt {
+            request: call.request.clone(),
+            fleet_subnet_root: first.fleet_subnet_root,
+            coordinator,
+            accepted_at_ns: now_ns + 1,
+        };
+        assert!(matches!(
+            FleetCoordinatorOps::record_root_funding_acceptance(
+                first.fleet_subnet_root,
+                &call.request,
+                receipt,
+                now_ns + 2,
+            )
+            .expect("commit reachable predecessor grant"),
+            FleetRootFundingResponse::Granted(_)
+        ));
+    }
+    let exhausted = FleetCoordinatorFundingStore::export()
+        .current
+        .expect("exhausted Coordinator funding state");
+    let exhausted_root = exhausted.roots.first().expect("exhausted Root ledger");
+    let mut plan = funding_rotation_plan(predecessor_registry.clone(), [&first, &second]);
+    let exhausted_usage = FleetFundingPolicyUsage {
+        historical_automatic_grants: exhausted.historical_automatic_grants,
+        historical_automatic_cycles: exhausted.historical_automatic_cycles.clone(),
+        generation_automatic_grants: exhausted.automatic_grants,
+        generation_automatic_cycles: exhausted.automatic_cycles.clone(),
+    };
+    plan.header.predecessor_usage = exhausted_usage;
+    plan.roots
+        .iter_mut()
+        .find(|root| root.fleet_subnet_root == first.fleet_subnet_root)
+        .expect("first Root plan")
+        .predecessor_usage = FleetFundingPolicyUsage {
+        historical_automatic_grants: exhausted_root.historical_automatic_grants,
+        historical_automatic_cycles: exhausted_root.historical_automatic_cycles.clone(),
+        generation_automatic_grants: exhausted_root.automatic_grants,
+        generation_automatic_cycles: exhausted_root.automatic_cycles.clone(),
+    };
+    plan.header.roots_digest = fleet_funding_policy_rotation_roots_digest(&plan.roots);
+    let plan_digest = fleet_funding_policy_rotation_plan_digest(&plan);
+    let operation_id = fleet_funding_policy_rotation_operation_id(coordinator, plan_digest);
+    let begin = FleetFundingPolicyRotationBeginRequest {
+        operation_id,
+        plan_digest,
+        header: plan.header.clone(),
+    };
+
+    let before = FleetCoordinatorFundingStore::export();
+    let mut stale_begin = begin.clone();
+    stale_begin.header.predecessor_generation += 1;
+    FleetCoordinatorOps::begin_funding_policy_rotation(stale_begin, 10)
+        .expect_err("stale predecessor generation must reject");
+    assert_eq!(FleetCoordinatorFundingStore::export(), before);
+
+    FleetCoordinatorOps::begin_funding_policy_rotation(begin.clone(), 11).expect("begin rotation");
+    let after_begin = FleetCoordinatorFundingStore::export();
+    FleetCoordinatorOps::begin_funding_policy_rotation(begin.clone(), 99)
+        .expect("begin response-loss replay");
+    assert_eq!(FleetCoordinatorFundingStore::export(), after_begin);
+    FleetCoordinatorOps::set_root_funding_enabled(false)
+        .expect_err("kill-switch mutation must not cross the rotation fence");
+
+    for root in &plan.roots {
+        let stage_root = FleetFundingPolicyRotationStageRootRequest {
+            operation_id,
+            plan_digest,
+            root: root.clone(),
+        };
+        FleetCoordinatorOps::stage_funding_policy_rotation_root(stage_root.clone(), 12)
+            .expect("stage Root");
+        let staged = FleetCoordinatorFundingStore::export();
+        FleetCoordinatorOps::stage_funding_policy_rotation_root(stage_root, 98)
+            .expect("stage response-loss replay");
+        assert_eq!(FleetCoordinatorFundingStore::export(), staged);
+    }
+
+    let apply = FleetFundingPolicyRotationApplyRequest {
+        operation_id,
+        plan_digest,
+        expected_predecessor_generation: 1,
+    };
+    FleetCoordinatorOps::apply_funding_policy_rotation(apply.clone(), 13)
+        .expect("apply fully staged plan");
+    let applying = FleetCoordinatorFundingStore::export();
+    FleetCoordinatorOps::apply_funding_policy_rotation(apply.clone(), 97)
+        .expect("apply response-loss replay");
+    assert_eq!(FleetCoordinatorFundingStore::export(), applying);
+
+    for index in 0..plan.roots.len() {
+        let FleetFundingPolicyRotationStep::PrepareRoot {
+            fleet_subnet_root,
+            request,
+        } = FleetCoordinatorOps::funding_policy_rotation_step().expect("next Root preparation")
+        else {
+            panic!("rotation must prepare every Root before publication")
+        };
+        assert_eq!(fleet_subnet_root, plan.roots[index].fleet_subnet_root);
+        FleetCoordinatorOps::record_funding_policy_rotation_root_prepared(
+            rotation_root_receipt(&request, false, 20 + index as u64),
+            20 + index as u64,
+        )
+        .expect("record prepared Root");
+    }
+    assert!(matches!(
+        FleetCoordinatorOps::funding_policy_rotation_step().expect("publication step"),
+        FleetFundingPolicyRotationStep::PublishRegistry
+    ));
+    let successor_registry = FleetCoordinatorOps::publish_funding_policy_rotation_registry(30)
+        .expect("publish exact successor Registry");
+    assert_eq!(
+        successor_registry.revision,
+        predecessor_registry.revision + 1
+    );
+
+    for index in 0..plan.roots.len() {
+        let FleetFundingPolicyRotationStep::ActivateRoot {
+            fleet_subnet_root,
+            request,
+        } = FleetCoordinatorOps::funding_policy_rotation_step().expect("next Root activation")
+        else {
+            panic!("rotation must activate every prepared Root")
+        };
+        assert_eq!(fleet_subnet_root, plan.roots[index].fleet_subnet_root);
+        let receipt = FleetFundingPolicyRotationRootReceipt {
+            operation_id: request.operation_id,
+            plan_digest: request.plan_digest,
+            fleet_subnet_root: request.fleet_subnet_root,
+            predecessor_generation: request.predecessor_generation,
+            successor_generation: request.successor_generation,
+            prepared: true,
+            activated: true,
+            recorded_at_ns: 40 + index as u64,
+        };
+        FleetCoordinatorOps::record_funding_policy_rotation_root_activated(
+            receipt,
+            40 + index as u64,
+        )
+        .expect("record activated Root");
+    }
+    assert!(matches!(
+        FleetCoordinatorOps::funding_policy_rotation_step().expect("completion step"),
+        FleetFundingPolicyRotationStep::Complete
+    ));
+    let terminal =
+        FleetCoordinatorOps::complete_funding_policy_rotation(50).expect("complete rotation");
+    assert_eq!(terminal.operation_id, operation_id);
+    assert_eq!(terminal.apply_operator_debit.to_u128(), 0);
+
+    let completed = FleetCoordinatorFundingStore::export();
+    FleetCoordinatorOps::apply_funding_policy_rotation(apply.clone(), 96)
+        .expect("terminal apply replay");
+    FleetCoordinatorOps::begin_funding_policy_rotation(begin.clone(), 95)
+        .expect("terminal begin replay");
+    FleetCoordinatorOps::stage_funding_policy_rotation_root(
+        FleetFundingPolicyRotationStageRootRequest {
+            operation_id,
+            plan_digest,
+            root: plan.roots[0].clone(),
+        },
+        94,
+    )
+    .expect("terminal stage replay");
+    let mut drifted_begin = begin.clone();
+    drifted_begin.header.topology_catalog_digest[0] ^= 1;
+    FleetCoordinatorOps::begin_funding_policy_rotation(drifted_begin, 93)
+        .expect_err("terminal begin replay must reject payload drift");
+    let mut drifted_stage_root = plan.roots[0].clone();
+    drifted_stage_root.placement.node_count += 1;
+    FleetCoordinatorOps::stage_funding_policy_rotation_root(
+        FleetFundingPolicyRotationStageRootRequest {
+            operation_id,
+            plan_digest,
+            root: drifted_stage_root,
+        },
+        92,
+    )
+    .expect_err("terminal stage replay must reject payload drift");
+    assert_eq!(FleetCoordinatorFundingStore::export(), completed);
+    assert!(
+        poll_ready(advance_funding_policy_rotation_once(operation_id))
+            .expect("terminal scheduled replay stops")
+    );
+    let mut corrupted_checkpoint = completed.clone();
+    corrupted_checkpoint
+        .current
+        .as_mut()
+        .expect("terminal funding state")
+        .rotation_history[0]
+        .receipt
+        .successor_policy_set_hash[0] ^= 1;
+    FleetCoordinatorFundingStore::import(corrupted_checkpoint);
+    FleetCoordinatorWorkflow::registry()
+        .expect_err("corrupted funding-policy checkpoint must invalidate Registry recovery");
+    FleetCoordinatorFundingStore::import(completed.clone());
+
+    let funding = completed.current.expect("terminal funding state");
+    assert_eq!(funding.policy_generation, 2);
+    assert_eq!(
+        funding.historical_automatic_grants,
+        u64::from(first.funding.root_funding.maximum_automatic_grants)
+    );
+    assert_eq!(
+        funding.historical_automatic_cycles,
+        first.funding.root_funding.maximum_automatic_cycles
+    );
+    assert_eq!(funding.automatic_grants, 0);
+    assert_eq!(funding.automatic_cycles.to_u128(), 0);
+    assert!(funding.rotation_current.is_none());
+    assert_eq!(funding.rotation_last, Some(terminal.clone()));
+
+    let application_after = FleetCoordinatorWorkflow::registry().expect("successor Registry");
+    assert_eq!(
+        application_after.component_specs,
+        application_before.component_specs
+    );
+    for (before, after) in application_before
+        .fleet_subnet_roots
+        .iter()
+        .zip(&application_after.fleet_subnet_roots)
+    {
+        assert_eq!(after.component_admissions, before.component_admissions);
+        assert_eq!(after.active_release_set, before.active_release_set);
+        assert_eq!(after.limits, before.limits);
+        assert_eq!(after.status, before.status);
+    }
+
+    let coordinator_policy = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("successor Coordinator state")
+        .root_funding
+        .expect("successor Coordinator policy");
+    let mut second_plan = funding_rotation_plan(
+        terminal.successor_registry,
+        [
+            &application_after.fleet_subnet_roots[0],
+            &application_after.fleet_subnet_roots[1],
+        ],
+    );
+    second_plan.header.predecessor_generation = 2;
+    second_plan.header.successor_generation = 3;
+    second_plan.header.predecessor_coordinator_policy_hash =
+        coordinator_root_funding_policy_hash(&coordinator_policy);
+    second_plan.header.predecessor_usage = FleetFundingPolicyUsage {
+        historical_automatic_grants: funding.historical_automatic_grants,
+        historical_automatic_cycles: funding.historical_automatic_cycles.clone(),
+        generation_automatic_grants: funding.automatic_grants,
+        generation_automatic_cycles: funding.automatic_cycles.clone(),
+    };
+    for root in &mut second_plan.roots {
+        let ledger = funding
+            .roots
+            .iter()
+            .find(|ledger| ledger.fleet_subnet_root == root.fleet_subnet_root);
+        root.predecessor_usage = FleetFundingPolicyUsage {
+            historical_automatic_grants: ledger
+                .map_or(0, |ledger| ledger.historical_automatic_grants),
+            historical_automatic_cycles: ledger.map_or_else(
+                || Cycles::new(0),
+                |ledger| ledger.historical_automatic_cycles.clone(),
+            ),
+            generation_automatic_grants: ledger.map_or(0, |ledger| ledger.automatic_grants),
+            generation_automatic_cycles: ledger
+                .map_or_else(|| Cycles::new(0), |ledger| ledger.automatic_cycles.clone()),
+        };
+    }
+    second_plan.header.roots_digest =
+        fleet_funding_policy_rotation_roots_digest(&second_plan.roots);
+    let second_terminal = complete_policy_rotation_for_test(coordinator, second_plan, 100);
+    let after_second_rotation =
+        FleetCoordinatorWorkflow::registry().expect("second successor Registry remains canonical");
+    assert_eq!(
+        after_second_rotation.component_specs,
+        application_before.component_specs
+    );
+    assert_eq!(
+        FleetCoordinatorFundingStore::export()
+            .current
+            .expect("second terminal funding state")
+            .rotation_history
+            .len(),
+        2
+    );
+    FleetCoordinatorOps::begin_funding_policy_rotation(begin, 121)
+        .expect("older terminal begin remains replayable");
+    FleetCoordinatorOps::stage_funding_policy_rotation_root(
+        FleetFundingPolicyRotationStageRootRequest {
+            operation_id,
+            plan_digest,
+            root: plan.roots[0].clone(),
+        },
+        122,
+    )
+    .expect("older terminal stage remains replayable");
+    FleetCoordinatorOps::apply_funding_policy_rotation(apply, 123)
+        .expect("older terminal apply remains replayable");
+    assert!(matches!(
+        FleetCoordinatorOps::funding_policy_rotation_status(operation_id)
+            .expect("older terminal status")
+            .expect("retained terminal operation")
+            .phase,
+        FleetFundingPolicyRotationStatusPhase::Completed(_)
+    ));
+
+    let successor_root = after_second_rotation
+        .fleet_subnet_roots
+        .iter()
+        .find(|root| root.fleet_subnet_root == first.fleet_subnet_root)
+        .expect("successor Root authority");
+    let resumed_request = root_funding_request(
+        coordinator,
+        successor_root,
+        second_terminal.successor_registry.clone(),
+        u64::from(first.funding.root_funding.maximum_automatic_grants) + 1,
+        0,
+    );
+    let resumed_at_ns = 6_u64
+        .checked_mul(window_ns)
+        .expect("successor grant observation time");
+    let resumed_call = match FleetCoordinatorOps::prepare_root_funding(
+        first.fleet_subnet_root,
+        resumed_request,
+        2_000_000_000_000_000,
+        resumed_at_ns,
+    )
+    .expect("successor generation resumes automatic funding")
+    {
+        FleetRootFundingDisposition::Invoke(call) => call,
+        FleetRootFundingDisposition::Current(_) | FleetRootFundingDisposition::Reconcile(_) => {
+            panic!("fresh successor request must invoke")
+        }
+    };
+    let resumed_receipt = FleetRootFundingAcceptanceReceipt {
+        request: resumed_call.request.clone(),
+        fleet_subnet_root: first.fleet_subnet_root,
+        coordinator,
+        accepted_at_ns: resumed_at_ns + 1,
+    };
+    FleetCoordinatorOps::record_root_funding_acceptance(
+        first.fleet_subnet_root,
+        &resumed_call.request,
+        resumed_receipt,
+        resumed_at_ns + 2,
+    )
+    .expect("commit successor generation grant");
+
+    FleetCoordinatorWorkflow::publish_root_draining(root_draining_publication_request(
+        successor_root,
+        &second_terminal.successor_registry,
+        [70; 32],
+    ))
+    .expect("application lifecycle remains writable after funding rotation");
+}
+
+fn funding_rotation_plan(
+    predecessor_registry: FleetRegistryVersion,
+    roots: [&FleetSubnetRootEntry; 2],
+) -> FleetFundingPolicyRotationPlan {
+    let mut proposed_coordinator = crate::test_support::coordinator_root_funding_policy();
+    proposed_coordinator.funding_profile = FleetFundingProfile::PreviewMultiSubnet;
+    proposed_coordinator.minimum_reserve_cycles = Cycles::new(80_000_000_000_000);
+    proposed_coordinator.maximum_automatic_grants = 8;
+    proposed_coordinator.maximum_automatic_cycles = Cycles::new(240_000_000_000_000);
+    let maximum_new_automatic_cycles = proposed_coordinator.maximum_automatic_cycles.clone();
+    let zero_usage = FleetFundingPolicyUsage {
+        historical_automatic_grants: 0,
+        historical_automatic_cycles: Cycles::new(0),
+        generation_automatic_grants: 0,
+        generation_automatic_cycles: Cycles::new(0),
+    };
+    let mut root_plans = roots
+        .into_iter()
+        .map(|root| {
+            let mut proposed_policy = root.funding.root_funding.clone();
+            proposed_policy.funding_profile = FleetFundingProfile::PreviewMultiSubnet;
+            FleetFundingPolicyRotationRootPlan {
+                fleet_subnet_root: root.fleet_subnet_root,
+                predecessor_policy_hash: fleet_subnet_root_funding_policy_hash(&root.funding),
+                predecessor_usage: zero_usage.clone(),
+                proposed_policy,
+                placement: FleetFundingPolicyRotationPlacementEvidence {
+                    subnet: root.placement_subnet,
+                    node_count: 13,
+                    cost_multiplier_numerator: 1,
+                    cost_multiplier_denominator: 1,
+                    fiduciary: false,
+                    acknowledge_fiduciary_cost: false,
+                },
+            }
+        })
+        .collect::<Vec<_>>();
+    root_plans.sort_by_key(|root| root.fleet_subnet_root);
+    let mut plan = FleetFundingPolicyRotationPlan {
+        header: FleetFundingPolicyRotationPlanHeader {
+            predecessor_registry,
+            predecessor_generation: 1,
+            successor_generation: 2,
+            predecessor_coordinator_policy_hash: coordinator_root_funding_policy_hash(
+                &crate::test_support::coordinator_root_funding_policy(),
+            ),
+            predecessor_usage: zero_usage,
+            proposed_coordinator_policy: proposed_coordinator,
+            topology_catalog_digest: [69; 32],
+            coordinator_placement: FleetFundingPolicyRotationPlacementEvidence {
+                subnet: SubnetId::from_principal(principal(2)),
+                node_count: 13,
+                cost_multiplier_numerator: 1,
+                cost_multiplier_denominator: 1,
+                fiduciary: false,
+                acknowledge_fiduciary_cost: false,
+            },
+            affected_root_count: 2,
+            roots_digest: [0; 32],
+            maximum_new_automatic_cycles,
+            apply_operator_debit: Cycles::new(0),
+            funding_source: FleetFundingPolicyRotationFundingSource::CoordinatorTreasury,
+        },
+        roots: root_plans,
+    };
+    plan.header.roots_digest = fleet_funding_policy_rotation_roots_digest(&plan.roots);
+    plan
+}
+
+fn rotation_root_receipt(
+    request: &canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest,
+    activated: bool,
+    recorded_at_ns: u64,
+) -> FleetFundingPolicyRotationRootReceipt {
+    FleetFundingPolicyRotationRootReceipt {
+        operation_id: request.operation_id,
+        plan_digest: request.plan_digest,
+        fleet_subnet_root: request.root.fleet_subnet_root,
+        predecessor_generation: request.predecessor_generation,
+        successor_generation: request.successor_generation,
+        prepared: true,
+        activated,
+        recorded_at_ns,
+    }
+}
+
+fn complete_policy_rotation_for_test(
+    coordinator: Principal,
+    plan: FleetFundingPolicyRotationPlan,
+    timestamp_base: u64,
+) -> canic_core::dto::fleet_funding::FleetFundingPolicyRotationReceipt {
+    let plan_digest = fleet_funding_policy_rotation_plan_digest(&plan);
+    let operation_id = fleet_funding_policy_rotation_operation_id(coordinator, plan_digest);
+    FleetCoordinatorOps::begin_funding_policy_rotation(
+        FleetFundingPolicyRotationBeginRequest {
+            operation_id,
+            plan_digest,
+            header: plan.header.clone(),
+        },
+        timestamp_base,
+    )
+    .expect("begin successor rotation");
+    for root in &plan.roots {
+        FleetCoordinatorOps::stage_funding_policy_rotation_root(
+            FleetFundingPolicyRotationStageRootRequest {
+                operation_id,
+                plan_digest,
+                root: root.clone(),
+            },
+            timestamp_base + 1,
+        )
+        .expect("stage successor Root");
+    }
+    FleetCoordinatorOps::apply_funding_policy_rotation(
+        FleetFundingPolicyRotationApplyRequest {
+            operation_id,
+            plan_digest,
+            expected_predecessor_generation: plan.header.predecessor_generation,
+        },
+        timestamp_base + 2,
+    )
+    .expect("apply successor rotation");
+    for index in 0..plan.roots.len() {
+        let FleetFundingPolicyRotationStep::PrepareRoot { request, .. } =
+            FleetCoordinatorOps::funding_policy_rotation_step()
+                .expect("successor Root preparation")
+        else {
+            panic!("successor rotation must prepare every Root")
+        };
+        FleetCoordinatorOps::record_funding_policy_rotation_root_prepared(
+            rotation_root_receipt(&request, false, timestamp_base + 3 + index as u64),
+            timestamp_base + 3 + index as u64,
+        )
+        .expect("record successor Root preparation");
+    }
+    FleetCoordinatorOps::publish_funding_policy_rotation_registry(timestamp_base + 10)
+        .expect("publish successor rotation Registry");
+    for index in 0..plan.roots.len() {
+        let FleetFundingPolicyRotationStep::ActivateRoot { request, .. } =
+            FleetCoordinatorOps::funding_policy_rotation_step().expect("successor Root activation")
+        else {
+            panic!("successor rotation must activate every Root")
+        };
+        FleetCoordinatorOps::record_funding_policy_rotation_root_activated(
+            FleetFundingPolicyRotationRootReceipt {
+                operation_id: request.operation_id,
+                plan_digest: request.plan_digest,
+                fleet_subnet_root: request.fleet_subnet_root,
+                predecessor_generation: request.predecessor_generation,
+                successor_generation: request.successor_generation,
+                prepared: true,
+                activated: true,
+                recorded_at_ns: timestamp_base + 11 + index as u64,
+            },
+            timestamp_base + 11 + index as u64,
+        )
+        .expect("record successor Root activation");
+    }
+    FleetCoordinatorOps::complete_funding_policy_rotation(timestamp_base + 20)
+        .expect("complete successor rotation")
 }
 
 #[test]

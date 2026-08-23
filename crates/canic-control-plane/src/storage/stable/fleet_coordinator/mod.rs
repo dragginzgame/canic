@@ -29,7 +29,12 @@ use canic_core::{
             RootComponentDirectorySynchronizationResponse, RootComponentProvisioningAdvanceRequest,
             RootComponentProvisioningStatusResponse, RootComponentPublicationRequest,
         },
-        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
+        fleet_funding::{
+            FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationPlanHeader,
+            FleetFundingPolicyRotationReceipt, FleetFundingPolicyRotationRootPlan,
+            FleetFundingPolicyRotationRootReceipt, FleetRootFundingRequest,
+            FleetRootFundingResponse,
+        },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryVersion, FleetServiceBinding, FleetSubnetRootDeletionExecutionResponse,
@@ -44,7 +49,7 @@ use canic_core::{
     ids::{
         AppId, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
         ComponentGroupPlacementId, ComponentGroupSpecId, FleetCoordinatorRootFundingPolicy,
-        FleetRegistryAuthority,
+        FleetRegistryAuthority, FleetSubnetRootFundingAuthority,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -65,9 +70,11 @@ use serde::{Deserialize, Serialize};
 const FLEET_COORDINATOR_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-// The maximum-format one-current-plus-one-terminal ledger for all 4,096 Roots
-// encodes to 10,920,060 bytes with the maintained serializer.
-const FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES: u32 = 16_777_216;
+// The bound covers the maximum 4,096-Root live grant ledger, one active
+// rotation, or the maximally fragmented durable 4,096-Root completed-rotation
+// checkpoint history; the maximum-format serialization tests own the
+// executable capacity proof.
+const FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES: u32 = 33_554_432;
 
 #[cfg(feature = "fleet-coordinator-canister")]
 struct FleetCoordinatorRegistryState;
@@ -141,6 +148,8 @@ pub struct CoordinatorRootGrantResultRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetRootFundingLedgerRecord {
     pub fleet_subnet_root: Principal,
+    pub historical_automatic_grants: u64,
+    pub historical_automatic_cycles: Cycles,
     pub automatic_grants: u32,
     pub automatic_cycles: Cycles,
     pub window: Option<FleetRootFundingWindowRecord>,
@@ -153,24 +162,78 @@ pub struct FleetRootFundingLedgerRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetCoordinatorFundingRecord {
     pub schema_version: u16,
+    pub policy_generation: u64,
     pub funding_enabled: bool,
+    pub historical_automatic_grants: u64,
+    pub historical_automatic_cycles: Cycles,
     pub automatic_grants: u32,
     pub automatic_cycles: Cycles,
     pub fleet_window: Option<FleetRootFundingWindowRecord>,
     pub roots: Vec<FleetRootFundingLedgerRecord>,
+    pub rotation_history: Vec<FleetFundingPolicyRotationCheckpointRecord>,
+    pub rotation_current: Option<FleetFundingPolicyRotationRecord>,
+    pub rotation_last: Option<FleetFundingPolicyRotationReceipt>,
 }
 
 impl Default for FleetCoordinatorFundingRecord {
     fn default() -> Self {
         Self {
             schema_version: FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION,
+            policy_generation: 1,
             funding_enabled: true,
+            historical_automatic_grants: 0,
+            historical_automatic_cycles: Cycles::new(0),
             automatic_grants: 0,
             automatic_cycles: Cycles::new(0),
             fleet_window: None,
             roots: Vec::new(),
+            rotation_history: Vec::new(),
+            rotation_current: None,
+            rotation_last: None,
         }
     }
+}
+
+/// Exact successor authority retained for one completed Registry rotation checkpoint.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetFundingPolicyRotationRootCheckpointRecord {
+    pub fleet_subnet_root: Principal,
+    pub funding: FleetSubnetRootFundingAuthority,
+}
+
+/// Bounded canonical Registry checkpoint for one completed funding-policy rotation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetFundingPolicyRotationCheckpointRecord {
+    pub receipt: FleetFundingPolicyRotationReceipt,
+    pub plan: FleetFundingPolicyRotationPlan,
+    pub coordinator_policy: FleetCoordinatorRootFundingPolicy,
+    pub roots: Vec<FleetFundingPolicyRotationRootCheckpointRecord>,
+}
+
+/// Monotonic Coordinator phase of one exact policy-generation rotation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FleetFundingPolicyRotationPhaseRecord {
+    Staging,
+    PreparingRoots {
+        prepared: Vec<FleetFundingPolicyRotationRootReceipt>,
+    },
+    ActivatingRoots {
+        successor_registry: Box<FleetRegistryVersion>,
+        prepared: Vec<FleetFundingPolicyRotationRootReceipt>,
+        activated: Vec<FleetFundingPolicyRotationRootReceipt>,
+    },
+}
+
+/// One Coordinator-owned staged and replayable funding-policy rotation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FleetFundingPolicyRotationRecord {
+    pub operation_id: [u8; 32],
+    pub plan_digest: [u8; 32],
+    pub header: FleetFundingPolicyRotationPlanHeader,
+    pub roots: Vec<FleetFundingPolicyRotationRootPlan>,
+    pub phase: FleetFundingPolicyRotationPhaseRecord,
+    pub opened_at_ns: u64,
+    pub updated_at_ns: u64,
 }
 
 ///
@@ -742,8 +805,11 @@ mod funding_capacity_tests {
     use canic_core::{
         cdk::structures::storable::Storable,
         dto::fleet_funding::{
-            FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
-            FleetRootFundingResponse,
+            FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
+            FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
+            FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationRootReceipt,
+            FleetFundingPolicyUsage, FleetRootFundingAcceptanceReceipt,
+            FleetRootFundingAcceptanceRequest, FleetRootFundingResponse,
         },
         ids::{
             CanonicalNetworkId, FleetBinding, FleetCoordinatorBinding, FleetId, FleetKey,
@@ -752,6 +818,10 @@ mod funding_capacity_tests {
     };
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one worst-case fixture covers both mutually exclusive durable ledger maxima"
+    )]
     fn maximum_root_funding_ledger_fits_its_stable_cell_bound() {
         let coordinator = principal(u32::MAX);
         let registry = FleetRegistryVersion {
@@ -788,6 +858,8 @@ mod funding_capacity_tests {
                 };
                 FleetRootFundingLedgerRecord {
                     fleet_subnet_root,
+                    historical_automatic_grants: u64::MAX,
+                    historical_automatic_cycles: Cycles::new(u128::MAX),
                     automatic_grants: u32::MAX,
                     automatic_cycles: Cycles::new(u128::MAX),
                     window: Some(FleetRootFundingWindowRecord {
@@ -820,11 +892,211 @@ mod funding_capacity_tests {
                     }),
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let grant_state = FleetCoordinatorFundingStateRecord {
+            current: Some(FleetCoordinatorFundingRecord {
+                schema_version: FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION,
+                policy_generation: u64::MAX,
+                funding_enabled: true,
+                historical_automatic_grants: u64::MAX,
+                historical_automatic_cycles: Cycles::new(u128::MAX),
+                automatic_grants: u32::MAX,
+                automatic_cycles: Cycles::new(u128::MAX),
+                fleet_window: Some(FleetRootFundingWindowRecord {
+                    window_start_secs: u64::MAX,
+                    spent_cycles: Cycles::new(u128::MAX),
+                }),
+                roots: roots.clone(),
+                rotation_history: Vec::new(),
+                rotation_current: None,
+                rotation_last: None,
+            }),
+        };
+        assert_funding_state_fits(&grant_state, "maximum grant ledger");
+        let roots = roots
+            .into_iter()
+            .map(|mut root| {
+                root.current = None;
+                root
+            })
+            .collect::<Vec<_>>();
+        let rotation_roots = roots
+            .iter()
+            .map(|root| FleetFundingPolicyRotationRootPlan {
+                fleet_subnet_root: root.fleet_subnet_root,
+                predecessor_policy_hash: [u8::MAX; 32],
+                predecessor_usage: FleetFundingPolicyUsage {
+                    historical_automatic_grants: u64::MAX,
+                    historical_automatic_cycles: Cycles::new(u128::MAX),
+                    generation_automatic_grants: u32::MAX,
+                    generation_automatic_cycles: Cycles::new(u128::MAX),
+                },
+                proposed_policy: crate::test_support::fleet_subnet_root_funding_authority()
+                    .root_funding,
+                placement: FleetFundingPolicyRotationPlacementEvidence {
+                    subnet: SubnetId::from_principal(principal(u32::MAX - 2)),
+                    node_count: u64::MAX,
+                    cost_multiplier_numerator: u64::MAX,
+                    cost_multiplier_denominator: u64::MAX,
+                    fiduciary: true,
+                    acknowledge_fiduciary_cost: true,
+                },
+            })
+            .collect::<Vec<_>>();
+        let rotation_header = FleetFundingPolicyRotationPlanHeader {
+            predecessor_registry: registry.clone(),
+            predecessor_generation: u64::MAX - 1,
+            successor_generation: u64::MAX,
+            predecessor_coordinator_policy_hash: [u8::MAX; 32],
+            predecessor_usage: FleetFundingPolicyUsage {
+                historical_automatic_grants: u64::MAX,
+                historical_automatic_cycles: Cycles::new(u128::MAX),
+                generation_automatic_grants: u32::MAX,
+                generation_automatic_cycles: Cycles::new(u128::MAX),
+            },
+            proposed_coordinator_policy: crate::test_support::coordinator_root_funding_policy(),
+            topology_catalog_digest: [u8::MAX; 32],
+            coordinator_placement: FleetFundingPolicyRotationPlacementEvidence {
+                subnet: registry.authority.binding.coordinator_subnet,
+                node_count: u64::MAX,
+                cost_multiplier_numerator: u64::MAX,
+                cost_multiplier_denominator: u64::MAX,
+                fiduciary: true,
+                acknowledge_fiduciary_cost: true,
+            },
+            affected_root_count: u32::try_from(MAX_FLEET_ROOT_FUNDING_SLOTS)
+                .expect("funding Root slot bound fits u32"),
+            roots_digest: [u8::MAX; 32],
+            maximum_new_automatic_cycles: Cycles::new(u128::MAX),
+            apply_operator_debit: Cycles::new(0),
+            funding_source: FleetFundingPolicyRotationFundingSource::CoordinatorTreasury,
+        };
+        let rotation_receipts = rotation_roots
+            .iter()
+            .map(|root| FleetFundingPolicyRotationRootReceipt {
+                operation_id: [u8::MAX; 32],
+                plan_digest: [u8::MAX; 32],
+                fleet_subnet_root: root.fleet_subnet_root,
+                predecessor_generation: u64::MAX - 1,
+                successor_generation: u64::MAX,
+                prepared: true,
+                activated: true,
+                recorded_at_ns: u64::MAX,
+            })
+            .collect::<Vec<_>>();
+        let terminal_receipt = FleetFundingPolicyRotationReceipt {
+            operation_id: [u8::MAX; 32],
+            plan_digest: [u8::MAX; 32],
+            predecessor_registry: registry.clone(),
+            successor_registry: registry.clone(),
+            predecessor_generation: u64::MAX - 1,
+            successor_generation: u64::MAX,
+            affected_root_count: u32::try_from(MAX_FLEET_ROOT_FUNDING_SLOTS)
+                .expect("funding Root slot bound fits u32"),
+            retained_historical_automatic_grants: u64::MAX,
+            retained_historical_automatic_cycles: Cycles::new(u128::MAX),
+            successor_policy_set_hash: [u8::MAX; 32],
+            maximum_new_automatic_cycles: Cycles::new(u128::MAX),
+            apply_operator_debit: Cycles::new(0),
+            completed_at_ns: u64::MAX,
+        };
         let state = FleetCoordinatorFundingStateRecord {
             current: Some(FleetCoordinatorFundingRecord {
                 schema_version: FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION,
+                policy_generation: u64::MAX,
                 funding_enabled: true,
+                historical_automatic_grants: u64::MAX,
+                historical_automatic_cycles: Cycles::new(u128::MAX),
+                automatic_grants: u32::MAX,
+                automatic_cycles: Cycles::new(u128::MAX),
+                fleet_window: Some(FleetRootFundingWindowRecord {
+                    window_start_secs: u64::MAX,
+                    spent_cycles: Cycles::new(u128::MAX),
+                }),
+                roots: roots.clone(),
+                rotation_history: Vec::new(),
+                rotation_current: Some(FleetFundingPolicyRotationRecord {
+                    operation_id: [u8::MAX; 32],
+                    plan_digest: [u8::MAX; 32],
+                    header: rotation_header.clone(),
+                    roots: rotation_roots.clone(),
+                    phase: FleetFundingPolicyRotationPhaseRecord::ActivatingRoots {
+                        successor_registry: Box::new(registry),
+                        prepared: rotation_receipts.clone(),
+                        activated: rotation_receipts,
+                    },
+                    opened_at_ns: u64::MAX,
+                    updated_at_ns: u64::MAX,
+                }),
+                rotation_last: None,
+            }),
+        };
+
+        assert_funding_state_fits(&state, "maximum rotation ledger");
+        let history_roots = rotation_roots
+            .iter()
+            .map(|root| FleetFundingPolicyRotationRootCheckpointRecord {
+                fleet_subnet_root: root.fleet_subnet_root,
+                funding: crate::test_support::fleet_subnet_root_funding_authority(),
+            })
+            .collect();
+        let history_state = FleetCoordinatorFundingStateRecord {
+            current: Some(FleetCoordinatorFundingRecord {
+                schema_version: FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION,
+                policy_generation: u64::MAX,
+                funding_enabled: true,
+                historical_automatic_grants: u64::MAX,
+                historical_automatic_cycles: Cycles::new(u128::MAX),
+                automatic_grants: u32::MAX,
+                automatic_cycles: Cycles::new(u128::MAX),
+                fleet_window: Some(FleetRootFundingWindowRecord {
+                    window_start_secs: u64::MAX,
+                    spent_cycles: Cycles::new(u128::MAX),
+                }),
+                roots: roots.clone(),
+                rotation_history: vec![FleetFundingPolicyRotationCheckpointRecord {
+                    receipt: terminal_receipt.clone(),
+                    plan: FleetFundingPolicyRotationPlan {
+                        header: rotation_header.clone(),
+                        roots: rotation_roots.clone(),
+                    },
+                    coordinator_policy: crate::test_support::coordinator_root_funding_policy(),
+                    roots: history_roots,
+                }],
+                rotation_current: None,
+                rotation_last: Some(terminal_receipt.clone()),
+            }),
+        };
+        assert_funding_state_fits(&history_state, "maximum completed rotation history");
+
+        let fragmented_history = rotation_roots
+            .into_iter()
+            .map(|root| {
+                let mut receipt = terminal_receipt.clone();
+                receipt.affected_root_count = 1;
+                let mut header = rotation_header.clone();
+                header.affected_root_count = 1;
+                FleetFundingPolicyRotationCheckpointRecord {
+                    receipt,
+                    plan: FleetFundingPolicyRotationPlan {
+                        header,
+                        roots: vec![root.clone()],
+                    },
+                    coordinator_policy: crate::test_support::coordinator_root_funding_policy(),
+                    roots: vec![FleetFundingPolicyRotationRootCheckpointRecord {
+                        fleet_subnet_root: root.fleet_subnet_root,
+                        funding: crate::test_support::fleet_subnet_root_funding_authority(),
+                    }],
+                }
+            })
+            .collect::<Vec<_>>();
+        let fragmented_history_state = FleetCoordinatorFundingStateRecord {
+            current: Some(FleetCoordinatorFundingRecord {
+                schema_version: FLEET_COORDINATOR_FUNDING_SCHEMA_VERSION,
+                policy_generation: u64::MAX,
+                funding_enabled: true,
+                historical_automatic_grants: u64::MAX,
+                historical_automatic_cycles: Cycles::new(u128::MAX),
                 automatic_grants: u32::MAX,
                 automatic_cycles: Cycles::new(u128::MAX),
                 fleet_window: Some(FleetRootFundingWindowRecord {
@@ -832,15 +1104,14 @@ mod funding_capacity_tests {
                     spent_cycles: Cycles::new(u128::MAX),
                 }),
                 roots,
+                rotation_history: fragmented_history,
+                rotation_current: None,
+                rotation_last: Some(terminal_receipt),
             }),
         };
-
-        let encoded = state.to_bytes();
-        assert!(
-            encoded.len() <= FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES as usize,
-            "maximum funding ledger encoded to {} bytes, exceeding {} bytes",
-            encoded.len(),
-            FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES,
+        assert_funding_state_fits(
+            &fragmented_history_state,
+            "maximum fragmented completed rotation history",
         );
     }
 
@@ -863,5 +1134,15 @@ mod funding_capacity_tests {
         let mut bytes = [u8::MAX; 29];
         bytes[..4].copy_from_slice(&index.to_be_bytes());
         Principal::from_slice(&bytes)
+    }
+
+    fn assert_funding_state_fits(state: &FleetCoordinatorFundingStateRecord, label: &str) {
+        let encoded = state.to_bytes();
+        assert!(
+            encoded.len() <= FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES as usize,
+            "{label} encoded to {} bytes, exceeding {} bytes",
+            encoded.len(),
+            FLEET_COORDINATOR_FUNDING_STATE_MAX_BYTES,
+        );
     }
 }

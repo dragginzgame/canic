@@ -20,7 +20,11 @@ use canic_core::{
             FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
         },
         error::Error,
-        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
+        fleet_funding::{
+            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+            FleetFundingPolicyRotationStageRootRequest, FleetRootFundingRequest,
+            FleetRootFundingResponse,
+        },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
@@ -107,6 +111,14 @@ impl FleetCoordinatorApi {
             CoordinatorCommand::ActivateRegistry(request) => {
                 Self::activate_registry(request).map(CoordinatorCommandResponse::ActivateRegistry)
             }
+            CoordinatorCommand::ApplyFundingPolicyRotation(request) => {
+                Self::apply_funding_policy_rotation(request)
+                    .map(CoordinatorCommandResponse::OperationAccepted)
+            }
+            CoordinatorCommand::BeginFundingPolicyRotation(request) => {
+                Self::begin_funding_policy_rotation(request)
+                    .map(CoordinatorCommandResponse::OperationAccepted)
+            }
             CoordinatorCommand::CompleteRootDeletion(request) => {
                 Self::complete_root_deletion(request)
                     .map(CoordinatorCommandResponse::CompleteRootDeletion)
@@ -152,7 +164,29 @@ impl FleetCoordinatorApi {
             }
             CoordinatorCommand::SetRootFunding(request) => Self::set_root_funding(request)
                 .map(CoordinatorCommandResponse::SetRootFunding),
+            CoordinatorCommand::StageFundingPolicyRotationRoot(request) => {
+                Self::stage_funding_policy_rotation_root(request)
+                    .map(CoordinatorCommandResponse::OperationAccepted)
+            }
         }
+    }
+
+    pub fn begin_funding_policy_rotation(
+        request: FleetFundingPolicyRotationBeginRequest,
+    ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
+        FleetCoordinatorWorkflow::begin_funding_policy_rotation(request).map_err(Into::into)
+    }
+
+    pub fn stage_funding_policy_rotation_root(
+        request: FleetFundingPolicyRotationStageRootRequest,
+    ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
+        FleetCoordinatorWorkflow::stage_funding_policy_rotation_root(request).map_err(Into::into)
+    }
+
+    pub fn apply_funding_policy_rotation(
+        request: FleetFundingPolicyRotationApplyRequest,
+    ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
+        FleetCoordinatorWorkflow::apply_funding_policy_rotation(request).map_err(Into::into)
     }
 
     pub async fn request_calling_root_funding(

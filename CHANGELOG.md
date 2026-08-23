@@ -15,13 +15,17 @@ Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
 - `0.108.1` adds the two-sided Coordinator/Root runtime grant journal, exact
   registered-Root admission, reserve-aware attached-cycle calls,
   accept-once/zero-accept replay, topology-scaled finite automatic authority,
-  exact Fiduciary cost acknowledgement and the sole recovery-first Root funding
-  timer. It completes protected manual and terminal automatic ICP refill with
-  durable Ledger/CMC replay and shared caps, explicit installed-Root recovery,
-  protected funding status/metrics, Medic and lifecycle/snapshot fences; real
-  PocketIC journeys prove single- and multi-Root Coordinator accounting,
-  non-renewing caps, uncertain-call suppression, real Ledger/CMC replay,
-  reserve-denial ICP fallback and no-spend policy denials.
+  a bounded 180T preview multi-Subnet staging profile, exact Fiduciary cost
+  acknowledgement and the sole recovery-first Root funding timer. It completes
+  protected manual and terminal automatic ICP refill with durable Ledger/CMC
+  replay and shared caps, explicit installed-Root recovery, protected funding
+  status/metrics, Medic and lifecycle/snapshot fences. It also adds explicit,
+  digest-bound funding-policy generation rotation with retained historical
+  usage, complete replay-bound checkpoints, mixed-state Root recovery and a
+  measured 32 MiB stable bound; real PocketIC journeys prove single- and
+  multi-Root Coordinator accounting, non-renewing caps, successor-generation
+  recovery, uncertain-call suppression, real Ledger/CMC replay, reserve-denial
+  ICP fallback and no-spend policy denials.
 - `0.108.0` establishes accepted replay/refund semantics, protected
   Coordinator/root funding policy and distinct fresh-install provisioning
   authority without yet enabling runtime grants.

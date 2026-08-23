@@ -14,7 +14,11 @@ use canic_core::{
         component_provisioning::{
             FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
         },
-        fleet_funding::{FleetRootFundingRequest, FleetRootFundingResponse},
+        fleet_funding::{
+            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+            FleetFundingPolicyRotationReceipt, FleetFundingPolicyRotationStageRootRequest,
+            FleetRootFundingRequest, FleetRootFundingResponse,
+        },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
             FleetRegistryManifest, FleetRegistryVersion, FleetSubnetRootDeletionCompletionRequest,
@@ -55,6 +59,8 @@ pub struct FleetCoordinatorInitArgs {
 pub enum CoordinatorCommand {
     AcknowledgeRootSnapshot(FleetSubnetRootSnapshotAcknowledgementRequest),
     ActivateRegistry(FleetRegistryActivationRequest),
+    ApplyFundingPolicyRotation(FleetFundingPolicyRotationApplyRequest),
+    BeginFundingPolicyRotation(FleetFundingPolicyRotationBeginRequest),
     CompleteRootDeletion(FleetSubnetRootDeletionCompletionRequest),
     JoinRoot(FleetSubnetRootJoinRequest),
     PrepareAuthoritySnapshot(AuthoritySnapshotRequest),
@@ -64,6 +70,7 @@ pub enum CoordinatorCommand {
     RequestRootFunding(FleetRootFundingRequest),
     ResumeAuthoritySnapshot(AuthoritySnapshotRequest),
     SetRootFunding(SetCyclesFundingRequest),
+    StageFundingPolicyRotationRoot(FleetFundingPolicyRotationStageRootRequest),
 }
 
 /// Closed correlated success union for Fleet Coordinator commands.
@@ -114,6 +121,8 @@ pub struct CoordinatorRootFundingStatusResponse {
     pub policy_hash: [u8; 32],
     pub policy: FleetSubnetRootFundingPolicy,
     pub window: CoordinatorFundingWindowStatusResponse,
+    pub historical_automatic_grants: u64,
+    pub historical_automatic_cycles: Cycles,
     pub automatic_grants: u32,
     pub automatic_cycles: Cycles,
     pub last_successful_grant_at_ns: Option<u64>,
@@ -126,12 +135,19 @@ pub struct CoordinatorRootFundingStatusResponse {
 pub struct CoordinatorFundingStatusResponse {
     pub coordinator: candid::Principal,
     pub current_cycles: Cycles,
+    pub policy_generation: u64,
     pub funding_enabled: bool,
     pub funding_profile: Option<FleetFundingProfile>,
     pub policy: Option<FleetCoordinatorRootFundingPolicy>,
     pub fleet_window: Option<CoordinatorFundingWindowStatusResponse>,
+    pub historical_automatic_grants: u64,
+    pub historical_automatic_cycles: Cycles,
     pub automatic_grants: u32,
     pub automatic_cycles: Cycles,
+    pub rotation_checkpoint_count: u32,
+    pub rotation_checkpoint_root_count: u32,
+    pub rotation_checkpoint_root_capacity_remaining: u32,
+    pub rotation: Option<FleetFundingPolicyRotationStatusResponse>,
     pub roots: Vec<CoordinatorRootFundingStatusResponse>,
 }
 
@@ -143,7 +159,37 @@ pub struct CoordinatorFundingStatusResponse {
 )]
 pub enum CoordinatorOperationStatusResponse {
     ComponentProvisioning(FleetComponentProvisioningStatusResponse),
+    FundingPolicyRotation(FleetFundingPolicyRotationStatusResponse),
     RootRemoval(CoordinatorRootRemovalOperationStatus),
+}
+
+/// Protected durable phase of one Coordinator-owned policy rotation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum FleetFundingPolicyRotationStatusPhase {
+    Staging {
+        staged_root_count: u32,
+        expected_root_count: u32,
+    },
+    PreparingRoots {
+        prepared_root_count: u32,
+        expected_root_count: u32,
+    },
+    ActivatingRoots {
+        activated_root_count: u32,
+        expected_root_count: u32,
+        successor_registry: FleetRegistryVersion,
+    },
+    Completed(Box<FleetFundingPolicyRotationReceipt>),
+}
+
+/// Controller-only status of one exact current or terminal rotation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetFundingPolicyRotationStatusResponse {
+    pub operation_id: [u8; 32],
+    pub plan_digest: [u8; 32],
+    pub predecessor_generation: u64,
+    pub successor_generation: u64,
+    pub phase: FleetFundingPolicyRotationStatusPhase,
 }
 
 /// Coordinator-owned progress across the existing durable root-removal boundaries.

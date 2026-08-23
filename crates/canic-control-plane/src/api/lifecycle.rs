@@ -203,6 +203,28 @@ impl LifecycleApi {
         crate::workflow::root_funding::accept(request).map_err(Into::into)
     }
 
+    /// Retain one exact Coordinator-authored policy-rotation fence.
+    pub fn prepare_root_funding_policy_rotation(
+        request: canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest,
+    ) -> Result<
+        canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_funding::prepare_policy_rotation(request).map_err(Into::into)
+    }
+
+    /// Converge protected Root authority and its Registry mirror to one successor.
+    pub async fn activate_root_funding_policy_rotation(
+        request: canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
+    ) -> Result<
+        canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
+        canic_core::dto::error::Error,
+    > {
+        crate::workflow::root_funding::activate_policy_rotation(request)
+            .await
+            .map_err(Into::into)
+    }
+
     pub fn fleet_subnet_root_canister_summary()
     -> Result<FleetSubnetRootCanisterSummary, canic_core::dto::error::Error> {
         crate::workflow::fleet_subnet_root::canister_summary().map_err(Into::into)
