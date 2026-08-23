@@ -2,8 +2,8 @@
 
 Date: 2026-08-23
 State: M0 accepted 2026-08-21; M1 complete in the 0.108.0 checkpoint; B3-B9
-and CANIC-019 included in tagged 0.108.1; forward closeout-documentation
-correction awaiting exact-revision validation and human re-audit
+and CANIC-019 included in tagged 0.108.1; corrected closeout accepted
+2026-08-23 and 0.108.2 publication authorized
 
 ## Authority And Scope
 
@@ -286,8 +286,8 @@ The audit corrections are:
 | M4 / B5 | One Root timer, recovery-first ordering, finite non-renewing caps and unchanged descendant owner | `workflow/runtime/cycles`, timer/lifecycle guards, 91-day cap PocketIC journey and non-Root parent-funding unit proof | Pass in tagged 0.108.1; runtime re-audit pass |
 | M5 / B6 | One manual/automatic Ledger/CMC replay owner, floor/reserve/caps and terminal fallback | `workflow/ic/icp_refill`, stable ID 39, 4,096-record bound, built-in Ledger/CMC replay, fallback and no-spend journeys | Pass in tagged 0.108.1; runtime re-audit pass |
 | M6 / B7 | Exact installed-authority recovery, protected status/CLI/Medic and lifecycle/snapshot fences | Host resolver, role status/Candid, CLI/Medic and snapshot/lifecycle focused suites | Pass in tagged 0.108.1; runtime re-audit pass |
-| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Tagged-source gate and runtime audit pass; forward documentation correction requires re-audit |
-| M8 / B9 | Explicit same-release funding-policy generation rotation with retained predecessor usage and application state | Exact plan/hash validation, Coordinator/Root durable fences and receipts, bounded stable checkpoints, CLI/Candid surfaces, interruption/replay unit proof and governed exhausted-to-successor PocketIC journey | Runtime pass in tagged 0.108.1; protocol wording corrected forward; re-audit pending |
+| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Complete gate and corrected closeout accepted 2026-08-23 |
+| M8 / B9 | Explicit same-release funding-policy generation rotation with retained predecessor usage and application state | Exact plan/hash validation, Coordinator/Root durable fences and receipts, bounded stable checkpoints, CLI/Candid surfaces, interruption/replay unit proof and governed exhausted-to-successor PocketIC journey | Runtime pass; protocol wording corrected; closeout accepted 2026-08-23 |
 
 ### Corrected PocketIC Matrix
 
@@ -558,8 +558,10 @@ controller command could create a successor generation. The forward
 documentation correction records the real tag/gate sequence and clarifies that
 CANIC-019 is the sole same-release successor-generation exception; time,
 restart, window rollover, direct top-up, policy reapplication and mutable
-configuration still cannot renew authority. A fresh exact-revision complete
-gate and human re-audit remain required before 0.108 may close or 0.109 begin.
+configuration still cannot renew authority. The complete gate passes on the
+corrected source. On 2026-08-23 the maintainer accepted the corrected verdict
+as `APPROVE 0.108 CLOSEOUT`, authorized the 0.108.2 release and directed
+continuation into 0.109 after publication.
 
 ## M0 Disposition
 

@@ -90,11 +90,13 @@ and cache changes, but one local observation does not prove parallel stability.
 The final tagged source at
 `075560dc1ff87d872dc40d22fa7b3e48f3113260` passed the complete
 `make validate` gate, including all 22 governed internal PocketIC cases. A fresh
-human closeout audit found no runtime P0 or P1 defect but rejected line
-closeout because active evidence still described an unpublished draft and one
-older policy paragraph contradicted CANIC-019. The forward documentation
-correction resolves both findings; a fresh exact-revision validation and human
-closeout verdict remain required before 0.109 may begin.
+human closeout audit found no runtime P0 or P1 defect but initially rejected
+line closeout because active evidence still described an unpublished draft and
+one older policy paragraph contradicted CANIC-019. The forward documentation
+correction resolves both findings and the complete gate passes on the corrected
+source. On 2026-08-23 the maintainer explicitly accepted the corrected 0.108
+closeout, authorized the 0.108.2 release and directed continuation into 0.109
+after publication.
 
 The 2026-08-22 0.108 design amendments are implemented through B9. Protected
 input materializes topology-matched single-Subnet, bounded preview multi-
@@ -561,10 +563,10 @@ re-audit passed and the maintainer accepted the final closeout verdict.
 0.108 has completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
 protected policy and the urgent fresh-Fleet corrections form the 0.108.0
 checkpoint. B3/M2 through B9/M8 are implementation-complete in tagged 0.108.1;
-the complete gate at the tagged source passed and the fresh closeout audit found
-no runtime blocker. Its two release-truth/protocol-documentation findings are
-corrected forward, while exact-revision revalidation and human acceptance
-remain next. 0.109 requires completed 0.108 and
+the complete gate passed and the fresh closeout audit found no runtime blocker.
+Its two release-truth/protocol-documentation findings are corrected forward,
+and the maintainer accepted the corrected closeout on 2026-08-23. 0.109 requires
+completed 0.108 and
 explicit B1 promotion; 0.110 requires completed 0.109 plus the accepted,
 current 0.106 qualification; 0.111 requires completed 0.110 and an exact
 released predecessor; and 0.112 requires accepted 0.111 closeout. Deferred
@@ -1009,12 +1011,11 @@ the prior full validation gate and the exact AC12 re-audit/maintainer
 acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 0.108.0 checkpoint remains the downstream policy-only baseline. Tagged 0.108.1
 contains the B3-B9 closeout corrections, CANIC-019 policy-generation rotation,
-funding-domain/fee correction and Registry/offline profile scaffold. Establish
-an immutable revision containing the forward documentation correction, rerun
-the complete maintainer-owned validation gate and then run a fresh human-owned
-0.108 closeout audit. Preserve the existing tag. Do not add a production pool
-contract, run any remote qualification effect or begin 0.109 before the audit
-verdict authorizes line closeout.
+funding-domain/fee correction and Registry/offline profile scaffold. Complete
+the maintainer-owned 0.108.2 validation/version/publication workflow while
+preserving the existing tag, then begin the explicitly authorized 0.109 B1
+batch. Do not add a production pool contract or run any remote qualification
+effect.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

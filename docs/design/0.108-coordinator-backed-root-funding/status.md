@@ -49,11 +49,13 @@ Date: 2026-08-23
   `075560dc1ff87d872dc40d22fa7b3e48f3113260` then passed the complete
   `make validate` gate, including all 22 governed internal PocketIC cases, and
   was tagged `v0.108.1` before final closeout. The fresh closeout audit found
-  no runtime P0 or P1 defect but rejected release-line closeout because active
-  evidence still described an unpublished draft and one older policy paragraph
-  contradicted CANIC-019. This forward documentation correction resolves those
-  findings; a fresh exact-revision gate and human closeout verdict remain
-  required before 0.109 may begin.
+  no runtime P0 or P1 defect but initially rejected release-line closeout
+  because active evidence still described an unpublished draft and one older
+  policy paragraph contradicted CANIC-019. The forward documentation correction
+  resolves both findings, and the complete gate passes on that corrected
+  source. On 2026-08-23 the maintainer explicitly accepted the corrected 0.108
+  closeout, authorized the 0.108.2 release and directed continuation into 0.109
+  after publication. No 0.108 product work remains.
 - Runtime impact: B3 adds exact registered-Root admission, the Coordinator
   funding kill switch, fixed Fleet/Root window accounting, durable
   current-plus-last replay and reserve-aware attached-cycle calls. B4 adds the
@@ -128,7 +130,7 @@ Date: 2026-08-23
 | B5 | Sparse-policy correction and Root timer integration | Single, preview multi and professional multi topology profiles, finite non-renewing caps, explicit Fiduciary placement, low-balance request ownership, nonterminal resumption and unchanged descendant funding | Host/config/hash, timer/policy/restart, placement-warning, generated-Candid and Root/Coordinator artifact checks | Included in tagged 0.108.1; runtime audit pass |
 | B6 | Manual and automatic ICP refill | Protected policy, cumulative budget, floor, terminal fallback and mutual exclusion | Ledger/CMC replay suites plus real reserve-denial fallback journey | Included in tagged 0.108.1; runtime audit pass |
 | B7 | Operator and lifecycle completion | Direct top-up resolution, status, metrics, Medic, runbooks, draining fences and generated surfaces | CLI/host/lifecycle/snapshot checks | Included in tagged 0.108.1; runtime audit pass |
-| B8 | Qualification and closeout readiness | Real value-transfer and fallback journeys, measured guidance, cycle-only creation admission, fee-complete operator debit, Registry/offline profile scaffold, sediment audit and closeout handoff | Complete `make validate` at tagged source, ICP CLI 1.3 balance fixtures and PocketIC evidence | Tagged source gate passed; forward documentation correction and fresh re-audit pending |
+| B8 | Qualification and closeout readiness | Real value-transfer and fallback journeys, measured guidance, cycle-only creation admission, fee-complete operator debit, Registry/offline profile scaffold, sediment audit and closeout handoff | Complete `make validate`, ICP CLI 1.3 balance fixtures and PocketIC evidence | Corrected closeout accepted 2026-08-23; 0.108.2 publication pending |
 | B9 | Explicit policy-generation rotation | No-effect installed-Fleet plan, exact digest/predecessor apply, Coordinator-owned durable fence and Root prepare/activate receipts, retained cumulative usage, complete historical replay checkpoints and unchanged application state | Policy/hash, controller/stale/concurrent/payload-drift rejection, mixed authority/mirror recovery, 32 MiB fragmented stable-capacity proof, interruption/restart, generated-Candid/CLI and focused PocketIC exhausted-to-successor journey | Included in tagged 0.108.1; runtime audit pass; protocol wording corrected forward |
 
 Nine batches match the amended design's M0-M8 dependency boundaries. They are not
@@ -136,9 +138,7 @@ preassigned patch releases.
 
 ## Next Authorized Action
 
-Establish an immutable revision containing the forward documentation
-correction, rerun the complete maintainer-owned validation gate and run a fresh
-human-owned 0.108 closeout audit against B3-B9/M2-M8. Preserve the existing
-`v0.108.1` tag. Do not begin 0.109 or run remote qualification effects while
-closeout remains unaccepted. The 0.108.0 policy checkpoint and held 0.106 B2
-work remain independent.
+Complete the maintainer-owned 0.108.2 validation/version/publication workflow,
+preserving the existing `v0.108.1` tag. After 0.108.2 publication, begin the
+explicitly authorized 0.109 B1 batch. The 0.108.0 policy checkpoint and held
+0.106 B2 work remain independent.

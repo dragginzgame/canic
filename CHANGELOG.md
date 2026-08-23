@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
 
+- `0.108.2` reconciles the tagged 0.108.1 closeout evidence and clarifies that
+  CANIC-019 is the sole explicit same-release successor-generation path; caps
+  remain non-renewing through time, restart, window rollover, direct top-up,
+  policy reapplication and mutable configuration.
 - `0.108.1` adds the two-sided Coordinator/Root runtime grant journal, exact
   registered-Root admission, reserve-aware attached-cycle calls,
   accept-once/zero-accept replay, topology-scaled finite automatic authority,
