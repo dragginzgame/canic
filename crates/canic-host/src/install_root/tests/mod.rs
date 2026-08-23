@@ -628,6 +628,7 @@ fn write_fake_icp_operator_funding_balance(root: &Path, name: &str, cycles: u128
     use std::os::unix::fs::PermissionsExt;
 
     let executable = root.join(name);
+    let staged = root.join(format!("{name}.staged"));
     let script = r#"#!/bin/sh
 case "$*" in
   "--version")
@@ -649,12 +650,13 @@ case "$*" in
 esac
 "#
     .replace("CYCLES", &cycles.to_string());
-    fs::write(&executable, script).expect("write funded operator ICP executable");
-    let mut permissions = fs::metadata(&executable)
+    fs::write(&staged, script).expect("write staged funded operator ICP executable");
+    let mut permissions = fs::metadata(&staged)
         .expect("funded operator ICP metadata")
         .permissions();
     permissions.set_mode(0o700);
-    fs::set_permissions(&executable, permissions).expect("make funded operator ICP executable");
+    fs::set_permissions(&staged, permissions).expect("make funded operator ICP executable");
+    fs::rename(staged, &executable).expect("publish closed funded operator ICP executable");
     executable
 }
 

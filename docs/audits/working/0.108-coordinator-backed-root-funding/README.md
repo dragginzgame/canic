@@ -499,6 +499,39 @@ pass, and warning-denied Clippy passes for core, host and CLI. The complete
 maintainer validation gate has not completed for the corrected candidate and
 must be rerun; this focused correction does not claim it.
 
+The next maintainer workspace-test attempt completed every serial PocketIC
+suite but its earlier ordinary library lane reported four consistency defects:
+the closed replay manifests omitted the three Coordinator and two Root
+funding-policy rotation commands; one host identity test still called a removed
+controller-only helper; and its ordering proof searched for that obsolete
+marker. The correction classifies all five exact operation-ID commands,
+hard-cuts the obsolete helper, moves its admission evidence to the live
+operator-funding observer and makes an ordinary-tier failure stop the combined
+runner before its serial PocketIC tier. Focused local validation on 2026-08-23
+against `e4128eb2bc51166a342f52bad58ef0e70a2bdb1f` plus the recorded fixture
+hardening passed:
+
+- `cargo test --locked -p canic-core --lib replay_policy::tests::role_command`:
+  pass, 10 tests including exact Root/Coordinator command-union coverage.
+- `cargo test --locked -p canic-host --lib fleet_install_plan::operator_evidence::tests`:
+  pass, 5 live observer tests after fake ICP executables were changed to publish
+  only from a closed staged file. The first focused reproduction had moved the
+  prior intermittent `ETXTBSY` failure to another directly written fixture,
+  confirming fixture publication rather than admission logic as its cause.
+- `cargo test --locked -p canic-host --lib install_root::tests::install_truth::ordering::current_install_records_gates_before_activation_mutation -- --exact`:
+  pass.
+- `cargo clippy --locked -p canic-core -p canic-host --all-targets -- -D warnings`:
+  pass.
+- `shellcheck --exclude=SC2001,SC2016 scripts/ci/run-workspace-tests.sh scripts/ci/check-release-integrity-contract.sh`,
+  `CANIC_TEST_PLAN_ONLY=1 bash scripts/ci/run-workspace-tests.sh full`,
+  `bash scripts/ci/check-release-integrity-contract.sh`, `cargo fmt --all --
+  --check` and `git diff --check`: pass.
+
+A maintainer `make patch` overlapped the changing worktree during this focused
+repair and is not treated as immutable-candidate evidence. The complete gate
+must still be rerun after the final correction is committed; no additional
+PocketIC rerun was performed by the focused repair.
+
 ## M0 Disposition
 
 The maintainer accepted complete M0 on 2026-08-21. It freezes the

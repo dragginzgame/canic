@@ -65,9 +65,12 @@ ordinary workspace lane reported four failures: five rotation commands were
 absent from replay-policy manifests, and host admission/order tests still named
 a removed controller-only helper. The open correction classifies all five
 durable commands, moves identity evidence to the live operator-funding observer
-and makes ordinary failures stop the combined runner before PocketIC.
-Versioning and publication remain pending targeted correction evidence, the
-complete gate, audit verdict and maintainer release workflow.
+and makes ordinary failures stop the combined runner before PocketIC. Focused
+replay-manifest, live operator-observer, install-order, runner-contract and
+warning-denied changed-package checks pass; fake ICP executables are published
+from closed staged files so parallel tests cannot race their writers.
+Versioning and publication remain pending the complete immutable-candidate
+gate, audit verdict and maintainer release workflow.
 
 The 2026-08-22 0.108 design amendments are implemented through B9. Protected
 input materializes topology-matched single-Subnet, bounded preview multi-

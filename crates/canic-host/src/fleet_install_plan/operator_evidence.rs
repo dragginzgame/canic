@@ -290,8 +290,9 @@ mod tests {
 
     fn write_fake_icp(root: &std::path::Path) -> std::path::PathBuf {
         let executable = root.join("icp");
+        let staged = root.join("icp.staged");
         fs::write(
-            &executable,
+            &staged,
             r#"#!/bin/sh
 case "$*" in
   "--version")
@@ -320,11 +321,12 @@ esac
 "#,
         )
         .expect("write fake ICP executable");
-        let mut permissions = fs::metadata(&executable)
+        let mut permissions = fs::metadata(&staged)
             .expect("fake ICP metadata")
             .permissions();
         permissions.set_mode(0o700);
-        fs::set_permissions(&executable, permissions).expect("make fake ICP executable");
+        fs::set_permissions(&staged, permissions).expect("make fake ICP executable");
+        fs::rename(staged, &executable).expect("publish closed fake ICP executable");
         executable
     }
 
@@ -333,23 +335,24 @@ esac
         identity: Result<&str, &str>,
     ) -> std::path::PathBuf {
         let executable = root.join("icp-identity-only");
+        let staged = root.join("icp-identity-only.staged");
         let identity_command = match identity {
             Ok(principal) => format!("printf '%s\\n' '{principal}'\nexit 0"),
             Err(detail) => format!("printf '%s\\n' '{detail}' >&2\nexit 1"),
         };
         fs::write(
-            &executable,
+            &staged,
             format!(
                 "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'icp 1.3.0'\n  exit 0\nfi\n{identity_command}\n"
             ),
         )
         .expect("write identity-only fake ICP executable");
-        let mut permissions = fs::metadata(&executable)
+        let mut permissions = fs::metadata(&staged)
             .expect("identity-only fake ICP metadata")
             .permissions();
         permissions.set_mode(0o700);
-        fs::set_permissions(&executable, permissions)
-            .expect("make identity-only fake ICP executable");
+        fs::set_permissions(&staged, permissions).expect("make identity-only fake ICP executable");
+        fs::rename(staged, &executable).expect("publish closed identity-only fake ICP executable");
         executable
     }
 }

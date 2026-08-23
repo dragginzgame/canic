@@ -33,9 +33,12 @@ Date: 2026-08-23
   controller-only admission helper. The open correction classifies those
   commands by their durable operation IDs, exercises identity admission through
   the live operator-funding observer and stops combined validation before
-  PocketIC whenever the ordinary tier fails. The corrected open draft still
-  requires the complete maintainer validation gate and a fresh human closeout
-  audit before release.
+  PocketIC whenever the ordinary tier fails. Fake ICP fixtures are now
+  atomically published from a closed staged file, removing the parallel-test
+  `ETXTBSY` race exposed during focused reproduction. The focused manifest,
+  observer, install-order, runner-contract and warning-denied changed-package
+  checks pass. The corrected open draft still requires the complete maintainer
+  validation gate and a fresh human closeout audit before release.
 - Runtime impact: B3 adds exact registered-Root admission, the Coordinator
   funding kill switch, fixed Fleet/Root window accounting, durable
   current-plus-last replay and reserve-aware attached-cycle calls. B4 adds the
