@@ -4,8 +4,15 @@
 //! Does not own: immutable plan publication, Canister creation, installation journals, or runtime.
 //! Boundary: IC mainnet selectors and funding are admitted only through trusted Subnet metadata.
 
+mod profile_scaffold;
 #[cfg(test)]
 mod tests;
+
+pub use profile_scaffold::{
+    FleetFundingProfileCoordinatorScaffold, FleetFundingProfileFormula,
+    FleetFundingProfileRootScaffold, FleetFundingProfileScaffold, FleetFundingProfileScaffoldError,
+    PROFILE_CYCLE_ROUNDING_QUANTUM, STANDARD_PROFILE_NODE_COUNT, scaffold_fleet_funding_profile,
+};
 
 pub use crate::subnet_catalog::{
     SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1, SubnetCatalogFieldV1,
@@ -18,9 +25,9 @@ use crate::{
     component_topology::RootComponentAdmissionInput,
     durable_io::{RegularFileReadError, read_optional_regular_bytes},
     fleet_install_plan::{
-        FreshFleetCatalogEvidenceV1, FreshFleetOperatorFundingEvidenceV1,
-        PlannedCanisterCreationFunding, PlannedComponentGroupPlacementAssignment,
-        PlannedFleetCoordinator, PlannedFleetSubnetRootInput, PlannedSubnetPlacementCostEvidence,
+        FreshFleetCatalogEvidenceV1, PlannedCanisterCreationFunding,
+        PlannedComponentGroupPlacementAssignment, PlannedFleetCoordinator,
+        PlannedFleetSubnetRootInput, PlannedSubnetPlacementCostEvidence,
     },
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
     subnet_catalog::{load_cached_mainnet_subnet_catalog, load_mainnet_subnet_catalog},
@@ -64,6 +71,65 @@ const STANDARD_SUBNET_NODE_COUNT: u64 = 13;
 const TRILLION_CYCLES: u128 = 1_000_000_000_000;
 const PROFILE_ROUNDING_CYCLES: u128 = 10 * TRILLION_CYCLES;
 
+#[derive(Clone, Copy)]
+struct FundingProfileBaselines {
+    coordinator_reserve_cycles: u128,
+    coordinator_creation_cycles: Option<u128>,
+    root: RootFundingProfileBaselines,
+    root_maximum_automatic_grants: u32,
+}
+
+impl FundingProfileBaselines {
+    const fn required_coordinator_creation_cycles(self) -> u128 {
+        self.coordinator_creation_cycles
+            .expect("single-Subnet profile owns an exact creation baseline")
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RootFundingProfileBaselines {
+    request_threshold_cycles: u128,
+    target_balance_cycles: u128,
+    root_creation_cycles: u128,
+    store_creation_cycles: u128,
+}
+
+const AFFORDABLE_ROOT_FUNDING_PROFILE_BASELINES: RootFundingProfileBaselines =
+    RootFundingProfileBaselines {
+        request_threshold_cycles: 10 * TRILLION_CYCLES,
+        target_balance_cycles: 30 * TRILLION_CYCLES,
+        root_creation_cycles: 30 * TRILLION_CYCLES,
+        store_creation_cycles: 10 * TRILLION_CYCLES,
+    };
+
+const fn funding_profile_baselines(profile: FleetFundingProfile) -> FundingProfileBaselines {
+    match profile {
+        FleetFundingProfile::SingleSubnet => FundingProfileBaselines {
+            coordinator_reserve_cycles: 30 * TRILLION_CYCLES,
+            coordinator_creation_cycles: Some(100 * TRILLION_CYCLES),
+            root: AFFORDABLE_ROOT_FUNDING_PROFILE_BASELINES,
+            root_maximum_automatic_grants: 4,
+        },
+        FleetFundingProfile::PreviewMultiSubnet => FundingProfileBaselines {
+            coordinator_reserve_cycles: 80 * TRILLION_CYCLES,
+            coordinator_creation_cycles: None,
+            root: AFFORDABLE_ROOT_FUNDING_PROFILE_BASELINES,
+            root_maximum_automatic_grants: 2,
+        },
+        FleetFundingProfile::MultiSubnet => FundingProfileBaselines {
+            coordinator_reserve_cycles: 2_000 * TRILLION_CYCLES,
+            coordinator_creation_cycles: None,
+            root: RootFundingProfileBaselines {
+                request_threshold_cycles: 250 * TRILLION_CYCLES,
+                target_balance_cycles: 1_000 * TRILLION_CYCLES,
+                root_creation_cycles: 1_000 * TRILLION_CYCLES,
+                store_creation_cycles: 200 * TRILLION_CYCLES,
+            },
+            root_maximum_automatic_grants: 4,
+        },
+    }
+}
+
 ///
 /// ResolvedFleetInstallInput
 ///
@@ -74,12 +140,25 @@ const PROFILE_ROUNDING_CYCLES: u128 = 10 * TRILLION_CYCLES;
 pub struct ResolvedFleetInstallInput {
     pub schema_version: u32,
     pub canonical_sha256: String,
-    pub operator: FreshFleetOperatorFundingEvidenceV1,
+    pub operator_principal: String,
     pub catalog: FreshFleetCatalogEvidenceV1,
     pub catalog_acquisition: FleetInstallCatalogAcquisitionV1,
     pub funding_profile: FleetFundingProfile,
     pub coordinator: PlannedFleetCoordinator,
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootInput>,
+}
+
+///
+/// FleetFundingProfileNodeCountResolution
+///
+/// Registry-backed node counts used by the funding-only authoring scaffold.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetFundingProfileNodeCountResolution {
+    pub coordinator_node_count: u64,
+    pub root_node_counts: Vec<u64>,
+    pub catalog_acquisition: FleetInstallCatalogAcquisitionV1,
 }
 
 ///
@@ -185,8 +264,10 @@ pub enum FleetInstallInputError {
         expected: &'static str,
     },
 
-    #[error("non-public network funding must use positive cycles for {owner}")]
-    NonPublicFunding { owner: String },
+    #[error(
+        "{owner} creation funding must use cycles; ICP-funded creation requires a conversion authority that is not supported"
+    )]
+    UnsupportedCreationFunding { owner: String },
 
     #[error("creation funding amount must be positive for {owner}")]
     NonPositiveCreationFunding { owner: String },
@@ -215,6 +296,17 @@ pub enum FleetInstallInputError {
     #[error("trusted Subnet {subnet} has no positive node-count evidence")]
     MissingSubnetNodeCount { subnet: SubnetId },
 
+    #[error(
+        "funding-profile node counts require the IC mainnet Registry; environment is {environment}"
+    )]
+    FundingProfileNodeCountsUnavailable { environment: String },
+
+    #[error("funding-profile node-count resolution requires at least one Root Subnet")]
+    FundingProfileNodeCountsMissingRoots,
+
+    #[error("funding-profile node-count resolution repeats Root Subnet {subnet}")]
+    FundingProfileNodeCountsDuplicateRoot { subnet: SubnetId },
+
     #[error("{owner} cycles value {actual} is below the topology-profile minimum {minimum}")]
     FundingProfileMinimum {
         owner: String,
@@ -230,17 +322,6 @@ pub enum FleetInstallInputError {
 
     #[error("invalid operator principal {value:?}: {reason}")]
     InvalidOperatorPrincipal { value: String, reason: String },
-
-    #[error("operator {field} is invalid")]
-    InvalidOperatorEvidence { field: &'static str },
-
-    #[error(
-        "operator balance evidence is stale at Unix second {now_unix_secs}; validity ended at {valid_until_unix_secs}"
-    )]
-    StaleOperatorBalance {
-        now_unix_secs: u64,
-        valid_until_unix_secs: u64,
-    },
 
     #[error("could not encode canonical Fleet installation input: {0}")]
     CanonicalEncoding(#[from] serde_json::Error),
@@ -289,20 +370,9 @@ impl From<Box<ic_query::subnet_catalog::SubnetCatalogLoadFailure>> for FleetInst
 struct FleetInstallInputDocument {
     schema_version: u32,
     funding_profile: FleetFundingProfile,
-    operator: OperatorFundingDocument,
+    operator: String,
     coordinator: CoordinatorInputDocument,
     fleet_subnet_roots: Vec<FleetSubnetRootInputDocument>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-struct OperatorFundingDocument {
-    principal: String,
-    funding_account: String,
-    source: String,
-    observed_at_unix_secs: u64,
-    valid_until_unix_secs: u64,
-    balance: CreationFundingDocument,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -464,17 +534,10 @@ pub fn load_and_resolve_fleet_install_input(
             &canonical_sha256,
             build_network,
             Some(&cached),
-            now_unix_secs,
         );
     }
 
-    resolve_document_with_evidence(
-        &document,
-        &canonical_sha256,
-        build_network,
-        None,
-        now_unix_secs,
-    )
+    resolve_document_with_evidence(&document, &canonical_sha256, build_network, None)
 }
 
 /// Load preflight input without a network call or workspace/cache mutation.
@@ -493,17 +556,121 @@ pub fn load_and_resolve_fleet_install_input_for_preflight(
             &canonical_sha256,
             build_network,
             Some(&cached),
-            now_unix_secs,
         );
     }
 
-    resolve_document_with_evidence(
-        &document,
-        &canonical_sha256,
-        build_network,
-        None,
-        now_unix_secs,
+    resolve_document_with_evidence(&document, &canonical_sha256, build_network, None)
+}
+
+/// Resolve exact funding-profile node counts from trusted IC Registry evidence.
+pub fn resolve_fleet_funding_profile_node_counts(
+    icp_root: &Path,
+    environment: &str,
+    profile: FleetFundingProfile,
+    coordinator_subnet: SubnetId,
+    root_subnets: &[SubnetId],
+    refresh_catalog: bool,
+) -> Result<FleetFundingProfileNodeCountResolution, FleetInstallInputError> {
+    validate_funding_profile_root_subnets(root_subnets)?;
+    let build_network = resolve_icp_build_network_from_root(icp_root, environment)?;
+    if build_network != BuildNetwork::Ic {
+        return Err(
+            FleetInstallInputError::FundingProfileNodeCountsUnavailable {
+                environment: environment.to_string(),
+            },
+        );
+    }
+    let now_unix_secs = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let outcome = if refresh_catalog {
+        load_mainnet_subnet_catalog(icp_root, now_unix_secs)?
+    } else {
+        load_cached_mainnet_subnet_catalog(icp_root, now_unix_secs)?
+    };
+    resolve_fleet_funding_profile_node_counts_from_catalog(
+        profile,
+        coordinator_subnet,
+        root_subnets,
+        &outcome,
     )
+}
+
+fn resolve_fleet_funding_profile_node_counts_from_catalog(
+    profile: FleetFundingProfile,
+    coordinator_subnet: SubnetId,
+    root_subnets: &[SubnetId],
+    outcome: &CatalogLoadOutcome,
+) -> Result<FleetFundingProfileNodeCountResolution, FleetInstallInputError> {
+    validate_funding_profile_root_subnets(root_subnets)?;
+    let coordinator_node_count = scaffold_subnet_node_count(&outcome.catalog, coordinator_subnet)?;
+    let root_node_counts = root_subnets
+        .iter()
+        .map(|subnet| scaffold_subnet_node_count(&outcome.catalog, *subnet))
+        .collect::<Result<Vec<_>, _>>()?;
+    let resolved_profile = resolved_funding_profile_from_subnets(coordinator_subnet, root_subnets);
+    if !funding_profile_matches_topology(profile, resolved_profile) {
+        return Err(FleetInstallInputError::FundingProfileMismatch {
+            configured: profile,
+            resolved: resolved_profile,
+        });
+    }
+    let (_, catalog_acquisition) = resolve_catalog_evidence(BuildNetwork::Ic, Some(outcome))?;
+    Ok(FleetFundingProfileNodeCountResolution {
+        coordinator_node_count,
+        root_node_counts,
+        catalog_acquisition,
+    })
+}
+
+fn validate_funding_profile_root_subnets(
+    root_subnets: &[SubnetId],
+) -> Result<(), FleetInstallInputError> {
+    if root_subnets.is_empty() {
+        return Err(FleetInstallInputError::FundingProfileNodeCountsMissingRoots);
+    }
+    let mut unique_roots = BTreeSet::new();
+    if let Some(duplicate) = root_subnets
+        .iter()
+        .find(|subnet| !unique_roots.insert(**subnet))
+    {
+        return Err(
+            FleetInstallInputError::FundingProfileNodeCountsDuplicateRoot { subnet: *duplicate },
+        );
+    }
+    Ok(())
+}
+
+fn resolved_funding_profile_from_subnets(
+    coordinator_subnet: SubnetId,
+    root_subnets: &[SubnetId],
+) -> FleetFundingProfile {
+    if root_subnets
+        .iter()
+        .all(|subnet| *subnet == coordinator_subnet)
+    {
+        FleetFundingProfile::SingleSubnet
+    } else {
+        FleetFundingProfile::MultiSubnet
+    }
+}
+
+fn scaffold_subnet_node_count(
+    catalog: &ValidatedSubnetCatalog,
+    subnet: SubnetId,
+) -> Result<u64, FleetInstallInputError> {
+    let info = trusted_subnet(Some(catalog), subnet)?;
+    validate_eligible_subnet(info)?;
+    if info.subnet_kind != SubnetKind::Application {
+        return Err(FleetInstallInputError::FundingMismatch {
+            owner: "fresh-Fleet infrastructure".to_string(),
+            subnet,
+            kind: info.subnet_kind.as_str().to_string(),
+            expected: "cycles funding on an Application Subnet",
+        });
+    }
+    info.node_count
+        .filter(|count| *count > 0)
+        .map(u64::from)
+        .ok_or(FleetInstallInputError::MissingSubnetNodeCount { subnet })
 }
 
 fn load_document_with_identity(
@@ -571,10 +738,9 @@ fn resolve_document_with_evidence(
     canonical_sha256: &str,
     build_network: BuildNetwork,
     catalog: Option<&CatalogLoadOutcome>,
-    now_unix_secs: u64,
 ) -> Result<ResolvedFleetInstallInput, FleetInstallInputError> {
     validate_schema_version(document)?;
-    let operator = resolve_operator(&document.operator, build_network, now_unix_secs)?;
+    let operator_principal = resolve_operator_principal(&document.operator)?;
     let (catalog_evidence, catalog_acquisition) = resolve_catalog_evidence(build_network, catalog)?;
     let validated_catalog = catalog.map(|outcome| &outcome.catalog);
     let (coordinator_subnet, coordinator_acknowledges_fiduciary_cost) = resolve_coordinator_subnet(
@@ -640,7 +806,7 @@ fn resolve_document_with_evidence(
     Ok(ResolvedFleetInstallInput {
         schema_version: document.schema_version,
         canonical_sha256: canonical_sha256.to_string(),
-        operator,
+        operator_principal,
         catalog: catalog_evidence,
         catalog_acquisition,
         funding_profile: document.funding_profile,
@@ -649,58 +815,20 @@ fn resolve_document_with_evidence(
     })
 }
 
-fn resolve_operator(
-    document: &OperatorFundingDocument,
-    build_network: BuildNetwork,
-    now_unix_secs: u64,
-) -> Result<FreshFleetOperatorFundingEvidenceV1, FleetInstallInputError> {
-    let principal = Principal::from_text(&document.principal).map_err(|error| {
+fn resolve_operator_principal(value: &str) -> Result<String, FleetInstallInputError> {
+    let principal = Principal::from_text(value).map_err(|error| {
         FleetInstallInputError::InvalidOperatorPrincipal {
-            value: document.principal.clone(),
+            value: value.to_string(),
             reason: error.to_string(),
         }
     })?;
-    if principal == Principal::anonymous() || principal.to_text() != document.principal {
+    if principal == Principal::anonymous() || principal.to_text() != value {
         return Err(FleetInstallInputError::InvalidOperatorPrincipal {
-            value: document.principal.clone(),
+            value: value.to_string(),
             reason: "principal must be canonical and non-anonymous".to_string(),
         });
     }
-    validate_operator_text("funding_account", &document.funding_account)?;
-    validate_operator_text("source", &document.source)?;
-    if document.observed_at_unix_secs == 0 {
-        return Err(FleetInstallInputError::InvalidOperatorEvidence {
-            field: "observed_at_unix_secs",
-        });
-    }
-    if document.valid_until_unix_secs <= document.observed_at_unix_secs {
-        return Err(FleetInstallInputError::InvalidOperatorEvidence {
-            field: "valid_until_unix_secs",
-        });
-    }
-    if now_unix_secs < document.observed_at_unix_secs {
-        return Err(FleetInstallInputError::InvalidOperatorEvidence {
-            field: "observed_at_unix_secs",
-        });
-    }
-    if now_unix_secs >= document.valid_until_unix_secs {
-        return Err(FleetInstallInputError::StaleOperatorBalance {
-            now_unix_secs,
-            valid_until_unix_secs: document.valid_until_unix_secs,
-        });
-    }
-    let balance = planned_funding("operator balance", &document.balance)?;
-    let _ = build_network;
-
-    Ok(FreshFleetOperatorFundingEvidenceV1 {
-        principal: document.principal.clone(),
-        funding_account: document.funding_account.clone(),
-        balance,
-        source: document.source.clone(),
-        observed_at_unix_secs: document.observed_at_unix_secs,
-        valid_until_unix_secs: document.valid_until_unix_secs,
-        balance_fresh: true,
-    })
+    Ok(value.to_string())
 }
 
 #[cfg(test)]
@@ -721,24 +849,7 @@ fn resolve_document(
         catalog: catalog.clone(),
         disposition: CacheDisposition::CacheHit,
     });
-    resolve_document_with_evidence(
-        document,
-        &canonical_sha256,
-        build_network,
-        outcome.as_ref(),
-        document.operator.observed_at_unix_secs,
-    )
-}
-
-const fn validate_operator_text(
-    field: &'static str,
-    value: &str,
-) -> Result<(), FleetInstallInputError> {
-    if value.is_empty() || value.len() > 256 || !value.is_ascii() {
-        Err(FleetInstallInputError::InvalidOperatorEvidence { field })
-    } else {
-        Ok(())
-    }
+    resolve_document_with_evidence(document, &canonical_sha256, build_network, outcome.as_ref())
 }
 
 fn resolve_catalog_evidence(
@@ -1299,27 +1410,17 @@ fn validate_funding_profile_baselines(
     roots: &[PlannedFleetSubnetRootInput],
 ) -> Result<(), FleetInstallInputError> {
     let coordinator_nodes = coordinator.placement_cost.node_count;
-    let coordinator_reserve_base = match profile {
-        FleetFundingProfile::SingleSubnet => 30 * TRILLION_CYCLES,
-        FleetFundingProfile::PreviewMultiSubnet => 80 * TRILLION_CYCLES,
-        FleetFundingProfile::MultiSubnet => 2_000 * TRILLION_CYCLES,
-    };
+    let baselines = funding_profile_baselines(profile);
     let coordinator_reserve = scale_profile_cycles(
-        coordinator_reserve_base,
+        baselines.coordinator_reserve_cycles,
         coordinator_nodes,
         "coordinator minimum reserve",
     )?;
-    let root_target_base = match profile {
-        FleetFundingProfile::SingleSubnet | FleetFundingProfile::PreviewMultiSubnet => {
-            30 * TRILLION_CYCLES
-        }
-        FleetFundingProfile::MultiSubnet => 1_000 * TRILLION_CYCLES,
-    };
     let root_targets = roots
         .iter()
         .map(|root| {
             scale_profile_cycles(
-                root_target_base,
+                baselines.root.target_balance_cycles,
                 root.placement_cost.node_count,
                 "root target balance",
             )
@@ -1333,7 +1434,7 @@ fn validate_funding_profile_baselines(
     };
     let coordinator_creation_minimum = match profile {
         FleetFundingProfile::SingleSubnet => scale_profile_cycles(
-            100 * TRILLION_CYCLES,
+            baselines.required_coordinator_creation_cycles(),
             coordinator_nodes,
             "Coordinator creation funding",
         )?,
@@ -1379,40 +1480,40 @@ fn validate_funding_profile_baselines(
     }
 
     for (root, target_minimum) in roots.iter().zip(root_targets) {
-        validate_root_funding_profile_baseline(profile, root, target_minimum)?;
+        validate_root_funding_profile_baseline(root, target_minimum, baselines)?;
     }
     Ok(())
 }
 
 fn validate_root_funding_profile_baseline(
-    profile: FleetFundingProfile,
     root: &PlannedFleetSubnetRootInput,
     target_minimum: u128,
+    baselines: FundingProfileBaselines,
 ) -> Result<(), FleetInstallInputError> {
     let owner = format!("Fleet Subnet Root {}", root.placement_subnet);
     let nodes = root.placement_cost.node_count;
-    let (threshold_base, root_creation_base, store_creation_base) = match profile {
-        FleetFundingProfile::SingleSubnet | FleetFundingProfile::PreviewMultiSubnet => (
-            10 * TRILLION_CYCLES,
-            30 * TRILLION_CYCLES,
-            10 * TRILLION_CYCLES,
-        ),
-        FleetFundingProfile::MultiSubnet => (
-            250 * TRILLION_CYCLES,
-            1_000 * TRILLION_CYCLES,
-            200 * TRILLION_CYCLES,
-        ),
-    };
-    let threshold_minimum = scale_profile_cycles(threshold_base, nodes, "root request threshold")?;
+    let threshold_minimum = scale_profile_cycles(
+        baselines.root.request_threshold_cycles,
+        nodes,
+        "root request threshold",
+    )?;
     validate_creation_funding_minimum(
         &format!("{owner} creation funding"),
         &root.root_creation_funding,
-        scale_profile_cycles(root_creation_base, nodes, "Root creation funding")?,
+        scale_profile_cycles(
+            baselines.root.root_creation_cycles,
+            nodes,
+            "Root creation funding",
+        )?,
     )?;
     validate_creation_funding_minimum(
         &format!("Wasm Store for {owner} creation funding"),
         &root.wasm_store_creation_funding,
-        scale_profile_cycles(store_creation_base, nodes, "Wasm Store creation funding")?,
+        scale_profile_cycles(
+            baselines.root.store_creation_cycles,
+            nodes,
+            "Wasm Store creation funding",
+        )?,
     )?;
     validate_cycles_minimum(
         &format!("{owner} request threshold"),
@@ -1476,10 +1577,16 @@ fn validate_creation_funding_minimum(
     funding: &PlannedCanisterCreationFunding,
     minimum: u128,
 ) -> Result<(), FleetInstallInputError> {
-    if let PlannedCanisterCreationFunding::Cycles { cycles } = funding {
-        validate_cycles_minimum(owner, *cycles, minimum)?;
+    match funding {
+        PlannedCanisterCreationFunding::Cycles { cycles } => {
+            validate_cycles_minimum(owner, *cycles, minimum)
+        }
+        PlannedCanisterCreationFunding::Icp { .. } => {
+            Err(FleetInstallInputError::UnsupportedCreationFunding {
+                owner: owner.to_string(),
+            })
+        }
     }
-    Ok(())
 }
 
 fn validate_cycles_minimum(
@@ -1507,14 +1614,7 @@ fn resolve_funding(
 ) -> Result<PlannedCanisterCreationFunding, FleetInstallInputError> {
     let planned = planned_funding(owner, funding)?;
     if build_network != BuildNetwork::Ic {
-        return match planned {
-            PlannedCanisterCreationFunding::Cycles { .. } => Ok(planned),
-            PlannedCanisterCreationFunding::Icp { .. } => {
-                Err(FleetInstallInputError::NonPublicFunding {
-                    owner: owner.to_string(),
-                })
-            }
-        };
+        return Ok(planned);
     }
 
     let info = trusted_subnet(catalog, subnet)?;
@@ -1524,9 +1624,6 @@ fn resolve_funding(
         (
             PlannedCanisterCreationFunding::Cycles { .. },
             SubnetKind::Application
-        ) | (
-            PlannedCanisterCreationFunding::Icp { .. },
-            SubnetKind::System
         )
     );
     if matches {
@@ -1538,7 +1635,7 @@ fn resolve_funding(
         kind: info.subnet_kind.as_str().to_string(),
         expected: match info.subnet_kind {
             SubnetKind::Application => "cycles",
-            SubnetKind::System => "icp",
+            SubnetKind::System => "cycles funding on an Application Subnet",
             SubnetKind::CloudEngine | SubnetKind::Unknown => {
                 unreachable!("ineligible Subnets reject before funding validation")
             }
@@ -1556,11 +1653,13 @@ fn planned_funding(
                 cycles: cycles.to_u128(),
             })
         }
-        CreationFundingDocument::Icp { e8s } if *e8s > 0 => {
-            Ok(PlannedCanisterCreationFunding::Icp { e8s: *e8s })
-        }
-        CreationFundingDocument::Cycles { .. } | CreationFundingDocument::Icp { .. } => {
+        CreationFundingDocument::Cycles { .. } => {
             Err(FleetInstallInputError::NonPositiveCreationFunding {
+                owner: owner.to_string(),
+            })
+        }
+        CreationFundingDocument::Icp { .. } => {
+            Err(FleetInstallInputError::UnsupportedCreationFunding {
                 owner: owner.to_string(),
             })
         }

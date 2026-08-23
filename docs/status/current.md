@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Purpose
 
@@ -55,22 +55,57 @@ stale CLI/hash/timer expectations and one real pre-activation Root-admission
 defect; its follow-up exposed duplicated-match Clippy failures. Those
 candidate defects are corrected and focused regressions pass. The complete
 maintainer gate must be rerun against the final immutable candidate before a
-fresh closeout audit. Versioning and publication remain pending that verdict
-and the maintainer release workflow.
+fresh closeout audit. The 2026-08-23 rerun stopped in `check-invariants`
+because the rotation-policy model imported boundary DTOs. The correction keeps
+the invariant decision in the model behind one DTO-free named input and moves
+only boundary conversion to ops; the exact ten-target invariant gate, focused
+rotation consumers and warning-denied changed-package Clippy now pass.
+Versioning and publication remain pending the complete gate, audit verdict and
+maintainer release workflow.
 
 The 2026-08-22 0.108 design amendments are implemented through B9. Protected
 input materializes topology-matched single-Subnet, bounded preview multi-
 Subnet and professional multi-Subnet baselines, scales them rationally by
 current Registry node count, enforces one grant per 90-day default window and
 retains finite non-renewing automatic count/cycle caps. The recommended
-one-Root preview is 140T Coordinator creation, 80T reserve, 30T Root creation,
-10T Store creation and a two-grant/60T lifetime cap: 180T initial total with
-automatic ICP disabled. The Fiduciary-backed `recommended` Coordinator
+standard-13-node one-Root preview is 140T Coordinator creation, 80T reserve,
+30T Root creation, 10T Store creation and a two-grant/60T lifetime cap: 180T
+in creation amounts before the three exact Cycles Ledger fees, with automatic
+ICP disabled. The Fiduciary-backed `recommended` Coordinator
 selector is removed; every Fiduciary Coordinator or Root placement requires
 an exact adjacent cost acknowledgement and emits retained high-cost evidence
 before plan and paid install effects. Corrected policy/hash/plan authority
 flows through Registry, stable accounting and generated interfaces before the
 sole Root timer runs.
+
+The Toko operator-config follow-up is also implemented in the open draft.
+Fleet input now carries only one top-level operator Principal; planning and
+installation verify the active ICP identity, derive its relevant ledger
+account and query its live cycles balance. Volatile balance/source/time
+observations do not perturb the canonical plan digest, and installation
+rechecks live sufficiency before the first effect.
+
+The follow-up funding review closes the remaining admission gaps. Fresh-Fleet
+infrastructure creation is cycle-only; ICP creation amounts reject before
+profile validation and the deferred conversion/rate authority is recorded as
+an unnumbered idea. Maximum operator debit now adds one exact Cycles Ledger fee
+for every host-created Coordinator, Root and Store. The `canic scaffold
+fleet-input` authoring surface resolves selected IC Subnet IDs through
+validated Registry evidence, retains explicit node counts as an offline
+fallback, shows all scale/round/cap/fee/debit formulas and emits exact integer
+funding TOML without reading an identity or balance. Live `canic deploy plan`
+remains the install-admission boundary. Focused equality/one-cycle-short, ICP
+CLI 1.3 balance-fixture and standard/Toko profile-scaffold checks pass.
+
+The Toko fresh-install reconciliation report is corrected in the same open
+draft. A Coordinator accepts a fully validated terminal Root receipt without
+having observed the Root's intermediate provisioning counters or requiring
+Root completion to follow its passive query intent. The immediate
+post-acceptance query also normalizes valid intermediate or terminal progress
+to the exact canonical acceptance receipt, and scheduled retry failures emit a
+bounded operation/phase/diagnostic record instead of disappearing. Focused
+terminal-jump, acceptance-race, restart/replay, forged-receipt and retained
+stepwise-path regressions pass.
 
 Accepted CANIC-019 adds one controller-reviewed same-release escape from an
 exhausted generation without weakening those finite caps. A no-effect CLI plan
@@ -932,9 +967,11 @@ the prior full validation gate and the exact AC12 re-audit/maintainer
 acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 published 0.108.0 checkpoint remains the downstream fresh-install baseline.
 The open 0.108.1 B3-B9 closeout corrections, CANIC-019 policy-generation
-rotation and focused checks are complete. Establish the immutable corrected
-candidate, rerun the complete maintainer-owned validation gate and then run a
-fresh human-owned 0.108 closeout audit. Do not add a production pool contract,
+rotation, funding-domain/fee correction and Registry/offline profile scaffold
+are implemented with focused checks. Establish the immutable corrected
+candidate,
+rerun the complete maintainer-owned validation gate and then run a fresh
+human-owned 0.108 closeout audit. Do not add a production pool contract,
 run any remote
 qualification effect, version, publish or begin 0.109 before the audit verdict
 and maintainer-owned release workflow authorize it.

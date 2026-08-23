@@ -5,7 +5,8 @@
 //! Boundary: every returned digest is derived from regular local bytes or finalized authority.
 
 use super::model::{
-    FreshFleetDecisionAuthorityV1, FreshFleetExpectedArtifactV1, FreshFleetReleaseSourceV1,
+    FreshFleetDecisionAuthorityV1, FreshFleetExpectedArtifactV1,
+    FreshFleetOperatorFundingEvidenceV1, FreshFleetReleaseSourceV1,
 };
 use crate::{
     fleet_install_input::ResolvedFleetInstallInput,
@@ -35,6 +36,7 @@ pub struct FreshFleetDecisionAuthorityRequest<'a> {
     pub canonical_network_id: CanonicalNetworkId,
     pub release_build_id: Option<ReleaseBuildId>,
     pub fleet_input: &'a ResolvedFleetInstallInput,
+    pub operator: &'a FreshFleetOperatorFundingEvidenceV1,
 }
 
 /// Typed failure while loading complete pre-effect decision identity.
@@ -84,7 +86,7 @@ pub fn load_fresh_fleet_decision_authority(
         fleet_input_sha256: request.fleet_input.canonical_sha256.clone(),
         release_source,
         catalog: request.fleet_input.catalog.clone(),
-        operator: request.fleet_input.operator.clone(),
+        operator: request.operator.clone(),
     })
 }
 

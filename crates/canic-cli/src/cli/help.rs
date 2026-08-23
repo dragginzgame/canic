@@ -89,7 +89,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "scaffold",
-        about: "Scaffold Canic source files",
+        about: "Scaffold Canic source files and deployment input",
     },
     CommandSpec {
         name: "state",

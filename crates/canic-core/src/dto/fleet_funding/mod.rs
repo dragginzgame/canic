@@ -17,10 +17,11 @@ pub const MAX_FLEET_ROOT_FUNDING_COMMAND_PAYLOAD_BYTES: usize =
     crate::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES;
 
 /// Maximum exact Root entries staged beneath one policy-rotation operation.
-pub const MAX_FLEET_FUNDING_POLICY_ROTATION_ROOTS: usize = 4_096;
+pub const MAX_FLEET_FUNDING_POLICY_ROTATION_ROOTS: usize = crate::ids::MAX_FLEET_ROOT_FUNDING_SLOTS;
 
 /// Maximum total Root-policy checkpoints retained across completed rotations.
-pub const MAX_FLEET_FUNDING_POLICY_ROTATION_HISTORY_ROOTS: usize = 4_096;
+pub const MAX_FLEET_FUNDING_POLICY_ROTATION_HISTORY_ROOTS: usize =
+    crate::ids::MAX_FLEET_ROOT_FUNDING_SLOTS;
 
 /// Current-generation and retained predecessor automatic-funding usage.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

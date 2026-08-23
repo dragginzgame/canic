@@ -8,10 +8,14 @@ mod authority;
 mod decision;
 mod initial_placement_policy;
 mod model;
+mod operator_evidence;
 mod persistence;
 mod preflight;
 #[cfg(test)]
 mod tests;
+
+/// Exact Cycles Ledger fee charged for one `create_canister` call.
+pub const CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES: u128 = 100_000_000;
 
 pub use authority::{
     FreshFleetDecisionAuthorityError, FreshFleetDecisionAuthorityRequest,
@@ -19,6 +23,7 @@ pub use authority::{
 };
 pub use decision::{
     FRESH_FLEET_DEPLOYMENT_PLAN_SCHEMA_VERSION, compile_fresh_fleet_deployment_plan,
+    fresh_fleet_maximum_operator_debit,
 };
 pub use model::{
     FleetInstallPlan, FleetInstallPlanError, FleetInstallPlanRequest, FreshFleetCanisterCountsV1,
@@ -30,6 +35,9 @@ pub use model::{
     PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet, PlannedCanisterCreationFunding,
     PlannedComponentGroupPlacementAssignment, PlannedFleetCoordinator, PlannedFleetSubnetRoot,
     PlannedFleetSubnetRootInput, PlannedSubnetPlacementCostEvidence,
+};
+pub use operator_evidence::{
+    FreshFleetOperatorEvidenceError, observe_fresh_fleet_operator_funding,
 };
 pub use persistence::{compile_and_persist_fleet_install_plan, load_persisted_fleet_install_plan};
 pub use preflight::{FRESH_FLEET_PREFLIGHT_SCHEMA_VERSION, compile_fresh_fleet_preflight};

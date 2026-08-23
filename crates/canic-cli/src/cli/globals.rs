@@ -149,6 +149,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
         "blob-storage" | "cycles" | "inspect" | "install" | "medic" | "status" | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
+        "deploy" => deploy_leaf_accepts_global_icp(tail),
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
@@ -167,6 +168,7 @@ fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool 
         "auth" => auth_leaf_accepts_globals(tail),
         "deploy" => deploy_leaf_accepts_global_environment(tail),
         "info" => info_leaf_accepts_globals(tail),
+        "scaffold" => tail.first().and_then(|arg| arg.to_str()) == Some("fleet-input"),
         "app" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
@@ -203,6 +205,10 @@ fn deploy_leaf_accepts_global_environment(tail: &[OsString]) -> bool {
         },
         _ => false,
     }
+}
+
+fn deploy_leaf_accepts_global_icp(tail: &[OsString]) -> bool {
+    tail.first().and_then(|arg| arg.to_str()) == Some("plan")
 }
 
 fn tail_option_value<'a>(tail: &'a [OsString], name: &str) -> Option<&'a str> {
@@ -302,6 +308,50 @@ mod tests {
                 OsString::from("icp"),
                 OsString::from(INTERNAL_ENVIRONMENT_OPTION),
                 OsString::from("staging"),
+            ]
+        );
+    }
+
+    #[test]
+    fn deploy_plan_accepts_global_icp_and_environment() {
+        let mut tail = vec![
+            OsString::from("plan"),
+            OsString::from("toko"),
+            OsString::from("--app"),
+            OsString::from("toko"),
+        ];
+
+        apply_global_icp("deploy", &mut tail, Some("custom-icp".to_string()));
+        apply_global_environment("deploy", &mut tail, Some("local".to_string()));
+
+        assert_eq!(
+            tail,
+            [
+                OsString::from("plan"),
+                OsString::from("toko"),
+                OsString::from("--app"),
+                OsString::from("toko"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("custom-icp"),
+                OsString::from(INTERNAL_ENVIRONMENT_OPTION),
+                OsString::from("local"),
+            ]
+        );
+    }
+
+    #[test]
+    fn scaffold_fleet_input_accepts_only_global_environment() {
+        let mut tail = vec![OsString::from("fleet-input")];
+
+        apply_global_icp("scaffold", &mut tail, Some("custom-icp".to_string()));
+        apply_global_environment("scaffold", &mut tail, Some("ic".to_string()));
+
+        assert_eq!(
+            tail,
+            [
+                OsString::from("fleet-input"),
+                OsString::from(INTERNAL_ENVIRONMENT_OPTION),
+                OsString::from("ic"),
             ]
         );
     }

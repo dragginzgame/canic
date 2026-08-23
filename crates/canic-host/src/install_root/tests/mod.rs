@@ -41,9 +41,9 @@ use super::{
     InstallRootOptions, InstallRootPhase, check_install_deployment_truth,
     check_install_execution_preflight, current_install_release_build, install_root,
     latest_deployment_truth_receipt_path_from_root, prepare_current_fresh_fleet_preflight,
-    require_current_release_builder, root_component_provisioning_operation_id,
-    root_registry_synchronization_operation_id, root_store_adoption_operation_id,
-    root_store_bootstrap_operation_id,
+    recheck_fresh_fleet_operator_funding, require_current_release_builder,
+    root_component_provisioning_operation_id, root_registry_synchronization_operation_id,
+    root_store_adoption_operation_id, root_store_bootstrap_operation_id,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -249,6 +249,7 @@ fn invalid_fresh_fleet_topology_rejects_before_release_build_allocation() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
+#[cfg(unix)]
 #[test]
 fn expected_plan_digest_mismatch_rejects_before_release_build_allocation() {
     let root = temp_dir("current-install-plan-digest-mismatch");
@@ -259,6 +260,8 @@ fn expected_plan_digest_mismatch_rejects_before_release_build_allocation() {
     let mut options = local_demo_install_options(&root);
     options.fleet_install_input_path = Some(input_path);
     options.expected_fresh_fleet_plan_digest = Some("00".repeat(32));
+    let executable = write_fake_icp_operator_funding(&root, "digest-mismatch-operator");
+    options.icp_executable = executable.to_string_lossy().into_owned();
 
     let error = install_root(options).expect_err("changed plan digest must reject");
 
@@ -267,8 +270,9 @@ fn expected_plan_digest_mismatch_rejects_before_release_build_allocation() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
+#[cfg(unix)]
 #[test]
-fn install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence() {
+fn install_recompiles_the_exact_plan_digest_and_rechecks_live_funding() {
     let root = temp_dir("current-install-plan-parity");
     fs::create_dir_all(&root).expect("create temp root");
     fs::write(root.join("Cargo.lock"), "# test lock\n").expect("write test Cargo.lock");
@@ -279,12 +283,16 @@ fn install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence
     fs::write(&input_path, valid_single_component_fleet_input()).expect("write valid Fleet input");
     let mut options = local_demo_install_options(&root);
     options.fleet_install_input_path = Some(input_path.clone());
+    let executable = write_fake_icp_operator_funding(&root, "funded-operator");
+    options.icp_executable = executable.to_string_lossy().into_owned();
+    let icp_context = InstallIcpContext::new(&options.icp_executable, &root, "local");
 
     let first = prepare_current_fresh_fleet_preflight(
         &root,
         &root,
         &config_path,
         &options,
+        &icp_context,
         FleetCatalogAcquisition::RefreshMissingOrInvalid,
     )
     .expect("compile first install decision");
@@ -294,11 +302,18 @@ fn install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence
         &root,
         &config_path,
         &options,
+        &icp_context,
         FleetCatalogAcquisition::CacheOnly,
     )
     .expect("exact decision digest should be reusable");
-    assert_eq!(exact.plan, first.plan);
+    assert_eq!(exact.plan.plan_digest, first.plan.plan_digest);
     assert!(!root.join(".canic/release-builds").exists());
+
+    write_fake_icp_operator_funding_balance(&root, "funded-operator", 1);
+    let error = recheck_fresh_fleet_operator_funding(&icp_context, &exact.plan)
+        .expect_err("newly insufficient balance must reject before effects");
+    assert_eq!(error.phase(), InstallRootPhase::Planning);
+    write_fake_icp_operator_funding(&root, "funded-operator");
 
     let changed_input =
         valid_single_component_fleet_input().replace("cycles = \"100T\"", "cycles = \"101T\"");
@@ -308,9 +323,10 @@ fn install_recompiles_the_exact_plan_digest_and_rejects_changed_balance_evidence
         &root,
         &config_path,
         &options,
+        &icp_context,
         FleetCatalogAcquisition::CacheOnly,
     )
-    .expect_err("changed balance must change and reject the expected digest");
+    .expect_err("changed input must change and reject the expected digest");
     assert_eq!(error.phase(), InstallRootPhase::Planning);
     assert!(!root.join(".canic/release-builds").exists());
     fs::remove_dir_all(root).expect("remove temp root");
@@ -612,17 +628,7 @@ maximum_instances = 1
 fn invalid_root_only_fleet_input() -> &'static str {
     r#"schema_version = 1
 funding_profile = "single_subnet"
-
-[operator]
-principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
-funding_account = "test-operator"
-source = "test_fixture"
-observed_at_unix_secs = 1782432100
-valid_until_unix_secs = 4102444800
-
-[operator.balance]
-kind = "cycles"
-cycles = "5000T"
+operator = "ryjl3-tyaaa-aaaaa-aaaba-cai"
 
 [coordinator.subnet]
 kind = "explicit"
@@ -707,6 +713,46 @@ fn write_fake_icp_identity(root: &Path, name: &str, identity: Result<&str, &str>
         .permissions();
     permissions.set_mode(0o700);
     fs::set_permissions(&executable, permissions).expect("make fake ICP executable");
+    executable
+}
+
+#[cfg(unix)]
+fn write_fake_icp_operator_funding(root: &Path, name: &str) -> PathBuf {
+    write_fake_icp_operator_funding_balance(root, name, 999_000_000_000_000)
+}
+
+#[cfg(unix)]
+fn write_fake_icp_operator_funding_balance(root: &Path, name: &str, cycles: u128) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let executable = root.join(name);
+    let script = r#"#!/bin/sh
+case "$*" in
+  "--version")
+    printf '%s\n' 'icp 1.2.0'
+    ;;
+  *"identity principal"*)
+    printf '%s\n' 'ryjl3-tyaaa-aaaaa-aaaba-cai'
+    ;;
+  *"cycles balance --json"*)
+    printf '%s\n' '{"balance":"CYCLES cycles"}'
+    ;;
+  *"identity account-id --format icrc1"*)
+    printf '%s\n' 'operator-cycles-account'
+    ;;
+  *)
+    printf '%s\n' "unexpected ICP command: $*" >&2
+    exit 1
+    ;;
+esac
+"#
+    .replace("CYCLES", &cycles.to_string());
+    fs::write(&executable, script).expect("write funded operator ICP executable");
+    let mut permissions = fs::metadata(&executable)
+        .expect("funded operator ICP metadata")
+        .permissions();
+    permissions.set_mode(0o700);
+    fs::set_permissions(&executable, permissions).expect("make funded operator ICP executable");
     executable
 }
 

@@ -14,7 +14,7 @@ use crate::deploy::plan::{
         CATEGORY_OBSERVATION, CATEGORY_TOPOLOGY, CATEGORY_UNSUPPORTED_SHAPE, PlanDiagnostic,
         PlanDiagnosticCategory, SEVERITY_BLOCKED, SEVERITY_UNSUPPORTED, SEVERITY_WARNING,
         SOURCE_CLI_ARG, SOURCE_DEPLOYMENT_CONFIG, SOURCE_DEPLOYMENT_PLAN_BUILDER,
-        SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT,
+        SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT, SOURCE_LOCAL_OBSERVATION,
     },
 };
 use std::path::Path;
@@ -105,17 +105,26 @@ pub(super) fn fresh_fleet_plan_blocker(
     source: crate::deploy::plan::report::PlanDiagnosticSource,
     refresh_catalog: bool,
 ) -> PlanDiagnostic {
-    let next = if source == SOURCE_FLEET_CATALOG {
-        if refresh_catalog {
+    let (category, next) = if source == SOURCE_FLEET_CATALOG {
+        let next = if refresh_catalog {
             "inspect the typed catalog failure and repair the selected Registry or cache authority before retrying"
         } else {
             "rerun with --refresh-catalog to acquire missing or invalid mainnet catalog evidence"
-        }
+        };
+        (CATEGORY_TOPOLOGY, next)
+    } else if source == SOURCE_LOCAL_OBSERVATION {
+        (
+            CATEGORY_OBSERVATION,
+            "select the authorized ICP identity and verify its ledger account has sufficient funds",
+        )
     } else {
-        "repair the Fleet input and fresh-Fleet authority before retrying"
+        (
+            CATEGORY_TOPOLOGY,
+            "repair the Fleet input and fresh-Fleet authority before retrying",
+        )
     };
     PlanDiagnostic {
-        category: CATEGORY_TOPOLOGY,
+        category,
         code: "fresh_fleet_plan_blocked".to_string(),
         severity: SEVERITY_BLOCKED,
         subject: fleet.to_string(),

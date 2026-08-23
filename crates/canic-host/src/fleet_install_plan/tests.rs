@@ -103,6 +103,11 @@ placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
 
+const COMPLETE_OPERATOR_CREATION_AMOUNT_CYCLES: u128 = 1_100;
+const COMPLETE_OPERATOR_CREATION_COUNT: u128 = 5;
+const COMPLETE_OPERATOR_DEBIT_CYCLES: u128 = COMPLETE_OPERATOR_CREATION_AMOUNT_CYCLES
+    + COMPLETE_OPERATOR_CREATION_COUNT * CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES;
+
 fn config() -> ConfigModel {
     parse_config_model(CONFIG).expect("valid Fleet config")
 }
@@ -385,7 +390,7 @@ fn decision_authority(balance: u128) -> FreshFleetDecisionAuthorityV1 {
 fn complete_decision_has_checked_counts_funding_and_canonical_digest() {
     let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),
-        authority: decision_authority(1_100),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
     })
     .expect("complete deployment decision");
 
@@ -399,7 +404,9 @@ fn complete_decision_has_checked_counts_funding_and_canonical_digest() {
     assert_eq!(plan.counts.total_canisters, 9);
     assert_eq!(
         plan.maximum_operator_debit,
-        PlannedCanisterCreationFunding::Cycles { cycles: 1_100 }
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: COMPLETE_OPERATOR_DEBIT_CYCLES
+        }
     );
     assert_eq!(plan.plan_digest.len(), 64);
     assert!(
@@ -411,7 +418,7 @@ fn complete_decision_has_checked_counts_funding_and_canonical_digest() {
         plan,
         compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
             preflight: complete_group_preflight(),
-            authority: decision_authority(1_100),
+            authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
         })
         .expect("repeat exact decision")
     );
@@ -422,13 +429,25 @@ fn complete_decision_has_checked_counts_funding_and_canonical_digest() {
             .count(),
         2
     );
+    let fee = plan
+        .funding_requirements
+        .iter()
+        .find(|requirement| requirement.category == "cycles_ledger_creation_fee")
+        .expect("fee-complete operator debit requirement");
+    assert_eq!(fee.canister_count, 5);
+    assert_eq!(
+        fee.maximum,
+        PlannedCanisterCreationFunding::Cycles {
+            cycles: COMPLETE_OPERATOR_CREATION_COUNT * CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES,
+        }
+    );
 }
 
 #[test]
-fn complete_decision_rejects_insufficient_or_changed_authority() {
+fn complete_decision_rejects_insufficient_or_stale_balance() {
     let insufficient = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),
-        authority: decision_authority(1_099),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES - 1),
     })
     .expect_err("insufficient balance must block");
     assert!(matches!(
@@ -436,7 +455,7 @@ fn complete_decision_rejects_insufficient_or_changed_authority() {
         FreshFleetDeploymentPlanError::InsufficientOperatorBalance
     ));
 
-    let mut stale_authority = decision_authority(1_100);
+    let mut stale_authority = decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES);
     stale_authority.operator.balance_fresh = false;
     assert!(matches!(
         compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
@@ -448,22 +467,31 @@ fn complete_decision_rejects_insufficient_or_changed_authority() {
 
     let baseline = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),
-        authority: decision_authority(1_100),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
     })
     .expect("baseline decision");
-    let changed = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+    let refreshed = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),
-        authority: decision_authority(1_101),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES + 1),
     })
-    .expect("changed observation remains sufficient");
-    assert_ne!(baseline.plan_digest, changed.plan_digest);
+    .expect("refreshed observation remains sufficient");
+    assert_eq!(baseline.plan_digest, refreshed.plan_digest);
+
+    let mut changed_account = decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES);
+    changed_account.operator.funding_account = "different-account".to_string();
+    let changed_account = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: complete_group_preflight(),
+        authority: changed_account,
+    })
+    .expect("changed account remains sufficient");
+    assert_ne!(baseline.plan_digest, changed_account.plan_digest);
 }
 
 #[test]
 fn complete_decision_digest_binds_coordinator_and_root_funding_policy() {
     let baseline = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),
-        authority: decision_authority(1_100),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
     })
     .expect("baseline decision");
 
@@ -477,7 +505,7 @@ fn complete_decision_digest_binds_coordinator_and_root_funding_policy() {
     let changed_coordinator =
         compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
             preflight: changed_coordinator,
-            authority: decision_authority(1_100),
+            authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
         })
         .expect("changed Coordinator policy decision");
     assert_ne!(baseline.plan_digest, changed_coordinator.plan_digest);
@@ -489,7 +517,7 @@ fn complete_decision_digest_binds_coordinator_and_root_funding_policy() {
         .cooldown_secs += 1;
     let changed_root = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: changed_root,
-        authority: decision_authority(1_100),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
     })
     .expect("changed root policy decision");
     assert_ne!(baseline.plan_digest, changed_root.plan_digest);

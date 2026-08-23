@@ -281,7 +281,7 @@ pub enum FreshFleetFundingPayerV1 {
     FleetSubnetRoot,
 }
 
-/// One checked per-category funding maximum included in the plan digest.
+/// One checked creation-amount or creation-fee maximum included in the plan digest.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FreshFleetFundingRequirementV1 {

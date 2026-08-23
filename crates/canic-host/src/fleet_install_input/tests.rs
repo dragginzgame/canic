@@ -35,37 +35,18 @@ struct FundingProfileOnlyDocument {
 }
 
 #[test]
-fn operator_balance_validity_is_strict_and_bounded() {
-    let input = document(CoordinatorSubnetSelector::Explicit {
-        subnet: subnet_text(7),
-        acknowledge_fiduciary_cost: false,
-    });
-
-    let fresh = resolve_operator(
-        &input.operator,
-        BuildNetwork::Local,
-        input.operator.valid_until_unix_secs - 1,
-    )
-    .expect("balance is fresh immediately before exclusive expiry");
-    assert!(fresh.balance_fresh);
-
+fn operator_is_one_exact_non_anonymous_principal() {
+    assert_eq!(
+        resolve_operator_principal(&subnet_text(9)).expect("canonical operator"),
+        subnet_text(9)
+    );
     assert!(matches!(
-        resolve_operator(
-            &input.operator,
-            BuildNetwork::Local,
-            input.operator.valid_until_unix_secs,
-        ),
-        Err(FleetInstallInputError::StaleOperatorBalance { .. })
+        resolve_operator_principal("2vxsx-fae"),
+        Err(FleetInstallInputError::InvalidOperatorPrincipal { .. })
     ));
     assert!(matches!(
-        resolve_operator(
-            &input.operator,
-            BuildNetwork::Local,
-            input.operator.observed_at_unix_secs - 1,
-        ),
-        Err(FleetInstallInputError::InvalidOperatorEvidence {
-            field: "observed_at_unix_secs"
-        })
+        resolve_operator_principal("not-a-principal"),
+        Err(FleetInstallInputError::InvalidOperatorPrincipal { .. })
     ));
 }
 
@@ -584,7 +565,44 @@ fn catalog_snapshot_authority_excludes_transient_acquisition_provenance() {
 }
 
 #[test]
-fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
+fn funding_profile_scaffold_resolves_exact_registry_node_counts() {
+    let mut coordinator = info(
+        FIDUCIARY_SUBNET,
+        SubnetKind::Application,
+        SubnetSpecialization::Fiduciary,
+        "fiduciary",
+    );
+    coordinator.node_count = Some(34);
+    let root = info(
+        EUROPEAN_SUBNET,
+        SubnetKind::Application,
+        SubnetSpecialization::European,
+        "european",
+    );
+    let outcome = CatalogLoadOutcome {
+        path: PathBuf::from("cached-subnet-catalog.json"),
+        catalog: catalog(vec![coordinator, root]),
+        disposition: CacheDisposition::CacheHit,
+    };
+
+    let resolution = resolve_fleet_funding_profile_node_counts_from_catalog(
+        FleetFundingProfile::PreviewMultiSubnet,
+        subnet(FIDUCIARY_SUBNET),
+        &[subnet(EUROPEAN_SUBNET)],
+        &outcome,
+    )
+    .expect("resolve exact Registry node counts");
+
+    assert_eq!(resolution.coordinator_node_count, 34);
+    assert_eq!(resolution.root_node_counts, vec![13]);
+    assert!(matches!(
+        resolution.catalog_acquisition,
+        FleetInstallCatalogAcquisitionV1::ValidatedCache { .. }
+    ));
+}
+
+#[test]
+fn public_resolution_rejects_icp_creation_funding_before_planning() {
     let system_subnet = subnet_text(8);
     let mut input = document(CoordinatorSubnetSelector::Explicit {
         subnet: system_subnet.clone(),
@@ -603,14 +621,18 @@ fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
         "system",
     )]);
 
-    let resolved = resolve_document(&input, BuildNetwork::Ic, Some(&system_catalog))
-        .expect("resolve restricted System Subnet");
-    assert_eq!(
-        resolved.coordinator.creation_funding,
-        PlannedCanisterCreationFunding::Icp { e8s: 100_000_000 }
-    );
+    assert!(matches!(
+        resolve_document(&input, BuildNetwork::Ic, Some(&system_catalog)),
+        Err(FleetInstallInputError::UnsupportedCreationFunding { .. })
+    ));
 
     input.coordinator.creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(1),
+    };
+    input.fleet_subnet_roots[0].root_creation_funding = CreationFundingDocument::Cycles {
+        cycles: Cycles::new(1),
+    };
+    input.fleet_subnet_roots[0].wasm_store_creation_funding = CreationFundingDocument::Cycles {
         cycles: Cycles::new(1),
     };
     assert!(matches!(
@@ -620,7 +642,7 @@ fn public_resolution_enforces_trusted_eligibility_and_funding_method() {
 }
 
 #[test]
-fn nonpublic_network_rejects_profile_selectors_and_icp_funding() {
+fn nonpublic_network_rejects_profile_selectors_and_icp_creation_funding() {
     assert!(matches!(
         resolve_document(
             &document(CoordinatorSubnetSelector::Profile {
@@ -641,7 +663,7 @@ fn nonpublic_network_rejects_profile_selectors_and_icp_funding() {
     input.coordinator.creation_funding = CreationFundingDocument::Icp { e8s: 1 };
     assert!(matches!(
         resolve_document(&input, BuildNetwork::Local, None),
-        Err(FleetInstallInputError::NonPublicFunding { .. })
+        Err(FleetInstallInputError::UnsupportedCreationFunding { .. })
     ));
 
     input.coordinator.creation_funding = CreationFundingDocument::Cycles {
@@ -1193,16 +1215,7 @@ fn document(selector: CoordinatorSubnetSelector) -> FleetInstallInputDocument {
     FleetInstallInputDocument {
         schema_version: 1,
         funding_profile: FleetFundingProfile::SingleSubnet,
-        operator: OperatorFundingDocument {
-            principal: subnet_text(9),
-            funding_account: "test-operator".to_string(),
-            source: "test_fixture".to_string(),
-            observed_at_unix_secs: FIXTURE_NOW_UNIX_SECS,
-            valid_until_unix_secs: FIXTURE_NOW_UNIX_SECS + 300,
-            balance: CreationFundingDocument::Cycles {
-                cycles: Cycles::new(5_000_000_000_000_000),
-            },
-        },
+        operator: subnet_text(9),
         coordinator: CoordinatorInputDocument {
             subnet: selector,
             creation_funding: CreationFundingDocument::Cycles {
@@ -1292,17 +1305,7 @@ fn input_toml() -> String {
     format!(
         r#"schema_version = 1
 funding_profile = "single_subnet"
-
-[operator]
-principal = "{}"
-funding_account = "test-operator"
-source = "test_fixture"
-observed_at_unix_secs = {FIXTURE_NOW_UNIX_SECS}
-valid_until_unix_secs = 4102444800
-
-[operator.balance]
-kind = "cycles"
-cycles = "5000T"
+operator = "{}"
 
 [coordinator.subnet]
 kind = "explicit"

@@ -4,6 +4,7 @@
 //! Does not own: evidence collection, rendering, persistence, builds, clocks, or IC effects.
 //! Boundary: successful output contains every decision-bearing fact and no unresolved blocker.
 
+use super::CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES;
 use super::model::*;
 use candid::Principal;
 use canic_core::cdk::utils::hash::hex_bytes;
@@ -19,7 +20,7 @@ pub fn compile_fresh_fleet_deployment_plan(
 ) -> Result<FreshFleetDeploymentPlanV1, FreshFleetDeploymentPlanError> {
     validate_authority(&request.preflight, &request.authority)?;
     let counts = compile_counts(&request.preflight)?;
-    let funding_requirements = compile_funding_requirements(&request.preflight)?;
+    let funding_requirements = compile_funding_requirements(&request.preflight, counts)?;
     let maximum_operator_debit = maximum_operator_debit(&funding_requirements)?;
     validate_operator_balance(&request.authority.operator.balance, &maximum_operator_debit)?;
     let plan_digest = plan_digest(
@@ -40,6 +41,14 @@ pub fn compile_fresh_fleet_deployment_plan(
         operator_balance_sufficient: true,
         plan_digest,
     })
+}
+
+/// Compute the exact maximum debit borne by the installation operator.
+pub fn fresh_fleet_maximum_operator_debit(
+    preflight: &FreshFleetPreflightV1,
+) -> Result<PlannedCanisterCreationFunding, FreshFleetDeploymentPlanError> {
+    let counts = compile_counts(preflight)?;
+    maximum_operator_debit(&compile_funding_requirements(preflight, counts)?)
 }
 
 fn validate_authority(
@@ -261,6 +270,7 @@ fn checked_root_count_sum(
 
 fn compile_funding_requirements(
     preflight: &FreshFleetPreflightV1,
+    counts: FreshFleetCanisterCountsV1,
 ) -> Result<Vec<FreshFleetFundingRequirementV1>, FreshFleetDeploymentPlanError> {
     let mut requirements = vec![funding_requirement(
         "coordinator_creation",
@@ -301,6 +311,22 @@ fn compile_funding_requirements(
             )?);
         }
     }
+    let operator_creation_count = counts
+        .coordinator_canisters
+        .checked_add(counts.root_canisters)
+        .and_then(|count| count.checked_add(counts.wasm_store_canisters))
+        .ok_or(FreshFleetDeploymentPlanError::CountOverflow {
+            subject: "operator-created infrastructure Canister",
+        })?;
+    requirements.push(funding_requirement(
+        "cycles_ledger_creation_fee",
+        "Operator-created infrastructure Canisters".to_string(),
+        FreshFleetFundingPayerV1::Operator,
+        operator_creation_count,
+        &PlannedCanisterCreationFunding::Cycles {
+            cycles: CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES,
+        },
+    )?);
     requirements.sort();
     Ok(requirements)
 }
@@ -406,7 +432,19 @@ fn plan_digest(
     let input = FreshFleetDeploymentPlanDigestInputV1 {
         schema_version: FRESH_FLEET_DEPLOYMENT_PLAN_SCHEMA_VERSION,
         preflight,
-        authority,
+        authority: FreshFleetDecisionAuthorityDigestV1 {
+            app_config_sha256: &authority.app_config_sha256,
+            requested_environment: &authority.requested_environment,
+            canonical_network_id: &authority.canonical_network_id,
+            fleet_input_schema_version: authority.fleet_input_schema_version,
+            fleet_input_sha256: &authority.fleet_input_sha256,
+            release_source: &authority.release_source,
+            catalog: &authority.catalog,
+            operator: FreshFleetOperatorAuthorityDigestV1 {
+                principal: &authority.operator.principal,
+                funding_account: &authority.operator.funding_account,
+            },
+        },
         counts,
         funding_requirements,
         maximum_operator_debit,
@@ -425,9 +463,29 @@ fn plan_digest(
 struct FreshFleetDeploymentPlanDigestInputV1<'a> {
     schema_version: u16,
     preflight: &'a FreshFleetPreflightV1,
-    authority: &'a FreshFleetDecisionAuthorityV1,
+    authority: FreshFleetDecisionAuthorityDigestV1<'a>,
     counts: FreshFleetCanisterCountsV1,
     funding_requirements: &'a [FreshFleetFundingRequirementV1],
     maximum_operator_debit: &'a PlannedCanisterCreationFunding,
     operator_balance_sufficient: bool,
+}
+
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct FreshFleetDecisionAuthorityDigestV1<'a> {
+    app_config_sha256: &'a str,
+    requested_environment: &'a str,
+    canonical_network_id: &'a canic_core::ids::CanonicalNetworkId,
+    fleet_input_schema_version: u32,
+    fleet_input_sha256: &'a str,
+    release_source: &'a FreshFleetReleaseSourceV1,
+    catalog: &'a FreshFleetCatalogEvidenceV1,
+    operator: FreshFleetOperatorAuthorityDigestV1<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct FreshFleetOperatorAuthorityDigestV1<'a> {
+    principal: &'a str,
+    funding_account: &'a str,
 }

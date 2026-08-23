@@ -9,6 +9,7 @@ use canic_core::{
 use canic_host::{
     canister_build::CanisterBuildProfile,
     fleet_catalog::FleetCatalogEntryV1,
+    fleet_install_plan::{FreshFleetOperatorFundingEvidenceV1, PlannedCanisterCreationFunding},
     release_build::{finalize_release_build_from_manifest, plan_release_build_for_profile},
 };
 use serde_json::Value as JsonValue;
@@ -38,6 +39,39 @@ maximum_instances = 1
 
 const USER_HUB_ARTIFACT: &[u8] = b"user-hub-artifact";
 
+macro_rules! build_report {
+    ($options:expr, $roots:expr $(,)?) => {
+        deploy_plan::build_report_with_operator_observer(
+            $options,
+            $roots,
+            &|principal, maximum_debit| Ok::<_, String>(operator_funding(principal, maximum_debit)),
+        )
+    };
+}
+
+fn operator_funding(
+    principal: &str,
+    maximum_debit: &PlannedCanisterCreationFunding,
+) -> FreshFleetOperatorFundingEvidenceV1 {
+    let balance = match maximum_debit {
+        PlannedCanisterCreationFunding::Cycles { .. } => PlannedCanisterCreationFunding::Cycles {
+            cycles: 5_000_000_000_000_000,
+        },
+        PlannedCanisterCreationFunding::Icp { .. } => {
+            PlannedCanisterCreationFunding::Icp { e8s: u64::MAX }
+        }
+    };
+    FreshFleetOperatorFundingEvidenceV1 {
+        principal: principal.to_string(),
+        funding_account: "test-operator".to_string(),
+        balance,
+        source: "test_fixture".to_string(),
+        observed_at_unix_secs: 1_782_432_100,
+        valid_until_unix_secs: 4_102_444_800,
+        balance_fresh: true,
+    }
+}
+
 const MALFORMED_DESIRED_CONFIG: &str = r#"
 unknown = true
 
@@ -47,17 +81,7 @@ name = "demo"
 
 const SAMPLE_FLEET_INPUT: &str = r#"schema_version = 1
 funding_profile = "single_subnet"
-
-[operator]
-principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
-funding_account = "test-operator"
-source = "test_fixture"
-observed_at_unix_secs = 1782432100
-valid_until_unix_secs = 4102444800
-
-[operator.balance]
-kind = "cycles"
-cycles = "5000T"
+operator = "ryjl3-tyaaa-aaaaa-aaaba-cai"
 
 [coordinator.subnet]
 kind = "explicit"
@@ -179,8 +203,9 @@ fn deploy_plan_help_documents_no_mutation_contract() {
     assert!(help.contains("canic --environment ic deploy plan demo --app demo --fleet-input"));
     assert!(help.contains("--refresh-catalog"));
     assert!(help.contains("Read-only deployment planning"));
-    assert!(help.contains("existing validated catalog evidence"));
-    assert!(help.contains("NNS Registry queries"));
+    assert!(help.contains("queries its relevant ledger account and balance"));
+    assert!(help.contains("catalog evidence is used"));
+    assert!(help.contains("Registry queries"));
     assert!(help.contains("private .canic/ic-query cache"));
     assert!(help.contains("No mode builds, changes deployment state"));
     assert!(help.contains("Put the top-level --environment before deploy"));
@@ -205,11 +230,14 @@ fn deploy_plan_options_parse_supported_surface() {
         OsString::from("01".repeat(32)),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
+        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
+        OsString::from("custom-icp"),
     ])
     .expect("parse deploy plan options");
 
     assert_eq!(options.fleet, "demo-local");
     assert_eq!(options.environment, "local");
+    assert_eq!(options.icp, "custom-icp");
     assert!(options.json);
     assert_eq!(options.out, Some(PathBuf::from("deployment-plan.json")));
     assert_eq!(options.fleet_input, PathBuf::from("fleet-input.toml"));
@@ -280,7 +308,7 @@ fn deploy_plan_loads_one_exact_finalized_release_source_without_allocation() {
     ])
     .expect("parse exact release source");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -334,7 +362,7 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -424,6 +452,44 @@ fn deploy_plan_report_builds_from_config_without_fleet_catalog_entry() {
 }
 
 #[test]
+fn deploy_plan_blocks_when_live_operator_funding_cannot_be_observed() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-operator-observation");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--app"),
+        OsString::from("demo"),
+        OsString::from("--fleet-input"),
+        OsString::from("fleet-input.toml"),
+    ])
+    .expect("parse deploy plan options");
+
+    let report = deploy_plan::build_report_with_operator_observer(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root,
+        },
+        &|_, _| Err::<FreshFleetOperatorFundingEvidenceV1, _>("ledger unavailable"),
+    );
+    let json = serde_json::to_value(&report).expect("serialize report");
+
+    assert!(json["fresh_fleet_plan"].is_null());
+    assert!(json["blockers"].as_array().is_some_and(|blockers| {
+        blockers.iter().any(|blocker| {
+            blocker["source"] == "local_observation"
+                && blocker["category"] == "observation"
+                && blocker["detail"]
+                    .as_str()
+                    .is_some_and(|detail| detail.contains("ledger unavailable"))
+                && blocker["next"]
+                    .as_str()
+                    .is_some_and(|next| next.contains("authorized ICP identity"))
+        })
+    }));
+}
+
+#[test]
 fn deploy_plan_catalog_identity_does_not_invent_one_root_fact() {
     let (_temp, workspace_root, icp_root) =
         temp_plan_workspace("canic-deploy-plan-coordinator-catalog");
@@ -442,7 +508,7 @@ fn deploy_plan_catalog_identity_does_not_invent_one_root_fact() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -490,7 +556,7 @@ fn deploy_plan_report_keeps_complete_inputs_planned_without_root_comparison() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -556,7 +622,7 @@ fn deploy_plan_report_previews_pool_canister_creation() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -593,7 +659,7 @@ fn deploy_plan_report_blocks_unresolved_config_target() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -627,7 +693,7 @@ fn deploy_plan_blocks_invalid_fleet_input_without_allocating_release_state() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -658,7 +724,7 @@ fn deploy_plan_report_blocks_invalid_fleet_name() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -694,7 +760,7 @@ fn deploy_plan_resolves_forwarded_environment_to_canonical_network() {
     ])
     .expect("parse forwarded plan environment");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -794,9 +860,8 @@ fn deploy_plan_catalog_acquisition_does_not_change_the_canonical_local_plan() {
         icp_root,
     };
 
-    let cache_only_digest =
-        plan_digest_from_report(&deploy_plan::build_report(&cache_only, &roots));
-    let refreshed_digest = plan_digest_from_report(&deploy_plan::build_report(&refresh, &roots));
+    let cache_only_digest = plan_digest_from_report(&build_report!(&cache_only, &roots));
+    let refreshed_digest = plan_digest_from_report(&build_report!(&refresh, &roots));
 
     assert_eq!(refreshed_digest, cache_only_digest);
 }
@@ -822,7 +887,7 @@ fn deploy_plan_blocks_contradictory_environment_profile() {
     ])
     .expect("parse forwarded plan environment");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -859,7 +924,7 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
     ])
     .expect("parse deploy plan options");
 
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -930,7 +995,7 @@ fn deploy_plan_json_out_is_create_new_and_json_only() {
         OsString::from(out.as_os_str()),
     ])
     .expect("parse deploy plan options");
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -974,7 +1039,7 @@ fn deploy_plan_out_does_not_create_parent_directories() {
         OsString::from(out.as_os_str()),
     ])
     .expect("parse deploy plan options");
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -1000,7 +1065,7 @@ fn deploy_plan_json_renderer_is_report_only() {
         OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -1029,7 +1094,7 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
         OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -1082,19 +1147,19 @@ fn workspace_plan_digest_tracks_build_inputs_but_excludes_report_outputs() {
         workspace_root: workspace_root.clone(),
         icp_root,
     };
-    let first = plan_digest_from_report(&deploy_plan::build_report(&options, &roots));
+    let first = plan_digest_from_report(&build_report!(&options, &roots));
 
     fs::write(
         workspace_root.join("deployment-plan.json"),
         "report output\n",
     )
     .expect("write excluded report output");
-    let after_report = plan_digest_from_report(&deploy_plan::build_report(&options, &roots));
+    let after_report = plan_digest_from_report(&build_report!(&options, &roots));
     assert_eq!(after_report, first);
 
     fs::write(workspace_root.join("Cargo.lock"), "# changed test lock\n")
         .expect("change Cargo.lock");
-    let after_lock = plan_digest_from_report(&deploy_plan::build_report(&options, &roots));
+    let after_lock = plan_digest_from_report(&build_report!(&options, &roots));
     assert_ne!(after_lock, first);
 }
 
@@ -1132,7 +1197,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         OsString::from("fleet-input.toml"),
     ])
     .expect("parse deploy plan options");
-    let report = deploy_plan::build_report(
+    let report = build_report!(
         &options,
         &deploy_plan::DeployPlanRoots {
             workspace_root,
@@ -1149,7 +1214,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("canonical fresh-Fleet decision"));
     assert!(text.contains("plan_digest: "));
     assert!(text.contains("operator_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));
-    assert!(text.contains("maximum_operator_debit: 140000000000000 cycles"));
+    assert!(text.contains("maximum_operator_debit: 140000300000000 cycles"));
     assert!(text.contains(
         "operator_balance_evidence: source=test_fixture observed_at=1782432100 valid_until=4102444800 fresh=true sufficient=true"
     ));
@@ -1161,6 +1226,9 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     ));
     assert!(text.contains(
         "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=100000000000000 cycles maximum=100000000000000 cycles"
+    ));
+    assert!(text.contains(
+        "funding: category=cycles_ledger_creation_fee owner=Operator-created infrastructure Canisters payer=operator count=3 per_canister=100000000 cycles maximum=300000000 cycles"
     ));
     assert!(text.contains("future apply preview (proposed operation labels; not executed)"));
     assert!(text.contains(

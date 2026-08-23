@@ -486,8 +486,18 @@ implementation corrects those boundaries, preflights retained fixed-window
 spend, stores each exact plan and raises the measured cell bound to 32 MiB. The
 passing governed journey exercises the real-canister corrections. It used only
 the pinned local PocketIC server; no external Ledger, CMC, canister, network or
-funding effect occurred. The complete maintainer validation gate remains unrun
-for this final dirty draft and is not claimed by this focused evidence.
+funding effect occurred.
+
+The 2026-08-23 maintainer validation rerun stopped at `check-invariants` because
+`model/fleet_funding_policy` imported rotation DTOs in both production and test
+code. The correction retains the economic validator in the model behind one
+DTO-free named input; `ops/fleet_funding_policy` owns the sole boundary-plan
+conversion and the original adversarial test follows that adapter. `make
+check-invariants` passes all ten requested targets, both core rotation-plan
+tests and all four Coordinator rotation tests pass, all five CLI funding tests
+pass, and warning-denied Clippy passes for core, host and CLI. The complete
+maintainer validation gate has not completed for the corrected candidate and
+must be rerun; this focused correction does not claim it.
 
 ## M0 Disposition
 

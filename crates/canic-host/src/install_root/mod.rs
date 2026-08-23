@@ -10,7 +10,8 @@ use crate::{
         FreshFleetPreflightRequest, FreshFleetPreflightV1, PersistedFleetInstallPlan,
         PlannedCanisterCreationFunding, compile_and_persist_fleet_install_plan,
         compile_fresh_fleet_deployment_plan, compile_fresh_fleet_preflight,
-        load_fresh_fleet_decision_authority,
+        fresh_fleet_maximum_operator_debit, load_fresh_fleet_decision_authority,
+        observe_fresh_fleet_operator_funding,
     },
     network::resolve_canonical_network_id_from_root,
     release_set::{AppConfigSnapshot, icp_root, workspace_root},
@@ -97,7 +98,6 @@ use fleet_subnet_root_registry_sync::{
 use fleet_subnet_root_store_bootstrap::bootstrap_and_verify_fleet_subnet_root_stores;
 use icp_context::InstallIcpContext;
 use identity::resolve_install_identity;
-use operations::require_planned_installation_controller;
 pub use options::InstallRootOptions;
 use output::{TerminalStyle, print_install_timing_summary};
 use phase_receipts::{
@@ -352,6 +352,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
     timings.emit_manifest = emitted_manifest.duration;
     let finalized_release_build =
         require_finalized_release_build(emitted_manifest.finalized_release_build)?;
+    recheck_fresh_fleet_operator_funding(&icp_context, &fresh_fleet_plan)?;
     let planned_install = plan_current_fleet_install(CurrentFleetInstallPlanRequest {
         icp_root: &icp_root,
         environment,
@@ -395,11 +396,14 @@ fn prepare_and_admit_current_fresh_fleet(
     config_path: &Path,
     options: &InstallRootOptions,
 ) -> Result<(PreparedFreshFleetDecision, InstallIcpContext), InstallRootError> {
+    let icp_context =
+        InstallIcpContext::new(&options.icp_executable, icp_root, &options.environment);
     let announced_fresh_fleet = prepare_current_fresh_fleet_preflight(
         workspace_root,
         icp_root,
         config_path,
         options,
+        &icp_context,
         FleetCatalogAcquisition::RefreshMissingOrInvalid,
     )?;
     print_fresh_fleet_decision(&announced_fresh_fleet.plan);
@@ -408,16 +412,10 @@ fn prepare_and_admit_current_fresh_fleet(
         icp_root,
         config_path,
         options,
+        &icp_context,
         FleetCatalogAcquisition::CacheOnly,
     )?;
     require_recompiled_fresh_fleet_plan(&announced_fresh_fleet.plan, &fresh_fleet.plan)?;
-    let icp_context =
-        InstallIcpContext::new(&options.icp_executable, icp_root, &options.environment);
-    require_planned_installation_controller(
-        icp_context.cli(),
-        &fresh_fleet.plan.authority.operator.principal,
-    )
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
     Ok((fresh_fleet, icp_context))
 }
 
@@ -426,6 +424,7 @@ fn prepare_current_fresh_fleet_preflight(
     icp_root: &Path,
     config_path: &Path,
     options: &InstallRootOptions,
+    icp_context: &InstallIcpContext,
     catalog_acquisition: FleetCatalogAcquisition,
 ) -> Result<PreparedFreshFleetDecision, InstallRootError> {
     let config = AppConfigSnapshot::load(config_path)
@@ -460,6 +459,14 @@ fn prepare_current_fresh_fleet_preflight(
         release_build_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    let operator = observe_fresh_fleet_operator_funding(
+        icp_context.cli(),
+        &input.operator_principal,
+        &maximum_operator_debit,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
     let authority = load_fresh_fleet_decision_authority(FreshFleetDecisionAuthorityRequest {
         workspace_root,
         icp_root,
@@ -468,6 +475,7 @@ fn prepare_current_fresh_fleet_preflight(
         canonical_network_id,
         release_build_id,
         fleet_input: &input,
+        operator: &operator,
     })
     .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
     let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
@@ -488,6 +496,26 @@ fn prepare_current_fresh_fleet_preflight(
         input,
         plan,
     })
+}
+
+fn recheck_fresh_fleet_operator_funding(
+    icp_context: &InstallIcpContext,
+    plan: &FreshFleetDeploymentPlanV1,
+) -> Result<(), InstallRootError> {
+    let operator = observe_fresh_fleet_operator_funding(
+        icp_context.cli(),
+        &plan.authority.operator.principal,
+        &plan.maximum_operator_debit,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
+    let mut authority = plan.authority.clone();
+    authority.operator = operator;
+    let rechecked = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: plan.preflight.clone(),
+        authority,
+    })
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    require_recompiled_fresh_fleet_plan(plan, &rechecked)
 }
 
 fn install_current_fleet_infrastructure(

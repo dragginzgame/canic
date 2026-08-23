@@ -707,15 +707,29 @@ impl FleetCoordinatorOps {
         let record = require_component_provisioning_operation_record(&current, request)?;
         let mut progress = component_provisioning_root_acceptance_progress(record)?;
         if progress.accepted_root_count > request.expected_accepted_root_count {
-            return replay_recorded_root_acceptance(record, request, &response, &progress);
+            return replay_recorded_root_acceptance(
+                &current.component_deployment_configuration,
+                record,
+                request,
+                &response,
+                recorded_at_ns,
+                &progress,
+            );
         }
         if progress.accepted_root_count != request.expected_accepted_root_count {
             return Err(InternalError::conflict());
         }
         let intent = progress.in_flight.ok_or_else(InternalError::conflict)?;
         let batch = root_batch(record, intent.root_index)?;
-        validate_root_acceptance_response(record, batch, &response)?;
-        validate_root_acceptance_observation(intent.started_at_ns, &response, recorded_at_ns)?;
+        let response = canonical_root_acceptance_observation(
+            &current.component_deployment_configuration,
+            record,
+            intent.root_index,
+            batch,
+            &response,
+            intent.started_at_ns,
+            recorded_at_ns,
+        )?;
         progress
             .acceptances
             .push(FleetComponentProvisioningRootAcceptanceRecord {
@@ -850,7 +864,6 @@ impl FleetCoordinatorOps {
             acceptance: &acceptance,
             previous,
             response: &response,
-            started_at_ns: intent.started_at_ns,
             recorded_at_ns,
         })?;
         let observed = FleetComponentProvisioningRootProvisionRecord {
@@ -4577,13 +4590,6 @@ impl RootProvisioningCounts {
         }
     }
 
-    const fn is_terminal(self, component_count: u32) -> bool {
-        self.reserved == component_count
-            && self.claimed == component_count
-            && self.installed == component_count
-            && self.registry_committed == component_count
-    }
-
     fn is_canonical(self, component_count: u32) -> bool {
         let counts_are_bounded = [
             self.reserved <= component_count,
@@ -6119,9 +6125,11 @@ fn root_batch(
 }
 
 fn replay_recorded_root_acceptance(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
     record: &FleetComponentProvisioningRecord,
     request: &FleetComponentProvisioningAdvanceRequest,
     response: &RootComponentProvisioningStatusResponse,
+    recorded_at_ns: u64,
     progress: &FleetComponentProvisioningRootAcceptanceProgress,
 ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
     if request.expected_accepted_root_count.checked_add(1) != Some(progress.accepted_root_count) {
@@ -6132,7 +6140,18 @@ fn replay_recorded_root_acceptance(
     let recorded = progress.acceptances.get(index).ok_or_else(|| {
         receipt_invariant("recorded root acceptance is absent at its durable cursor")
     })?;
-    if &recorded.response != response {
+    let root_index = request.expected_accepted_root_count;
+    let batch = root_batch(record, root_index)?;
+    let canonical = canonical_root_acceptance_observation(
+        configuration,
+        record,
+        root_index,
+        batch,
+        response,
+        recorded.started_at_ns,
+        recorded_at_ns,
+    )?;
+    if recorded.response != canonical {
         return Err(InternalError::conflict());
     }
     component_provisioning_status_response(record)
@@ -6290,8 +6309,101 @@ struct RootProvisionResponseValidation<'a> {
     acceptance: &'a FleetComponentProvisioningRootAcceptanceRecord,
     previous: &'a RootComponentProvisioningStatusResponse,
     response: &'a RootComponentProvisioningStatusResponse,
+    recorded_at_ns: u64,
+}
+
+fn canonical_root_acceptance_observation(
+    configuration: &canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
+    record: &FleetComponentProvisioningRecord,
+    root_index: u32,
+    batch: &FleetSubnetRootProvisioningBatch,
+    observed: &RootComponentProvisioningStatusResponse,
     started_at_ns: u64,
     recorded_at_ns: u64,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let canonical = canonical_root_acceptance_response(record, batch, observed.accepted_at_ns)?;
+    let acceptance = FleetComponentProvisioningRootAcceptanceRecord {
+        started_at_ns,
+        response: canonical.clone(),
+        recorded_at_ns,
+    };
+    match observed.phase {
+        RootComponentProvisioningPhase::Accepted => {
+            validate_root_provision_current(record, batch, &acceptance, observed)?;
+        }
+        RootComponentProvisioningPhase::Provisioned => {
+            FleetServiceBindingOps::validate_provisioned_root_receipt_compiled(
+                configuration,
+                &record.plan,
+                record.operation_id,
+                record.plan_hash,
+                usize::try_from(root_index).map_err(|_| InternalError::resource_exhausted())?,
+                observed,
+            )?;
+            if !root_post_provisioning_progress_is_absent(observed) {
+                return Err(InternalError::conflict());
+            }
+            let provisioned_at_ns = observed
+                .provisioned_at_ns
+                .ok_or_else(InternalError::conflict)?;
+            if recorded_at_ns < provisioned_at_ns {
+                return Err(InternalError::invalid_input());
+            }
+        }
+        RootComponentProvisioningPhase::Published
+        | RootComponentProvisioningPhase::RuntimesActive => {
+            return Err(InternalError::conflict());
+        }
+    }
+    validate_root_acceptance_response(record, batch, &canonical)?;
+    validate_root_acceptance_observation(started_at_ns, &canonical, recorded_at_ns)?;
+    Ok(canonical)
+}
+
+fn canonical_root_acceptance_response(
+    record: &FleetComponentProvisioningRecord,
+    batch: &FleetSubnetRootProvisioningBatch,
+    accepted_at_ns: u64,
+) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
+    let (placement_count, component_count) = root_batch_counts(batch)?;
+    let receipt_content_hash = RootComponentProvisioningReceiptOps::acceptance_content_hash(
+        RootComponentProvisioningAcceptanceReceiptAuthority {
+            operation_id: record.operation_id,
+            plan_hash: record.plan_hash,
+            fleet_registry: &record.plan.fleet_registry,
+            configuration_digest: record.plan.configuration_digest,
+            batch,
+            placement_count,
+            component_count,
+            accepted_at_ns,
+        },
+    )?;
+    Ok(RootComponentProvisioningStatusResponse {
+        operation_id: record.operation_id,
+        plan_hash: record.plan_hash,
+        fleet_registry: record.plan.fleet_registry.clone(),
+        configuration_digest: record.plan.configuration_digest,
+        fleet_subnet_root: batch.root.fleet_subnet_root,
+        phase: RootComponentProvisioningPhase::Accepted,
+        placement_count,
+        component_count,
+        reserved_component_count: 0,
+        claimed_component_count: 0,
+        installed_component_count: 0,
+        registry_committed_component_count: 0,
+        published_component_count: 0,
+        activated_component_count: 0,
+        root_runtime_active: false,
+        result: None,
+        publication: None,
+        activation: None,
+        accepted_at_ns,
+        provisioned_at_ns: None,
+        published_at_ns: None,
+        activation_started_at_ns: None,
+        runtimes_activated_at_ns: None,
+        receipt_content_hash,
+    })
 }
 
 fn validate_root_acceptance_response(
@@ -6384,7 +6496,6 @@ fn validate_root_provision_response(
         acceptance,
         previous,
         response,
-        started_at_ns,
         recorded_at_ns,
     } = validation;
     let batch = root_batch(record, root_index)?;
@@ -6406,11 +6517,6 @@ fn validate_root_provision_response(
             }
         }
         RootComponentProvisioningPhase::Provisioned => {
-            if !RootProvisioningCounts::from_response(previous)
-                .is_terminal(previous.component_count)
-            {
-                return Err(InternalError::conflict());
-            }
             FleetServiceBindingOps::validate_provisioned_root_receipt_compiled(
                 configuration,
                 &record.plan,
@@ -6419,10 +6525,13 @@ fn validate_root_provision_response(
                 usize::try_from(root_index).map_err(|_| InternalError::resource_exhausted())?,
                 response,
             )?;
+            if !root_post_provisioning_progress_is_absent(response) {
+                return Err(InternalError::conflict());
+            }
             let provisioned_at_ns = response
                 .provisioned_at_ns
                 .ok_or_else(InternalError::conflict)?;
-            if provisioned_at_ns < started_at_ns || recorded_at_ns < provisioned_at_ns {
+            if recorded_at_ns < provisioned_at_ns {
                 return Err(InternalError::invalid_input());
             }
         }
@@ -6460,6 +6569,7 @@ fn validate_root_provision_current(
         && response.component_count == component_count
         && response.result.is_none()
         && response.provisioned_at_ns.is_none()
+        && root_post_provisioning_progress_is_absent(response)
         && RootProvisioningCounts::from_response(response).is_canonical(component_count);
     let acceptance_is_exact = response.accepted_at_ns == acceptance.response.accepted_at_ns
         && response.receipt_content_hash == acceptance.response.receipt_content_hash;
@@ -6467,6 +6577,23 @@ fn validate_root_provision_current(
         return Err(InternalError::conflict());
     }
     Ok(())
+}
+
+fn root_post_provisioning_progress_is_absent(
+    response: &RootComponentProvisioningStatusResponse,
+) -> bool {
+    [
+        response.published_component_count == 0,
+        response.activated_component_count == 0,
+        !response.root_runtime_active,
+        response.publication.is_none(),
+        response.activation.is_none(),
+        response.published_at_ns.is_none(),
+        response.activation_started_at_ns.is_none(),
+        response.runtimes_activated_at_ns.is_none(),
+    ]
+    .into_iter()
+    .all(|is_absent| is_absent)
 }
 
 fn validate_component_provisioning_root_provision_state(
@@ -6652,9 +6779,7 @@ fn validate_root_provision_receipts(
         let provisioned_at_ns = provision.response.provisioned_at_ns.ok_or_else(|| {
             receipt_invariant("stored root Provisioned response has no completion time")
         })?;
-        if provisioned_at_ns < provision.started_at_ns
-            || provision.recorded_at_ns < provisioned_at_ns
-        {
+        if provision.recorded_at_ns < provisioned_at_ns {
             return Err(receipt_invariant(
                 "stored root Provisioned response time evidence is invalid",
             ));
@@ -6670,6 +6795,11 @@ fn validate_root_provision_receipts(
         .map_err(|_| {
             receipt_invariant("stored root Provisioned response differs from its plan batch")
         })?;
+        if !root_post_provisioning_progress_is_absent(&provision.response) {
+            return Err(receipt_invariant(
+                "stored root Provisioned response carries post-provisioning progress",
+            ));
+        }
         previous_observed_at_ns = provision.recorded_at_ns;
     }
     Ok(previous_observed_at_ns)
