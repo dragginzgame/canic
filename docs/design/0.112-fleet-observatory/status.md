@@ -1,10 +1,11 @@
-# Canic 0.111 Implementation Status
+# Canic 0.112 Implementation Status
 
 Date: 2026-08-18
+Last updated: 2026-08-23
 
 ## Status
 
-- State: accepted and scheduled after the 0.110 stateful-adoption gate.
+- State: accepted and scheduled after the 0.111 stateful-adoption gate.
 - Outcome: a generic, supported downstream observatory surface serving exact
   local identity and bounded Fleet overview from every installed Canister.
 - Flagship consumer: external Prequel Wars, with its own data-only Galactic
@@ -13,20 +14,20 @@ Date: 2026-08-18
   Skynet App/helper are removed by this planning cut; historical release/audit
   records remain truthful.
 - Runtime impact: none from this planning cut.
-- Implementation approval: none. B1 requires accepted 0.110 closeout and
+- Implementation approval: none. B1 requires accepted 0.111 closeout and
   explicit maintainer promotion.
 - Dependency posture: canonical Canic packages and infrastructure never depend
   on Prequel Wars, IcyDB or another downstream application crate.
 - Frontend posture: browser environment/bindings and externally managed static
   assets remain a separate unnumbered delivery-handoff idea.
 
-Design: [Generic Fleet observatory](0.111-design.md)
+Design: [Generic Fleet observatory](0.112-design.md)
 
 ## Release-Batch Tracker
 
 | Batch | Outcome | Included evidence and fallout | Focused validation | Status |
 | --- | --- | --- | --- | --- |
-| B1 | Supported generic contract and baseline | Package/API ownership, every-role fields, evidence/freshness, bounds, public allowlist and profile versioning | Source inventory, model/policy tests and explicit acceptance | Blocked on 0.110 and promotion |
+| B1 | Supported generic contract and baseline | Package/API ownership, every-role fields, evidence/freshness, bounds, public allowlist and profile versioning | Source inventory, model/policy tests and explicit acceptance | Blocked on 0.111 and promotion |
 | B2 | Generic view/renderer/HTTP package | Passive views/profile, escaping, routing, headers, parity and first excess | Native tests and package Clippy | Blocked on B1 |
 | B3 | Canonical role adapters | Coordinator/root/Store/managed local identity and safe views | Role builds, Candid/HTTP and authority rejection | Blocked on B2 |
 | B4 | Revisioned Fleet projection | Root summaries, aggregation, protected propagation, freshness and restart recovery | Authority/revision/replay PocketIC tests | Blocked on B3 |
@@ -36,6 +37,6 @@ Design: [Generic Fleet observatory](0.111-design.md)
 
 ## Next Authorized Action
 
-No 0.111 work is authorized. After 0.110 closes, request B1 promotion and
+No 0.112 work is authorized. After 0.111 closes, request B1 promotion and
 freeze the generic package boundary before any runtime, Candid or projection
 mutation.

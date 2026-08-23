@@ -209,7 +209,7 @@ costs remain in the effect ledger but never enter a statistic.
   invalidates the fixture rather than silently selecting a replacement.
 
 The installed probe is a bounded representative Canic lifecycle workload, not
-a claim about every App. Any 0.109 funding recommendation derived from it must
+a claim about every App. Any 0.110 funding recommendation derived from it must
 add the Q4 workload headroom rule and name this exact limitation.
 
 ### Event And Censoring Rules
@@ -285,7 +285,7 @@ recovery reserve is `2 * B_reset_max`, representing one complete attempt and
 one exact recovery attempt. All arithmetic is checked and rounded upward to
 the next 100,000,000 cycles.
 
-The report may propose these dated 0.109 inputs:
+The report may propose these dated 0.110 inputs:
 
 ~~~text
 standby_minimum_cycles = B_H + safety_margin + recovery_reserve
@@ -361,7 +361,7 @@ provenance is complete and no empirical Q2 row exists. Q3/Q4 protocol
 `canic-0.106-q3q4-v1` is frozen. The exact Q1 `EmptyRootAdmissions` blocker and
 the four Q6 constraints—unbounded failure text, the structurally narrow
 handoff-receipt bound, unbounded terminal-receipt retention and the absent
-canonical receipt-map snapshot payload—are accepted as 0.109-owned work, not
+canonical receipt-map snapshot payload—are accepted as 0.110-owned work, not
 as 0.106 corrections.
 
 Exact binding of the B2 network, signing/funding identities and terminal asset

@@ -37,8 +37,18 @@ Date: 2026-08-23
   atomically published from a closed staged file, removing the parallel-test
   `ETXTBSY` race exposed during focused reproduction. The focused manifest,
   observer, install-order, runner-contract and warning-denied changed-package
-  checks pass. The corrected open draft still requires the complete maintainer
-  validation gate and a fresh human closeout audit before release.
+  checks pass. The qualification-runtime follow-up keeps the complete internal
+  PocketIC matrix in one ordered process, persistently caches its canonical
+  Coordinator artifact, moves pure internal checks before the PocketIC barrier,
+  reuses only reset-complete native baselines and emits Fleet phase plus shared-
+  server resource timings. Two exact governed runs passed all 22 internal cases:
+  the cache-populating pass took 293 seconds and the cross-process reuse pass
+  took 208 seconds, with a 2,229,804 kB server high-water mark and 97 threads.
+  The changed six-test native-agent target also passed, with a 2,519,036 kB
+  high-water mark and 162 threads. Serial capacity remains one because these
+  local measurements do not yet prove parallel stability. The corrected open
+  draft still requires the complete maintainer validation gate and a fresh
+  human closeout audit before release.
 - Runtime impact: B3 adds exact registered-Root admission, the Coordinator
   funding kill switch, fixed Fleet/Root window accounting, durable
   current-plus-last replay and reserve-aware attached-cycle calls. B4 adds the
@@ -88,8 +98,9 @@ Date: 2026-08-23
   current root cycle/external-call ownership inventory and proposed cost
   envelope are available. The 0.107 closeout and complete M0 evidence are
   accepted. The held 0.106 B2 external work does not gate this line.
-- Successor: 0.109 estate implementation remains blocked until this line is
-  complete.
+- Successors: 0.109 Fleet-wide ingress admission remains blocked until this
+  line is complete; 0.110 estate implementation also depends on completed
+  0.109.
 - Surface posture: 0.108.0 remains policy-only. The open draft adds Coordinator
   `RequestRootFunding` and `SetRootFunding` plus Root `AcceptFunding` and
   `RefillCycles` commands, generated Candid contracts, timer-owned request/

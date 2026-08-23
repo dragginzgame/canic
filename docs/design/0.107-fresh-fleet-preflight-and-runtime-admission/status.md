@@ -13,8 +13,9 @@ Date: 2026-08-21
 - Predecessor: accepted repository-local 0.106 B1 baseline. The separately
   authorized 0.106 B2 external evidence does not gate this line.
 - Successors: 0.108 Coordinator-backed root funding retains its passing B1
-  evidence but begins production work only after this line; 0.109 estates and
-  later scheduled lines move one minor number without semantic change.
+  evidence but begins production work only after this line. 0.109 hard-cuts
+  this line's independent per-canister whitelist into one Fleet-wide policy;
+  0.110 estates and later scheduled lines follow it.
 - Repository boundary: Toko remains read-only and supplies requirements plus
   final acceptance evidence only.
 - Historical delivery estimate: seven release batches and approximately 10-15

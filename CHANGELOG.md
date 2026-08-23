@@ -38,6 +38,9 @@ Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
   Registry evidence, retains an offline explicit-count fallback, explains
   node-scaled formulas and emits exact funding TOML without weakening live
   deployment admission.
+  Release qualification now runs cheap internal checks first, keeps all
+  internal PocketIC cases in one ordered process, persistently caches the
+  canonical Coordinator artifact and reuses only reset-complete baselines.
 - `0.108.0` establishes accepted replay/refund semantics, protected
   Coordinator/root funding policy and distinct fresh-install provisioning
   authority without yet enabling runtime grants.

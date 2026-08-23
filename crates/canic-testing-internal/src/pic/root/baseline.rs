@@ -280,6 +280,9 @@ fn root_baseline_snapshot_targets(metadata: &RootBaselineMetadata) -> Vec<Canist
 }
 
 #[cfg(test)]
+pub(in crate::pic) use tests::governed_fast_cases;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
@@ -305,5 +308,12 @@ mod tests {
         assert_eq!(targets[1].sender(), Some(root_id));
         assert_eq!(targets[2].canister_id(), store_id);
         assert_eq!(targets[2].sender(), Some(root_id));
+    }
+
+    pub fn governed_fast_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![(
+            "Root baseline snapshot authority",
+            root_baseline_snapshot_targets_are_unique_and_controller_exact,
+        )]
     }
 }

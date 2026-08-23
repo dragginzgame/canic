@@ -54,19 +54,28 @@ workspace test inventory. New integration targets must declare their release
 lane, execution class and suite before the gate accepts them. Ordinary tests
 retain libtest's default parallelism; PocketIC suites remain explicitly
 single-threaded and ordered until a measured narrower concurrency policy is
-proven stable. `make test-wasm` is the fast lane and runs only its classified
-release-surface integrations, never the PocketIC suites.
+proven stable. After every serial suite the runner reports the shared server's
+current resident memory, resident high-water mark and thread count from the
+release-supported Linux process boundary. `make test-wasm` is the fast lane and
+runs only its classified release-surface integrations, never the PocketIC
+suites.
 Cargo continues across independently selected test binaries inside each cost
 tier, and the workspace runner records every failed suite before returning one
 nonzero result. A failed ordinary tier is a hard barrier in the combined local
 runner: it reports all ordinary failures and skips the serial PocketIC tier.
 Plan-only inventory resolution still enumerates both tiers, and the explicit
-PocketIC-only mode remains independently runnable. In CI, the serial PocketIC
-lane runs the exact Fleet deployment-restore proof before the broader mixed
-library harness and skips that proof from the later harness.
-This keeps stateful deployment recovery isolated and locally attributable while
-retaining the full mixed-role coverage. The PocketIC lane clears transient
-heavy Wasm targets once before its integration-suite group and once at
+PocketIC-only mode remains independently runnable. In CI, one ignored governed
+`canic-testing-internal` harness calls every internal PocketIC case in explicit
+order inside one Rust process. Fleet deployment restore and autonomous Root
+removal are the first two cases; the harness reports each result immediately,
+catches failures through the suite boundary and retains the process-local Fleet
+baseline and artifact owners. The restore proof uses that baseline, while the
+destructive Root-removal case uses an exclusive fresh instance because canister
+deletion is outside the snapshot-reset contract. The matching pure internal
+cases run in the ordinary tier before PocketIC. This keeps stateful deployment
+recovery locally attributable while avoiding three cold process-local Fleet
+baselines. The PocketIC lane clears transient heavy Wasm targets once before
+its integration-suite group and once at
 invocation cleanup; it retains Cargo freshness between the ordered suites.
 CI may run the ordinary and PocketIC lanes in separate jobs; it must not
 parallelize the PocketIC suites themselves without replacing this measured
@@ -85,7 +94,8 @@ cleanup as a crash-safety fallback bound to the numeric direct-child port path.
 A failed suite prints bounded tails from both server streams next to its own
 retained log. `ic-testkit` 0.8.9 owns the corrected bounded managed-server
 primitive for one Rust process; Canic keeps a runner-owned server because the
-serial lane crosses several Cargo test processes. Repository fixtures use
+serial lane still crosses the internal harness and several integration-test
+processes. Repository fixtures use
 testkit connect mode with their own 30-second instance-construction deadline.
 Direct PocketIC test commands outside the governed runner must supply
 `CANIC_POCKET_IC_SERVER_URL`; they fail immediately when it is absent rather

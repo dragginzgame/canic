@@ -48,7 +48,7 @@ is the earliest blocker, before immutable Fleet planning, root/Store creation
 or PocketIC activation. It is not evidence that an empty topology activates.
 
 Disposition: Q1 is blocked on the current production topology contract. Under
-the evidence-only 0.106 design, the production correction belongs to 0.109.
+the evidence-only 0.106 design, the production correction belongs to 0.110.
 B1 cannot treat this as its permitted alternate outcome until the blocker and
 later owner are explicitly accepted.
 
@@ -105,7 +105,7 @@ recipient encodes to 67 bytes and exceeds the declared 64-byte bound. Current
 workflow provenance expects both the handed-off asset key and recipient to be
 Canister Principals, but that narrower invariant is not represented by the
 stored field type. B1 therefore records the 64-byte declaration as an existing
-0.109 blocker rather than treating it as a complete structural ceiling.
+0.110 blocker rather than treating it as a complete structural ceiling.
 
 ### Physical Asset State
 
@@ -240,7 +240,7 @@ of these pool allocations.
 This means current same-release upgrade recovery remains truthful because the
 stable maps stay resident, while a canonical external pool snapshot/restore
 contract is incomplete—especially for terminal handoff receipts. B1 records
-that as current ownership evidence and a 0.109 blocker; 0.106 does not add a
+that as current ownership evidence and a 0.110 blocker; 0.106 does not add a
 snapshot payload or migration lane.
 
 ## Current Release-Tree Reachability Classification
@@ -261,7 +261,7 @@ snapshot payload or migration lane.
 | 0.106 working evidence | audit evidence | none |
 | 0.106 design/status and current handoff | documentation | none |
 | 0.105 changelog reconciliation | documentation | none |
-| 0.107-0.111 renumbering and linked historical/current guidance | documentation | none; preserves the settled successor sequence without implementing it |
+| 0.107-0.112 renumbering and linked historical/current guidance | documentation | none; preserves the settled successor sequence without implementing it |
 | 0.108 B1 working evidence and root `Unreleased` note | successor test evidence and documentation | none in shipped runtime; deliberately remains outside the 0.106 patch summary |
 
 One production-owned source file gains only code gated by `#[cfg(test)]`.
@@ -278,15 +278,15 @@ classified 0.108 probe remain unpublished dependency leaves beneath
 ## Q6 Disposition And B1 Acceptance
 
 Q6's repository inventory is complete. It records rather than repairs four
-current constraints for 0.109 acceptance: unbounded failure text, the
+current constraints for 0.110 acceptance: unbounded failure text, the
 structurally narrow 64-byte handoff-receipt bound, unbounded terminal receipt
 count and the absence of a canonical handoff-receipt snapshot payload.
 
 The maintainer accepted repository-local B1 on 2026-08-20. That acceptance:
 
 - freezes Q3/Q4 protocol `canic-0.106-q3q4-v1`;
-- assigns the exact `EmptyRootAdmissions` Q1 blocker to 0.109; and
-- assigns the four Q6 constraints above to 0.109 without treating them as
+- assigns the exact `EmptyRootAdmissions` Q1 blocker to 0.110; and
+- assigns the four Q6 constraints above to 0.110 without treating them as
   corrected by 0.106.
 
 No repository-local B1 work remains. The separate Q2 provenance matrix is

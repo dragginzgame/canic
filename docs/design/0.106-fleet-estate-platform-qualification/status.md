@@ -27,14 +27,14 @@ Date: 2026-08-20
   deployment-readiness inventory, and 0.108 consumes the accepted B1 root-
   ownership/current-cost boundary; neither is gated on B2. Accepted B2
   evidence is mandatory for
-  mutating 0.109 Fleet-estate work.
+  mutating 0.110 Fleet-estate work.
 
 ## Release-Batch Tracker
 
 | Batch | Outcome | Owner | Included evidence | Validation | Status |
 | --- | --- | --- | --- | --- | --- |
 | B1 | Reproducible repository/local qualification boundary | host planning, test harness and current pool inventory | immutable baseline, Q2 provenance, accepted Q3/Q4 protocol, Q1/Q6 and local proofs, production-reachability inventory, proposed external envelope | focused host, control-plane and PocketIC checks; no external effects | Accepted 2026-08-20 |
-| B2 | Dated platform qualification and accepted 0.109 handoff | qualification harness and audit report | protocol-bound disposable measurements, separately approved minimal mainnet confirmation, qualified cost/balance recommendations and complete reconciliation | run-specific checks plus maintainer evidence review | Execution held: blocked on explicit external authorization |
+| B2 | Dated platform qualification and accepted 0.110 handoff | qualification harness and audit report | protocol-bound disposable measurements, separately approved minimal mainnet confirmation, qualified cost/balance recommendations and complete reconciliation | run-specific checks plus maintainer evidence review | Execution held: blocked on explicit external authorization |
 
 The two-batch exception is intentional: 0.106 is an evidence-only predecessor
 with one external-effect authorization boundary, not a maintained runtime
@@ -51,7 +51,7 @@ B1 must deliver together:
    conditions, reset fixtures, latency/censoring rules and the Q4 horizon,
    safety-margin and recovery-reserve model;
 5. strict empty-topology host plan and PocketIC activation proof, or an exact
-   accepted blocker assigned to 0.109;
+   accepted blocker assigned to 0.110;
 6. bounded non-production lane, replay and controller-observation harnesses;
 7. local positive, first-excess, interruption and contradictory-evidence
    cases;
@@ -90,10 +90,12 @@ and cannot be marked complete.
 4. 0.106 qualifies the platform and current pool boundary;
 5. 0.107 closes fresh-Fleet preflight and runtime-admission gaps;
 6. 0.108 closes replay-safe Coordinator-backed root operating funding; and
-7. 0.109 implements reusable Fleet Subnet Canister estates and proves the
+7. 0.109 establishes Coordinator-owned Fleet-wide ingress admission with
+   complete local enforcement projections; then
+8. 0.110 implements reusable Fleet Subnet Canister estates and proves the
    10/100/1,000 progression; then
-8. 0.110 qualifies one exact stateful predecessor/successor transition; then
-9. 0.111 serves the generic Fleet observatory from every installed Canister.
+9. 0.111 qualifies one exact stateful predecessor/successor transition; then
+10. 0.112 serves the generic Fleet observatory from every installed Canister.
 
 All unrelated future concepts are unnumbered under `docs/design/ideas/`.
 Published versions, historical changelogs, retained audit reports and archived
@@ -107,7 +109,7 @@ any external effect. Its operation, asset, concurrency, fee/refund, reserve
 and funded-exposure ceilings are already frozen. Protocol
 `canic-0.106-q3q4-v1`, the exact Q1 `EmptyRootAdmissions` blocker and the four
 Q6 constraints were accepted on 2026-08-20; the blocker and constraints are
-0.109-owned and are not corrected by 0.106. The protocol's exact
+0.110-owned and are not corrected by 0.106. The protocol's exact
 predecessor-built fixture hash and initialized memory observations are now
 frozen, and its 1/8/16/32 creation and empty/installed reset lanes, exact
 uncertainty retry, first excess and controller/routing transitions pass
@@ -115,10 +117,10 @@ locally. The terminal dependency/source guard also passes. Q2 freezes the deploy
 Cycles Ledger v1.0.6 interface/source authority and keeps every empirical cell
 pending B2. Q6 now
 freezes its current encoded shapes, generic receipt/cost ceilings and snapshot
-owners, including four explicit 0.109 constraints. The current empty-topology
+owners, including four explicit 0.110 constraints. The current empty-topology
 path fails at exact `EmptyRootAdmissions`. No repository-local B1 work remains.
 Because 0.107 consumes accepted B1 and is not gated on B2, its baseline and
 contract batch is the next in-repository sequence. The renumbered 0.108 B1
 proof remains ready for maintainer acceptance but does not authorize
 production work before 0.107 closes. Do not run a remote or IC-mainnet
-experiment or begin 0.109 production work.
+experiment or begin 0.110 production work.

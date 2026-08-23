@@ -1,10 +1,12 @@
 use canic_core::ids::BuildNetwork;
 use ic_testkit::artifacts::{
-    ArtifactCacheMaintenance, ArtifactCachePrunePolicy, LabeledWasmBuildSpec,
+    ArtifactCacheMaintenance, ArtifactCacheOutcome, ArtifactCachePreparation,
+    ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetPrunePolicy, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
     WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase, WasmBuildSpec,
-    build_wasm_canisters_cached_batch_with_config_and_progress,
+    build_wasm_canisters_cached_batch_with_config_and_progress, prepare_artifact_cache,
+    resolve_cargo_build_inputs,
 };
 use std::{
     fs,
@@ -40,41 +42,30 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
             .join(".canic/release-builds")
             .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
             .join("artifacts/fleet_coordinator/fleet_coordinator.wasm");
-        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        let output = Command::new(cargo)
-            .current_dir(workspace_root)
-            .env("CARGO_INCREMENTAL", "0")
-            .env("CARGO_TARGET_DIR", target_dir)
-            .env("ICP_ENVIRONMENT", "local")
-            .env(
-                INTERNAL_TEST_RELEASE_BUILD_ID.0,
-                INTERNAL_TEST_RELEASE_BUILD_ID.1,
-            )
-            .args([
-                "run",
-                "-q",
-                "--profile",
-                "fast",
-                "-p",
-                "canic-host",
-                "--example",
-                "build_artifact",
-                "--locked",
-                "--",
-                "fleet_coordinator",
-                "fast",
-                workspace_root.to_str().expect("workspace root UTF-8"),
-                workspace_root.to_str().expect("ICP root UTF-8"),
-                config_path.to_str().expect("config path UTF-8"),
-                "--release-build-id",
-                INTERNAL_TEST_RELEASE_BUILD_ID.1,
-            ])
-            .output()
-            .expect("run canonical Fleet Coordinator artifact builder");
-        assert!(
-            output.status.success(),
-            "canonical Fleet Coordinator artifact build failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+        let cache = canonical_fleet_coordinator_cache_spec(
+            workspace_root,
+            &target_dir,
+            &config_path,
+            &artifact_path,
+        );
+        let outcome = match prepare_artifact_cache(&cache)
+            .expect("prepare canonical Fleet Coordinator artifact cache")
+        {
+            ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
+            ArtifactCachePreparation::Build(transaction) => {
+                run_canonical_fleet_coordinator_build(workspace_root, &target_dir, &config_path);
+                transaction
+                    .import_output("fleet_coordinator", &artifact_path)
+                    .expect("import canonical Fleet Coordinator artifact");
+                transaction
+                    .commit()
+                    .expect("commit canonical Fleet Coordinator artifact cache")
+            }
+        };
+        eprintln!("[canic-test-wasm:fleet_coordinator] canonical artifact {outcome}");
+        report_artifact_cache_maintenance(
+            "canonical-fleet-coordinator",
+            outcome.record().maintenance(),
         );
         fs::read(&artifact_path).unwrap_or_else(|error| {
             panic!(
@@ -84,6 +75,103 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
         })
     })
     .clone()
+}
+
+fn canonical_fleet_coordinator_cache_spec(
+    workspace_root: &Path,
+    target_dir: &Path,
+    config_path: &Path,
+    artifact_path: &Path,
+) -> ArtifactCacheSpec {
+    let environment = [
+        ("CARGO_INCREMENTAL", "0"),
+        ("ICP_ENVIRONMENT", "local"),
+        INTERNAL_TEST_RELEASE_BUILD_ID,
+    ];
+    let cargo_build = WasmBuildSpec::new(
+        workspace_root,
+        target_dir,
+        &["canic-fleet-coordinator", "canic-host"],
+        CanicWasmBuildProfile::Fast.target_dir_name(),
+    )
+    .with_cargo_profile_args(["--profile", "fast", "--locked"])
+    .with_extra_env(environment);
+    let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
+        .expect("resolve canonical Fleet Coordinator Cargo inputs");
+    let config_relative = config_path
+        .strip_prefix(workspace_root)
+        .expect("Coordinator config must be workspace-confined")
+        .to_str()
+        .expect("Coordinator config path UTF-8");
+
+    ArtifactCacheSpec::new(
+        &workspace_root.join("target/test-artifacts/external-artifact-cache"),
+        "canonical-fleet-coordinator",
+        "canic/canonical-fleet-coordinator/v1",
+    )
+    .with_coordination_scope("canic-external-artifact-builds")
+    .with_arguments([
+        "cargo run -p canic-host --example build_artifact",
+        "fleet_coordinator",
+        "fast",
+        config_relative,
+    ])
+    .with_environment(environment)
+    .with_input("build-config", config_path)
+    .with_input("icp-config", &workspace_root.join("icp.yaml"))
+    .with_input(
+        "canonical-candid",
+        &workspace_root.join("crates/canic-fleet-coordinator/fleet_coordinator.did"),
+    )
+    .with_cargo_build_inputs("coordinator-cargo", &cargo_build, &cargo_inputs)
+    .with_output("fleet_coordinator", artifact_path)
+    .with_prune_policy_at_most_every(
+        internal_test_artifact_prune_policy(),
+        internal_test_artifact_maintenance_interval(),
+    )
+}
+
+fn run_canonical_fleet_coordinator_build(
+    workspace_root: &Path,
+    target_dir: &Path,
+    config_path: &Path,
+) {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let output = Command::new(cargo)
+        .current_dir(workspace_root)
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_TARGET_DIR", target_dir)
+        .env("ICP_ENVIRONMENT", "local")
+        .env(
+            INTERNAL_TEST_RELEASE_BUILD_ID.0,
+            INTERNAL_TEST_RELEASE_BUILD_ID.1,
+        )
+        .args([
+            "run",
+            "-q",
+            "--profile",
+            "fast",
+            "-p",
+            "canic-host",
+            "--example",
+            "build_artifact",
+            "--locked",
+            "--",
+            "fleet_coordinator",
+            "fast",
+            workspace_root.to_str().expect("workspace root UTF-8"),
+            workspace_root.to_str().expect("ICP root UTF-8"),
+            config_path.to_str().expect("config path UTF-8"),
+            "--release-build-id",
+            INTERNAL_TEST_RELEASE_BUILD_ID.1,
+        ])
+        .output()
+        .expect("run canonical Fleet Coordinator artifact builder");
+    assert!(
+        output.status.success(),
+        "canonical Fleet Coordinator artifact build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 ///
@@ -401,6 +489,9 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
+pub(super) use tests::governed_fast_cases;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -456,5 +547,22 @@ mod tests {
             maintenance.failure_mode(),
             SharedIncrementalTargetMaintenanceFailureMode::BestEffort
         );
+    }
+
+    pub fn governed_fast_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![
+            (
+                "artifact canonical build config input",
+                canonical_build_config_is_an_explicit_artifact_input,
+            ),
+            (
+                "artifact shared target network",
+                shared_wasm_target_uses_effective_network,
+            ),
+            (
+                "artifact shared target retention",
+                shared_wasm_target_retention_is_bounded,
+            ),
+        ]
     }
 }

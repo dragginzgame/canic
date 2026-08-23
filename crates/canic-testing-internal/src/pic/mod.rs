@@ -9,6 +9,8 @@ use canic_core::{
 };
 #[cfg(test)]
 use std::sync::{Mutex, MutexGuard, PoisonError};
+#[cfg(test)]
+use std::{collections::BTreeSet, panic::AssertUnwindSafe, time::Instant};
 
 mod artifacts;
 mod audit;
@@ -20,6 +22,9 @@ mod fleet_registry;
 mod lifecycle;
 mod root;
 mod startup;
+
+#[cfg(test)]
+type GovernedTestCase = (&'static str, fn());
 
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 pub use audit::{
@@ -94,4 +99,73 @@ fn acquire_pic_unit_test_serial_guard() -> MutexGuard<'static, ()> {
     PIC_UNIT_TEST_SERIAL
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
+}
+
+#[cfg(test)]
+fn run_governed_test_cases(cases: Vec<GovernedTestCase>) {
+    let mut failures = Vec::new();
+    for (name, test) in cases {
+        let started_at = Instant::now();
+        eprintln!("[canic-testing-internal] START {name}");
+        if std::panic::catch_unwind(AssertUnwindSafe(test)).is_err() {
+            eprintln!(
+                "[canic-testing-internal] FAIL {name} elapsed={:.3}s",
+                started_at.elapsed().as_secs_f64()
+            );
+            failures.push(name);
+        } else {
+            eprintln!(
+                "[canic-testing-internal] PASS {name} elapsed={:.3}s",
+                started_at.elapsed().as_secs_f64()
+            );
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "governed internal test failures: {}",
+        failures.join(", ")
+    );
+}
+
+// -----------------------------------------------------------------------------
+// Governed runner entry points
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod governed_suite {
+    use super::*;
+
+    #[test]
+    #[ignore = "the workspace runner executes this fast tier explicitly"]
+    fn governed_fast_internal_suite() {
+        assert_governed_pocketic_order();
+        let mut cases = artifacts::governed_fast_cases();
+        cases.extend(lifecycle::governed_fast_cases());
+        cases.extend(root::governed_fast_cases());
+        assert_eq!(cases.len(), 5);
+        run_governed_test_cases(cases);
+    }
+
+    #[test]
+    #[ignore = "the workspace runner supplies one shared PocketIC server and serial process"]
+    fn governed_serial_pocketic_suite() {
+        assert_governed_pocketic_order();
+        let mut cases = fleet_registry::governed_pocketic_cases();
+        cases.extend(fleet_coordinator::governed_pocketic_cases());
+        run_governed_test_cases(cases);
+    }
+
+    fn assert_governed_pocketic_order() {
+        let mut cases = fleet_registry::governed_pocketic_cases();
+        cases.extend(fleet_coordinator::governed_pocketic_cases());
+        let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        assert_eq!(names.len(), 22);
+        assert_eq!(names[0], "Fleet deployment restore");
+        assert_eq!(names[1], "autonomous Root removal");
+        assert_eq!(
+            names.iter().copied().collect::<BTreeSet<_>>().len(),
+            names.len()
+        );
+    }
 }

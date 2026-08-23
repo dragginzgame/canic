@@ -13,6 +13,8 @@ mod topology;
 
 use artifacts::stage_managed_release_set;
 pub use artifacts::{ensure_root_release_artifacts_built, load_root_wasm};
+#[cfg(test)]
+pub(super) use baseline::governed_fast_cases;
 pub use baseline::{
     RootBaselineRecipe, RootBaselineRecipeError, build_root_cached_baseline,
     restore_root_cached_baseline,

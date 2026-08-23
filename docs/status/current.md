@@ -25,11 +25,11 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
   caller-continuation values and routes ordinary host failures through the
   prose catalogue. Active checklist:
   [0.102 compact diagnostic codes](../design/0.102-compact-diagnostic-codes/status.md).
-- Application-safety and estate sequence: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../design/0.108-coordinator-backed-root-funding/status.md), [0.109 reusable estates plus application retirement](../design/0.109-fleet-subnet-canister-estates/status.md), [0.110 stateful Fleet release adoption](../design/0.110-stateful-fleet-release-adoption/status.md) and [0.111 generic Fleet observatory](../design/0.111-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
+- Application-safety and estate sequence: [0.103 role-owned Candid surface](../design/0.103-role-owned-candid-surface/status.md), [0.104 timer ownership plus synchronous lifecycle composition](../design/0.104-ic-timers-consumer-hard-cut/status.md), [0.105 framework-neutral local application authorization](../design/0.105-framework-neutral-local-application-authorization/status.md), [0.106 platform qualification](../design/0.106-fleet-estate-platform-qualification/status.md), [0.107 fresh-Fleet preflight and runtime admission](../design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md), [0.108 Coordinator-backed root funding](../design/0.108-coordinator-backed-root-funding/status.md), [0.109 Fleet-wide ingress admission](../design/0.109-fleet-wide-ingress-admission/status.md), [0.110 reusable estates plus application retirement](../design/0.110-fleet-subnet-canister-estates/status.md), [0.111 stateful Fleet release adoption](../design/0.111-stateful-fleet-release-adoption/status.md) and [0.112 generic Fleet observatory](../design/0.112-fleet-observatory/status.md). External [Prequel Wars](https://github.com/dragginzgame/prequel-wars) replaces the checked-in Skynet App as the flagship demonstration. Other future concepts are [unnumbered ideas](../design/ideas/README.md).
 - Release boundary: every pre-1.0 transition is reinstall-only. Every
   Canic-owned canister in a Fleet must come from one admitted release set
   before activation. Same-release interruption recovery, exact retry, backup
-  and restore remain required. Scheduled 0.110 is the first explicit
+  and restore remain required. Scheduled 0.111 is the first explicit
   one-predecessor-to-one-successor exception; no current release is adoptable
   until that line is implemented and published.
 
@@ -69,6 +69,26 @@ and makes ordinary failures stop the combined runner before PocketIC. Focused
 replay-manifest, live operator-observer, install-order, runner-contract and
 warning-denied changed-package checks pass; fake ICP executables are published
 from closed staged files so parallel tests cannot race their writers.
+The follow-up test-runtime slice keeps every internal PocketIC scenario in one
+ordered process, runs its five pure checks before the PocketIC barrier and
+preserves direct targeting of each original test. The first two governed cases
+remain Fleet deployment restore and autonomous Root removal. The restore proof
+uses the process-local active-Fleet baseline; destructive Root removal uses a
+fresh exclusive instance because a deleted canister is outside that baseline's
+snapshot-reset contract. The canonical Coordinator artifact is
+content-addressed through the persistent external-artifact cache, fresh Fleet
+setup reports each build/topology/install/join/activation/validation phase and
+the runner records PocketIC server RSS/high-water/thread evidence after every
+serial suite. Native authorization reuses the captured Fleet only for cases
+whose mutations remain inside the complete snapshot/reset contract; the two
+HTTP-gateway journeys stay fresh. The cache-populating governed run passed all
+22 cases in 293 seconds; the cross-process reuse run passed in 208 seconds,
+with the Coordinator phase falling from 17.267 to 1.520 seconds and the fresh
+Fleet baseline from 33.601 to 16.138 seconds. Its shared PocketIC server peaked
+at 2,229,804 kB RSS and 97 threads. The six-test native-agent target passed in
+68.51 seconds after compilation and peaked at 2,519,036 kB and 162 threads.
+Serial capacity remains one: these measurements justify the retained process
+and cache changes, but one local observation does not prove parallel stability.
 Versioning and publication remain pending the complete immutable-candidate
 gate, audit verdict and maintainer release workflow.
 
@@ -297,7 +317,7 @@ also pass. The terminal guard keeps both qualification canisters as unpublished
 test-only dependency leaves outside shipped role configuration. Q6 records
 unbounded pool failure text, the 64-byte handoff-receipt bound's 67-byte
 structural counterexample, unbounded terminal-receipt retention and the absent
-canonical receipt-map snapshot payload as accepted 0.109-owned constraints;
+canonical receipt-map snapshot payload as accepted 0.110-owned constraints;
 0.106 does not repair them. B2 execution is held pending separate exact
 authorization for every external effect. The release-tree closeout restores
 the exact `v0.105.0` versions of every pre-existing locked package and
@@ -464,12 +484,20 @@ adds explicit same-release funding-policy generation rotation with one durable
 Coordinator fence, bounded retained checkpoints and unchanged application
 state; it also remains confined to the open 0.108.1 draft.
 
-Scheduled 0.109 owns indexed estates, parallel creation/reset, transfer and
+Scheduled 0.109 hard-cuts the independent per-canister whitelist into one
+Coordinator-owned Fleet admission policy with complete local enforcement
+projections. Fleet, Component-spec, Component-instance, Fleet Subnet Root and
+explicit standalone-consumer scopes narrow authority; physical Subnet
+membership never grants it. The framework-neutral standalone-consumer
+contract lets Toko's IcyDB App enforce the same policy without making it a
+Canic-managed Component or assuming authorization inheritance.
+
+Scheduled 0.110 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
 bounded application retirement acknowledgement before ordinary uninstall;
 forced removal is separately authorized and permanently marked unqualified.
-Scheduled 0.110 then owns one stop-the-world exact predecessor/successor
-adoption before stateful production claims. Scheduled 0.111 publishes generic
+Scheduled 0.111 then owns one stop-the-world exact predecessor/successor
+adoption before stateful production claims. Scheduled 0.112 publishes generic
 supported observatory views/rendering for downstream Prequel Wars without a
 game dependency. Estate-budget replenishment, a product-frontend delivery
 handoff, transport, Workers, authentication profiles, blob/archive storage and
@@ -531,10 +559,10 @@ protected policy and the urgent fresh-Fleet corrections form the published
 0.108.0 checkpoint. B3/M2 through B9/M8 are implementation-complete in the
 open 0.108.1 draft; post-validation candidate corrections and the CANIC-019
 amendment have focused passing evidence, while the final maintainer gate and
-human 0.108 closeout audit remain next. 0.109
-requires completed 0.108 plus application-retirement evidence; 0.110 requires
-accepted 0.109 and an exact
-released predecessor; and 0.111 requires accepted 0.110 closeout. Deferred
+human 0.108 closeout audit remain next. 0.109 requires completed 0.108 and
+explicit B1 promotion; 0.110 requires completed 0.109 plus the accepted,
+current 0.106 qualification; 0.111 requires completed 0.110 and an exact
+released predecessor; and 0.112 requires accepted 0.111 closeout. Deferred
 ideas authorize none of these mutations.
 
 ## Validation
@@ -967,7 +995,7 @@ dispose of this canister without an explicit plan for that balance.
 Published `v0.105.0` closes the framework-neutral authorization line. The
 maintainer accepted repository-local 0.106 B1 on 2026-08-20: protocol
 `canic-0.106-q3q4-v1` is frozen, and the exact empty-topology blocker plus four
-Q6 current-state constraints are assigned to 0.109. The operation,
+Q6 current-state constraints are assigned to 0.110. The operation,
 physical-asset, concurrency, fee/refund, reserve and funded-exposure ceilings
 plus bounded creation/reset/controller harness and terminal source/dependency
 guard pass. Keep B2 held until a separate exact network, identity and

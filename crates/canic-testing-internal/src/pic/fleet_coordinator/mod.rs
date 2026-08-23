@@ -5,6 +5,9 @@
 //! Boundary: builds one Coordinator and calls its controller and registered-root endpoint surfaces.
 
 #[cfg(test)]
+pub(super) use tests::governed_pocketic_cases;
+
+#[cfg(test)]
 mod tests {
     use crate::pic::artifacts::build_canonical_fleet_coordinator_wasm;
     use crate::pic::startup::start_pocket_ic;
@@ -732,5 +735,18 @@ placement.minimum_distinct_roots = 2
 
     fn principal(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])
+    }
+
+    pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![
+            (
+                "Coordinator joining-root replay",
+                coordinator_commits_joining_roots_and_replays_original_receipts,
+            ),
+            (
+                "Coordinator durable compiled configuration",
+                standalone_coordinator_prepares_from_its_durable_compiled_configuration,
+            ),
+        ]
     }
 }
