@@ -2694,6 +2694,164 @@ fn coordinator_advances_each_accepted_root_and_freezes_terminal_receipts() {
     );
 }
 
+#[test]
+fn coordinator_accepts_a_root_that_finishes_before_its_first_observation() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    accept_every_planned_root(&config, plan_hash);
+    let status = component_provisioning_status(&config, plan_hash);
+    let request = root_provision_advance_request(&status);
+    let call = expect_root_provision_call(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            advance_component_provisioning_root_for_test(&config, &request, 120)
+            .expect("persist first root provisioning observation intent"),
+        false,
+    );
+    let durable_intent = FleetCoordinatorRegistryStore::export();
+    let response = terminal_root_provision_response(&config, &call, 119);
+
+    let mut corrupt = response.clone();
+    corrupt.receipt_content_hash[0] ^= 1;
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(&config, &request, corrupt, 121)
+        .expect_err("terminal observation still requires its exact receipt hash");
+    assert_eq!(
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_FAILED.raw_code()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let mut post_provisioning = response.clone();
+    post_provisioning.published_component_count = 1;
+    let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(
+            &config,
+            &request,
+            post_provisioning,
+            121,
+        )
+        .expect_err("Provisioned observation cannot carry publication progress");
+    assert_eq!(
+        conflict.public_error().code(),
+        canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+    );
+    assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+
+    let next = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_for_test(
+            &config,
+            &request,
+            response.clone(),
+            121,
+        )
+        .expect("accept valid terminal root observation");
+    assert_eq!(
+        next.phase,
+        FleetComponentProvisioningPhase::ProvisioningRoots
+    );
+    assert_eq!(next.provisioned_root_count, 1);
+    assert_eq!(next.provisioning_in_flight_root, None);
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    let mut corrupt = durable.clone();
+    let record = corrupt
+        .current
+        .as_mut()
+        .and_then(|current| current.component_provisioning.as_mut())
+        .expect("Component provisioning record");
+    let FleetComponentProvisioningStateRecord::ProvisioningRoots { provisions, .. } =
+        &mut record.state
+    else {
+        panic!("one terminal Root must retain one provision receipt")
+    };
+    provisions[0].response.published_component_count = 1;
+    FleetCoordinatorRegistryStore::import(corrupt);
+    let invalid =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            FleetComponentProvisioningStatusRequest {
+                operation_id: [101; 32],
+                plan_hash,
+            },
+        )
+        .expect_err("durable Provisioned receipt cannot carry publication progress");
+    assert_eq!(
+        invalid.code(),
+        canic_core::diagnostics::codes::STATE_INVALID
+    );
+
+    FleetCoordinatorRegistryStore::import(durable);
+    assert_eq!(component_provisioning_status(&config, plan_hash), next);
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_provisioning_root_for_test(&config, &request, response, 999)
+            .expect("replay terminal observation after Coordinator commit"),
+        next
+    );
+}
+
+#[test]
+fn coordinator_normalizes_a_root_that_advances_before_acceptance_observation() {
+    for terminal in [false, true] {
+        let (config, plan_hash) = prepare_two_root_acceptance_plan();
+        let request = root_acceptance_advance_request(plan_hash, 0);
+        let call = expect_root_acceptance_call(
+            crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                advance_component_provisioning_root_acceptance_for_test(&config, &request, 103)
+                .expect("persist first root acceptance intent"),
+            false,
+        );
+        let response = if terminal {
+            terminal_root_acceptance_observation(&config, &call.request, 104, 104)
+        } else {
+            let mut progressed = accepted_root_response(&call.request, 104);
+            progressed.reserved_component_count = 1;
+            progressed
+        };
+        if !terminal {
+            let durable_intent = FleetCoordinatorRegistryStore::export();
+            let mut invalid = response.clone();
+            invalid.published_component_count = 1;
+            let conflict = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+                record_component_provisioning_root_acceptance_for_test(
+                    &config, &request, invalid, 105,
+                )
+                .expect_err("pre-provisioning observation cannot carry publication progress");
+            assert_eq!(
+                conflict.public_error().code(),
+                canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+            );
+            assert_eq!(FleetCoordinatorRegistryStore::export(), durable_intent);
+        }
+        let status = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+            record_component_provisioning_root_acceptance_for_test(
+                &config,
+                &request,
+                response.clone(),
+                105,
+            )
+            .expect("normalize progressed root acceptance observation");
+        assert_root_acceptance_status(&status, FleetComponentProvisioningPhase::AcceptingRoots, 1);
+
+        let durable = FleetCoordinatorRegistryStore::export();
+        let record = durable
+            .current
+            .as_ref()
+            .and_then(|current| current.component_provisioning.as_ref())
+            .expect("Component provisioning record");
+        let FleetComponentProvisioningStateRecord::AcceptingRoots { acceptances, .. } =
+            &record.state
+        else {
+            panic!("first root acceptance must remain in progress")
+        };
+        assert_eq!(acceptances.len(), 1);
+        assert_eq!(
+            acceptances[0].response,
+            accepted_root_response(&call.request, 104)
+        );
+        assert_first_root_acceptance_replays(&config, &request, response, &status);
+    }
+}
+
 fn assert_terminal_root_provisioning_status(
     status: &FleetComponentProvisioningStatusResponse,
     now: u64,
@@ -3029,6 +3187,58 @@ fn accepted_root_response(
         runtimes_activated_at_ns: None,
         receipt_content_hash,
     }
+}
+
+fn terminal_root_acceptance_observation(
+    config: &ConfigModel,
+    request: &RootComponentProvisioningAcceptanceRequest,
+    accepted_at_ns: u64,
+    provisioned_at_ns: u64,
+) -> RootComponentProvisioningStatusResponse {
+    let durable = FleetCoordinatorRegistryStore::export();
+    let record = durable
+        .current
+        .as_ref()
+        .and_then(|current| current.component_provisioning.as_ref())
+        .expect("Component provisioning record");
+    provisioned_root_response(
+        config,
+        record,
+        &request.batch,
+        accepted_at_ns,
+        provisioned_at_ns,
+    )
+}
+
+fn terminal_root_provision_response(
+    config: &ConfigModel,
+    call: &FleetComponentProvisioningRootProvisionCallView,
+    provisioned_at_ns: u64,
+) -> RootComponentProvisioningStatusResponse {
+    let durable = FleetCoordinatorRegistryStore::export();
+    let current = durable.current.as_ref().expect("Coordinator state");
+    let record = current
+        .component_provisioning
+        .as_ref()
+        .filter(|record| record.operation_id == call.request.operation_id)
+        .or_else(|| {
+            current
+                .component_scale_out
+                .as_ref()
+                .filter(|record| record.operation_id == call.request.operation_id)
+        })
+        .expect("provisioning record");
+    let root_index = record
+        .plan
+        .batches
+        .iter()
+        .position(|batch| batch.root.fleet_subnet_root == call.fleet_subnet_root)
+        .expect("planned root index");
+    let batch = &record.plan.batches[root_index];
+    let accepted_at_ns = provisioning_acceptances(&record.state)[root_index]
+        .response
+        .accepted_at_ns;
+    provisioned_root_response(config, record, batch, accepted_at_ns, provisioned_at_ns)
 }
 
 fn next_root_provision_response(

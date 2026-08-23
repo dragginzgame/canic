@@ -25,10 +25,13 @@ use canic_host::{
     },
     fleet_install_plan::{
         FreshFleetDecisionAuthorityRequest, FreshFleetDeploymentPlanRequest,
-        FreshFleetDeploymentPlanV1, FreshFleetPreflightEffectsV1, FreshFleetPreflightRequest,
+        FreshFleetDeploymentPlanV1, FreshFleetOperatorFundingEvidenceV1,
+        FreshFleetPreflightEffectsV1, FreshFleetPreflightRequest, PlannedCanisterCreationFunding,
         compile_fresh_fleet_deployment_plan, compile_fresh_fleet_preflight,
-        load_fresh_fleet_decision_authority,
+        fresh_fleet_maximum_operator_debit, load_fresh_fleet_decision_authority,
+        observe_fresh_fleet_operator_funding,
     },
+    icp::IcpCli,
     network::resolve_canonical_network_id_from_root,
     release_build::load_finalized_release_build,
     release_set::AppConfigSnapshot,
@@ -58,7 +61,7 @@ pub(super) use render::{render_json, render_text};
 use report::{DeploymentPlanReport, REPORT_SCHEMA_VERSION};
 use report::{
     PlanDiagnosticSource, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
-    SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT,
+    SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT, SOURCE_LOCAL_OBSERVATION,
 };
 
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
@@ -87,6 +90,24 @@ pub(super) fn build_report(
     options: &DeployPlanOptions,
     roots: &DeployPlanRoots,
 ) -> DeploymentPlanReport {
+    let icp = IcpCli::new(&options.icp, Some(options.environment.clone()))
+        .with_cwd(roots.icp_root.clone());
+    build_report_with_operator_observer(options, roots, &|expected_principal, maximum_debit| {
+        observe_fresh_fleet_operator_funding(&icp, expected_principal, maximum_debit)
+    })
+}
+
+pub(super) fn build_report_with_operator_observer<E>(
+    options: &DeployPlanOptions,
+    roots: &DeployPlanRoots,
+    observe_operator: &impl Fn(
+        &str,
+        &PlannedCanisterCreationFunding,
+    ) -> Result<FreshFleetOperatorFundingEvidenceV1, E>,
+) -> DeploymentPlanReport
+where
+    E: std::fmt::Display,
+{
     let config_path = plan_config_path(&roots.workspace_root, options);
     let fleet_input_path = plan_fleet_input_path(&roots.icp_root, options);
     let mut blockers = target_resolution_blockers(options, &config_path, &roots.icp_root);
@@ -94,7 +115,13 @@ pub(super) fn build_report(
     let mut catalog_acquisition = None;
     let mut catalog_failure = None;
     let fresh_fleet_plan = if target_resolved {
-        match build_fresh_fleet_plan(options, roots, &config_path, &fleet_input_path) {
+        match build_fresh_fleet_plan(
+            options,
+            roots,
+            &config_path,
+            &fleet_input_path,
+            observe_operator,
+        ) {
             Ok(build) => {
                 catalog_acquisition = Some(build.catalog_acquisition);
                 Some(build.plan)
@@ -178,12 +205,19 @@ pub(super) fn build_report(
     }
 }
 
-fn build_fresh_fleet_plan(
+fn build_fresh_fleet_plan<E>(
     options: &DeployPlanOptions,
     roots: &DeployPlanRoots,
     config_path: &Path,
     fleet_input_path: &Path,
-) -> Result<FreshFleetPlanBuild, FreshFleetPreflightBuildError> {
+    observe_operator: &impl Fn(
+        &str,
+        &PlannedCanisterCreationFunding,
+    ) -> Result<FreshFleetOperatorFundingEvidenceV1, E>,
+) -> Result<FreshFleetPlanBuild, FreshFleetPreflightBuildError>
+where
+    E: std::fmt::Display,
+{
     let config = AppConfigSnapshot::load(config_path)
         .map_err(|error| preflight_build_error(SOURCE_APP_CONFIG, error))?;
     let input = if options.refresh_catalog {
@@ -221,6 +255,10 @@ fn build_fresh_fleet_plan(
     let canonical_network_id =
         resolve_canonical_network_id_from_root(&roots.icp_root, &options.environment)
             .map_err(|error| preflight_build_error(SOURCE_DEPLOYMENT_CONFIG, error))?;
+    let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
+        .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+    let operator = observe_operator(&input.operator_principal, &maximum_operator_debit)
+        .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?;
     let authority = load_fresh_fleet_decision_authority(FreshFleetDecisionAuthorityRequest {
         workspace_root: &roots.workspace_root,
         icp_root: &roots.icp_root,
@@ -229,6 +267,7 @@ fn build_fresh_fleet_plan(
         canonical_network_id,
         release_build_id,
         fleet_input: &input,
+        operator: &operator,
     })
     .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
     let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {

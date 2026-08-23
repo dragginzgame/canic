@@ -1,17 +1,7 @@
 # One-Subnet IC mainnet input for the reusable Playground App.
 schema_version = 1
 funding_profile = "single_subnet"
-
-[operator]
-principal = "ryjl3-tyaaa-aaaaa-aaaba-cai"
-funding_account = "playground-cycles-authority"
-source = "maintainer_fixture"
-observed_at_unix_secs = 1782432100
-valid_until_unix_secs = 4102444800
-
-[operator.balance]
-kind = "cycles"
-cycles = "5000T"
+operator = "ryjl3-tyaaa-aaaaa-aaaba-cai"
 
 [coordinator.subnet]
 kind = "explicit"

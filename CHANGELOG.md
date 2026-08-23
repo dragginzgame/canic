@@ -25,7 +25,19 @@ Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
   measured 32 MiB stable bound; real PocketIC journeys prove single- and
   multi-Root Coordinator accounting, non-renewing caps, successor-generation
   recovery, uncertain-call suppression, real Ledger/CMC replay, reserve-denial
-  ICP fallback and no-spend policy denials.
+  ICP fallback and no-spend policy denials. It also reduces Fleet-input
+  operator funding authority to one Principal and derives the matching ledger
+  account plus live cycles balance through ICP CLI, excluding volatile observations
+  from the canonical plan digest and rechecking them before install effects.
+  Fresh-Fleet reconciliation now also accepts an exact terminal Root receipt
+  without requiring the Coordinator to witness intermediate counters,
+  normalizes a Root that advances before its post-acceptance observation and
+  logs bounded scheduled-retry diagnostics. Fleet creation is now cycle-only,
+  its maximum operator debit includes every per-create Cycles Ledger fee, and
+  `scaffold fleet-input` resolves selected Subnet IDs through validated
+  Registry evidence, retains an offline explicit-count fallback, explains
+  node-scaled formulas and emits exact funding TOML without weakening live
+  deployment admission.
 - `0.108.0` establishes accepted replay/refund semantics, protected
   Coordinator/root funding policy and distinct fresh-install provisioning
   authority without yet enabling runtime grants.

@@ -10,8 +10,8 @@ use crate::{
             flag_arg, parse_matches, path_option, render_usage, required_path, required_string,
             string_option_or_else, typed_option,
         },
-        defaults::local_environment,
-        globals::internal_environment_arg,
+        defaults::{default_icp, local_environment},
+        globals::{internal_environment_arg, internal_icp_arg},
     },
     deploy::{DeployCommandError, value_arg},
 };
@@ -40,9 +40,10 @@ Examples:
   canic deploy plan demo-local --app demo --fleet-input deployments/demo-local.toml
   canic --environment ic deploy plan demo --app demo --fleet-input deployments/demo-ic.toml --refresh-catalog
 
-Read-only deployment planning. By default, existing validated catalog evidence
-is used without contacting the IC. --refresh-catalog may issue read-only public
-NNS Registry queries and update Canic's private .canic/ic-query cache when it is
+Read-only deployment planning. Every plan verifies the active ICP identity and
+queries its relevant ledger account and balance. By default, existing validated
+catalog evidence is used; --refresh-catalog may also issue read-only public NNS
+Registry queries and update Canic's private .canic/ic-query cache when it is
 missing or invalid. No mode builds, changes deployment state, or performs an IC
 update call. Put the top-level --environment before deploy to select the exact
 ICP target.";
@@ -53,6 +54,7 @@ pub(in crate::deploy) struct DeployPlanOptions {
     pub(in crate::deploy) app: String,
     pub(in crate::deploy) environment: String,
     pub(in crate::deploy) fleet_input: PathBuf,
+    pub(in crate::deploy) icp: String,
     pub(in crate::deploy) json: bool,
     pub(in crate::deploy) out: Option<PathBuf>,
     pub(in crate::deploy) profile: Option<CanisterBuildProfile>,
@@ -82,6 +84,7 @@ impl DeployPlanOptions {
             app,
             environment: string_option_or_else(&matches, "environment", local_environment),
             fleet_input: required_path(&matches, FLEET_INPUT_ARG),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             json: matches.get_flag(JSON_ARG),
             out: path_option(&matches, OUT_ARG),
             profile: typed_option(&matches, PROFILE_ARG),
@@ -116,6 +119,7 @@ pub(in crate::deploy) fn command() -> ClapCommand {
         .arg(refresh_catalog_arg())
         .arg(release_build_arg())
         .arg(internal_environment_arg())
+        .arg(internal_icp_arg())
         .after_help(DEPLOY_PLAN_HELP_AFTER)
 }
 

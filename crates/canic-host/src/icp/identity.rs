@@ -13,10 +13,48 @@ impl IcpCli {
         run_output(&mut command)
     }
 
+    /// Return the selected identity's exact default account in the requested ledger format.
+    pub fn identity_account_id_text(
+        &self,
+        format: IcpIdentityAccountFormat,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.identity_account_id_command(format);
+        run_output(&mut command)
+    }
+
     fn identity_principal_command(&self) -> std::process::Command {
         let mut command = self.command();
         command.args(["identity", "principal"]);
         command
+    }
+
+    fn identity_account_id_command(
+        &self,
+        format: IcpIdentityAccountFormat,
+    ) -> std::process::Command {
+        let mut command = self.command();
+        command.args(["identity", "account-id", "--format", format.label()]);
+        command
+    }
+}
+
+///
+/// IcpIdentityAccountFormat
+///
+/// Ledger account representation selected for one ICP CLI identity observation.
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IcpIdentityAccountFormat {
+    IcpLedger,
+    Icrc1,
+}
+
+impl IcpIdentityAccountFormat {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::IcpLedger => "ledger",
+            Self::Icrc1 => "icrc1",
+        }
     }
 }
 
@@ -32,6 +70,20 @@ mod tests {
         assert_eq!(
             command_display(&icp.identity_principal_command()),
             "icp --project-root-override /workspace/app identity principal"
+        );
+    }
+
+    #[test]
+    fn account_resolution_selects_the_exact_ledger_representation() {
+        let icp = IcpCli::new("icp", Some("ic".to_string())).with_cwd("/workspace/app");
+
+        assert_eq!(
+            command_display(&icp.identity_account_id_command(IcpIdentityAccountFormat::Icrc1)),
+            "icp --project-root-override /workspace/app identity account-id --format icrc1"
+        );
+        assert_eq!(
+            command_display(&icp.identity_account_id_command(IcpIdentityAccountFormat::IcpLedger)),
+            "icp --project-root-override /workspace/app identity account-id --format ledger"
         );
     }
 }

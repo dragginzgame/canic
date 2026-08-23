@@ -30,6 +30,7 @@ use crate::{
 use candid::{CandidType, Principal};
 use canic_core::{
     api::timer::TimerApi,
+    cdk::utils::hash::hex_bytes,
     control_plane_support::{
         error::InternalError,
         ops::ic::{IcOps, call::CallOps},
@@ -65,6 +66,8 @@ use canic_core::{
         role::{OperationReceipt, OperationStatusRequest, RootRemovalRequest},
         state::SetStateResponse,
     },
+    log,
+    log::Topic,
     protocol,
 };
 use serde::Deserialize;
@@ -708,7 +711,16 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
     match FleetCoordinatorWorkflow::advance_component_provisioning(&request).await {
         Ok(status) if status.phase == FleetComponentProvisioningPhase::RuntimesActivated => {}
         Ok(_) => schedule_component_provisioning(operation_id, plan_hash, Duration::ZERO),
-        Err(_) => schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1)),
+        Err(error) => {
+            log!(
+                Topic::Fleet,
+                Warn,
+                "Fleet Component provisioning retry: operation_id={} phase={:?} error={error}",
+                hex_bytes(operation_id),
+                status.phase,
+            );
+            schedule_component_provisioning(operation_id, plan_hash, Duration::from_secs(1));
+        }
     }
 }
 

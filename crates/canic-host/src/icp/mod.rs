@@ -1,3 +1,4 @@
+mod balance;
 mod canister;
 mod command;
 mod diagnostic;
@@ -10,12 +11,14 @@ mod run;
 mod snapshot;
 mod version;
 
+pub use balance::IcpBalanceError;
 pub use command::{
     CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV, add_target_args, command_display,
     existing_local_canister_candid_path, local_canister_candid_path,
 };
 pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
+pub use identity::IcpIdentityAccountFormat;
 pub use model::{
     IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli, IcpRawOutput, IcpSnapshot,
     LocalReplicaTarget,

@@ -10,15 +10,14 @@ pub mod icp_refill {
 pub mod fleet_funding_policy {
     pub use crate::model::fleet_funding_policy::{
         FleetFundingPolicyRotationValidationError, FleetFundingPolicyValidationError,
-        validate_coordinator_root_funding_policy, validate_fleet_funding_policy_rotation_plan,
-        validate_fleet_root_funding_admission, validate_fleet_root_funding_capacity,
-        validate_fleet_subnet_root_funding_authority,
+        validate_coordinator_root_funding_policy, validate_fleet_root_funding_admission,
+        validate_fleet_root_funding_capacity, validate_fleet_subnet_root_funding_authority,
     };
     pub use crate::ops::fleet_funding_policy::{
         coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
         fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
         fleet_funding_policy_rotation_successor_policy_set_hash, fleet_root_funding_operation_id,
-        fleet_subnet_root_funding_policy_hash,
+        fleet_subnet_root_funding_policy_hash, validate_fleet_funding_policy_rotation_plan,
     };
 }
 

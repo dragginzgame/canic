@@ -54,6 +54,102 @@ fn parses_canister_scaffold_dry_run_option() {
     assert!(options.dry_run);
 }
 
+// Ensure Fleet-input scaffold options accept exact node-count evidence per role.
+#[test]
+fn parses_fleet_input_scaffold_options() {
+    let options = FleetInputScaffoldOptions::parse([
+        OsString::from("preview_multi_subnet"),
+        OsString::from("--coordinator-node-count"),
+        OsString::from("34"),
+        OsString::from("--root-node-count"),
+        OsString::from("13"),
+        OsString::from("--root-node-count"),
+        OsString::from("28"),
+    ])
+    .expect("parse Fleet-input scaffold options");
+
+    assert_eq!(options.profile, FleetFundingProfile::PreviewMultiSubnet);
+    assert_eq!(
+        options.node_counts,
+        FleetInputScaffoldNodeCounts::Explicit {
+            coordinator: 34,
+            roots: vec![13, 28],
+        }
+    );
+}
+
+// Ensure Registry-backed authoring captures exact Subnet IDs and refresh policy.
+#[test]
+fn parses_registry_fleet_input_scaffold_options() {
+    let coordinator = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae";
+    let root = "bkfrj-6k62g-dycql-7h53p-atvkj-zg4to-gaogh-netha-ptybj-ntsgw-rqe";
+    let options = FleetInputScaffoldOptions::parse([
+        OsString::from("preview_multi_subnet"),
+        OsString::from("--coordinator-subnet"),
+        OsString::from(coordinator),
+        OsString::from("--root-subnet"),
+        OsString::from(root),
+        OsString::from("--refresh-catalog"),
+        OsString::from("--__canic-environment"),
+        OsString::from("ic"),
+    ])
+    .expect("parse Registry Fleet-input scaffold options");
+
+    assert_eq!(options.profile, FleetFundingProfile::PreviewMultiSubnet);
+    assert_eq!(
+        options.node_counts,
+        FleetInputScaffoldNodeCounts::Registry {
+            environment: "ic".to_string(),
+            coordinator_subnet: parse_subnet_id(coordinator).expect("Coordinator Subnet ID"),
+            root_subnets: vec![parse_subnet_id(root).expect("Root Subnet ID")],
+            refresh_catalog: true,
+        }
+    );
+}
+
+// Ensure the two node-count authority modes cannot be mixed.
+#[test]
+fn rejects_mixed_fleet_input_scaffold_node_count_authority() {
+    let result = FleetInputScaffoldOptions::parse([
+        OsString::from("preview_multi_subnet"),
+        OsString::from("--coordinator-node-count"),
+        OsString::from("34"),
+        OsString::from("--root-subnet"),
+        OsString::from("bkfrj-6k62g-dycql-7h53p-atvkj-zg4to-gaogh-netha-ptybj-ntsgw-rqe"),
+    ]);
+
+    std::assert_matches!(result, Err(ScaffoldCommandError::Usage(_)));
+}
+
+// Ensure the offline scaffold explains Toko's real values and emits exact parseable TOML.
+#[test]
+fn renders_fee_complete_toko_funding_profile_scaffold() {
+    let scaffold =
+        scaffold_fleet_funding_profile(FleetFundingProfile::PreviewMultiSubnet, 34, &[13])
+            .expect("materialize Toko funding scaffold");
+    let text = render_fleet_input_scaffold(&scaffold, "explicit_node_counts");
+
+    assert!(text.contains("funded_identity_required: false"));
+    assert!(text.contains("node_count_source: explicit_node_counts"));
+    assert!(text.contains(
+        "coordinator.minimum_reserve_cycles = ceil_to_10000000000000(80000000000000 * max(34, 13) / 13) = 210000000000000 cycles"
+    ));
+    assert!(text.contains("operator_creation_amount_cycles: 310000000000000"));
+    assert!(text.contains("operator_creation_fee_cycles: 300000000"));
+    assert!(text.contains("maximum_operator_debit_cycles: 310000300000000"));
+    assert!(text.contains("cycles = \"270000000000000\""));
+    assert!(!text.contains("kind = \"icp\""));
+
+    let toml = text
+        .split_once("Exact funding TOML:\n")
+        .expect("TOML heading")
+        .1
+        .split_once("\n\nNext:\n")
+        .expect("TOML footer")
+        .0;
+    toml::from_str::<TomlValue>(toml).expect("exact funding TOML parses");
+}
+
 // Ensure confirmation accepts an explicit yes response.
 #[test]
 fn confirm_scaffold_accepts_yes() {

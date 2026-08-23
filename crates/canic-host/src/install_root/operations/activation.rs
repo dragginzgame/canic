@@ -74,6 +74,7 @@ pub(in crate::install_root) enum InstallationControllerObservationError {
     #[error(
         "active ICP installation identity {observed} differs from Fleet input operator principal {expected}"
     )]
+    #[cfg(test)]
     OperatorMismatch {
         expected: String,
         observed: Principal,
@@ -205,6 +206,7 @@ pub(in crate::install_root) fn active_installation_controller(
     Ok(controller)
 }
 
+#[cfg(test)]
 pub(in crate::install_root) fn require_planned_installation_controller(
     icp: &IcpCli,
     expected: &str,

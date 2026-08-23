@@ -9,9 +9,11 @@ mod preparation;
 mod registry;
 
 pub(super) use crate::canister_protocol::{call_with_arg, query_with_arg};
+#[cfg(test)]
+pub(super) use activation::require_planned_installation_controller;
 pub(super) use activation::{
     active_installation_controller, module_hash_text, require_expected_controllers,
-    require_expected_module_hash, require_planned_installation_controller,
+    require_expected_module_hash,
 };
 pub(super) use artifact::{InstallArtifact, resolve_install_artifact};
 pub(super) use binding::resolve_install_protocol_binding;

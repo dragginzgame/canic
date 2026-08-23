@@ -18,6 +18,7 @@ Supporting implementation evidence does not belong here.
 - `immutable-test-checkout-lease/`
 - `language-neutral-managed-guest-feasibility/`
 - `optional-encrypted-canister-snapshot-archives/`
+- `operator-funding-conversion-authority/`
 - `product-frontend-delivery-handoff/`
 - `saltz/`
 - `standalone-blob-service-extraction/`

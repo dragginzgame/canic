@@ -1,6 +1,6 @@
 # Canic 0.108 Implementation Status
 
-Date: 2026-08-22
+Date: 2026-08-23
 
 ## Status
 
@@ -22,8 +22,13 @@ Date: 2026-08-22
   exact complete plans for historical replay, recovers the Root through the
   protected-authority/Registry-mirror split, preflights retained fixed-window
   spend and proves the measured 25,315,095-byte fragmented history inside a
-  32 MiB cell. The corrected open draft still requires the final maintainer
-  validation gate and a fresh human closeout audit before release.
+  32 MiB cell. The 2026-08-23 validation rerun then exposed one layering-gate
+  defect: the model read rotation DTOs directly. One ops-owned conversion now
+  supplies a DTO-free named model input without moving or duplicating the
+  invariant decision; `make check-invariants`, focused consumers and
+  warning-denied changed-package Clippy pass. The corrected open draft still
+  requires the complete maintainer validation gate and a fresh human closeout
+  audit before release.
 - Runtime impact: B3 adds exact registered-Root admission, the Coordinator
   funding kill switch, fixed Fleet/Root window accounting, durable
   current-plus-last replay and reserve-aware attached-cycle calls. B4 adds the
@@ -49,6 +54,25 @@ Date: 2026-08-22
   high-cost warning. B5 propagates that correction through immutable input,
   plans, policy hashes, Registry authority, stable accounting and generated
   Candid before enabling the Root timer.
+- Toko operator feedback also exposed that Fleet input incorrectly required
+  self-declared account, balance and observation metadata. The corrected hard
+  cut retains only the top-level operator Principal, derives the active
+  identity's Cycles Ledger account and live balance through ICP CLI, excludes
+  volatile observations from the plan digest and rechecks sufficiency before
+  install effects. The follow-up hard-cuts fresh-Fleet creation to cycles,
+  includes one exact Cycles Ledger fee for every operator-created
+  infrastructure Canister, and adds a node-scaled funding-profile scaffold
+  that resolves selected Subnet IDs through validated Registry evidence,
+  retains an offline explicit-count fallback and emits formula plus exact-TOML
+  output. ICP conversion authority is deferred to an unnumbered idea.
+- Toko fresh-install feedback exposed an observer-coupling defect outside the
+  funding protocol: an autonomous Root could reach `Provisioned` before the
+  Coordinator observed its intermediate counters and remain permanently
+  unreconciled. The open draft now accepts the exact compiled terminal receipt
+  directly, permits its completion time to predate the passive query intent,
+  normalizes progress raced by the post-acceptance query, and retains bounded
+  scheduled-retry diagnostics. Focused direct-terminal, canonical-acceptance,
+  restart/replay, forged-receipt and stepwise regressions pass.
 - Predecessors: completed 0.103 and 0.104, accepted 0.106 B1 baseline and
   completed 0.107 fresh-Fleet preflight/runtime admission, plus the
   current root cycle/external-call ownership inventory and proposed cost
@@ -78,7 +102,7 @@ Date: 2026-08-22
 | B5 | Sparse-policy correction and Root timer integration | Single, preview multi and professional multi topology profiles, finite non-renewing caps, explicit Fiduciary placement, low-balance request ownership, nonterminal resumption and unchanged descendant funding | Host/config/hash, timer/policy/restart, placement-warning, generated-Candid and Root/Coordinator artifact checks | Complete 2026-08-22; open 0.108.1 draft |
 | B6 | Manual and automatic ICP refill | Protected policy, cumulative budget, floor, terminal fallback and mutual exclusion | Ledger/CMC replay suites plus real reserve-denial fallback journey | Complete 2026-08-22; open 0.108.1 draft |
 | B7 | Operator and lifecycle completion | Direct top-up resolution, status, metrics, Medic, runbooks, draining fences and generated surfaces | CLI/host/lifecycle/snapshot checks | Complete 2026-08-22; open 0.108.1 draft |
-| B8 | Qualification and closeout readiness | Real value-transfer and fallback journeys, measured guidance, sediment audit and closeout handoff | Targeted repository gates and PocketIC evidence | Initial closeout rejected; candidate validation defects corrected; final maintainer gate and re-audit pending |
+| B8 | Qualification and closeout readiness | Real value-transfer and fallback journeys, measured guidance, cycle-only creation admission, fee-complete operator debit, Registry/offline profile scaffold, sediment audit and closeout handoff | Targeted repository gates, ICP CLI 1.3 balance fixtures and PocketIC evidence | Initial closeout rejected; candidate validation and Toko funding-review defects corrected; final maintainer gate and re-audit pending |
 | B9 | Explicit policy-generation rotation | No-effect installed-Fleet plan, exact digest/predecessor apply, Coordinator-owned durable fence and Root prepare/activate receipts, retained cumulative usage, complete historical replay checkpoints and unchanged application state | Policy/hash, controller/stale/concurrent/payload-drift rejection, mixed authority/mirror recovery, 32 MiB fragmented stable-capacity proof, interruption/restart, generated-Candid/CLI and focused PocketIC exhausted-to-successor journey | Complete 2026-08-22; open 0.108.1 draft |
 
 Nine batches match the amended design's M0-M8 dependency boundaries. They are not
