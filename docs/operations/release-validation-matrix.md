@@ -79,7 +79,8 @@ command inventory here. The maintained outcome categories are:
   feature, dependency, secret, audit, release-contract, and current-document
   checks for pull requests and `main`;
 - separately reported ordinary and ordered serial PocketIC test lanes for pull
-  requests and `main`, including an early exact Fleet deployment-restore proof;
+  requests and `main`, including Fleet deployment restore as the first case in
+  the one-process internal harness plus per-suite PocketIC resource evidence;
   and
 - the locked release workspace build for a `Release ...` commit on `main`.
 

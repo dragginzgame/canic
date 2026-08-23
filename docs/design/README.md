@@ -40,17 +40,21 @@ release-batch plan and explicit maintainer acceptance.
 6. [0.108 Coordinator-backed root funding](0.108-coordinator-backed-root-funding/status.md)
    closes replay-safe root operating funding without funding the estate
    Cycles Ledger budget implicitly.
-7. [0.109 Fleet Subnet Canister estates](0.109-fleet-subnet-canister-estates/status.md)
+7. [0.109 Fleet-wide ingress admission](0.109-fleet-wide-ingress-admission/status.md)
+   replaces independent per-canister whitelists with one Coordinator-owned
+   policy, complete local enforcement projections and an explicit standalone-
+   consumer boundary.
+8. [0.110 Fleet Subnet Canister estates](0.110-fleet-subnet-canister-estates/status.md)
    adds application retirement evidence before recycling, indexed reusable
    estates, bounded parallel work, transfer and the 10/100/1,000 proof.
-8. [0.110 stateful Fleet release adoption](0.110-stateful-fleet-release-adoption/status.md)
+9. [0.111 stateful Fleet release adoption](0.111-stateful-fleet-release-adoption/status.md)
    qualifies one whole-Fleet stop-the-world predecessor-to-successor
    transition before stateful production claims.
-9. [0.111 generic Fleet observatory](0.111-fleet-observatory/status.md)
+10. [0.112 generic Fleet observatory](0.112-fleet-observatory/status.md)
    publishes supported downstream views/rendering with external Prequel Wars
    as the flagship consumer.
 
-Deferred ideas do not gate this nine-line path unless a later explicit
+Deferred ideas do not gate this ten-line path unless a later explicit
 amendment moves one into a numbered design.
 
 ## Release-Batch Plan Template

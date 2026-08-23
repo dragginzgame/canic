@@ -16,6 +16,9 @@ const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const PREPAID_POOL_ASSET_COUNT: usize = 10;
 const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
+#[cfg(test)]
+pub(in crate::pic) use tests::governed_pocketic_cases;
+
 mod tests {
     use super::*;
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
@@ -118,10 +121,16 @@ mod tests {
     use canic_host::release_set::AppConfigSnapshot;
     use flate2::{Compression, write::GzEncoder};
     use std::{
-        collections::BTreeMap, error::Error as StdError, fmt, io::Write, num::NonZeroUsize,
-        sync::OnceLock, time::Duration,
+        collections::BTreeMap,
+        error::Error as StdError,
+        fmt,
+        io::Write,
+        num::NonZeroUsize,
+        sync::OnceLock,
+        time::{Duration, Instant},
     };
 
+    use crate::pic::fleet_registry::fixture::progress_elapsed;
     use crate::pic::{
         CanicWasmBuildProfile,
         artifacts::{
@@ -3367,7 +3376,12 @@ mod tests {
     )]
     fn published_draining_root_autonomously_reaches_external_deletion_readiness() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let fixture = acquire_active_component_registry();
+        // Root deletion is deliberately outside the pooled baseline's reset
+        // contract: PocketIC cannot restore a captured snapshot after the
+        // target canister has been deleted. Keep this destructive journey on
+        // an exclusively owned instance so it cannot invalidate the warm
+        // baseline used by reset-complete cases.
+        let fixture = setup_fresh_active_component_registry();
         let CoordinatorStatusResponse::Registry(registry) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
@@ -3660,17 +3674,33 @@ mod tests {
     }
 
     fn setup_active_component_registry_fresh() -> ActiveComponentRegistryFixture {
+        let total_started = Instant::now();
+        let phase_started = Instant::now();
         let root_wasm = build_test_root_wasm();
+        progress_elapsed("root artifacts ready", phase_started);
+        let phase_started = Instant::now();
         let coordinator_wasm = build_test_coordinator_wasm();
+        progress_elapsed("Coordinator artifact ready", phase_started);
+        let phase_started = Instant::now();
         let store_fixture = build_root_store_fixture();
+        progress_elapsed("Store and Component artifacts ready", phase_started);
+        let phase_started = Instant::now();
         let pic = build_pic();
+        progress_elapsed("PocketIC topology ready", phase_started);
+        let phase_started = Instant::now();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
         let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator, store_fixture);
+        progress_elapsed("Root and Store installed", phase_started);
+        let phase_started = Instant::now();
         install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &fixture);
+        progress_elapsed("Coordinator installed", phase_started);
+        let phase_started = Instant::now();
         let (joining_version, sync_request) =
             join_and_synchronize_root(&pic, coordinator, &fixture);
+        progress_elapsed("Root joined and synchronized", phase_started);
 
+        let phase_started = Instant::now();
         let components = assert_registry_and_root_runtime_activation(
             &pic,
             coordinator,
@@ -3678,6 +3708,7 @@ mod tests {
             joining_version,
             sync_request,
         );
+        progress_elapsed("Component Registry activated", phase_started);
         let fixture = ActiveComponentRegistryFixture {
             runtime: ActiveComponentRegistryRuntime::Fresh(Box::new(pic)),
             coordinator,
@@ -3690,7 +3721,10 @@ mod tests {
             wasm_store: fixture.response.wasm_store,
             pool_assets: fixture.init_args.canister_pool_imports,
         };
+        let phase_started = Instant::now();
         assert_root_canister_summary(&fixture);
+        progress_elapsed("fresh Fleet validated", phase_started);
+        progress_elapsed("fresh Fleet setup complete", total_started);
         fixture
     }
 
@@ -4888,6 +4922,92 @@ mod tests {
             panic!("Root returned a differently correlated authority status");
         };
         assert_eq!(authority.binding.fleet_subnet_root, root_id);
+    }
+
+    #[cfg(test)]
+    pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![
+            (
+                "Fleet deployment restore",
+                restored_root_preserves_its_inventory_but_cannot_allocate,
+            ),
+            (
+                "autonomous Root removal",
+                published_draining_root_autonomously_reaches_external_deletion_readiness,
+            ),
+            (
+                "prepared mainnet Root automatic refill",
+                prepared_mainnet_root_automatically_refills_one_exact_pool_asset,
+            ),
+            (
+                "uncertain mainnet refill replay",
+                uncertain_mainnet_refill_reuses_the_exact_paid_request,
+            ),
+            (
+                "Coordinator attached-cycle grant",
+                real_coordinator_funds_one_active_root_exactly_once,
+            ),
+            (
+                "two-Root independent funding limits",
+                two_roots_use_independent_limits_and_one_coordinator_budget,
+            ),
+            (
+                "non-renewing automatic grant cap",
+                automatic_grant_cap_never_renews_after_the_ninety_day_window,
+            ),
+            (
+                "explicit funding-policy rotation",
+                explicit_policy_rotation_reopens_exhausted_automatic_funding_once,
+            ),
+            (
+                "Coordinator reserve-denial ICP fallback",
+                terminal_coordinator_reserve_denial_runs_one_real_icp_fallback,
+            ),
+            (
+                "real ICP rate denial",
+                real_rate_gate_denial_spends_no_icp_and_creates_no_refill,
+            ),
+            (
+                "insufficient real ICP denial",
+                insufficient_real_icp_spends_nothing_and_creates_no_refill,
+            ),
+            (
+                "uncertain grant fallback suppression",
+                uncertain_grant_suppresses_icp_and_direct_topup_remains_available,
+            ),
+            (
+                "production Ledger and CMC replay",
+                production_ledger_and_cmc_exact_replay_never_duplicates_value,
+            ),
+            (
+                "qualification Ledger cohort isolation",
+                qualification_ledger_preflight_keeps_1_8_16_32_lanes_independent,
+            ),
+            (
+                "qualification reset cohort isolation",
+                qualification_reset_preflight_keeps_1_8_16_32_lanes_independent,
+            ),
+            (
+                "qualification effect arithmetic",
+                qualification_external_effect_envelope_uses_checked_arithmetic,
+            ),
+            (
+                "qualification controller transition",
+                qualification_controller_transition_requires_exact_routing_evidence,
+            ),
+            (
+                "prepared Root local Store",
+                prepared_root_bootstraps_and_reverifies_its_exact_local_store,
+            ),
+            (
+                "co-located Fleet isolation",
+                co_located_fleets_keep_roots_stores_pools_and_registries_isolated,
+            ),
+            (
+                "active Component Registry attestations",
+                active_registry_issues_component_role_attestations,
+            ),
+        ]
     }
 }
 

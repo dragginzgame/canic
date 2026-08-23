@@ -25,8 +25,9 @@ use canic::{
     protocol,
 };
 use canic_testing_internal::pic::{
-    managed_test_init_identity, report_canister_diagnostics, role_grant,
-    setup_fresh_active_component_registry, upgrade_args,
+    ActiveComponentRegistryFixture, managed_test_init_identity, report_canister_diagnostics,
+    role_grant, setup_active_component_registry, setup_fresh_active_component_registry,
+    upgrade_args,
 };
 use ic_agent::{Agent, Identity, identity::Secp256k1Identity};
 use ic_stable_structures::{
@@ -209,6 +210,15 @@ struct ApplicationReplayRecordFixture {
     remove_at_ns: u64,
 }
 
+// Acquire the shared snapshot baseline only for cases whose mutations remain
+// inside its captured Coordinator, Root, Store, issuer and verifier set. These
+// cases create no gateway, canister or external resource; the recipe restores
+// canister state and cycles, resets unused pool assets, preserves monotonic
+// simulator time and revalidates the active authority graph before reuse.
+fn setup_snapshot_resettable_active_component_registry() -> ActiveComponentRegistryFixture {
+    setup_active_component_registry()
+}
+
 #[test]
 fn pem_backed_native_agent_prepares_retrieves_and_presents_delegated_token() {
     let mut fixture = setup_fresh_active_component_registry();
@@ -255,7 +265,7 @@ fn pem_backed_native_agent_prepares_retrieves_and_presents_delegated_token() {
     reason = "one ordered PocketIC journey proves runtime-whitelist authority and recovery"
 )]
 fn runtime_whitelist_is_durable_bounded_and_separate_from_application_sessions() {
-    let fixture = setup_fresh_active_component_registry();
+    let fixture = setup_snapshot_resettable_active_component_registry();
     let target = fixture.verifier.canister_id;
     let root = fixture.root;
     let controller = Principal::from_slice(&[0x61; 29]);
@@ -746,7 +756,7 @@ fn runtime_whitelist_probe_as(
     reason = "one ordered PocketIC journey records the complete maximum-state resource boundary"
 )]
 fn maximum_application_session_resource_contract_is_bounded() {
-    let fixture = setup_fresh_active_component_registry();
+    let fixture = setup_snapshot_resettable_active_component_registry();
     let verifier_wasm = fixture.verifier_wasm();
     let verifier = fixture.verifier.canister_id;
     let subject = native_agent_subject();
@@ -878,7 +888,7 @@ fn measure_application_authorization_at_state(
     session_count: usize,
     replay_count: usize,
 ) -> (usize, u64) {
-    let fixture = setup_fresh_active_component_registry();
+    let fixture = setup_snapshot_resettable_active_component_registry();
     let verifier = fixture.verifier.canister_id;
     let subject = native_agent_subject();
     let auth_state_bytes = inject_application_authorization_state(
@@ -931,7 +941,7 @@ fn measure_application_authorization_at_state(
 
 #[test]
 fn closed_local_authorization_denial_partition_is_bounded() {
-    let fixture = setup_fresh_active_component_registry();
+    let fixture = setup_snapshot_resettable_active_component_registry();
     let caller = native_agent_subject();
     let observations = LocalAuthorizationDenialProbe::ALL.map(|probe| {
         let sample: Result<QueryPerfSample<String>, Error> =

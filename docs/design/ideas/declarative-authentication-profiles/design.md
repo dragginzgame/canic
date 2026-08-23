@@ -5,7 +5,7 @@ Date: 2026-08-03
 ## Status
 
 - Classification: deferred, unnumbered idea. Its former `0.108` working number
-  is retired; the scheduled local application-authorization line is now 0.109.
+  is retired; the scheduled local application-authorization line is now 0.105.
 - Former review status: proposed for maintainer review.
 - Release boundary: reinstall only. A future authentication-profile release
   consumes no prior-release token, certificate, issuer-policy, session or
@@ -170,7 +170,7 @@ Canic recognizes only protocol identities:
 | transport caller | Principal authenticated by the IC for this request |
 | authenticated subject | application subject selected by the maintained Canic identity boundary |
 | delegated token | signed Canic audience, profile, grant, scope and lifetime authority |
-| local application session | 0.109 bounded local mapping from transport caller to verified subject, issuer, role scopes and expiry |
+| local application session | 0.105 bounded local mapping from transport caller to verified subject, issuer, role scopes and expiry |
 | role attestation | separate Canister-to-Canister service identity proof |
 
 The current `RootComponentMembershipApi` is also outside authentication-profile
@@ -525,7 +525,7 @@ so the proof is visible and independently auditable. Client helpers may inject
 that argument but must not silently substitute a session for an endpoint that
 declared proof-bearing authorization.
 
-The independent 0.109 session-bearing lane exists for explicitly declared
+The independent 0.105 session-bearing lane exists for explicitly declared
 application or framework endpoints whose maintained ABI cannot carry Canic
 proof material. It consumes the same profile scopes and verified-authority
 policy. The authentication-profile design must not create another tokenless session record, decision
@@ -738,17 +738,17 @@ The authentication-profile design does not:
 - make every Component descendant an authenticated verifier implicitly; or
 - modify a downstream application repository.
 
-## Relationship To Canic 0.109
+## Relationship To Canic 0.105
 
-0.109 owns proof-to-session materialization, exact transport-caller binding,
+0.105 owns proof-to-session materialization, exact transport-caller binding,
 bounded local scope lookup and the synchronous framework-neutral decision.
 The authentication-profile idea owns declarative profile compilation, issuance,
 verifier projections and client acquisition.
 
 The authentication-profile design must:
 
-- use the 0.109 canonical application-scope identity;
-- let profile-issued tokens establish the same current 0.109 session record;
+- use the 0.105 canonical application-scope identity;
+- let profile-issued tokens establish the same current 0.105 session record;
 - bind the session authority generation to the installed profile projection;
 - report its maximum token/session revocation latency honestly; and
 - retain no parallel subject-only session or profile-specific tokenless guard.
@@ -882,5 +882,5 @@ The authentication-profile idea is ready for implementation only when:
 - the hard-cut request and configuration removals are enumerated; and
 - component-subtree reach is either fully frozen or explicitly absent from the
   first implementation surface; and
-- profile-issued session authority reuses the complete 0.109 current surface
+- profile-issued session authority reuses the complete 0.105 current surface
   without a second local grant or session store.

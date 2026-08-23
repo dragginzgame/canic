@@ -55,6 +55,27 @@ report_owned_pocketic_server_output() {
     tail -40 "$CANIC_TEST_SCRATCH/pocketic.stdout" >&2 || true
 }
 
+report_owned_pocketic_server_resources() {
+    local label="$1"
+    local server_pid="$POCKET_IC_SERVER_PID"
+    if [[ -z "$server_pid" || ! -r "/proc/$server_pid/status" ]]; then
+        echo "==> shared PocketIC resources after $label: unavailable" >&2
+        return
+    fi
+
+    local key value rss="unknown" high_water="unknown" threads="unknown"
+    while IFS=: read -r key value; do
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        case "$key" in
+            Threads) threads="$value" ;;
+            VmHWM) high_water="$value" ;;
+            VmRSS) rss="$value" ;;
+        esac
+    done <"/proc/$server_pid/status"
+    echo "==> shared PocketIC resources after $label: rss=$rss high_water=$high_water threads=$threads"
+}
+
 stop_owned_pocketic_server() {
     local server_pid="$POCKET_IC_SERVER_PID"
     if [[ -z "$server_pid" ]]; then
@@ -244,6 +265,9 @@ run_test() {
     esac
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
+    if [[ "$execution" = "pocketic-serial" ]]; then
+        report_owned_pocketic_server_resources "$label"
+    fi
     if [[ "$status" -eq 0 ]]; then
         record_summary "$label" "$elapsed" "$execution" "PASS"
         echo "==> $label done in $elapsed"
@@ -404,17 +428,17 @@ if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
         --lib \
         --bins \
         --exclude canic-testing-internal
+    run_parallel_test \
+        "canic-testing-internal fast lib tests" \
+        -p canic-testing-internal \
+        --lib \
+        pic::governed_suite::governed_fast_internal_suite \
+        -- \
+        --exact \
+        --ignored
 fi
 
 if [[ "$MODE" == "fast" ]]; then
-    # The internal crate's PocketIC journeys run in the dedicated PocketIC
-    # lane. Compile its complete test harness here and retain its pure
-    # embedded-config unit proof.
-    run_parallel_test \
-        "canic-testing-internal embedded config" \
-        -p canic-testing-internal \
-        --lib \
-        pic::lifecycle::tests::init_payload_component_spec_matches_embedded_canister_config
     run_inventory_tests "fast release-surface integration tests" canic parallel ordinary
     finish_test_run
     exit 0
@@ -443,45 +467,41 @@ require_ordinary_success_before_pocketic
 start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
-    run_serial_pocketic_test \
-        "targeted canic-testing-internal PocketIC proof" \
-        -p canic-testing-internal \
-        --lib \
-        "$TARGETED_POCKETIC_TEST" \
-        -- \
-        --exact
+    if [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_serial_pocketic_suite" ]]; then
+        run_serial_pocketic_test \
+            "targeted governed canic-testing-internal PocketIC suite" \
+            -p canic-testing-internal \
+            --lib \
+            "$TARGETED_POCKETIC_TEST" \
+            -- \
+            --exact \
+            --ignored
+    else
+        run_serial_pocketic_test \
+            "targeted canic-testing-internal PocketIC proof" \
+            -p canic-testing-internal \
+            --lib \
+            "$TARGETED_POCKETIC_TEST" \
+            -- \
+            --exact
+    fi
     finish_test_run
     exit 0
 fi
 
-# The internal library owns several PocketIC journeys in its adjacent unit
-# tests. Run the deployment-restore and destructive autonomous-removal proofs
-# first so either regression is reported without waiting for the rest of the
-# mixed harness. The remaining serial lane skips those exact tests rather than
-# paying for either journey twice.
-FLEET_DEPLOYMENT_RESTORE_TEST="pic::fleet_registry::baseline::tests::restored_root_preserves_its_inventory_but_cannot_allocate"
-ROOT_REMOVAL_TEST="pic::fleet_registry::baseline::tests::published_draining_root_autonomously_reaches_external_deletion_readiness"
+# One governed harness calls every internal PocketIC scenario in explicit
+# order, reports each result immediately and catches failures until the suite
+# boundary. Keeping one Rust process preserves its process-local artifact and
+# baseline pools. The deployment-restore and autonomous Root-removal proofs
+# remain the first two cases.
 run_serial_pocketic_test \
-    "Fleet deployment-restore PocketIC proof" \
+    "canic-testing-internal ordered PocketIC suite" \
     -p canic-testing-internal \
     --lib \
-    "$FLEET_DEPLOYMENT_RESTORE_TEST" \
+    pic::governed_suite::governed_serial_pocketic_suite \
     -- \
-    --exact
-run_serial_pocketic_test \
-    "autonomous Root-removal PocketIC proof" \
-    -p canic-testing-internal \
-    --lib \
-    "$ROOT_REMOVAL_TEST" \
-    -- \
-    --exact
-run_serial_pocketic_test \
-    "canic-testing-internal lib tests" \
-    -p canic-testing-internal \
-    --lib \
-    -- \
-    --skip "$FLEET_DEPLOYMENT_RESTORE_TEST" \
-    --skip "$ROOT_REMOVAL_TEST"
+    --exact \
+    --ignored
 
 # PocketIC-backed integration suites.
 # Receipt, timer and lifecycle use the same internal-test build environment and

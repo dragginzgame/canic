@@ -38,7 +38,7 @@ Date: 2026-07-26
   introduced.
 - Repository scope: Canic only. IcyDB and other database repositories remain
   read-only downstream integrations.
-- Independence posture: this transport idea neither requires nor extends 0.109
+- Independence posture: this transport idea neither requires nor extends 0.105
   application sessions. Transport routes carry explicit Canister-to-Canister
   authority; they do not substitute for an ingress application subject.
 - Lifecycle posture: 0.106 neither requires nor extends the 0.104 synchronous

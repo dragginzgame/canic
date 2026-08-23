@@ -354,14 +354,17 @@ rg -F "if: \${{ !cancelled()" <<<"$pocketic_job" >/dev/null ||
 if rg -F 'path: target' <<<"$pocketic_job" | rg -v -F 'path: target/test-artifacts' >/dev/null; then
     fail "PocketIC CI must not cache the complete Cargo target directory"
 fi
-rg -F '"Fleet deployment-restore PocketIC proof"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the serial PocketIC lane does not run Fleet deployment-restore evidence early"
-rg -F -- '--skip "$FLEET_DEPLOYMENT_RESTORE_TEST"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the mixed PocketIC library lane repeats the early Fleet deployment-restore proof"
-rg -F '"autonomous Root-removal PocketIC proof"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the serial PocketIC lane does not run Root-removal evidence early"
-rg -F -- '--skip "$ROOT_REMOVAL_TEST"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the mixed PocketIC library lane repeats the early Root-removal proof"
+rg -F '"canic-testing-internal ordered PocketIC suite"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the serial PocketIC lane does not use the one-process ordered internal suite"
+rg -F 'pic::governed_suite::governed_serial_pocketic_suite' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the serial PocketIC lane does not select the governed internal suite"
+if rg -F 'FLEET_DEPLOYMENT_RESTORE_TEST=' "$WORKSPACE_TEST_RUNNER" >/dev/null; then
+    fail "the internal PocketIC lane still splits the process-local Fleet pool"
+fi
+rg -F 'report_owned_pocketic_server_resources' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the serial PocketIC lane does not report server resource pressure"
+rg -F 'VmHWM' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the PocketIC resource report omits resident high-water evidence"
 if rg '^[[:space:]]+tags:' "$CI" >/dev/null; then
     fail "primary CI must not create a second tag-only release signal"
 fi
