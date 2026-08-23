@@ -1,8 +1,9 @@
 # Canic 0.108 Coordinator-Backed Root Funding Evidence
 
-Date: 2026-08-22
-State: M0 accepted 2026-08-21; M1 complete in published 0.108.0; B3-B9
-closeout corrections and CANIC-019 applied to the open 0.108.1 working draft
+Date: 2026-08-23
+State: M0 accepted 2026-08-21; M1 complete in the 0.108.0 checkpoint; B3-B9
+and CANIC-019 included in tagged 0.108.1; forward closeout-documentation
+correction awaiting exact-revision validation and human re-audit
 
 ## Authority And Scope
 
@@ -13,8 +14,10 @@ target. M1 adds protected policy to the existing Fleet-input, plan, init,
 root-authority and Registry contracts, but no runtime grant state machine,
 timer, treasury ledger or public endpoint.
 
-The closeout-correction section below covers B3-B9/M2-M8 in the open 0.108.1
-draft. It does not rewrite M0/M1 history or claim that 0.108.1 is published.
+The closeout-correction section below covers B3-B9/M2-M8 and preserves the
+historical progression from the rejected draft through the tagged 0.108.1
+source, complete validation and fresh closeout audit. It does not rewrite
+M0/M1 history.
 
 The published checkpoint reconciliation starts from `main` at
 `5523280c7c1b081d455c69fb551448c4cf9212f7`. The observed toolchain is
@@ -244,16 +247,16 @@ above are the behavioral result.
 
 ## B3-B9 Closeout Correction
 
-The first human-owned closeout audit rejected the open 0.108.1 draft. The
-correction starts from published `v0.108.0` commit
-`187dacd4f3c07b3077513bc9d9148fe7261fa4ff`. The current local candidate is
-`d4e18003248b085d05dc431153da3efa998dc119` on `main`, followed by the dirty
-working-tree corrections recorded below. The revision is two commits ahead of
-`origin/main`; neither those commits nor the working-tree correction are a
-published 0.108.1 release. The maintainer must establish the final immutable
-candidate before re-audit. This record names the exact reproducible base and
-focused tests without treating a local commit or passing subset as release
-truth.
+The first human-owned closeout audit rejected the then-open 0.108.1 draft. The
+correction starts from `v0.108.0` commit
+`187dacd4f3c07b3077513bc9d9148fe7261fa4ff`. At the first candidate checkpoint,
+`d4e18003248b085d05dc431153da3efa998dc119` on `main` was followed by the dirty
+working-tree corrections recorded below. Neither was a published release at
+that time. Subsequent correction commits culminated in
+`075560dc1ff87d872dc40d22fa7b3e48f3113260`, which was versioned and tagged
+`v0.108.1` before the final human closeout. The sections below retain the
+intermediate failures as historical evidence rather than describing the
+current repository state.
 
 The audit corrections are:
 
@@ -269,8 +272,8 @@ The audit corrections are:
   semantics. The local refill stub remains only for deterministic adapter and
   fault-classification tests; and
 - this record, the design status, active handoff, changelog and runbook now
-  distinguish published 0.108.0, the rejected draft, the corrected open draft
-  and the still-required human re-audit.
+  distinguish the 0.108.0 policy checkpoint, rejected and corrected drafts,
+  tagged 0.108.1 source and still-required final human closeout.
 
 ### M0-M8 / B1-B9 Traceability
 
@@ -278,13 +281,13 @@ The audit corrections are:
 | --- | --- | --- | --- |
 | M0 / B1 | Attached-cycle atomicity, refund, response-loss replay and measured bounded-call floor | Test-only `root_funding_probe`; accepted PocketIC interruption matrix and 42.2B-cycle floors above | Accepted; assumptions retained because production now uses the same bounded-call and accept-zero primitives |
 | M1 / B2 | Protected policy, canonical hashing/propagation and generic refill hard cut | Fleet-input/model/hash/plan/init/Registry validation and published 0.108.0 evidence above | Complete in 0.108.0 |
-| M2 / B3 | Sole Coordinator grant authority, reserve/windows, durable current/last result | `ops/fleet_coordinator/root_funding.rs`, Coordinator stable ID 62, workflow authority/replay tests, one- and two-Root PocketIC journeys | Pass in corrected draft |
-| M3 / B4 | Root-owned request journal and exact accept-once command | `ops/root_funding`, Root stable ID 63, restart/zero-accept tests and accepted M0 callback-loss proof | Pass in corrected draft |
-| M4 / B5 | One Root timer, recovery-first ordering, finite non-renewing caps and unchanged descendant owner | `workflow/runtime/cycles`, timer/lifecycle guards, 91-day cap PocketIC journey and non-Root parent-funding unit proof | Pass in corrected draft |
-| M5 / B6 | One manual/automatic Ledger/CMC replay owner, floor/reserve/caps and terminal fallback | `workflow/ic/icp_refill`, stable ID 39, 4,096-record bound, built-in Ledger/CMC replay, fallback and no-spend journeys | Pass in corrected draft |
-| M6 / B7 | Exact installed-authority recovery, protected status/CLI/Medic and lifecycle/snapshot fences | Host resolver, role status/Candid, CLI/Medic and snapshot/lifecycle focused suites | Pass in corrected draft; final rerun listed below |
-| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Prior evidence passes; post-validation correction still requires the final maintainer gate and human re-audit |
-| M8 / B9 | Explicit same-release funding-policy generation rotation with retained predecessor usage and application state | Exact plan/hash validation, Coordinator/Root durable fences and receipts, bounded stable checkpoints, CLI/Candid surfaces, interruption/replay unit proof and governed exhausted-to-successor PocketIC journey | Pass in corrected open draft; final maintainer gate and human re-audit remain required |
+| M2 / B3 | Sole Coordinator grant authority, reserve/windows, durable current/last result | `ops/fleet_coordinator/root_funding.rs`, Coordinator stable ID 62, workflow authority/replay tests, one- and two-Root PocketIC journeys | Pass in tagged 0.108.1; runtime re-audit pass |
+| M3 / B4 | Root-owned request journal and exact accept-once command | `ops/root_funding`, Root stable ID 63, restart/zero-accept tests and accepted M0 callback-loss proof | Pass in tagged 0.108.1; runtime re-audit pass |
+| M4 / B5 | One Root timer, recovery-first ordering, finite non-renewing caps and unchanged descendant owner | `workflow/runtime/cycles`, timer/lifecycle guards, 91-day cap PocketIC journey and non-Root parent-funding unit proof | Pass in tagged 0.108.1; runtime re-audit pass |
+| M5 / B6 | One manual/automatic Ledger/CMC replay owner, floor/reserve/caps and terminal fallback | `workflow/ic/icp_refill`, stable ID 39, 4,096-record bound, built-in Ledger/CMC replay, fallback and no-spend journeys | Pass in tagged 0.108.1; runtime re-audit pass |
+| M6 / B7 | Exact installed-authority recovery, protected status/CLI/Medic and lifecycle/snapshot fences | Host resolver, role status/Candid, CLI/Medic and snapshot/lifecycle focused suites | Pass in tagged 0.108.1; runtime re-audit pass |
+| M7 / B8 | Representative generated consumers, measured local qualification, sediment/docs and closeout truth | Generated Root/Coordinator builds, real PocketIC matrix, active-document reconciliation and targeted hygiene gates | Tagged-source gate and runtime audit pass; forward documentation correction requires re-audit |
+| M8 / B9 | Explicit same-release funding-policy generation rotation with retained predecessor usage and application state | Exact plan/hash validation, Coordinator/Root durable fences and receipts, bounded stable checkpoints, CLI/Candid surfaces, interruption/replay unit proof and governed exhausted-to-successor PocketIC journey | Runtime pass in tagged 0.108.1; protocol wording corrected forward; re-audit pending |
 
 ### Corrected PocketIC Matrix
 
@@ -403,10 +406,10 @@ Focused post-validation reruns on 2026-08-22:
 - `cargo test --locked -p canic --test protocol_surface`: pass, 40 tests,
   including the checked-in Coordinator Candid profile variant.
 
-The complete maintainer validation attempt began before the final dirty
-corrections and is not evidence for this exact working tree. It must be rerun
-by the maintainer after the final candidate is made immutable. No remote
-qualification or value-transfer effect was performed by these corrections.
+That complete maintainer validation attempt began before the final dirty
+corrections and was not evidence for that exact working tree. It therefore
+required a later immutable-candidate rerun. No remote qualification or
+value-transfer effect was performed by these corrections.
 
 ### CANIC-019 / B9 Policy-Generation Rotation Evidence
 
@@ -495,9 +498,9 @@ DTO-free named input; `ops/fleet_funding_policy` owns the sole boundary-plan
 conversion and the original adversarial test follows that adapter. `make
 check-invariants` passes all ten requested targets, both core rotation-plan
 tests and all four Coordinator rotation tests pass, all five CLI funding tests
-pass, and warning-denied Clippy passes for core, host and CLI. The complete
-maintainer validation gate has not completed for the corrected candidate and
-must be rerun; this focused correction does not claim it.
+pass, and warning-denied Clippy passes for core, host and CLI. At that point the
+complete maintainer validation gate had not completed for the corrected
+candidate, so this focused correction did not claim it.
 
 The next maintainer workspace-test attempt completed every serial PocketIC
 suite but its earlier ordinary library lane reported four consistency defects:
@@ -528,9 +531,35 @@ hardening passed:
   --check` and `git diff --check`: pass.
 
 A maintainer `make patch` overlapped the changing worktree during this focused
-repair and is not treated as immutable-candidate evidence. The complete gate
-must still be rerun after the final correction is committed; no additional
-PocketIC rerun was performed by the focused repair.
+repair and is not treated as immutable-candidate evidence. At that point the
+complete gate still required a rerun after the final correction was committed;
+the focused repair itself performed no additional PocketIC rerun.
+
+### Final Tagged-Source Gate And Fresh Closeout Audit
+
+The final source revision
+`075560dc1ff87d872dc40d22fa7b3e48f3113260` had a clean working tree on
+`main`, was versioned by commit `Release 0.108.1` and was tagged `v0.108.1`.
+The complete canonical `make validate` gate then passed at that exact revision:
+both sequential barriers passed, all warning-denied workspace Clippy targets
+passed and the complete workspace test runner passed. The ordered internal
+PocketIC process passed all 22 governed cases in 287.57 seconds using the
+production ICP Ledger and CMC. Its server high-water mark was 2,241,540 kB at
+97 threads; the complete shared-server run later reached 4,254,440 kB and 257
+threads across all serial suites. Serial capacity remains one.
+
+The fresh human-owned closeout audit found no runtime P0 or P1 defect. It
+positively traced exact Root and Coordinator authority, accept-once attached
+cycles, Ledger/CMC replay, finite caps and fixed windows, the sole Root timer,
+stable bounds, generated surfaces and CANIC-019 convergence. It rejected line
+closeout on two documentation findings: active status/evidence still described
+an unpublished draft, and the older exhaustion paragraph incorrectly said no
+controller command could create a successor generation. The forward
+documentation correction records the real tag/gate sequence and clarifies that
+CANIC-019 is the sole same-release successor-generation exception; time,
+restart, window rollover, direct top-up, policy reapplication and mutable
+configuration still cannot renew authority. A fresh exact-revision complete
+gate and human re-audit remain required before 0.108 may close or 0.109 begin.
 
 ## M0 Disposition
 
