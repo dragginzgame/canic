@@ -753,7 +753,16 @@ fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types
     for declaration in [
         "root_funding : opt FleetCoordinatorRootFundingPolicy;",
         "type FleetCoordinatorRootFundingPolicy = record {",
-        "type FleetFundingProfile = variant { multi_subnet; preview_multi_subnet; single_subnet };",
+        "type FleetFundingProfile = variant {",
+        "preview_multi_subnet;",
+        "type FleetFundingPolicyRotationApplyRequest = record {",
+        "type FleetFundingPolicyRotationBeginRequest = record {",
+        "type FleetFundingPolicyRotationPlanHeader = record {",
+        "type FleetFundingPolicyRotationReceipt = record {",
+        "type FleetFundingPolicyRotationRootPlan = record {",
+        "type FleetFundingPolicyRotationStageRootRequest = record {",
+        "type FleetFundingPolicyRotationStatusResponse = record {",
+        "type FleetFundingPolicyUsage = record {",
         "type FleetSubnetRootFundingAuthority = record {",
         "type FleetSubnetRootFundingPolicy = record {",
         "type FleetSubnetRootIcpRefillPolicy = record {",
@@ -768,6 +777,9 @@ fn fleet_coordinator_candid_contains_protected_policy_and_funding_protocol_types
         "maximum_automatic_cycles : nat;",
         "maximum_automatic_refills : nat32;",
         "maximum_automatic_refill_e8s : nat64;",
+        "rotation_checkpoint_count : nat32;",
+        "rotation_checkpoint_root_count : nat32;",
+        "rotation_checkpoint_root_capacity_remaining : nat32;",
     ] {
         assert!(
             did.contains(declaration),
@@ -795,6 +807,8 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
     for variant in [
         "AcknowledgeRootSnapshot",
         "ActivateRegistry",
+        "ApplyFundingPolicyRotation",
+        "BeginFundingPolicyRotation",
         "CompleteRootDeletion",
         "JoinRoot",
         "PrepareAuthoritySnapshot",
@@ -804,6 +818,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
         "RequestRootFunding",
         "ResumeAuthoritySnapshot",
         "SetRootFunding",
+        "StageFundingPolicyRotationRoot",
     ] {
         assert!(
             request.contains(variant),
@@ -812,7 +827,7 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
     }
     assert_eq!(
         request.lines().filter(|line| line.contains(';')).count(),
-        11,
+        14,
         "CoordinatorCommand acquired an unreviewed variant:\n{request}"
     );
 }
@@ -958,6 +973,8 @@ fn root_and_coordinator_role_ingress_are_command_status_only() {
     let root = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
     for variant in [
         "AcceptFunding(",
+        "ActivateFundingPolicyRotation(",
+        "PrepareFundingPolicyRotation(",
         "ProvisionComponent(",
         "ProvisionComponents(",
         "RemoveComponent(",
@@ -1010,11 +1027,14 @@ fn assert_coordinator_ingress_is_command_status_only() {
     );
     for variant in [
         "ActivateRegistry(",
+        "ApplyFundingPolicyRotation(",
+        "BeginFundingPolicyRotation(",
         "JoinRoot(",
         "ProvisionComponents(",
         "RemoveRoot(",
         "RequestRootFunding(",
         "SetRootFunding(",
+        "StageFundingPolicyRotationRoot(",
     ] {
         assert!(
             coordinator.contains(variant),

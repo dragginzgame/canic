@@ -83,6 +83,8 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             let controller_command = matches!(
                 &command,
                 CoordinatorCommand::ActivateRegistry(_)
+                    | CoordinatorCommand::ApplyFundingPolicyRotation(_)
+                    | CoordinatorCommand::BeginFundingPolicyRotation(_)
                     | CoordinatorCommand::CompleteRootDeletion(_)
                     | CoordinatorCommand::JoinRoot(_)
                     | CoordinatorCommand::PrepareAuthoritySnapshot(_)
@@ -91,6 +93,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                     | CoordinatorCommand::RemoveRoot(_)
                     | CoordinatorCommand::ResumeAuthoritySnapshot(_)
                     | CoordinatorCommand::SetRootFunding(_)
+                    | CoordinatorCommand::StageFundingPolicyRotationRoot(_)
             );
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)

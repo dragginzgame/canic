@@ -457,6 +457,30 @@ impl FleetActivationOps {
         ))
     }
 
+    /// Atomically replace only the exact protected Root funding authority.
+    pub(crate) fn replace_root_funding_authority(
+        expected: &crate::ids::FleetSubnetRootFundingAuthority,
+        next: crate::ids::FleetSubnetRootFundingAuthority,
+    ) -> Result<FleetSubnetRootAuthority, FleetActivationOpsError> {
+        let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let root = record.root_authority.as_mut().ok_or_else(|| {
+            FleetActivationOpsError::InvalidRecord {
+                reason: "protected Fleet activation record has no Fleet Subnet Root authority"
+                    .to_string(),
+            }
+        })?;
+        if root.binding.funding == next {
+            return Self::root_authority();
+        }
+        if &root.binding.funding != expected {
+            return Err(FleetActivationOpsError::IdentityMismatch);
+        }
+        root.binding.funding = next;
+        validate_record_bound(&record)?;
+        replace_record(record)?;
+        Self::root_authority()
+    }
+
     pub(crate) fn wasm_store_authority()
     -> Result<FleetSubnetWasmStoreAuthority, FleetActivationOpsError> {
         let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;

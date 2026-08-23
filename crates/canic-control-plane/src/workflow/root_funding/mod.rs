@@ -13,7 +13,9 @@ use crate::{
     view::root_funding::{
         RootFundingAcceptanceDisposition, RootFundingAuthorityView, RootFundingScheduleView,
     },
-    workflow::{fleet_coordinator_client, root_authority::validated_root_authority},
+    workflow::{
+        fleet_coordinator_client, fleet_registry_mirror, root_authority::validated_root_authority,
+    },
 };
 use candid::Principal;
 use canic_core::{
@@ -22,9 +24,12 @@ use canic_core::{
         ops::{ic::IcOps, icp_refill::IcpRefillStoreOps},
     },
     dto::fleet_funding::{
+        FleetFundingPolicyRotationRootActivateRequest,
+        FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
         FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
         FleetRootFundingRequest, FleetRootFundingResponse,
     },
+    shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
 
 /// Initialize the independent Root funding journal on fresh install.
@@ -59,7 +64,10 @@ pub fn current_request() -> Result<Option<FleetRootFundingRequest>, InternalErro
 
 /// Reject authority capture while a value-transfer workflow still requires reconciliation.
 pub fn require_authority_snapshot_resumable() -> Result<(), InternalError> {
-    if current_request()?.is_some() || IcpRefillStoreOps::resumable_operation_count() != 0 {
+    if RootFundingOps::policy_rotation_in_progress()
+        || current_request()?.is_some()
+        || IcpRefillStoreOps::resumable_operation_count() != 0
+    {
         return Err(InternalError::conflict());
     }
     Ok(())
@@ -67,11 +75,91 @@ pub fn require_authority_snapshot_resumable() -> Result<(), InternalError> {
 
 /// Return the protected normal-threshold schedule for the sole Root timer owner.
 pub fn schedule() -> Result<RootFundingScheduleView, InternalError> {
+    if RootFundingOps::policy_rotation_in_progress() {
+        return Err(InternalError::conflict());
+    }
     let authority = funding_authority()?;
     Ok(RootFundingScheduleView {
         request_threshold: authority.funding.root_funding.request_threshold.to_u128(),
         cooldown_secs: authority.funding.root_funding.cooldown_secs,
     })
+}
+
+/// Fence this Root and retain one exact Coordinator-authored rotation request.
+pub fn prepare_policy_rotation(
+    request: FleetFundingPolicyRotationRootPrepareRequest,
+) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
+    let authority = funding_authority()?;
+    if let Some(receipt) = RootFundingOps::policy_rotation_prepare_replay(&authority, &request)? {
+        return Ok(receipt);
+    }
+    canic_core::api::runtime::root_funding::RootFundingTimerApi::prepare_policy_rotation_fence()?;
+    let result = RootFundingOps::prepare_policy_rotation(&authority, request, IcOps::now_nanos());
+    if result.is_err() {
+        let _ = canic_core::api::runtime::root_funding::RootFundingTimerApi::reconcile();
+    }
+    result
+}
+
+/// Converge protected authority, Registry mirror and the existing Root journal.
+pub async fn activate_policy_rotation(
+    request: FleetFundingPolicyRotationRootActivateRequest,
+) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
+    let Ok(prepared) = RootFundingOps::prepared_policy_rotation() else {
+        let authority = funding_authority()?;
+        let receipt = RootFundingOps::completed_policy_rotation(&authority, &request)?
+            .ok_or_else(InternalError::conflict)?;
+        canic_core::api::runtime::root_funding::RootFundingTimerApi::reconcile()
+            .map_err(|_| InternalError::unavailable())?;
+        return Ok(receipt);
+    };
+    let plan = &prepared.request;
+    if request.operation_id != plan.operation_id
+        || request.plan_digest != plan.plan_digest
+        || request.predecessor_registry != plan.predecessor_registry
+        || request.predecessor_generation != plan.predecessor_generation
+        || request.successor_generation != plan.successor_generation
+        || request.fleet_subnet_root != plan.root.fleet_subnet_root
+    {
+        return Err(InternalError::conflict());
+    }
+
+    let (protected, root) = validated_root_authority()?;
+    if root != request.fleet_subnet_root {
+        return Err(InternalError::conflict());
+    }
+    let mut successor_funding = protected.binding.funding.clone();
+    successor_funding.root_funding = plan.root.proposed_policy.clone();
+    let current_hash = fleet_subnet_root_funding_policy_hash(&protected.binding.funding);
+    let successor_hash = fleet_subnet_root_funding_policy_hash(&successor_funding);
+    if current_hash == plan.root.predecessor_policy_hash {
+        canic_core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::replace_root_funding_authority(
+            &protected.binding.funding,
+            successor_funding,
+        )?;
+    } else if current_hash != successor_hash {
+        return Err(InternalError::conflict());
+    }
+
+    fleet_registry_mirror::advance_for_funding_policy_rotation(
+        request.predecessor_registry,
+        request.successor_registry.clone(),
+        plan.root.predecessor_policy_hash,
+    )
+    .await?;
+    let authority = funding_authority()?;
+    if authority.registry != request.successor_registry {
+        return Err(InternalError::conflict());
+    }
+    let receipt = RootFundingOps::complete_policy_rotation(
+        &authority,
+        request.operation_id,
+        request.plan_digest,
+        IcOps::now_nanos(),
+    )?;
+    canic_core::api::runtime::root_funding::RootFundingTimerApi::reconcile()
+        .map_err(|_| InternalError::unavailable())?;
+    Ok(receipt)
 }
 
 /// Return the controller-only Root funding and emergency-refill projection.

@@ -22,7 +22,8 @@ use crate::{
 use canic_backup::discovery::DiscoveryError;
 use canic_core::{cdk::utils::hash::DecodeHexError, diagnostics::DiagnosticCode};
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, installed_fleet::InstalledFleetError,
+    CanisterProtocolError, icp::IcpCommandError, icp_config::IcpConfigError,
+    installed_fleet::InstalledFleetError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -86,6 +87,9 @@ pub enum CyclesCommandError {
         code: DiagnosticCode,
         diagnostic: String,
     },
+
+    #[error(transparent)]
+    FundingProtocol(#[from] CanisterProtocolError),
 
     #[error(transparent)]
     RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),

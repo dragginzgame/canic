@@ -91,12 +91,24 @@ mod tests {
     use canic_core::{
         cdk::types::Cycles,
         dto::{
-            fleet_funding::{FleetRootFundingNoGrantReason, FleetRootFundingResponse},
+            fleet_funding::{
+                FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+                FleetFundingPolicyRotationFundingSource,
+                FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationPlan,
+                FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
+                FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationStageRootRequest,
+                FleetFundingPolicyUsage, FleetRootFundingNoGrantReason, FleetRootFundingResponse,
+            },
             icp_refill::{IcpRefillStatus, IcpRefillTrigger},
         },
         ids::{
             CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootAutomaticIcpRefillPolicy,
             FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
+        },
+        shared_support::fleet_funding_policy::{
+            coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
+            fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
+            validate_fleet_funding_policy_rotation_plan,
         },
     };
     use canic_core::{
@@ -141,7 +153,10 @@ mod tests {
     #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
     #[cfg(test)]
-    use canic_control_plane::dto::fleet_coordinator::CoordinatorOperationStatusResponse;
+    use canic_control_plane::dto::fleet_coordinator::{
+        CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
+        FleetFundingPolicyRotationStatusPhase,
+    };
 
     const ISSUER_PACKAGE: &str = "delegation_issuer_stub";
     const COORDINATOR_INSTALL_CYCLES: u128 = 500_000_000_000_000;
@@ -1053,6 +1068,232 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real exhausted-generation, staged-rotation and successor-grant journey"
+    )]
+    fn explicit_policy_rotation_reopens_exhausted_automatic_funding_once() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_root_funding_journey_with_policy(
+            false,
+            30_000_000_000_000,
+            |root, coordinator| {
+                root.root_funding.request_threshold = Cycles::new(192_000_000_000_000);
+                root.root_funding.target_balance = Cycles::new(385_000_000_000_000);
+                root.root_funding.budget.maximum_cycles = root.root_funding.target_balance.clone();
+                root.root_funding.maximum_automatic_grants = 1;
+                root.root_funding.maximum_automatic_cycles =
+                    root.root_funding.target_balance.clone();
+                coordinator.maximum_automatic_grants = 1;
+                coordinator.maximum_automatic_cycles = root.root_funding.target_balance.clone();
+            },
+        );
+        let predecessor = await_root_funding(&fixture, |status| {
+            status.automatic_grants == 1
+                && matches!(
+                    status.last_result,
+                    Some(FleetRootFundingResponse::Granted(_))
+                )
+        });
+        let Some(FleetRootFundingResponse::Granted(first_grant)) = predecessor.last_result.as_ref()
+        else {
+            panic!("predecessor generation must retain its one real grant");
+        };
+        assert_eq!(first_grant.request.operation_sequence, 1);
+        assert_eq!(
+            predecessor.root_policy.request_threshold,
+            Cycles::new(192_000_000_000_000)
+        );
+        assert_eq!(
+            predecessor.root_policy.target_balance,
+            Cycles::new(385_000_000_000_000)
+        );
+
+        fixture.pic.advance_time(Duration::from_hours(91 * 24));
+        for _ in 0..4 {
+            fixture.pic.tick();
+        }
+        let still_exhausted = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(still_exhausted.policy_generation, 1);
+        assert_eq!(still_exhausted.automatic_grants, 1);
+        assert_eq!(still_exhausted.last_result, predecessor.last_result);
+
+        let plan = current_one_root_rotation_plan(&fixture);
+        let plan_digest = fleet_funding_policy_rotation_plan_digest(&plan);
+        let operation_id =
+            fleet_funding_policy_rotation_operation_id(fixture.coordinator, plan_digest);
+        let begin = FleetFundingPolicyRotationBeginRequest {
+            operation_id,
+            plan_digest,
+            header: plan.header.clone(),
+        };
+        let stage = FleetFundingPolicyRotationStageRootRequest {
+            operation_id,
+            plan_digest,
+            root: plan.roots[0].clone(),
+        };
+        let apply = FleetFundingPolicyRotationApplyRequest {
+            operation_id,
+            plan_digest,
+            expected_predecessor_generation: plan.header.predecessor_generation,
+        };
+        assert_rotation_command_accepted(
+            &fixture,
+            "begin",
+            CoordinatorCommand::BeginFundingPolicyRotation(begin.clone()),
+            operation_id,
+        );
+        assert_rotation_command_accepted(
+            &fixture,
+            "stage Root",
+            CoordinatorCommand::StageFundingPolicyRotationRoot(stage.clone()),
+            operation_id,
+        );
+        assert_rotation_command_accepted(
+            &fixture,
+            "apply",
+            CoordinatorCommand::ApplyFundingPolicyRotation(apply.clone()),
+            operation_id,
+        );
+
+        let terminal = await_policy_rotation(&fixture, operation_id);
+        assert_eq!(terminal.predecessor_generation, 1);
+        assert_eq!(terminal.successor_generation, 2);
+        assert_eq!(terminal.affected_root_count, 1);
+        assert_eq!(terminal.retained_historical_automatic_grants, 1);
+        assert_eq!(terminal.apply_operator_debit, Cycles::new(0));
+
+        let rotated_root = root_funding_status(&fixture.pic, fixture.root);
+        assert_eq!(rotated_root.policy_generation, 2);
+        assert_eq!(rotated_root.historical_automatic_grants, 1);
+        assert_eq!(rotated_root.automatic_grants, 0);
+        assert!(rotated_root.rotation_current.is_none());
+        assert!(rotated_root.rotation_last.is_some());
+        let rotated_coordinator = coordinator_funding_status(&fixture);
+        assert_eq!(rotated_coordinator.policy_generation, 2);
+        assert_eq!(rotated_coordinator.historical_automatic_grants, 1);
+        assert_eq!(rotated_coordinator.automatic_grants, 0);
+        assert_eq!(rotated_coordinator.rotation_checkpoint_count, 1);
+        assert_eq!(rotated_coordinator.rotation_checkpoint_root_count, 1);
+
+        assert_rotation_command_accepted(
+            &fixture,
+            "terminal begin replay",
+            CoordinatorCommand::BeginFundingPolicyRotation(begin.clone()),
+            operation_id,
+        );
+        assert_rotation_command_accepted(
+            &fixture,
+            "terminal stage replay",
+            CoordinatorCommand::StageFundingPolicyRotationRoot(stage.clone()),
+            operation_id,
+        );
+        assert_rotation_command_accepted(
+            &fixture,
+            "terminal apply replay",
+            CoordinatorCommand::ApplyFundingPolicyRotation(apply),
+            operation_id,
+        );
+        let mut drifted_begin = begin;
+        drifted_begin.header.topology_catalog_digest[0] ^= 1;
+        assert!(
+            coordinator_command(
+                &fixture.pic,
+                fixture.coordinator,
+                CoordinatorCommand::BeginFundingPolicyRotation(drifted_begin),
+            )
+            .is_err(),
+            "terminal begin replay must reject payload drift"
+        );
+        let mut drifted_stage = stage;
+        drifted_stage.root.placement.node_count += 1;
+        assert!(
+            coordinator_command(
+                &fixture.pic,
+                fixture.coordinator,
+                CoordinatorCommand::StageFundingPolicyRotationRoot(drifted_stage),
+            )
+            .is_err(),
+            "terminal stage replay must reject payload drift"
+        );
+        assert_eq!(
+            coordinator_funding_status(&fixture).rotation_checkpoint_count,
+            1,
+            "terminal command replay must not append a second checkpoint"
+        );
+
+        let mut drain_sequence = 0_u8;
+        loop {
+            let observed = root_funding_status(&fixture.pic, fixture.root);
+            if observed.automatic_grants == 1
+                || fixture.pic.cycle_balance(fixture.root)
+                    < rotated_root.root_policy.request_threshold.to_u128()
+            {
+                break;
+            }
+            assert!(
+                drain_sequence < 40,
+                "Root drain must remain bounded: balance={} threshold={} status={observed:?}",
+                fixture.pic.cycle_balance(fixture.root),
+                rotated_root.root_policy.request_threshold.to_u128(),
+            );
+            let descendant = if drain_sequence < 20 {
+                fixture.descendant
+            } else {
+                fixture.alternate_descendant
+            };
+            let transferred = request_descendant_funding(
+                &fixture.pic,
+                fixture.root,
+                descendant,
+                descendant_funding_request(
+                    &fixture.pic,
+                    0x60_u8
+                        .checked_add(drain_sequence)
+                        .expect("bounded drain request identity"),
+                ),
+            );
+            assert_eq!(transferred, 5_000_000_000_000);
+            drain_sequence += 1;
+            if fixture.pic.cycle_balance(fixture.root)
+                >= rotated_root.root_policy.request_threshold.to_u128()
+            {
+                fixture.pic.advance_time(Duration::from_secs(61));
+                fixture.pic.tick();
+            }
+        }
+        let after_drain = root_funding_status(&fixture.pic, fixture.root);
+        assert!(
+            fixture.pic.cycle_balance(fixture.root)
+                < rotated_root.root_policy.request_threshold.to_u128()
+                || after_drain.automatic_grants == 1
+        );
+
+        let successor = await_root_funding(&fixture, |status| {
+            status.policy_generation == 2
+                && status.historical_automatic_grants == 1
+                && status.automatic_grants == 1
+                && matches!(
+                    status.last_result,
+                    Some(FleetRootFundingResponse::Granted(ref grant))
+                        if grant.request.operation_sequence == 2
+                )
+        });
+        let Some(FleetRootFundingResponse::Granted(successor_grant)) =
+            successor.last_result.as_ref()
+        else {
+            panic!("successor generation must retain its one real grant");
+        };
+        assert_eq!(successor_grant.request.operation_sequence, 2);
+        assert_eq!(successor.historical_automatic_grants, 1);
+        assert_eq!(successor.automatic_grants, 1);
+        let successor_coordinator = coordinator_funding_status(&fixture);
+        assert_eq!(successor_coordinator.historical_automatic_grants, 1);
+        assert_eq!(successor_coordinator.automatic_grants, 1);
+        assert_eq!(successor_coordinator.rotation_checkpoint_count, 1);
+    }
+
+    #[test]
     fn terminal_coordinator_reserve_denial_runs_one_real_icp_fallback() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = setup_system_icp_funding_journey(490_000_000_000_000);
@@ -1427,6 +1668,7 @@ mod tests {
         coordinator: Principal,
         root: Principal,
         descendant: Principal,
+        alternate_descendant: Principal,
         root_balance_before_activation: u128,
     }
 
@@ -1592,6 +1834,7 @@ mod tests {
             coordinator,
             root: root_fixture.root_id,
             descendant: active_components.issuer.canister_id,
+            alternate_descendant: active_components.verifier.canister_id,
             root_balance_before_activation,
         }
     }
@@ -1694,6 +1937,7 @@ mod tests {
             coordinator,
             root: root_fixture.root_id,
             descendant: active_components.issuer.canister_id,
+            alternate_descendant: active_components.verifier.canister_id,
             root_balance_before_activation,
         }
     }
@@ -1998,6 +2242,176 @@ mod tests {
             "Root protected funding journey",
         );
         panic!("Root protected funding journey did not become terminal");
+    }
+
+    #[cfg(test)]
+    fn coordinator_funding_status(
+        fixture: &RootFundingJourneyFixture,
+    ) -> CoordinatorFundingStatusResponse {
+        let CoordinatorStatusResponse::Funding(status) = coordinator_status(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::Funding,
+        )
+        .expect("query protected Coordinator funding status") else {
+            panic!("Coordinator returned a differently correlated funding status");
+        };
+        status
+    }
+
+    #[cfg(test)]
+    fn current_one_root_rotation_plan(
+        fixture: &RootFundingJourneyFixture,
+    ) -> FleetFundingPolicyRotationPlan {
+        let coordinator = coordinator_funding_status(fixture);
+        let root = root_funding_status(&fixture.pic, fixture.root);
+        let CoordinatorStatusResponse::RegistryVersion(predecessor_registry) = coordinator_status(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::RegistryVersion,
+        )
+        .expect("query predecessor Registry version") else {
+            panic!("Coordinator returned a differently correlated Registry version");
+        };
+        assert_eq!(coordinator.policy_generation, root.policy_generation);
+        assert!(coordinator.rotation.is_none());
+        assert!(root.rotation_current.is_none());
+        assert!(root.current_operation.is_none());
+        let proposed_coordinator_policy = coordinator
+            .policy
+            .clone()
+            .expect("active Coordinator funding policy");
+        let predecessor_usage = FleetFundingPolicyUsage {
+            historical_automatic_grants: coordinator.historical_automatic_grants,
+            historical_automatic_cycles: coordinator.historical_automatic_cycles.clone(),
+            generation_automatic_grants: coordinator.automatic_grants,
+            generation_automatic_cycles: coordinator.automatic_cycles.clone(),
+        };
+        let root_usage = FleetFundingPolicyUsage {
+            historical_automatic_grants: root.historical_automatic_grants,
+            historical_automatic_cycles: root.historical_automatic_cycles.clone(),
+            generation_automatic_grants: root.automatic_grants,
+            generation_automatic_cycles: root.automatic_cycles.clone(),
+        };
+        assert_eq!(predecessor_usage, root_usage);
+        let placement = |canister| FleetFundingPolicyRotationPlacementEvidence {
+            subnet: SubnetId::from_principal(
+                fixture
+                    .pic
+                    .get_subnet(canister)
+                    .expect("funding canister placement Subnet"),
+            ),
+            node_count: 1,
+            cost_multiplier_numerator: 1,
+            cost_multiplier_denominator: 1,
+            fiduciary: false,
+            acknowledge_fiduciary_cost: false,
+        };
+        let roots = vec![FleetFundingPolicyRotationRootPlan {
+            fleet_subnet_root: fixture.root,
+            predecessor_policy_hash: root.policy_hash,
+            predecessor_usage: root_usage,
+            proposed_policy: root.root_policy,
+            placement: placement(fixture.root),
+        }];
+        let maximum_new_automatic_cycles =
+            proposed_coordinator_policy.maximum_automatic_cycles.clone();
+        let mut plan = FleetFundingPolicyRotationPlan {
+            header: FleetFundingPolicyRotationPlanHeader {
+                predecessor_registry,
+                predecessor_generation: coordinator.policy_generation,
+                successor_generation: coordinator
+                    .policy_generation
+                    .checked_add(1)
+                    .expect("successor funding generation"),
+                predecessor_coordinator_policy_hash: coordinator_root_funding_policy_hash(
+                    &proposed_coordinator_policy,
+                ),
+                predecessor_usage,
+                proposed_coordinator_policy,
+                topology_catalog_digest: [0; 32],
+                coordinator_placement: placement(fixture.coordinator),
+                affected_root_count: 1,
+                roots_digest: [0; 32],
+                maximum_new_automatic_cycles,
+                apply_operator_debit: Cycles::new(0),
+                funding_source: FleetFundingPolicyRotationFundingSource::CoordinatorTreasury,
+            },
+            roots,
+        };
+        plan.header.roots_digest = fleet_funding_policy_rotation_roots_digest(&plan.roots);
+        validate_fleet_funding_policy_rotation_plan(&plan).expect("valid live rotation plan");
+        plan
+    }
+
+    #[cfg(test)]
+    fn assert_rotation_command_accepted(
+        fixture: &RootFundingJourneyFixture,
+        label: &str,
+        command: CoordinatorCommand,
+        operation_id: [u8; 32],
+    ) {
+        let response = coordinator_command(&fixture.pic, fixture.coordinator, command)
+            .unwrap_or_else(|error| {
+                panic!("accept exact funding-policy rotation {label}: {error:?}")
+            });
+        let CoordinatorCommandResponse::OperationAccepted(receipt) = response else {
+            panic!("Coordinator returned a differently correlated rotation response");
+        };
+        assert_eq!(receipt.operation_id, operation_id);
+    }
+
+    #[cfg(test)]
+    fn await_policy_rotation(
+        fixture: &RootFundingJourneyFixture,
+        operation_id: [u8; 32],
+    ) -> FleetFundingPolicyRotationReceipt {
+        for _ in 0..128 {
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::FundingPolicyRotation(status),
+            ) = coordinator_status(
+                &fixture.pic,
+                fixture.coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query funding-policy rotation status")
+            else {
+                panic!("Coordinator returned a differently correlated operation status");
+            };
+            if let FleetFundingPolicyRotationStatusPhase::Completed(receipt) = status.phase {
+                return *receipt;
+            }
+            fixture.pic.advance_time(Duration::from_secs(1));
+            fixture.pic.tick();
+        }
+        report_canister_diagnostics(
+            &fixture.pic,
+            fixture.coordinator,
+            Principal::anonymous(),
+            "Coordinator funding-policy rotation journey",
+        );
+        panic!("Coordinator funding-policy rotation did not become terminal");
+    }
+
+    #[cfg(test)]
+    fn descendant_funding_request(
+        pic: &PocketIc,
+        request_byte: u8,
+    ) -> canic::dto::capability::RootCapabilityEnvelopeV1 {
+        canic::dto::capability::RootCapabilityEnvelopeV1 {
+            service: canic::dto::capability::CapabilityService::Root,
+            capability_version: canic::dto::capability::CAPABILITY_VERSION_V1,
+            capability: canic::dto::rpc::Request::Cycles(canic::dto::rpc::CyclesRequest {
+                cycles: 5_000_000_000_000,
+                metadata: None,
+            }),
+            proof: canic::dto::capability::CapabilityProof::Structural,
+            metadata: canic::dto::capability::CapabilityRequestMetadata {
+                request_id: [request_byte; 32],
+                issued_at_ns: pic.get_time().as_nanos_since_unix_epoch(),
+                ttl_ns: 300_000_000_000,
+            },
+        }
     }
 
     #[cfg(test)]

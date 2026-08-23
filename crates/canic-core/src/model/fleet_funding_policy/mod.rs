@@ -4,11 +4,17 @@
 //! Does not own: config decoding, canonical hashing, storage, accounting, or effects.
 //! Boundary: host and canister admission validate the same protected policy shapes.
 
-use crate::ids::{
-    COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES,
-    FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES, FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES,
-    FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
-    FleetSubnetRootFundingPolicy,
+use crate::{
+    dto::fleet_funding::{
+        FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
+        FleetFundingPolicyRotationPlan, MAX_FLEET_FUNDING_POLICY_ROTATION_ROOTS,
+    },
+    ids::{
+        COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES,
+        FLEET_SUBNET_ROOT_FUNDING_REQUEST_FLOOR_CYCLES, FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES,
+        FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy,
+    },
 };
 use candid::Principal;
 use thiserror::Error as ThisError;
@@ -119,6 +125,136 @@ pub enum FleetFundingPolicyValidationError {
     AutomaticIcpRefillMaximumZero,
     #[error("automatic ICP refill spend cap must admit one maximum per-call refill")]
     AutomaticIcpRefillMaximumBelowPerCallMaximum,
+}
+
+/// Exact invariant rejected for one no-effect funding-policy rotation plan.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ThisError)]
+pub enum FleetFundingPolicyRotationValidationError {
+    #[error("funding-policy rotation generation is not the exact monotonic successor")]
+    GenerationMismatch,
+    #[error("funding-policy rotation must contain one to 4,096 exact Roots")]
+    RootCountInvalid,
+    #[error("funding-policy rotation Roots are not strictly ordered and unique")]
+    RootOrderInvalid,
+    #[error("funding-policy rotation retained usage is inconsistent")]
+    UsageMismatch,
+    #[error("funding-policy rotation maximum exposure is inconsistent")]
+    ExposureMismatch,
+    #[error("funding-policy rotation apply must have zero immediate operator debit")]
+    OperatorDebitNonzero,
+    #[error("funding-policy rotation placement evidence is invalid")]
+    PlacementEvidenceInvalid,
+    #[error("funding-policy rotation profile differs from physical topology")]
+    ProfileTopologyMismatch,
+    #[error("funding-policy rotation contains invalid funding policy")]
+    PolicyInvalid,
+}
+
+/// Validate the pure bounded and economic invariants of one complete rotation plan.
+pub fn validate_fleet_funding_policy_rotation_plan(
+    plan: &FleetFundingPolicyRotationPlan,
+) -> Result<(), FleetFundingPolicyRotationValidationError> {
+    let header = &plan.header;
+    if header.predecessor_generation == 0
+        || header
+            .predecessor_generation
+            .checked_add(1)
+            .is_none_or(|successor| successor != header.successor_generation)
+    {
+        return Err(FleetFundingPolicyRotationValidationError::GenerationMismatch);
+    }
+    if plan.roots.is_empty()
+        || plan.roots.len() > MAX_FLEET_FUNDING_POLICY_ROTATION_ROOTS
+        || usize::try_from(header.affected_root_count).ok() != Some(plan.roots.len())
+    {
+        return Err(FleetFundingPolicyRotationValidationError::RootCountInvalid);
+    }
+    if plan
+        .roots
+        .windows(2)
+        .any(|roots| roots[0].fleet_subnet_root >= roots[1].fleet_subnet_root)
+    {
+        return Err(FleetFundingPolicyRotationValidationError::RootOrderInvalid);
+    }
+    if header.maximum_new_automatic_cycles
+        != header.proposed_coordinator_policy.maximum_automatic_cycles
+    {
+        return Err(FleetFundingPolicyRotationValidationError::ExposureMismatch);
+    }
+    if header.apply_operator_debit.to_u128() != 0
+        || header.funding_source != FleetFundingPolicyRotationFundingSource::CoordinatorTreasury
+    {
+        return Err(FleetFundingPolicyRotationValidationError::OperatorDebitNonzero);
+    }
+    validate_rotation_placement(&header.coordinator_placement)?;
+    validate_coordinator_root_funding_policy(&header.proposed_coordinator_policy)
+        .map_err(|_| FleetFundingPolicyRotationValidationError::PolicyInvalid)?;
+
+    let mut authorities = Vec::with_capacity(plan.roots.len());
+    let mut historical_grants = 0_u64;
+    let mut historical_cycles = 0_u128;
+    let mut generation_grants = 0_u32;
+    let mut generation_cycles = 0_u128;
+    for root in &plan.roots {
+        validate_rotation_placement(&root.placement)?;
+        let authority = FleetSubnetRootFundingAuthority {
+            root_funding: root.proposed_policy.clone(),
+            icp_refill: None,
+        };
+        validate_fleet_subnet_root_funding_authority(&authority, false)
+            .map_err(|_| FleetFundingPolicyRotationValidationError::PolicyInvalid)?;
+        historical_grants = historical_grants
+            .checked_add(root.predecessor_usage.historical_automatic_grants)
+            .ok_or(FleetFundingPolicyRotationValidationError::UsageMismatch)?;
+        historical_cycles = historical_cycles
+            .checked_add(root.predecessor_usage.historical_automatic_cycles.to_u128())
+            .ok_or(FleetFundingPolicyRotationValidationError::UsageMismatch)?;
+        generation_grants = generation_grants
+            .checked_add(root.predecessor_usage.generation_automatic_grants)
+            .ok_or(FleetFundingPolicyRotationValidationError::UsageMismatch)?;
+        generation_cycles = generation_cycles
+            .checked_add(root.predecessor_usage.generation_automatic_cycles.to_u128())
+            .ok_or(FleetFundingPolicyRotationValidationError::UsageMismatch)?;
+        authorities.push(authority);
+    }
+    let usage = &header.predecessor_usage;
+    if usage.historical_automatic_grants != historical_grants
+        || usage.historical_automatic_cycles.to_u128() != historical_cycles
+        || usage.generation_automatic_grants != generation_grants
+        || usage.generation_automatic_cycles.to_u128() != generation_cycles
+    {
+        return Err(FleetFundingPolicyRotationValidationError::UsageMismatch);
+    }
+    validate_fleet_root_funding_capacity(&header.proposed_coordinator_policy, authorities.iter())
+        .map_err(|_| FleetFundingPolicyRotationValidationError::PolicyInvalid)?;
+    let crosses_subnets = plan
+        .roots
+        .iter()
+        .any(|root| root.placement.subnet != header.coordinator_placement.subnet);
+    let profile_matches = match header.proposed_coordinator_policy.funding_profile {
+        FleetFundingProfile::SingleSubnet => !crosses_subnets,
+        FleetFundingProfile::PreviewMultiSubnet | FleetFundingProfile::MultiSubnet => {
+            crosses_subnets
+        }
+    };
+    if !profile_matches {
+        return Err(FleetFundingPolicyRotationValidationError::ProfileTopologyMismatch);
+    }
+    Ok(())
+}
+
+const fn validate_rotation_placement(
+    placement: &FleetFundingPolicyRotationPlacementEvidence,
+) -> Result<(), FleetFundingPolicyRotationValidationError> {
+    let acknowledgement_matches = placement.fiduciary == placement.acknowledge_fiduciary_cost;
+    if placement.node_count == 0
+        || placement.cost_multiplier_numerator == 0
+        || placement.cost_multiplier_denominator == 0
+        || !acknowledgement_matches
+    {
+        return Err(FleetFundingPolicyRotationValidationError::PlacementEvidenceInvalid);
+    }
+    Ok(())
 }
 
 /// Validate one immutable Coordinator treasury policy.
@@ -390,8 +526,9 @@ const fn profile_reserve(profile: FleetFundingProfile) -> u128 {
 
 const fn profile_root_balances(profile: FleetFundingProfile) -> (u128, u128) {
     match profile {
-        FleetFundingProfile::SingleSubnet => (10 * TRILLION_CYCLES, 30 * TRILLION_CYCLES),
-        FleetFundingProfile::PreviewMultiSubnet => (10 * TRILLION_CYCLES, 30 * TRILLION_CYCLES),
+        FleetFundingProfile::SingleSubnet | FleetFundingProfile::PreviewMultiSubnet => {
+            (10 * TRILLION_CYCLES, 30 * TRILLION_CYCLES)
+        }
         FleetFundingProfile::MultiSubnet => (250 * TRILLION_CYCLES, 1_000 * TRILLION_CYCLES),
     }
 }
@@ -405,7 +542,20 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Cycles,
-        ids::{CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingPolicy},
+        dto::{
+            fleet_funding::{
+                FleetFundingPolicyRotationFundingSource,
+                FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationPlan,
+                FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationRootPlan,
+                FleetFundingPolicyUsage,
+            },
+            fleet_registry::FleetRegistryVersion,
+        },
+        ids::{
+            AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+            FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
+            FleetSubnetRootFundingPolicy, SubnetId,
+        },
     };
 
     #[test]
@@ -524,6 +674,161 @@ mod tests {
             .expect("preview Coordinator admits the Root target");
         validate_fleet_root_funding_capacity(&coordinator, [&root])
             .expect("preview lifetime caps are mutually bounded");
+    }
+
+    #[test]
+    fn rotation_plan_is_bounded_monotonic_and_retains_exact_usage() {
+        let plan = rotation_plan();
+        validate_fleet_funding_policy_rotation_plan(&plan).expect("valid rotation plan");
+
+        let mut changed = plan.clone();
+        changed.header.successor_generation += 1;
+        assert_eq!(
+            validate_fleet_funding_policy_rotation_plan(&changed),
+            Err(FleetFundingPolicyRotationValidationError::GenerationMismatch)
+        );
+
+        let mut changed = plan.clone();
+        changed.header.predecessor_usage.generation_automatic_grants += 1;
+        assert_eq!(
+            validate_fleet_funding_policy_rotation_plan(&changed),
+            Err(FleetFundingPolicyRotationValidationError::UsageMismatch)
+        );
+
+        let mut changed = plan.clone();
+        changed.roots[1].fleet_subnet_root = changed.roots[0].fleet_subnet_root;
+        assert_eq!(
+            validate_fleet_funding_policy_rotation_plan(&changed),
+            Err(FleetFundingPolicyRotationValidationError::RootOrderInvalid)
+        );
+
+        let mut changed = plan.clone();
+        changed.header.apply_operator_debit = Cycles::new(1);
+        assert_eq!(
+            validate_fleet_funding_policy_rotation_plan(&changed),
+            Err(FleetFundingPolicyRotationValidationError::OperatorDebitNonzero)
+        );
+
+        let mut changed = plan;
+        changed.roots[0].placement.acknowledge_fiduciary_cost = true;
+        assert_eq!(
+            validate_fleet_funding_policy_rotation_plan(&changed),
+            Err(FleetFundingPolicyRotationValidationError::PlacementEvidenceInvalid)
+        );
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one complete valid rotation fixture makes every bound explicit"
+    )]
+    fn rotation_plan() -> FleetFundingPolicyRotationPlan {
+        let coordinator = Principal::from_slice(&[41; 29]);
+        let coordinator_subnet = SubnetId::from_principal(Principal::from_slice(&[42; 29]));
+        let root_subnet = SubnetId::from_principal(Principal::from_slice(&[43; 29]));
+        let policy = FleetSubnetRootFundingPolicy {
+            funding_profile: FleetFundingProfile::PreviewMultiSubnet,
+            request_threshold: Cycles::new(10 * TRILLION_CYCLES),
+            target_balance: Cycles::new(30 * TRILLION_CYCLES),
+            cooldown_secs: THIRTY_DAYS_SECS,
+            budget: CyclesFundingBudget {
+                window_secs: NINETY_DAYS_SECS,
+                maximum_cycles: Cycles::new(30 * TRILLION_CYCLES),
+            },
+            maximum_automatic_grants: 2,
+            maximum_automatic_cycles: Cycles::new(60 * TRILLION_CYCLES),
+        };
+        let usage = |grants, cycles| FleetFundingPolicyUsage {
+            historical_automatic_grants: u64::from(grants),
+            historical_automatic_cycles: Cycles::new(cycles),
+            generation_automatic_grants: grants,
+            generation_automatic_cycles: Cycles::new(cycles),
+        };
+        let roots = vec![
+            FleetFundingPolicyRotationRootPlan {
+                fleet_subnet_root: Principal::from_slice(&[1; 29]),
+                predecessor_policy_hash: [51; 32],
+                predecessor_usage: usage(1, 30 * TRILLION_CYCLES),
+                proposed_policy: policy.clone(),
+                placement: FleetFundingPolicyRotationPlacementEvidence {
+                    subnet: coordinator_subnet,
+                    node_count: 13,
+                    cost_multiplier_numerator: 1,
+                    cost_multiplier_denominator: 1,
+                    fiduciary: false,
+                    acknowledge_fiduciary_cost: false,
+                },
+            },
+            FleetFundingPolicyRotationRootPlan {
+                fleet_subnet_root: Principal::from_slice(&[2; 29]),
+                predecessor_policy_hash: [52; 32],
+                predecessor_usage: usage(1, 30 * TRILLION_CYCLES),
+                proposed_policy: policy,
+                placement: FleetFundingPolicyRotationPlacementEvidence {
+                    subnet: root_subnet,
+                    node_count: 13,
+                    cost_multiplier_numerator: 1,
+                    cost_multiplier_denominator: 1,
+                    fiduciary: false,
+                    acknowledge_fiduciary_cost: false,
+                },
+            },
+        ];
+        FleetFundingPolicyRotationPlan {
+            header: FleetFundingPolicyRotationPlanHeader {
+                predecessor_registry: FleetRegistryVersion {
+                    authority: FleetRegistryAuthority {
+                        binding: FleetCoordinatorBinding {
+                            fleet: FleetBinding {
+                                fleet: FleetKey {
+                                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                                    fleet_id: FleetId::from_generated_bytes([44; 32]),
+                                },
+                                app: AppId::from("rotation-policy-test"),
+                            },
+                            coordinator_subnet,
+                            coordinator,
+                        },
+                        epoch: 1,
+                    },
+                    revision: 7,
+                    content_hash: [45; 32],
+                },
+                predecessor_generation: 3,
+                successor_generation: 4,
+                predecessor_coordinator_policy_hash: [46; 32],
+                predecessor_usage: FleetFundingPolicyUsage {
+                    historical_automatic_grants: 2,
+                    historical_automatic_cycles: Cycles::new(60 * TRILLION_CYCLES),
+                    generation_automatic_grants: 2,
+                    generation_automatic_cycles: Cycles::new(60 * TRILLION_CYCLES),
+                },
+                proposed_coordinator_policy: FleetCoordinatorRootFundingPolicy {
+                    funding_profile: FleetFundingProfile::PreviewMultiSubnet,
+                    minimum_reserve_cycles: Cycles::new(80 * TRILLION_CYCLES),
+                    budget: CyclesFundingBudget {
+                        window_secs: NINETY_DAYS_SECS,
+                        maximum_cycles: Cycles::new(60 * TRILLION_CYCLES),
+                    },
+                    maximum_automatic_grants: 4,
+                    maximum_automatic_cycles: Cycles::new(120 * TRILLION_CYCLES),
+                },
+                topology_catalog_digest: [47; 32],
+                coordinator_placement: FleetFundingPolicyRotationPlacementEvidence {
+                    subnet: coordinator_subnet,
+                    node_count: 13,
+                    cost_multiplier_numerator: 1,
+                    cost_multiplier_denominator: 1,
+                    fiduciary: false,
+                    acknowledge_fiduciary_cost: false,
+                },
+                affected_root_count: 2,
+                roots_digest: [48; 32],
+                maximum_new_automatic_cycles: Cycles::new(120 * TRILLION_CYCLES),
+                apply_operator_debit: Cycles::new(0),
+                funding_source: FleetFundingPolicyRotationFundingSource::CoordinatorTreasury,
+            },
+            roots,
+        }
     }
 
     fn authority() -> FleetSubnetRootFundingAuthority {

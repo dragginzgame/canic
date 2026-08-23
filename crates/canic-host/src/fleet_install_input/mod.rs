@@ -1392,12 +1392,7 @@ fn validate_root_funding_profile_baseline(
     let owner = format!("Fleet Subnet Root {}", root.placement_subnet);
     let nodes = root.placement_cost.node_count;
     let (threshold_base, root_creation_base, store_creation_base) = match profile {
-        FleetFundingProfile::SingleSubnet => (
-            10 * TRILLION_CYCLES,
-            30 * TRILLION_CYCLES,
-            10 * TRILLION_CYCLES,
-        ),
-        FleetFundingProfile::PreviewMultiSubnet => (
+        FleetFundingProfile::SingleSubnet | FleetFundingProfile::PreviewMultiSubnet => (
             10 * TRILLION_CYCLES,
             30 * TRILLION_CYCLES,
             10 * TRILLION_CYCLES,

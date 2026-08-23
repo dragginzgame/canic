@@ -11,7 +11,7 @@ use crate::{
     dto::{
         fleet_coordinator::{
             CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
-            FleetCoordinatorInitArgs,
+            FleetCoordinatorInitArgs, FleetFundingPolicyRotationStatusPhase,
         },
         root::RootRemovalOperationStatus,
     },
@@ -24,7 +24,7 @@ use crate::{
         FleetComponentProvisioningRootProvisionCallView,
         FleetComponentProvisioningRootProvisionDisposition,
         FleetComponentRuntimeActivationCallView, FleetComponentRuntimeActivationDisposition,
-        FleetRootFundingCallView, FleetRootFundingDisposition,
+        FleetFundingPolicyRotationStep, FleetRootFundingCallView, FleetRootFundingDisposition,
     },
 };
 use candid::{CandidType, Principal};
@@ -45,7 +45,11 @@ use canic_core::{
         },
         error::Error,
         fleet_funding::{
-            FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
+            FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+            FleetFundingPolicyRotationRootActivateRequest,
+            FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
+            FleetFundingPolicyRotationStageRootRequest, FleetRootFundingAcceptanceReceipt,
+            FleetRootFundingRequest, FleetRootFundingResponse,
         },
         fleet_registry::{
             FleetRegistry, FleetRegistryActivationRequest, FleetRegistryActivationResponse,
@@ -69,6 +73,8 @@ use std::time::Duration;
 #[derive(CandidType)]
 enum RemoteRootCommand {
     AcceptFunding(canic_core::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
+    ActivateFundingPolicyRotation(FleetFundingPolicyRotationRootActivateRequest),
+    PrepareFundingPolicyRotation(FleetFundingPolicyRotationRootPrepareRequest),
     ProvisionComponents(RootComponentProvisioningAcceptanceRequest),
     RemoveRoot(RootRemovalRequest),
     SynchronizeComponentDirectories(RootComponentDirectorySynchronizationRequest),
@@ -77,7 +83,9 @@ enum RemoteRootCommand {
 #[derive(CandidType, Deserialize)]
 enum RemoteRootCommandResponse {
     AcceptFunding(Box<FleetRootFundingAcceptanceReceipt>),
+    ActivateFundingPolicyRotation(Box<FleetFundingPolicyRotationRootReceipt>),
     OperationAccepted(Box<OperationReceipt>),
+    PrepareFundingPolicyRotation(Box<FleetFundingPolicyRotationRootReceipt>),
     SynchronizeComponentDirectories(Box<RootComponentDirectorySynchronizationResponse>),
 }
 
@@ -199,6 +207,27 @@ impl FleetCoordinatorWorkflow {
         enabled: bool,
     ) -> Result<SetStateResponse<bool>, InternalError> {
         FleetCoordinatorOps::set_root_funding_enabled(enabled)
+    }
+
+    pub(crate) fn begin_funding_policy_rotation(
+        request: FleetFundingPolicyRotationBeginRequest,
+    ) -> Result<OperationReceipt, InternalError> {
+        FleetCoordinatorOps::begin_funding_policy_rotation(request, IcOps::now_nanos())
+    }
+
+    pub(crate) fn stage_funding_policy_rotation_root(
+        request: FleetFundingPolicyRotationStageRootRequest,
+    ) -> Result<OperationReceipt, InternalError> {
+        FleetCoordinatorOps::stage_funding_policy_rotation_root(request, IcOps::now_nanos())
+    }
+
+    pub(crate) fn apply_funding_policy_rotation(
+        request: FleetFundingPolicyRotationApplyRequest,
+    ) -> Result<OperationReceipt, InternalError> {
+        let receipt =
+            FleetCoordinatorOps::apply_funding_policy_rotation(request, IcOps::now_nanos())?;
+        schedule_funding_policy_rotation(receipt.operation_id, Duration::ZERO);
+        Ok(receipt)
     }
 
     pub(crate) fn require_root_funding_snapshot_resumable() -> Result<(), InternalError> {
@@ -406,7 +435,9 @@ impl FleetCoordinatorWorkflow {
                 Ok(*receipt)
             }
             RemoteRootCommandResponse::AcceptFunding(_)
+            | RemoteRootCommandResponse::ActivateFundingPolicyRotation(_)
             | RemoteRootCommandResponse::OperationAccepted(_)
+            | RemoteRootCommandResponse::PrepareFundingPolicyRotation(_)
             | RemoteRootCommandResponse::SynchronizeComponentDirectories(_) => {
                 Err(InternalError::conflict())
             }
@@ -478,6 +509,83 @@ impl FleetCoordinatorWorkflow {
     }
 }
 
+fn schedule_funding_policy_rotation(operation_id: [u8; 32], delay: Duration) {
+    TimerApi::defer_lifecycle_required(delay, "Fleet funding-policy rotation", async move {
+        match advance_funding_policy_rotation_once(operation_id).await {
+            Ok(true) => {}
+            Ok(false) => schedule_funding_policy_rotation(operation_id, Duration::ZERO),
+            Err(_) => {
+                schedule_funding_policy_rotation(operation_id, Duration::from_secs(1));
+            }
+        }
+    });
+}
+
+async fn advance_funding_policy_rotation_once(
+    operation_id: [u8; 32],
+) -> Result<bool, InternalError> {
+    let step = match FleetCoordinatorOps::funding_policy_rotation_step() {
+        Ok(step) => step,
+        Err(error) => {
+            let terminal = FleetCoordinatorOps::funding_policy_rotation_status(operation_id)?
+                .is_some_and(|status| {
+                    matches!(
+                        status.phase,
+                        FleetFundingPolicyRotationStatusPhase::Completed(_)
+                    )
+                });
+            if terminal {
+                return Ok(true);
+            }
+            return Err(error);
+        }
+    };
+    match step {
+        FleetFundingPolicyRotationStep::PrepareRoot {
+            fleet_subnet_root,
+            request,
+        } => {
+            if request.operation_id != operation_id {
+                return Err(InternalError::conflict());
+            }
+            let receipt =
+                call_root_funding_policy_rotation_prepare(fleet_subnet_root, request).await?;
+            FleetCoordinatorOps::record_funding_policy_rotation_root_prepared(
+                receipt,
+                IcOps::now_nanos(),
+            )?;
+            Ok(false)
+        }
+        FleetFundingPolicyRotationStep::PublishRegistry => {
+            FleetCoordinatorOps::publish_funding_policy_rotation_registry(IcOps::now_nanos())?;
+            Ok(false)
+        }
+        FleetFundingPolicyRotationStep::ActivateRoot {
+            fleet_subnet_root,
+            request,
+        } => {
+            if request.operation_id != operation_id {
+                return Err(InternalError::conflict());
+            }
+            let receipt =
+                call_root_funding_policy_rotation_activate(fleet_subnet_root, request).await?;
+            FleetCoordinatorOps::record_funding_policy_rotation_root_activated(
+                receipt,
+                IcOps::now_nanos(),
+            )?;
+            Ok(false)
+        }
+        FleetFundingPolicyRotationStep::Complete => {
+            let receipt =
+                FleetCoordinatorOps::complete_funding_policy_rotation(IcOps::now_nanos())?;
+            if receipt.operation_id != operation_id {
+                return Err(InternalError::conflict());
+            }
+            Ok(true)
+        }
+    }
+}
+
 fn schedule_coordinator_root_removal(operation_id: [u8; 32], delay: Duration) {
     TimerApi::defer_lifecycle_required(delay, "Fleet Coordinator root removal", async move {
         match advance_coordinator_root_removal_once(operation_id).await {
@@ -495,7 +603,8 @@ async fn advance_coordinator_root_removal_once(
 ) -> Result<bool, InternalError> {
     let current = match FleetCoordinatorOps::operation_status(operation_id)? {
         CoordinatorOperationStatusResponse::RootRemoval(current) => current,
-        CoordinatorOperationStatusResponse::ComponentProvisioning(_) => {
+        CoordinatorOperationStatusResponse::ComponentProvisioning(_)
+        | CoordinatorOperationStatusResponse::FundingPolicyRotation(_) => {
             return Err(InternalError::conflict());
         }
     };
@@ -844,6 +953,36 @@ async fn call_root_funding_acceptance(
     }
 }
 
+async fn call_root_funding_policy_rotation_prepare(
+    fleet_subnet_root: Principal,
+    request: FleetFundingPolicyRotationRootPrepareRequest,
+) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
+    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+        .with_arg(RemoteRootCommand::PrepareFundingPolicyRotation(request))?
+        .execute()
+        .await?;
+    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+    match response.map_err(InternalError::observed_public)? {
+        RemoteRootCommandResponse::PrepareFundingPolicyRotation(receipt) => Ok(*receipt),
+        _ => Err(InternalError::conflict()),
+    }
+}
+
+async fn call_root_funding_policy_rotation_activate(
+    fleet_subnet_root: Principal,
+    request: FleetFundingPolicyRotationRootActivateRequest,
+) -> Result<FleetFundingPolicyRotationRootReceipt, InternalError> {
+    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+        .with_arg(RemoteRootCommand::ActivateFundingPolicyRotation(request))?
+        .execute()
+        .await?;
+    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+    match response.map_err(InternalError::observed_public)? {
+        RemoteRootCommandResponse::ActivateFundingPolicyRotation(receipt) => Ok(*receipt),
+        _ => Err(InternalError::conflict()),
+    }
+}
+
 async fn advance_root_component_provisioning(
     call: FleetComponentProvisioningRootProvisionCallView,
 ) -> Result<RootComponentProvisioningStatusResponse, InternalError> {
@@ -921,7 +1060,11 @@ async fn advance_root_component_directories(
                     RootComponentDirectoryAdvanceResponse::Synchronization(*response),
                 ),
                 RemoteRootCommandResponse::AcceptFunding(_)
-                | RemoteRootCommandResponse::OperationAccepted(_) => Err(InternalError::conflict()),
+                | RemoteRootCommandResponse::ActivateFundingPolicyRotation(_)
+                | RemoteRootCommandResponse::OperationAccepted(_)
+                | RemoteRootCommandResponse::PrepareFundingPolicyRotation(_) => {
+                    Err(InternalError::conflict())
+                }
             }
         }
     }

@@ -15,6 +15,9 @@ macro_rules! canic_emit_root_command_endpoint {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommand {
             AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
+            ActivateFundingPolicyRotation(
+                ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootActivateRequest,
+            ),
             AdoptStore(::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest),
             BootstrapStore(::canic::dto::root_store::RootStoreBootstrapRequest),
             GetOrCreateDelegationProof,
@@ -27,6 +30,9 @@ macro_rules! canic_emit_root_command_endpoint {
                 ::canic::dto::component_registry::RootComponentRegistryPreparationRequest,
             ),
             PrepareFleetActivation,
+            PrepareFundingPolicyRotation(
+                ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest,
+            ),
             #[cfg(canic_capability_role_attestation_signer)]
             PrepareRoleAttestation(::canic::dto::auth::RoleAttestationRequest),
             PreviewCycleRefill(::canic::dto::icp_refill::CycleRefillInput),
@@ -65,6 +71,9 @@ macro_rules! canic_emit_root_command_endpoint {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum RootCommandResponse {
             AcceptFunding(::canic::dto::fleet_funding::FleetRootFundingAcceptanceReceipt),
+            ActivateFundingPolicyRotation(
+                ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
+            ),
             GetOrCreateDelegationProof(::canic::dto::auth::RootDelegationProofBatchProof),
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
@@ -76,6 +85,9 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             PrepareComponentRegistry(
                 ::canic::dto::component_registry::RootComponentRegistryStatusResponse,
+            ),
+            PrepareFundingPolicyRotation(
+                ::canic::dto::fleet_funding::FleetFundingPolicyRotationRootReceipt,
             ),
             #[cfg(canic_capability_role_attestation_signer)]
             PrepareRoleAttestation(::canic::dto::auth::RoleAttestationPrepareResponse),
@@ -200,7 +212,12 @@ macro_rules! canic_emit_root_command_endpoint {
                 )?;
             }
 
-            if matches!(&command, RootCommand::AcceptFunding(_)) {
+            if matches!(
+                &command,
+                RootCommand::AcceptFunding(_)
+                    | RootCommand::ActivateFundingPolicyRotation(_)
+                    | RootCommand::PrepareFundingPolicyRotation(_)
+            ) {
                 $crate::__internal::control_plane::api::lifecycle::LifecycleApi::authorize_root_funding_caller(caller)?;
             }
 
@@ -297,6 +314,11 @@ macro_rules! canic_emit_root_command_endpoint {
                 RootCommand::AcceptFunding(request) => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_root_funding(request)
                         .map(RootCommandResponse::AcceptFunding)
+                }
+                RootCommand::ActivateFundingPolicyRotation(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_root_funding_policy_rotation(request)
+                        .await
+                        .map(RootCommandResponse::ActivateFundingPolicyRotation)
                 }
                 RootCommand::AdoptStore(request) => {
                     let operation_id = request.operation_id;
@@ -435,6 +457,10 @@ macro_rules! canic_emit_root_command_endpoint {
                             operation_id: response.identity.operation_id,
                         },
                     ))
+                }
+                RootCommand::PrepareFundingPolicyRotation(request) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_root_funding_policy_rotation(request)
+                        .map(RootCommandResponse::PrepareFundingPolicyRotation)
                 }
                 #[cfg(canic_capability_role_attestation_signer)]
                 RootCommand::PrepareRoleAttestation(request) => {

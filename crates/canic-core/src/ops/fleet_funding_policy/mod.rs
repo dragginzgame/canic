@@ -4,10 +4,17 @@
 //! Does not own: policy validation, storage, treasury accounting, or external effects.
 //! Boundary: host and canister owners hash the same bounded protected policy shapes.
 
-use crate::dto::fleet_registry::FleetRegistryVersion;
+use crate::dto::{
+    fleet_funding::{
+        FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
+        FleetFundingPolicyRotationPlan, FleetFundingPolicyRotationPlanHeader,
+        FleetFundingPolicyRotationRootPlan, FleetFundingPolicyUsage,
+    },
+    fleet_registry::FleetRegistryVersion,
+};
 use crate::ids::{
     FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetSubnetRootFundingAuthority,
-    FleetSubnetRootIcpRefillPolicy,
+    FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
 };
 use candid::Principal;
 use sha2::{Digest, Sha256};
@@ -15,6 +22,11 @@ use sha2::{Digest, Sha256};
 const COORDINATOR_POLICY_DOMAIN: &[u8] = b"canic/coordinator-root-funding-policy/v1";
 const ROOT_POLICY_DOMAIN: &[u8] = b"canic/fleet-subnet-root-funding-policy/v1";
 const ROOT_FUNDING_OPERATION_DOMAIN: &[u8] = b"canic/fleet-root-funding-operation/v1";
+const FUNDING_ROTATION_ROOTS_DOMAIN: &[u8] = b"canic/funding-policy-rotation-roots/v1";
+const FUNDING_ROTATION_PLAN_DOMAIN: &[u8] = b"canic/funding-policy-rotation-plan/v1";
+const FUNDING_ROTATION_OPERATION_DOMAIN: &[u8] = b"canic/funding-policy-rotation-operation/v1";
+const FUNDING_ROTATION_SUCCESSOR_POLICY_SET_DOMAIN: &[u8] =
+    b"canic/funding-policy-rotation-successor-policy-set/v1";
 
 /// Return the canonical digest of one immutable Coordinator treasury policy.
 #[must_use]
@@ -90,6 +102,163 @@ pub fn fleet_root_funding_operation_id(
     encoder.u128(requested_cycles);
     encoder.bytes(&policy_hash);
     encoder.finish()
+}
+
+/// Return the canonical digest of the exact sorted Root portion of one rotation plan.
+#[must_use]
+pub fn fleet_funding_policy_rotation_roots_digest(
+    roots: &[FleetFundingPolicyRotationRootPlan],
+) -> [u8; 32] {
+    let mut encoder = CanonicalPolicyEncoder::new(FUNDING_ROTATION_ROOTS_DOMAIN);
+    encoder.u64(roots.len() as u64);
+    for root in roots {
+        encode_rotation_root(&mut encoder, root);
+    }
+    encoder.finish()
+}
+
+/// Return the canonical digest accepted by policy-rotation apply.
+#[must_use]
+pub fn fleet_funding_policy_rotation_plan_digest(
+    plan: &FleetFundingPolicyRotationPlan,
+) -> [u8; 32] {
+    let mut encoder = CanonicalPolicyEncoder::new(FUNDING_ROTATION_PLAN_DOMAIN);
+    encode_rotation_header(&mut encoder, &plan.header);
+    encoder.u64(plan.roots.len() as u64);
+    for root in &plan.roots {
+        encode_rotation_root(&mut encoder, root);
+    }
+    encoder.finish()
+}
+
+/// Derive the sole Coordinator rotation operation identity from its accepted plan.
+#[must_use]
+pub fn fleet_funding_policy_rotation_operation_id(
+    coordinator: Principal,
+    plan_digest: [u8; 32],
+) -> [u8; 32] {
+    let mut encoder = CanonicalPolicyEncoder::new(FUNDING_ROTATION_OPERATION_DOMAIN);
+    encoder.bytes(coordinator.as_slice());
+    encoder.bytes(&plan_digest);
+    encoder.finish()
+}
+
+/// Commit the exact successor Coordinator and full per-Root funding authority set.
+#[must_use]
+pub fn fleet_funding_policy_rotation_successor_policy_set_hash<'a>(
+    coordinator: &FleetCoordinatorRootFundingPolicy,
+    roots: impl IntoIterator<Item = (Principal, &'a FleetSubnetRootFundingAuthority)>,
+) -> [u8; 32] {
+    let mut roots = roots.into_iter().collect::<Vec<_>>();
+    roots.sort_by_key(|(root, _)| *root);
+    let mut encoder = CanonicalPolicyEncoder::new(FUNDING_ROTATION_SUCCESSOR_POLICY_SET_DOMAIN);
+    encode_coordinator_policy(&mut encoder, coordinator);
+    encoder.u64(roots.len() as u64);
+    for (root, authority) in roots {
+        encoder.bytes(root.as_slice());
+        encode_root_policy(&mut encoder, &authority.root_funding);
+        encode_icp_refill(&mut encoder, authority.icp_refill.as_ref());
+    }
+    encoder.finish()
+}
+
+fn encode_rotation_header(
+    encoder: &mut CanonicalPolicyEncoder,
+    header: &FleetFundingPolicyRotationPlanHeader,
+) {
+    encode_registry_version(encoder, &header.predecessor_registry);
+    encoder.u64(header.predecessor_generation);
+    encoder.u64(header.successor_generation);
+    encoder.bytes(&header.predecessor_coordinator_policy_hash);
+    encode_usage(encoder, &header.predecessor_usage);
+    encode_coordinator_policy(encoder, &header.proposed_coordinator_policy);
+    encoder.bytes(&header.topology_catalog_digest);
+    encode_placement(encoder, &header.coordinator_placement);
+    encoder.u32(header.affected_root_count);
+    encoder.bytes(&header.roots_digest);
+    encoder.u128(header.maximum_new_automatic_cycles.to_u128());
+    encoder.u128(header.apply_operator_debit.to_u128());
+    encoder.u8(match header.funding_source {
+        FleetFundingPolicyRotationFundingSource::CoordinatorTreasury => 1,
+    });
+}
+
+fn encode_rotation_root(
+    encoder: &mut CanonicalPolicyEncoder,
+    root: &FleetFundingPolicyRotationRootPlan,
+) {
+    encoder.bytes(root.fleet_subnet_root.as_slice());
+    encoder.bytes(&root.predecessor_policy_hash);
+    encode_usage(encoder, &root.predecessor_usage);
+    encode_root_policy(encoder, &root.proposed_policy);
+    encode_placement(encoder, &root.placement);
+}
+
+fn encode_registry_version(encoder: &mut CanonicalPolicyEncoder, registry: &FleetRegistryVersion) {
+    let authority = &registry.authority;
+    encoder.bytes(
+        authority
+            .binding
+            .fleet
+            .fleet
+            .canonical_network_id
+            .as_bytes(),
+    );
+    encoder.bytes(authority.binding.fleet.fleet.fleet_id.as_bytes());
+    encoder.bytes(authority.binding.fleet.app.as_str().as_bytes());
+    encoder.bytes(
+        authority
+            .binding
+            .coordinator_subnet
+            .as_principal()
+            .as_slice(),
+    );
+    encoder.bytes(authority.binding.coordinator.as_slice());
+    encoder.u64(authority.epoch);
+    encoder.u64(registry.revision);
+    encoder.bytes(&registry.content_hash);
+}
+
+fn encode_usage(encoder: &mut CanonicalPolicyEncoder, usage: &FleetFundingPolicyUsage) {
+    encoder.u64(usage.historical_automatic_grants);
+    encoder.u128(usage.historical_automatic_cycles.to_u128());
+    encoder.u32(usage.generation_automatic_grants);
+    encoder.u128(usage.generation_automatic_cycles.to_u128());
+}
+
+fn encode_placement(
+    encoder: &mut CanonicalPolicyEncoder,
+    placement: &FleetFundingPolicyRotationPlacementEvidence,
+) {
+    encoder.bytes(placement.subnet.as_principal().as_slice());
+    encoder.u64(placement.node_count);
+    encoder.u64(placement.cost_multiplier_numerator);
+    encoder.u64(placement.cost_multiplier_denominator);
+    encoder.u8(u8::from(placement.fiduciary));
+    encoder.u8(u8::from(placement.acknowledge_fiduciary_cost));
+}
+
+fn encode_coordinator_policy(
+    encoder: &mut CanonicalPolicyEncoder,
+    policy: &FleetCoordinatorRootFundingPolicy,
+) {
+    encoder.u8(funding_profile_tag(policy.funding_profile));
+    encoder.u128(policy.minimum_reserve_cycles.to_u128());
+    encoder.u64(policy.budget.window_secs);
+    encoder.u128(policy.budget.maximum_cycles.to_u128());
+    encoder.u32(policy.maximum_automatic_grants);
+    encoder.u128(policy.maximum_automatic_cycles.to_u128());
+}
+
+fn encode_root_policy(encoder: &mut CanonicalPolicyEncoder, policy: &FleetSubnetRootFundingPolicy) {
+    encoder.u8(funding_profile_tag(policy.funding_profile));
+    encoder.u128(policy.request_threshold.to_u128());
+    encoder.u128(policy.target_balance.to_u128());
+    encoder.u64(policy.cooldown_secs);
+    encoder.u64(policy.budget.window_secs);
+    encoder.u128(policy.budget.maximum_cycles.to_u128());
+    encoder.u32(policy.maximum_automatic_grants);
+    encoder.u128(policy.maximum_automatic_cycles.to_u128());
 }
 
 fn encode_icp_refill(
@@ -189,9 +358,9 @@ mod tests {
     use crate::{
         cdk::types::Cycles,
         ids::{
-            AppId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding, FleetFundingProfile,
-            FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootAutomaticIcpRefillPolicy,
-            FleetSubnetRootFundingPolicy, SubnetId,
+            AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+            FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
+            FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootFundingPolicy, SubnetId,
         },
     };
 
@@ -215,7 +384,14 @@ mod tests {
 
         let mut changed = policy.clone();
         changed.funding_profile = FleetFundingProfile::MultiSubnet;
-        assert_ne!(baseline, coordinator_root_funding_policy_hash(&changed));
+        let multi_subnet = coordinator_root_funding_policy_hash(&changed);
+        assert_ne!(baseline, multi_subnet);
+
+        let mut changed = policy.clone();
+        changed.funding_profile = FleetFundingProfile::PreviewMultiSubnet;
+        let preview_multi_subnet = coordinator_root_funding_policy_hash(&changed);
+        assert_ne!(baseline, preview_multi_subnet);
+        assert_ne!(multi_subnet, preview_multi_subnet);
 
         let mut changed = policy.clone();
         changed.minimum_reserve_cycles = Cycles::new(100_000_001);
@@ -251,6 +427,9 @@ mod tests {
     fn root_policy_hash_binds_every_root_funding_field() {
         assert_authority_hash_changes(|value| {
             value.root_funding.funding_profile = FleetFundingProfile::MultiSubnet;
+        });
+        assert_authority_hash_changes(|value| {
+            value.root_funding.funding_profile = FleetFundingProfile::PreviewMultiSubnet;
         });
         assert_authority_hash_changes(|value| {
             value.root_funding.request_threshold = Cycles::new(43_000_000_000);
@@ -377,6 +556,80 @@ mod tests {
         );
     }
 
+    #[test]
+    fn rotation_plan_digest_binds_authority_usage_topology_and_successor_policy() {
+        let plan = rotation_plan_fixture();
+        let baseline = fleet_funding_policy_rotation_plan_digest(&plan);
+
+        let mut changed = plan.clone();
+        changed.header.predecessor_registry.content_hash[0] ^= 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan.clone();
+        changed.header.successor_generation += 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan.clone();
+        changed.header.predecessor_usage.historical_automatic_grants += 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan.clone();
+        changed
+            .header
+            .proposed_coordinator_policy
+            .maximum_automatic_grants += 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan.clone();
+        changed.header.topology_catalog_digest[0] ^= 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan.clone();
+        changed.header.coordinator_placement.node_count += 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan.clone();
+        changed.roots[0]
+            .predecessor_usage
+            .generation_automatic_grants += 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let mut changed = plan;
+        changed.roots[0].proposed_policy.maximum_automatic_grants += 1;
+        assert_ne!(
+            baseline,
+            fleet_funding_policy_rotation_plan_digest(&changed)
+        );
+
+        let coordinator = Principal::from_slice(&[21; 29]);
+        let operation = fleet_funding_policy_rotation_operation_id(coordinator, baseline);
+        assert_ne!(
+            operation,
+            fleet_funding_policy_rotation_operation_id(Principal::from_slice(&[22; 29]), baseline)
+        );
+    }
+
     fn assert_authority_hash_changes(change: impl FnOnce(&mut FleetSubnetRootFundingAuthority)) {
         let mut changed = authority();
         let baseline = fleet_subnet_root_funding_policy_hash(&changed);
@@ -443,5 +696,69 @@ mod tests {
             maximum_automatic_grants: 4,
             maximum_automatic_cycles: Cycles::new(40_000_000_000_000),
         }
+    }
+
+    fn rotation_plan_fixture() -> FleetFundingPolicyRotationPlan {
+        let coordinator = Principal::from_slice(&[21; 29]);
+        let subnet = SubnetId::from_principal(Principal::from_slice(&[23; 29]));
+        let registry = FleetRegistryVersion {
+            authority: FleetRegistryAuthority {
+                binding: FleetCoordinatorBinding {
+                    fleet: FleetBinding {
+                        fleet: FleetKey {
+                            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                            fleet_id: FleetId::from_generated_bytes([24; 32]),
+                        },
+                        app: AppId::from("rotation-hash"),
+                    },
+                    coordinator_subnet: subnet,
+                    coordinator,
+                },
+                epoch: 3,
+            },
+            revision: 4,
+            content_hash: [25; 32],
+        };
+        let usage = FleetFundingPolicyUsage {
+            historical_automatic_grants: 5,
+            historical_automatic_cycles: Cycles::new(6),
+            generation_automatic_grants: 2,
+            generation_automatic_cycles: Cycles::new(7),
+        };
+        let placement = FleetFundingPolicyRotationPlacementEvidence {
+            subnet,
+            node_count: 13,
+            cost_multiplier_numerator: 1,
+            cost_multiplier_denominator: 1,
+            fiduciary: false,
+            acknowledge_fiduciary_cost: false,
+        };
+        let roots = vec![FleetFundingPolicyRotationRootPlan {
+            fleet_subnet_root: Principal::from_slice(&[26; 29]),
+            predecessor_policy_hash: [27; 32],
+            predecessor_usage: usage.clone(),
+            proposed_policy: authority().root_funding,
+            placement: placement.clone(),
+        }];
+        let mut plan = FleetFundingPolicyRotationPlan {
+            header: FleetFundingPolicyRotationPlanHeader {
+                predecessor_registry: registry,
+                predecessor_generation: 8,
+                successor_generation: 9,
+                predecessor_coordinator_policy_hash: [28; 32],
+                predecessor_usage: usage,
+                proposed_coordinator_policy: coordinator_policy_fixture(),
+                topology_catalog_digest: [29; 32],
+                coordinator_placement: placement,
+                affected_root_count: 1,
+                roots_digest: [0; 32],
+                maximum_new_automatic_cycles: Cycles::new(40_000_000_000_000),
+                apply_operator_debit: Cycles::new(0),
+                funding_source: FleetFundingPolicyRotationFundingSource::CoordinatorTreasury,
+            },
+            roots,
+        };
+        plan.header.roots_digest = fleet_funding_policy_rotation_roots_digest(&plan.roots);
+        plan
     }
 }

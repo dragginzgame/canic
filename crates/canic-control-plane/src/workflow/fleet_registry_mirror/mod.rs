@@ -31,6 +31,7 @@ use canic_core::{
         },
         role::OperationReceipt,
     },
+    shared_support::fleet_funding_policy::fleet_subnet_root_funding_policy_hash,
 };
 use std::time::Duration;
 
@@ -349,6 +350,61 @@ pub async fn advance_for_component_publication(
             Ok(active_response(root, &active))
         }
     }
+}
+
+/// Converge a fenced Root mirror after its protected funding authority changes.
+pub(super) async fn advance_for_funding_policy_rotation(
+    predecessor_registry: FleetRegistryVersion,
+    successor_registry: FleetRegistryVersion,
+    predecessor_policy_hash: [u8; 32],
+) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
+    let (authority, root) = validated_root_authority()?;
+    let mirror = FleetRegistryMirrorOps::current();
+    let current = mirror.active.ok_or_else(InternalError::unavailable)?;
+    if current.snapshot.version == successor_registry {
+        let active = validated_active(&authority, root)?;
+        return Ok(active_response(root, &active));
+    }
+    if current.snapshot.version != predecessor_registry {
+        return Err(InternalError::conflict());
+    }
+
+    let predecessor_entry = current
+        .snapshot
+        .registry
+        .fleet_subnet_roots
+        .iter()
+        .find(|entry| entry.fleet_subnet_root == root)
+        .ok_or_else(InternalError::invalid_input)?;
+    if fleet_subnet_root_funding_policy_hash(&predecessor_entry.funding) != predecessor_policy_hash
+    {
+        return Err(InternalError::conflict());
+    }
+    let mut predecessor_authority = authority.clone();
+    predecessor_authority.binding.funding = predecessor_entry.funding.clone();
+    validate_snapshot(
+        &predecessor_authority,
+        &current.snapshot,
+        predecessor_entry.status,
+    )?;
+
+    let target = fetch_snapshot(&authority).await?;
+    if target.version != successor_registry {
+        return Err(InternalError::conflict());
+    }
+    let target_entry = validated_snapshot_root(&authority, &target)?;
+    if target_entry.status != predecessor_entry.status {
+        return Err(InternalError::conflict());
+    }
+    let directory = FleetRegistryOps::directory_for_root(
+        &authority.binding.authority,
+        &ConfigOps::component_topology()?,
+        &target.registry,
+        root,
+    )?;
+    FleetRegistryMirrorOps::commit_active(predecessor_registry, target, directory);
+    let active = validated_active(&authority, root)?;
+    Ok(active_response(root, &active))
 }
 
 /// Advance the local mirror to the Coordinator-published Draining root entry.

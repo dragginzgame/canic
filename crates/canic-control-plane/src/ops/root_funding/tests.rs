@@ -6,10 +6,13 @@ use crate::{
     view::root_funding::RootFundingAcceptanceDisposition,
 };
 use canic_core::dto::fleet_funding::{
-    FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason,
+    FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationRootActivateRequest,
+    FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationRootPrepareRequest,
+    FleetFundingPolicyUsage, FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason,
     FleetRootFundingNoGrantReceipt,
 };
 use canic_core::dto::fleet_registry::FleetSubnetRootStatus;
+use canic_core::ids::SubnetId;
 
 #[test]
 #[expect(
@@ -247,6 +250,136 @@ fn root_funding_status_projects_protected_policy_and_durable_usage() {
     assert!(status.latest_icp_refill.is_none());
 }
 
+#[test]
+fn root_policy_rotation_replays_exact_terminal_activation_and_rejects_payload_drift() {
+    RootFundingStore::import(RootFundingData::default());
+    RootFundingOps::commit_genesis(RootFundingOps::compile_genesis()).expect("funding genesis");
+    let predecessor = authority();
+    let request = rotation_prepare_request(&predecessor);
+
+    let prepared = RootFundingOps::prepare_policy_rotation(&predecessor, request.clone(), 10)
+        .expect("prepare rotation");
+    let prepared_state = RootFundingStore::export();
+    assert!(prepared.prepared);
+    assert!(!prepared.activated);
+    assert_eq!(
+        RootFundingOps::prepare_policy_rotation(&predecessor, request.clone(), 99)
+            .expect("exact prepare replay"),
+        prepared
+    );
+    assert_eq!(
+        RootFundingOps::policy_rotation_prepare_replay(&predecessor, &request)
+            .expect("active prepare replay lookup"),
+        Some(prepared)
+    );
+    assert_eq!(RootFundingStore::export(), prepared_state);
+
+    let mut successor = predecessor;
+    successor.registry.revision += 1;
+    successor.registry.content_hash = [92; 32];
+    successor.funding.root_funding = request.root.proposed_policy.clone();
+    assert!(
+        RootFundingOps::current_for_test(&successor).is_err(),
+        "ordinary authority validation must reject the protected-successor/predecessor-journal split"
+    );
+    assert_eq!(
+        RootFundingOps::prepared_policy_rotation()
+            .expect("prepared recovery remains available across the mixed authority boundary")
+            .request,
+        request
+    );
+    let activate = FleetFundingPolicyRotationRootActivateRequest {
+        operation_id: request.operation_id,
+        plan_digest: request.plan_digest,
+        predecessor_registry: request.predecessor_registry.clone(),
+        successor_registry: successor.registry.clone(),
+        predecessor_generation: request.predecessor_generation,
+        successor_generation: request.successor_generation,
+        fleet_subnet_root: request.root.fleet_subnet_root,
+    };
+    let activated = RootFundingOps::complete_policy_rotation(
+        &successor,
+        activate.operation_id,
+        activate.plan_digest,
+        20,
+    )
+    .expect("complete rotation");
+    assert!(activated.activated);
+    let terminal = RootFundingStore::export();
+    assert_eq!(
+        RootFundingOps::completed_policy_rotation(&successor, &activate)
+            .expect("terminal replay lookup"),
+        Some(activated.clone())
+    );
+    assert_eq!(RootFundingStore::export(), terminal);
+    assert_eq!(
+        RootFundingOps::prepare_policy_rotation(&successor, request, 999)
+            .expect("terminal prepare replay"),
+        activated
+    );
+    assert_eq!(
+        RootFundingOps::policy_rotation_prepare_replay(
+            &successor,
+            &rotation_prepare_request(&authority()),
+        )
+        .expect("terminal prepare replay lookup"),
+        Some(activated)
+    );
+
+    let mut altered = activate;
+    altered.successor_registry.content_hash[0] ^= 1;
+    assert!(RootFundingOps::completed_policy_rotation(&successor, &altered).is_err());
+    assert_eq!(RootFundingStore::export(), terminal);
+}
+
+#[test]
+fn root_policy_rotation_retains_exhausted_usage_and_resets_only_successor_counters() {
+    let predecessor = authority();
+    let mut exhausted = RootFundingOps::compile_genesis();
+    exhausted.automatic_grants = predecessor.funding.root_funding.maximum_automatic_grants;
+    exhausted.automatic_cycles = predecessor
+        .funding
+        .root_funding
+        .maximum_automatic_cycles
+        .clone();
+    RootFundingStore::import(RootFundingData {
+        current: Some(exhausted),
+    });
+    let mut request = rotation_prepare_request(&predecessor);
+    request.root.predecessor_usage.generation_automatic_grants =
+        predecessor.funding.root_funding.maximum_automatic_grants;
+    request.root.predecessor_usage.generation_automatic_cycles = predecessor
+        .funding
+        .root_funding
+        .maximum_automatic_cycles
+        .clone();
+    RootFundingOps::prepare_policy_rotation(&predecessor, request.clone(), 10)
+        .expect("prepare exhausted generation");
+
+    let mut successor = predecessor.clone();
+    successor.registry.revision += 1;
+    successor.registry.content_hash = [95; 32];
+    RootFundingOps::complete_policy_rotation(
+        &successor,
+        request.operation_id,
+        request.plan_digest,
+        20,
+    )
+    .expect("complete exhausted generation rotation");
+    let current = RootFundingOps::current_for_test(&successor).expect("successor journal");
+    assert_eq!(current.policy_generation, 2);
+    assert_eq!(
+        current.historical_automatic_grants,
+        u64::from(predecessor.funding.root_funding.maximum_automatic_grants)
+    );
+    assert_eq!(
+        current.historical_automatic_cycles,
+        predecessor.funding.root_funding.maximum_automatic_cycles
+    );
+    assert_eq!(current.automatic_grants, 0);
+    assert_eq!(current.automatic_cycles.to_u128(), 0);
+}
+
 fn authority() -> RootFundingAuthorityView {
     let request = crate::test_support::root_funding_request_fixture(1);
     RootFundingAuthorityView {
@@ -255,6 +388,37 @@ fn authority() -> RootFundingAuthorityView {
         status: FleetSubnetRootStatus::Active,
         funding_eligible: true,
         funding: crate::test_support::fleet_subnet_root_funding_authority(),
+    }
+}
+
+fn rotation_prepare_request(
+    authority: &RootFundingAuthorityView,
+) -> FleetFundingPolicyRotationRootPrepareRequest {
+    FleetFundingPolicyRotationRootPrepareRequest {
+        operation_id: [81; 32],
+        plan_digest: [82; 32],
+        predecessor_registry: authority.registry.clone(),
+        predecessor_generation: 1,
+        successor_generation: 2,
+        root: FleetFundingPolicyRotationRootPlan {
+            fleet_subnet_root: authority.fleet_subnet_root,
+            predecessor_policy_hash: fleet_subnet_root_funding_policy_hash(&authority.funding),
+            predecessor_usage: FleetFundingPolicyUsage {
+                historical_automatic_grants: 0,
+                historical_automatic_cycles: 0_u128.into(),
+                generation_automatic_grants: 0,
+                generation_automatic_cycles: 0_u128.into(),
+            },
+            proposed_policy: authority.funding.root_funding.clone(),
+            placement: FleetFundingPolicyRotationPlacementEvidence {
+                subnet: SubnetId::from_principal(candid::Principal::from_slice(&[83; 29])),
+                node_count: 13,
+                cost_multiplier_numerator: 1,
+                cost_multiplier_denominator: 1,
+                fiduciary: false,
+                acknowledge_fiduciary_cost: false,
+            },
+        },
     }
 }
 

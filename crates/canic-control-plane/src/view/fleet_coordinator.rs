@@ -11,8 +11,26 @@ use canic_core::dto::{
         RootComponentDirectorySynchronizationRequest, RootComponentProvisioningAcceptanceRequest,
         RootComponentProvisioningAdvanceRequest, RootComponentPublicationRequest,
     },
-    fleet_funding::{FleetRootFundingAcceptanceRequest, FleetRootFundingResponse},
+    fleet_funding::{
+        FleetFundingPolicyRotationRootActivateRequest,
+        FleetFundingPolicyRotationRootPrepareRequest, FleetRootFundingAcceptanceRequest,
+        FleetRootFundingResponse,
+    },
 };
+
+/// Exact next effect derived from the Coordinator-owned rotation operation.
+pub enum FleetFundingPolicyRotationStep {
+    PrepareRoot {
+        fleet_subnet_root: Principal,
+        request: FleetFundingPolicyRotationRootPrepareRequest,
+    },
+    PublishRegistry,
+    ActivateRoot {
+        fleet_subnet_root: Principal,
+        request: FleetFundingPolicyRotationRootActivateRequest,
+    },
+    Complete,
+}
 
 /// One exact attached-cycles call derived from a durable Coordinator reservation.
 pub struct FleetRootFundingCallView {

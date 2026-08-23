@@ -5,6 +5,7 @@
 //! Boundary: workflow supplies protected init facts and receives canonical Registry projections.
 
 mod deployment_ledger;
+mod funding_rotation;
 mod root_deletion;
 mod root_funding;
 
@@ -98,6 +99,7 @@ use canic_core::{
         MAX_FLEET_ROOT_FUNDING_SLOTS, SubnetId,
     },
     shared_support::fleet_funding_policy::{
+        fleet_funding_policy_rotation_successor_policy_set_hash,
         validate_coordinator_root_funding_policy, validate_fleet_root_funding_admission,
         validate_fleet_root_funding_capacity,
     },
@@ -168,6 +170,11 @@ impl FleetCoordinatorOps {
     ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
         if operation_id == [0; 32] {
             return Err(InternalError::invalid_input());
+        }
+        if let Some(status) = Self::funding_policy_rotation_status(operation_id)? {
+            return Ok(CoordinatorOperationStatusResponse::FundingPolicyRotation(
+                status,
+            ));
         }
         let current = Self::current()?;
 
@@ -1746,6 +1753,12 @@ impl FleetCoordinatorOps {
         current: &FleetCoordinatorRegistryRecord,
         next: FleetCoordinatorRegistryRecord,
     ) -> Result<FleetCoordinatorCommitOutcome, InternalError> {
+        if crate::storage::stable::fleet_coordinator::FleetCoordinatorFundingStore::export()
+            .current
+            .is_some_and(|funding| funding.rotation_current.is_some())
+        {
+            return Err(InternalError::conflict());
+        }
         FleetCoordinatorRegistryStore::commit_transition(current, next).map_err(|error| match error
         {
             FleetCoordinatorCommitError::ConflictingState => InternalError::conflict(),
@@ -6959,6 +6972,13 @@ impl FleetSubnetRootLifecycleReceipt<'_> {
             Self::Removed(receipt) => receipt.response.version.revision,
         }
     }
+
+    const fn previous_revision(self) -> u64 {
+        match self {
+            Self::Draining(receipt) => receipt.response.previous_version.revision,
+            Self::Removed(receipt) => receipt.response.previous_version.revision,
+        }
+    }
 }
 
 fn canonical_registry_lifecycle_history(
@@ -6966,11 +6986,230 @@ fn canonical_registry_lifecycle_history(
 ) -> Result<Vec<FleetRegistryHistoryPoint>, InternalError> {
     let joining = historical_joining_registry(current)?;
     let (mut historical_registry, mut history) = initial_lifecycle_history(current, joining)?;
-    apply_service_publication_receipts(current, &mut historical_registry, &mut history)?;
+    let funding = crate::storage::stable::fleet_coordinator::FleetCoordinatorFundingStore::export();
+    let checkpoints = funding
+        .current
+        .as_ref()
+        .map_or(&[][..], |funding| funding.rotation_history.as_slice());
+    let mut checkpoint_index = 0_usize;
+    apply_service_publication_receipts(
+        current,
+        checkpoints,
+        &mut checkpoint_index,
+        &mut historical_registry,
+        &mut history,
+    )?;
     for lifecycle in canonical_lifecycle_receipts(current)? {
+        apply_funding_policy_rotation_checkpoints_through(
+            current,
+            checkpoints,
+            &mut checkpoint_index,
+            lifecycle.previous_revision(),
+            &mut historical_registry,
+            &mut history,
+        )?;
         apply_lifecycle_receipt(current, lifecycle, &mut historical_registry, &mut history)?;
     }
+    apply_funding_policy_rotation_checkpoints_through(
+        current,
+        checkpoints,
+        &mut checkpoint_index,
+        u64::MAX,
+        &mut historical_registry,
+        &mut history,
+    )?;
+    append_funding_policy_rotation_head(current, &mut historical_registry, &mut history)?;
     Ok(history)
+}
+
+fn apply_funding_policy_rotation_checkpoints_through(
+    current: &FleetCoordinatorRegistryRecord,
+    checkpoints: &[crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationCheckpointRecord],
+    checkpoint_index: &mut usize,
+    target_revision: u64,
+    historical_registry: &mut FleetRegistry,
+    history: &mut Vec<FleetRegistryHistoryPoint>,
+) -> Result<(), InternalError> {
+    while let Some(checkpoint) = checkpoints.get(*checkpoint_index) {
+        if checkpoint.receipt.successor_registry.revision > target_revision {
+            break;
+        }
+        apply_funding_policy_rotation_checkpoint(
+            current,
+            checkpoint,
+            historical_registry,
+            history,
+        )?;
+        *checkpoint_index = checkpoint_index
+            .checked_add(1)
+            .ok_or_else(InternalError::invariant)?;
+    }
+    Ok(())
+}
+
+fn apply_funding_policy_rotation_checkpoint(
+    current: &FleetCoordinatorRegistryRecord,
+    checkpoint: &crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationCheckpointRecord,
+    historical_registry: &mut FleetRegistry,
+    history: &mut Vec<FleetRegistryHistoryPoint>,
+) -> Result<(), InternalError> {
+    let previous_version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        historical_registry,
+    )?;
+    if previous_version != checkpoint.receipt.predecessor_registry
+        || checkpoint.roots.len() != historical_registry.fleet_subnet_roots.len()
+    {
+        return Err(receipt_invariant(
+            "funding-policy rotation checkpoint source differs from canonical history",
+        ));
+    }
+    let mut next_registry = historical_registry.clone();
+    next_registry.revision = next_registry
+        .revision
+        .checked_add(1)
+        .ok_or_else(InternalError::invariant)?;
+    for root in &checkpoint.roots {
+        let entry = next_registry
+            .fleet_subnet_roots
+            .iter_mut()
+            .find(|entry| entry.fleet_subnet_root == root.fleet_subnet_root)
+            .ok_or_else(|| {
+                receipt_invariant("funding-policy rotation checkpoint Root is not canonical")
+            })?;
+        entry.funding = root.funding.clone();
+    }
+    let policy_set_hash = fleet_funding_policy_rotation_successor_policy_set_hash(
+        &checkpoint.coordinator_policy,
+        checkpoint
+            .roots
+            .iter()
+            .map(|root| (root.fleet_subnet_root, &root.funding)),
+    );
+    let version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &next_registry,
+    )?;
+    if version != checkpoint.receipt.successor_registry
+        || policy_set_hash != checkpoint.receipt.successor_policy_set_hash
+    {
+        return Err(receipt_invariant(
+            "funding-policy rotation checkpoint target differs from canonical history",
+        ));
+    }
+    *historical_registry = next_registry.clone();
+    history.push(FleetRegistryHistoryPoint {
+        registry: next_registry,
+        version,
+    });
+    Ok(())
+}
+
+fn append_funding_policy_rotation_head(
+    current: &FleetCoordinatorRegistryRecord,
+    historical_registry: &mut FleetRegistry,
+    history: &mut Vec<FleetRegistryHistoryPoint>,
+) -> Result<(), InternalError> {
+    if historical_registry == &current.registry {
+        return Ok(());
+    }
+    if !registry_diff_is_funding_rotation(historical_registry, &current.registry) {
+        return Err(receipt_invariant(
+            "Fleet Registry head differs from lifecycle history outside funding policy",
+        ));
+    }
+    let funding = crate::storage::stable::fleet_coordinator::FleetCoordinatorFundingStore::export()
+        .current
+        .ok_or_else(InternalError::unavailable)?;
+    let current_version = FleetRegistryOps::version(
+        &current.authority,
+        &current
+            .component_deployment_configuration
+            .component_topology,
+        &current.registry,
+    )?;
+    let active_authorizes = funding.rotation_current.as_ref().is_some_and(|rotation| {
+        if current.registry.revision
+            != rotation.header.predecessor_registry.revision.saturating_add(1)
+            || current.root_funding.as_ref()
+                != Some(&rotation.header.proposed_coordinator_policy)
+            || matches!(
+                rotation.phase,
+                crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationPhaseRecord::Staging
+            )
+        {
+            return false;
+        }
+        let roots_match = rotation.roots.len() == current.registry.fleet_subnet_roots.len()
+            && rotation.roots.iter().all(|root| {
+                current.registry.fleet_subnet_roots.iter().any(|entry| {
+                    entry.fleet_subnet_root == root.fleet_subnet_root
+                        && entry.funding.root_funding == root.proposed_policy
+                })
+            });
+        let successor_matches = match &rotation.phase {
+            crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationPhaseRecord::ActivatingRoots {
+                successor_registry,
+                ..
+            } => successor_registry.as_ref() == &current_version,
+            crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationPhaseRecord::PreparingRoots { .. } => true,
+            crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationPhaseRecord::Staging => false,
+        };
+        roots_match && successor_matches
+    });
+    let terminal_authorizes = funding.rotation_last.as_ref().is_some_and(|receipt| {
+        let Some(coordinator_policy) = current.root_funding.as_ref() else {
+            return false;
+        };
+        let policy_hash = fleet_funding_policy_rotation_successor_policy_set_hash(
+            coordinator_policy,
+            current
+                .registry
+                .fleet_subnet_roots
+                .iter()
+                .map(|root| (root.fleet_subnet_root, &root.funding)),
+        );
+        receipt.successor_generation == funding.policy_generation
+            && receipt.successor_registry == current_version
+            && receipt.successor_policy_set_hash == policy_hash
+    });
+    if !active_authorizes && !terminal_authorizes {
+        return Err(receipt_invariant(
+            "Fleet Registry funding-policy head lacks exact durable rotation authority",
+        ));
+    }
+    *historical_registry = current.registry.clone();
+    history.push(FleetRegistryHistoryPoint {
+        registry: current.registry.clone(),
+        version: current_version,
+    });
+    Ok(())
+}
+
+fn registry_diff_is_funding_rotation(historical: &FleetRegistry, current: &FleetRegistry) -> bool {
+    if historical.authority != current.authority
+        || historical.component_specs != current.component_specs
+        || historical.services != current.services
+        || historical.fleet_subnet_roots.len() != current.fleet_subnet_roots.len()
+        || current.revision <= historical.revision
+    {
+        return false;
+    }
+    historical
+        .fleet_subnet_roots
+        .iter()
+        .zip(&current.fleet_subnet_roots)
+        .all(|(historical, current)| {
+            let mut current = current.clone();
+            current.funding = historical.funding.clone();
+            &current == historical
+        })
 }
 
 fn initial_lifecycle_history(
@@ -7083,10 +7322,20 @@ fn registry_snapshot_at_version(
 
 fn apply_service_publication_receipts(
     current: &FleetCoordinatorRegistryRecord,
+    checkpoints: &[crate::storage::stable::fleet_coordinator::FleetFundingPolicyRotationCheckpointRecord],
+    checkpoint_index: &mut usize,
     historical_registry: &mut FleetRegistry,
     history: &mut Vec<FleetRegistryHistoryPoint>,
 ) -> Result<(), InternalError> {
     for receipt in &current.service_publication_receipts {
+        apply_funding_policy_rotation_checkpoints_through(
+            current,
+            checkpoints,
+            checkpoint_index,
+            receipt.previous_version.revision,
+            historical_registry,
+            history,
+        )?;
         apply_service_publication_receipt(current, receipt, historical_registry, history)?;
     }
     Ok(())
