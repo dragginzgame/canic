@@ -375,6 +375,9 @@ rg -F 'cargo test --locked --no-fail-fast' "$WORKSPACE_TEST_RUNNER" >/dev/null |
     fail "the workspace test runner does not retain failures across Cargo test binaries"
 rg -F 'FAILED_LABELS+=("$label")' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not collect independent suite failures"
+rg --multiline 'require_ordinary_success_before_pocketic\nstart_owned_pocketic_server' \
+    "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the full workspace runner does not stop after ordinary failures before PocketIC"
 rg -F '"$HEAVY_BUILD_TARGETS_USED" -eq 0' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the PocketIC integration group does not preserve Wasm build freshness between suites"
 for validation_runner_fragment in \

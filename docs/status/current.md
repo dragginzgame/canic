@@ -59,9 +59,15 @@ fresh closeout audit. The 2026-08-23 rerun stopped in `check-invariants`
 because the rotation-policy model imported boundary DTOs. The correction keeps
 the invariant decision in the model behind one DTO-free named input and moves
 only boundary conversion to ops; the exact ten-target invariant gate, focused
-rotation consumers and warning-denied changed-package Clippy now pass.
-Versioning and publication remain pending the complete gate, audit verdict and
-maintainer release workflow.
+rotation consumers and warning-denied changed-package Clippy now pass. The
+next maintainer validation completed every serial PocketIC suite but its earlier
+ordinary workspace lane reported four failures: five rotation commands were
+absent from replay-policy manifests, and host admission/order tests still named
+a removed controller-only helper. The open correction classifies all five
+durable commands, moves identity evidence to the live operator-funding observer
+and makes ordinary failures stop the combined runner before PocketIC.
+Versioning and publication remain pending targeted correction evidence, the
+complete gate, audit verdict and maintainer release workflow.
 
 The 2026-08-22 0.108 design amendments are implemented through B9. Protected
 input materializes topology-matched single-Subnet, bounded preview multi-

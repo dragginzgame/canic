@@ -46,8 +46,10 @@ fn store_command_variants_have_one_exact_replay_policy_each() {
 fn asynchronous_root_intents_are_replay_protected_by_operation_id() {
     for variant in [
         "AcceptFunding",
+        "ActivateFundingPolicyRotation",
         "AdoptStore",
         "BootstrapStore",
+        "PrepareFundingPolicyRotation",
         "ProvisionChild",
         "ProvisionComponent",
         "ProvisionPeer",
@@ -95,7 +97,14 @@ fn root_capability_variant_delegates_to_its_nested_command_manifest() {
 
 #[test]
 fn coordinator_long_running_intents_are_operation_replay_protected() {
-    for variant in ["ProvisionComponents", "RemoveRoot", "RequestRootFunding"] {
+    for variant in [
+        "ApplyFundingPolicyRotation",
+        "BeginFundingPolicyRotation",
+        "ProvisionComponents",
+        "RemoveRoot",
+        "RequestRootFunding",
+        "StageFundingPolicyRotationRoot",
+    ] {
         let entry = command_entry(COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST, variant);
         assert!(matches!(
             entry.replay_policy,

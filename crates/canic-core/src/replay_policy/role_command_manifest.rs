@@ -28,6 +28,13 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         None,
     ),
     replay_protected(
+        "ActivateFundingPolicyRotation",
+        "fleet_funding_policy_rotation.activate_root.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
+    replay_protected(
         "AdoptStore",
         "root.adopt_store.v1",
         CostClass::None,
@@ -79,6 +86,13 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         "component_registry.prepare_root.v1",
     ),
     response_idempotent("PrepareFleetActivation", "fleet_activation.prepare.v1"),
+    replay_protected(
+        "PrepareFundingPolicyRotation",
+        "fleet_funding_policy_rotation.prepare_root.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     replay_protected(
         "PrepareRoleAttestation",
         "auth.prepare_role_attestation.v1",
@@ -204,6 +218,20 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
         "fleet_registry.acknowledge_root.v1",
     ),
     response_idempotent("ActivateRegistry", "fleet_registry.activate.v1"),
+    replay_protected(
+        "ApplyFundingPolicyRotation",
+        "fleet_funding_policy_rotation.apply.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
+    replay_protected(
+        "BeginFundingPolicyRotation",
+        "fleet_funding_policy_rotation.begin.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     response_idempotent(
         "CompleteRootDeletion",
         "fleet_registry.complete_root_deletion.v1",
@@ -243,6 +271,13 @@ pub const COORDINATOR_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &
         "authority_restore.resume_snapshot.v1",
     ),
     response_idempotent("SetRootFunding", "fleet_root_funding.set_enabled.v1"),
+    replay_protected(
+        "StageFundingPolicyRotationRoot",
+        "fleet_funding_policy_rotation.stage_root.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
 ];
 
 /// Canonical replay-policy rows for managed Canister command variants.

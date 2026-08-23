@@ -56,10 +56,14 @@ retain libtest's default parallelism; PocketIC suites remain explicitly
 single-threaded and ordered until a measured narrower concurrency policy is
 proven stable. `make test-wasm` is the fast lane and runs only its classified
 release-surface integrations, never the PocketIC suites.
-Cargo continues across independently selected test binaries, and the workspace
-runner records every failed suite before returning one nonzero result. In CI,
-the serial PocketIC lane runs the exact Fleet deployment-restore proof before
-the broader mixed library harness and skips that proof from the later harness.
+Cargo continues across independently selected test binaries inside each cost
+tier, and the workspace runner records every failed suite before returning one
+nonzero result. A failed ordinary tier is a hard barrier in the combined local
+runner: it reports all ordinary failures and skips the serial PocketIC tier.
+Plan-only inventory resolution still enumerates both tiers, and the explicit
+PocketIC-only mode remains independently runnable. In CI, the serial PocketIC
+lane runs the exact Fleet deployment-restore proof before the broader mixed
+library harness and skips that proof from the later harness.
 This keeps stateful deployment recovery isolated and locally attributable while
 retaining the full mixed-role coverage. The PocketIC lane clears transient
 heavy Wasm targets once before its integration-suite group and once at
