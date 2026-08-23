@@ -21,7 +21,6 @@ use super::execution_preflight::current_install_execution_preflight_receipt;
 use super::icp_context::InstallIcpContext;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, InstallPhaseLabel,
-    require_planned_installation_controller,
 };
 use super::output::render_install_timing_summary;
 use super::phase_receipts::{
@@ -332,79 +331,6 @@ fn install_recompiles_the_exact_plan_digest_and_rechecks_live_funding() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-#[cfg(unix)]
-#[test]
-fn install_identity_admission_accepts_the_exact_fleet_operator() {
-    let root = temp_dir("current-install-matching-operator");
-    fs::create_dir_all(&root).expect("create temp root");
-    let expected = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-    let executable = write_fake_icp_identity(&root, "matching-icp", Ok(expected));
-    let icp = InstallIcpContext::new(executable.to_str().expect("UTF-8 path"), &root, "local");
-
-    let observed = require_planned_installation_controller(icp.cli(), expected)
-        .expect("exact Fleet operator must be admitted");
-
-    assert_eq!(observed.to_text(), expected);
-    assert!(!root.join(".canic/release-builds").exists());
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn install_identity_admission_rejects_anonymous_and_mismatched_operators() {
-    let root = temp_dir("current-install-invalid-operator");
-    fs::create_dir_all(&root).expect("create temp root");
-    let expected = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-    let anonymous_executable = write_fake_icp_identity(&root, "anonymous-icp", Ok("2vxsx-fae"));
-    let anonymous = InstallIcpContext::new(
-        anonymous_executable.to_str().expect("UTF-8 path"),
-        &root,
-        "local",
-    );
-
-    let anonymous_error = require_planned_installation_controller(anonymous.cli(), expected)
-        .expect_err("anonymous identity must reject");
-
-    assert!(anonymous_error.to_string().contains("anonymous Principal"));
-
-    let observed = "rrkah-fqaaa-aaaaa-aaaaq-cai";
-    let mismatch_executable = write_fake_icp_identity(&root, "mismatch-icp", Ok(observed));
-    let mismatch = InstallIcpContext::new(
-        mismatch_executable.to_str().expect("UTF-8 path"),
-        &root,
-        "local",
-    );
-    let mismatch_error = require_planned_installation_controller(mismatch.cli(), expected)
-        .expect_err("mismatched identity must reject");
-    let mismatch_detail = mismatch_error.to_string();
-    assert!(mismatch_detail.contains(expected));
-    assert!(mismatch_detail.contains(observed));
-    assert!(!root.join(".canic/release-builds").exists());
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[cfg(unix)]
-#[test]
-fn install_identity_admission_explains_noninteractive_encrypted_identity_setup() {
-    let root = temp_dir("current-install-locked-operator");
-    fs::create_dir_all(&root).expect("create temp root");
-    let executable = write_fake_icp_identity(
-        &root,
-        "locked-icp",
-        Err("identity is encrypted and password input is unavailable"),
-    );
-    let icp = InstallIcpContext::new(executable.to_str().expect("UTF-8 path"), &root, "local");
-
-    let error = require_planned_installation_controller(icp.cli(), "ryjl3-tyaaa-aaaaa-aaaba-cai")
-        .expect_err("unusable encrypted identity must reject");
-    let detail = error.to_string();
-
-    assert!(detail.contains("identity is encrypted"));
-    assert!(detail.contains("CANIC_ICP_IDENTITY_PASSWORD_FILE"));
-    assert!(!root.join(".canic/release-builds").exists());
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
 #[test]
 fn named_ic_environment_is_explicit_for_cargo_builds() {
     let root = temp_dir("canic-install-build-environment");
@@ -690,30 +616,6 @@ cycles = "10T"
 
 fn valid_single_component_fleet_input() -> String {
     invalid_root_only_fleet_input().replace("unknown = 1", "app = 1")
-}
-
-#[cfg(unix)]
-fn write_fake_icp_identity(root: &Path, name: &str, identity: Result<&str, &str>) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
-
-    let executable = root.join(name);
-    let identity_command = match identity {
-        Ok(principal) => format!("printf '%s\\n' '{principal}'\nexit 0"),
-        Err(detail) => format!("printf '%s\\n' '{detail}' >&2\nexit 1"),
-    };
-    fs::write(
-        &executable,
-        format!(
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'icp 1.2.0'\n  exit 0\nfi\n{identity_command}\n"
-        ),
-    )
-    .expect("write fake ICP executable");
-    let mut permissions = fs::metadata(&executable)
-        .expect("fake ICP metadata")
-        .permissions();
-    permissions.set_mode(0o700);
-    fs::set_permissions(&executable, permissions).expect("make fake ICP executable");
-    executable
 }
 
 #[cfg(unix)]

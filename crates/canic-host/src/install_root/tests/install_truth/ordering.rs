@@ -112,7 +112,7 @@ fn assert_current_fresh_fleet_admission_order(source: &str, install: &str) {
     assert_before(
         admission,
         "prepare_current_fresh_fleet_preflight(",
-        "require_planned_installation_controller(",
+        "require_recompiled_fresh_fleet_plan(",
     );
     let fresh_preflight = source_section(
         source,
@@ -141,6 +141,16 @@ fn assert_fresh_preflight_order(preflight: &str) {
     assert_before(
         preflight,
         "compile_current_fresh_fleet_preflight(",
+        "fresh_fleet_maximum_operator_debit(",
+    );
+    assert_before(
+        preflight,
+        "fresh_fleet_maximum_operator_debit(",
+        "observe_fresh_fleet_operator_funding(",
+    );
+    assert_before(
+        preflight,
+        "observe_fresh_fleet_operator_funding(",
         "load_fresh_fleet_decision_authority(",
     );
     assert_before(

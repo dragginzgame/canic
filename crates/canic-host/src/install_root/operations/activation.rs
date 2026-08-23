@@ -70,15 +70,6 @@ pub(in crate::install_root) enum InstallationControllerObservationError {
 
     #[error("ICP CLI returned the anonymous Principal as the installation identity")]
     Anonymous,
-
-    #[error(
-        "active ICP installation identity {observed} differs from Fleet input operator principal {expected}"
-    )]
-    #[cfg(test)]
-    OperatorMismatch {
-        expected: String,
-        observed: Principal,
-    },
 }
 
 #[derive(Debug, ThisError)]
@@ -204,21 +195,6 @@ pub(in crate::install_root) fn active_installation_controller(
         return Err(InstallationControllerObservationError::Anonymous);
     }
     Ok(controller)
-}
-
-#[cfg(test)]
-pub(in crate::install_root) fn require_planned_installation_controller(
-    icp: &IcpCli,
-    expected: &str,
-) -> Result<Principal, InstallationControllerObservationError> {
-    let observed = active_installation_controller(icp)?;
-    if observed.to_text() != expected {
-        return Err(InstallationControllerObservationError::OperatorMismatch {
-            expected: expected.to_string(),
-            observed,
-        });
-    }
-    Ok(observed)
 }
 
 pub(in crate::install_root) fn require_expected_controllers(

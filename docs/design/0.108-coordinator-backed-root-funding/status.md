@@ -26,7 +26,14 @@ Date: 2026-08-23
   defect: the model read rotation DTOs directly. One ops-owned conversion now
   supplies a DTO-free named model input without moving or duplicating the
   invariant decision; `make check-invariants`, focused consumers and
-  warning-denied changed-package Clippy pass. The corrected open draft still
+  warning-denied changed-package Clippy pass. The following maintainer test
+  run completed all serial PocketIC suites but exposed four ordinary-test
+  consistency failures: the replay-policy manifests omitted the five new
+  rotation commands, and host tests/order evidence still referred to a removed
+  controller-only admission helper. The open correction classifies those
+  commands by their durable operation IDs, exercises identity admission through
+  the live operator-funding observer and stops combined validation before
+  PocketIC whenever the ordinary tier fails. The corrected open draft still
   requires the complete maintainer validation gate and a fresh human closeout
   audit before release.
 - Runtime impact: B3 adds exact registered-Root admission, the Coordinator

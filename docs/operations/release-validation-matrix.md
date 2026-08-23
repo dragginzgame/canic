@@ -53,9 +53,10 @@ make validate
 dependency and secret gates, the control-plane feature matrix, Cargo check,
 Clippy, and the complete workspace test target. It collects every independent
 failure within a cheap preflight barrier before admitting a sequential
-expensive barrier, then collects every failure in that admitted barrier. The
-primitive targets remain independently runnable and do not invoke unrelated
-validation operations.
+expensive barrier, then collects every failure in that admitted barrier. Within
+the complete workspace test target, all ordinary suites finish first and any
+ordinary failure skips the serial PocketIC suites. The primitive targets remain
+independently runnable and do not invoke unrelated validation operations.
 
 ## Required Local RC Gates
 

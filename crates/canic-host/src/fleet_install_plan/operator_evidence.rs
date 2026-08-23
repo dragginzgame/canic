@@ -43,7 +43,9 @@ pub enum FreshFleetOperatorEvidenceError {
     #[error("active ICP identity account is empty")]
     EmptyAccount,
 
-    #[error("active ICP identity could not be resolved: {source}")]
+    #[error(
+        "active ICP identity could not be resolved: {source}; for an encrypted identity in non-interactive execution, set CANIC_ICP_IDENTITY_PASSWORD_FILE to an absolute operator-owned password file"
+    )]
     Identity {
         #[source]
         source: IcpCommandError,
@@ -237,6 +239,55 @@ mod tests {
         fs::remove_dir_all(root).expect("remove temp root");
     }
 
+    #[test]
+    fn rejects_the_anonymous_active_identity() {
+        let root = temp_dir("canic-operator-funding-anonymous");
+        fs::create_dir_all(&root).expect("create temp root");
+        let executable = write_identity_only_fake_icp(&root, Ok("2vxsx-fae"));
+        let icp =
+            IcpCli::new(executable.to_string_lossy(), Some("local".to_string())).with_cwd(&root);
+
+        let error = observe_fresh_fleet_operator_funding(
+            &icp,
+            OPERATOR,
+            &PlannedCanisterCreationFunding::Cycles { cycles: 1 },
+        )
+        .expect_err("anonymous identity must reject");
+
+        assert!(matches!(
+            error,
+            FreshFleetOperatorEvidenceError::AnonymousIdentity
+        ));
+        fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn explains_noninteractive_encrypted_identity_setup() {
+        let root = temp_dir("canic-operator-funding-locked");
+        fs::create_dir_all(&root).expect("create temp root");
+        let executable = write_identity_only_fake_icp(
+            &root,
+            Err("identity is encrypted and password input is unavailable"),
+        );
+        let icp =
+            IcpCli::new(executable.to_string_lossy(), Some("local".to_string())).with_cwd(&root);
+
+        let error = observe_fresh_fleet_operator_funding(
+            &icp,
+            OPERATOR,
+            &PlannedCanisterCreationFunding::Cycles { cycles: 1 },
+        )
+        .expect_err("unusable encrypted identity must reject");
+        assert!(matches!(
+            error,
+            FreshFleetOperatorEvidenceError::Identity { .. }
+        ));
+        let detail = error.to_string();
+        assert!(detail.contains("identity is encrypted"));
+        assert!(detail.contains("CANIC_ICP_IDENTITY_PASSWORD_FILE"));
+        fs::remove_dir_all(root).expect("remove temp root");
+    }
+
     fn write_fake_icp(root: &std::path::Path) -> std::path::PathBuf {
         let executable = root.join("icp");
         fs::write(
@@ -274,6 +325,31 @@ esac
             .permissions();
         permissions.set_mode(0o700);
         fs::set_permissions(&executable, permissions).expect("make fake ICP executable");
+        executable
+    }
+
+    fn write_identity_only_fake_icp(
+        root: &std::path::Path,
+        identity: Result<&str, &str>,
+    ) -> std::path::PathBuf {
+        let executable = root.join("icp-identity-only");
+        let identity_command = match identity {
+            Ok(principal) => format!("printf '%s\\n' '{principal}'\nexit 0"),
+            Err(detail) => format!("printf '%s\\n' '{detail}' >&2\nexit 1"),
+        };
+        fs::write(
+            &executable,
+            format!(
+                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'icp 1.3.0'\n  exit 0\nfi\n{identity_command}\n"
+            ),
+        )
+        .expect("write identity-only fake ICP executable");
+        let mut permissions = fs::metadata(&executable)
+            .expect("identity-only fake ICP metadata")
+            .permissions();
+        permissions.set_mode(0o700);
+        fs::set_permissions(&executable, permissions)
+            .expect("make identity-only fake ICP executable");
         executable
     }
 }

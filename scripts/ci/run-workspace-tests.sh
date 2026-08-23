@@ -183,6 +183,14 @@ finish_test_run() {
     return 1
 }
 
+require_ordinary_success_before_pocketic() {
+    if [[ "$MODE" != "full" || "$PLAN_ONLY" -eq 1 || ${#FAILED_LABELS[@]} -eq 0 ]]; then
+        return
+    fi
+    echo "ORDINARY TEST BARRIER FAILED: skipping the serial PocketIC suites." >&2
+    finish_test_run
+}
+
 run_test() {
     local execution="$1"
     local label="$2"
@@ -431,6 +439,7 @@ if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
     fi
 fi
 
+require_ordinary_success_before_pocketic
 start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
