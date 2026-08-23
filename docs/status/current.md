@@ -35,9 +35,9 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Progress
 
-The published 0.108.0 checkpoint contains M0/M1 plus the urgent fresh-Fleet
-corrections. The open 0.108.1 draft completes B3-B9/M2-M8: exact registered-
-Root admission, full Registry-authority-bound operation identity, fixed and
+The 0.108.0 policy-only checkpoint contains M0/M1 plus the urgent fresh-Fleet
+corrections. Tagged 0.108.1 completes B3-B9/M2-M8: exact registered-Root
+admission, full Registry-authority-bound operation identity, fixed and
 non-renewing budget/reserve accounting, durable two-sided journals,
 accept-once/zero-accept replay, recovery-first Coordinator funding, protected
 manual and terminal automatic ICP refill, exact installed-authority recovery,
@@ -53,9 +53,7 @@ direct-top-up, production Ledger/CMC replay, reserve-fallback, insufficient-ICP
 and rate-denial journeys. The maintainer's first candidate validation exposed
 stale CLI/hash/timer expectations and one real pre-activation Root-admission
 defect; its follow-up exposed duplicated-match Clippy failures. Those
-candidate defects are corrected and focused regressions pass. The complete
-maintainer gate must be rerun against the final immutable candidate before a
-fresh closeout audit. The 2026-08-23 rerun stopped in `check-invariants`
+candidate defects were corrected. The 2026-08-23 rerun stopped in `check-invariants`
 because the rotation-policy model imported boundary DTOs. The correction keeps
 the invariant decision in the model behind one DTO-free named input and moves
 only boundary conversion to ops; the exact ten-target invariant gate, focused
@@ -63,7 +61,7 @@ rotation consumers and warning-denied changed-package Clippy now pass. The
 next maintainer validation completed every serial PocketIC suite but its earlier
 ordinary workspace lane reported four failures: five rotation commands were
 absent from replay-policy manifests, and host admission/order tests still named
-a removed controller-only helper. The open correction classifies all five
+a removed controller-only helper. The subsequent correction classifies all five
 durable commands, moves identity evidence to the live operator-funding observer
 and makes ordinary failures stop the combined runner before PocketIC. Focused
 replay-manifest, live operator-observer, install-order, runner-contract and
@@ -89,8 +87,14 @@ at 2,229,804 kB RSS and 97 threads. The six-test native-agent target passed in
 68.51 seconds after compilation and peaked at 2,519,036 kB and 162 threads.
 Serial capacity remains one: these measurements justify the retained process
 and cache changes, but one local observation does not prove parallel stability.
-Versioning and publication remain pending the complete immutable-candidate
-gate, audit verdict and maintainer release workflow.
+The final tagged source at
+`075560dc1ff87d872dc40d22fa7b3e48f3113260` passed the complete
+`make validate` gate, including all 22 governed internal PocketIC cases. A fresh
+human closeout audit found no runtime P0 or P1 defect but rejected line
+closeout because active evidence still described an unpublished draft and one
+older policy paragraph contradicted CANIC-019. The forward documentation
+correction resolves both findings; a fresh exact-revision validation and human
+closeout verdict remain required before 0.109 may begin.
 
 The 2026-08-22 0.108 design amendments are implemented through B9. Protected
 input materializes topology-matched single-Subnet, bounded preview multi-
@@ -107,7 +111,7 @@ before plan and paid install effects. Corrected policy/hash/plan authority
 flows through Registry, stable accounting and generated interfaces before the
 sole Root timer runs.
 
-The Toko operator-config follow-up is also implemented in the open draft.
+The Toko operator-config follow-up is also included in tagged 0.108.1.
 Fleet input now carries only one top-level operator Principal; planning and
 installation verify the active ICP identity, derive its relevant ledger
 account and query its live cycles balance. Volatile balance/source/time
@@ -473,16 +477,16 @@ Coordinator genesis and root activation validate independent copies, and the
 unreachable generic `canic.toml` refill path is hard-cut. Generated Candid
 expands only the protected init/Registry data and adds no funding endpoint. B2
 is complete and included in the 0.108.0 checkpoint. B3/M2 through B5/M4 are
-complete in the open 0.108.1 draft: Coordinator grants and Root acceptance own
+included in tagged 0.108.1: Coordinator grants and Root acceptance own
 exact durable two-sided journals; sparse topology-scaled policy, non-renewing
 caps and explicit Fiduciary acknowledgement flow through immutable authority;
 and the sole Root top-up timer resumes retained work before creating a request.
-B6/M5 through B8/M7 are complete in the open 0.108.1 draft and do not ship in
+B6/M5 through B8/M7 are included in tagged 0.108.1 and do not ship in
 0.108.0. They add the one-owner protected ICP refill path, operator and
 lifecycle surfaces, real PocketIC qualification and closeout handoff. B9/M8
 adds explicit same-release funding-policy generation rotation with one durable
 Coordinator fence, bounded retained checkpoints and unchanged application
-state; it also remains confined to the open 0.108.1 draft.
+state; it is also included in tagged 0.108.1.
 
 Scheduled 0.109 hard-cuts the independent per-canister whitelist into one
 Coordinator-owned Fleet admission policy with complete local enforcement
@@ -555,11 +559,12 @@ accepted and B2 stays held pending its separately approved external run plan.
 accepted 0.106 B1 without the held B2 external effects. Its AC12 correction
 re-audit passed and the maintainer accepted the final closeout verdict.
 0.108 has completed 0.107 and its accepted inputs; M0 is accepted, B2/M1
-protected policy and the urgent fresh-Fleet corrections form the published
-0.108.0 checkpoint. B3/M2 through B9/M8 are implementation-complete in the
-open 0.108.1 draft; post-validation candidate corrections and the CANIC-019
-amendment have focused passing evidence, while the final maintainer gate and
-human 0.108 closeout audit remain next. 0.109 requires completed 0.108 and
+protected policy and the urgent fresh-Fleet corrections form the 0.108.0
+checkpoint. B3/M2 through B9/M8 are implementation-complete in tagged 0.108.1;
+the complete gate at the tagged source passed and the fresh closeout audit found
+no runtime blocker. Its two release-truth/protocol-documentation findings are
+corrected forward, while exact-revision revalidation and human acceptance
+remain next. 0.109 requires completed 0.108 and
 explicit B1 promotion; 0.110 requires completed 0.109 plus the accepted,
 current 0.106 qualification; 0.111 requires completed 0.110 and an exact
 released predecessor; and 0.112 requires accepted 0.111 closeout. Deferred
@@ -1002,16 +1007,14 @@ guard pass. Keep B2 held until a separate exact network, identity and
 terminal-disposition authorization exists. In 0.107, B2-B7 implementation,
 the prior full validation gate and the exact AC12 re-audit/maintainer
 acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
-published 0.108.0 checkpoint remains the downstream fresh-install baseline.
-The open 0.108.1 B3-B9 closeout corrections, CANIC-019 policy-generation
-rotation, funding-domain/fee correction and Registry/offline profile scaffold
-are implemented with focused checks. Establish the immutable corrected
-candidate,
-rerun the complete maintainer-owned validation gate and then run a fresh
-human-owned 0.108 closeout audit. Do not add a production pool contract,
-run any remote
-qualification effect, version, publish or begin 0.109 before the audit verdict
-and maintainer-owned release workflow authorize it.
+0.108.0 checkpoint remains the downstream policy-only baseline. Tagged 0.108.1
+contains the B3-B9 closeout corrections, CANIC-019 policy-generation rotation,
+funding-domain/fee correction and Registry/offline profile scaffold. Establish
+an immutable revision containing the forward documentation correction, rerun
+the complete maintainer-owned validation gate and then run a fresh human-owned
+0.108 closeout audit. Preserve the existing tag. Do not add a production pool
+contract, run any remote qualification effect or begin 0.109 before the audit
+verdict authorizes line closeout.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.

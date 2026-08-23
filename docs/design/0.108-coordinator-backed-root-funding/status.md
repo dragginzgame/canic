@@ -4,16 +4,15 @@ Date: 2026-08-23
 
 ## Status
 
-- State: 0.108.0 is published. The first human closeout audit rejected the open
-  0.108.1 draft. Its source corrections are now applied: both funding legs use
+- State: 0.108.0 is the policy-only checkpoint. The first human closeout audit
+  rejected the then-open 0.108.1 draft. Its source corrections were applied:
+  both funding legs use
   bounded calls, the Root ICP replay journal fails closed at 4,096 lifetime
   identities, and the qualification matrix now uses PocketIC's production ICP
   Ledger/CMC plus real single- and multi-Root journeys. The maintainer's first
   validation attempt then exposed stale CLI/hash/timer expectations and one
   pre-activation Root-admission defect; its follow-up exposed duplicated-match
-  Clippy failures. Those candidate defects are corrected, the focused
-  regressions pass and the complete maintainer gate must be rerun against the
-  final immutable candidate before a new human verdict. On 2026-08-22 the
+  Clippy failures. Those candidate defects were corrected. On 2026-08-22 the
   maintainer then accepted CANIC-019 as a distinct B9/M8 amendment: exhausted
   finite authority may be renewed only through an explicit, digest-bound,
   replay-safe same-release policy-generation rotation that retains prior usage
@@ -30,7 +29,7 @@ Date: 2026-08-23
   run completed all serial PocketIC suites but exposed four ordinary-test
   consistency failures: the replay-policy manifests omitted the five new
   rotation commands, and host tests/order evidence still referred to a removed
-  controller-only admission helper. The open correction classifies those
+  controller-only admission helper. The subsequent correction classifies those
   commands by their durable operation IDs, exercises identity admission through
   the live operator-funding observer and stops combined validation before
   PocketIC whenever the ordinary tier fails. Fake ICP fixtures are now
@@ -46,9 +45,15 @@ Date: 2026-08-23
   took 208 seconds, with a 2,229,804 kB server high-water mark and 97 threads.
   The changed six-test native-agent target also passed, with a 2,519,036 kB
   high-water mark and 162 threads. Serial capacity remains one because these
-  local measurements do not yet prove parallel stability. The corrected open
-  draft still requires the complete maintainer validation gate and a fresh
-  human closeout audit before release.
+  local measurements do not yet prove parallel stability. The final source at
+  `075560dc1ff87d872dc40d22fa7b3e48f3113260` then passed the complete
+  `make validate` gate, including all 22 governed internal PocketIC cases, and
+  was tagged `v0.108.1` before final closeout. The fresh closeout audit found
+  no runtime P0 or P1 defect but rejected release-line closeout because active
+  evidence still described an unpublished draft and one older policy paragraph
+  contradicted CANIC-019. This forward documentation correction resolves those
+  findings; a fresh exact-revision gate and human closeout verdict remain
+  required before 0.109 may begin.
 - Runtime impact: B3 adds exact registered-Root admission, the Coordinator
   funding kill switch, fixed Fleet/Root window accounting, durable
   current-plus-last replay and reserve-aware attached-cycle calls. B4 adds the
@@ -88,8 +93,8 @@ Date: 2026-08-23
 - Toko fresh-install feedback exposed an observer-coupling defect outside the
   funding protocol: an autonomous Root could reach `Provisioned` before the
   Coordinator observed its intermediate counters and remain permanently
-  unreconciled. The open draft now accepts the exact compiled terminal receipt
-  directly, permits its completion time to predate the passive query intent,
+  unreconciled. The 0.108.1 implementation accepts the exact compiled terminal
+  receipt directly, permits its completion time to predate the passive query intent,
   normalizes progress raced by the post-acceptance query, and retains bounded
   scheduled-retry diagnostics. Focused direct-terminal, canonical-acceptance,
   restart/replay, forged-receipt and stepwise regressions pass.
@@ -101,11 +106,11 @@ Date: 2026-08-23
 - Successors: 0.109 Fleet-wide ingress admission remains blocked until this
   line is complete; 0.110 estate implementation also depends on completed
   0.109.
-- Surface posture: 0.108.0 remains policy-only. The open draft adds Coordinator
+- Surface posture: 0.108.0 remains policy-only. Tagged 0.108.1 adds Coordinator
   `RequestRootFunding` and `SetRootFunding` plus Root `AcceptFunding` and
   `RefillCycles` commands, generated Candid contracts, timer-owned request/
   fallback initiation, protected Coordinator/Root `Funding` status and
-  `canic cycles funding`. The open draft also adds protected Coordinator
+  `canic cycles funding`. Tagged 0.108.1 also adds protected Coordinator
   `BeginFundingPolicyRotation`, `StageFundingPolicyRotationRoot` and
   `ApplyFundingPolicyRotation` variants plus Root prepare/activate lifecycle
   variants, while the CLI exposes `--plan-rotation` and `--apply-rotation`.
@@ -118,22 +123,22 @@ Date: 2026-08-23
 | --- | --- | --- | --- | --- |
 | B1 | M0 recovery and admission proof | Minimal Coordinator/root atomicity proof, current/last-result model, offline break-glass authority and measured request/refill floors | Focused PocketIC value-transfer plus bounded pure/host proof | Accepted 2026-08-21 |
 | B2 | Protected policy hard cut | Fleet-input schema-1 policy, validation, hashing, propagation and generic refill sediment removal | Host/config/hash, Candid-containment and final payload-bound tests | Complete; included in the 0.108.0 checkpoint |
-| B3 | Coordinator grant authority | Registry-bound decisions, treasury windows, reserve, intents, receipts and attached-cycles call | Policy, authority, replay, stable-capacity, role-contract and generated-surface tests | Complete 2026-08-22; open 0.108.1 draft |
-| B4 | Root acceptance and request journal | Exact acceptance, zero-accept replay and monotonic current/last-result replacement | Root state/restart tests, accepted M0 response-loss platform proof and representative generated Root artifact | Complete 2026-08-22; open 0.108.1 draft |
-| B5 | Sparse-policy correction and Root timer integration | Single, preview multi and professional multi topology profiles, finite non-renewing caps, explicit Fiduciary placement, low-balance request ownership, nonterminal resumption and unchanged descendant funding | Host/config/hash, timer/policy/restart, placement-warning, generated-Candid and Root/Coordinator artifact checks | Complete 2026-08-22; open 0.108.1 draft |
-| B6 | Manual and automatic ICP refill | Protected policy, cumulative budget, floor, terminal fallback and mutual exclusion | Ledger/CMC replay suites plus real reserve-denial fallback journey | Complete 2026-08-22; open 0.108.1 draft |
-| B7 | Operator and lifecycle completion | Direct top-up resolution, status, metrics, Medic, runbooks, draining fences and generated surfaces | CLI/host/lifecycle/snapshot checks | Complete 2026-08-22; open 0.108.1 draft |
-| B8 | Qualification and closeout readiness | Real value-transfer and fallback journeys, measured guidance, cycle-only creation admission, fee-complete operator debit, Registry/offline profile scaffold, sediment audit and closeout handoff | Targeted repository gates, ICP CLI 1.3 balance fixtures and PocketIC evidence | Initial closeout rejected; candidate validation and Toko funding-review defects corrected; final maintainer gate and re-audit pending |
-| B9 | Explicit policy-generation rotation | No-effect installed-Fleet plan, exact digest/predecessor apply, Coordinator-owned durable fence and Root prepare/activate receipts, retained cumulative usage, complete historical replay checkpoints and unchanged application state | Policy/hash, controller/stale/concurrent/payload-drift rejection, mixed authority/mirror recovery, 32 MiB fragmented stable-capacity proof, interruption/restart, generated-Candid/CLI and focused PocketIC exhausted-to-successor journey | Complete 2026-08-22; open 0.108.1 draft |
+| B3 | Coordinator grant authority | Registry-bound decisions, treasury windows, reserve, intents, receipts and attached-cycles call | Policy, authority, replay, stable-capacity, role-contract and generated-surface tests | Included in tagged 0.108.1; runtime audit pass |
+| B4 | Root acceptance and request journal | Exact acceptance, zero-accept replay and monotonic current/last-result replacement | Root state/restart tests, accepted M0 response-loss platform proof and representative generated Root artifact | Included in tagged 0.108.1; runtime audit pass |
+| B5 | Sparse-policy correction and Root timer integration | Single, preview multi and professional multi topology profiles, finite non-renewing caps, explicit Fiduciary placement, low-balance request ownership, nonterminal resumption and unchanged descendant funding | Host/config/hash, timer/policy/restart, placement-warning, generated-Candid and Root/Coordinator artifact checks | Included in tagged 0.108.1; runtime audit pass |
+| B6 | Manual and automatic ICP refill | Protected policy, cumulative budget, floor, terminal fallback and mutual exclusion | Ledger/CMC replay suites plus real reserve-denial fallback journey | Included in tagged 0.108.1; runtime audit pass |
+| B7 | Operator and lifecycle completion | Direct top-up resolution, status, metrics, Medic, runbooks, draining fences and generated surfaces | CLI/host/lifecycle/snapshot checks | Included in tagged 0.108.1; runtime audit pass |
+| B8 | Qualification and closeout readiness | Real value-transfer and fallback journeys, measured guidance, cycle-only creation admission, fee-complete operator debit, Registry/offline profile scaffold, sediment audit and closeout handoff | Complete `make validate` at tagged source, ICP CLI 1.3 balance fixtures and PocketIC evidence | Tagged source gate passed; forward documentation correction and fresh re-audit pending |
+| B9 | Explicit policy-generation rotation | No-effect installed-Fleet plan, exact digest/predecessor apply, Coordinator-owned durable fence and Root prepare/activate receipts, retained cumulative usage, complete historical replay checkpoints and unchanged application state | Policy/hash, controller/stale/concurrent/payload-drift rejection, mixed authority/mirror recovery, 32 MiB fragmented stable-capacity proof, interruption/restart, generated-Candid/CLI and focused PocketIC exhausted-to-successor journey | Included in tagged 0.108.1; runtime audit pass; protocol wording corrected forward |
 
 Nine batches match the amended design's M0-M8 dependency boundaries. They are not
 preassigned patch releases.
 
 ## Next Authorized Action
 
-Establish the immutable corrected candidate revision, rerun the complete
-maintainer-owned validation gate and run a fresh human-owned 0.108 closeout
-audit against the complete open 0.108.1 B3-B9/M2-M8 batch. Do not begin 0.109,
-run remote qualification effects, version, tag or publish until that verdict
-and the maintainer-owned release workflow authorize those actions. The
-published 0.108.0 checkpoint and held 0.106 B2 work remain independent.
+Establish an immutable revision containing the forward documentation
+correction, rerun the complete maintainer-owned validation gate and run a fresh
+human-owned 0.108 closeout audit against B3-B9/M2-M8. Preserve the existing
+`v0.108.1` tag. Do not begin 0.109 or run remote qualification effects while
+closeout remains unaccepted. The 0.108.0 policy checkpoint and held 0.106 B2
+work remain independent.
