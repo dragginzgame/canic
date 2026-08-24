@@ -75,10 +75,10 @@ The following 0.107 surfaces are hard-deleted rather than aliased:
 - `RuntimeWhitelist` managed command/status and replay-manifest variants; and
 - `[app.whitelist]` configuration and bootstrap seed.
 
-The playground, application fixtures, procedural-macro parser/validator,
-managed role endpoint bundle and representative generated Candid all use the
-new exact spelling. The only remaining old names in executable-source searches
-are negative absence assertions.
+The application fixtures, procedural-macro parser/validator, managed role
+endpoint bundle and representative generated Candid all use the new exact
+spelling. The only remaining old names in executable-source searches are
+negative absence assertions.
 
 ## Targeted qualification
 

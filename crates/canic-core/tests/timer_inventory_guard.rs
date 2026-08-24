@@ -949,10 +949,6 @@ fn expected_ownership_inventory() -> BTreeMap<&'static str, OwnershipClass> {
 fn expected_native_registration_calls() -> BTreeMap<String, BTreeMap<String, usize>> {
     [
         (
-            "apps/saltz/burner/src/lib.rs",
-            [("register_once", 1)].as_slice(),
-        ),
-        (
             "canisters/test/runtime_probe/src/lib.rs",
             [("register_after_completion", 1), ("register_once", 4)].as_slice(),
         ),
@@ -1001,10 +997,6 @@ fn expected_native_registration_calls() -> BTreeMap<String, BTreeMap<String, usi
 fn expected_native_registration_actions() -> BTreeMap<String, BTreeMap<String, usize>> {
     [
         (
-            "apps/saltz/burner/src/lib.rs",
-            [("cancel", 1), ("ensure_scheduled", 1)].as_slice(),
-        ),
-        (
             "canisters/test/runtime_probe/src/lib.rs",
             [("cancel", 1), ("ensure_scheduled", 4)].as_slice(),
         ),
@@ -1050,14 +1042,13 @@ fn expected_native_registration_actions() -> BTreeMap<String, BTreeMap<String, u
     .collect()
 }
 
-const fn application_ownership() -> [(&'static str, OwnershipClass); 7] {
+const fn application_ownership() -> [(&'static str, OwnershipClass); 6] {
     use OwnershipClass::{
         DtoOrMetricsProjection as Projection, IndependentApplicationCustody as Application,
         PrivateLifecycleConsumer as Lifecycle,
     };
 
     [
-        ("apps/saltz/burner/src/lib.rs", Application),
         ("apps/test/test/src/lib.rs", Application),
         (
             "canisters/test/canic_icydb_lifecycle_probe/src/lib.rs",
@@ -1219,7 +1210,6 @@ const fn facade_ownership() -> [(&'static str, OwnershipClass); 2] {
 fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     [
         "Cargo.toml",
-        "apps/saltz/burner/Cargo.toml",
         "apps/test/test/Cargo.toml",
         "canisters/test/canic_icydb_lifecycle_probe/Cargo.toml",
         "canisters/test/delegation_root_stub/Cargo.toml",

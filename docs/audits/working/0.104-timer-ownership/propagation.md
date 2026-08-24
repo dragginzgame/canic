@@ -27,9 +27,6 @@ must show:
 existing `companion-framework/inventory/visible` native row remains. Its
 public `timer!`, `timer_interval!`, `canic::api::timer::cancel` and hidden
 `TimerApi::set` coverage becomes native registration/capacity/cancel coverage.
-The standalone Saltz burner remains separately classified evidence; the guide
-does not depend on that experimental application.
-
 ## Synchronous Lifecycle Participant
 
 The only canonical grammar is:

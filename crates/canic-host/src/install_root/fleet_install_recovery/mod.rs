@@ -277,7 +277,7 @@ pub(super) fn compile_recovery_plan(
 }
 
 const RETAINED_INSTALL_RECOVERY_PREDECESSOR: &str = "0.109.1";
-const RETAINED_INSTALL_RECOVERY_SUCCESSOR: &str = "0.109.2";
+const RETAINED_INSTALL_RECOVERY_SUCCESSORS: &[&str] = &["0.109.2", "0.109.3"];
 
 /// Enforce the one narrow host-only cross-patch rescue contract for an exact retained build.
 pub fn require_supported_recovery_builder(
@@ -288,12 +288,13 @@ pub fn require_supported_recovery_builder(
         return Ok(());
     }
     if recorded == RETAINED_INSTALL_RECOVERY_PREDECESSOR
-        && current == RETAINED_INSTALL_RECOVERY_SUCCESSOR
+        && RETAINED_INSTALL_RECOVERY_SUCCESSORS.contains(&current)
     {
         return Ok(());
     }
+    let successors = RETAINED_INSTALL_RECOVERY_SUCCESSORS.join(" or ");
     Err(invalid(format!(
-        "interrupted Fleet install release build belongs to Canic {recorded}, not current Canic {current}; only an exact {RETAINED_INSTALL_RECOVERY_PREDECESSOR} release-build session may be resumed by {RETAINED_INSTALL_RECOVERY_SUCCESSOR}"
+        "interrupted Fleet install release build belongs to Canic {recorded}, not current Canic {current}; only an exact {RETAINED_INSTALL_RECOVERY_PREDECESSOR} release-build session may be resumed by {successors}"
     )))
 }
 
@@ -541,11 +542,13 @@ mod tests {
     }
 
     #[test]
-    fn cross_patch_rescue_is_exactly_1091_to_1092() {
+    fn cross_patch_rescue_is_exactly_1091_to_explicit_successors() {
         assert!(require_supported_recovery_builder("0.109.2", "0.109.2").is_ok());
         assert!(require_supported_recovery_builder("0.109.1", "0.109.2").is_ok());
+        assert!(require_supported_recovery_builder("0.109.1", "0.109.3").is_ok());
         assert!(require_supported_recovery_builder("0.109.0", "0.109.2").is_err());
-        assert!(require_supported_recovery_builder("0.109.1", "0.109.3").is_err());
+        assert!(require_supported_recovery_builder("0.109.1", "0.109.4").is_err());
+        assert!(require_supported_recovery_builder("0.109.2", "0.109.3").is_err());
         assert!(require_supported_recovery_builder("0.109.2", "0.109.1").is_err());
     }
 

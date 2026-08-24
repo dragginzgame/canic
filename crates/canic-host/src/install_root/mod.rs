@@ -72,7 +72,7 @@ use crate::release_build::{
     plan_release_build_for_profile,
 };
 use build_network::resolve_install_build_context;
-use build_snapshot::resolve_install_snapshot;
+use build_snapshot::{InstallSnapshotSource, resolve_install_snapshot};
 pub use config_selection::{
     ConfigDiscoveryError, current_canic_workspace_root, discover_canic_config_choices,
     discover_canic_workspace_root_from, discover_workspace_canic_config_choices,
@@ -1132,7 +1132,11 @@ fn current_install_build_inputs(
         options.build_profile,
     )?;
     if options.deployment_plan_override.is_some() {
-        let snapshot = resolve_install_snapshot(&context, &options.root_build_target, true)?;
+        let snapshot = resolve_install_snapshot(
+            &context,
+            &options.root_build_target,
+            InstallSnapshotSource::DeploymentPlan,
+        )?;
         return Ok((context, snapshot));
     }
 
@@ -1148,7 +1152,15 @@ fn current_install_build_inputs(
     context = context
         .with_profile(release_build.record.build_profile)
         .with_release_build_id(release_build.record.release_build_id);
-    let mut snapshot = resolve_install_snapshot(&context, &options.root_build_target, false)?;
+    let source = if matches!(
+        release_build.record.state,
+        crate::release_build::ReleaseBuildPlanState::Finalized { .. }
+    ) {
+        InstallSnapshotSource::FinalizedRelease(&release_build)
+    } else {
+        InstallSnapshotSource::WorkspaceBuild
+    };
+    let mut snapshot = resolve_install_snapshot(&context, &options.root_build_target, source)?;
     snapshot.release_build = Some(release_build);
     Ok((context, snapshot))
 }

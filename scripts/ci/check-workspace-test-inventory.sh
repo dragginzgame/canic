@@ -88,7 +88,6 @@ if rg -n -U \
     '(?s)PocketIcBuilder::new\(\).{0,250}\.build\(\)' \
     "$ROOT/crates/canic-testing-internal" \
     "$ROOT/crates/canic-tests" \
-    "$ROOT/apps/saltz" \
     --glob '*.rs'; then
     fail "PocketIC builders must use the bounded explicit startup helper"
 fi

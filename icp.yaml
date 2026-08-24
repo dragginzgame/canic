@@ -48,51 +48,6 @@ canisters:
           commands:
             - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_shard release . . apps/test/canic.toml
 
-  - name: playground_root
-    build:
-      steps:
-        - type: script
-          commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- root release . . apps/playground/canic.toml
-
-  - name: playground_hub
-    build:
-      steps:
-        - type: script
-          commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- playground_hub release . . apps/playground/canic.toml
-
-  - name: wenzelroll
-    build:
-      steps:
-        - type: script
-          commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- wenzelroll release . . apps/playground/canic.toml
-
-  - name: saltz_preview
-    build:
-      steps:
-        - type: script
-          commands:
-            - CARGO_INCREMENTAL=0 cargo build --locked --package saltz_preview --target wasm32-unknown-unknown --release
-            - cp target/wasm32-unknown-unknown/release/saltz_preview.wasm "$ICP_WASM_OUTPUT_PATH"
-
-  - name: cycle_burn_probe
-    build:
-      steps:
-        - type: script
-          commands:
-            - CARGO_INCREMENTAL=0 cargo build --locked --package cycle_burn_probe --target wasm32-unknown-unknown --release
-            - cp target/wasm32-unknown-unknown/release/cycle_burn_probe.wasm "$ICP_WASM_OUTPUT_PATH"
-
-  - name: saltz_burner
-    build:
-      steps:
-        - type: script
-          commands:
-            - CARGO_INCREMENTAL=0 cargo build --locked --package saltz_burner --target wasm32-unknown-unknown --release
-            - cp target/wasm32-unknown-unknown/release/saltz_burner.wasm "$ICP_WASM_OUTPUT_PATH"
-
 networks:
   - name: local
     mode: managed
@@ -100,13 +55,6 @@ networks:
     gateway:
       bind: 127.0.0.1
       port: 8001
-
-  - name: saltz-local
-    mode: managed
-    version: "v13.0.0-2026-05-07-04-27"
-    gateway:
-      bind: 127.0.0.1
-      port: 8002
 
 environments:
   - name: demo
@@ -125,37 +73,10 @@ environments:
       - scale_replica
       - user_hub
       - user_shard
-      - playground_root
-      - playground_hub
-      - wenzelroll
 
   - name: proof
     network: ic
     canisters: [root, app, user_hub, user_shard]
-
-  - name: playground-ic
-    network: ic
-    canisters: [playground_root, playground_hub, wenzelroll]
-
-  - name: saltz-preview-local
-    network: saltz-local
-    canisters: [saltz_preview]
-
-  - name: cycle-burn-local
-    network: saltz-local
-    canisters: [cycle_burn_probe]
-
-  - name: cycle-burn-calibration-ic
-    network: ic
-    canisters: [cycle_burn_probe]
-
-  - name: waveform-burner-local
-    network: saltz-local
-    canisters: [saltz_burner]
-
-  - name: waveform-burner-ic
-    network: ic
-    canisters: [saltz_burner]
 
   - name: test
     network: local

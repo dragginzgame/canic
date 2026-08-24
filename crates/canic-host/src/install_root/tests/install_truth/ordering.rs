@@ -34,8 +34,18 @@ fn current_install_records_gates_before_activation_mutation() {
     );
     assert_before(
         manifest_emission,
-        "compile_and_persist_application_artifact_union(",
+        "emit_install_manifest_files(",
         "finalize_release_build_from_manifest(",
+    );
+    let workspace_manifest_emission = source_section(
+        manifest_emission,
+        "CompleteInstallBuildSnapshot::Workspace(workspace) =>",
+        "CompleteInstallBuildSnapshot::Finalized(finalized) =>",
+    );
+    assert_before(
+        workspace_manifest_emission,
+        "compile_and_persist_application_artifact_union(",
+        "Ok(InstallManifestPaths",
     );
     assert_before(
         install,

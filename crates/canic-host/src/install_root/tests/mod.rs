@@ -1,5 +1,5 @@
 use super::build_network::resolve_install_build_context;
-use super::build_snapshot::{InstallBuildTarget, resolve_install_snapshot};
+use super::build_snapshot::{InstallBuildTarget, InstallSnapshotSource, resolve_install_snapshot};
 use super::commands::{
     icp_canister_command, icp_canister_create_command, icp_canister_install_binary_args_command,
     icp_e8s_text, read_created_canister, write_candid_args,
@@ -427,8 +427,9 @@ maximum_instances = 2
         release_build_id: None,
     };
 
-    let snapshot = resolve_install_snapshot(&context, "root", true)
-        .expect("deployment-plan install should accept multiple Components");
+    let snapshot =
+        resolve_install_snapshot(&context, "root", InstallSnapshotSource::DeploymentPlan)
+            .expect("deployment-plan install should accept multiple Components");
     assert_eq!(snapshot.app_id, "demo");
 
     fs::remove_dir_all(root).expect("remove temp root");

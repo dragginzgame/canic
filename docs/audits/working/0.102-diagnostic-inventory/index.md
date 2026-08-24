@@ -2413,5 +2413,4 @@ The representative release-Wasm closeout measurement is recorded in
 conversion evidence. Clean changes remain limited to fields directly affected
 by removal of diagnostic strings; do not add a durable-state redesign, JSON
 registry, handling taxonomy or observability subsystem. The diagnostic batch
-is ready for maintainer commit/push validation; the current-document guard's
-unrelated Saltz asset finding remains with that separately scoped work.
+is ready for maintainer commit/push validation.

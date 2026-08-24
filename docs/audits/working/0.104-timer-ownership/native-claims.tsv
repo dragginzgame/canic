@@ -9,6 +9,4 @@ log retention	OnceRegistration	Retained	ClaimKey::BuiltIn(LogRetention)	log inde
 placement receipt acknowledgement	OnceRegistration	Retained	ClaimKey::BuiltIn(PlacementReceiptAcknowledgement)	durable terminal receipt index and receipt operation IDs	placement acknowledgement owner	Move native custody to placement owner; inactive when index is empty
 root canister-pool maintenance	AfterCompletionRegistration	Retained	ClaimKey::CanisterPoolMaintenance wrapped by TimerHandle	Fleet activation/draining plus pool records and journals	control-plane canister-pool owner	Hold native registration directly; provider owns cadence and pool owns demand
 async-job recovery watchdog	WatchdogRegistration	Retained	ClaimKey::RecoveryWatchdog	expired business-attempt lease plus confirmed current domain demand	closed async-job recovery owner set	Retain one native watchdog; remove alternate scheduling lane and durable provider mirrors
-Saltz waveform	OnceRegistration	Retained	standalone Saltz application	immutable authorized waveform state	Saltz burner	Retain unchanged and classify as non-Canic application custody
 runtime-probe companion	OnceRegistration	Retained	runtime_probe fixture	fixture-owned shared inventory row	runtime_probe fixture	Retain as direct-provider composition evidence
-
