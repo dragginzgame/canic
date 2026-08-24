@@ -5,6 +5,13 @@
 //! Boundary: each compare-and-commit request and response is journalled, then the complete
 //! Coordinator snapshot, manifest, and version are independently reproduced from the Fleet plan.
 
+use super::fleet_component_provisioning_plan::{
+    CompileFleetComponentProvisioningPlanRequest, compile_fleet_component_provisioning_plan,
+};
+use super::fleet_registry_recovery::{
+    ActiveRegistryRecoveryRequest, JoiningRegistryRecoveryRequest,
+    require_joining_or_recovered_registry,
+};
 use super::fleet_subnet_root_install_journal::{
     FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest, ResolvedFleetSubnetRootInstall,
     begin_registry_join, expected_registry_join_entry, plan_fleet_subnet_root_install,
@@ -115,18 +122,28 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
     let joining_version =
         FleetRegistryOps::version(&authority, &component_topology, &expected_registry)?;
     let live = query_live_registry(icp_context.cli(), &protocol_binding, coordinator)?;
-    if exact_registry_matches(&authority, &component_topology, &expected_registry, &live)? {
-        return Ok(joining_version);
-    }
     let active_registry =
         FleetRegistryOps::compile_active(&authority, &component_topology, &expected_registry)?;
-    require_exact_registry(
-        &authority,
-        &component_topology,
-        &active_registry,
-        &live,
-        "complete all-Active recovery",
-    )?;
+    let compiled =
+        compile_fleet_component_provisioning_plan(CompileFleetComponentProvisioningPlanRequest {
+            config: config.model(),
+            fleet_install_plan: &fleet_install_plan.plan,
+            registry: &active_registry,
+            operation_id: super::root_component_provisioning_operation_id(install_operation_id),
+        })?;
+    require_joining_or_recovered_registry(JoiningRegistryRecoveryRequest {
+        active: ActiveRegistryRecoveryRequest {
+            icp: icp_context.cli(),
+            binding: &protocol_binding,
+            coordinator,
+            component_topology: &component_topology,
+            active: &active_registry,
+            live: &live,
+            expected_operation_id: compiled.prepare_request.operation_id,
+            expected_plan_hash: compiled.plan_hash,
+        },
+        joining: &expected_registry,
+    })?;
     Ok(joining_version)
 }
 
@@ -240,19 +257,4 @@ fn require_exact_registry(
         return Err(RootRegistryJoinError::LiveRegistryMismatch(stage).into());
     }
     Ok(())
-}
-
-fn exact_registry_matches(
-    authority: &FleetRegistryAuthority,
-    component_topology: &ComponentTopology,
-    expected_registry: &FleetRegistry,
-    live: &LiveRegistryEvidence,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let expected_manifest =
-        FleetRegistryOps::manifest(authority, component_topology, expected_registry)?;
-    let expected_version =
-        FleetRegistryOps::version(authority, component_topology, expected_registry)?;
-    Ok(live.registry == *expected_registry
-        && live.manifest == expected_manifest
-        && live.version == expected_version)
 }

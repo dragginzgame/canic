@@ -93,6 +93,31 @@ fn current_install_records_gates_before_activation_mutation() {
     );
 }
 
+#[test]
+fn every_pre_provisioning_registry_gate_accepts_the_same_proven_successor() {
+    let join = include_str!("../../fleet_subnet_root_registry_join/mod.rs");
+    assert!(
+        join.contains("require_joining_or_recovered_registry("),
+        "the earliest Registry join gate must accept the shared proven recovery state"
+    );
+
+    for (label, source) in [
+        (
+            "root synchronization",
+            include_str!("../../fleet_subnet_root_registry_sync/mod.rs"),
+        ),
+        (
+            "Registry activation",
+            include_str!("../../fleet_registry_activation/mod.rs"),
+        ),
+    ] {
+        assert!(
+            source.contains("require_active_or_service_successor_registry("),
+            "{label} must accept the shared proven recovery state"
+        );
+    }
+}
+
 fn assert_current_fresh_fleet_admission_order(source: &str, install: &str) {
     assert_before(
         install,

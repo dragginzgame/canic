@@ -1,6 +1,10 @@
 //! Focused tests for exact live Registry replay classification.
 
 use super::*;
+use crate::install_root::fleet_registry_recovery::{
+    ComponentProvisioningSuccessorEvidence, require_active_or_service_successor_evidence,
+    require_joining_or_recovered_evidence,
+};
 use candid::Principal;
 use canic_core::{
     bootstrap::{
@@ -8,6 +12,9 @@ use canic_core::{
         parse_config_model,
     },
     cdk::types::Cycles,
+    dto::component_provisioning::{
+        FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
+    },
     dto::fleet_registry::{
         FleetServiceBinding, FleetServiceComponentBinding, FleetServiceMode, FleetSubnetRootEntry,
         FleetSubnetRootStatus,
@@ -19,6 +26,7 @@ use canic_core::{
         FleetSubnetCanisterPoolConfig, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
         ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
+    shared_support::fleet_admission_policy::compile_installed_fleet_admission_policy,
 };
 
 #[test]
@@ -35,7 +43,7 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
     let exact_live = live_evidence(&topology, successor.clone());
     let expected_operation_id = [21; 32];
     let expected_plan_hash = [22; 32];
-    require_exact_or_service_successor_registry(
+    require_active_or_service_successor_evidence(
         &topology,
         &active,
         &live_evidence(&topology, active.clone()),
@@ -54,7 +62,7 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
         phase: FleetComponentProvisioningPhase::ConfirmingDirectories,
     };
 
-    require_exact_or_service_successor_registry(
+    require_active_or_service_successor_evidence(
         &topology,
         &active,
         &exact_live,
@@ -65,7 +73,7 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
     .expect("accept exact service successor");
 
     assert!(
-        require_exact_or_service_successor_registry(
+        require_active_or_service_successor_evidence(
             &topology,
             &active,
             &exact_live,
@@ -80,7 +88,7 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
     let mut wrong_plan = successor_evidence.clone();
     wrong_plan.plan_hash[0] ^= 1;
     assert!(
-        require_exact_or_service_successor_registry(
+        require_active_or_service_successor_evidence(
             &topology,
             &active,
             &exact_live,
@@ -95,7 +103,7 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
     let mut premature = successor_evidence.clone();
     premature.phase = FleetComponentProvisioningPhase::ComponentsProvisioned;
     assert!(
-        require_exact_or_service_successor_registry(
+        require_active_or_service_successor_evidence(
             &topology,
             &active,
             &exact_live,
@@ -111,7 +119,7 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
     later.revision += 1;
     let later_live = live_evidence(&topology, later);
     assert!(
-        require_exact_or_service_successor_registry(
+        require_active_or_service_successor_evidence(
             &topology,
             &active,
             &later_live,
@@ -122,6 +130,115 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
         .is_err(),
         "a later canonical Registry must not masquerade as the one service successor"
     );
+}
+
+#[test]
+fn initial_service_successor_rejects_changed_admission_authority() {
+    let topology = topology();
+    let active = active_registry(&topology);
+    let mut successor = FleetRegistryOps::compile_initial_services(
+        &active.authority,
+        &topology,
+        &active,
+        vec![service()],
+    )
+    .expect("compile service successor");
+    successor.admission = compile_installed_fleet_admission_policy(
+        successor.admission.fleet.clone(),
+        successor.admission.generation + 1,
+        successor.admission.fleet_principals.clone(),
+        successor.admission.rules.clone(),
+    )
+    .expect("valid divergent admission authority");
+    let live = live_evidence(&topology, successor);
+    let operation_id = [24; 32];
+    let plan_hash = [25; 32];
+    let evidence = ComponentProvisioningSuccessorEvidence {
+        operation_id,
+        plan_hash,
+        source_registry: FleetRegistryOps::version(&active.authority, &topology, &active)
+            .expect("active Registry version"),
+        published_registry: Some(live.version.clone()),
+        operation: FleetComponentProvisioningOperation::FreshInstall,
+        phase: FleetComponentProvisioningPhase::ServiceTopologyPublished,
+    };
+
+    assert!(
+        require_active_or_service_successor_evidence(
+            &topology,
+            &active,
+            &live,
+            operation_id,
+            plan_hash,
+            Some(&evidence),
+        )
+        .is_err(),
+        "an initial-service successor must not change admission authority"
+    );
+}
+
+#[test]
+fn join_recovery_reaches_the_exact_initial_service_successor() {
+    let topology = topology();
+    let authority = authority();
+    let genesis = FleetRegistryOps::compile_genesis(
+        &AppId::from("demo"),
+        authority.clone(),
+        &topology,
+        crate::test_support::fleet_admission_policy(authority.binding.fleet.clone()),
+    )
+    .expect("genesis Registry");
+    let joining =
+        FleetRegistryOps::compile_joining(&authority, &topology, &genesis, root(&topology))
+            .expect("Joining Registry");
+    let active = FleetRegistryOps::compile_active(&authority, &topology, &joining)
+        .expect("all-Active Registry");
+    let successor =
+        FleetRegistryOps::compile_initial_services(&authority, &topology, &active, vec![service()])
+            .expect("initial service successor");
+    let successor_live = live_evidence(&topology, successor);
+    let operation_id = [31; 32];
+    let plan_hash = [32; 32];
+    let evidence = ComponentProvisioningSuccessorEvidence {
+        operation_id,
+        plan_hash,
+        source_registry: FleetRegistryOps::version(&authority, &topology, &active)
+            .expect("active Registry version"),
+        published_registry: Some(successor_live.version.clone()),
+        operation: FleetComponentProvisioningOperation::FreshInstall,
+        phase: FleetComponentProvisioningPhase::ConfirmingDirectories,
+    };
+
+    require_joining_or_recovered_evidence(
+        &topology,
+        &joining,
+        &active,
+        &live_evidence(&topology, joining.clone()),
+        operation_id,
+        plan_hash,
+        None,
+    )
+    .expect("accept exact all-Joining replay");
+    require_joining_or_recovered_evidence(
+        &topology,
+        &joining,
+        &active,
+        &live_evidence(&topology, active.clone()),
+        operation_id,
+        plan_hash,
+        None,
+    )
+    .expect("accept exact all-Active replay");
+    require_joining_or_recovered_evidence(
+        &topology,
+        &joining,
+        &active,
+        &successor_live,
+        operation_id,
+        plan_hash,
+        Some(&evidence),
+    )
+    .expect("accept exact service successor at the join recovery boundary");
 }
 
 fn topology() -> ComponentTopology {

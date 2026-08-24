@@ -35,7 +35,7 @@ use crate::{
         load_persisted_canic_infrastructure_artifact_manifest,
     },
 };
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 use candid::Principal;
 use canic_control_plane::dto::fleet_coordinator::{
@@ -61,6 +61,7 @@ const BASE_ADVANCE_LIMIT: usize = 32;
 const ADVANCES_PER_COMPONENT: usize = 8;
 const ADVANCES_PER_PLACEMENT: usize = 4;
 const ADVANCES_PER_ROOT: usize = 8;
+const SCHEDULED_PROGRESS_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 pub(super) struct InstallFleetComponentsRequest<'a> {
     pub icp: &'a InstallIcpContext,
@@ -153,7 +154,13 @@ pub(super) fn install_fleet_components_and_publish_catalog(
                     return Err(advance_bound_exceeded(&current).into());
                 }
                 let status = reconcile_or_advance(icp, &binding, request.coordinator, &current)?;
-                record_component_provisioning_advanced(&current, status)?
+                let poll_delay =
+                    scheduled_progress_poll_delay(current.journal.last_status.as_ref(), &status);
+                let advanced = record_component_provisioning_advanced(&current, status)?;
+                if let Some(delay) = poll_delay {
+                    std::thread::sleep(delay);
+                }
+                advanced
             }
             FleetComponentProvisioningInstallPhase::RuntimesActivated => {
                 begin_fleet_catalog_publication(
@@ -340,6 +347,15 @@ fn provisioning_advance_limit(
         .ok_or(FleetComponentProvisioningInstallError::AdvanceLimitOverflow)
 }
 
+fn scheduled_progress_poll_delay(
+    previous: Option<&FleetComponentProvisioningStatusResponse>,
+    observed: &FleetComponentProvisioningStatusResponse,
+) -> Option<Duration> {
+    previous
+        .is_some_and(|previous| previous == observed)
+        .then_some(SCHEDULED_PROGRESS_POLL_INTERVAL)
+}
+
 fn advance_bound_exceeded(
     current: &ResolvedFleetComponentProvisioningInstall,
 ) -> FleetComponentProvisioningInstallError {
@@ -372,7 +388,21 @@ fn advance_bound_exceeded(
 
 #[cfg(test)]
 mod tests {
-    use super::FleetComponentProvisioningInstallError;
+    use super::{
+        FleetComponentProvisioningInstallError, SCHEDULED_PROGRESS_POLL_INTERVAL,
+        scheduled_progress_poll_delay,
+    };
+    use candid::Principal;
+    use canic_core::{
+        dto::component_provisioning::{
+            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
+            FleetComponentProvisioningStatusResponse,
+        },
+        ids::{
+            AppId, CanonicalNetworkId, ComponentDeploymentConfigurationDigest, FleetBinding,
+            FleetCoordinatorBinding, FleetId, FleetKey, FleetRegistryAuthority, SubnetId,
+        },
+    };
 
     #[test]
     fn bounded_advance_error_renders_last_correlated_state() {
@@ -390,5 +420,75 @@ mod tests {
                 "07".repeat(32)
             )
         );
+    }
+
+    #[test]
+    fn unchanged_scheduled_status_waits_without_delaying_observed_progress() {
+        let previous = status(FleetComponentProvisioningPhase::AcceptingRoots);
+        assert_eq!(
+            scheduled_progress_poll_delay(Some(&previous), &previous),
+            Some(SCHEDULED_PROGRESS_POLL_INTERVAL)
+        );
+        let advanced = status(FleetComponentProvisioningPhase::RootsAccepted);
+        assert_eq!(
+            scheduled_progress_poll_delay(Some(&previous), &advanced),
+            None
+        );
+        assert_eq!(scheduled_progress_poll_delay(None, &previous), None);
+    }
+
+    fn status(phase: FleetComponentProvisioningPhase) -> FleetComponentProvisioningStatusResponse {
+        let fleet = FleetBinding {
+            fleet: FleetKey {
+                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                fleet_id: FleetId::from_generated_bytes([1; 32]),
+            },
+            app: AppId::from("demo"),
+        };
+        FleetComponentProvisioningStatusResponse {
+            operation_id: [2; 32],
+            plan_hash: [3; 32],
+            fleet_registry: canic_core::dto::fleet_registry::FleetRegistryVersion {
+                authority: FleetRegistryAuthority {
+                    binding: FleetCoordinatorBinding {
+                        fleet,
+                        coordinator_subnet: SubnetId::from_principal(Principal::from_slice(
+                            &[4; 29],
+                        )),
+                        coordinator: Principal::from_slice(&[5; 29]),
+                    },
+                    epoch: 1,
+                },
+                revision: 3,
+                content_hash: [6; 32],
+            },
+            configuration_digest: ComponentDeploymentConfigurationDigest::from_bytes([7; 32]),
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            phase,
+            directory_confirmation_root_count: 1,
+            root_batch_count: 1,
+            accepted_root_count: 0,
+            acceptance_in_flight_root: None,
+            provisioned_root_count: 0,
+            current_root: None,
+            provisioning_in_flight_root: None,
+            directory_confirmed_root_count: 0,
+            current_synchronization: None,
+            current_publication: None,
+            publication_in_flight_root: None,
+            runtime_activated_root_count: 0,
+            current_activation: None,
+            activation_in_flight_root: None,
+            pending_root_failure: None,
+            group_placement_count: 5,
+            component_count: 5,
+            planned_at_ns: 1,
+            roots_accepted_at_ns: None,
+            components_provisioned_at_ns: None,
+            published_fleet_registry: None,
+            service_topology_published_at_ns: None,
+            directories_confirmed_at_ns: None,
+            runtimes_activated_at_ns: None,
+        }
     }
 }

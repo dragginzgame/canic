@@ -16,6 +16,9 @@ use super::{
         ResolvedFleetRegistryActivation, begin_registry_activation, plan_fleet_registry_activation,
         record_registry_activated, record_registry_activation_verified,
     },
+    fleet_registry_recovery::{
+        ActiveRegistryRecoveryRequest, require_active_or_service_successor_registry,
+    },
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
         expected_registry_join_entry, plan_fleet_subnet_root_install,
@@ -38,23 +41,15 @@ use std::path::Path;
 
 use candid::Principal;
 use canic_control_plane::dto::fleet_coordinator::{
-    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorOperationStatusResponse,
-    CoordinatorStatusRequest, CoordinatorStatusResponse,
+    CoordinatorCommand, CoordinatorCommandResponse, CoordinatorStatusRequest,
+    CoordinatorStatusResponse,
 };
 use canic_core::{
     control_plane_support::{config::ComponentTopology, ops::fleet_registry::FleetRegistryOps},
     dto::fleet_registry::{
-        FleetComponentSpecEntry, FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
-        FleetSubnetRootEntry, FleetSubnetRootSnapshotAcknowledgement,
+        FleetRegistry, FleetRegistryManifest, FleetRegistryVersion,
+        FleetSubnetRootSnapshotAcknowledgement,
     },
-    dto::{
-        component_provisioning::{
-            FleetComponentProvisioningOperation, FleetComponentProvisioningPhase,
-            FleetComponentProvisioningStatusResponse,
-        },
-        role::OperationStatusRequest,
-    },
-    ids::FleetRegistryAuthority,
     protocol,
 };
 use thiserror::Error as ThisError;
@@ -190,24 +185,16 @@ pub(super) fn activate_and_verify_fleet_registry(
                 request.install_operation_id,
             ),
         })?;
-    let successor_evidence = if live.registry == current.journal.active_registry {
-        None
-    } else {
-        Some(query_component_provisioning_successor_evidence(
-            icp,
-            &protocol_binding,
-            request.coordinator,
-            compiled.prepare_request.operation_id,
-        )?)
-    };
-    require_exact_or_service_successor_registry(
-        &component_topology,
-        &current.journal.active_registry,
-        &live,
-        compiled.prepare_request.operation_id,
-        compiled.plan_hash,
-        successor_evidence.as_ref(),
-    )?;
+    require_active_or_service_successor_registry(ActiveRegistryRecoveryRequest {
+        icp,
+        binding: &protocol_binding,
+        coordinator: request.coordinator,
+        component_topology: &component_topology,
+        active: &current.journal.active_registry,
+        live: &live,
+        expected_operation_id: compiled.prepare_request.operation_id,
+        expected_plan_hash: compiled.plan_hash,
+    })?;
     let version = FleetRegistryOps::version(
         &current.journal.active_registry.authority,
         &component_topology,
@@ -342,135 +329,6 @@ fn require_exact_registry(
     Ok(())
 }
 
-fn require_exact_or_service_successor_registry(
-    component_topology: &ComponentTopology,
-    expected: &FleetRegistry,
-    live: &LiveRegistryEvidence,
-    expected_operation_id: [u8; 32],
-    expected_plan_hash: [u8; 32],
-    successor_evidence: Option<&ComponentProvisioningSuccessorEvidence>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let expected_manifest =
-        FleetRegistryOps::manifest(&expected.authority, component_topology, expected)?;
-    let expected_version =
-        FleetRegistryOps::version(&expected.authority, component_topology, expected)?;
-    let expected_evidence = RegistryEvidence {
-        registry: expected,
-        manifest: &expected_manifest,
-        version: &expected_version,
-    };
-    if RegistryEvidence::from_live(live) == expected_evidence {
-        return Ok(());
-    }
-
-    FleetRegistryOps::validate(&expected.authority, component_topology, &live.registry)?;
-    let live_manifest =
-        FleetRegistryOps::manifest(&live.registry.authority, component_topology, &live.registry)?;
-    let live_version =
-        FleetRegistryOps::version(&live.registry.authority, component_topology, &live.registry)?;
-    let expected_successor_revision = expected.revision.checked_add(1);
-    let immutable_authority_matches = RegistryImmutableAuthority::from_registry(&live.registry)
-        == RegistryImmutableAuthority::from_registry(expected);
-    let service_successor_facts = [
-        expected_successor_revision == Some(live.registry.revision),
-        expected.services.is_empty(),
-        !live.registry.services.is_empty(),
-    ];
-    let is_service_successor = service_successor_facts
-        .into_iter()
-        .all(std::convert::identity);
-    let evidence_is_exact = RegistryHead {
-        manifest: &live.manifest,
-        version: &live.version,
-    } == RegistryHead {
-        manifest: &live_manifest,
-        version: &live_version,
-    };
-    let successor_is_valid = [
-        immutable_authority_matches,
-        is_service_successor,
-        evidence_is_exact,
-        successor_evidence.is_some_and(|evidence| {
-            evidence.operation_id == expected_operation_id
-                && evidence.plan_hash == expected_plan_hash
-                && evidence.source_registry == expected_version
-                && evidence.published_registry.as_ref() == Some(&live.version)
-                && evidence.operation == FleetComponentProvisioningOperation::FreshInstall
-                && component_provisioning_phase_has_published_services(evidence.phase)
-        }),
-    ]
-    .into_iter()
-    .all(std::convert::identity);
-    if !successor_is_valid {
-        return Err(FleetRegistryActivationError::LiveRegistryMismatch(
-            "verified all-Active or exact Fleet-service successor",
-        )
-        .into());
-    }
-    Ok(())
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct ComponentProvisioningSuccessorEvidence {
-    operation_id: [u8; 32],
-    plan_hash: [u8; 32],
-    source_registry: FleetRegistryVersion,
-    published_registry: Option<FleetRegistryVersion>,
-    operation: FleetComponentProvisioningOperation,
-    phase: FleetComponentProvisioningPhase,
-}
-
-impl From<&FleetComponentProvisioningStatusResponse> for ComponentProvisioningSuccessorEvidence {
-    fn from(status: &FleetComponentProvisioningStatusResponse) -> Self {
-        Self {
-            operation_id: status.operation_id,
-            plan_hash: status.plan_hash,
-            source_registry: status.fleet_registry.clone(),
-            published_registry: status.published_fleet_registry.clone(),
-            operation: status.operation.clone(),
-            phase: status.phase,
-        }
-    }
-}
-
-const fn component_provisioning_phase_has_published_services(
-    phase: FleetComponentProvisioningPhase,
-) -> bool {
-    matches!(
-        phase,
-        FleetComponentProvisioningPhase::ServiceTopologyPublished
-            | FleetComponentProvisioningPhase::ConfirmingDirectories
-            | FleetComponentProvisioningPhase::DirectoriesConfirmed
-            | FleetComponentProvisioningPhase::ActivatingRuntimes
-            | FleetComponentProvisioningPhase::RuntimesActivated
-    )
-}
-
-fn query_component_provisioning_successor_evidence(
-    icp: &IcpCli,
-    binding: &crate::protocol_binding::ResolvedProtocolBinding,
-    coordinator: Principal,
-    operation_id: [u8; 32],
-) -> Result<ComponentProvisioningSuccessorEvidence, Box<dyn std::error::Error>> {
-    let response = query_with_arg::<_, CoordinatorStatusResponse>(
-        icp,
-        binding,
-        coordinator,
-        protocol::CANIC_STATUS,
-        &CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
-    )?;
-    let CoordinatorStatusResponse::Operation(
-        CoordinatorOperationStatusResponse::ComponentProvisioning(status),
-    ) = response
-    else {
-        return Err(FleetRegistryActivationError::LiveRegistryMismatch(
-            "service-successor provisioning evidence",
-        )
-        .into());
-    };
-    Ok(ComponentProvisioningSuccessorEvidence::from(&status))
-}
-
 #[derive(Eq, PartialEq)]
 struct RegistryEvidence<'a> {
     registry: &'a FleetRegistry,
@@ -490,29 +348,6 @@ impl<'a> RegistryEvidence<'a> {
             registry: &live.registry,
             manifest: &live.manifest,
             version: &live.version,
-        }
-    }
-}
-
-#[derive(Eq, PartialEq)]
-struct RegistryHead<'a> {
-    manifest: &'a FleetRegistryManifest,
-    version: &'a FleetRegistryVersion,
-}
-
-#[derive(Eq, PartialEq)]
-struct RegistryImmutableAuthority<'a> {
-    authority: &'a FleetRegistryAuthority,
-    component_specs: &'a [FleetComponentSpecEntry],
-    fleet_subnet_roots: &'a [FleetSubnetRootEntry],
-}
-
-impl<'a> RegistryImmutableAuthority<'a> {
-    fn from_registry(registry: &'a FleetRegistry) -> Self {
-        Self {
-            authority: &registry.authority,
-            component_specs: &registry.component_specs,
-            fleet_subnet_roots: &registry.fleet_subnet_roots,
         }
     }
 }

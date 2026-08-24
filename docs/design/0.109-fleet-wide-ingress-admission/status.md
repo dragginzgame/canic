@@ -8,16 +8,17 @@ Last updated: 2026-08-24
 - State: B1-B7 are functionally implementation-complete. B8 now owns the
   0.109 release and downstream go-live support that must precede complexity
   remediation. The inherited pool-bootstrap and Registry-recovery defects plus
-  the retry-diagnostic gap are corrected in published `v0.109.0`. The complete
-  maintainer validation, version and publication flow is complete. The exact
-  managed and standalone-local Wasms passed downstream PocketIC qualification,
-  but `CANIC-027` blocks the canonical no-effect workspace plan on
-  index-tracked deletions. Its current correction must be published and the
-  downstream plan evidence reproduced. The accepted post-implementation
-  complexity audit has a `fail` closeout verdict; B9 must supersede it with a
-  pass before 0.109 minor closeout or 0.110 promotion. Direct managed-
-  application ingress architecture is positively qualified, but B8 remains
-  open on the planning correction and evidence above.
+  the retry-diagnostic gap were intended to be corrected in published
+  `v0.109.0`, but a post-publication executable-path audit found the successor
+  check unreachable from two earlier restart gates and the host able to exhaust
+  its poll bound before scheduled pool retry. The open 0.109.2 candidate fixes
+  those paths and proves zero-to-five pool creation. Published `v0.109.1`
+  corrects `CANIC-027`; the exact downstream graph, complete CI and managed/
+  standalone PocketIC qualification pass. The accepted post-
+  implementation complexity audit has a `fail` closeout verdict; B9 must
+  supersede it with a pass before B10, 0.109 minor closeout or 0.110 promotion.
+  Direct managed-application ingress architecture is positively qualified, but
+  B8 remains open on 0.109.2 publication and its final plan evidence.
 - Outcome: one Coordinator-owned, bounded Fleet admission policy projected and
   enforced locally by every managed instance whose exact role declares
   `fleet_admission = true`.
@@ -44,9 +45,10 @@ Last updated: 2026-08-24
   protected Fleet input, one Coordinator command/status authority, local
   projections and `caller::is_fleet_admitted()`. The role, caller-adapter and
   CLI names remain the exact B1 contract.
-- Downstream posture: Toko Miner remains read-only from Canic. Its IcyDB App is
-  now a normal managed Component and may adopt the synchronous
-  managed-projection adapter in downstream-owned work after publication.
+- Downstream posture: Toko Miner remains read-only from Canic. Its IcyDB App
+  has adopted the published synchronous managed-projection adapter and passed
+  exact built-Wasm qualification; its credentialed no-effect plan remains
+  downstream-owned.
 
 Design: [Fleet-wide ingress admission](0.109-design.md)
 
@@ -67,10 +69,11 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment blockers, publish an immutable matching `canic`/`canic-cli` 0.109 pair, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, targeted checks, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/plan evidence | 0.109.0 published; `CANIC-027` correction ready; blocked on correction publication and downstream plan evidence |
-| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, finding-backed gravity-well decomposition, active-document contraction, bounded validation and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
+| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment blockers, publish an immutable matching `canic`/`canic-cli` 0.109 pair, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, targeted checks, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/plan evidence | 0.109.2 correction targeted checks pass; blocked on maintainer release flow and exact downstream zero-blocker 0.109.2 plan |
+| B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, localized admission decisions, finding-backed decomposition of the three gravity wells, active handoff below 250 lines, bounded PocketIC resource envelope, `CANIC-028` diagnostic correction and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
+| B10 | Published managed-App qualification support | One bounded downstream test-support surface for exact managed init/activation, admission fencing, fresh install and same-release recovery without private `canic-core`/`ic-testkit` reconstruction | Public-package consumer build plus managed/standalone lifecycle qualification and Toko adapter removal | Scheduled; blocked on B9 |
 
-Nine batches fit the normal minor-line guideline. They are not preassigned
+Ten batches fit the normal minor-line guideline. They are not preassigned
 patch releases.
 
 ## Release And Downstream-Support Gate
@@ -143,17 +146,20 @@ restart after service publication, reach runtime-active and show the exact
 per-Root failure while a retry is pending. The fixes are forward-only in 0.109;
 released 0.108 sources and tags remain immutable.
 
-Published `v0.109.0` corrects all three defects. One IC-profile
-PocketIC journey starts with zero imported pool assets, advances the sole
-Root-owned Cycles-Ledger creation journal once and provisions the Component
-with one paid request while exposing the typed pending Root failure. A
-complementary local-profile journey publishes Registry revision 4 and reaches
-`RuntimesActivated`. Host recovery accepts that successor only with exact
-compiled-plan and protected Coordinator operation evidence; predecessor,
-missing-evidence, premature, wrong-plan and later-revision cases retain their
-fail-closed outcomes. The detailed commands and results are retained in the B8
-correction evidence. The complete maintainer gate and publication are complete;
-downstream adoption has not occurred.
+Published `v0.109.0` added the Root-owned pool pass, successor predicate and
+typed failure, but its evidence covered only one pool asset and invoked the
+successor predicate after earlier exact-snapshot gates. The open 0.109.2
+candidate drives the sole Root-owned Cycles-Ledger journal to the exact
+accepted-batch demand, waits between unchanged host polls and applies one
+strict successor authority at join, Root synchronization and activation. Its
+IC-profile PocketIC journey starts with zero, creates and provisions five
+assets, and exposes then clears the typed pending Root failure. A complementary
+local-profile journey still reaches `RuntimesActivated`. Exact Joining/all-
+Active/successor replay passes while missing, premature, wrong-plan and later
+successors reject. The detailed commands and results are retained in the B8
+correction evidence. Downstream adoption and local qualification on 0.109.1
+remain historical positive evidence; B8 now requires 0.109.2 publication and
+the exact credentialed no-effect plan against it.
 
 The downstream repository, its CI and every deployment effect remain outside
 this repository's mutation authority. In particular, this gate does not
@@ -173,31 +179,50 @@ complexity finding and retain a passing superseding verdict from one immutable
 candidate. Publication and adoption establish the real product loop that B9
 audits; neither event alone closes the complexity gate or authorizes 0.110.
 
+B9 remains a pure simplification batch. It localizes admission decisions and
+decomposes `ops::component_registry`, `workflow::component_registry` and
+`ops::fleet_coordinator` along existing owner seams, contracts this handoff
+below 250 lines and freezes a bounded PocketIC time/RSS/process envelope.
+Correcting `CANIC-028` preserves exact selected-root observation but tells a
+named-environment fresh plan that initial install owns build/finalization; it
+must not add fallback lookup, manual copying or a new build capability. Current
+downstream need is input to B9's later 0.110 retriage: retain stateful
+application retirement first and defer reserve Fleets, cross-Fleet transfer,
+broad funding automation and 1,000-canister qualification unless fresh demand
+earns them. The retriage decision itself still occurs only after B9 evidence.
+
+`CANIC-026` is deliberately not part of B9. B10 owns a small published
+managed-App qualification harness after simplification passes, and may not add
+runtime authority or expose private control-plane ownership.
+
 ## Blocking Application Evidence
 
-Current Toko Miner has hard-removed Core. Its singleton managed IcyDB App owns
-browser login and five caller-owned User/Robot methods. Those direct
-`#[icydb::request_execution]` exports currently reject only anonymous callers
-before application-owned `Principal -> UserPrincipal -> UserId -> Robot`
-resolution, so any non-anonymous Principal may attempt enrollment directly.
-Canister topology and controllership do not intercept the call.
+Toko Miner has hard-removed Core. Its singleton managed IcyDB App owns browser
+login and five caller-owned User/Robot methods. Before adoption, those direct
+`#[icydb::request_execution]` exports rejected only anonymous callers before
+application-owned `Principal -> UserPrincipal -> UserId -> Robot` resolution;
+Canister topology and controllership could not intercept the call.
 
-The accepted 0.109 outcome gives that App one exact managed projection. Its
-browser-login Canic endpoint may use `caller::is_fleet_admitted()`, and each
-protected IcyDB endpoint may make `require_caller()` its first body operation
+The adopted 0.109 outcome gives that App one exact managed projection. Its
+browser-login Canic endpoint uses `caller::is_fleet_admitted()`, and each
+protected IcyDB endpoint invokes `require_caller()` before its application work
 while retaining Toko's separate membership, administrator and resource rules.
+The exact built-Wasm qualification proves public/admitted/denied/anonymous/
+fenced behavior and same-release recovery.
 
 ## Next Authorized Action
 
 B1 is accepted and B2-B7 compile generation-one authority through the plan,
 Registry, sole Coordinator mutation record, exact managed local projection,
 one synchronous composed-framework caller guard and replay-safe runtime
-convergence. `CANIC-109-GOLIVE-001` through `003` are corrected with targeted
-recovery evidence and are published in `v0.109.0`. The exact downstream Wasms
-passed the admission qualification matrix. Continue B8 by publishing the
-`CANIC-027` tracked-deletion planning correction and reproducing the canonical
-no-effect plan against it. After that evidence is accepted, close B8 and
-continue with B9's evidence-first simplification and immutable superseding
-audit. Do not begin 0.110 until that audit passes, the maintainer accepts it and
-then explicitly promotes the revised 0.110 B1. Do not treat this in-repository
-gate as external mutation or deployment authority.
+convergence. `CANIC-109-GOLIVE-003` is published; the open 0.109.2 draft closes
+the executable-path gaps in `001` and `002` with targeted recovery evidence,
+and `v0.109.1` publishes `CANIC-027`. Continue B8 with the maintainer-owned
+0.109.2 validation/version/publication flow, then retain the exact zero-blocker
+0.109.2 no-effect plan from the trusted operator shell. After that evidence is
+accepted, close B8 and continue
+with B9's evidence-first simplification and immutable superseding audit, then
+B10's separate managed-App qualification support. Do not begin 0.110 until
+those 0.109 gates pass, the maintainer accepts closeout and then explicitly
+promotes the revised 0.110 B1. Do not treat this in-repository gate as external
+mutation or deployment authority.
