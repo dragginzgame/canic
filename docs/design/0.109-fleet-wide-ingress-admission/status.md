@@ -8,14 +8,16 @@ Last updated: 2026-08-24
 - State: B1-B7 are functionally implementation-complete. B8 now owns the
   0.109 release and downstream go-live support that must precede complexity
   remediation. The inherited pool-bootstrap and Registry-recovery defects plus
-  the retry-diagnostic gap are corrected in the current working candidate with
-  focused native and PocketIC evidence. The complete maintainer validation
-  gate has not run, so publication and downstream adoption remain pending. The
-  accepted post-implementation
+  the retry-diagnostic gap are corrected in published `v0.109.0`. The complete
+  maintainer validation, version and publication flow is complete. The exact
+  managed and standalone-local Wasms passed downstream PocketIC qualification,
+  but `CANIC-027` blocks the canonical no-effect workspace plan on
+  index-tracked deletions. Its current correction must be published and the
+  downstream plan evidence reproduced. The accepted post-implementation
   complexity audit has a `fail` closeout verdict; B9 must supersede it with a
   pass before 0.109 minor closeout or 0.110 promotion. Direct managed-
-  application ingress still blocks Toko Miner staging until publication and
-  downstream adoption.
+  application ingress architecture is positively qualified, but B8 remains
+  open on the planning correction and evidence above.
 - Outcome: one Coordinator-owned, bounded Fleet admission policy projected and
   enforced locally by every managed instance whose exact role declares
   `fleet_admission = true`.
@@ -65,7 +67,7 @@ B8 correction evidence:
 | B5 | Composed-framework adapter | Synchronous managed-projection caller guard and generic IcyDB-style fixture | Native parity and direct-ingress PocketIC journey | Ready |
 | B6 | Runtime convergence | Pre-effect catalog reserve/release, fence/activate/open journals, participant fences, exact retry and forward recovery | Stale-catalog, interruption, unavailable-target, add/remove and new-Component PocketIC matrix | Ready |
 | B7 | Security closeout and propagation | Docs/generated surfaces, residue cleanup, measurements and read-only Toko adoption review | Targeted repository gates and adversarial multi-Root journey | Ready |
-| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment blockers, publish an immutable matching `canic`/`canic-cli` 0.109 pair, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, targeted checks, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/plan evidence | Corrections ready; blocked on maintainer release and downstream evidence |
+| B8 | Release and downstream go-live support | Correct the accepted fresh-deployment blockers, publish an immutable matching `canic`/`canic-cli` 0.109 pair, freeze the current Fleet-input/planning and App-only adoption contracts, consume separately authorized qualification evidence and correct every resulting Canic-owned blocker | Fresh-install/restart/retry-status evidence, targeted checks, maintainer release gate, package-pair equality, read-only downstream review and retained qualified-adoption/plan evidence | 0.109.0 published; `CANIC-027` correction ready; blocked on correction publication and downstream plan evidence |
 | B9 | Post-adoption complexity contraction | Canonical complexity/change-friction/structure/duplication evidence, finding-backed gravity-well decomposition, active-document contraction, bounded validation and 0.110 scope retriage | Immutable method reruns, targeted changed-package checks and accepted superseding verdict | Accepted; blocked on B8 |
 
 Nine batches fit the normal minor-line guideline. They are not preassigned
@@ -141,7 +143,7 @@ restart after service publication, reach runtime-active and show the exact
 per-Root failure while a retry is pending. The fixes are forward-only in 0.109;
 released 0.108 sources and tags remain immutable.
 
-The current working candidate corrects all three defects. One IC-profile
+Published `v0.109.0` corrects all three defects. One IC-profile
 PocketIC journey starts with zero imported pool assets, advances the sole
 Root-owned Cycles-Ledger creation journal once and provisions the Component
 with one paid request while exposing the typed pending Root failure. A
@@ -150,8 +152,8 @@ complementary local-profile journey publishes Registry revision 4 and reaches
 compiled-plan and protected Coordinator operation evidence; predecessor,
 missing-evidence, premature, wrong-plan and later-revision cases retain their
 fail-closed outcomes. The detailed commands and results are retained in the B8
-correction evidence. The complete maintainer gate, publication and downstream
-adoption have not occurred.
+correction evidence. The complete maintainer gate and publication are complete;
+downstream adoption has not occurred.
 
 The downstream repository, its CI and every deployment effect remain outside
 this repository's mutation authority. In particular, this gate does not
@@ -191,10 +193,11 @@ B1 is accepted and B2-B7 compile generation-one authority through the plan,
 Registry, sole Coordinator mutation record, exact managed local projection,
 one synchronous composed-framework caller guard and replay-safe runtime
 convergence. `CANIC-109-GOLIVE-001` through `003` are corrected with targeted
-recovery evidence. Continue B8 with the maintainer-owned complete validation,
-version and publication flow. After the exact published pair is separately
-adopted and qualified, close B8 and continue with B9's evidence-first
-simplification and immutable superseding audit. Do not begin 0.110 until that
-audit passes, the maintainer accepts it and then explicitly promotes the
-revised 0.110 B1. Do not adopt the dirty candidate in Toko before publication
-or treat this in-repository gate as external mutation or deployment authority.
+recovery evidence and are published in `v0.109.0`. The exact downstream Wasms
+passed the admission qualification matrix. Continue B8 by publishing the
+`CANIC-027` tracked-deletion planning correction and reproducing the canonical
+no-effect plan against it. After that evidence is accepted, close B8 and
+continue with B9's evidence-first simplification and immutable superseding
+audit. Do not begin 0.110 until that audit passes, the maintainer accepts it and
+then explicitly promotes the revised 0.110 B1. Do not treat this in-repository
+gate as external mutation or deployment authority.

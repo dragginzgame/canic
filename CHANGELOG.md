@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.1` lets workspace deployment planning hash the current included
+  worktree when Git still tracks deleted files, while retaining modified and
+  accepted untracked source in plan identity.
 - `0.109.0` hard-cuts App-local whitelists to one Coordinator-owned Fleet
   admission policy projected into every managed non-Root canister, adds
   replay-safe live add/remove convergence with bounded CLI and Medic surfaces,
