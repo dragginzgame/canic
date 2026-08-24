@@ -14,12 +14,17 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Release
 
-- The open 0.109.3 draft corrects `CANIC-031`: an exact retained 0.109.1
-  install may reuse its immutable finalized artifacts under the explicitly
-  supported successor host without applying that host's fresh-build role-
-  version gate. The read-only path still validates the exact builder,
-  topology, package identities, manifests and raw/gzip bytes. The same draft
-  hard-cuts the repository-owned Playground and Saltz application estates,
+- Published `v0.109.3` corrects `CANIC-031`: an exact retained 0.109.1 install
+  may reuse its immutable finalized artifacts under the explicitly supported
+  successor host without applying that host's fresh-build role-version gate.
+  The downstream resume crossed that gate without Cargo or artifact mutation,
+  then exposed `CANIC-033`: the host rejected the first exact Coordinator
+  provisioning status after its zero-delay timer had advanced beyond
+  `Planned`. The open 0.109.4 correction retains any exact monotonic
+  nonterminal observation, maps complete terminal evidence directly to the
+  terminal host phase and admits 0.109.4 as the next explicit successor for
+  the same retained 0.109.1 session. The 0.109.3 release also hard-cuts the
+  repository-owned Playground and Saltz application estates,
   including their canister crates, deployment inputs, ICP environments,
   active design/calibration material and test inventories. Canic retains
   framework fixtures and generic audit probes only;
@@ -588,14 +593,19 @@ zero remaining debit and Store-bootstrap verification next. The authorized
 resume then exposed `CANIC-031` before any IC update: the host accepted the
 retained 0.109.1 builder but routed its consumer graph through ordinary
 0.109.2 fresh-build role-version validation before finalized-artifact reuse.
-The open 0.109.3 correction makes finalized recovery a distinct read-only
-source. Its exact 0.109.1 consumer/session fixture crosses retained manifest
-admission into exact session-journal replay without Cargo or artifact mutation
-and rejects package, topology, artifact-byte and manifest-digest drift; focused
-host tests and warning-denied Clippy pass. B8 remains open for the maintainer-
-owned validation/publication of
-that correction, the separately authorized downstream resume and deployed-
-state/admission proof. B9
+Published `v0.109.3` makes finalized recovery a distinct read-only source. The
+downstream resume reused the retained 0.109.1 release without Cargo or artifact
+mutation and advanced through Registry and Root preparation. It then exposed
+`CANIC-033`: the accepted Coordinator command schedules zero-delay private
+advancement, while the host required the first correlated status to remain
+exactly `Planned`. The open 0.109.4 correction retains every exact nonterminal
+phase and derives the next request from it; a complete terminal observation
+advances directly to catalog publication. It also extends the explicit
+0.109.1 recovery successor set through 0.109.4 while rejecting 0.109.5 and
+other predecessor pairs. All 126 focused `install_root` tests and warning-
+denied host Clippy pass. B8 remains open for maintainer validation/publication,
+the separately authorized exact-source plan/resume and deployed-state/
+admission proof. B9
 complexity remediation and B10 published managed-App test support then block
 minor closeout and 0.110.
 
@@ -652,10 +662,11 @@ Store-bootstrap verification with its journals intact, before App or frontend
 effects. The read-only 0.109.2 recovery inspector reproduces three fenced
 operator creations, zero remaining debit and the exact verification phase.
 Do not rerun fresh staging: the exact-source 0.109.2 recovery plan is reviewed,
-but the open `CANIC-031` correction must be validated and published before its
-resume is authorized again. `CANIC-028`'s impossible
-named-environment build advice and the generic retained-decision source-drift
-remediation are assigned to pure B9 cleanup. B10
+published 0.109.3 crossed the `CANIC-031` retained-artifact gate without a
+Cargo build or artifact mutation, and the open `CANIC-033` correction must be
+validated and published before its resume is authorized again. `CANIC-028`'s
+impossible named-environment build advice and the generic retained-decision
+source-drift remediation are assigned to pure B9 cleanup. B10
 then owns the separate published managed-App qualification harness. Stateful
 release adoption remains owned by 0.111, application retirement by 0.110 B2,
 generic observatory work by 0.112, and saved-plan consumption remains
@@ -1080,16 +1091,17 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.2` completes its maintainer-owned correction release and
+Published `v0.109.3` completes the retained-artifact correction and the real
+downstream session crossed that gate without rebuilding. Its later
+Coordinator-provisioning race is corrected in the open 0.109.4 draft, whose
+focused install-root tests and warning-denied host Clippy pass. Continue B8
+with maintainer-owned validation and publication of that correction. Then use
+the exact downstream `v0.2.0` recovery checkout for a read-only plan and
+require the unchanged digest, zero debit and
+`fleet_component_provisioning` next before separately authorizing one resume.
+The earlier published `v0.109.2`
 contains the zero-to-five pool/revision-4 recovery plus the funding/journal
-part of `CANIC-029`. The exact-source recovery plan is reviewed, but its first
-authorized resume exposed `CANIC-031` before any IC update. The open 0.109.3
-draft makes retained finalized-artifact validation read-only and distinct from
-fresh current-host builds; it also removes the repository-owned application
-estates described above while archiving the funded external Saltz canister's
-exact disposition. Continue B8 with maintainer-owned validation and publication
-of 0.109.3. Then reproduce the exact recovery plan and separately authorize its
-resume. Only after deployed-state/admission evidence closes B8,
+part of `CANIC-029`. Only after deployed-state/admission evidence closes B8,
 continue with B9 under the binding post-implementation complexity audit:
 freeze the canonical evidence, simplify the accepted gravity wells and active
 authority, preserve bounded validation, retriage every 0.110 batch and issue an
