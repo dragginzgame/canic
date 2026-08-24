@@ -4,6 +4,9 @@
 //! Does not own: planning policy, builds, report persistence, clocks, or IC effects.
 //! Boundary: every returned digest is derived from regular local bytes or finalized authority.
 
+#[cfg(test)]
+mod tests;
+
 use super::model::{
     FreshFleetDecisionAuthorityV1, FreshFleetExpectedArtifactV1,
     FreshFleetOperatorFundingEvidenceV1, FreshFleetReleaseSourceV1,
@@ -206,11 +209,16 @@ fn workspace_source_snapshot_sha256(
     for relative in paths {
         validate_relative_source_path(&relative)?;
         let path = workspace_root.join(&relative);
-        let metadata =
-            fs::symlink_metadata(&path).map_err(|source| FreshFleetDecisionAuthorityError::Io {
-                path: path.clone(),
-                source,
-            })?;
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(source) if source.kind() == io::ErrorKind::NotFound => continue,
+            Err(source) => {
+                return Err(FreshFleetDecisionAuthorityError::Io {
+                    path: path.clone(),
+                    source,
+                });
+            }
+        };
         if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
             return Err(FreshFleetDecisionAuthorityError::UnsafeSourcePath { path });
         }

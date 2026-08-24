@@ -7,13 +7,48 @@ Date: 2026-08-24
 | Item | Value |
 | --- | --- |
 | Published predecessor | annotated `v0.108.2`, commit `dafc455339df92acb304072d3ec2b98c4069747d` |
-| Candidate | uncommitted cumulative 0.109 working tree on `main`; `v0.108.2-dirty` |
-| Effects | Canic repository source, documentation, generated Candid, local build artifacts and local PocketIC only |
-| Excluded | complete maintainer validation, versioning, publication, downstream mutation, deployment and every remote or paid effect |
+| Validated source | `15508c770a10d30dccd65840e24dcf52b58e59d4` |
+| Published release | annotated `v0.109.0`, commit `3cae3d2c95af087365d8b3fb096a505b6be9b418`; clean `main` and `origin/main` agree |
+| Current correction | uncommitted `0.109.1` draft on `v0.109.0-dirty`; `CANIC-027` source-identity correction plus B8 evidence propagation |
+| Effects | Canic repository source, documentation, generated Candid, local build artifacts, local PocketIC and the maintainer-owned validation/version/publication flow |
+| Excluded | downstream mutation, deployment and every downstream remote or paid effect |
 
-This evidence closes the in-repository correction portion of B8. It does not
-close B8 itself: the immutable matching package release and separately
-authorized downstream adoption/qualification remain human-owned prerequisites.
+This evidence closes the in-repository correction and immutable matching-package
+release portions of B8. It does not close B8 itself: separately authorized
+downstream adoption and qualification remain human-owned prerequisites.
+
+## Published package integrity
+
+The crates.io registry reports both maintained public packages at exact version
+`0.109.0`, non-yanked and with Rust `1.91.0` metadata:
+
+| Package | Published at | Registry/archive SHA-256 |
+| --- | --- | --- |
+| `canic` | `2026-08-24T11:36:24.728439Z` | `2ae8d4b82c67034573f0e4fe73d289b32963651dbf7b4f0ca58dd53f5f7c7a72` |
+| `canic-cli` | `2026-08-24T11:39:08.339814Z` | `60ad19f10771391fad0a68c764973d09979404f18189e2e8aba5548ebb3625cc` |
+
+`cargo info --registry crates-io` resolved both exact public versions. The
+downloaded archive hashes match the registry checksums. Their normalized
+packaged manifests retain exact `0.109.0` Canic-family dependencies: `canic`
+binds `canic-control-plane`, `canic-core` and `canic-macros`; `canic-cli` binds
+`canic-backup`, `canic-core` and `canic-host`. This closes package presence,
+version equality and internal-family pinning without relying on the workspace
+path dependencies.
+
+An isolated public-registry installation also completed successfully:
+
+```text
+cargo install --locked canic-cli --version 0.109.0 --root <isolated-temp-root>
+# Installed package `canic-cli v0.109.0` (executable `canic`)
+
+<isolated-temp-root>/bin/canic --version
+# canic 0.109.0
+```
+
+The install compiled the registry-resolved `canic-core`, `canic-backup`,
+`canic-control-plane`, `canic-host` and `canic-cli` 0.109.0 packages. It did
+not use this workspace's path dependencies or mutate an installed operator
+toolchain.
 
 ## `CANIC-109-GOLIVE-001`: fresh pool capacity
 
@@ -145,14 +180,58 @@ expectation before PocketIC; the exact current inventory is 30. Warning-denied
 Clippy found and closed current-0.109 cfg, pattern, future-size and explicit
 long-proof annotations without weakening runtime authority.
 
-The complete maintainer validation gate was not run. Repository policy reserves
-that gate for the maintainer-owned release flow. No Toko source or dependency
-was changed, no downstream qualification was run, and no canister, Ledger,
-CMC, network, funding, version, Git or publication effect occurred.
+The maintainer-owned release flow subsequently completed the complete gate at
+source commit `15508c770a10d30dccd65840e24dcf52b58e59d4` and published the
+uniform 0.109.0 workspace as annotated tag
+`v0.109.0` at `3cae3d2c95af087365d8b3fb096a505b6be9b418`.
+
+## Read-only downstream checkpoint
+
+The post-publication read-only Toko Miner check found its workspace at commit
+`e61c15b54afd04744611724408dcceeae65dab7d` with extensive unrelated dirty
+work. Its workspace still requests Canic `0.108`, its lockfile resolves
+`0.108.0`, and its App configuration still contains `[app.whitelist]` without
+the 0.109 admission-participant declaration. No downstream source, dependency,
+generated artifact, identity or IC state was changed, and no downstream test or
+deployment effect was run. This proves publication is complete but downstream
+adoption evidence was absent at that checkpoint.
+
+## Qualified-adoption feedback
+
+The downstream maintainer subsequently reported that the exact managed App and
+standalone-local Wasms passed PocketIC qualification, including admitted,
+denied, anonymous, fenced and same-release upgrade behavior. That result
+supports the published admission architecture, but the canonical no-effect
+workspace plan remained blocked before it could produce reviewable plan
+evidence.
+
+`CANIC-027` identified the Canic-owned cause: workspace source identity asks Git
+for cached plus accepted untracked paths, so an index-tracked file deleted only
+from the worktree remained in the candidate list and failed the subsequent file
+read. The forward correction treats that exact absent worktree entry as absent
+source while retaining current bytes for tracked modifications and nonignored
+untracked files. Invalid relative paths, symlinks, non-files and I/O failures
+other than `NotFound` remain fail-closed. Focused authority tests cover exact
+deleted-state replay, restoration, tracked modification, accepted untracked
+source and ignored untracked source; the complete owning planning filter and
+warning-denied host Clippy pass.
+
+The remaining feedback is routed without expanding B8 or B9:
+
+| Feedback | Disposition |
+| --- | --- |
+| `CANIC-026` supported managed-App qualification harness | High-value future product capability; B9 may preserve the measured downstream-friction evidence but cannot add the harness because B9 is a no-new-capability contraction batch. Promotion requires a separately accepted later boundary. |
+| `CANIC-006` state-preserving release transition | Already owned by scheduled 0.111's exact stop-the-world predecessor-to-successor transition. It remains blocked on the accepted 0.109 and 0.110 gates. |
+| `CANIC-005` application retirement acknowledgement | Already owned by scheduled 0.110 B2. It remains blocked on 0.109 closeout and explicit 0.110 promotion. |
+| `CANIC-015` saved plan consumption | Accepted as unscheduled deployment ergonomics; it is not an admission-authority or current planning-correctness blocker and receives no implementation authority here. |
+| Long-running multi-Subnet local showcase | Useful future qualification work, but not part of the bounded 0.109 admission release. |
+| Generic Fleet observatory | Already owned by scheduled 0.112 and remains blocked on its predecessors. |
 
 ## Result
 
-The in-repository B8 corrections are ready for the maintainer-owned complete
-validation/version/publication workflow. B8 remains open until the exact
-published package pair is adopted and separately qualified downstream with no
-unresolved Canic-owned blocker. B9 and 0.110 remain blocked.
+The in-repository B8 corrections and immutable matching-package publication are
+complete. The admission Wasms now have positive downstream qualification, and
+the `CANIC-027` correction is locally ready. B8 remains open until that
+correction is published as the next matching 0.109 package pair and the
+downstream canonical no-effect plan is reproduced against it. B9 and 0.110
+remain blocked.
