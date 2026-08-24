@@ -277,7 +277,7 @@ pub(super) fn compile_recovery_plan(
 }
 
 const RETAINED_INSTALL_RECOVERY_PREDECESSOR: &str = "0.109.1";
-const RETAINED_INSTALL_RECOVERY_SUCCESSORS: &[&str] = &["0.109.2", "0.109.3"];
+const RETAINED_INSTALL_RECOVERY_SUCCESSORS: &[&str] = &["0.109.2", "0.109.3", "0.109.4"];
 
 /// Enforce the one narrow host-only cross-patch rescue contract for an exact retained build.
 pub fn require_supported_recovery_builder(
@@ -546,8 +546,9 @@ mod tests {
         assert!(require_supported_recovery_builder("0.109.2", "0.109.2").is_ok());
         assert!(require_supported_recovery_builder("0.109.1", "0.109.2").is_ok());
         assert!(require_supported_recovery_builder("0.109.1", "0.109.3").is_ok());
+        assert!(require_supported_recovery_builder("0.109.1", "0.109.4").is_ok());
         assert!(require_supported_recovery_builder("0.109.0", "0.109.2").is_err());
-        assert!(require_supported_recovery_builder("0.109.1", "0.109.4").is_err());
+        assert!(require_supported_recovery_builder("0.109.1", "0.109.5").is_err());
         assert!(require_supported_recovery_builder("0.109.2", "0.109.3").is_err());
         assert!(require_supported_recovery_builder("0.109.2", "0.109.1").is_err());
     }

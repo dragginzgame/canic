@@ -92,7 +92,7 @@ fn lost_advance_response_recovers_from_the_persisted_exact_request() {
         })
         .expect("plan host transaction");
     let preparing = begin_component_provisioning_preparation(&planned).expect("begin preparation");
-    let prepared = record_component_provisioning_prepared(&preparing, planned_status(&compiled))
+    let prepared = record_component_provisioning_observed(&preparing, planned_status(&compiled))
         .expect("record prepared status");
     let in_flight = begin_component_provisioning_advance(&prepared).expect("persist exact intent");
 
@@ -132,6 +132,80 @@ fn lost_advance_response_recovers_from_the_persisted_exact_request() {
 }
 
 #[test]
+fn prepare_response_loss_reconciles_every_correlated_nonterminal_phase() {
+    let phases = [
+        FleetComponentProvisioningPhase::Planned,
+        FleetComponentProvisioningPhase::AcceptingRoots,
+        FleetComponentProvisioningPhase::RootsAccepted,
+        FleetComponentProvisioningPhase::ProvisioningRoots,
+        FleetComponentProvisioningPhase::ComponentsProvisioned,
+        FleetComponentProvisioningPhase::ServiceTopologyPublished,
+        FleetComponentProvisioningPhase::ConfirmingDirectories,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed,
+        FleetComponentProvisioningPhase::ActivatingRuntimes,
+    ];
+
+    for (index, phase) in phases.into_iter().enumerate() {
+        let name = format!("fleet-component-provisioning-first-status-{index}");
+        let (plan, compiled, preparing) = preparing_transaction(&name);
+        let recovered = plan_fleet_component_provisioning_install(
+            PlanFleetComponentProvisioningInstallRequest {
+                fleet_install_plan: &plan,
+                coordinator: principal(3),
+                fleet_name: FleetName::try_from("main".to_string()).expect("Fleet name"),
+                environment: "ic".to_string(),
+                compiled: compiled.clone(),
+            },
+        )
+        .expect("recover retained preparation intent after response loss");
+        assert_eq!(recovered.journal, preparing.journal);
+
+        let observed = observed_status(&compiled, phase);
+        let retained = record_component_provisioning_observed(&recovered, observed.clone())
+            .expect("retain exact monotonic Coordinator status");
+        assert_eq!(
+            retained.journal.phase,
+            FleetComponentProvisioningInstallPhase::Prepared
+        );
+        assert_eq!(retained.journal.last_status, Some(observed.clone()));
+
+        let advancing = begin_component_provisioning_advance(&retained)
+            .expect("persist advance derived from observed status");
+        assert_eq!(
+            advancing.journal.advance_request,
+            Some(super::advance_request(&observed))
+        );
+    }
+}
+
+#[test]
+fn first_terminal_status_requires_complete_evidence_and_skips_another_advance() {
+    let (plan, compiled, preparing) =
+        preparing_transaction("fleet-component-provisioning-first-terminal-status");
+    let incomplete = status(
+        &compiled,
+        FleetComponentProvisioningPhase::RuntimesActivated,
+    );
+    assert!(matches!(
+        record_component_provisioning_observed(&preparing, incomplete),
+        Err(FleetComponentProvisioningInstallJournalError::InvalidDocument { .. })
+    ));
+
+    let terminal_status = terminal_status(&compiled);
+    let terminal = record_component_provisioning_observed(&preparing, terminal_status.clone())
+        .expect("retain complete terminal Coordinator evidence");
+    assert_eq!(
+        terminal.journal.phase,
+        FleetComponentProvisioningInstallPhase::RuntimesActivated
+    );
+    assert_eq!(terminal.journal.last_status, Some(terminal_status));
+    assert!(terminal.journal.advance_request.is_none());
+
+    begin_fleet_catalog_publication(&terminal, catalog_entry(&plan, 100))
+        .expect("continue directly to catalog publication");
+}
+
+#[test]
 fn conflicting_coordinator_status_cannot_replace_frozen_authority() {
     let root = temp_dir("fleet-component-provisioning-conflict");
     let plan = install_plan(&root);
@@ -149,14 +223,14 @@ fn conflicting_coordinator_status_cannot_replace_frozen_authority() {
     let mut wrong = planned_status(&compiled);
     wrong.operation_id = [99; 32];
     assert!(matches!(
-        record_component_provisioning_prepared(&preparing, wrong),
+        record_component_provisioning_observed(&preparing, wrong),
         Err(FleetComponentProvisioningInstallJournalError::InvalidDocument { .. })
     ));
 
     let mut wrong_count = planned_status(&compiled);
     wrong_count.component_count = 1;
     assert!(matches!(
-        record_component_provisioning_prepared(&preparing, wrong_count),
+        record_component_provisioning_observed(&preparing, wrong_count),
         Err(FleetComponentProvisioningInstallJournalError::InvalidDocument { .. })
     ));
 }
@@ -187,6 +261,23 @@ fn terminal_transaction(
     CompiledFleetComponentProvisioningPlan,
     ResolvedFleetComponentProvisioningInstall,
 ) {
+    let (plan, compiled, preparing) = preparing_transaction(name);
+    let prepared = record_component_provisioning_observed(&preparing, planned_status(&compiled))
+        .expect("record prepared Coordinator plan");
+    let advancing =
+        begin_component_provisioning_advance(&prepared).expect("persist advance intent");
+    let terminal = record_component_provisioning_advanced(&advancing, terminal_status(&compiled))
+        .expect("record terminal runtime evidence");
+    (plan, compiled, terminal)
+}
+
+fn preparing_transaction(
+    name: &str,
+) -> (
+    PersistedFleetInstallPlan,
+    CompiledFleetComponentProvisioningPlan,
+    ResolvedFleetComponentProvisioningInstall,
+) {
     let root = temp_dir(name);
     let plan = install_plan(&root);
     let compiled = compiled_plan(&plan);
@@ -201,13 +292,7 @@ fn terminal_transaction(
         .expect("plan host transaction");
     let preparing =
         begin_component_provisioning_preparation(&planned).expect("persist preparation intent");
-    let prepared = record_component_provisioning_prepared(&preparing, planned_status(&compiled))
-        .expect("record prepared Coordinator plan");
-    let advancing =
-        begin_component_provisioning_advance(&prepared).expect("persist advance intent");
-    let terminal = record_component_provisioning_advanced(&advancing, terminal_status(&compiled))
-        .expect("record terminal runtime evidence");
-    (plan, compiled, terminal)
+    (plan, compiled, preparing)
 }
 
 fn planned_status(
@@ -219,14 +304,62 @@ fn planned_status(
 fn terminal_status(
     compiled: &CompiledFleetComponentProvisioningPlan,
 ) -> FleetComponentProvisioningStatusResponse {
-    let mut status = status(compiled, FleetComponentProvisioningPhase::RuntimesActivated);
-    status.roots_accepted_at_ns = Some(2);
-    status.components_provisioned_at_ns = Some(3);
-    status.published_fleet_registry = Some(compiled.prepare_request.plan.fleet_registry.clone());
-    status.service_topology_published_at_ns = Some(4);
-    status.directories_confirmed_at_ns = Some(5);
-    status.runtimes_activated_at_ns = Some(6);
-    status
+    observed_status(compiled, FleetComponentProvisioningPhase::RuntimesActivated)
+}
+
+fn observed_status(
+    compiled: &CompiledFleetComponentProvisioningPlan,
+    phase: FleetComponentProvisioningPhase,
+) -> FleetComponentProvisioningStatusResponse {
+    let mut observed = status(compiled, phase);
+    if matches!(
+        phase,
+        FleetComponentProvisioningPhase::RootsAccepted
+            | FleetComponentProvisioningPhase::ProvisioningRoots
+            | FleetComponentProvisioningPhase::ComponentsProvisioned
+            | FleetComponentProvisioningPhase::ServiceTopologyPublished
+            | FleetComponentProvisioningPhase::ConfirmingDirectories
+            | FleetComponentProvisioningPhase::DirectoriesConfirmed
+            | FleetComponentProvisioningPhase::ActivatingRuntimes
+            | FleetComponentProvisioningPhase::RuntimesActivated
+    ) {
+        observed.roots_accepted_at_ns = Some(2);
+    }
+    if matches!(
+        phase,
+        FleetComponentProvisioningPhase::ComponentsProvisioned
+            | FleetComponentProvisioningPhase::ServiceTopologyPublished
+            | FleetComponentProvisioningPhase::ConfirmingDirectories
+            | FleetComponentProvisioningPhase::DirectoriesConfirmed
+            | FleetComponentProvisioningPhase::ActivatingRuntimes
+            | FleetComponentProvisioningPhase::RuntimesActivated
+    ) {
+        observed.components_provisioned_at_ns = Some(3);
+    }
+    if matches!(
+        phase,
+        FleetComponentProvisioningPhase::ServiceTopologyPublished
+            | FleetComponentProvisioningPhase::ConfirmingDirectories
+            | FleetComponentProvisioningPhase::DirectoriesConfirmed
+            | FleetComponentProvisioningPhase::ActivatingRuntimes
+            | FleetComponentProvisioningPhase::RuntimesActivated
+    ) {
+        observed.published_fleet_registry =
+            Some(compiled.prepare_request.plan.fleet_registry.clone());
+        observed.service_topology_published_at_ns = Some(4);
+    }
+    if matches!(
+        phase,
+        FleetComponentProvisioningPhase::DirectoriesConfirmed
+            | FleetComponentProvisioningPhase::ActivatingRuntimes
+            | FleetComponentProvisioningPhase::RuntimesActivated
+    ) {
+        observed.directories_confirmed_at_ns = Some(5);
+    }
+    if phase == FleetComponentProvisioningPhase::RuntimesActivated {
+        observed.runtimes_activated_at_ns = Some(6);
+    }
+    observed
 }
 
 fn status(

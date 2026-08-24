@@ -14,7 +14,7 @@ use super::{
         ResolvedFleetComponentProvisioningInstall, begin_component_provisioning_advance,
         begin_component_provisioning_preparation, begin_fleet_catalog_publication,
         complete_fleet_component_provisioning_install, plan_fleet_component_provisioning_install,
-        record_component_provisioning_advanced, record_component_provisioning_prepared,
+        record_component_provisioning_advanced, record_component_provisioning_observed,
         record_fleet_catalog_published,
     },
     fleet_component_provisioning_plan::{
@@ -141,7 +141,7 @@ pub(super) fn install_fleet_components_and_publish_catalog(
             }
             FleetComponentProvisioningInstallPhase::PreparationInFlight => {
                 let status = query_or_prepare(icp, &binding, request.coordinator, &current)?;
-                record_component_provisioning_prepared(&current, status)?
+                record_component_provisioning_observed(&current, status)?
             }
             FleetComponentProvisioningInstallPhase::Prepared => {
                 begin_component_provisioning_advance(&current)?

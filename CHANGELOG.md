@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.4` lets an interrupted fresh install retain any exact monotonic
+  Coordinator Component-provisioning status observed after prepare, including
+  direct terminal reconciliation, and explicitly extends the one retained
+  0.109.1 host-recovery allowance through this patch without admitting later
+  or different predecessor pairs.
 - `0.109.3` makes the exact retained 0.109.1 install rescue reach immutable
   finalized-artifact reuse without applying the successor's fresh-build role
   version gate, while retaining topology/package/manifest/byte rejection and

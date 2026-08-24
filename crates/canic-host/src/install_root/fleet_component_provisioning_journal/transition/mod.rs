@@ -42,22 +42,22 @@ pub(in crate::install_root) fn begin_component_provisioning_preparation(
     )
 }
 
-pub(in crate::install_root) fn record_component_provisioning_prepared(
+pub(in crate::install_root) fn record_component_provisioning_observed(
     current: &ResolvedFleetComponentProvisioningInstall,
     status: FleetComponentProvisioningStatusResponse,
 ) -> Result<ResolvedFleetComponentProvisioningInstall, FleetComponentProvisioningInstallJournalError>
 {
     validate_status_identity(&current.path, &current.journal, &status)?;
-    if status.phase != FleetComponentProvisioningPhase::Planned {
-        return Err(invalid(
-            &current.path,
-            "initial Coordinator preparation did not return the Planned phase",
-        ));
-    }
+    let next_phase = if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
+        validate_terminal_status(&current.path, &current.journal, &status)?;
+        FleetComponentProvisioningInstallPhase::RuntimesActivated
+    } else {
+        FleetComponentProvisioningInstallPhase::Prepared
+    };
     transition(
         current,
         FleetComponentProvisioningInstallPhase::PreparationInFlight,
-        FleetComponentProvisioningInstallPhase::Prepared,
+        next_phase,
         |next| next.last_status = Some(status),
     )
 }

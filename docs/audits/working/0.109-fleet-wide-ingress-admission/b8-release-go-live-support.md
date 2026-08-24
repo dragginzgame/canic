@@ -12,9 +12,10 @@ Date: 2026-08-24
 | `CANIC-027` source | `f36326015d3b9fe3061d9545acebc46206870bdf` |
 | Published correction | annotated `v0.109.1`, commit `44e90e6dd4fd9293f7f013cf58f3242c188620d2`; clean `main` and `origin/main` agree |
 | Published recovery correction | annotated `v0.109.2`, commit `b48181ba2b4b0d9f679386ddb62179ba498b8ee2`; remote tag object `94aa4d190d142acda51eac35a19234fa0509b8bd` |
-| Open recovery-path correction | unversioned 0.109.3 draft; targeted host tests and warning-denied Clippy pass, complete maintainer validation/publication not yet run |
-| Canic effects | Repository source/documentation, local build artifacts and local PocketIC through 0.109.2 plus its maintainer-owned validation/version/publication; no downstream effect from this repository |
-| Downstream evidence | Separately owned exact-0.109.2 graph/CLI adoption, complete local qualification, read-only current-source rejection and blocker-free exact-source recovery plan; Coordinator, Root and Store remain live, while App/frontend effects did not start |
+| Published artifact-reuse correction | annotated `v0.109.3`, commit `d861febb00bed2ca8145b705f82d836dc0ae6686`; downstream recovery crossed immutable retained-artifact reuse without Cargo or artifact mutation |
+| Open provisioning-recovery correction | 0.109.4 changelog draft over the still-0.109.3 workspace version; all 126 focused install-root tests and warning-denied host Clippy pass, complete maintainer validation/version/publication not run |
+| Canic effects | Repository source/documentation and local build artifacts plus maintainer-owned validation/version/publication through 0.109.3; no downstream effect from this repository |
+| Downstream evidence | Separately owned exact-0.109.3 graph/CLI adoption, exact-source zero-debit plan and authorized recovery; retained-artifact reuse, Registry activation and Root preparation advanced before `CANIC-033`; App/frontend effects did not start |
 | Excluded | Any new live staging, resume, paid effect or other external mutation from this repository |
 
 Adversarial post-0.109.1 inspection reopened the in-repository correction:
@@ -26,10 +27,15 @@ replaying durable creation journals. The same candidate now owns that
 `CANIC-029` correction. Exact downstream qualification and recovery-plan review
 pass. The authorized resume then exposed `CANIC-031` before any IC update: the
 host accepted the retained 0.109.1 builder but next routed that source through
-ordinary 0.109.2 role-version validation. The open correction makes finalized
-reuse read-only and distinct from fresh builds. B8 therefore remains open for
-maintainer validation/publication, the separately authorized resume and
-deployed-state/admission evidence.
+ordinary 0.109.2 role-version validation. Published 0.109.3 makes finalized
+reuse read-only and distinct from fresh builds, and the exact downstream
+recovery crossed that gate. It then exposed `CANIC-033`: Coordinator-owned
+zero-delay advancement raced the host's requirement that its first correlated
+status remain `Planned`. The open correction retains any exact monotonic first
+status and explicitly admits 0.109.4 as the next host successor for the same
+retained 0.109.1 session. B8 therefore remains open for maintainer validation/
+publication, the separately authorized plan/resume and deployed-state/
+admission evidence.
 
 ## Published package integrity
 
@@ -88,6 +94,21 @@ source decision. A disposable exact `v0.2.0` checkout with physically confined
 recovery evidence reconstructed the original digest and produced a blocker-free
 warning-only plan. No resume, deployment, Ledger, frontend or other external
 effect occurred.
+
+### Published 0.109.3 artifact-reuse correction
+
+The maintainer-owned release flow published `v0.109.3` from clean commit
+`d861febb00bed2ca8145b705f82d836dc0ae6686`. Toko Miner independently adopted
+the complete graph and CLI, reproduced its immutable `v0.2.0` source decision,
+three fenced creations and zero remaining debit, and authorized the exact
+resume. The host reused finalized 0.109.1 artifacts in 0.13 seconds without
+Cargo or artifact mutation, closing `CANIC-031`'s reachability defect.
+
+The live recovery advanced Registry and Root preparation before stopping at
+Coordinator Component provisioning. The host retained
+`preparation_in_flight`, while the Coordinator's zero-delay timer had already
+advanced the exact operation beyond `Planned`. No App, Fleet catalog, frontend
+or fixture publication occurred.
 
 ## `CANIC-109-GOLIVE-001`: fresh pool capacity
 
@@ -455,17 +476,67 @@ manifests, artifact bytes and interrupted Fleet session. Under the current
 host it crosses finalized manifest admission into exact session-journal replay
 with the complete fixture tree unchanged. The same proof rejects changed
 package identity, topology, artifact bytes and root-manifest digest. The exact
-pair test admits only same-version recovery plus the named
-0.109.1-to-0.109.2/0.109.3 rescues and rejects other predecessors or
-successors. All 124 focused `install_root` tests, the five
+pair test admitted only same-version recovery plus the named
+0.109.1-to-0.109.2/0.109.3 rescues and rejected other predecessors or
+successors. All 124 then-current focused `install_root` tests, the five
 `release_build` tests and warning-denied `canic-host` library/test Clippy pass.
-The complete maintainer gate and publication remain deliberately unclaimed.
+The complete maintainer gate published this correction in `v0.109.3`, and the
+exact downstream session crossed finalized-artifact reuse without Cargo or
+artifact mutation. Final verification remains coupled only to the separately
+open Fleet completion evidence.
 
-No fresh downstream staging attempt is appropriate. The trusted operator has
-reviewed the exact-source recovery plan, but the correction must first pass the
-maintainer release flow. After publication the downstream owner must reproduce
-the plan, separately authorize its resume and retain resulting deployed-state/
-admission evidence. Only then may frontend and fixture publication proceed.
+## `CANIC-033`: monotonic first provisioning status
+
+The authorized 0.109.3 resume completed immutable artifact reuse, Registry
+activation and Root Component-registry preparation. The host durably retained
+its Component-provisioning preparation intent and submitted the exact
+Coordinator command. That command intentionally schedules Coordinator-owned
+advancement with a zero-delay timer before returning its operation receipt.
+The host's first protected status query therefore observed the same exact
+operation after it had advanced beyond `Planned`, but
+`record_component_provisioning_prepared` rejected every other phase.
+
+The correction keeps the existing host journal as the sole recovery owner. It
+validates the same operation, plan hash, Fleet Registry, configuration,
+operation kind, plan cardinality and bounded counts, then retains every exact
+nonterminal Coordinator phase as the source of the next durable advance
+request. A first `RuntimesActivated` observation must pass the existing
+complete terminal-evidence validator and moves directly to the terminal host
+phase, so restart proceeds to catalog publication without another provisioning
+request. Mismatched identity/cardinality and incomplete terminal evidence still
+reject before journal replacement.
+
+The explicit retained-install successor list now admits only 0.109.2, 0.109.3
+and 0.109.4 hosts for the one 0.109.1 predecessor. Same-version replay remains
+unchanged; 0.109.5, other predecessors and reversed pairs reject. This does not
+create a general migration or mixed-version runtime lane.
+
+Focused tests recover the durable `preparation_in_flight` journal after a lost
+prepare response, reconcile each nonterminal phase, bind the next request to
+that exact observation, accept only complete terminal evidence and reject
+substituted authority/cardinality. All 126 install-root tests and warning-
+denied host library/test Clippy pass.
+
+```text
+cargo test --locked -p canic-host fleet_component_provisioning --lib -- --nocapture
+# 10 passed
+
+cargo test --locked -p canic-host install_root::fleet_install_recovery::tests --lib -- --nocapture
+# 2 passed
+
+cargo test --locked -p canic-host install_root:: --lib -- --nocapture
+# 126 passed
+
+cargo clippy --locked -p canic-host --lib --tests -- -D warnings
+# passed
+```
+
+No fresh downstream staging attempt is appropriate. After immutable
+publication the downstream owner must use the advanced exact `v0.2.0`
+recovery checkout for a read-only plan, require the unchanged digest, zero
+remaining debit and `fleet_component_provisioning` next, and separately
+authorize one exact resume. Only after Fleet/App and deployed-state/admission
+proof may frontend and fixture publication proceed.
 
 The remaining feedback is routed without widening B8 or adding product
 capability to B9:
@@ -484,9 +555,11 @@ capability to B9:
 
 ## Result
 
-The 0.109.2 correction, complete maintainer gate, publication, downstream
-adoption and exact-source recovery-plan review pass. The open `CANIC-031`
-correction passes its targeted host/recovery checks but is not validated or
-published. B8 remains open for that maintainer release flow, the separately
-authorized resume and deployed-state/admission proof. B9 remains blocked until
-that evidence is accepted; B10 and 0.110 remain blocked behind B9.
+Published 0.109.3 closes retained-artifact reachability and the downstream
+session crossed that gate. The open `CANIC-033` correction passes all 126
+install-root tests and warning-denied host Clippy and explicitly admits the
+next patch as a successor for the same retained session. It is not versioned,
+validated or published. B8 remains open for the maintainer release flow, the
+separately authorized exact-source plan/resume and deployed-state/admission
+proof. B9 remains blocked until that evidence is accepted; B10 and 0.110 remain
+blocked behind B9.
