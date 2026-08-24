@@ -1263,7 +1263,8 @@ async fn require_ready_pool_capacity(component_count: u32) -> Result<(), Interna
     if CanisterPoolOps::ready_count() >= component_count {
         return Ok(());
     }
-    let _maintenance = crate::workflow::canister_pool::maintain_once().await?;
+    let _maintenance =
+        crate::workflow::canister_pool::maintain_ready_capacity_once(component_count).await?;
     if CanisterPoolOps::ready_count() < component_count {
         return Err(InternalError::unavailable());
     }

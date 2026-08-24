@@ -2,8 +2,8 @@
 
 #[cfg(test)]
 use super::build::{
-    build_icp_refill_pic, build_icp_refill_stub_wasm, build_mainnet_refill_wasms,
-    build_two_root_pic,
+    build_icp_refill_pic, build_icp_refill_stub_wasm, build_mainnet_five_component_refill_wasms,
+    build_mainnet_refill_wasms, build_two_root_pic, five_component_root_canister_config_path,
 };
 use super::build::{
     build_pic, build_test_root_wasm, build_test_wasm_store_wasm, root_canister_config_path,
@@ -1248,25 +1248,43 @@ mod tests {
         clippy::too_many_lines,
         reason = "one production-shaped journey binds pool creation, typed retry and provisioning evidence"
     )]
-    fn fresh_component_acceptance_drives_the_root_owned_pool_before_effects() {
+    fn fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let (root_wasm, cycles_ledger_wasm) = build_mainnet_refill_wasms();
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config_path = five_component_root_canister_config_path(&workspace_root);
+        let (root_wasm, cycles_ledger_wasm) = build_mainnet_five_component_refill_wasms();
         let coordinator_wasm = build_test_coordinator_wasm();
-        let store_fixture = build_root_store_fixture();
+        let store_fixture =
+            build_root_store_fixture_with_config(&config_path, build_five_component_wasms());
         let pic = build_pic();
         let coordinator = pic.create_canister();
         pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
-        let created_asset = std::cell::Cell::new(None);
-        let fixture = install_bootstrapped_root_with_pool_setup(
+        let created_assets = std::cell::RefCell::new(Vec::new());
+        let fixture = install_bootstrapped_root_with_config_and_pool_setup(
             &pic,
             root_wasm,
             coordinator,
             store_fixture,
+            BootstrappedRootPlacement {
+                canister_pool_minimum_size: Some(5),
+                coordinator_subnet: None,
+                root_subnet: None,
+                component_admission_limits: None,
+                fleet_id: None,
+                funding: None,
+                coordinator_root_funding: None,
+            },
+            &config_path,
             |pic, root| {
                 let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
-                let asset = pic.create_canister_on_subnet(None, None, root_subnet);
-                pic.set_controllers(asset, None, vec![root])
-                    .expect("prepare Cycles Ledger creation result");
+                let assets = (0..5)
+                    .map(|_| {
+                        let asset = pic.create_canister_on_subnet(None, None, root_subnet);
+                        pic.set_controllers(asset, None, vec![root])
+                            .expect("prepare Cycles Ledger creation result");
+                        asset
+                    })
+                    .collect::<Vec<_>>();
                 let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
                     .expect("canonical Cycles Ledger principal");
                 pic.create_canister_with_id(None, None, cycles_ledger)
@@ -1275,7 +1293,7 @@ mod tests {
                     cycles_ledger,
                     cycles_ledger_wasm,
                     encode_one(CyclesLedgerStubInitArgs {
-                        canister_ids: vec![asset],
+                        canister_ids: assets.clone(),
                         expected_root: root,
                         expected_subnet: root_subnet,
                         pending_first_index: None,
@@ -1283,23 +1301,24 @@ mod tests {
                     .expect("encode Cycles Ledger stub init"),
                     None,
                 );
-                created_asset.set(Some(asset));
+                created_assets.replace(assets);
                 Vec::new()
             },
         );
         let operation_id = [0x6d; 32];
-        begin_fixture_fresh_component_provisioning(
+        begin_fixture_fresh_component_provisioning_with_config(
             &pic,
             coordinator,
             coordinator_wasm,
             &fixture,
             operation_id,
+            &config_path,
         );
 
         let mut pending_root_failure = None;
         let mut provisioned = None;
         let mut last_status = None;
-        for _ in 0..80 {
+        for _ in 0..240 {
             let CoordinatorStatusResponse::Operation(
                 CoordinatorOperationStatusResponse::ComponentProvisioning(status),
             ) = coordinator_status(
@@ -1335,7 +1354,7 @@ mod tests {
             );
             panic!("fresh Component provisioning did not complete: {last_status:?}")
         });
-        assert_eq!(provisioned.component_count, 1);
+        assert_eq!(provisioned.component_count, 5);
         let failure = pending_root_failure.expect("one automatic-capacity retry is observable");
         assert_eq!(failure.fleet_subnet_root, fixture.root_id);
         assert_eq!(
@@ -1351,23 +1370,25 @@ mod tests {
         assert!(failure.failed_at_ns > 0);
         assert!(provisioned.pending_root_failure.is_none());
 
-        let asset = created_asset.get().expect("one Cycles Ledger result");
         let pool = root_pool_status(&pic, fixture.root_id);
-        let entry = pool
-            .entries
-            .iter()
-            .find(|entry| entry.canister_id == asset)
-            .expect("created asset remains in the Root inventory");
-        assert!(matches!(
-            entry.status,
-            CanisterPoolAssetStatus::Workload { .. }
-        ));
+        assert_eq!(pool.workload, 5);
+        for asset in created_assets.borrow().iter().copied() {
+            let entry = pool
+                .entries
+                .iter()
+                .find(|entry| entry.canister_id == asset)
+                .expect("created asset remains in the Root inventory");
+            assert!(matches!(
+                entry.status,
+                CanisterPoolAssetStatus::Workload { .. }
+            ));
+        }
         let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
             .expect("canonical Cycles Ledger principal");
         let request_count: u64 = pic
             .query_candid(cycles_ledger, "request_count", ())
             .expect("query pool creation request count");
-        assert_eq!(request_count, 1);
+        assert_eq!(request_count, 5);
     }
 
     #[test]
@@ -2317,6 +2338,7 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_minimum_size: None,
                 coordinator_subnet: Some(subnet),
                 root_subnet: Some(subnet),
                 component_admission_limits: None,
@@ -2419,6 +2441,7 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_minimum_size: None,
                 coordinator_subnet: Some(subnet),
                 root_subnet: Some(subnet),
                 component_admission_limits: None,
@@ -2481,6 +2504,7 @@ mod tests {
                 coordinator,
                 build_root_store_fixture(),
                 BootstrappedRootPlacement {
+                    canister_pool_minimum_size: None,
                     coordinator_subnet: Some(*first_subnet),
                     root_subnet: Some(subnet),
                     component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
@@ -5091,7 +5115,23 @@ mod tests {
             .and_then(Path::parent)
             .expect("workspace root");
         let config_path = root_canister_config_path(workspace_root);
-        let config = AppConfigSnapshot::load(&config_path).expect("load root config");
+        install_fixture_coordinator_with_config(
+            pic,
+            coordinator,
+            coordinator_wasm,
+            fixture,
+            &config_path,
+        );
+    }
+
+    fn install_fixture_coordinator_with_config(
+        pic: &PocketIc,
+        coordinator: Principal,
+        coordinator_wasm: Vec<u8>,
+        fixture: &BootstrappedRootFixture,
+        config_path: &Path,
+    ) {
+        let config = AppConfigSnapshot::load(config_path).expect("load root config");
         let coordinator_args = FleetCoordinatorInitArgs {
             configured_app: fixture
                 .init_args
@@ -5143,7 +5183,7 @@ mod tests {
             .fleet_subnet_roots
             .first()
             .expect("one registered Root");
-        let entries = deployment
+        let entries: Vec<_> = deployment
             .members
             .iter()
             .map(|member| ComponentGroupPlanEntry {
@@ -5153,6 +5193,16 @@ mod tests {
                 purpose: member.purpose.clone(),
                 labels: member.labels.clone(),
                 limits: member.limits.clone(),
+            })
+            .collect();
+        let placements = (0..deployment.initial_placements)
+            .map(|ordinal| ComponentGroupPlacementPlan {
+                group_placement: ComponentGroupPlacementId {
+                    deployment: deployment.deployment.clone(),
+                    ordinal,
+                },
+                component_group: deployment.component_group.clone(),
+                entries: entries.clone(),
             })
             .collect();
         FleetComponentProvisioningPlan {
@@ -5178,14 +5228,7 @@ mod tests {
                     funding: root.funding.clone(),
                 },
                 active_release_set: root.active_release_set,
-                placements: vec![ComponentGroupPlacementPlan {
-                    group_placement: ComponentGroupPlacementId {
-                        deployment: deployment.deployment.clone(),
-                        ordinal: 0,
-                    },
-                    component_group: deployment.component_group.clone(),
-                    entries,
-                }],
+                placements,
             }],
         }
     }
@@ -5198,7 +5241,33 @@ mod tests {
         fixture: &BootstrappedRootFixture,
         operation_id: [u8; 32],
     ) {
-        install_fixture_coordinator(pic, coordinator, coordinator_wasm, fixture);
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        begin_fixture_fresh_component_provisioning_with_config(
+            pic,
+            coordinator,
+            coordinator_wasm,
+            fixture,
+            operation_id,
+            &root_canister_config_path(&workspace_root),
+        );
+    }
+
+    #[cfg(test)]
+    fn begin_fixture_fresh_component_provisioning_with_config(
+        pic: &PocketIc,
+        coordinator: Principal,
+        coordinator_wasm: Vec<u8>,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+        config_path: &Path,
+    ) {
+        install_fixture_coordinator_with_config(
+            pic,
+            coordinator,
+            coordinator_wasm,
+            fixture,
+            config_path,
+        );
         let (joining_version, sync_request) = join_and_synchronize_root(pic, coordinator, fixture);
         activate_registry_and_prepare_component_registry(
             pic,
@@ -5213,9 +5282,8 @@ mod tests {
         else {
             panic!("Coordinator returned a differently correlated Registry status");
         };
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
-            .expect("load provisioning fixture config");
+        let config =
+            AppConfigSnapshot::load(config_path).expect("load provisioning fixture config");
         let plan = fixture_fresh_component_plan(config.model(), &registry);
         let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
             pic,
@@ -5550,6 +5618,7 @@ mod tests {
     }
 
     struct BootstrappedRootPlacement {
+        canister_pool_minimum_size: Option<u32>,
         coordinator_subnet: Option<Principal>,
         root_subnet: Option<Principal>,
         component_admission_limits: Option<RootComponentAdmissionLimits>,
@@ -5587,6 +5656,7 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_minimum_size: None,
                 coordinator_subnet: Some(coordinator_subnet),
                 root_subnet: Some(placement_subnet),
                 component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(1)),
@@ -5616,6 +5686,7 @@ mod tests {
             coordinator,
             store_fixture,
             BootstrappedRootPlacement {
+                canister_pool_minimum_size: None,
                 coordinator_subnet: None,
                 root_subnet: None,
                 component_admission_limits: None,
@@ -5643,6 +5714,29 @@ mod tests {
             .and_then(Path::parent)
             .expect("workspace root");
         let config_path = root_canister_config_path(workspace_root);
+        install_bootstrapped_root_with_config_and_pool_setup(
+            pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            placement,
+            &config_path,
+            pool_setup,
+        )
+    }
+
+    fn install_bootstrapped_root_with_config_and_pool_setup<F>(
+        pic: &PocketIc,
+        root_wasm: Vec<u8>,
+        coordinator: Principal,
+        store_fixture: RootStoreFixture,
+        placement: BootstrappedRootPlacement,
+        config_path: &Path,
+        pool_setup: F,
+    ) -> BootstrappedRootFixture
+    where
+        F: FnOnce(&PocketIc, Principal) -> Vec<Principal>,
+    {
         let RootStoreFixture {
             manifest,
             artifacts,
@@ -5671,12 +5765,20 @@ mod tests {
                 coordinator,
                 root_wasm: &root_wasm,
                 wasm_store_wasm: &wasm_store_wasm,
-                config_path: &config_path,
+                config_path,
                 release_set_digest: digest,
             })
             .expect("encode exact root authority");
         let mut init_args =
             decode_one::<FleetSubnetRootInitArgs>(&init_bytes).expect("decode root init authority");
+        if let Some(minimum_size) = placement.canister_pool_minimum_size {
+            init_args
+                .authority
+                .binding
+                .limits
+                .canister_pool
+                .minimum_size = minimum_size;
+        }
         if let Some(funding) = placement.funding.clone() {
             init_args.authority.binding.funding = funding;
         }
@@ -5687,7 +5789,7 @@ mod tests {
                     RootComponentAdmissionLimits::Uniform(limit) => *limit,
                 };
             }
-            let config = AppConfigSnapshot::load(&config_path).expect("reload root config");
+            let config = AppConfigSnapshot::load(config_path).expect("reload root config");
             init_args.authority.binding.component_topology_digest = config
                 .component_topology()
                 .project_for_admissions(&init_args.authority.binding.component_admissions)
@@ -5920,8 +6022,14 @@ mod tests {
             .and_then(Path::parent)
             .expect("workspace root");
         let config_path = root_canister_config_path(workspace_root);
-        let (manifest, artifacts) =
-            exact_root_store_fixture(&config_path, build_test_component_wasms());
+        build_root_store_fixture_with_config(&config_path, build_test_component_wasms())
+    }
+
+    fn build_root_store_fixture_with_config(
+        config_path: &Path,
+        component_wasms: &BTreeMap<CanisterRole, Vec<u8>>,
+    ) -> RootStoreFixture {
+        let (manifest, artifacts) = exact_root_store_fixture(config_path, component_wasms);
         RootStoreFixture {
             manifest,
             artifacts,
@@ -6023,6 +6131,21 @@ mod tests {
                 &workspace_root,
                 &config_path,
                 "fleet-registry-sync",
+                &[("issuer", ISSUER_PACKAGE)],
+            )
+        })
+    }
+
+    #[cfg(test)]
+    fn build_five_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
+        static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
+        WASMS.get_or_init(|| {
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let config_path = five_component_root_canister_config_path(&workspace_root);
+            build_component_fixture_wasms(
+                &workspace_root,
+                &config_path,
+                "fleet-registry-five-components",
                 &[("issuer", ISSUER_PACKAGE)],
             )
         })
@@ -6146,7 +6269,7 @@ mod tests {
             ),
             (
                 "fresh provisioning automatic pool readiness",
-                fresh_component_acceptance_drives_the_root_owned_pool_before_effects,
+                fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects,
             ),
             (
                 "fresh provisioning terminal runtime activation",

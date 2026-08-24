@@ -45,6 +45,7 @@ mod fleet_component_provisioning_plan;
 mod fleet_install_session;
 mod fleet_registry_activation;
 mod fleet_registry_activation_journal;
+mod fleet_registry_recovery;
 mod fleet_subnet_root_component_registry_preparation;
 mod fleet_subnet_root_install;
 mod fleet_subnet_root_install_journal;

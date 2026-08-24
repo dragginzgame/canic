@@ -5,6 +5,12 @@
 //! Boundary: each root journal records intent before the root performs its inter-canister calls.
 
 use super::{
+    fleet_component_provisioning_plan::{
+        CompileFleetComponentProvisioningPlanRequest, compile_fleet_component_provisioning_plan,
+    },
+    fleet_registry_recovery::{
+        ActiveRegistryRecoveryRequest, require_active_or_service_successor_registry,
+    },
     fleet_subnet_root_install_journal::{
         FleetSubnetRootInstallPhase, PlanFleetSubnetRootInstallRequest,
         ResolvedFleetSubnetRootInstall, begin_registry_sync, expected_registry_join_entry,
@@ -91,6 +97,10 @@ pub(super) struct SynchronizeFleetSubnetRootsRequest<'a> {
     pub joining_version: FleetRegistryVersion,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one closed host sequence drives every Root and verifies exact recovery evidence"
+)]
 pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     request: SynchronizeFleetSubnetRootsRequest<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -178,20 +188,29 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
     if root_acknowledgements_match(&live, expected, &joining_version) {
         return Ok(());
     }
+    if !live.is_empty() {
+        return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
+    }
     let active_registry =
         FleetRegistryOps::compile_active(&authority, &component_topology, &joining_registry)?;
     let live_registry = query_live_registry(coordinator_icp, &coordinator_binding, coordinator)?;
-    let expected_manifest =
-        FleetRegistryOps::manifest(&authority, &component_topology, &active_registry)?;
-    let expected_version =
-        FleetRegistryOps::version(&authority, &component_topology, &active_registry)?;
-    if live_registry.registry != active_registry
-        || live_registry.manifest != expected_manifest
-        || live_registry.version != expected_version
-        || !live.is_empty()
-    {
-        return Err(RootRegistrySyncError::AcknowledgementSetMismatch.into());
-    }
+    let compiled =
+        compile_fleet_component_provisioning_plan(CompileFleetComponentProvisioningPlanRequest {
+            config: config.model(),
+            fleet_install_plan: &fleet_install_plan.plan,
+            registry: &active_registry,
+            operation_id: super::root_component_provisioning_operation_id(install_operation_id),
+        })?;
+    require_active_or_service_successor_registry(ActiveRegistryRecoveryRequest {
+        icp: coordinator_icp,
+        binding: &coordinator_binding,
+        coordinator,
+        component_topology: &component_topology,
+        active: &active_registry,
+        live: &live_registry,
+        expected_operation_id: compiled.prepare_request.operation_id,
+        expected_plan_hash: compiled.plan_hash,
+    })?;
     Ok(())
 }
 

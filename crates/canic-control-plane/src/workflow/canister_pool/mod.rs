@@ -133,6 +133,22 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
 
 /// Reconcile one bounded reset or automatic refill operation.
 pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
+    let ready_target = pool_config()?.minimum_size;
+    maintain_once_for_ready_target(ready_target).await
+}
+
+/// Advance one Root-owned maintenance pass toward an exact accepted-batch demand.
+pub async fn maintain_ready_capacity_once(
+    ready_target: u32,
+) -> Result<PoolAdminResponse, InternalError> {
+    let config = pool_config()?;
+    require_ready_target(&config, ready_target)?;
+    maintain_once_for_ready_target(ready_target).await
+}
+
+async fn maintain_once_for_ready_target(
+    ready_target: u32,
+) -> Result<PoolAdminResponse, InternalError> {
     let attempt = match claim_maintenance()? {
         AsyncJobClaim::Acquired(attempt) => attempt,
         AsyncJobClaim::Busy { .. } => {
@@ -141,7 +157,7 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
             });
         }
     };
-    let result = maintain_once_inner().await;
+    let result = maintain_once_inner(ready_target).await;
     let completion = maintenance_result_completion(&result);
     if !AsyncJobRecoveryOps::finish(attempt, completion)? {
         return Err(InternalError::invariant());
@@ -149,7 +165,7 @@ pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
     result
 }
 
-async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
+async fn maintain_once_inner(ready_target: u32) -> Result<PoolAdminResponse, InternalError> {
     let status = FleetActivationWorkflow::status()?;
     if !matches!(
         status.phase,
@@ -161,6 +177,7 @@ async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
         });
     }
     let config = pool_config()?;
+    require_ready_target(&config, ready_target)?;
 
     if CanisterPoolOps::pending_handoff().is_some() {
         return Ok(PoolAdminResponse::MaintenancePaused {
@@ -190,7 +207,7 @@ async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
             reason: "Fleet Subnet Root draining has fenced pool replenishment".to_string(),
         });
     }
-    if CanisterPoolOps::ready_count() >= config.minimum_size {
+    if CanisterPoolOps::ready_count() >= ready_target {
         return Ok(PoolAdminResponse::Maintained);
     }
     refill::start(&config).await
@@ -212,7 +229,11 @@ async fn run_maintenance_timer() -> TimerRunResult {
             );
         }
     };
-    finish_maintenance_timer(attempt, maintain_once_inner().await)
+    let result = match pool_config() {
+        Ok(config) => maintain_once_inner(config.minimum_size).await,
+        Err(error) => Err(error),
+    };
+    finish_maintenance_timer(attempt, result)
 }
 
 /// Dispatch one watchdog-owned takeover without awaiting fallible work.
@@ -326,7 +347,11 @@ fn cancel_maintenance_timer() -> Result<(), AuthorityTimerError> {
 
 fn spawn_maintenance(attempt: AsyncJobAttempt) {
     ic_cdk::futures::spawn(async move {
-        let _result = finish_maintenance_timer(attempt, maintain_once_inner().await);
+        let result = match pool_config() {
+            Ok(config) => maintain_once_inner(config.minimum_size).await,
+            Err(error) => Err(error),
+        };
+        let _result = finish_maintenance_timer(attempt, result);
     });
 }
 
@@ -589,6 +614,16 @@ fn pool_config() -> Result<FleetSubnetCanisterPoolConfig, InternalError> {
         .canister_pool)
 }
 
+const fn require_ready_target(
+    config: &FleetSubnetCanisterPoolConfig,
+    ready_target: u32,
+) -> Result<(), InternalError> {
+    if ready_target == 0 || ready_target > config.maximum_size {
+        return Err(InternalError::resource_exhausted());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -605,6 +640,17 @@ mod tests {
             validate_import_subnet(canister_id, expected, Some(Principal::from_slice(&[5; 29])))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn accepted_batch_ready_target_may_exceed_the_maintenance_minimum() {
+        let config = FleetSubnetCanisterPoolConfig {
+            minimum_size: 1,
+            maximum_size: 10,
+            canister_cycles: Cycles::new(5_000_000_000_000),
+        };
+        assert!(require_ready_target(&config, 5).is_ok());
+        assert!(require_ready_target(&config, 11).is_err());
     }
 
     #[test]

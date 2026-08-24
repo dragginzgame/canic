@@ -550,10 +550,14 @@ admission surface while an omitted managed role does not; the composed-IcyDB
 direct-ingress journey passes on fresh Wasm, and the real Root/Component
 add-remove journey converges on the corrected mirrored declaration.
 0.109 B1-B7 are functionally complete. B8 owns Canic release and downstream
-go-live support. Its in-repository corrections passed the complete maintainer
-gate and are published in `v0.109.0`; separately authorized downstream adoption
-still keeps B8 open. B9 complexity remediation then blocks minor closeout and
-0.110.
+go-live support. Published `v0.109.1` retains the intended corrections and the
+downstream graph, complete CI and exact managed/standalone Wasm qualification
+pass, but post-publication path review found the revision-4 predicate
+unreachable from join/synchronization and the host poll bound vulnerable to a
+tight loop. The open 0.109.2 draft corrects both paths and proves zero-to-five
+pool creation. B8 remains open for its release and exact downstream plan. B9
+complexity remediation and B10 published managed-App test support then block
+minor closeout and 0.110.
 
 The 2026-08-24 post-implementation complexity audit rejects that functional
 candidate as the baseline for another distributed control-plane line. Its
@@ -569,17 +573,19 @@ Neither publication nor adoption alone closes that gate or authorizes 0.110.
 
 The first fresh Toko deployment on Canic 0.108.1 passed workspace check, Wasm
 build, zero-blocker planning and shell/diff checks, then exposed three inherited
-Canic blockers accepted into B8. Published `v0.109.0` corrects all three.
-`CANIC-109-GOLIVE-001` now drives one bounded pass of the existing
-Root-owned pool journal after exact Root-batch validation; an IC-profile
-PocketIC journey starts with zero imports, performs one Cycles-Ledger creation
-request and provisions the Component. `CANIC-109-GOLIVE-002` accepts only the
-canonical revision-4 initial-service successor bound to the exact compiled
-fresh-install plan and protected Coordinator operation evidence; missing,
+Canic blockers accepted into B8. Published `v0.109.0` added their first
+corrections, but later path review showed `CANIC-109-GOLIVE-001` still allowed
+the host to spend its observation bound before the scheduled retry and
+`CANIC-109-GOLIVE-002` remained unreachable behind exact join/synchronization
+gates. The open 0.109.2 draft waits after unchanged status, drives the sole
+Root pool journal to the exact accepted-batch demand and uses one successor
+authority at all three gates. Its IC-profile PocketIC journey starts with zero
+imports, performs five Cycles-Ledger creation requests and provisions all five
+Components. Exact Joining/all-Active/revision-4 recovery passes while missing,
 premature, wrong-plan and later successors reject. `CANIC-109-GOLIVE-003`
-retains one typed Root/stage/code/time failure and projects it only while it
-matches the current durable retry. A complementary local-profile journey
-publishes revision 4 and reaches `RuntimesActivated`. The governed serial
+remains published: one typed Root/stage/code/time failure is projected only
+while it matches the current durable retry. A complementary local-profile
+journey reaches `RuntimesActivated`. The governed serial
 inventory now contains 30 exact cases, its five ordinary checks pass before
 PocketIC, and warning-denied Clippy passes for the changed packages. The
 maintainer-owned complete gate passed at source commit
@@ -595,15 +601,18 @@ exact managed App and standalone-local Wasms across admitted, denied,
 anonymous, fenced and same-release upgrade behavior. Its canonical no-effect
 workspace plan then exposed `CANIC-027`: Git still lists an index-tracked file
 deleted only from the worktree, and workspace source identity tried to read the
-absent path. The current B8 correction omits that absent entry while preserving
+absent path. Published `v0.109.1` omits that absent entry while preserving
 current tracked modifications and accepted untracked source in the digest;
-unsafe paths and other I/O errors still fail closed. Focused source-identity,
-complete Fleet-plan and warning-denied host checks pass. B8 remains open until
-the correction is published and the downstream no-effect plan is reproduced.
-The requested managed-App qualification harness is useful future capability,
-but B9 cannot add it under its no-new-capability contract. Stateful release
-adoption remains owned by 0.111, application retirement by 0.110 B2, generic
-observatory work by 0.112, and saved-plan consumption remains unscheduled.
+unsafe paths and other I/O errors still fail closed. Exact downstream 0.109.1
+CI passes, and its dirty-worktree plan crosses source identity. That plan run
+lacked `CANIC_ICP_IDENTITY_PASSWORD_FILE`, so no reviewable 0.109.1 digest was
+produced. That is retained as historical evidence; the accepted plan must now
+be reproduced against the exact published 0.109.2 pair. `CANIC-028`'s
+impossible named-environment build advice is assigned to pure B9 cleanup. B10
+then owns the separate published managed-App qualification harness. Stateful
+release adoption remains owned by 0.111, application retirement by 0.110 B2,
+generic observatory work by 0.112, and saved-plan consumption remains
+unscheduled.
 
 Scheduled 0.110 owns indexed estates, parallel creation/reset, transfer and
 the 10/100/1,000 proof. Opted-in stateful roles must produce an immutable,
@@ -1133,18 +1142,18 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.0` completes B8's maintainer-owned validation/version/
-publication portion and its three accepted go-live corrections. Downstream
-admission qualification now passes. Continue B8 with publication of the
-`CANIC-027` tracked-deletion planning correction and reproduction of the
-canonical no-effect plan against it. Only after B8 closes, continue with B9
+Published `v0.109.1` completed its maintainer-owned release flow, but the
+0.109.2 correction is now the open B8 candidate. Its targeted native, host and
+PocketIC checks pass. Continue B8 with the maintainer-owned complete
+validation/version/publication flow, then the exact zero-blocker 0.109.2
+no-effect plan from the trusted operator shell. Only after B8 closes, continue with B9
 under the binding post-implementation complexity audit: freeze the canonical
 evidence, simplify the accepted gravity wells and active authority, preserve
 bounded validation, retriage every 0.110 batch and issue an immutable
-superseding verdict. Do not begin 0.110 unless that verdict passes, the
-maintainer accepts it and then explicitly promotes the revised B1. Do not add a
-production pool contract or run any
-remote qualification effect.
+superseding verdict. B10 then owns the separately published managed-App
+qualification harness. Do not begin 0.110 unless those gates pass, the
+maintainer accepts 0.109 closeout and then explicitly promotes the revised B1.
+Do not add a production pool contract or run any remote qualification effect.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.
