@@ -32,6 +32,10 @@ use canic_host::{
         observe_fresh_fleet_operator_funding,
     },
     icp::IcpCli,
+    install_root::{
+        FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
+        inspect_fresh_fleet_install_recovery, require_supported_recovery_builder,
+    },
     network::resolve_canonical_network_id_from_root,
     release_build::load_finalized_release_build,
     release_set::AppConfigSnapshot,
@@ -58,7 +62,7 @@ use outcome::{operation, sort_proposed_operations};
 pub(super) use render::{command_exit_result, write_report};
 #[cfg(test)]
 pub(super) use render::{render_json, render_text};
-use report::{DeploymentPlanReport, REPORT_SCHEMA_VERSION};
+use report::{DeploymentPlanReport, ProposedOperationLabel, REPORT_SCHEMA_VERSION};
 use report::{
     PlanDiagnosticSource, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
     SOURCE_FLEET_CATALOG, SOURCE_FLEET_INPUT, SOURCE_LOCAL_OBSERVATION,
@@ -114,6 +118,7 @@ where
     let target_resolved = blockers.is_empty();
     let mut catalog_acquisition = None;
     let mut catalog_failure = None;
+    let mut install_recovery = None;
     let fresh_fleet_plan = if target_resolved {
         match build_fresh_fleet_plan(
             options,
@@ -124,10 +129,12 @@ where
         ) {
             Ok(build) => {
                 catalog_acquisition = Some(build.catalog_acquisition);
+                install_recovery = build.install_recovery;
                 Some(build.plan)
             }
             Err(error) => {
                 catalog_failure = error.catalog_failure.map(|failure| *failure);
+                install_recovery = error.install_recovery.map(|recovery| *recovery);
                 blockers.push(fresh_fleet_plan_blocker(
                     &options.fleet,
                     error.detail,
@@ -147,7 +154,8 @@ where
     let resolved_release_build_id = fresh_fleet_plan
         .as_ref()
         .and_then(|plan| plan.preflight.release_build_id)
-        .or(options.release_build_id);
+        .or(options.release_build_id)
+        .or_else(|| install_recovery.as_ref().map(recovery_release_build_id));
     let mut plan = build_plan(options, roots, &config_path, &resolved_build_profile);
     plan.plan_digest = fresh_fleet_plan
         .as_ref()
@@ -167,9 +175,9 @@ where
         &resolved_build_profile,
         &plan,
     );
-    let proposed_operations = proposed_operations(&plan);
+    let proposed_operations = report_proposed_operations(&plan, install_recovery.as_ref());
     let mut next_actions = next_actions(options, &blockers, &warnings, &assumptions);
-
+    append_recovery_next_actions(&mut next_actions, install_recovery.as_ref());
     sort_diagnostics(&mut blockers);
     sort_diagnostics(&mut warnings);
     sort_diagnostics(&mut assumptions);
@@ -195,6 +203,7 @@ where
         catalog_acquisition,
         catalog_failure,
         fresh_fleet_plan,
+        install_recovery,
         plan,
         blockers,
         warnings,
@@ -203,6 +212,37 @@ where
         proposed_operations,
         next_actions,
     }
+}
+
+fn report_proposed_operations(
+    plan: &DeploymentPlanV1,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
+) -> Vec<ProposedOperationLabel> {
+    if recovery.is_some_and(|recovery| recovery.effects_started) {
+        Vec::new()
+    } else {
+        proposed_operations(plan)
+    }
+}
+
+fn append_recovery_next_actions(
+    next_actions: &mut Vec<String>,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
+) {
+    if !recovery.is_some_and(|recovery| recovery.effects_started) {
+        return;
+    }
+    next_actions.push(
+        "review install_recovery before explicitly authorizing the retained-session resume"
+            .to_string(),
+    );
+    next_actions.push("do not start a replacement fresh Fleet install".to_string());
+}
+
+const fn recovery_release_build_id(
+    recovery: &FreshFleetInstallRecoveryPlanV1,
+) -> canic_core::ids::ReleaseBuildId {
+    recovery.release_build_id
 }
 
 fn build_fresh_fleet_plan<E>(
@@ -220,77 +260,112 @@ where
 {
     let config = AppConfigSnapshot::load(config_path)
         .map_err(|error| preflight_build_error(SOURCE_APP_CONFIG, error))?;
-    let input = if options.refresh_catalog {
-        load_and_resolve_fleet_install_input(
-            &roots.icp_root,
-            &options.environment,
-            fleet_input_path,
-        )
-    } else {
-        load_and_resolve_fleet_install_input_for_preflight(
-            &roots.icp_root,
-            &options.environment,
-            fleet_input_path,
-        )
-    }
-    .map_err(fleet_input_preflight_build_error)?;
-    let catalog_acquisition = input.catalog_acquisition.clone();
-    let (build_profile, release_build_id) = resolve_plan_release_source(options, roots)
-        .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
     let fleet_name = options
         .fleet
         .parse::<FleetName>()
         .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
-    let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
-        config: config.model(),
-        app: &options.app,
-        fleet_name: &fleet_name,
-        coordinator: &input.coordinator,
-        admission: &input.admission,
-        fleet_subnet_roots: &input.fleet_subnet_roots,
-        build_profile,
-        release_build_id,
-        effects: FreshFleetPreflightEffectsV1::none_started(),
-    })
-    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
     let canonical_network_id =
         resolve_canonical_network_id_from_root(&roots.icp_root, &options.environment)
             .map_err(|error| preflight_build_error(SOURCE_DEPLOYMENT_CONFIG, error))?;
-    let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
-        .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
-    let operator = observe_operator(&input.operator_principal, &maximum_operator_debit)
+    let app = canic_core::ids::AppId::from(options.app.as_str());
+    let install_recovery =
+        inspect_fresh_fleet_install_recovery(InspectFreshFleetInstallRecoveryRequest {
+            root: &roots.icp_root,
+            canonical_network_id,
+            fleet_name: &fleet_name,
+            app: &app,
+            config: config.model(),
+        })
         .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?;
-    let authority = load_fresh_fleet_decision_authority(FreshFleetDecisionAuthorityRequest {
-        workspace_root: &roots.workspace_root,
-        icp_root: &roots.icp_root,
-        config: &config,
-        requested_environment: &options.environment,
-        canonical_network_id,
-        release_build_id,
-        fleet_input: &input,
-        operator: &operator,
-    })
-    .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
-    let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
-        preflight,
-        authority,
-    })
-    .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
-    Ok(FreshFleetPlanBuild {
-        plan,
-        catalog_acquisition,
+    let build = (|| {
+        let input = if options.refresh_catalog {
+            load_and_resolve_fleet_install_input(
+                &roots.icp_root,
+                &options.environment,
+                fleet_input_path,
+            )
+        } else {
+            load_and_resolve_fleet_install_input_for_preflight(
+                &roots.icp_root,
+                &options.environment,
+                fleet_input_path,
+            )
+        }
+        .map_err(fleet_input_preflight_build_error)?;
+        let catalog_acquisition = input.catalog_acquisition.clone();
+        let (build_profile, release_build_id) =
+            resolve_plan_release_source(options, roots, install_recovery.as_ref())
+                .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
+        let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+            config: config.model(),
+            app: &options.app,
+            fleet_name: &fleet_name,
+            coordinator: &input.coordinator,
+            admission: &input.admission,
+            fleet_subnet_roots: &input.fleet_subnet_roots,
+            build_profile,
+            release_build_id,
+            effects: FreshFleetPreflightEffectsV1::none_started(),
+        })
+        .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+        let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
+            .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?;
+        let required_operator_debit = install_recovery
+            .as_ref()
+            .map_or(&maximum_operator_debit, |recovery| {
+                &recovery.remaining_operator_debit
+            });
+        let operator = observe_operator(&input.operator_principal, required_operator_debit)
+            .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?;
+        let authority_request = FreshFleetDecisionAuthorityRequest {
+            workspace_root: &roots.workspace_root,
+            icp_root: &roots.icp_root,
+            config: &config,
+            requested_environment: &options.environment,
+            canonical_network_id,
+            release_build_id,
+            fleet_input: &input,
+            operator: &operator,
+        };
+        let authority = match install_recovery.as_ref() {
+            Some(recovery) => recovery.load_decision_authority(authority_request),
+            None => load_fresh_fleet_decision_authority(authority_request).map_err(Into::into),
+        }
+        .map_err(|error| preflight_build_error(SOURCE_BUILD_PROFILE, error))?;
+        let decision_request = FreshFleetDeploymentPlanRequest {
+            preflight,
+            authority,
+        };
+        let plan = match install_recovery.as_ref() {
+            Some(recovery) => recovery
+                .compile_decision(decision_request)
+                .map_err(|error| preflight_build_error(SOURCE_LOCAL_OBSERVATION, error))?,
+            None => compile_fresh_fleet_deployment_plan(decision_request)
+                .map_err(|error| preflight_build_error(SOURCE_FLEET_INPUT, error))?,
+        };
+        Ok(FreshFleetPlanBuild {
+            plan,
+            catalog_acquisition,
+            install_recovery: install_recovery.clone(),
+        })
+    })();
+    build.map_err(|mut error: FreshFleetPreflightBuildError| {
+        error.install_recovery = install_recovery.map(Box::new);
+        error
     })
 }
 
 struct FreshFleetPlanBuild {
     plan: FreshFleetDeploymentPlanV1,
     catalog_acquisition: FleetInstallCatalogAcquisitionV1,
+    install_recovery: Option<FreshFleetInstallRecoveryPlanV1>,
 }
 
 struct FreshFleetPreflightBuildError {
     detail: String,
     source: PlanDiagnosticSource,
     catalog_failure: Option<Box<SubnetCatalogLoadFailureEvidenceV1>>,
+    install_recovery: Option<Box<FreshFleetInstallRecoveryPlanV1>>,
 }
 
 fn preflight_build_error(
@@ -301,6 +376,7 @@ fn preflight_build_error(
         detail: error.to_string(),
         source,
         catalog_failure: None,
+        install_recovery: None,
     }
 }
 
@@ -319,12 +395,14 @@ fn fleet_input_preflight_build_error(
         detail: error.to_string(),
         source,
         catalog_failure: catalog_failure.map(Box::new),
+        install_recovery: None,
     }
 }
 
 fn resolve_plan_release_source(
     options: &DeployPlanOptions,
     roots: &DeployPlanRoots,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
 ) -> Result<
     (
         canic_host::canister_build::CanisterBuildProfile,
@@ -332,7 +410,10 @@ fn resolve_plan_release_source(
     ),
     String,
 > {
-    let Some(release_build_id) = options.release_build_id else {
+    let release_build_id = options
+        .release_build_id
+        .or_else(|| recovery.map(|recovery| recovery.release_build_id));
+    let Some(release_build_id) = release_build_id else {
         return Ok((
             options
                 .profile
@@ -342,7 +423,19 @@ fn resolve_plan_release_source(
     };
     let finalized = load_finalized_release_build(&roots.icp_root, release_build_id)
         .map_err(|error| error.to_string())?;
-    if finalized.record.builder_version != env!("CARGO_PKG_VERSION") {
+    if let Some(recovery) = recovery {
+        if release_build_id != recovery.release_build_id {
+            return Err(
+                "requested release build differs from the interrupted Fleet install session"
+                    .to_string(),
+            );
+        }
+        require_supported_recovery_builder(
+            &finalized.record.builder_version,
+            env!("CARGO_PKG_VERSION"),
+        )
+        .map_err(|error| error.to_string())?;
+    } else if finalized.record.builder_version != env!("CARGO_PKG_VERSION") {
         return Err(format!(
             "finalized release build belongs to Canic {}, not current Canic {}",
             finalized.record.builder_version,
@@ -358,7 +451,10 @@ fn resolve_plan_release_source(
             finalized.record.build_profile.target_dir_name()
         ));
     }
-    Ok((finalized.record.build_profile, Some(release_build_id)))
+    let decision_release_build_id = recovery.map_or(Some(release_build_id), |recovery| {
+        recovery.decision_release_build_id
+    });
+    Ok((finalized.record.build_profile, decision_release_build_id))
 }
 
 fn build_plan(
@@ -474,6 +570,73 @@ mod tests {
         assert_eq!(
             aggregate_status(&blockers, &warnings, &assumptions),
             PlanStatus::Blocked
+        );
+    }
+
+    #[test]
+    fn retained_install_recovery_renders_exact_session_phase_and_remaining_debit() {
+        let mut report = report_with_status(PlanStatus::Blocked);
+        let release_build_id = canic_core::ids::ReleaseBuildId::from_nonce(
+            canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
+        );
+        report.install_recovery = Some(FreshFleetInstallRecoveryPlanV1 {
+            schema_version: 1,
+            classification:
+                canic_host::install_root::FreshFleetInstallRecoveryClassificationV1::PaidEffectRecovery,
+            fleet_install_operation_id: "ab".repeat(32),
+            release_build_id,
+            decision_release_build_id: None,
+            retained_builder_version: "0.109.1".to_string(),
+            fresh_fleet_plan_digest: "cd".repeat(32),
+            effects_started: true,
+            original_maximum_operator_debit: PlannedCanisterCreationFunding::Cycles {
+                cycles: 310_000_300_000_000,
+            },
+            remaining_operator_debit: PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+            fenced_operator_creations: 3,
+            total_operator_creations: 3,
+            uncertain_creation_outcomes: Vec::new(),
+            next_replay_phase: "fleet_subnet_root:subnet:store_bootstrap_verification".to_string(),
+        });
+
+        let text = render_text(&report);
+        assert!(text.contains("status: blocked"));
+        assert!(text.contains("no_effects_started: false"));
+        assert!(text.contains("classification: paid_effect_recovery"));
+        assert!(text.contains("decision_release_build: workspace"));
+        assert!(text.contains("remaining_operator_debit: 0 cycles"));
+        assert!(
+            text.contains(
+                "next_replay_phase: fleet_subnet_root:subnet:store_bootstrap_verification"
+            )
+        );
+        let json = serde_json::from_str::<serde_json::Value>(
+            &render_json(&report).expect("render recovery report JSON"),
+        )
+        .expect("valid recovery report JSON");
+        assert_eq!(
+            json["install_recovery"]["release_build_id"],
+            release_build_id.to_string()
+        );
+        assert_eq!(
+            json["install_recovery"]["remaining_operator_debit"]["cycles"],
+            "0"
+        );
+        assert!(
+            report_proposed_operations(&report.plan, report.install_recovery.as_ref()).is_empty(),
+            "paid recovery must not relabel fenced creations as fresh proposals"
+        );
+        let mut next_actions = Vec::new();
+        append_recovery_next_actions(&mut next_actions, report.install_recovery.as_ref());
+        assert!(
+            next_actions
+                .iter()
+                .any(|action| action.contains("retained-session resume"))
+        );
+        assert!(
+            next_actions
+                .iter()
+                .any(|action| action.contains("do not start a replacement"))
         );
     }
 
@@ -839,6 +1002,7 @@ mod tests {
             catalog_acquisition: None,
             catalog_failure: None,
             fresh_fleet_plan: None,
+            install_recovery: None,
             plan: plan_with_assumptions([]),
             blockers: Vec::new(),
             warnings: Vec::new(),

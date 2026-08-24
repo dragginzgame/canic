@@ -127,6 +127,16 @@ that transient acquisition provenance separately.
 `--out` writes JSON only and fails if the target file already exists or the
 parent directory does not exist.
 
+If an exact fresh-Fleet install session already contains effects, planning
+switches to read-only recovery inspection. It validates the retained session,
+original plan, release build and creation journals and emits an
+`install_recovery` section with the original maximum debit, remaining debit,
+fenced and uncertain creation outcomes, and the next replay phase. It does not
+advance the session or acquire its install lock. Review that report before a
+separately authorized resume; do not start a replacement fresh install. Once
+paid effects exist, the report suppresses generic fresh-install proposal labels
+and uses the retained next replay phase as its continuation guidance.
+
 ## Check Deployment Evidence
 
 When a Fleet exists, run a passive deployment check and save a stable evidence

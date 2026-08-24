@@ -17,10 +17,12 @@ mod tests;
 /// Exact Cycles Ledger fee charged for one `create_canister` call.
 pub const CYCLES_LEDGER_CREATE_CANISTER_FEE_CYCLES: u128 = 100_000_000;
 
+pub(crate) use authority::load_fresh_fleet_recovery_decision_authority;
 pub use authority::{
     FreshFleetDecisionAuthorityError, FreshFleetDecisionAuthorityRequest,
     load_fresh_fleet_decision_authority,
 };
+pub(crate) use decision::compile_fresh_fleet_deployment_plan_with_operator_debit;
 pub use decision::{
     FRESH_FLEET_DEPLOYMENT_PLAN_SCHEMA_VERSION, compile_fresh_fleet_deployment_plan,
     fresh_fleet_maximum_operator_debit,

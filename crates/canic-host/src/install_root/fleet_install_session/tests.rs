@@ -7,8 +7,7 @@
 use crate::{
     install_root::fleet_install_session::{
         FleetInstallSessionError, PlanFleetInstallSessionRequest, plan_fleet_install_session,
-        recover_fleet_install_session_authority, recover_fleet_install_session_release_build,
-        session_path,
+        recover_fleet_install_session_authority, session_path,
     },
     release_build::{finalize_release_build_from_manifest, plan_release_build},
     test_support::temp_dir,
@@ -36,7 +35,7 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
 
     let first = plan_fleet_install_session(request()).expect("plan session");
     let repeated = plan_fleet_install_session(request()).expect("recover session");
-    let recovered_release = recover_fleet_install_session_release_build(
+    let recovered_release = recover_fleet_install_session_authority(
         &root,
         network,
         &first.fleet_name,
@@ -47,7 +46,10 @@ fn exact_retry_recovers_one_immutable_fleet_and_operation_identity() {
 
     assert_eq!(repeated, first);
     assert_eq!(
-        recovered_release.record.release_build_id,
+        recovered_release
+            .finalized_release_build
+            .record
+            .release_build_id,
         first.release_build_id
     );
     assert_ne!(first.operation_id, [0; 32]);
@@ -92,7 +94,7 @@ fn retry_rejects_changed_app_or_release_authority() {
         Err(FleetInstallSessionError::ConflictingAuthority { .. })
     ));
     assert!(matches!(
-        recover_fleet_install_session_release_build(
+        recover_fleet_install_session_authority(
             &root,
             network,
             &"primary".parse().expect("Fleet name"),

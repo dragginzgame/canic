@@ -93,6 +93,25 @@ pub fn load_fresh_fleet_decision_authority(
     })
 }
 
+/// Recompile an interrupted session's decision using its exact retained host builder identity.
+///
+/// This changes only the volatile current package version inserted into a workspace release-source
+/// record. Config, Fleet input, source snapshot, Cargo lock, catalog, operator, and finalized
+/// release authority are still loaded and checked from their canonical owners.
+pub fn load_fresh_fleet_recovery_decision_authority(
+    request: FreshFleetDecisionAuthorityRequest<'_>,
+    retained_builder_version: &str,
+) -> Result<FreshFleetDecisionAuthorityV1, FreshFleetDecisionAuthorityError> {
+    let mut authority = load_fresh_fleet_decision_authority(request)?;
+    if let FreshFleetReleaseSourceV1::Workspace {
+        builder_version, ..
+    } = &mut authority.release_source
+    {
+        *builder_version = retained_builder_version.to_string();
+    }
+    Ok(authority)
+}
+
 fn expected_artifacts(
     config: &AppConfigSnapshot,
 ) -> Result<Vec<FreshFleetExpectedArtifactV1>, FreshFleetDecisionAuthorityError> {

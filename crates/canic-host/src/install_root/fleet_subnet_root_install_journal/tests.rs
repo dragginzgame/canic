@@ -15,14 +15,14 @@ use crate::{
         begin_registry_mirror_activation, begin_registry_sync, begin_root_creation,
         begin_root_install, begin_store_adoption, begin_store_bootstrap, begin_store_staging,
         begin_wasm_store_creation, begin_wasm_store_install, expected_root_authority,
-        expected_wasm_store_authority, plan_fleet_subnet_root_install,
-        record_component_registry_preparation_verified, record_component_registry_prepared,
-        record_infrastructure_verified, record_registry_join_verified, record_registry_joined,
-        record_registry_mirror_activated, record_registry_mirror_activation_verified,
-        record_registry_sync_verified, record_registry_synchronized, record_root_created,
-        record_root_installed, record_store_adopted, record_store_bootstrapped,
-        record_store_staged, record_store_verified, record_wasm_store_created,
-        record_wasm_store_installed,
+        expected_wasm_store_authority, inspect_fleet_subnet_root_install,
+        plan_fleet_subnet_root_install, record_component_registry_preparation_verified,
+        record_component_registry_prepared, record_infrastructure_verified,
+        record_registry_join_verified, record_registry_joined, record_registry_mirror_activated,
+        record_registry_mirror_activation_verified, record_registry_sync_verified,
+        record_registry_synchronized, record_root_created, record_root_installed,
+        record_store_adopted, record_store_bootstrapped, record_store_staged,
+        record_store_verified, record_wasm_store_created, record_wasm_store_installed,
     },
     release_set::{
         CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
@@ -133,6 +133,26 @@ fn exact_retry_recovers_in_flight_root_without_advancing_it() {
         begin_root_creation(&recovered, installation_controller).expect("recover creation intent");
     assert_eq!(repeated.journal, creating.journal);
     assert!(!repeated.advanced);
+}
+
+#[test]
+fn read_only_inspection_does_not_allocate_a_root_journal_or_lock() {
+    let root = temp_dir("fleet-subnet-root-install-journal-inspection");
+    let fixture = fixture(&root);
+
+    assert!(
+        inspect_fleet_subnet_root_install(request(&fixture))
+            .expect("inspect absent root journal")
+            .is_none()
+    );
+    assert!(!root.join(super::ROOT_INSTALL_DIRECTORY).exists());
+
+    let planned = plan(&fixture).expect("publish root journal");
+    let inspected = inspect_fleet_subnet_root_install(request(&fixture))
+        .expect("inspect exact root journal")
+        .expect("published root journal");
+    assert_eq!(inspected.journal, planned.journal);
+    assert!(!inspected.advanced);
 }
 
 #[test]
@@ -559,14 +579,18 @@ struct Fixture {
 fn plan(
     fixture: &Fixture,
 ) -> Result<super::ResolvedFleetSubnetRootInstall, super::FleetSubnetRootInstallJournalError> {
-    plan_fleet_subnet_root_install(PlanFleetSubnetRootInstallRequest {
+    plan_fleet_subnet_root_install(request(fixture))
+}
+
+fn request(fixture: &Fixture) -> PlanFleetSubnetRootInstallRequest<'_> {
+    PlanFleetSubnetRootInstallRequest {
         fleet_install_plan: &fixture.plan,
         infrastructure_manifest: &fixture.manifest,
         coordinator: Principal::from_slice(&[33]),
         install_operation_id: [11; 32],
         component_topology: fixture.topology.clone(),
         root_plan: &fixture.plan.plan.fleet_subnet_roots[0],
-    })
+    }
 }
 
 #[expect(

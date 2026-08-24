@@ -36,6 +36,7 @@ use canic_control_plane::{
 };
 use canic_core::{
     cdk::utils::hash::{hex_bytes, wasm_hash},
+    diagnostics::codes,
     dto::fleet_subnet_root::{
         FleetSubnetWasmStoreAdoptionRequest, FleetSubnetWasmStoreAdoptionResponse,
     },
@@ -52,10 +53,13 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use thiserror::Error as ThisError;
 
 const MAX_STORE_TRANSITIONS: usize = 10;
+const MAX_STATE_UNAVAILABLE_QUERY_ATTEMPTS: usize = 5;
+const STATE_UNAVAILABLE_QUERY_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[derive(CandidType)]
 enum RootCommandFragment {
@@ -521,14 +525,90 @@ fn query_root_operation(
     root: Principal,
     operation_id: [u8; 32],
 ) -> Result<RootOperationStatusResponse, Box<dyn std::error::Error>> {
-    let response: RootStatusResponseFragment = query_with_arg(
-        icp,
-        binding,
-        root,
-        protocol::CANIC_STATUS,
-        &RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
+    let request = RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id });
+    let response: RootStatusResponseFragment = retry_state_unavailable_query(
+        || query_with_arg(icp, binding, root, protocol::CANIC_STATUS, &request),
+        |error| error.is_rejected_with(codes::STATE_UNAVAILABLE),
+        || std::thread::sleep(STATE_UNAVAILABLE_QUERY_RETRY_DELAY),
     )?;
     match response {
         RootStatusResponseFragment::Operation(response) => Ok(*response),
+    }
+}
+
+fn retry_state_unavailable_query<T, E>(
+    mut query: impl FnMut() -> Result<T, E>,
+    is_state_unavailable: impl Fn(&E) -> bool,
+    mut wait: impl FnMut(),
+) -> Result<T, E> {
+    for attempt in 1..=MAX_STATE_UNAVAILABLE_QUERY_ATTEMPTS {
+        match query() {
+            Ok(value) => return Ok(value),
+            Err(error)
+                if attempt < MAX_STATE_UNAVAILABLE_QUERY_ATTEMPTS
+                    && is_state_unavailable(&error) =>
+            {
+                wait();
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("positive bounded attempt count always returns")
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn transient_state_unavailable_retries_with_one_fixed_bound() {
+        let mut attempts = 0;
+        let mut waits = 0;
+        let result = retry_state_unavailable_query(
+            || {
+                attempts += 1;
+                if attempts < 3 { Err("state") } else { Ok(17) }
+            },
+            |error| *error == "state",
+            || waits += 1,
+        );
+
+        assert_eq!(result, Ok(17));
+        assert_eq!(attempts, 3);
+        assert_eq!(waits, 2);
+    }
+
+    #[test]
+    fn transient_state_unavailable_stops_at_the_explicit_attempt_bound() {
+        let mut attempts = 0;
+        let mut waits = 0;
+        let result = retry_state_unavailable_query(
+            || {
+                attempts += 1;
+                Err::<(), _>("state")
+            },
+            |error| *error == "state",
+            || waits += 1,
+        );
+
+        assert_eq!(result, Err("state"));
+        assert_eq!(attempts, MAX_STATE_UNAVAILABLE_QUERY_ATTEMPTS);
+        assert_eq!(waits, MAX_STATE_UNAVAILABLE_QUERY_ATTEMPTS - 1);
+    }
+
+    #[test]
+    fn nontransient_verification_failure_is_not_retried() {
+        let mut attempts = 0;
+        let result = retry_state_unavailable_query(
+            || {
+                attempts += 1;
+                Err::<(), _>("other")
+            },
+            |error| *error == "state",
+            || panic!("nontransient failure must not wait"),
+        );
+
+        assert_eq!(result, Err("other"));
+        assert_eq!(attempts, 1);
     }
 }

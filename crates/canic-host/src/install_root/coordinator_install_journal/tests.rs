@@ -134,6 +134,33 @@ fn exact_retry_recovers_in_flight_without_advancing_again() {
     assert!(!repeated.advanced);
 }
 
+#[test]
+fn read_only_inspection_does_not_allocate_a_journal_or_lock() {
+    let root = temp_dir("coordinator-install-journal-inspection");
+    let plan = persisted_plan(&root);
+    let manifest = persisted_manifest(&root, plan.plan.release_build_id);
+    let request = || PlanFleetCoordinatorInstallRequest {
+        fleet_install_plan: &plan,
+        infrastructure_manifest: &manifest,
+        component_deployment_configuration: empty_deployment_configuration(),
+    };
+
+    assert!(
+        inspect_fleet_coordinator_install(request())
+            .expect("inspect absent journal")
+            .is_none()
+    );
+    assert!(!root.join(COORDINATOR_INSTALL_JOURNAL_FILE).exists());
+    assert!(!root.join(COORDINATOR_INSTALL_JOURNAL_LOCK_FILE).exists());
+
+    let planned = plan_fleet_coordinator_install(request()).expect("publish journal");
+    let inspected = inspect_fleet_coordinator_install(request())
+        .expect("inspect exact journal")
+        .expect("published journal");
+    assert_eq!(inspected.journal, planned.journal);
+    assert!(!inspected.advanced);
+}
+
 fn persisted_plan(root: &Path) -> PersistedFleetInstallPlan {
     let release_build_id =
         ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([6; 32]));

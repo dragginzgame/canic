@@ -133,8 +133,7 @@ pub async fn admin(command: PoolAdminCommand) -> Result<PoolAdminResponse, Inter
 
 /// Reconcile one bounded reset or automatic refill operation.
 pub async fn maintain_once() -> Result<PoolAdminResponse, InternalError> {
-    let ready_target = pool_config()?.minimum_size;
-    maintain_once_for_ready_target(ready_target).await
+    maintain_once_for_demand(ReadyDemand::ConfiguredMinimum).await
 }
 
 /// Advance one Root-owned maintenance pass toward an exact accepted-batch demand.
@@ -143,11 +142,16 @@ pub async fn maintain_ready_capacity_once(
 ) -> Result<PoolAdminResponse, InternalError> {
     let config = pool_config()?;
     require_ready_target(&config, ready_target)?;
-    maintain_once_for_ready_target(ready_target).await
+    maintain_once_for_demand(ReadyDemand::Exact(ready_target)).await
 }
 
-async fn maintain_once_for_ready_target(
-    ready_target: u32,
+enum ReadyDemand {
+    ConfiguredMinimum,
+    Exact(u32),
+}
+
+async fn maintain_once_for_demand(
+    ready_demand: ReadyDemand,
 ) -> Result<PoolAdminResponse, InternalError> {
     let attempt = match claim_maintenance()? {
         AsyncJobClaim::Acquired(attempt) => attempt,
@@ -157,7 +161,10 @@ async fn maintain_once_for_ready_target(
             });
         }
     };
-    let result = maintain_once_inner(ready_target).await;
+    let result = match ready_demand {
+        ReadyDemand::ConfiguredMinimum => maintain_once_inner().await,
+        ReadyDemand::Exact(ready_target) => maintain_once_inner_for_target(ready_target).await,
+    };
     let completion = maintenance_result_completion(&result);
     if !AsyncJobRecoveryOps::finish(attempt, completion)? {
         return Err(InternalError::invariant());
@@ -165,7 +172,14 @@ async fn maintain_once_for_ready_target(
     result
 }
 
-async fn maintain_once_inner(ready_target: u32) -> Result<PoolAdminResponse, InternalError> {
+async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
+    let ready_target = pool_config()?.minimum_size;
+    maintain_once_inner_for_target(ready_target).await
+}
+
+async fn maintain_once_inner_for_target(
+    ready_target: u32,
+) -> Result<PoolAdminResponse, InternalError> {
     let status = FleetActivationWorkflow::status()?;
     if !matches!(
         status.phase,
@@ -229,11 +243,7 @@ async fn run_maintenance_timer() -> TimerRunResult {
             );
         }
     };
-    let result = match pool_config() {
-        Ok(config) => maintain_once_inner(config.minimum_size).await,
-        Err(error) => Err(error),
-    };
-    finish_maintenance_timer(attempt, result)
+    finish_maintenance_timer(attempt, maintain_once_inner().await)
 }
 
 /// Dispatch one watchdog-owned takeover without awaiting fallible work.
@@ -347,11 +357,7 @@ fn cancel_maintenance_timer() -> Result<(), AuthorityTimerError> {
 
 fn spawn_maintenance(attempt: AsyncJobAttempt) {
     ic_cdk::futures::spawn(async move {
-        let result = match pool_config() {
-            Ok(config) => maintain_once_inner(config.minimum_size).await,
-            Err(error) => Err(error),
-        };
-        let _result = finish_maintenance_timer(attempt, result);
+        let _result = finish_maintenance_timer(attempt, maintain_once_inner().await);
     });
 }
 

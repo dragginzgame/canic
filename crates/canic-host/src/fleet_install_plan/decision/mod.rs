@@ -18,11 +18,22 @@ const PLAN_DIGEST_DOMAIN: &[u8] = b"canic-deployment-plan:v1\0";
 pub fn compile_fresh_fleet_deployment_plan(
     request: FreshFleetDeploymentPlanRequest,
 ) -> Result<FreshFleetDeploymentPlanV1, FreshFleetDeploymentPlanError> {
+    let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&request.preflight)?;
+    compile_fresh_fleet_deployment_plan_with_operator_debit(request, &maximum_operator_debit)
+}
+
+/// Compile an exact retained-session decision against only the debit the host can still issue.
+///
+/// The returned canonical plan and digest continue to bind the original maximum operator debit.
+pub fn compile_fresh_fleet_deployment_plan_with_operator_debit(
+    request: FreshFleetDeploymentPlanRequest,
+    required_operator_debit: &PlannedCanisterCreationFunding,
+) -> Result<FreshFleetDeploymentPlanV1, FreshFleetDeploymentPlanError> {
     validate_authority(&request.preflight, &request.authority)?;
     let counts = compile_counts(&request.preflight)?;
     let funding_requirements = compile_funding_requirements(&request.preflight, counts)?;
     let maximum_operator_debit = maximum_operator_debit(&funding_requirements)?;
-    validate_operator_balance(&request.authority.operator.balance, &maximum_operator_debit)?;
+    validate_operator_balance(&request.authority.operator.balance, required_operator_debit)?;
     let plan_digest = plan_digest(
         &request.preflight,
         &request.authority,

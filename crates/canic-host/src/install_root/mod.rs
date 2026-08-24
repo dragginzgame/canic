@@ -42,6 +42,7 @@ mod fleet_catalog_publication;
 mod fleet_component_provisioning_install;
 mod fleet_component_provisioning_journal;
 mod fleet_component_provisioning_plan;
+mod fleet_install_recovery;
 mod fleet_install_session;
 mod fleet_registry_activation;
 mod fleet_registry_activation_journal;
@@ -80,6 +81,11 @@ pub use config_selection::{
 use coordinator_install::install_and_verify_fleet_coordinator;
 use fleet_component_provisioning_install::{
     InstallFleetComponentsRequest, install_fleet_components_and_publish_catalog,
+};
+pub use fleet_install_recovery::{
+    FreshFleetInstallRecoveryClassificationV1, FreshFleetInstallRecoveryError,
+    FreshFleetInstallRecoveryPlanV1, InspectFreshFleetInstallRecoveryRequest,
+    inspect_fresh_fleet_install_recovery, require_supported_recovery_builder,
 };
 use fleet_registry_activation::{ActivateFleetRegistryRequest, activate_and_verify_fleet_registry};
 use fleet_registry_activation_journal::load_verified_installed_registry;
@@ -270,6 +276,7 @@ struct PreparedFreshFleetDecision {
     fleet_name: String,
     input: ResolvedFleetInstallInput,
     plan: FreshFleetDeploymentPlanV1,
+    recovery: Option<FreshFleetInstallRecoveryPlanV1>,
 }
 
 #[derive(Clone, Copy)]
@@ -305,6 +312,7 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
         fleet_name,
         input: resolved_fleet_install_input,
         plan: fresh_fleet_plan,
+        recovery: fresh_fleet_recovery,
     } = fresh_fleet;
     options.admitted_fresh_fleet_plan_digest = Some(fresh_fleet_plan.plan_digest.clone());
 
@@ -353,7 +361,11 @@ pub fn install_root(mut options: InstallRootOptions) -> Result<(), InstallRootEr
     timings.emit_manifest = emitted_manifest.duration;
     let finalized_release_build =
         require_finalized_release_build(emitted_manifest.finalized_release_build)?;
-    recheck_fresh_fleet_operator_funding(&icp_context, &fresh_fleet_plan)?;
+    recheck_fresh_fleet_operator_funding(
+        &icp_context,
+        &fresh_fleet_plan,
+        fresh_fleet_recovery.as_ref(),
+    )?;
     let planned_install = plan_current_fleet_install(CurrentFleetInstallPlanRequest {
         icp_root: &icp_root,
         environment,
@@ -408,6 +420,9 @@ fn prepare_and_admit_current_fresh_fleet(
         FleetCatalogAcquisition::RefreshMissingOrInvalid,
     )?;
     print_fresh_fleet_decision(&announced_fresh_fleet.plan);
+    if let Some(recovery) = announced_fresh_fleet.recovery.as_ref() {
+        print_fresh_fleet_recovery(recovery);
+    }
     let fresh_fleet = prepare_current_fresh_fleet_preflight(
         workspace_root,
         icp_root,
@@ -442,80 +457,112 @@ fn prepare_current_fresh_fleet_preflight(
         catalog_acquisition,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
-    let (build_profile, release_build_id, recovered_plan_digest) =
-        current_install_preflight_release_source(
-            icp_root,
-            canonical_network_id,
-            &fleet_name,
-            &app_id,
-            options,
-        )
-        .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
+    let release_source = current_install_preflight_release_source(
+        icp_root,
+        canonical_network_id,
+        &fleet_name,
+        &app_id,
+        config.model(),
+        options,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
     let preflight = compile_current_fresh_fleet_preflight(
         &config,
         &app_id,
         &fleet_name,
         &input,
-        build_profile,
-        release_build_id,
+        release_source.build_profile,
+        release_source.release_build_id,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Planning))?;
     let maximum_operator_debit = fresh_fleet_maximum_operator_debit(&preflight)
         .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    let required_operator_debit = release_source
+        .recovery
+        .as_ref()
+        .map_or(&maximum_operator_debit, |recovery| {
+            &recovery.remaining_operator_debit
+        });
     let operator = observe_fresh_fleet_operator_funding(
         icp_context.cli(),
         &input.operator_principal,
-        &maximum_operator_debit,
+        required_operator_debit,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
-    let authority = load_fresh_fleet_decision_authority(FreshFleetDecisionAuthorityRequest {
+    let authority_request = FreshFleetDecisionAuthorityRequest {
         workspace_root,
         icp_root,
         config: &config,
         requested_environment: &options.environment,
         canonical_network_id,
-        release_build_id,
+        release_build_id: release_source.release_build_id,
         fleet_input: &input,
         operator: &operator,
-    })
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
-    let plan = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+    };
+    let authority = match release_source.recovery.as_ref() {
+        Some(recovery) => recovery
+            .load_decision_authority(authority_request)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
+        None => load_fresh_fleet_decision_authority(authority_request)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
+    };
+    let decision_request = FreshFleetDeploymentPlanRequest {
         preflight,
         authority,
-    })
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    };
+    let plan = match release_source.recovery.as_ref() {
+        Some(recovery) => recovery
+            .compile_decision(decision_request)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
+        None => compile_fresh_fleet_deployment_plan(decision_request)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
+    };
     require_fresh_fleet_plan_digest(
         options.expected_fresh_fleet_plan_digest.as_deref(),
         &plan.plan_digest,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
-    require_fresh_fleet_plan_digest(recovered_plan_digest.as_deref(), &plan.plan_digest)
-        .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    require_fresh_fleet_plan_digest(
+        release_source.recovered_plan_digest.as_deref(),
+        &plan.plan_digest,
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
     Ok(PreparedFreshFleetDecision {
         app_id,
         fleet_name,
         input,
         plan,
+        recovery: release_source.recovery,
     })
 }
 
 fn recheck_fresh_fleet_operator_funding(
     icp_context: &InstallIcpContext,
     plan: &FreshFleetDeploymentPlanV1,
+    recovery: Option<&FreshFleetInstallRecoveryPlanV1>,
 ) -> Result<(), InstallRootError> {
+    let required_operator_debit = recovery.map_or(&plan.maximum_operator_debit, |recovery| {
+        &recovery.remaining_operator_debit
+    });
     let operator = observe_fresh_fleet_operator_funding(
         icp_context.cli(),
         &plan.authority.operator.principal,
-        &plan.maximum_operator_debit,
+        required_operator_debit,
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?;
     let mut authority = plan.authority.clone();
     authority.operator = operator;
-    let rechecked = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+    let decision_request = FreshFleetDeploymentPlanRequest {
         preflight: plan.preflight.clone(),
         authority,
-    })
-    .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?;
+    };
+    let rechecked = match recovery {
+        Some(recovery) => recovery
+            .compile_decision(decision_request)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
+        None => compile_fresh_fleet_deployment_plan(decision_request)
+            .map_err(|source| InstallRootError::new(InstallRootPhase::Planning, source))?,
+    };
     require_recompiled_fresh_fleet_plan(plan, &rechecked)
 }
 
@@ -768,17 +815,19 @@ fn compile_current_fresh_fleet_preflight(
     .map_err(Into::into)
 }
 
-type CurrentInstallPreflightReleaseSource = (
-    crate::canister_build::CanisterBuildProfile,
-    Option<canic_core::ids::ReleaseBuildId>,
-    Option<String>,
-);
+struct CurrentInstallPreflightReleaseSource {
+    build_profile: crate::canister_build::CanisterBuildProfile,
+    release_build_id: Option<canic_core::ids::ReleaseBuildId>,
+    recovered_plan_digest: Option<String>,
+    recovery: Option<FreshFleetInstallRecoveryPlanV1>,
+}
 
 fn current_install_preflight_release_source(
     icp_root: &Path,
     canonical_network_id: canic_core::ids::CanonicalNetworkId,
     fleet_name: &str,
     app_id: &str,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
     options: &InstallRootOptions,
 ) -> Result<CurrentInstallPreflightReleaseSource, Box<dyn std::error::Error>> {
     let fleet_name = fleet_name.parse()?;
@@ -789,7 +838,7 @@ fn current_install_preflight_release_source(
         &fleet_name,
         &app,
     )? {
-        let finalized = recovered.finalized_release_build;
+        let finalized = &recovered.finalized_release_build;
         if options
             .release_build_id
             .is_some_and(|requested| requested != finalized.record.release_build_id)
@@ -798,27 +847,35 @@ fn current_install_preflight_release_source(
                 "requested release build differs from the interrupted Fleet install session".into(),
             );
         }
-        require_current_release_builder(&finalized.record.builder_version)?;
+        require_recovery_release_builder(&finalized.record.builder_version)?;
         require_requested_build_profile(options.build_profile, finalized.record.build_profile)?;
-        return Ok((
-            finalized.record.build_profile,
-            recovered.decision_release_build_id,
-            Some(recovered.fresh_fleet_plan_digest),
-        ));
+        let recovery = fleet_install_recovery::compile_recovery_plan(icp_root, config, &recovered)?;
+        return Ok(CurrentInstallPreflightReleaseSource {
+            build_profile: finalized.record.build_profile,
+            release_build_id: recovered.decision_release_build_id,
+            recovered_plan_digest: Some(recovered.fresh_fleet_plan_digest),
+            recovery: Some(recovery),
+        });
     }
     if let Some(release_build_id) = options.release_build_id {
         let finalized = load_finalized_release_build(icp_root, release_build_id)?;
         require_current_release_builder(&finalized.record.builder_version)?;
         require_requested_build_profile(options.build_profile, finalized.record.build_profile)?;
-        return Ok((finalized.record.build_profile, Some(release_build_id), None));
+        return Ok(CurrentInstallPreflightReleaseSource {
+            build_profile: finalized.record.build_profile,
+            release_build_id: Some(release_build_id),
+            recovered_plan_digest: None,
+            recovery: None,
+        });
     }
-    Ok((
-        options
+    Ok(CurrentInstallPreflightReleaseSource {
+        build_profile: options
             .build_profile
             .unwrap_or(crate::canister_build::CanisterBuildProfile::Release),
-        None,
-        None,
-    ))
+        release_build_id: None,
+        recovered_plan_digest: None,
+        recovery: None,
+    })
 }
 
 fn persist_current_fleet_install_plan(
@@ -910,6 +967,33 @@ fn print_fresh_fleet_decision(plan: &FreshFleetDeploymentPlanV1) {
         ),
     );
     print_fresh_fleet_placement_warnings(plan);
+    println!();
+}
+
+fn print_fresh_fleet_recovery(recovery: &FreshFleetInstallRecoveryPlanV1) {
+    let remaining = match &recovery.remaining_operator_debit {
+        PlannedCanisterCreationFunding::Cycles { cycles } => format!("{cycles} cycles"),
+        PlannedCanisterCreationFunding::Icp { e8s } => format!("{e8s} ICP e8s"),
+    };
+    TerminalStyle::detected().print_section(
+        "Fresh-Fleet recovery",
+        &format!(
+            "session {} retains release build {} (Canic {}), resumes at {}, and may issue at most {remaining} remaining operator debit",
+            recovery.fleet_install_operation_id,
+            recovery.release_build_id,
+            recovery.retained_builder_version,
+            recovery.next_replay_phase,
+        ),
+    );
+    if recovery.has_uncertain_creation_outcome() {
+        TerminalStyle::detected().print_section(
+            "Fenced creation observation",
+            &format!(
+                "observe without reissuing: {}",
+                recovery.uncertain_creation_outcomes.join(", ")
+            ),
+        );
+    }
     println!();
 }
 
@@ -1080,12 +1164,13 @@ fn current_install_release_build(
     let canonical_network_id = resolve_canonical_network_id_from_root(icp_root, environment)?;
     let fleet_name = fleet_name.parse()?;
     let app = app_id.into();
-    if let Some(finalized) = fleet_install_session::recover_fleet_install_session_release_build(
+    if let Some(recovered) = fleet_install_session::recover_fleet_install_session_authority(
         icp_root,
         canonical_network_id,
         &fleet_name,
         &app,
     )? {
+        let finalized = recovered.finalized_release_build;
         if requested_release_build_id
             .is_some_and(|requested| requested != finalized.record.release_build_id)
         {
@@ -1093,7 +1178,7 @@ fn current_install_release_build(
                 "requested release build differs from the interrupted Fleet install session".into(),
             );
         }
-        require_current_release_builder(&finalized.record.builder_version)?;
+        require_recovery_release_builder(&finalized.record.builder_version)?;
         require_requested_build_profile(requested_build_profile, finalized.record.build_profile)?;
         return Ok(PlannedReleaseBuild {
             record: finalized.record,
@@ -1127,6 +1212,10 @@ fn require_current_release_builder(recorded: &str) -> Result<(), Box<dyn std::er
         .into());
     }
     Ok(())
+}
+
+fn require_recovery_release_builder(recorded: &str) -> Result<(), Box<dyn std::error::Error>> {
+    require_supported_recovery_builder(recorded, env!("CARGO_PKG_VERSION")).map_err(Into::into)
 }
 
 fn require_requested_build_profile(

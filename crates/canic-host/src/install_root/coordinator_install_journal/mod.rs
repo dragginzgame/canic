@@ -235,6 +235,23 @@ pub(super) fn plan_fleet_coordinator_install(
     Ok(resolved(durable, path, true))
 }
 
+/// Read and validate an existing Coordinator journal against its exact planned authority.
+///
+/// Unlike `plan_fleet_coordinator_install`, this inspection never creates a journal or lock file.
+pub(super) fn inspect_fleet_coordinator_install(
+    request: PlanFleetCoordinatorInstallRequest<'_>,
+) -> Result<Option<ResolvedFleetCoordinatorInstall>, FleetCoordinatorInstallJournalError> {
+    let path = coordinator_install_journal_path(&request.fleet_install_plan.path);
+    let Some(observed) = load_optional_journal(&path)? else {
+        return Ok(None);
+    };
+    let expected = planned_journal(&request)?;
+    if !same_immutable_authority(&observed, &expected) {
+        return Err(FleetCoordinatorInstallJournalError::ConflictingAuthority { path });
+    }
+    Ok(Some(resolved(observed, path, false)))
+}
+
 /// Record durable intent immediately before the one Coordinator creation effect.
 pub(super) fn begin_coordinator_creation(
     current: &ResolvedFleetCoordinatorInstall,
