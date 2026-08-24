@@ -1,5 +1,4 @@
 path	classification	current_authority	closeout
-apps/saltz/burner/src/lib.rs	independent application custody	Standalone waveform owner holds its native once registration	Retained as separately owned direct-provider evidence
 apps/test/test/src/lib.rs	independent application custody	Executable application fixture observes the shared inventory	Retained without Canic scheduling authority
 canisters/test/canic_icydb_lifecycle_probe/src/lib.rs	independent application custody	Published IcyDB participant reconstructs its own provider row	Retained as exact B7 composition evidence
 canisters/test/delegation_root_stub/src/lib.rs	independent application custody	Executable Root participant observes exact Canic provider rows	Retained without Canic scheduling authority

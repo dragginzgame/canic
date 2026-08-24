@@ -254,7 +254,6 @@ while IFS= read -r method; do
             --glob '*.toml' \
             --glob '!target/**' \
             --glob '!.icp/**' \
-            --glob '!apps/saltz/**' \
             -- "$method" "$REPO_ROOT" || true
         if [[ -n "$constant" ]]; then
             rg -n -w \
@@ -263,7 +262,6 @@ while IFS= read -r method; do
                 --glob '*.toml' \
                 --glob '!target/**' \
                 --glob '!.icp/**' \
-                --glob '!apps/saltz/**' \
                 -- "$constant" "$REPO_ROOT" || true
         fi
     } | awk -F ':' -v root="$REPO_ROOT/" '

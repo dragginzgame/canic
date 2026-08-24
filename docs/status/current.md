@@ -14,6 +14,21 @@ Historical handoffs: [through 2026-06-30](archive/2026-06-30-precompact.md),
 
 ## Current Release
 
+- The open 0.109.3 draft corrects `CANIC-031`: an exact retained 0.109.1
+  install may reuse its immutable finalized artifacts under the explicitly
+  supported successor host without applying that host's fresh-build role-
+  version gate. The read-only path still validates the exact builder,
+  topology, package identities, manifests and raw/gzip bytes. The same draft
+  hard-cuts the repository-owned Playground and Saltz application estates,
+  including their canister crates, deployment inputs, ICP environments,
+  active design/calibration material and test inventories. Canic retains
+  framework fixtures and generic audit probes only;
+  the exact historical calibration and terminal disposition for external
+  canister `w47na-gaaaa-aaaad-qmclq-cai` remains archived in the
+  [dated audit report](../audits/reports/2026-08/2026-08-24/saltz-mainnet-calibration.md).
+  Its approximately `2.590 Pcycles` remain externally funded, and this
+  repository removal authorizes no reinstall, deletion, controller mutation,
+  funding or other remote effect.
 - The root `Cargo.toml` is the sole live workspace package-version authority;
   this handoff deliberately does not mirror its value. Immutable local and
   remote tag refs own publication truth, and tag presence determines whether a
@@ -554,7 +569,7 @@ go-live support. Published `v0.109.1` retains the intended corrections and the
 downstream graph, complete CI and exact managed/standalone Wasm qualification
 pass, but post-publication path review found the revision-4 predicate
 unreachable from join/synchronization and the host poll bound vulnerable to a
-tight loop. The open 0.109.2 draft corrects both paths and proves zero-to-five
+tight loop. Published `v0.109.2` corrects both paths and proves zero-to-five
 pool creation. A later interrupted 0.109.1 fresh install exposed `CANIC-029`:
 recovery recognized retained paid effects but still demanded the original
 310,000,300,000-cycle operator maximum before replaying their journals. The
@@ -565,9 +580,22 @@ admits one exact 0.109.1-to-0.109.2 host recovery while retaining the installed
 0.109.1 artifacts. Its first complete release-gate attempt exposed two source-
 inventory omissions rather than a runtime failure: the canonical background
 pool-maintenance expression and the deliberate host wait inventory. Both are
-corrected and their 16-test timer guard plus 17 pool tests pass; a clean full
-rerun remains pending. B8 remains open for its release, exact recovery-plan
-review and separately authorized downstream resume/deployed-state proof. B9
+corrected; the complete maintainer gate and publication passed. Exact downstream
+0.109.2 CI also passes. The later current source correctly rejects the retained
+decision, while a disposable exact deployment-source checkout reproduces the
+original digest and a blocker-free recovery plan with three fenced creations,
+zero remaining debit and Store-bootstrap verification next. The authorized
+resume then exposed `CANIC-031` before any IC update: the host accepted the
+retained 0.109.1 builder but routed its consumer graph through ordinary
+0.109.2 fresh-build role-version validation before finalized-artifact reuse.
+The open 0.109.3 correction makes finalized recovery a distinct read-only
+source. Its exact 0.109.1 consumer/session fixture crosses retained manifest
+admission into exact session-journal replay without Cargo or artifact mutation
+and rejects package, topology, artifact-byte and manifest-digest drift; focused
+host tests and warning-denied Clippy pass. B8 remains open for the maintainer-
+owned validation/publication of
+that correction, the separately authorized downstream resume and deployed-
+state/admission proof. B9
 complexity remediation and B10 published managed-App test support then block
 minor closeout and 0.110.
 
@@ -589,7 +617,7 @@ Canic blockers accepted into B8. Published `v0.109.0` added their first
 corrections, but later path review showed `CANIC-109-GOLIVE-001` still allowed
 the host to spend its observation bound before the scheduled retry and
 `CANIC-109-GOLIVE-002` remained unreachable behind exact join/synchronization
-gates. The open 0.109.2 draft waits after unchanged status, drives the sole
+gates. Published `v0.109.2` waits after unchanged status, drives the sole
 Root pool journal to the exact accepted-batch demand and uses one successor
 authority at all three gates. Its IC-profile PocketIC journey starts with zero
 imports, performs five Cycles-Ledger creation requests and provisions all five
@@ -623,9 +651,11 @@ created and funded the exact Coordinator, Root and Store, then stopped at
 Store-bootstrap verification with its journals intact, before App or frontend
 effects. The read-only 0.109.2 recovery inspector reproduces three fenced
 operator creations, zero remaining debit and the exact verification phase.
-Do not rerun fresh staging: after publishing 0.109.2, review its retained-
-session recovery plan and separately authorize the resume. `CANIC-028`'s
-impossible named-environment build advice is assigned to pure B9 cleanup. B10
+Do not rerun fresh staging: the exact-source 0.109.2 recovery plan is reviewed,
+but the open `CANIC-031` correction must be validated and published before its
+resume is authorized again. `CANIC-028`'s impossible
+named-environment build advice and the generic retained-decision source-drift
+remediation are assigned to pure B9 cleanup. B10
 then owns the separate published managed-App qualification harness. Stateful
 release adoption remains owned by 0.111, application retirement by 0.110 B2,
 generic observatory work by 0.112, and saved-plan consumption remains
@@ -756,8 +786,8 @@ CI ownership are guarded. Targeted actionlint, ShellCheck, release/current-
 document guards, release-flow tests and plan-only test-lane checks pass; the
 complete suite has not been rerun.
 
-Focused `ic-testkit` adoption checks compile the internal harness,
-integration package and Saltz test target under the locked dependency graph.
+Focused `ic-testkit` adoption checks compile the internal harness and
+integration package under the locked dependency graph.
 The payload-limit PocketIC suite passes with structured standalone-pool
 outcomes and exact cache paths. A warm three-spec lifecycle acquisition reused
 one compatible input snapshot: only the first spec resolved Cargo inputs, the
@@ -803,7 +833,7 @@ payload-limit rerun compiled and completed its 34.98-second cold Wasm build,
 but a concurrently owned PocketIC process prevented a new server from binding;
 the run was stopped without claiming runtime evidence. After advancing to
 0.8.6, all three direct consumers pass all-target compilation in 36.03 seconds;
-warning-denied Clippy passes for the complete internal/Saltz targets and the
+warning-denied Clippy passes for the complete internal targets and the
 three directly affected Canic integration targets, and all three artifact
 tests pass. The wider Canic integration Clippy command reaches a separately
 owned 0.104 timer test that is 103 lines against its 100-line lint limit, which
@@ -1033,115 +1063,6 @@ catalog parity, host package-contract and generated Store-wrapper tests,
 facade manifest/documentation guards and CLI medic role-contract fixtures.
 The complete suite was not rerun.
 
-The standalone cycle-burn waveform idea completed its bounded B0b pulse and
-B0c plateau mainnet calibrations on 2026-08-16. Canister
-`w47na-gaaaa-aaaad-qmclq-cai` burned exactly `4 Tcycles` on the frozen public
-13-node `verified_application` Subnet and retained more than `1 Tcycle`.
-Direct-burn visibility passed, but the public Subnet peak rose only
-approximately `0.883 Bcycles/second` and stayed elevated across the observed
-tail, rejecting the assumed independent approximately 100-second buckets by
-approximately a `45.3x` flattening factor. The later exact `3.6 Tcycle`
-host-driven plateau proved that repeated bounded input accumulates cleanly,
-raising the observed series approximately `0.990 Bcycles/second`. The
-maintainer then explicitly promoted a standalone, non-Fleet executor and inert
-mainnet install. The complete decay kernel remains open, so its embedded
-`4,531`-second rectangular controller is a dated bounded proposal rather than
-a Dashboard-fidelity claim. Exact calibration evidence is retained in the
-[B0b calibration report](../audits/working/saltz-b0b-calibration/mainnet-calibration.md).
-
-The integer compiler embeds 45 pre-roll plus 864 waveform amounts at exact
-100-second deadlines. After two bounded 1× attempts proved timer/receipt
-execution but remained too close to public noise, the maintainer authorized an
-exact 10× controlled-signal trial. Authorization digest
-`e5977055cf691d29353c6649bd464a821475efd66432ff56ea93d76de419ff8d`
-can burn at most `958,052,944,723,000 cycles`, but the staged trial binds only
-the first 42 pulses and requires `54,924,680,000,000 cycles` at `Arm`. Exact
-schedule/unit checks, warning-denied Clippy, strict extracted Candid and
-targeted PocketIC funding, authority, 42-pulse exhaustion, timer-burn and abort
-evidence pass. Release Wasm
-`2388f3f4e38274999682da7a3525d6fbc41724c073c61d16b7c9b253ebecbfc9`
-is installed on `w47na-gaaaa-aaaad-qmclq-cai`. Converting exactly
-`49.1 Tcycles` cost `30.15060661 ICP`; the exact top-up produced
-`55,080,036,485,836 cycles` before Arm. The 10× run began at
-`2026-08-17T00:15:00+02:00`. Sixteen exact receipts burned
-`20,504,640,000,000 cycles` with no terminal reason. The owning Subnet's exact
-600-second public series rose from `0.389` and `0.508` before the controlled
-rise to `1.496`, `3.378` and `5.157 Bcycles/second`. The successive controlled
-increases of approximately `0.988`, `1.881` and `1.779 Bcycles/second` passed
-the multi-bin proportional-response continuation gate.
-
-The exact remaining top-up was `904,073,274,118,831 cycles`. Its discrete
-mint deposited `904,073,274,124,352 cycles` and cost `556.42132824 ICP`; the
-canister received only the exact requested top-up. After receipt 17 it held
-`937,366,738,334,627 cycles` against `936,266,764,723,000` remaining
-intentional cycles, preserving `1,099,973,611,627 cycles` for reserve and
-execution. The controller identity retained `4,635.83518221 ICP`.
-
-At `2026-08-17T00:57+02:00`, the maintainer clarified that the intended canvas
-was the global Dashboard homepage rather than the owning Subnet graph. Its
-approximately `45.9 Bcycles/second` global value exposes a material scope
-mismatch: the installed controller was calibrated only against the Subnet's
-background and kernel. The standing loss-of-confidence rule therefore caused
-an immediate controller Abort before chart start. Terminal status is
-`Aborted` / `ControllerAbort`, with exactly 26 receipts,
-`33,320,040,000,000 cycles` burned and `925,797,679,907,302 cycles` remaining.
-No waveform step executed and no later intentional burn is authorized.
-
-Read-only B0e global qualification is active. The exact seven-day pre-run
-global series contains 1,009 ten-minute samples with `37.576 Bcycles/second`
-median, `37.983` mean, `53.915` maximum and `4.255 Bcycles/second` 95th-
-percentile absolute adjacent change. Replaying a provisional
-`100..=150 Bcycles/second` trace over every historical day yields strong
-correlations. The 26-pulse controlled rise fits a `4,200.842`-second
-display-gain denominator with `R² = 0.999475`. The observed tail begins at
-timestamp `1786922200`, one 100-second sample after the first pulse reaches
-3,600 seconds of age. Its successive approximately `0.3 Bcycles/second` losses
-separate the measured gain from 3,600-second visible support. Ten-second onset
-evidence shows attribution beginning about 10 seconds after execution and
-becoming complete by about 60 seconds; the controller conservatively leads the
-label by one 100-second control step. Remaining pulse expirations are still the
-acceptance gate.
-
-The local candidate hard-cuts the obsolete 10× scale into a direct global
-contract: `30 Bcycles/second` conservative background credit,
-`100 Bcycles/second` floor, `50 Bcycles/second` relief, a `4,201`-second gain
-denominator, `3,600`-second support, `100`-second control-grid phase lead and
-`500 Bcycles/second` hard rate ceiling. Its exact integer plan is 35 pre-roll
-plus 864 waveform pulses totaling `9,481,510,455,119,000 cycles` with digest
-`dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9`.
-Simulator/unit checks, warning-denied Clippy, Wasm-target compilation, strict
-Candid equivalence and targeted PocketIC funding, exhaustion, exact first
-waveform receipt, complete 899-pulse execution and Abort evidence pass. This
-code remains inert local evidence; it is not reinstall, funding or Arm
-authority.
-
-`Arm` is now an immutable staged authority: it can burn only the 35-pulse
-pre-roll. Surplus balance cannot enter the drawing. The first waveform pulse
-requires a separate exact-digest `AuthorizeWaveform` command whose current
-balance covers the remaining pre-roll, first waveform pulse and retained
-reserve. Every later pulse separately preserves that reserve. Focused PocketIC
-proves an absent or minimally underfunded continuation rejects, a partially
-funded continuation stops before its first unaffordable pulse, Abort prevents
-later pulses and a fully funded continuation completes all 899 receipts.
-
-The separately authorized global attempt used that exact
-`dc1cc6ba53470e0f4abf8045224c8a9bb92516b86e458e9238d4428def3e13d9`
-plan. It began pre-roll at `2026-08-17T02:30:00+02:00`, began the chart at
-`03:30`, reached receipt 535 and burned exactly
-`5,859,496,546,135,400 cycles`. At `16:36:50`, an unrelated burn on Subnet
-`brlsh-zidhj-3yy3e-6vqbz-7xnih-xeq2l-as5oc-g32c4-i5pdn-2wwof-oae`
-added approximately `180 Bcycles/second` to the global canvas while the owning
-Subnet remained on the expected trace. The maintainer classified the 24-hour
-image as spoiled and explicitly ordered Abort. Independent controller status
-confirmed terminal `Aborted` / `ControllerAbort`, 535 receipts and no later
-intentional burn authority.
-
-**Preserved mainnet asset:** canister `w47na-gaaaa-aaaad-qmclq-cai` retained
-`2,589,936,553,122,558 cycles` at final verification, approximately
-`2.590 Pcycles`. The controller identity retained only `0.00010000 ICP`.
-Those cycles cannot be converted back into ICP, but they remain useful funding
-for later authorized canister work. Do not reinstall, delete or otherwise
-dispose of this canister without an explicit plan for that balance.
 
 ## Next Action
 
@@ -1159,31 +1080,26 @@ acceptance are complete on `ic-query 0.42.0` stable snapshot authority. The
 contains the B3-B9 runtime implementation, and published `v0.108.2` records the
 accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
-Published `v0.109.1` completed its maintainer-owned release flow, but the
-0.109.2 correction is now the open B8 candidate. Its targeted native, host and
-PocketIC checks pass, and the two inventory failures from its first complete
-gate attempt are corrected with targeted evidence. `CANIC-029` remaining-debit,
-bounded-verification and exact retained-session host recovery are implemented
-with targeted evidence. Continue B8 with a clean maintainer-owned complete
-validation/version/publication flow, then review the exact 0.109.1 recovery
-plan and separately authorize its resume. Only after deployed-state/admission
-evidence closes B8, continue with B9 under the binding post-implementation
-complexity audit: freeze the canonical evidence, simplify the accepted gravity
-wells and active authority, preserve bounded validation, retriage every 0.110
-batch and issue an immutable superseding verdict. B10 then owns the separately
-published managed-App qualification harness. Do not begin 0.110 unless those
-gates pass, the maintainer accepts 0.109 closeout and then explicitly promotes
-the revised B1.
+Published `v0.109.2` completes its maintainer-owned correction release and
+contains the zero-to-five pool/revision-4 recovery plus the funding/journal
+part of `CANIC-029`. The exact-source recovery plan is reviewed, but its first
+authorized resume exposed `CANIC-031` before any IC update. The open 0.109.3
+draft makes retained finalized-artifact validation read-only and distinct from
+fresh current-host builds; it also removes the repository-owned application
+estates described above while archiving the funded external Saltz canister's
+exact disposition. Continue B8 with maintainer-owned validation and publication
+of 0.109.3. Then reproduce the exact recovery plan and separately authorize its
+resume. Only after deployed-state/admission evidence closes B8,
+continue with B9 under the binding post-implementation complexity audit:
+freeze the canonical evidence, simplify the accepted gravity wells and active
+authority, preserve bounded validation, retriage every 0.110 batch and issue an
+immutable superseding verdict. B10 then owns the separately published managed-
+App qualification harness. Do not begin 0.110 unless those gates pass, the
+maintainer accepts 0.109 closeout and then explicitly promotes the revised B1.
 Do not add a production pool contract or run any remote qualification effect.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or
 retired 991 rows.
 
-For the standalone waveform idea, retain the terminal canister and its
-approximately `2.590 Pcycles` without further effects. The completed attempt
-proved the controlled trace was visible but also proved the global public
-canvas can be spoiled by unrelated Subnet burn. Any transfer, reinstall,
-deletion, mint, top-up or new Arm requires an explicit disposition or run plan
-and separate mainnet authorization; passing local checks cannot supply it.
 
 Design roots retain authority; supporting evidence lives under `docs/audits/`.

@@ -125,6 +125,9 @@ pub enum ReleaseBuildPlanError {
     )]
     ConflictingFinalization { release_build_id: ReleaseBuildId },
 
+    #[error("finalized release-build manifest digest differs for release build {release_build_id}")]
+    ManifestDigestMismatch { release_build_id: ReleaseBuildId },
+
     #[error("cryptographic random source returned only {actual} of 32 required bytes")]
     ShortRandomRead { actual: usize },
 
@@ -180,6 +183,27 @@ pub fn load_finalized_release_build(
     finalized_record(path, record)
 }
 
+/// Validate one finalized build against its immutable regular no-follow manifest bytes.
+pub fn validate_finalized_release_build_manifest(
+    root: &Path,
+    release_build_id: ReleaseBuildId,
+    manifest_path: &Path,
+) -> Result<FinalizedReleaseBuild, ReleaseBuildPlanError> {
+    let finalized = load_finalized_release_build(root, release_build_id)?;
+    let ReleaseBuildPlanState::Finalized {
+        release_set_manifest_digest,
+    } = finalized.record.state
+    else {
+        unreachable!("finalized loader admits only finalized records");
+    };
+    let manifest_bytes = read_plan_bytes(manifest_path)?;
+    let actual: [u8; 32] = Sha256::digest(&manifest_bytes).into();
+    if actual != release_set_manifest_digest {
+        return Err(ReleaseBuildPlanError::ManifestDigestMismatch { release_build_id });
+    }
+    Ok(finalized)
+}
+
 /// Finalize one planned build from the exact durable release-set manifest bytes.
 pub fn finalize_release_build_from_manifest(
     root: &Path,
@@ -205,11 +229,20 @@ fn plan_release_build_with_nonce(
     nonce: ReleaseBuildNonce,
     build_profile: CanisterBuildProfile,
 ) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
+    plan_release_build_with_nonce_and_builder(root, nonce, build_profile, env!("CARGO_PKG_VERSION"))
+}
+
+fn plan_release_build_with_nonce_and_builder(
+    root: &Path,
+    nonce: ReleaseBuildNonce,
+    build_profile: CanisterBuildProfile,
+    builder_version: &str,
+) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
     let release_build_id = ReleaseBuildId::from_nonce(nonce);
     let record = ReleaseBuildPlanRecord {
         nonce,
         release_build_id,
-        builder_version: env!("CARGO_PKG_VERSION").to_string(),
+        builder_version: builder_version.to_string(),
         build_profile,
         state: ReleaseBuildPlanState::Planned,
     };
@@ -220,6 +253,15 @@ fn plan_release_build_with_nonce(
         source,
     })?;
     Ok(PlannedReleaseBuild { record, path })
+}
+
+#[cfg(test)]
+pub(crate) fn plan_test_release_build_for_builder(
+    root: &Path,
+    builder_version: &str,
+    build_profile: CanisterBuildProfile,
+) -> Result<PlannedReleaseBuild, ReleaseBuildPlanError> {
+    plan_release_build_with_nonce_and_builder(root, random_nonce()?, build_profile, builder_version)
 }
 
 fn finalize_release_build(

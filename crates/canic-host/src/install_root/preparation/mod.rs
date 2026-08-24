@@ -1,5 +1,5 @@
 use super::build_network::ensure_icp_environment_ready;
-use super::build_snapshot::ValidatedInstallSnapshot;
+use super::build_snapshot::{CompleteInstallBuildSnapshot, ValidatedInstallSnapshot};
 use super::build_targets::{progress_bar, wasm_artifact_size};
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
@@ -10,7 +10,7 @@ use super::operations::{BuildInstallTargetsOperation, InstallPhaseLabel};
 use super::output::{TerminalActivity, TerminalStyle};
 use super::phase_receipts::CompletedInstallPhase;
 use super::plan_artifacts::{PreparedPlanArtifacts, prepare_plan_artifacts_with_phase};
-use super::reused_build::load_reused_install_build;
+use super::reused_build::validate_reused_install_build;
 use super::timing::InstallTimingSummary;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::deployment_truth::{
@@ -135,17 +135,10 @@ fn build_install_targets_with_phase(
         .release_build
         .as_ref()
         .ok_or_else(|| "normal install is missing its release-build authority".to_string())?;
-    if matches!(
-        release_build.record.state,
-        ReleaseBuildPlanState::Finalized { .. }
-    ) {
+    if let CompleteInstallBuildSnapshot::Finalized(finalized) = complete_build {
         let started_at = current_unix_timestamp_label()?;
         let started = Instant::now();
-        let reused = load_reused_install_build(
-            icp_root,
-            complete_build,
-            release_build.record.release_build_id,
-        )?;
+        let role_names = validate_reused_install_build(icp_root, finalized)?;
         let duration = started.elapsed();
         TerminalStyle::detected().print_section(
             "Build artifacts ready",
@@ -156,12 +149,6 @@ fn build_install_targets_with_phase(
             ),
         );
         println!();
-        let role_names = reused
-            .outputs
-            .iter()
-            .map(|output| output.role.clone())
-            .chain(["fleet_coordinator".to_string(), "wasm_store".to_string()])
-            .collect();
         return Ok(PreparedInstallBuild {
             phase: CompletedInstallPhase {
                 phase: InstallPhaseLabel::BUILD_ARTIFACTS,
@@ -178,12 +165,21 @@ fn build_install_targets_with_phase(
             infrastructure_duration: Duration::ZERO,
             materialize_duration: Duration::ZERO,
             reuse_duration: duration,
-            outputs: reused.outputs,
-            infrastructure_outputs: reused.infrastructure_outputs,
+            outputs: Vec::new(),
+            infrastructure_outputs: Vec::new(),
             plan_artifacts: None,
         });
     }
-    let operation = BuildInstallTargetsOperation::new(build_context, &complete_build.targets);
+    if matches!(
+        release_build.record.state,
+        ReleaseBuildPlanState::Finalized { .. }
+    ) {
+        return Err("finalized release build has no retained install snapshot".into());
+    }
+    let CompleteInstallBuildSnapshot::Workspace(workspace) = complete_build else {
+        unreachable!("finalized snapshot returned above");
+    };
+    let operation = BuildInstallTargetsOperation::new(build_context, &workspace.targets);
     let started_at = current_unix_timestamp_label()?;
     let configured = operation.execute()?;
     let (infrastructure_outputs, infrastructure_duration) =

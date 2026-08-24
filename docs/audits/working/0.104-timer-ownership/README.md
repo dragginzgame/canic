@@ -400,10 +400,10 @@ callable facade.
 
 The final lock contains exactly one `ic-timers 0.6.1` package, one provider-
 implementation `ic-cdk-timers 1.0.0` package and exact outer `icydb 0.230.2`.
-No manifest declares the raw provider. The root workspace pin plus eight
+No manifest declares the raw provider. The root workspace pin plus seven
 package manifests declare `ic-timers`: `canic-core`, `canic-control-plane`,
-`canic-tests`, Saltz burner, the maintained application test fixture,
-`runtime_probe`, `delegation_root_stub` and the IcyDB composition probe.
+`canic-tests`, the maintained application test fixture, `runtime_probe`,
+`delegation_root_stub` and the IcyDB composition probe.
 
 ### Final Provider Inventory And Performance
 
@@ -498,7 +498,6 @@ consumers of `ic-timers` are:
 | `canic-core` | Canic fixed jobs, lifecycle work and inventory projection | Keep the dependency; remove duplicated mechanics and move claims to exact owners |
 | `canic-tests` | Integration assertions against provider capacity | Keep as test-only direct evidence |
 | `runtime_probe` | Shared-inventory fixture and current facade consumer | Convert all Canic-facade use to direct provider custody |
-| `saltz_burner` | Standalone application-owned native once registration | Retain unchanged as a separately owned direct-provider example |
 
 No production Rust source imports `ic_cdk_timers` or `cdk::timers`. The B8
 semantic guard must retain that rule while expanding the classified source

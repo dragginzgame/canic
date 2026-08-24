@@ -1238,15 +1238,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cycle_burn_probe"
-version = "0.109.2"
-dependencies = [
- "candid",
- "ic-cdk",
- "serde",
-]
-
-[[package]]
 name = "cycles_ledger_stub"
 version = "0.109.2"
 dependencies = [
@@ -3582,25 +3573,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
-name = "playground_hub"
-version = "0.109.2"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
- "serde",
-]
-
-[[package]]
-name = "playground_root"
-version = "0.109.2"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "plotters"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4284,47 +4256,6 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
-
-[[package]]
-name = "saltz_burner"
-version = "0.109.2"
-dependencies = [
- "candid",
- "ic-cdk",
- "ic-testkit",
- "ic-timers",
- "pocket-ic",
- "saltz_simulator",
- "serde",
-]
-
-[[package]]
-name = "saltz_preview"
-version = "0.109.2"
-dependencies = [
- "candid",
- "ic-cdk",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "saltz_root"
-version = "0.109.2"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "saltz_simulator"
-version = "0.109.2"
-dependencies = [
- "clap",
- "sha2 0.10.9",
-]
 
 [[package]]
 name = "same-file"
@@ -5586,16 +5517,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "wenzelroll"
-version = "0.109.2"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
- "serde",
 ]
 
 [[package]]

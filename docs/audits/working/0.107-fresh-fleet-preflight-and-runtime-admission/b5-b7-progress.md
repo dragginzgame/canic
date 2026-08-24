@@ -246,9 +246,9 @@ cargo clippy --locked --no-deps -p canic -p canic-macros --all-targets -- -D war
   passed with dead code, stale expectations and unreachable public items denied
 cargo check --locked -p sharding_root_stub
   passed with the final workspace member inheriting the shared lint table
-cargo check --locked -p saltz_preview -p canister_test -p canic_icydb_lifecycle_probe -p canic-icydb-lifecycle-schema -p delegation_issuer_stub -p root_funding_probe -p cycles_ledger_stub -p canic-testing-internal
+cargo check --locked -p canister_test -p canic_icydb_lifecycle_probe -p canic-icydb-lifecycle-schema -p delegation_issuer_stub -p root_funding_probe -p cycles_ledger_stub -p canic-testing-internal
   passed after exact generated-code dependency classification
-cargo clippy --locked --no-deps -p saltz_preview -p canister_test -p canic_icydb_lifecycle_probe -p canic-icydb-lifecycle-schema -p delegation_issuer_stub -p root_funding_probe -p cycles_ledger_stub -p canic-testing-internal -p sharding_root_stub --all-targets -- -D warnings
+cargo clippy --locked --no-deps -p canister_test -p canic_icydb_lifecycle_probe -p canic-icydb-lifecycle-schema -p delegation_issuer_stub -p root_funding_probe -p cycles_ledger_stub -p canic-testing-internal -p sharding_root_stub --all-targets -- -D warnings
   passed
 cargo machete --skip-target-dir .
   passed with no unused dependency finding

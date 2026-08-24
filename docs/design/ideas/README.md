@@ -20,7 +20,6 @@ Supporting implementation evidence does not belong here.
 - `optional-encrypted-canister-snapshot-archives/`
 - `operator-funding-conversion-authority/`
 - `product-frontend-delivery-handoff/`
-- `saltz/`
 - `standalone-blob-service-extraction/`
 
 Move an idea to a top-level numbered directory only when it has a concrete

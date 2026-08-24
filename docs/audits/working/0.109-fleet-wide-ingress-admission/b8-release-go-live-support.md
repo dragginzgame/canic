@@ -11,20 +11,25 @@ Date: 2026-08-24
 | Published base | annotated `v0.109.0`, commit `3cae3d2c95af087365d8b3fb096a505b6be9b418` |
 | `CANIC-027` source | `f36326015d3b9fe3061d9545acebc46206870bdf` |
 | Published correction | annotated `v0.109.1`, commit `44e90e6dd4fd9293f7f013cf58f3242c188620d2`; clean `main` and `origin/main` agree |
-| Reopened correction | open 0.109.2 draft; post-publication path audit found two deployment-path gaps, and the later interrupted 0.109.1 install exposed `CANIC-029` remaining-debit and verification-retry recovery gaps |
-| Canic effects | Repository source/documentation, local build artifacts and local PocketIC through the 0.109.2 candidate; maintainer-owned validation/version/publication only through 0.109.1 |
-| Downstream evidence | Separately owned 0.109.1 dependency/CLI adoption, local qualification and interrupted fresh install; Coordinator, Root and Store are live, while App/frontend effects did not start |
+| Published recovery correction | annotated `v0.109.2`, commit `b48181ba2b4b0d9f679386ddb62179ba498b8ee2`; remote tag object `94aa4d190d142acda51eac35a19234fa0509b8bd` |
+| Open recovery-path correction | unversioned 0.109.3 draft; targeted host tests and warning-denied Clippy pass, complete maintainer validation/publication not yet run |
+| Canic effects | Repository source/documentation, local build artifacts and local PocketIC through 0.109.2 plus its maintainer-owned validation/version/publication; no downstream effect from this repository |
+| Downstream evidence | Separately owned exact-0.109.2 graph/CLI adoption, complete local qualification, read-only current-source rejection and blocker-free exact-source recovery plan; Coordinator, Root and Store remain live, while App/frontend effects did not start |
 | Excluded | Any new live staging, resume, paid effect or other external mutation from this repository |
 
-Adversarial post-publication inspection reopened the in-repository correction:
+Adversarial post-0.109.1 inspection reopened the in-repository correction:
 0.109.1 contained the intended successor predicate, but the real restart order
-could reject revision 4 before reaching it. The current 0.109.2 candidate fixes
+could reject revision 4 before reaching it. Published 0.109.2 fixes
 that path and the bounded fresh-pool wait. The subsequent 0.109.1 install also
 proved that recovery incorrectly rechecked the original maximum debit before
 replaying durable creation journals. The same candidate now owns that
-`CANIC-029` correction. B8 therefore still requires the maintainer-owned
-complete release flow for 0.109.2, review of the exact retained-session
-recovery plan and separately authorized resume/deployed-state evidence.
+`CANIC-029` correction. Exact downstream qualification and recovery-plan review
+pass. The authorized resume then exposed `CANIC-031` before any IC update: the
+host accepted the retained 0.109.1 builder but next routed that source through
+ordinary 0.109.2 role-version validation. The open correction makes finalized
+reuse read-only and distinct from fresh builds. B8 therefore remains open for
+maintainer validation/publication, the separately authorized resume and
+deployed-state/admission evidence.
 
 ## Published package integrity
 
@@ -67,6 +72,22 @@ the complete 0.109.1 Canic graph, pinned its qualification dependency and
 developer CLI to 0.109.1, verified the immutable remote tag and confirmed the
 installed CLI version. This supersedes the 0.109.0 package checkpoint for the
 remaining B8 plan proof.
+
+### Published 0.109.2 recovery correction
+
+The maintainer-owned release flow published `v0.109.2` from clean commit
+`b48181ba2b4b0d9f679386ddb62179ba498b8ee2`. Toko Miner independently resolved
+all four Canic crates plus its exact support and CLI pins to 0.109.2. Its
+complete `make ci` passed 52 Rust tests, both PocketIC journeys, 121 frontend
+tests, Candid parity, Wasm checks and the production build.
+
+The read-only current-workspace plan correctly classified paid-effect recovery,
+fenced all three creations, required zero additional cycles and named Store-
+bootstrap verification as the next phase. It then rejected the later workspace
+source decision. A disposable exact `v0.2.0` checkout with physically confined
+recovery evidence reconstructed the original digest and produced a blocker-free
+warning-only plan. No resume, deployment, Ledger, frontend or other external
+effect occurred.
 
 ## `CANIC-109-GOLIVE-001`: fresh pool capacity
 
@@ -114,7 +135,7 @@ faking NNS-dependent IC activation in a minimal PocketIC topology.
 
 The 0.109.1 implementation performed this check only after its earlier join and
 Root-synchronization recovery gates, so a legitimate revision-4 successor was
-still rejected before the validator was reachable. The 0.109.2 candidate moves
+still rejected before the validator was reachable. Published 0.109.2 moves
 that decision into one shared recovery owner used by join, synchronization and
 activation.
 
@@ -209,7 +230,7 @@ bash scripts/ci/run-with-test-scratch.sh \
 # 1 passed in 14s with cached artifacts; 409,588 kB high-water, 19 threads
 ```
 
-### Open 0.109.2 candidate
+### Published 0.109.2 candidate evidence
 
 ```text
 cargo check --locked -p canic-host -p canic-control-plane
@@ -281,8 +302,8 @@ cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings
 # passed
 ```
 
-These are focused candidate checks, not a claim that the maintainer-owned
-complete gate has run on the final 0.109.2 revision.
+These were focused candidate checks. The later maintainer-owned complete gate
+and immutable publication supersede their release-readiness limitation.
 
 ```text
 bash scripts/ci/run-with-test-scratch.sh \
@@ -405,11 +426,46 @@ operator creations as fenced, zero remaining operator debit and
 The test was removed after the proof; it performed no repository or network
 mutation.
 
-No new downstream staging attempt is appropriate. After 0.109.2 completes the
-maintainer-owned release flow, the trusted operator must obtain and review the
-exact recovery plan, explicitly authorize that resume, and retain resulting
-deployed-state/admission evidence. Only then may downstream frontend and
-fixture publication proceed.
+## `CANIC-031`: finalized-artifact recovery reachability
+
+The separately authorized exact-source resume accepted the supported
+0.109.1-to-0.109.2 retained builder pair and then failed in `BuildInputs` with
+`role_contract_canic_version_mismatch` for both configured roles. The ordinary
+snapshot resolver validated the predecessor consumer graph as though it were a
+fresh 0.109.2 build before the later finalized-artifact branch could run. The
+failure preceded every IC update; the confined and authoritative recovery
+trees remained byte-identical and the downstream identity returned to
+anonymous.
+
+The open correction gives install snapshot resolution three explicit sources:
+deployment plan, fresh workspace build and finalized release. Only the fresh
+workspace branch invokes the current role build-spec resolver. Finalized
+recovery instead validates the current exact App topology and declared package
+names against the retained application union and infrastructure manifest,
+requires every infrastructure entry to name the retained builder, reconciles
+the Root release-set with the application union and checks its finalized digest
+through a regular no-follow read. Before and after deployment-truth
+preparation, it re-materializes every raw/gzip application and infrastructure
+artifact through the existing immutable validators. That path neither invokes
+Cargo nor rebuilds or rewrites an artifact or manifest.
+
+The retained-session regression contains a 0.109.1 consumer lock graph,
+finalized 0.109.1 release record, exact application/infrastructure/root
+manifests, artifact bytes and interrupted Fleet session. Under the current
+host it crosses finalized manifest admission into exact session-journal replay
+with the complete fixture tree unchanged. The same proof rejects changed
+package identity, topology, artifact bytes and root-manifest digest. The exact
+pair test admits only same-version recovery plus the named
+0.109.1-to-0.109.2/0.109.3 rescues and rejects other predecessors or
+successors. All 124 focused `install_root` tests, the five
+`release_build` tests and warning-denied `canic-host` library/test Clippy pass.
+The complete maintainer gate and publication remain deliberately unclaimed.
+
+No fresh downstream staging attempt is appropriate. The trusted operator has
+reviewed the exact-source recovery plan, but the correction must first pass the
+maintainer release flow. After publication the downstream owner must reproduce
+the plan, separately authorize its resume and retain resulting deployed-state/
+admission evidence. Only then may frontend and fixture publication proceed.
 
 The remaining feedback is routed without widening B8 or adding product
 capability to B9:
@@ -418,6 +474,8 @@ capability to B9:
 | --- | --- |
 | `CANIC-026` supported managed-App qualification harness | Scheduled as a separate bounded B10 support batch after B9, so the pure simplification batch does not acquire another product capability. It must replace downstream private payload/lifecycle plumbing without creating runtime authority. |
 | `CANIC-028` named-environment artifact advice | Non-blocking operator defect assigned to B9 cleanup: preserve exact selected-root observation, distinguish pre-install assumptions and remove the impossible `canic build` remediation when that command cannot populate the observed root. |
+| Retained-decision source drift | Non-blocking operator diagnostic defect assigned to B9 beside `CANIC-028`: identify workspace-source drift, name the exact retained source identity/revision and omit unrelated identity/funding remediation after those checks pass. |
+| `CANIC-030` retained funded Saltz asset | The open repository-estate cleanup now archives the exact calibration and terminal disposition record instead of deleting the only retained evidence for the live external canister and its approximately `2.590 Pcycles`; it authorizes no external effect. |
 | `CANIC-006` state-preserving release transition | Already owned by scheduled 0.111's exact stop-the-world predecessor-to-successor transition. It remains blocked on the accepted 0.109 and 0.110 gates. |
 | `CANIC-005` application retirement acknowledgement | Already owned by scheduled 0.110 B2. It remains blocked on 0.109 closeout and explicit 0.110 promotion. |
 | `CANIC-015` saved plan consumption | Accepted as unscheduled deployment ergonomics; it is not an admission-authority or current planning-correctness blocker and receives no implementation authority here. |
@@ -426,10 +484,9 @@ capability to B9:
 
 ## Result
 
-The 0.109.2 in-repository correction and its targeted evidence are complete,
-including the two inventory failures exposed by the first complete release-
-gate attempt and the `CANIC-029` retained-session recovery path. B8 remains
-open for a clean maintainer-owned complete validation/version/publication flow,
-exact recovery-plan review and separately authorized resume/deployed-state
-proof. B9 remains blocked until that evidence is accepted; B10 and 0.110
-remain blocked behind B9.
+The 0.109.2 correction, complete maintainer gate, publication, downstream
+adoption and exact-source recovery-plan review pass. The open `CANIC-031`
+correction passes its targeted host/recovery checks but is not validated or
+published. B8 remains open for that maintainer release flow, the separately
+authorized resume and deployed-state/admission proof. B9 remains blocked until
+that evidence is accepted; B10 and 0.110 remain blocked behind B9.

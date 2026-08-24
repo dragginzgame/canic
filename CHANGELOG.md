@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 
+- `0.109.3` makes the exact retained 0.109.1 install rescue reach immutable
+  finalized-artifact reuse without applying the successor's fresh-build role
+  version gate, while retaining topology/package/manifest/byte rejection and
+  removing the repository-owned Playground and Saltz application estates with
+  the funded external Saltz canister's disposition audit preserved.
 - `0.109.2` makes fresh multi-Component installation converge from an empty
   Root pool under the exact accepted-batch demand, waits between unchanged
   scheduled Coordinator polls, and applies one strict initial-service Registry
