@@ -22,9 +22,11 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
   exposes bounded typed per-Root retry evidence. An immutable matching package
   release and separately authorized downstream qualification must still close
   every further Canic-owned adoption blocker before binding post-adoption
-  complexity remediation begins. 0.109 minor closeout and 0.110 promotion
-  remain blocked until the accepted simplification findings pass an immutable
-  superseding audit.
+  complexity remediation begins. The release-gate follow-up also reconciles
+  pure-policy layering, timer ownership, Coordinator state inventory and the
+  authority-bound plan/receipt golden surfaces. 0.109 minor closeout and 0.110
+  promotion remain blocked until the accepted simplification findings pass an
+  immutable superseding audit.
 
 ## [0.108.x] - Coordinator-Backed Root Funding
 
