@@ -309,7 +309,26 @@ fn install_recompiles_the_exact_plan_digest_and_rechecks_live_funding() {
     assert!(!root.join(".canic/release-builds").exists());
 
     write_fake_icp_operator_funding_balance(&root, "funded-operator", 1);
-    let error = recheck_fresh_fleet_operator_funding(&icp_context, &exact.plan)
+    let recovery = super::FreshFleetInstallRecoveryPlanV1 {
+        schema_version: 1,
+        classification: super::FreshFleetInstallRecoveryClassificationV1::PaidEffectRecovery,
+        fleet_install_operation_id: "ab".repeat(32),
+        release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([7; 32])),
+        decision_release_build_id: exact.plan.preflight.release_build_id,
+        retained_builder_version: env!("CARGO_PKG_VERSION").to_string(),
+        fresh_fleet_plan_digest: exact.plan.plan_digest.clone(),
+        effects_started: true,
+        original_maximum_operator_debit: exact.plan.maximum_operator_debit.clone(),
+        remaining_operator_debit:
+            crate::fleet_install_plan::PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+        fenced_operator_creations: 3,
+        total_operator_creations: 3,
+        uncertain_creation_outcomes: Vec::new(),
+        next_replay_phase: "fleet_component_provisioning".to_string(),
+    };
+    recheck_fresh_fleet_operator_funding(&icp_context, &exact.plan, Some(&recovery))
+        .expect("exact recovery recheck requires only the journal-derived remaining debit");
+    let error = recheck_fresh_fleet_operator_funding(&icp_context, &exact.plan, None)
         .expect_err("newly insufficient balance must reject before effects");
     assert_eq!(error.phase(), InstallRootPhase::Planning);
     write_fake_icp_operator_funding(&root, "funded-operator");

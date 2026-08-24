@@ -547,6 +547,34 @@ fn complete_decision_rejects_insufficient_or_stale_balance() {
 }
 
 #[test]
+fn retained_recovery_debit_does_not_rewrite_the_canonical_maximum_or_digest() {
+    let preflight = complete_group_preflight();
+    let full = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: preflight.clone(),
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
+    })
+    .expect("full fresh decision");
+    let recovered = compile_fresh_fleet_deployment_plan_with_operator_debit(
+        FreshFleetDeploymentPlanRequest {
+            preflight,
+            authority: decision_authority(0),
+        },
+        &PlannedCanisterCreationFunding::Cycles { cycles: 0 },
+    )
+    .expect("zero remaining debit is sufficient for exact retained recovery");
+
+    assert_eq!(recovered.plan_digest, full.plan_digest);
+    assert_eq!(
+        recovered.maximum_operator_debit,
+        full.maximum_operator_debit
+    );
+    assert_eq!(
+        recovered.authority.operator.balance,
+        PlannedCanisterCreationFunding::Cycles { cycles: 0 }
+    );
+}
+
+#[test]
 fn complete_decision_digest_binds_funding_and_admission_policy() {
     let baseline = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),

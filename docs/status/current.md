@@ -555,7 +555,19 @@ downstream graph, complete CI and exact managed/standalone Wasm qualification
 pass, but post-publication path review found the revision-4 predicate
 unreachable from join/synchronization and the host poll bound vulnerable to a
 tight loop. The open 0.109.2 draft corrects both paths and proves zero-to-five
-pool creation. B8 remains open for its release and exact downstream plan. B9
+pool creation. A later interrupted 0.109.1 fresh install exposed `CANIC-029`:
+recovery recognized retained paid effects but still demanded the original
+310,000,300,000-cycle operator maximum before replaying their journals. The
+same draft now derives remaining debit from the exact session and creation
+journals, retains the original plan/digest, exposes the next replay phase,
+retries only transient Store-bootstrap verification within five attempts and
+admits one exact 0.109.1-to-0.109.2 host recovery while retaining the installed
+0.109.1 artifacts. Its first complete release-gate attempt exposed two source-
+inventory omissions rather than a runtime failure: the canonical background
+pool-maintenance expression and the deliberate host wait inventory. Both are
+corrected and their 16-test timer guard plus 17 pool tests pass; a clean full
+rerun remains pending. B8 remains open for its release, exact recovery-plan
+review and separately authorized downstream resume/deployed-state proof. B9
 complexity remediation and B10 published managed-App test support then block
 minor closeout and 0.110.
 
@@ -606,8 +618,13 @@ current tracked modifications and accepted untracked source in the digest;
 unsafe paths and other I/O errors still fail closed. Exact downstream 0.109.1
 CI passes, and its dirty-worktree plan crosses source identity. That plan run
 lacked `CANIC_ICP_IDENTITY_PASSWORD_FILE`, so no reviewable 0.109.1 digest was
-produced. That is retained as historical evidence; the accepted plan must now
-be reproduced against the exact published 0.109.2 pair. `CANIC-028`'s
+produced. That is retained as historical evidence. A later authorized attempt
+created and funded the exact Coordinator, Root and Store, then stopped at
+Store-bootstrap verification with its journals intact, before App or frontend
+effects. The read-only 0.109.2 recovery inspector reproduces three fenced
+operator creations, zero remaining debit and the exact verification phase.
+Do not rerun fresh staging: after publishing 0.109.2, review its retained-
+session recovery plan and separately authorize the resume. `CANIC-028`'s
 impossible named-environment build advice is assigned to pure B9 cleanup. B10
 then owns the separate published managed-App qualification harness. Stateful
 release adoption remains owned by 0.111, application retirement by 0.110 B2,
@@ -1144,15 +1161,19 @@ accepted closeout. The explicitly promoted 0.109 B1 authority/baseline evidence
 and its managed-only correction are accepted. B2-B7 are functionally ready.
 Published `v0.109.1` completed its maintainer-owned release flow, but the
 0.109.2 correction is now the open B8 candidate. Its targeted native, host and
-PocketIC checks pass. Continue B8 with the maintainer-owned complete
-validation/version/publication flow, then the exact zero-blocker 0.109.2
-no-effect plan from the trusted operator shell. Only after B8 closes, continue with B9
-under the binding post-implementation complexity audit: freeze the canonical
-evidence, simplify the accepted gravity wells and active authority, preserve
-bounded validation, retriage every 0.110 batch and issue an immutable
-superseding verdict. B10 then owns the separately published managed-App
-qualification harness. Do not begin 0.110 unless those gates pass, the
-maintainer accepts 0.109 closeout and then explicitly promotes the revised B1.
+PocketIC checks pass, and the two inventory failures from its first complete
+gate attempt are corrected with targeted evidence. `CANIC-029` remaining-debit,
+bounded-verification and exact retained-session host recovery are implemented
+with targeted evidence. Continue B8 with a clean maintainer-owned complete
+validation/version/publication flow, then review the exact 0.109.1 recovery
+plan and separately authorize its resume. Only after deployed-state/admission
+evidence closes B8, continue with B9 under the binding post-implementation
+complexity audit: freeze the canonical evidence, simplify the accepted gravity
+wells and active authority, preserve bounded validation, retriage every 0.110
+batch and issue an immutable superseding verdict. B10 then owns the separately
+published managed-App qualification harness. Do not begin 0.110 unless those
+gates pass, the maintainer accepts 0.109 closeout and then explicitly promotes
+the revised B1.
 Do not add a production pool contract or run any remote qualification effect.
 Do not reopen compact diagnostics with JSON, generic handling metadata,
 observability infrastructure, compatibility decoding, B1 test coupling or

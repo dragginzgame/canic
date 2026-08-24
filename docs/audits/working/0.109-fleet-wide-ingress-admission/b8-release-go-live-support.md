@@ -11,17 +11,20 @@ Date: 2026-08-24
 | Published base | annotated `v0.109.0`, commit `3cae3d2c95af087365d8b3fb096a505b6be9b418` |
 | `CANIC-027` source | `f36326015d3b9fe3061d9545acebc46206870bdf` |
 | Published correction | annotated `v0.109.1`, commit `44e90e6dd4fd9293f7f013cf58f3242c188620d2`; clean `main` and `origin/main` agree |
-| Reopened correction | open 0.109.2 draft; post-publication path audit found the 0.109.1 successor validator unreachable from the earlier join/synchronization gates and the host polling loop able to exhaust its bound before scheduled retry |
+| Reopened correction | open 0.109.2 draft; post-publication path audit found two deployment-path gaps, and the later interrupted 0.109.1 install exposed `CANIC-029` remaining-debit and verification-retry recovery gaps |
 | Canic effects | Repository source/documentation, local build artifacts and local PocketIC through the 0.109.2 candidate; maintainer-owned validation/version/publication only through 0.109.1 |
-| Downstream evidence | Separately owned 0.109.1 dependency/CLI adoption and local qualification; no deploy, commit, push, canister or Ledger effect |
-| Excluded | Live staging, paid effects and every audit-time external mutation from this repository |
+| Downstream evidence | Separately owned 0.109.1 dependency/CLI adoption, local qualification and interrupted fresh install; Coordinator, Root and Store are live, while App/frontend effects did not start |
+| Excluded | Any new live staging, resume, paid effect or other external mutation from this repository |
 
 Adversarial post-publication inspection reopened the in-repository correction:
 0.109.1 contained the intended successor predicate, but the real restart order
 could reject revision 4 before reaching it. The current 0.109.2 candidate fixes
-that path and the bounded fresh-pool wait. B8 therefore still requires the
-maintainer-owned complete release flow for 0.109.2 and a trusted downstream
-zero-blocker plan against that exact package pair.
+that path and the bounded fresh-pool wait. The subsequent 0.109.1 install also
+proved that recovery incorrectly rechecked the original maximum debit before
+replaying durable creation journals. The same candidate now owns that
+`CANIC-029` correction. B8 therefore still requires the maintainer-owned
+complete release flow for 0.109.2, review of the exact retained-session
+recovery plan and separately authorized resume/deployed-state evidence.
 
 ## Published package integrity
 
@@ -227,10 +230,59 @@ cargo test --locked -p canic-control-plane component_provisioning --lib -- --noc
 cargo test --locked -p canic-host install_truth --lib -- --nocapture
 # 38 passed after the three-gate recovery guard was added
 
+cargo test --locked -p canic-core --test timer_inventory_guard -- --nocapture
+# 16 passed after the release-gate inventory correction
+
 cargo clippy --locked -p canic-host -p canic-control-plane \
   -p canic-testing-internal --lib --tests -- -D warnings
 # passed
 ```
+
+`CANIC-029` targeted checks on the current working candidate:
+
+```text
+cargo check --locked -p canic-host -p canic-cli
+# passed
+
+cargo test --locked -p canic-host fleet_install_plan::tests -- --nocapture
+# 16 passed
+
+cargo test --locked -p canic-host install_root::fleet_install_recovery::tests -- --nocapture
+# 2 passed
+
+cargo test --locked -p canic-host install_root::coordinator_install_journal::tests -- --nocapture
+# 4 passed
+
+cargo test --locked -p canic-host install_root::fleet_subnet_root_install_journal::tests -- --nocapture
+# 9 passed
+
+cargo test --locked -p canic-host install_root::fleet_install_session::tests -- --nocapture
+# 4 passed
+
+cargo test --locked -p canic-host install_recompiles_the_exact_plan_digest_and_rechecks_live_funding -- --nocapture
+# 1 passed
+
+cargo test --locked -p canic-host retry_tests -- --nocapture
+# 3 passed
+
+cargo test --locked -p canic-host install_truth --lib -- --nocapture
+# 38 passed
+
+cargo test --locked -p canic-core --test timer_inventory_guard -- --nocapture
+# 16 passed
+
+cargo test --locked -p canic-cli deploy::plan::tests -- --nocapture
+# 15 passed
+
+cargo test --locked -p canic-cli deploy::tests::plan -- --nocapture
+# 25 passed
+
+cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings
+# passed
+```
+
+These are focused candidate checks, not a claim that the maintainer-owned
+complete gate has run on the final 0.109.2 revision.
 
 ```text
 bash scripts/ci/run-with-test-scratch.sh \
@@ -246,8 +298,15 @@ bash scripts/ci/run-with-test-scratch.sh \
 # 19 threads
 ```
 
-The complete maintainer-owned release gate has not been run on the 0.109.2
-candidate and is not claimed here.
+The first complete maintainer-owned release-gate run reached the ordinary test
+barrier and found two source-inventory omissions: background/watchdog pool
+maintenance no longer matched the canonical fresh-config-read expression, and
+the new host sleep was absent from the governed timed-wait inventory. No
+runtime or PocketIC case failed; the ordinary barrier correctly skipped the
+serial PocketIC suites. The pool owner now retains its no-argument
+authoritative minimum path while batch maintenance keeps exact demand, the
+wait inventory is explicit, and the affected 16-test guard plus 17 pool tests
+pass. A complete maintainer rerun remains required and is not claimed here.
 
 The broader Coordinator filter initially found a test-only terminal admission
 fixture with an arbitrary nonzero Root receipt hash. The fixture now derives
@@ -300,9 +359,57 @@ process did not receive the operator-owned absolute
 plan digest, fee/balance review or complete `not_executed` effect list. The
 wrapper restored the anonymous identity and caused no canister, Fleet, Ledger
 or deployment effect. `CANIC-027` is adopted but conservatively not verified.
-The later Canic path audit reopened the deployment correction, so the next
-accepted downstream plan must use the exact published 0.109.2 pair; the failed
-credential observation remains historical 0.109.1 evidence.
+The later Canic path audit reopened the deployment correction. The failed
+credential observation remains historical 0.109.1 evidence; it was superseded
+by the separately authorized fresh-install attempt described below.
+
+## `CANIC-029`: retained-session recovery
+
+The downstream 0.109.1 attempt durably created, funded and installed the exact
+Coordinator, Root and Wasm Store. Its Coordinator creation journal is verified;
+the Root journal is retained at sequence 15 in `store_bootstrapped`; and the
+exact protected Store-bootstrap status query now succeeds and matches the
+journal. The App was not created, the frontend was not changed, the default
+identity was restored to anonymous and the operator balance is 14,788 cycles.
+Those are downstream observations, not effects performed by this audit.
+
+Published 0.109.1 detects that effects started but still requires the original
+310,000,300,000-cycle maximum before journal replay. The correction introduces
+one read-only recovery inspector over the exact immutable install session,
+retained plan, artifact manifest and Coordinator/Root journals. It computes
+the remaining debit with checked arithmetic: a creation intent beyond
+`Planned` fences that amount and its exact Cycles Ledger creation fee forever.
+An in-flight creation is likewise fenced against a duplicate debit but remains
+an explicitly uncertain observation-only outcome. Exact replay is still
+required; journal state is not inferred from a live canister alone.
+
+Both `canic deploy plan` and `canic install` recompile the retained decision
+authority and canonical digest. The original maximum remains in the plan;
+only the live-balance admission check uses the journal-derived remainder. A
+recovery report names the operation/session identity, exact retained 0.109.1
+release build and builder, original digest, total and fenced creation counts,
+uncertain outcomes, next replay phase, original maximum and remaining debit.
+Once validated, that recovery section survives a later identity or decision
+blocker, so a blocked report cannot regress to `no_effects_started: true`.
+The only cross-patch allowance is 0.109.2 host recovery of an exact validated
+0.109.1 session using its retained 0.109.1 artifacts. It does not upgrade or
+migrate a canister and does not establish a general compatibility path.
+
+The Store-bootstrap update remains outside the observation retry. Only a typed
+`STATE_UNAVAILABLE` query is retried, at most five exact attempts with a one-
+second wait; other failures return immediately. Later process recovery retains
+the same Root-journalled operation identity. A disposable read-only
+test against the reported downstream recovery directory reproduced all three
+operator creations as fenced, zero remaining operator debit and
+`fleet_subnet_root:pae4o-...:store_bootstrap_verification` as the next phase.
+The test was removed after the proof; it performed no repository or network
+mutation.
+
+No new downstream staging attempt is appropriate. After 0.109.2 completes the
+maintainer-owned release flow, the trusted operator must obtain and review the
+exact recovery plan, explicitly authorize that resume, and retain resulting
+deployed-state/admission evidence. Only then may downstream frontend and
+fixture publication proceed.
 
 The remaining feedback is routed without widening B8 or adding product
 capability to B9:
@@ -319,8 +426,10 @@ capability to B9:
 
 ## Result
 
-The 0.109.2 in-repository correction and its targeted evidence are complete.
-B8 remains open for the maintainer-owned complete validation/version/
-publication flow and the exact zero-blocker 0.109.2 no-effect plan from the
-trusted downstream operator shell. B9 remains blocked until that evidence is
-accepted; B10 and 0.110 remain blocked behind B9.
+The 0.109.2 in-repository correction and its targeted evidence are complete,
+including the two inventory failures exposed by the first complete release-
+gate attempt and the `CANIC-029` retained-session recovery path. B8 remains
+open for a clean maintainer-owned complete validation/version/publication flow,
+exact recovery-plan review and separately authorized resume/deployed-state
+proof. B9 remains blocked until that evidence is accepted; B10 and 0.110
+remain blocked behind B9.

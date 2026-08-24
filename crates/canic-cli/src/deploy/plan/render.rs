@@ -28,6 +28,7 @@ use canic_host::{
     fleet_install_plan::{
         FreshFleetDeploymentPlanV1, FreshFleetFundingPayerV1, PlannedCanisterCreationFunding,
     },
+    install_root::FreshFleetInstallRecoveryPlanV1,
 };
 
 pub(in crate::deploy) fn write_report(
@@ -98,14 +99,18 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
         ),
         format!(
             "no_effects_started: {}",
-            report
-                .fresh_fleet_plan
+            !report
+                .install_recovery
                 .as_ref()
-                .is_some_and(|plan| plan.preflight.effects.no_effects_started())
-                || report
-                    .catalog_failure
+                .is_some_and(|recovery| recovery.effects_started)
+                && (report
+                    .fresh_fleet_plan
                     .as_ref()
-                    .is_some_and(catalog_failure_has_no_effects)
+                    .is_some_and(|plan| plan.preflight.effects.no_effects_started())
+                    || report
+                        .catalog_failure
+                        .as_ref()
+                        .is_some_and(catalog_failure_has_no_effects))
         ),
         String::new(),
     ];
@@ -115,6 +120,9 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
     }
     if let Some(plan) = &report.fresh_fleet_plan {
         append_fresh_fleet_decision(&mut lines, plan);
+    }
+    if let Some(recovery) = &report.install_recovery {
+        append_install_recovery(&mut lines, recovery);
     }
     if let Some(failure) = &report.catalog_failure {
         append_catalog_failure(&mut lines, failure);
@@ -128,6 +136,57 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
     append_next_actions(&mut lines, &report.next_actions);
 
     lines.join("\n")
+}
+
+fn append_install_recovery(lines: &mut Vec<String>, recovery: &FreshFleetInstallRecoveryPlanV1) {
+    lines.push("fresh-Fleet install recovery".to_string());
+    lines.push(format!(
+        "  classification: {}",
+        recovery.classification.as_str()
+    ));
+    lines.push(format!(
+        "  fleet_install_operation_id: {}",
+        recovery.fleet_install_operation_id
+    ));
+    lines.push(format!("  release_build: {}", recovery.release_build_id));
+    lines.push(format!(
+        "  decision_release_build: {}",
+        recovery
+            .decision_release_build_id
+            .map_or_else(|| "workspace".to_string(), |release| release.to_string())
+    ));
+    lines.push(format!(
+        "  retained_builder_version: {}",
+        recovery.retained_builder_version
+    ));
+    lines.push(format!(
+        "  fresh_fleet_plan_digest: {}",
+        recovery.fresh_fleet_plan_digest
+    ));
+    lines.push(format!("  effects_started: {}", recovery.effects_started));
+    lines.push(format!(
+        "  original_maximum_operator_debit: {}",
+        render_funding(&recovery.original_maximum_operator_debit)
+    ));
+    lines.push(format!(
+        "  remaining_operator_debit: {}",
+        render_funding(&recovery.remaining_operator_debit)
+    ));
+    lines.push(format!(
+        "  fenced_operator_creations: {}/{}",
+        recovery.fenced_operator_creations, recovery.total_operator_creations
+    ));
+    lines.push(format!(
+        "  next_replay_phase: {}",
+        recovery.next_replay_phase
+    ));
+    if !recovery.uncertain_creation_outcomes.is_empty() {
+        lines.push(format!(
+            "  uncertain_creation_outcomes: {}",
+            recovery.uncertain_creation_outcomes.join(",")
+        ));
+    }
+    lines.push(String::new());
 }
 
 fn append_catalog_acquisition(

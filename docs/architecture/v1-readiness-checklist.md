@@ -118,6 +118,17 @@ The authoritative plan is compiled from stable validated snapshot authority;
 cache path, collection time and disposition remain separate report provenance
 so the digest stays reproducible during installation.
 
+When one exact fresh-Fleet install session already has effects, the same
+read-only command validates its retained session, original plan, release build
+and creation journals before adding `install_recovery` to the report. That
+section preserves the original maximum debit and names the journal-derived
+remaining debit, fenced creation count, uncertain outcomes and next replay
+phase. Planning does not advance a journal or acquire the install lock. A
+recovery report must be reviewed before a separately authorized resume; it is
+not authority to start another fresh install. After paid effects, generic
+fresh-install proposal labels are suppressed in favor of the exact retained
+next replay phase.
+
 Check a Fleet and save stable deployment evidence:
 
 ```text

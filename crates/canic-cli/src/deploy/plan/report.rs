@@ -10,6 +10,7 @@ use canic_host::{
     deployment_truth::DeploymentPlanV1,
     fleet_install_input::{FleetInstallCatalogAcquisitionV1, SubnetCatalogLoadFailureEvidenceV1},
     fleet_install_plan::FreshFleetDeploymentPlanV1,
+    install_root::FreshFleetInstallRecoveryPlanV1,
 };
 
 pub(super) const REPORT_SCHEMA_VERSION: u16 = 1;
@@ -72,6 +73,7 @@ pub(in crate::deploy) struct DeploymentPlanReport {
     pub(super) catalog_acquisition: Option<FleetInstallCatalogAcquisitionV1>,
     pub(super) catalog_failure: Option<SubnetCatalogLoadFailureEvidenceV1>,
     pub(super) fresh_fleet_plan: Option<FreshFleetDeploymentPlanV1>,
+    pub(super) install_recovery: Option<FreshFleetInstallRecoveryPlanV1>,
     pub(super) plan: DeploymentPlanV1,
     pub(super) blockers: Vec<PlanDiagnostic>,
     pub(super) warnings: Vec<PlanDiagnostic>,

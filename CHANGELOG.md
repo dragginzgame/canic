@@ -15,7 +15,11 @@ Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
 - `0.109.2` makes fresh multi-Component installation converge from an empty
   Root pool under the exact accepted-batch demand, waits between unchanged
   scheduled Coordinator polls, and applies one strict initial-service Registry
-  successor validator at every restart gate before Component provisioning.
+  successor validator at every restart gate before Component provisioning. It
+  also resumes an exact interrupted 0.109.1 fresh-install session using only
+  the operator debit still issuable from validated creation journals, reports
+  that recovery authority in the no-effect plan and bounds transient protected
+  status verification without resending the update inside the query retry.
 - `0.109.1` lets workspace deployment planning hash the current included
   worktree when Git still tracks deleted files, while retaining modified and
   accepted untracked source in plan identity.
