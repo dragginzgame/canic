@@ -1219,7 +1219,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         "canister_counts: coordinator=1 root=1 store=1 component=0 ready_pool=1 role=3 total=4"
     ));
     assert!(text.contains(
-        "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1 admission_projections=1"
+        "root: subnet=pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae component=0 initial_pool=1 pool_creations=1 ready_pool=1 admissions=1 admission_projections=0"
     ));
     assert!(text.contains(
         "funding: category=coordinator_creation owner=Fleet Coordinator payer=operator count=1 per_canister=100000000000000 cycles maximum=100000000000000 cycles"

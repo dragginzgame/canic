@@ -14,6 +14,7 @@ crates/canic-control-plane/src/workflow/component_registry/mod.rs	private lifecy
 crates/canic-control-plane/src/workflow/fleet_coordinator/mod.rs	private lifecycle consumer	Coordinator removal schedules bounded private continuations	Retained with removal state as authority
 crates/canic-control-plane/src/workflow/fleet_registry_mirror/mod.rs	private lifecycle consumer	Mirror schedules one bounded private continuation	Retained with mirror state as authority
 crates/canic-control-plane/src/workflow/fleet_subnet_root.rs	private lifecycle consumer	Root removal schedules one bounded private continuation	Retained with removal state as authority
+crates/canic-control-plane/src/workflow/root_admission/mod.rs	private lifecycle consumer	Root admission schedules bounded private convergence continuations	Retained with the Root admission journal as authority
 crates/canic-core/src/api/runtime/mod.rs	DTO/metrics projection	Runtime API converts atomic provider snapshots to neutral status	Retained without registration capability
 crates/canic-core/src/api/runtime/root_funding.rs	private lifecycle consumer	Root funding lifecycle API reconciles or fences the sole cycle-top-up owner	Retained without independent timer custody
 crates/canic-core/src/api/timer.rs	private lifecycle consumer	Internal API exposes only required initialization, deferral and authority transitions	Retained as a private boundary; public application facade remains absent

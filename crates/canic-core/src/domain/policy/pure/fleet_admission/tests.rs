@@ -13,7 +13,6 @@ use crate::model::fleet_admission_authority::{
     FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION, FleetAdmissionAuthorityState,
     FleetAdmissionCoordinatorRootPhaseModel, FleetAdmissionCoordinatorRootProgressModel,
     FleetAdmissionMutationOutcomeModel, FleetAdmissionMutationRequestModel,
-    FleetAdmissionRootCatalogAuthorityModel,
 };
 
 fn principal(index: u8) -> Principal {
@@ -238,14 +237,7 @@ fn effective_mutation_accepts_an_exact_zero_participant_catalog() {
         [8; 32],
     );
     request.participant_count = 0;
-    request.participant_catalog_digest =
-        crate::ops::fleet_admission_policy::fleet_admission_participant_catalog_digest(&[
-            FleetAdmissionRootCatalogAuthorityModel {
-                fleet_subnet_root: principal(20),
-                participant_catalog_digest: [25; 32],
-                participant_count: 0,
-            },
-        ]);
+    request.participant_catalog_digest = participant_catalog_digest();
     let mut successor = active;
     successor.generation = 2;
     successor.fleet_principals.push(principal(2));
@@ -365,14 +357,11 @@ fn mutation_request(
         principal,
         operation_id,
         successor_policy_digest,
-        participant_catalog_digest:
-            crate::ops::fleet_admission_policy::fleet_admission_participant_catalog_digest(&[
-                FleetAdmissionRootCatalogAuthorityModel {
-                    fleet_subnet_root: Principal::from_slice(&[20; 29]),
-                    participant_catalog_digest: [25; 32],
-                    participant_count: 1,
-                },
-            ]),
+        participant_catalog_digest: participant_catalog_digest(),
         participant_count: 1,
     }
+}
+
+fn participant_catalog_digest() -> [u8; 32] {
+    [26; 32]
 }

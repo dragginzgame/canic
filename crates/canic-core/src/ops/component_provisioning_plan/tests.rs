@@ -433,7 +433,7 @@ fn canonical_plan_binds_exact_roots_placements_members_and_limits() {
 
     assert_eq!(
         crate::ids::ComponentDeploymentConfigurationDigest::from_bytes(hash).to_string(),
-        "23c408c260a2bb45ac7204e99e92f02964e8909a8835104a83a7280045a26ed8"
+        "696c1a26214fa994dddeb507d905b0217d1658c83ffba0649b09427cfd1c2a65"
     );
 
     assert_eq!(
