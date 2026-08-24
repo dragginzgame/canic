@@ -13,7 +13,7 @@ canic_core::ic_memory_range!(
     authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
     start =
         canic_core::role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_FUNDING_ID,
-    end = canic_core::role_contract::allocation::memory::control_plane::ROOT_FUNDING_ID,
+    end = canic_core::role_contract::allocation::memory::control_plane::ROOT_ADMISSION_ID,
 );
 
 #[cfg(test)]

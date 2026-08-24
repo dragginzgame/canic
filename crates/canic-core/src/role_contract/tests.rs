@@ -116,9 +116,11 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::BlobStorageBilling, vec![58]),
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
-        (StateAllocationKey::CoreRuntimeWhitelist, vec![61]),
+        (StateAllocationKey::CoreFleetAdmissionProjection, vec![61]),
         (StateAllocationKey::FleetCoordinatorFunding, vec![62]),
         (StateAllocationKey::RootFunding, vec![63]),
+        (StateAllocationKey::FleetCoordinatorAdmission, vec![64]),
+        (StateAllocationKey::RootAdmission, vec![65]),
         (StateAllocationKey::TemplateManifests, vec![10]),
         (StateAllocationKey::TemplateChunkSets, vec![11]),
         (StateAllocationKey::TemplateChunkRefs, vec![12]),
@@ -163,12 +165,18 @@ fn canonical_allocations_form_packed_owner_ledgers() {
             .chain(std::iter::once(
                 allocation::memory::control_plane::ROOT_FUNDING_ID,
             ))
+            .chain(std::iter::once(
+                allocation::memory::control_plane::FLEET_COORDINATOR_ADMISSION_ID,
+            ))
+            .chain(std::iter::once(
+                allocation::memory::control_plane::ROOT_ADMISSION_ID,
+            ))
             .collect::<Vec<_>>()
     );
     assert_eq!(
         ids(AllocationOwner::CanicCore),
         (allocation::CANIC_CORE_MIN_ID
-            ..=allocation::memory::runtime_whitelist::RUNTIME_WHITELIST_ID)
+            ..=allocation::memory::fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID)
             .collect::<Vec<_>>()
     );
 }
@@ -236,6 +244,7 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
     app.sharding = Some(ShardingConfig::default());
     let config = ConfigTestBuilder::new()
         .with_default_canister("app", app)
+        .with_fleet_admission("app")
         .build();
     let role = CanisterRole::owned("app".to_string());
 
@@ -246,6 +255,7 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
         first,
         BTreeSet::from([
             RoleCapabilityKey::DelegatedTokenVerifier,
+            RoleCapabilityKey::FleetAdmissionProjection,
             RoleCapabilityKey::RoleAttestationVerifier,
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Sharding,
@@ -266,12 +276,15 @@ fn local_application_authorization_capability_is_exactly_role_pruned() {
     let config = ConfigTestBuilder::new()
         .with_default_canister("enabled", enabled)
         .with_default_canister("disabled", disabled)
+        .with_fleet_admission("enabled")
         .build();
 
     let enabled = derive_role_capabilities(&config, &CanisterRole::new("enabled")).unwrap();
     let disabled = derive_role_capabilities(&config, &CanisterRole::new("disabled")).unwrap();
     assert!(enabled.contains(&RoleCapabilityKey::LocalApplicationAuthorization));
     assert!(enabled.contains(&RoleCapabilityKey::DelegatedTokenVerifier));
+    assert!(enabled.contains(&RoleCapabilityKey::FleetAdmissionProjection));
+    assert!(!disabled.contains(&RoleCapabilityKey::FleetAdmissionProjection));
     assert!(!disabled.contains(&RoleCapabilityKey::LocalApplicationAuthorization));
     assert!(
         !built_in_role_capabilities(BuiltInRoleKind::FleetCoordinator)
@@ -284,16 +297,37 @@ fn local_application_authorization_capability_is_exactly_role_pruned() {
 }
 
 #[test]
-fn runtime_whitelist_allocation_is_declared_nonroot_only() {
-    let service = resolved_service_contract(
-        ConfigTestBuilder::canister_config(CanisterKind::Service),
-        BTreeSet::new(),
-    );
+fn fleet_admission_projection_allocation_requires_explicit_nonroot_enrollment() {
+    let role = CanisterRole::new("service");
+    let config = ConfigTestBuilder::new()
+        .with_default_canister(
+            role.clone(),
+            ConfigTestBuilder::canister_config(CanisterKind::Service),
+        )
+        .with_fleet_admission(role.clone())
+        .build();
+    let RoleContractResolution::Resolved { contract: service } =
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features: BTreeSet::new(),
+            default_features_enabled: true,
+        })
+    else {
+        panic!("enrolled service role contract should resolve");
+    };
     assert!(
         service
             .allocations
             .iter()
-            .any(|allocation| allocation.key == StateAllocationKey::CoreRuntimeWhitelist)
+            .any(|allocation| allocation.key == StateAllocationKey::CoreFleetAdmissionProjection)
+    );
+    assert!(
+        service
+            .capabilities
+            .contains(&RoleCapabilityKey::FleetAdmissionProjection)
     );
 
     let root_config = ConfigTestBuilder::new()
@@ -315,7 +349,7 @@ fn runtime_whitelist_allocation_is_declared_nonroot_only() {
         !root
             .allocations
             .iter()
-            .any(|allocation| allocation.key == StateAllocationKey::CoreRuntimeWhitelist)
+            .any(|allocation| allocation.key == StateAllocationKey::CoreFleetAdmissionProjection)
     );
 
     for (role, declared_feature) in [
@@ -338,10 +372,9 @@ fn runtime_whitelist_allocation_is_declared_nonroot_only() {
             panic!("built-in contract should resolve");
         };
         assert!(
-            !contract
-                .allocations
-                .iter()
-                .any(|allocation| allocation.key == StateAllocationKey::CoreRuntimeWhitelist)
+            !contract.allocations.iter().any(
+                |allocation| allocation.key == StateAllocationKey::CoreFleetAdmissionProjection
+            )
         );
     }
 }
@@ -505,7 +538,7 @@ fn surplus_state_feature_allocates_normally() {
         allocation_ids(&contract.allocations),
         vec![
             30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 55, 56, 57, 58,
-            60, 61,
+            60,
         ]
     );
 }
@@ -543,7 +576,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60, 63,
+            34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 59, 60, 63, 65,
         ]
     );
 }
@@ -573,7 +606,7 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
 }
 
 #[test]
-fn built_in_fleet_coordinator_selects_registry_funding_and_restore_fence() {
+fn built_in_fleet_coordinator_selects_admission_registry_funding_and_restore_fence() {
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::BuiltIn(BuiltInRoleKind::FleetCoordinator),
         declared_features: BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister]),
@@ -583,7 +616,7 @@ fn built_in_fleet_coordinator_selects_registry_funding_and_restore_fence() {
         panic!("built-in Fleet Coordinator contract should resolve");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59, 62]);
+    assert_eq!(allocation_ids(&contract.allocations), vec![15, 59, 62, 64]);
     assert_eq!(
         contract.required_features,
         BTreeSet::from([CanicFeatureKey::FleetCoordinatorCanister])

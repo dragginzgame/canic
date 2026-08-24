@@ -11,8 +11,6 @@ package = "../../../apps/test/root"
 kind = "canister"
 package = "."
 
-[app.whitelist]
-
 [auth.delegated_tokens]
 enabled = false
 

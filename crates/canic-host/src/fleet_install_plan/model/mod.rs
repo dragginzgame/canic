@@ -20,10 +20,10 @@ use canic_core::{
     cdk::types::{Cycles, Principal},
     ids::{
         CanonicalNetworkId, ComponentGroupDeploymentId, ComponentSpecAdmission,
-        ComponentTopologyDigest, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetName,
-        FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet,
-        ReleaseBuildId, ReleaseSetDigest, SubnetId,
+        ComponentTopologyDigest, CyclesFundingBudget, FleetAdmissionPolicy,
+        FleetAdmissionPolicyTemplate, FleetBinding, FleetCoordinatorRootFundingPolicy,
+        FleetFundingProfile, FleetName, FleetSubnetRootFundingAuthority, FleetSubnetRootLimits,
+        FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseSetDigest, SubnetId,
     },
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
@@ -132,6 +132,7 @@ pub struct FreshFleetPreflightRequest<'a> {
     pub app: &'a str,
     pub fleet_name: &'a FleetName,
     pub coordinator: &'a PlannedFleetCoordinator,
+    pub admission: &'a FleetAdmissionPolicyTemplate,
     pub fleet_subnet_roots: &'a [PlannedFleetSubnetRootInput],
     pub build_profile: CanisterBuildProfile,
     pub release_build_id: Option<ReleaseBuildId>,
@@ -147,6 +148,7 @@ pub struct FreshFleetSubnetRootPlanV1 {
     pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,
+    pub admission_projections: Vec<PlannedFleetAdmissionProjection>,
     #[serde(with = "root_limits_document")]
     pub limits: FleetSubnetRootLimits,
     pub funding: FleetSubnetRootFundingAuthority,
@@ -159,6 +161,16 @@ pub struct FreshFleetSubnetRootPlanV1 {
     pub remaining_pool_canisters: u32,
 }
 
+/// One protected pre-allocation effective admission projection bound into the Fleet plan.
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlannedFleetAdmissionProjection {
+    pub component_spec: canic_core::ids::ComponentSpecId,
+    pub participant_roles: Vec<canic_core::ids::CanisterRole>,
+    pub effective_principal_count: u32,
+    pub template_projection_digest: [u8; 32],
+}
+
 /// Canonical placement, admission and funding result shared by plan and install.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -168,6 +180,7 @@ pub struct FreshFleetPreflightV1 {
     pub fleet_name: FleetName,
     pub funding_profile: FleetFundingProfile,
     pub coordinator: PlannedFleetCoordinator,
+    pub admission: FleetAdmissionPolicyTemplate,
     pub fleet_subnet_roots: Vec<FreshFleetSubnetRootPlanV1>,
     pub build_profile: String,
     pub release_build_id: Option<ReleaseBuildId>,
@@ -346,6 +359,18 @@ pub enum FreshFleetPreflightError {
     #[error("{subject} count does not fit u32")]
     CountDoesNotFitU32 { subject: &'static str },
 
+    #[error("protected Fleet admission policy is invalid: {reason}")]
+    InvalidAdmissionPolicy { reason: String },
+
+    #[error("generation-one Fleet admission selects unknown Component Spec '{component_spec}'")]
+    UnknownAdmissionComponentSpec { component_spec: String },
+
+    #[error("generation-one Fleet admission selects unknown Root Subnet {placement_subnet}")]
+    UnknownAdmissionFleetSubnetRoot { placement_subnet: SubnetId },
+
+    #[error("generation-one Fleet admission does not accept Fleet or Component-instance rules")]
+    UnsupportedAdmissionSelector,
+
     #[error(transparent)]
     Topology(#[from] FleetTopologyPlanError),
 }
@@ -404,6 +429,7 @@ pub struct PlannedFleetSubnetRoot {
     pub component_group_placements: Vec<PlannedComponentGroupPlacementAssignment>,
     pub component_admissions: Vec<ComponentSpecAdmission>,
     pub component_topology_digest: ComponentTopologyDigest,
+    pub admission_projections: Vec<PlannedFleetAdmissionProjection>,
     pub initial_release_set: FleetSubnetRootReleaseSet,
     #[serde(with = "root_limits_document")]
     pub limits: FleetSubnetRootLimits,
@@ -426,6 +452,7 @@ pub struct FleetInstallPlan {
     pub fresh_fleet_plan_digest: String,
     pub release_build_id: ReleaseBuildId,
     pub application_artifact_union_digest: [u8; 32],
+    pub admission: FleetAdmissionPolicy,
     pub coordinator: PlannedFleetCoordinator,
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRoot>,
 }
@@ -472,6 +499,7 @@ pub struct FleetInstallPlanRequest<'a> {
     pub fresh_fleet_plan_digest: String,
     pub release_build_id: ReleaseBuildId,
     pub coordinator: PlannedFleetCoordinator,
+    pub admission: FleetAdmissionPolicyTemplate,
     pub fleet_subnet_roots: Vec<PlannedFleetSubnetRootInput>,
 }
 
@@ -521,6 +549,9 @@ pub enum FleetInstallPlanError {
 
     #[error("Fleet install plan fresh-Fleet digest is not canonical SHA-256 text")]
     InvalidFreshFleetPlanDigest,
+
+    #[error("Fleet install admission policy is invalid: {reason}")]
+    InvalidAdmissionPolicy { reason: String },
 
     #[error("Fleet Subnet Root plans are not in canonical placement order")]
     NonCanonicalRootOrder,

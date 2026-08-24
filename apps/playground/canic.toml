@@ -5,9 +5,6 @@
 name = "playground"
 
 # Add the mainnet operator principal before building a deployable release.
-[app.whitelist]
-principals = []
-
 [roles.root]
 kind = "root"
 package = "root"
@@ -15,6 +12,7 @@ package = "root"
 [roles.playground_hub]
 kind = "canister"
 package = "playground_hub"
+fleet_admission = true
 
 [roles.wenzelroll]
 kind = "canister"

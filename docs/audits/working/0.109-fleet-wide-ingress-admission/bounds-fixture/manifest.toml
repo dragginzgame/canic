@@ -1,0 +1,10 @@
+[package]
+name = "canic-109-measure"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+candid = "=0.10.35"
+ciborium = "=0.2.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+

@@ -24,6 +24,7 @@ pub mod component_runtime;
 pub mod config;
 pub mod cost_guard;
 pub mod fleet_activation;
+pub mod fleet_admission_policy;
 pub mod fleet_funding_policy;
 pub mod fleet_registry;
 pub mod fleet_service_binding;

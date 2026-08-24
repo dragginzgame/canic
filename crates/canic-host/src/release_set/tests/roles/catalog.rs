@@ -117,10 +117,6 @@ package = "scale"
 [roles.role_baseline]
 kind = "canister"
 package = "role_baseline"
-[app.whitelist]
-
-
-
 [component_specs.user_hub]
 component_role = "user_hub"
 maximum_instances = 1

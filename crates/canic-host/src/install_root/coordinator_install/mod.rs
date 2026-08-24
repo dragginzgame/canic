@@ -340,6 +340,7 @@ fn expected_genesis(
         &journal
             .component_deployment_configuration
             .component_topology,
+        journal.admission.clone(),
     )?;
     let manifest = FleetRegistryOps::manifest(
         &authority,
@@ -359,6 +360,7 @@ fn expected_genesis(
         init_args: FleetCoordinatorInitArgs {
             configured_app: journal.fleet.app.clone(),
             authority,
+            admission: journal.admission.clone(),
             component_deployment_configuration: journal.component_deployment_configuration.clone(),
             root_funding: journal.root_funding.clone(),
         },
@@ -389,12 +391,13 @@ mod tests {
             configured_app,
             authority: FleetRegistryAuthority {
                 binding: FleetCoordinatorBinding {
-                    fleet,
+                    fleet: fleet.clone(),
                     coordinator_subnet,
                     coordinator,
                 },
                 epoch: 1,
             },
+            admission: crate::test_support::fleet_admission_policy(fleet),
             component_deployment_configuration:
                 canic_core::bootstrap::compiled::ComponentDeploymentConfiguration {
                     component_topology: canic_core::bootstrap::compiled::ComponentTopology {

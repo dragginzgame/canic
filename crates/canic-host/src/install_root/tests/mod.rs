@@ -476,8 +476,6 @@ package = "scale"
 [roles.worker]
 kind = "canister"
 package = "worker"
-[app.whitelist]
-
 {attached}
 "#
     )
@@ -517,9 +515,6 @@ init_mode = "enabled"
 [roles.root]
 kind = "root"
 package = "root"
-[app.whitelist]
-
-
 "#,
     )
     .expect("write config");
@@ -541,8 +536,6 @@ package = "root"
 [roles.app]
 kind = "canister"
 package = "app"
-[app.whitelist]
-
 [component_specs.app]
 component_role = "app"
 maximum_instances = 1
@@ -555,6 +548,9 @@ fn invalid_root_only_fleet_input() -> &'static str {
     r#"schema_version = 1
 funding_profile = "single_subnet"
 operator = "ryjl3-tyaaa-aaaaa-aaaba-cai"
+
+[admission]
+principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai"]
 
 [coordinator.subnet]
 kind = "explicit"
@@ -721,9 +717,6 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-[app.whitelist]
-
-
 "#,
     )
     .expect("write config");

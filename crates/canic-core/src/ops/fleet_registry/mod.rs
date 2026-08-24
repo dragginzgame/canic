@@ -22,10 +22,13 @@ use crate::{
         FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
     ids::{
-        AppId, ComponentSpecAdmission, ComponentSpecId, FleetRegistryAuthority,
-        FleetSubnetRootLimits, ReleaseBuildId,
+        AppId, ComponentSpecAdmission, ComponentSpecId, FleetAdmissionPolicy,
+        FleetAdmissionSelector, FleetRegistryAuthority, FleetSubnetRootLimits, ReleaseBuildId,
     },
-    model::fleet_funding_policy::FleetFundingPolicyValidationError,
+    model::{
+        fleet_admission_policy::FleetAdmissionPolicyValidationError,
+        fleet_funding_policy::FleetFundingPolicyValidationError,
+    },
     ops::{OpsError, fleet_funding_policy::fleet_subnet_root_funding_policy_hash},
 };
 use candid::Principal;
@@ -58,6 +61,12 @@ pub enum FleetRegistryOpsError {
 
     #[error("Fleet Registry authority does not match the protected expected authority")]
     AuthorityMismatch,
+
+    #[error("Fleet Registry admission policy does not match its protected Fleet authority")]
+    FleetAdmissionAuthorityMismatch,
+
+    #[error("Fleet Registry admission policy is invalid: {0}")]
+    FleetAdmissionPolicy(#[from] FleetAdmissionPolicyValidationError),
 
     #[error("Fleet Registry canonical bytes exceed bound {maximum_bytes}: {actual_bytes}")]
     CanonicalBytesExceeded {
@@ -218,8 +227,9 @@ impl FleetRegistryOps {
         configured_app: &AppId,
         authority: FleetRegistryAuthority,
         topology: &ComponentTopology,
+        admission: FleetAdmissionPolicy,
     ) -> Result<FleetRegistry, InternalError> {
-        validation::compile_genesis(configured_app, authority, topology)
+        validation::compile_genesis(configured_app, authority, topology, admission)
             .map_err(OpsError::from)
             .map_err(InternalError::from)
     }
@@ -730,6 +740,7 @@ fn canonical_bytes(
     let mut encoder = CanonicalEncoder::new();
     encode_authority(&mut encoder, &registry.authority);
     encoder.u64(registry.revision);
+    encode_fleet_admission_policy(&mut encoder, &registry.admission);
     encoder.u64(registry.component_specs.len() as u64);
     for component_spec in &registry.component_specs {
         encode_component_spec(&mut encoder, component_spec);
@@ -743,6 +754,41 @@ fn canonical_bytes(
         encode_service(&mut encoder, service);
     }
     encoder.finish()
+}
+
+fn encode_fleet_admission_policy(encoder: &mut CanonicalEncoder, policy: &FleetAdmissionPolicy) {
+    encoder.u16(policy.schema_version);
+    encoder.bytes(policy.fleet.fleet.canonical_network_id.as_bytes());
+    encoder.bytes(policy.fleet.fleet.fleet_id.as_bytes());
+    encoder.string(policy.fleet.app.as_str());
+    encoder.u64(policy.generation);
+    encoder.u64(policy.fleet_principals.len() as u64);
+    for principal in &policy.fleet_principals {
+        encoder.bytes(principal.as_slice());
+    }
+    encoder.u64(policy.rules.len() as u64);
+    for rule in &policy.rules {
+        match &rule.selector {
+            FleetAdmissionSelector::Fleet => encoder.u8(0),
+            FleetAdmissionSelector::ComponentSpec(component_spec) => {
+                encoder.u8(1);
+                encoder.string(component_spec.as_str());
+            }
+            FleetAdmissionSelector::ComponentInstance(component_instance) => {
+                encoder.u8(2);
+                encoder.bytes(component_instance.as_bytes());
+            }
+            FleetAdmissionSelector::FleetSubnetRoot(fleet_subnet_root) => {
+                encoder.u8(3);
+                encoder.bytes(fleet_subnet_root.as_principal().as_slice());
+            }
+        }
+        encoder.u64(rule.principals.len() as u64);
+        for principal in &rule.principals {
+            encoder.bytes(principal.as_slice());
+        }
+    }
+    encoder.bytes(&policy.policy_digest);
 }
 
 fn encode_authority(encoder: &mut CanonicalEncoder, authority: &FleetRegistryAuthority) {
@@ -878,6 +924,10 @@ impl CanonicalEncoder {
     }
 
     fn u32(&mut self, value: u32) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
+    }
+
+    fn u16(&mut self, value: u16) {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 

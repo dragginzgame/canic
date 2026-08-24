@@ -47,7 +47,7 @@ fn wenzelroll_can_create() -> Result<bool, Error> {
     ScalingApi::plan_create_worker(WENZELROLL_POOL)
 }
 
-#[canic_update(requires(caller::is_whitelisted()))]
+#[canic_update(requires(caller::is_fleet_admitted()))]
 async fn wenzelroll_create() -> Result<WenzelrollView, Error> {
     let canister_id = ScalingApi::create_worker(WENZELROLL_POOL).await?;
     let created_at_secs = ScalingApi::registry()

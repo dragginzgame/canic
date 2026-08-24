@@ -661,22 +661,24 @@ placement.minimum_distinct_roots = 2
             .expect("valid config")
             .compile_component_deployment_configuration()
             .expect("Component deployment configuration");
+        let fleet = FleetBinding {
+            fleet: FleetKey {
+                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                fleet_id: FleetId::from_generated_bytes([7; 32]),
+            },
+            app: AppId::from("demo"),
+        };
         FleetCoordinatorInitArgs {
             configured_app: AppId::from("demo"),
             authority: FleetRegistryAuthority {
                 binding: FleetCoordinatorBinding {
-                    fleet: FleetBinding {
-                        fleet: FleetKey {
-                            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                            fleet_id: FleetId::from_generated_bytes([7; 32]),
-                        },
-                        app: AppId::from("demo"),
-                    },
+                    fleet: fleet.clone(),
                     coordinator_subnet: SubnetId::from_principal(principal(2)),
                     coordinator,
                 },
                 epoch: 1,
             },
+            admission: super::super::fleet_admission_policy(fleet),
             root_funding: Some(super::super::coordinator_root_funding_policy()),
             component_deployment_configuration,
         }

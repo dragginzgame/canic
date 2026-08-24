@@ -60,6 +60,14 @@ struct LifecycleCompositionSnapshot {
     database_access: ProbeEvidence,
 }
 
+/// Observable result from the exact composed-framework admission path.
+#[derive(CandidType, Clone, Debug, Eq, PartialEq)]
+struct ComposedFrameworkAdmissionReceipt {
+    caller: candid::Principal,
+    workflow_runs: u32,
+    icydb_request_session: ProbeEvidence,
+}
+
 #[derive(Clone, Copy)]
 struct LifecycleCompositionRecord {
     hook: ProbeLifecycleHook,
@@ -91,6 +99,7 @@ thread_local! {
     static COMPOSITION: RefCell<LifecycleCompositionRecord> =
         const { RefCell::new(LifecycleCompositionRecord::new(ProbeLifecycleHook::Init)) };
     static LIFECYCLE_RUNNING: Cell<bool> = const { Cell::new(false) };
+    static COMPOSED_FRAMEWORK_WORKFLOW_RUNS: Cell<u32> = const { Cell::new(0) };
 }
 
 canic::start!(lifecycle_participant(
@@ -192,6 +201,51 @@ fn database_startup() -> ProbeDatabaseStartup {
 
 fn database_ready() -> bool {
     icydb::db::with_request_execution(|| db().map(|_| ())).is_ok()
+}
+
+#[canic_query(public)]
+fn composed_framework_public_probe() -> Result<candid::Principal, Error> {
+    Ok(ic_cdk::api::msg_caller())
+}
+
+#[icydb::request_execution]
+#[canic_update(public)]
+fn composed_framework_admission_probe() -> Result<ComposedFrameworkAdmissionReceipt, Error> {
+    let caller = canic::fleet_admission::require_caller()?;
+    let icydb_request_session = ProbeEvidence::from_observation(db().is_ok());
+    let workflow_runs = COMPOSED_FRAMEWORK_WORKFLOW_RUNS.with(|runs| {
+        let next = runs.get().saturating_add(1);
+        runs.set(next);
+        next
+    });
+    Ok(ComposedFrameworkAdmissionReceipt {
+        caller,
+        workflow_runs,
+        icydb_request_session,
+    })
+}
+
+#[icydb::request_execution]
+#[canic_update(public)]
+fn composed_framework_owned_probe() -> Result<candid::Principal, Error> {
+    let caller = canic::fleet_admission::require_caller()?;
+    let application_owner = candid::Principal::from_slice(&[17; 29]);
+    if caller != application_owner {
+        return Err(Error::from_registered(
+            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+        ));
+    }
+    Ok(caller)
+}
+
+#[canic_query(public)]
+fn composed_framework_workflow_runs() -> Result<u32, Error> {
+    Ok(COMPOSED_FRAMEWORK_WORKFLOW_RUNS.with(Cell::get))
+}
+
+#[canic_query(requires(caller::is_fleet_admitted()))]
+async fn canic_fleet_admission_parity_probe() -> Result<candid::Principal, Error> {
+    Ok(ic_cdk::api::msg_caller())
 }
 
 #[canic_query(public)]

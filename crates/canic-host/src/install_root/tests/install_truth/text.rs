@@ -44,8 +44,6 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-[app.whitelist]
-
 "#;
 
 #[test]
@@ -191,9 +189,6 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-[app.whitelist]
-
-
 "#,
     )
     .expect("write config");

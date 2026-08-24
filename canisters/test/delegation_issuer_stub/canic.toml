@@ -1,9 +1,6 @@
 [app]
 name = "delegation_root_stub"
 
-[app.whitelist]
-principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai"]
-
 [roles.root]
 kind = "root"
 package = "../delegation_root_stub"
@@ -11,6 +8,7 @@ package = "../delegation_root_stub"
 [roles.issuer]
 kind = "canister"
 package = "."
+fleet_admission = true
 
 [auth.delegated_tokens]
 enabled = true

@@ -37,7 +37,7 @@ enum CoordinatorStatusRequestFragment {
 
 #[derive(CandidType, serde::Deserialize)]
 enum CoordinatorStatusResponseFragment {
-    Registry(FleetRegistry),
+    Registry(Box<FleetRegistry>),
     RegistryManifest(FleetRegistryManifest),
     RegistryVersion(FleetRegistryVersion),
 }
@@ -112,7 +112,7 @@ pub(super) fn load_report(
     else {
         return Err(correlation_error());
     };
-    let plan = SubnetInventoryPlan::compile(catalog, registry, manifest, version)?;
+    let plan = SubnetInventoryPlan::compile(catalog, *registry, manifest, version)?;
     let summaries = query_root_summaries(&icp, &root_binding, plan.root_principals())?;
     plan.complete(summaries).map_err(Into::into)
 }

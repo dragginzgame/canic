@@ -10,9 +10,16 @@ use crate::{
         FleetComponentSpecEntry, FleetRegistry, FleetServiceBinding, FleetServiceComponentBinding,
         FleetServiceMode, FleetSubnetRootEntry, FleetSubnetRootStatus,
     },
-    ids::{AppId, CanonicalNetworkId, ComponentInstanceId, FleetRegistryAuthority, FleetServiceId},
+    ids::{
+        AppId, CanonicalNetworkId, ComponentInstanceId, FleetAdmissionPolicy,
+        FleetRegistryAuthority, FleetServiceId,
+    },
+    model::fleet_admission_policy::validate_initial_fleet_admission_generation,
     model::fleet_funding_policy::validate_fleet_subnet_root_funding_authority,
-    ops::fleet_registry::FleetRegistryOpsError,
+    ops::{
+        fleet_admission_policy::validate_installed_fleet_admission_policy,
+        fleet_registry::FleetRegistryOpsError,
+    },
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -22,6 +29,7 @@ pub(super) fn compile_genesis(
     configured_app: &AppId,
     authority: FleetRegistryAuthority,
     topology: &ComponentTopology,
+    admission: FleetAdmissionPolicy,
 ) -> Result<FleetRegistry, FleetRegistryOpsError> {
     if authority.epoch != 1 {
         return Err(FleetRegistryOpsError::GenesisAuthorityEpoch(
@@ -34,10 +42,16 @@ pub(super) fn compile_genesis(
             received: authority.binding.fleet.app,
         });
     }
+    validate_installed_fleet_admission_policy(&admission)?;
+    validate_initial_fleet_admission_generation(admission.generation)?;
+    if admission.fleet != authority.binding.fleet {
+        return Err(FleetRegistryOpsError::FleetAdmissionAuthorityMismatch);
+    }
 
     let registry = FleetRegistry {
         authority: authority.clone(),
         revision: 1,
+        admission,
         component_specs: topology
             .component_specs
             .iter()
@@ -66,6 +80,10 @@ pub(super) fn validate(
     }
     if registry.revision == 0 {
         return Err(FleetRegistryOpsError::NonPositiveRevision);
+    }
+    validate_installed_fleet_admission_policy(&registry.admission)?;
+    if registry.admission.fleet != registry.authority.binding.fleet {
+        return Err(FleetRegistryOpsError::FleetAdmissionAuthorityMismatch);
     }
 
     validate_component_specs(topology, &registry.component_specs)?;

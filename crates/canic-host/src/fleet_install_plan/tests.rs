@@ -11,8 +11,9 @@ use canic_core::{
     bootstrap::{compiled::ConfigModel, parse_config_model},
     cdk::types::Cycles,
     ids::{
-        AppId, CanisterRole, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetId,
-        FleetKey, FleetSubnetRootLimits, ReleaseBuildId, SubnetId,
+        AppId, CanisterRole, CanonicalNetworkId, CyclesFundingBudget, FleetAdmissionRule,
+        FleetAdmissionSelector, FleetBinding, FleetId, FleetKey, FleetSubnetRootLimits,
+        ReleaseBuildId, SubnetId,
     },
 };
 use flate2::{Compression, GzBuilder};
@@ -41,6 +42,7 @@ package = "root"
 [roles.alpha]
 kind = "canister"
 package = "alpha"
+fleet_admission = true
 
 [roles.beta]
 kind = "canister"
@@ -206,6 +208,7 @@ fn request<'a>(
         fresh_fleet_plan_digest: "ab".repeat(32),
         release_build_id,
         coordinator: coordinator(),
+        admission: crate::test_support::fleet_admission_policy_template(),
         fleet_subnet_roots: vec![
             root_input(7, vec![admission("beta", 1), admission("alpha", 1)]),
             root_input(6, vec![admission("alpha", 1)]),
@@ -222,12 +225,14 @@ fn fresh_fleet_preflight_canonicalizes_roots_before_any_effect() {
         root_input(6, vec![admission("alpha", 1)]),
     ];
     let fleet_name = "demo-local".parse().expect("Fleet name");
+    let admission = crate::test_support::fleet_admission_policy_template();
 
     let preflight = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
         config: &config,
         app: "demo",
         fleet_name: &fleet_name,
         coordinator: &coordinator,
+        admission: &admission,
         fleet_subnet_roots: &roots,
         build_profile: CanisterBuildProfile::Release,
         release_build_id: None,
@@ -239,6 +244,13 @@ fn fresh_fleet_preflight_canonicalizes_roots_before_any_effect() {
     assert_eq!(preflight.app, "demo");
     assert_eq!(preflight.fleet_name, fleet_name);
     assert!(preflight.effects.no_effects_started());
+    assert!(preflight.fleet_subnet_roots.iter().all(|root| {
+        root.admission_projections.len() == 1
+            && root.admission_projections[0].component_spec.as_ref() == "alpha"
+            && root.admission_projections[0].participant_roles == vec![CanisterRole::from("alpha")]
+            && root.admission_projections[0].effective_principal_count == 1
+            && root.admission_projections[0].template_projection_digest != [0; 32]
+    }));
     assert_eq!(
         preflight
             .fleet_subnet_roots
@@ -258,12 +270,14 @@ fn fresh_fleet_preflight_rejects_any_started_effect() {
         vec![admission("alpha", 2), admission("beta", 1)],
     )];
     let fleet_name = "demo-local".parse().expect("Fleet name");
+    let admission = crate::test_support::fleet_admission_policy_template();
 
     let error = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
         config: &config,
         app: "demo",
         fleet_name: &fleet_name,
         coordinator: &coordinator,
+        admission: &admission,
         fleet_subnet_roots: &roots,
         build_profile: CanisterBuildProfile::Release,
         release_build_id: None,
@@ -285,6 +299,47 @@ fn fresh_fleet_preflight_rejects_any_started_effect() {
 }
 
 #[test]
+fn fresh_fleet_preflight_rejects_unknown_admission_topology() {
+    let config = config();
+    let coordinator = coordinator();
+    let roots = vec![root_input(
+        6,
+        vec![admission("alpha", 1), admission("beta", 1)],
+    )];
+    let fleet_name = "demo-local".parse().expect("Fleet name");
+    let principal = Principal::from_slice(&[1; 29]);
+    let admission = canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(
+        vec![principal],
+        vec![FleetAdmissionRule {
+            selector: FleetAdmissionSelector::ComponentSpec(
+                "missing".parse().expect("Component Spec ID"),
+            ),
+            principals: vec![principal],
+        }],
+    )
+    .expect("structurally valid admission template");
+
+    let error = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
+        config: &config,
+        app: "demo",
+        fleet_name: &fleet_name,
+        coordinator: &coordinator,
+        admission: &admission,
+        fleet_subnet_roots: &roots,
+        build_profile: CanisterBuildProfile::Release,
+        release_build_id: None,
+        effects: FreshFleetPreflightEffectsV1::none_started(),
+    })
+    .expect_err("unknown admission selector target must reject");
+
+    assert!(matches!(
+        error,
+        FreshFleetPreflightError::UnknownAdmissionComponentSpec { component_spec }
+            if component_spec == "missing"
+    ));
+}
+
+#[test]
 fn fresh_fleet_preflight_rejects_incomplete_group_placement() {
     let config = group_config();
     let coordinator = coordinator();
@@ -293,12 +348,14 @@ fn fresh_fleet_preflight_rejects_incomplete_group_placement() {
     let second = root_input(7, vec![admission("alpha", 1), admission("beta", 1)]);
     let roots = vec![first, second];
     let fleet_name = "demo-local".parse().expect("Fleet name");
+    let admission = crate::test_support::fleet_admission_policy_template();
 
     let error = compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
         config: &config,
         app: "demo",
         fleet_name: &fleet_name,
         coordinator: &coordinator,
+        admission: &admission,
         fleet_subnet_roots: &roots,
         build_profile: CanisterBuildProfile::Release,
         release_build_id: None,
@@ -331,12 +388,14 @@ fn complete_group_preflight() -> FreshFleetPreflightV1 {
     second.wasm_store_creation_funding = PlannedCanisterCreationFunding::Cycles { cycles: 300 };
     second.limits.canister_pool.canister_cycles = Cycles::new(50);
     let fleet_name = "demo-local".parse().expect("Fleet name");
+    let admission = crate::test_support::fleet_admission_policy_template();
 
     compile_fresh_fleet_preflight(FreshFleetPreflightRequest {
         config: &config,
         app: "demo",
         fleet_name: &fleet_name,
         coordinator: &coordinator,
+        admission: &admission,
         fleet_subnet_roots: &[second, first],
         build_profile: CanisterBuildProfile::Release,
         release_build_id: None,
@@ -488,7 +547,7 @@ fn complete_decision_rejects_insufficient_or_stale_balance() {
 }
 
 #[test]
-fn complete_decision_digest_binds_coordinator_and_root_funding_policy() {
+fn complete_decision_digest_binds_funding_and_admission_policy() {
     let baseline = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
         preflight: complete_group_preflight(),
         authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
@@ -521,6 +580,20 @@ fn complete_decision_digest_binds_coordinator_and_root_funding_policy() {
     })
     .expect("changed root policy decision");
     assert_ne!(baseline.plan_digest, changed_root.plan_digest);
+
+    let mut changed_admission = complete_group_preflight();
+    changed_admission.admission =
+        canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(
+            vec![Principal::from_slice(&[2; 29])],
+            Vec::new(),
+        )
+        .expect("changed admission template");
+    let changed_admission = compile_fresh_fleet_deployment_plan(FreshFleetDeploymentPlanRequest {
+        preflight: changed_admission,
+        authority: decision_authority(COMPLETE_OPERATOR_DEBIT_CYCLES),
+    })
+    .expect("changed admission policy decision");
+    assert_ne!(baseline.plan_digest, changed_admission.plan_digest);
 }
 
 #[test]
@@ -547,6 +620,15 @@ fn exact_multi_root_plan_and_manifests_are_immutable_and_idempotent() {
 
     assert_eq!(repeated, persisted);
     assert_eq!(persisted.plan.fresh_fleet_plan_digest, "ab".repeat(32));
+    assert_eq!(persisted.plan.admission.fleet, fleet);
+    assert_eq!(persisted.plan.admission.generation, 1);
+    assert_ne!(persisted.plan.admission.policy_digest, [0; 32]);
+    assert!(persisted.plan.fleet_subnet_roots.iter().all(|root| {
+        root.admission_projections.len() == 1
+            && root.admission_projections[0].component_spec.as_ref() == "alpha"
+            && root.admission_projections[0].participant_roles == vec![CanisterRole::from("alpha")]
+            && root.admission_projections[0].template_projection_digest != [0; 32]
+    }));
     fs::remove_file(&persisted.path).expect("simulate interruption before plan publication");
     assert_eq!(
         compile_and_persist_fleet_install_plan(request(

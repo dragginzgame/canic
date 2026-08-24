@@ -14,6 +14,7 @@ use crate::deploy::{
 
 use std::path::Path;
 
+use canic_core::{cdk::utils::hash::hex_bytes, ids::FLEET_ADMISSION_INITIAL_GENERATION};
 use canic_host::{
     durable_io::create_new_bytes,
     fleet_install_input::{
@@ -427,6 +428,20 @@ fn append_fresh_fleet_decision(lines: &mut Vec<String>, plan: &FreshFleetDeploym
     let operator = &plan.authority.operator;
     lines.push("canonical fresh-Fleet decision".to_string());
     lines.push(format!("  plan_digest: {}", plan.plan_digest));
+    let admission = &plan.preflight.admission;
+    let narrower_principal_references = admission
+        .rules
+        .iter()
+        .map(|rule| rule.principals.len())
+        .sum::<usize>();
+    lines.push(format!(
+        "  admission: generation={} template_digest={} fleet_principals={} narrower_rules={} narrower_principal_references={}",
+        FLEET_ADMISSION_INITIAL_GENERATION,
+        hex_bytes(admission.template_digest),
+        admission.fleet_principals.len(),
+        admission.rules.len(),
+        narrower_principal_references,
+    ));
     lines.push(format!("  operator_principal: {}", operator.principal));
     lines.push(format!(
         "  operator_funding_account: {}",
@@ -460,13 +475,14 @@ fn append_fresh_fleet_decision(lines: &mut Vec<String>, plan: &FreshFleetDeploym
     ));
     for root in &plan.preflight.fleet_subnet_roots {
         lines.push(format!(
-            "  root: subnet={} component={} initial_pool={} pool_creations={} ready_pool={} admissions={}",
+            "  root: subnet={} component={} initial_pool={} pool_creations={} ready_pool={} admissions={} admission_projections={}",
             root.placement_subnet,
             root.initial_component_canisters,
             root.initial_pool_canisters,
             root.pool_canister_creations,
             root.remaining_pool_canisters,
             root.component_admissions.len(),
+            root.admission_projections.len(),
         ));
     }
     for requirement in &plan.funding_requirements {

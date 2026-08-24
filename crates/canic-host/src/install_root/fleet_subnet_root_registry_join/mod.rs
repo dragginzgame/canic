@@ -82,6 +82,7 @@ pub(super) fn register_and_verify_fleet_subnet_roots_joining(
         &fleet_install_plan.plan.fleet.app,
         authority.clone(),
         &component_topology,
+        fleet_install_plan.plan.admission.clone(),
     )?;
 
     for root_plan in &fleet_install_plan.plan.fleet_subnet_roots {

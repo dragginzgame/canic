@@ -551,6 +551,7 @@ mod tests {
         let registry = FleetRegistry {
             authority: authority.clone(),
             revision: version.revision,
+            admission: crate::test_support::fleet_admission_policy(authority.binding.fleet.clone()),
             component_specs: Vec::new(),
             fleet_subnet_roots: vec![target_entry.clone(), requester_entry.clone()],
             services: vec![service],

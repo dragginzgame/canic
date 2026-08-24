@@ -12,6 +12,7 @@ mod component;
 mod component_deployment;
 mod endpoint;
 mod fleet;
+mod fleet_admission;
 mod fleet_topology;
 mod intent;
 mod metrics;
@@ -36,6 +37,13 @@ pub use component_deployment::{
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use fleet::{
     FleetBinding, FleetId, FleetIdParseError, FleetKey, FleetName, FleetNameParseError,
+};
+pub use fleet_admission::{
+    FLEET_ADMISSION_INITIAL_GENERATION, FLEET_ADMISSION_SCHEMA_VERSION, FleetAdmissionPolicy,
+    FleetAdmissionPolicyTemplate, FleetAdmissionProjection, FleetAdmissionRule,
+    FleetAdmissionSelector, FleetAdmissionTarget, MAX_FLEET_ADMISSION_PRINCIPALS,
+    MAX_FLEET_ADMISSION_PROJECTION_PAGE, MAX_FLEET_ADMISSION_PROJECTION_RECORD_BYTES,
+    MAX_FLEET_ADMISSION_RULE_PRINCIPAL_REFERENCES, MAX_FLEET_ADMISSION_RULES,
 };
 pub use fleet_topology::{
     COORDINATOR_ROOT_FUNDING_EXECUTION_RESERVE_FLOOR_CYCLES, ComponentBinding,

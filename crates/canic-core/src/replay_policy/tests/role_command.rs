@@ -100,6 +100,7 @@ fn coordinator_long_running_intents_are_operation_replay_protected() {
     for variant in [
         "ApplyFundingPolicyRotation",
         "BeginFundingPolicyRotation",
+        "MutateAdmission",
         "ProvisionComponents",
         "RemoveRoot",
         "RequestRootFunding",
@@ -155,15 +156,44 @@ fn managed_auth_effects_own_exact_replay_contracts() {
         prepare.quota_policy,
         Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
     );
+}
 
-    let runtime_whitelist =
-        command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "RuntimeWhitelist");
-    assert_eq!(
-        runtime_whitelist.replay_policy,
-        ReplayPolicy::ResponseIdempotent {
-            command_kind: replay_command_kind("runtime_whitelist.mutate.v1"),
-        }
-    );
+#[test]
+fn managed_admission_transitions_are_operation_replay_protected() {
+    for variant in [
+        "ActivateFleetAdmission",
+        "OpenFleetAdmission",
+        "PrepareFleetAdmission",
+    ] {
+        let entry = command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, variant);
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                requires_operation_id: true,
+                ..
+            }
+        ));
+        assert_eq!(entry.cost_class, CostClass::None);
+    }
+}
+
+#[test]
+fn root_admission_transitions_are_operation_replay_protected() {
+    for variant in [
+        "ActivateFleetAdmission",
+        "OpenFleetAdmission",
+        "PrepareFleetAdmission",
+    ] {
+        let entry = command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, variant);
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                requires_operation_id: true,
+                ..
+            }
+        ));
+        assert_eq!(entry.cost_class, CostClass::None);
+    }
 }
 
 #[test]

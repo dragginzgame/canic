@@ -287,7 +287,7 @@ fn standalone_local_emits_only_local_status_and_standards() {
 }
 
 #[test]
-fn runtime_whitelist_is_managed_only_and_authenticates_before_state_access() {
+fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_access() {
     let workspace = workspace_root();
     let role_path = workspace.join("crates/canic/src/macros/endpoints/role.rs");
     let role = fs::read_to_string(&role_path)
@@ -313,25 +313,45 @@ fn runtime_whitelist_is_managed_only_and_authenticates_before_state_access() {
         })
         .expect("standalone-local status emitter");
 
-    for source in [managed_status, managed_command] {
+    assert!(
+        managed_status.contains(
+            "#[cfg(canic_capability_fleet_admission_projection)]\n            Admission("
+        ) && managed_status.contains("CanisterStatusRequest::Admission"),
+        "an explicitly enrolled managed role must expose the local Fleet-admission projection"
+    );
+    for variant in [
+        "ActivateFleetAdmission(",
+        "OpenFleetAdmission(",
+        "PrepareFleetAdmission(",
+    ] {
+        let position = managed_command
+            .find(variant)
+            .unwrap_or_else(|| panic!("managed admission command variant {variant}"));
+        let prefix = &managed_command[..position];
         assert!(
-            source.contains("RuntimeWhitelist"),
-            "managed role surface must own the runtime-whitelist selector"
-        );
-        let auth = source
-            .find("is_controller_or_root(caller)")
-            .expect("controller-or-Root authorization");
-        let dispatch = source
-            .find("RuntimeWhitelistApi")
-            .expect("runtime-whitelist facade dispatch");
-        assert!(
-            auth < dispatch,
-            "managed endpoint must authorize before runtime-whitelist state dispatch"
+            prefix.ends_with("#[cfg(canic_capability_fleet_admission_projection)]\n            "),
+            "managed admission command variant {variant} must be role-pruned"
         );
     }
+    let auth = managed_status
+        .find("is_controller_or_root(caller)")
+        .expect("controller-or-Root authorization");
+    let dispatch = managed_status
+        .find("FleetAdmissionProjectionApi::status")
+        .expect("Fleet-admission projection facade dispatch");
     assert!(
-        !local_status.contains("RuntimeWhitelist"),
-        "standalone-local status must not expose managed runtime-whitelist state"
+        auth < dispatch,
+        "managed status must authorize before projection state dispatch"
+    );
+    assert!(
+        !managed_command.contains("RuntimeWhitelist")
+            && !managed_command.contains("runtime_whitelist"),
+        "removed local whitelist mutation authority must not survive"
+    );
+    assert!(
+        !local_status.contains("FleetAdmissionProjection")
+            && !local_status.contains("CanisterStatusRequest::Admission"),
+        "standalone-local status must not expose managed Fleet-admission state"
     );
 
     for relative in [
@@ -342,8 +362,8 @@ fn runtime_whitelist_is_managed_only_and_authenticates_before_state_access() {
         let source = fs::read_to_string(workspace.join(relative))
             .unwrap_or_else(|error| panic!("read {relative}: {error}"));
         assert!(
-            !source.contains("RuntimeWhitelist") && !source.contains("runtime_whitelist"),
-            "specialized infrastructure surface must not expose runtime whitelist: {relative}"
+            !source.contains("FleetAdmissionProjectionApi"),
+            "specialized infrastructure surface must not expose target-local projection: {relative}"
         );
     }
 }

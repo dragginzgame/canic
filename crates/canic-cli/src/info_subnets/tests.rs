@@ -235,6 +235,15 @@ fn fixture() -> Fixture {
     let registry = FleetRegistry {
         authority: authority.clone(),
         revision: 4,
+        admission: canic_core::shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy(
+            fleet.clone(),
+            &canic_core::shared_support::fleet_admission_policy::compile_fleet_admission_policy_template(
+                vec![principal(1)],
+                Vec::new(),
+            )
+            .expect("Fleet admission template"),
+        )
+        .expect("Fleet admission policy"),
         component_specs: Vec::new(),
         fleet_subnet_roots: vec![
             root(1, 40, FleetSubnetRootStatus::Active),

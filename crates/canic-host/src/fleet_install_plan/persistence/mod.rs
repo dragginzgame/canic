@@ -16,7 +16,8 @@ use crate::{
         FleetInstallPlan, FleetInstallPlanError, FleetInstallPlanRequest,
         FreshFleetPreflightEffectsV1, FreshFleetPreflightError, FreshFleetPreflightRequest,
         FreshFleetSubnetRootPlanV1, PersistedFleetInstallPlan, PersistedFleetSubnetRootReleaseSet,
-        PlannedCanisterCreationFunding, PlannedFleetCoordinator, PlannedFleetSubnetRoot,
+        PlannedCanisterCreationFunding, PlannedFleetAdmissionProjection, PlannedFleetCoordinator,
+        PlannedFleetSubnetRoot,
     },
     fleet_install_plan::preflight::compile_fresh_fleet_preflight,
     release_build::load_finalized_release_build,
@@ -30,7 +31,14 @@ use std::{
 use candid::Principal;
 use canic_core::{
     bootstrap::compiled::ConfigModel,
-    ids::{FleetBinding, FleetSubnetRootReleaseSet, ReleaseBuildId, SubnetId},
+    ids::{
+        FleetAdmissionTarget, FleetBinding, FleetSubnetRootReleaseSet, ReleaseBuildId, SubnetId,
+    },
+    shared_support::fleet_admission_policy::{
+        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
+        effective_fleet_admission_template_principals, fleet_admission_template_projection_digest,
+        validate_installed_fleet_admission_policy,
+    },
 };
 use sha2::{Digest, Sha256};
 
@@ -203,6 +211,7 @@ fn compile_plan(
         app: request.fleet.app.as_str(),
         fleet_name: &request.fleet_name,
         coordinator: &request.coordinator,
+        admission: &request.admission,
         fleet_subnet_roots: &request.fleet_subnet_roots,
         build_profile,
         release_build_id: Some(request.release_build_id),
@@ -228,6 +237,7 @@ fn compile_plan(
             component_group_placements: root.component_group_placements.clone(),
             component_admissions: root.component_admissions.clone(),
             component_topology_digest: root.component_topology_digest,
+            admission_projections: root.admission_projections.clone(),
             initial_release_set: FleetSubnetRootReleaseSet {
                 release_build_id: request.release_build_id,
                 manifest_digest,
@@ -242,11 +252,16 @@ fn compile_plan(
         topology_roots.push(topology_root);
     }
 
+    let admission = bind_initial_fleet_admission_policy(request.fleet.clone(), &request.admission)
+        .map_err(|error| FleetInstallPlanError::InvalidAdmissionPolicy {
+            reason: error.to_string(),
+        })?;
     let plan = FleetInstallPlan {
         fleet: request.fleet.clone(),
         fresh_fleet_plan_digest: request.fresh_fleet_plan_digest.clone(),
         release_build_id: request.release_build_id,
         application_artifact_union_digest: union_digest,
+        admission,
         coordinator: request.coordinator.clone(),
         fleet_subnet_roots: planned_roots,
     };
@@ -296,6 +311,24 @@ fn fleet_install_plan_error(error: FreshFleetPreflightError) -> FleetInstallPlan
         FreshFleetPreflightError::CountDoesNotFitU32 { subject } => {
             invalid_assignments(format!("{subject} count does not fit u32"))
         }
+        FreshFleetPreflightError::InvalidAdmissionPolicy { reason } => {
+            FleetInstallPlanError::InvalidAdmissionPolicy { reason }
+        }
+        FreshFleetPreflightError::UnknownAdmissionComponentSpec { component_spec } => {
+            FleetInstallPlanError::InvalidAdmissionPolicy {
+                reason: format!("unknown Component Spec '{component_spec}'"),
+            }
+        }
+        FreshFleetPreflightError::UnknownAdmissionFleetSubnetRoot { placement_subnet } => {
+            FleetInstallPlanError::InvalidAdmissionPolicy {
+                reason: format!("unknown Fleet Subnet Root {placement_subnet}"),
+            }
+        }
+        FreshFleetPreflightError::UnsupportedAdmissionSelector => {
+            FleetInstallPlanError::InvalidAdmissionPolicy {
+                reason: "unsupported generation-one selector".to_string(),
+            }
+        }
         FreshFleetPreflightError::Topology(error) => FleetInstallPlanError::Topology(error),
     }
 }
@@ -319,6 +352,22 @@ fn canonical_plan_bytes(
     if !is_canonical_sha256(&plan.fresh_fleet_plan_digest) {
         return Err(FleetInstallPlanError::InvalidFreshFleetPlanDigest);
     }
+    validate_installed_fleet_admission_policy(&plan.admission).map_err(|error| {
+        FleetInstallPlanError::InvalidAdmissionPolicy {
+            reason: error.to_string(),
+        }
+    })?;
+    if plan.admission.fleet != plan.fleet {
+        return Err(FleetInstallPlanError::InvalidAdmissionPolicy {
+            reason: "policy Fleet binding does not match its install plan".to_string(),
+        });
+    }
+    if plan.admission.generation != canic_core::ids::FLEET_ADMISSION_INITIAL_GENERATION {
+        return Err(FleetInstallPlanError::InvalidAdmissionPolicy {
+            reason: "fresh install policy is not generation one".to_string(),
+        });
+    }
+    validate_installed_admission_selectors(plan, config)?;
     validate_coordinator(&plan.coordinator)?;
     let mut previous = None;
     let mut admissions = Vec::with_capacity(plan.fleet_subnet_roots.len());
@@ -355,6 +404,95 @@ fn canonical_plan_bytes(
     let bytes = serde_json::to_vec(plan).map_err(FleetInstallPlanError::PlanSerialization)?;
     check_size(&bytes, FileKind::Plan)?;
     Ok(bytes)
+}
+
+fn validate_installed_admission_selectors(
+    plan: &FleetInstallPlan,
+    config: &ConfigModel,
+) -> Result<(), FleetInstallPlanError> {
+    for rule in &plan.admission.rules {
+        match &rule.selector {
+            canic_core::ids::FleetAdmissionSelector::ComponentSpec(component_spec) => {
+                let configured = config.component_specs.contains_key(component_spec);
+                let admitted = plan.fleet_subnet_roots.iter().any(|root| {
+                    root.component_admissions
+                        .iter()
+                        .any(|admission| &admission.component_spec == component_spec)
+                });
+                if !configured || !admitted {
+                    return Err(FleetInstallPlanError::InvalidAdmissionPolicy {
+                        reason: format!("unknown Component Spec '{component_spec}'"),
+                    });
+                }
+            }
+            canic_core::ids::FleetAdmissionSelector::FleetSubnetRoot(placement_subnet) => {
+                if !plan
+                    .fleet_subnet_roots
+                    .iter()
+                    .any(|root| &root.placement_subnet == placement_subnet)
+                {
+                    return Err(FleetInstallPlanError::InvalidAdmissionPolicy {
+                        reason: format!("unknown Fleet Subnet Root {placement_subnet}"),
+                    });
+                }
+            }
+            canic_core::ids::FleetAdmissionSelector::Fleet
+            | canic_core::ids::FleetAdmissionSelector::ComponentInstance(_) => {
+                return Err(FleetInstallPlanError::InvalidAdmissionPolicy {
+                    reason: "unsupported generation-one selector".to_string(),
+                });
+            }
+        }
+    }
+    let template = compile_fleet_admission_policy_template(
+        plan.admission.fleet_principals.clone(),
+        plan.admission.rules.clone(),
+    )
+    .map_err(|error| FleetInstallPlanError::InvalidAdmissionPolicy {
+        reason: error.to_string(),
+    })?;
+    for root in &plan.fleet_subnet_roots {
+        let expected = root
+            .component_admissions
+            .iter()
+            .filter_map(|component| {
+                let participant_roles =
+                    config.component_spec_fleet_admission_roles(&component.component_spec)?;
+                (!participant_roles.is_empty()).then_some((component, participant_roles))
+            })
+            .map(|(component, participant_roles)| {
+                let target = FleetAdmissionTarget {
+                    component_spec: component.component_spec.clone(),
+                    component_instance: None,
+                    fleet_subnet_root: root.placement_subnet,
+                };
+                let effective = effective_fleet_admission_template_principals(&template, &target);
+                Ok(PlannedFleetAdmissionProjection {
+                    component_spec: component.component_spec.clone(),
+                    participant_roles,
+                    effective_principal_count: u32::try_from(effective.len()).map_err(|_| {
+                        FleetInstallPlanError::InvalidAdmissionPolicy {
+                            reason: "projection Principal count does not fit u32".to_string(),
+                        }
+                    })?,
+                    template_projection_digest: fleet_admission_template_projection_digest(
+                        template.template_digest,
+                        &target,
+                        &effective,
+                    ),
+                })
+            })
+            .collect::<Result<Vec<_>, FleetInstallPlanError>>()?;
+        if root.admission_projections != expected {
+            return Err(FleetInstallPlanError::InvalidAdmissionPolicy {
+                reason: format!(
+                    "Fleet Subnet Root {} admission projections do not match policy and topology",
+                    root.placement_subnet
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn is_canonical_sha256(value: &str) -> bool {
@@ -396,6 +534,7 @@ fn fresh_root(root: &PlannedFleetSubnetRoot) -> FreshFleetSubnetRootPlanV1 {
         component_group_placements: root.component_group_placements.clone(),
         component_admissions: root.component_admissions.clone(),
         component_topology_digest: root.component_topology_digest,
+        admission_projections: root.admission_projections.clone(),
         limits: root.limits.clone(),
         funding: root.funding.clone(),
         canister_pool_imports: root.canister_pool_imports.clone(),

@@ -40,6 +40,7 @@ pub mod cycles;
 pub mod env;
 pub mod error;
 pub mod fleet_activation;
+pub mod fleet_admission;
 pub mod fleet_funding;
 pub mod fleet_registry;
 pub mod fleet_subnet_root;
@@ -56,7 +57,6 @@ pub mod role;
 pub mod root_store;
 pub mod rpc;
 pub mod runtime;
-pub mod runtime_whitelist;
 pub mod state;
 
 ///

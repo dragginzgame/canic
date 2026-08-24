@@ -38,6 +38,8 @@ mod tests {
     };
     #[cfg(test)]
     use canic::dto::runtime::{CanicRuntimeStatus, TimerRegistrationStatus};
+    #[cfg(test)]
+    use canic::dto::{fleet_admission::FleetAdmissionProjectionStatusResponse, page::PageRequest};
     use canic::{
         CANIC_WASM_CHUNK_BYTES,
         dto::{
@@ -94,6 +96,12 @@ mod tests {
     use canic_core::{
         cdk::types::Cycles,
         dto::{
+            fleet_admission::{
+                FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
+                FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
+                FleetAdmissionOperationPhase, FleetAdmissionProjectionPhase,
+                FleetAdmissionRootStatusResponse, FleetAdmissionRootTransitionPhase,
+            },
             fleet_funding::{
                 FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
                 FleetFundingPolicyRotationFundingSource,
@@ -105,8 +113,15 @@ mod tests {
             icp_refill::{IcpRefillStatus, IcpRefillTrigger},
         },
         ids::{
-            CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootAutomaticIcpRefillPolicy,
-            FleetSubnetRootFundingPolicy, FleetSubnetRootIcpRefillPolicy,
+            CyclesFundingBudget, FleetAdmissionPolicy, FleetAdmissionSelector, FleetFundingProfile,
+            FleetSubnetRootAutomaticIcpRefillPolicy, FleetSubnetRootFundingPolicy,
+            FleetSubnetRootIcpRefillPolicy,
+        },
+        shared_support::fleet_admission_policy::{
+            compile_installed_fleet_admission_policy, effective_fleet_admission_principals,
+            fleet_admission_participant_catalog_digest,
+            fleet_admission_root_participant_catalog_digest, fleet_admission_target_for_binding,
+            materialize_fleet_admission_projection,
         },
         shared_support::fleet_funding_policy::{
             coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
@@ -160,7 +175,16 @@ mod tests {
     };
 
     #[cfg(test)]
+    use canic::dto::component_provisioning::{
+        ComponentGroupPlacementPlan, ComponentGroupPlanEntry, FleetComponentProvisioningOperation,
+        FleetComponentProvisioningPhase, FleetComponentProvisioningPlan,
+        FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningRetryStage,
+        FleetSubnetRootProvisioningBatch,
+    };
+    #[cfg(test)]
     use canic::dto::fleet_registry::FleetSubnetRootDrainingReservationRequest;
+    #[cfg(test)]
+    use canic::ids::{ComponentGroupPlacementId, FleetSubnetRootBinding};
     #[cfg(test)]
     use canic_control_plane::dto::fleet_coordinator::{
         CoordinatorFundingStatusResponse, CoordinatorOperationStatusResponse,
@@ -218,6 +242,8 @@ mod tests {
     #[derive(CandidType)]
     enum RootStatusRequestFragment {
         #[cfg(test)]
+        Admission(PageRequest),
+        #[cfg(test)]
         AuthorityRestore,
         FleetAuthority,
         #[cfg(test)]
@@ -235,6 +261,8 @@ mod tests {
         reason = "the PocketIC decoder mirrors the direct Root status wire"
     )]
     enum RootStatusResponseFragment {
+        #[cfg(test)]
+        Admission(FleetAdmissionRootStatusResponse),
         #[cfg(test)]
         AuthorityRestore(AuthorityRestoreFenceStatusResponse),
         FleetAuthority(FleetSubnetRootAuthority),
@@ -255,6 +283,18 @@ mod tests {
     #[derive(CandidType, Deserialize)]
     enum ManagedStatusResponseFragment {
         Operation(ManagedOperationStatusResponseFragment),
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType)]
+    enum ManagedAdmissionStatusRequestFragment {
+        Admission(PageRequest),
+    }
+
+    #[cfg(test)]
+    #[derive(CandidType, Deserialize)]
+    enum ManagedAdmissionStatusResponseFragment {
+        Admission(FleetAdmissionProjectionStatusResponse),
     }
 
     #[derive(CandidType, Deserialize)]
@@ -348,6 +388,91 @@ mod tests {
     ) -> Result<RootStatusResponseFragment, Error> {
         pic.query_candid(root, canic::protocol::CANIC_STATUS, (request,))
             .expect("Root status transport")
+    }
+
+    #[cfg(test)]
+    fn root_admission_catalog_authority(
+        pic: &PocketIc,
+        root: Principal,
+        successor: &FleetAdmissionPolicy,
+    ) -> canic_core::shared_support::fleet_admission_authority::FleetAdmissionRootCatalogAuthorityModel{
+        let RootStatusResponseFragment::Admission(status) = root_status(
+            pic,
+            root,
+            RootStatusRequestFragment::Admission(PageRequest {
+                limit: 32,
+                offset: 0,
+            }),
+        )
+        .expect("query Root admission catalog") else {
+            panic!("Root returned a differently correlated admission status");
+        };
+        assert!(status.operation_id.is_none());
+        assert!(status.phase.is_none());
+        assert_eq!(
+            usize::try_from(status.participants.total).expect("participant total fits usize"),
+            status.participants.entries.len()
+        );
+        let projections = status
+            .participants
+            .entries
+            .iter()
+            .map(|participant| {
+                let selector = fleet_admission_target_for_binding(&participant.target);
+                let principals = effective_fleet_admission_principals(successor, &selector);
+                materialize_fleet_admission_projection(
+                    successor,
+                    participant.target.clone(),
+                    principals,
+                )
+                .expect("compile successor participant projection")
+            })
+            .collect::<Vec<_>>();
+        canic_core::shared_support::fleet_admission_authority::FleetAdmissionRootCatalogAuthorityModel {
+            fleet_subnet_root: root,
+            participant_catalog_digest: fleet_admission_root_participant_catalog_digest(
+                &projections,
+            ),
+            participant_count: u32::try_from(status.participants.total)
+                .expect("Root admission participant count fits u32"),
+        }
+    }
+
+    #[cfg(test)]
+    fn root_admission_catalog_authorities(
+        pic: &PocketIc,
+        roots: &[Principal],
+        successor: &FleetAdmissionPolicy,
+    ) -> Vec<canic_core::shared_support::fleet_admission_authority::FleetAdmissionRootCatalogAuthorityModel>{
+        let mut catalogs = roots
+            .iter()
+            .map(|root| root_admission_catalog_authority(pic, *root, successor))
+            .collect::<Vec<_>>();
+        catalogs.sort_unstable_by(|left, right| {
+            left.fleet_subnet_root
+                .as_slice()
+                .cmp(right.fleet_subnet_root.as_slice())
+        });
+        catalogs
+    }
+
+    #[cfg(test)]
+    fn admission_participant_catalog_authority(
+        pic: &PocketIc,
+        roots: &[Principal],
+        successor: &FleetAdmissionPolicy,
+    ) -> ([u8; 32], u32) {
+        let catalogs = root_admission_catalog_authorities(pic, roots, successor);
+        let participant_count = catalogs
+            .iter()
+            .try_fold(0_u32, |total, catalog| {
+                total.checked_add(catalog.participant_count)
+            })
+            .expect("Fleet admission participant count fits u32");
+        (
+            fleet_admission_participant_catalog_digest(&catalogs),
+            participant_count,
+        )
     }
 
     fn root_pool_status(pic: &PocketIc, root: Principal) -> CanisterPoolResponse {
@@ -483,6 +608,190 @@ mod tests {
     ) -> Result<CoordinatorStatusResponse, Error> {
         pic.query_candid(coordinator, canic::protocol::CANIC_STATUS, (request,))
             .expect("Coordinator status transport")
+    }
+
+    #[cfg(test)]
+    fn await_fleet_admission_convergence(
+        pic: &PocketIc,
+        coordinator: Principal,
+        operation_id: [u8; 32],
+    ) -> FleetAdmissionMutationResponse {
+        let mut last_phase = String::new();
+        for _ in 0..128 {
+            let status = coordinator_status(
+                pic,
+                coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query Fleet admission operation");
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::Admission(operation),
+            ) = status
+            else {
+                panic!("Coordinator returned a differently correlated admission operation")
+            };
+            let observed_phase = format!("{:?}", operation.phase);
+            if observed_phase != last_phase {
+                eprintln!("[pic_fleet_admission] Coordinator phase={observed_phase}");
+                last_phase = observed_phase;
+            }
+            if let FleetAdmissionOperationPhase::Completed(response) = operation.phase {
+                return response;
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        report_canister_diagnostics_batch(
+            pic,
+            [("coordinator", coordinator, Principal::anonymous())],
+            "Fleet admission convergence timeout",
+        );
+        panic!("Fleet admission operation did not converge; last phase={last_phase}")
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one proof restarts every retained Coordinator and Root transition boundary"
+    )]
+    fn await_fleet_admission_convergence_across_coordinator_restarts(
+        pic: &PocketIc,
+        coordinator: Principal,
+        roots: &[Principal],
+        targets: &[Principal],
+        operation_id: [u8; 32],
+    ) -> FleetAdmissionMutationResponse {
+        assert_eq!(roots.len(), targets.len());
+        let mut restarted = std::collections::BTreeSet::new();
+        let mut restarted_roots = std::collections::BTreeSet::new();
+        let mut stopped_targets = std::collections::BTreeSet::new();
+        for _ in 0..192 {
+            let status = coordinator_status(
+                pic,
+                coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query interrupted Fleet admission operation");
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::Admission(operation),
+            ) = status
+            else {
+                panic!("Coordinator returned a differently correlated admission operation")
+            };
+            let boundary = match &operation.phase {
+                FleetAdmissionOperationPhase::Preparing { .. } => Some("preparing"),
+                FleetAdmissionOperationPhase::Releasing { .. } => Some("releasing"),
+                FleetAdmissionOperationPhase::PerimeterFenced { .. } => Some("perimeter_fenced"),
+                FleetAdmissionOperationPhase::Activating { .. } => Some("activating"),
+                FleetAdmissionOperationPhase::Opening { .. } => Some("opening"),
+                FleetAdmissionOperationPhase::Planned { .. } => None,
+                FleetAdmissionOperationPhase::Completed(response) => {
+                    assert_eq!(
+                        restarted,
+                        std::collections::BTreeSet::from([
+                            "activating",
+                            "opening",
+                            "perimeter_fenced",
+                            "preparing",
+                        ])
+                    );
+                    let expected_root_boundaries = roots
+                        .iter()
+                        .flat_map(|root| {
+                            ["activating", "opening", "perimeter_fenced", "preparing"]
+                                .map(|phase| (*root, phase))
+                        })
+                        .collect::<std::collections::BTreeSet<_>>();
+                    assert_eq!(restarted_roots, expected_root_boundaries);
+                    return response.clone();
+                }
+            };
+            if let Some(boundary) = boundary
+                && restarted.insert(boundary)
+            {
+                if boundary == "activating" {
+                    for (root, target) in roots.iter().zip(targets) {
+                        pic.stop_canister(*target, Some(*root))
+                            .expect("hold target before Root activation effect");
+                        stopped_targets.insert(*target);
+                    }
+                }
+                pic.stop_canister(coordinator, None)
+                    .expect("stop Coordinator at retained admission boundary");
+                pic.advance_time(Duration::from_secs(1));
+                pic.tick();
+                pic.start_canister(coordinator, None)
+                    .expect("restart Coordinator at retained admission boundary");
+            }
+            for (root, target) in roots.iter().zip(targets) {
+                let response = root_status(
+                    pic,
+                    *root,
+                    RootStatusRequestFragment::Admission(PageRequest {
+                        limit: 1,
+                        offset: 0,
+                    }),
+                );
+                let Ok(RootStatusResponseFragment::Admission(status)) = response else {
+                    continue;
+                };
+                if status.operation_id != Some(operation_id) {
+                    continue;
+                }
+                let boundary = match status.phase {
+                    Some(FleetAdmissionRootTransitionPhase::Preparing) => Some("preparing"),
+                    Some(FleetAdmissionRootTransitionPhase::PerimeterFenced) => {
+                        Some("perimeter_fenced")
+                    }
+                    Some(FleetAdmissionRootTransitionPhase::Activating) => Some("activating"),
+                    Some(FleetAdmissionRootTransitionPhase::Opening) => Some("opening"),
+                    Some(
+                        FleetAdmissionRootTransitionPhase::Converged
+                        | FleetAdmissionRootTransitionPhase::Released,
+                    )
+                    | None => None,
+                };
+                if let Some(boundary) = boundary
+                    && restarted_roots.insert((*root, boundary))
+                {
+                    pic.stop_canister(*root, None)
+                        .expect("stop Root at retained admission boundary");
+                    pic.start_canister(*root, None)
+                        .expect("restart Root at retained admission boundary");
+                    if boundary == "activating" && stopped_targets.remove(target) {
+                        pic.start_canister(*target, Some(*root))
+                            .expect("release target after retained Root activation boundary");
+                    }
+                }
+            }
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        panic!("interrupted Fleet admission operation did not converge")
+    }
+
+    #[cfg(test)]
+    fn managed_admission_status(
+        pic: &PocketIc,
+        canister_id: Principal,
+        root: Principal,
+    ) -> FleetAdmissionProjectionStatusResponse {
+        let response: Result<ManagedAdmissionStatusResponseFragment, Error> = pic
+            .query_candid_as(
+                canister_id,
+                root,
+                canic::protocol::CANIC_STATUS,
+                (ManagedAdmissionStatusRequestFragment::Admission(
+                    PageRequest {
+                        limit: 128,
+                        offset: 0,
+                    },
+                ),),
+            )
+            .expect("managed admission status transport");
+        let ManagedAdmissionStatusResponseFragment::Admission(status) =
+            response.expect("managed admission status");
+        status
     }
 
     fn store_command_as(
@@ -932,6 +1241,196 @@ mod tests {
     #[test]
     fn uncertain_mainnet_refill_reuses_the_exact_paid_request() {
         assert_mainnet_refill(true, 2);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one production-shaped journey binds pool creation, typed retry and provisioning evidence"
+    )]
+    fn fresh_component_acceptance_drives_the_root_owned_pool_before_effects() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let (root_wasm, cycles_ledger_wasm) = build_mainnet_refill_wasms();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let created_asset = std::cell::Cell::new(None);
+        let fixture = install_bootstrapped_root_with_pool_setup(
+            &pic,
+            root_wasm,
+            coordinator,
+            store_fixture,
+            |pic, root| {
+                let root_subnet = pic.get_subnet(root).expect("root placement Subnet");
+                let asset = pic.create_canister_on_subnet(None, None, root_subnet);
+                pic.set_controllers(asset, None, vec![root])
+                    .expect("prepare Cycles Ledger creation result");
+                let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+                    .expect("canonical Cycles Ledger principal");
+                pic.create_canister_with_id(None, None, cycles_ledger)
+                    .expect("create canonical Cycles Ledger stub principal");
+                pic.install_canister(
+                    cycles_ledger,
+                    cycles_ledger_wasm,
+                    encode_one(CyclesLedgerStubInitArgs {
+                        canister_ids: vec![asset],
+                        expected_root: root,
+                        expected_subnet: root_subnet,
+                        pending_first_index: None,
+                    })
+                    .expect("encode Cycles Ledger stub init"),
+                    None,
+                );
+                created_asset.set(Some(asset));
+                Vec::new()
+            },
+        );
+        let operation_id = [0x6d; 32];
+        begin_fixture_fresh_component_provisioning(
+            &pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            operation_id,
+        );
+
+        let mut pending_root_failure = None;
+        let mut provisioned = None;
+        let mut last_status = None;
+        for _ in 0..80 {
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+            ) = coordinator_status(
+                &pic,
+                coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query fresh Component provisioning")
+            else {
+                panic!("Coordinator returned a differently correlated operation status");
+            };
+            if status.pending_root_failure.is_some() {
+                pending_root_failure = status.pending_root_failure;
+            }
+            if status.provisioned_root_count == status.root_batch_count
+                && status.components_provisioned_at_ns.is_some()
+            {
+                provisioned = Some(status);
+                break;
+            }
+            last_status = Some(status);
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        let provisioned = provisioned.unwrap_or_else(|| {
+            report_canister_diagnostics_batch(
+                &pic,
+                [
+                    ("Coordinator", coordinator, Principal::anonymous()),
+                    ("Root", fixture.root_id, Principal::anonymous()),
+                ],
+                "fresh provisioning automatic pool readiness",
+            );
+            panic!("fresh Component provisioning did not complete: {last_status:?}")
+        });
+        assert_eq!(provisioned.component_count, 1);
+        let failure = pending_root_failure.expect("one automatic-capacity retry is observable");
+        assert_eq!(failure.fleet_subnet_root, fixture.root_id);
+        assert_eq!(
+            failure.stage,
+            FleetComponentProvisioningRetryStage::RootProvisioning
+        );
+        assert_eq!(
+            failure.diagnostic_code,
+            canic_core::diagnostics::codes::STATE_CONFLICT
+                .raw_code()
+                .raw()
+        );
+        assert!(failure.failed_at_ns > 0);
+        assert!(provisioned.pending_root_failure.is_none());
+
+        let asset = created_asset.get().expect("one Cycles Ledger result");
+        let pool = root_pool_status(&pic, fixture.root_id);
+        let entry = pool
+            .entries
+            .iter()
+            .find(|entry| entry.canister_id == asset)
+            .expect("created asset remains in the Root inventory");
+        assert!(matches!(
+            entry.status,
+            CanisterPoolAssetStatus::Workload { .. }
+        ));
+        let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai")
+            .expect("canonical Cycles Ledger principal");
+        let request_count: u64 = pic
+            .query_candid(cycles_ledger, "request_count", ())
+            .expect("query pool creation request count");
+        assert_eq!(request_count, 1);
+    }
+
+    #[test]
+    fn fresh_component_provisioning_reaches_runtime_active_with_root_owned_capacity() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let root_wasm = build_test_root_wasm();
+        let coordinator_wasm = build_test_coordinator_wasm();
+        let store_fixture = build_root_store_fixture();
+        let pic = build_pic();
+        let coordinator = pic.create_canister();
+        pic.add_cycles(coordinator, COORDINATOR_INSTALL_CYCLES);
+        let fixture = install_bootstrapped_root(&pic, root_wasm, coordinator, store_fixture);
+        let operation_id = [0x6e; 32];
+        begin_fixture_fresh_component_provisioning(
+            &pic,
+            coordinator,
+            coordinator_wasm,
+            &fixture,
+            operation_id,
+        );
+
+        let mut last_status = None;
+        for _ in 0..120 {
+            let CoordinatorStatusResponse::Operation(
+                CoordinatorOperationStatusResponse::ComponentProvisioning(status),
+            ) = coordinator_status(
+                &pic,
+                coordinator,
+                CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+            )
+            .expect("query terminal fresh Component provisioning")
+            else {
+                panic!("Coordinator returned a differently correlated operation status");
+            };
+            if status.phase == FleetComponentProvisioningPhase::RuntimesActivated {
+                assert_eq!(status.component_count, 1);
+                assert_eq!(status.runtime_activated_root_count, 1);
+                assert!(status.runtimes_activated_at_ns.is_some());
+                assert!(status.pending_root_failure.is_none());
+                assert_eq!(
+                    status
+                        .published_fleet_registry
+                        .as_ref()
+                        .expect("published Fleet service Registry")
+                        .revision,
+                    4
+                );
+                return;
+            }
+            last_status = Some(status);
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+
+        report_canister_diagnostics_batch(
+            &pic,
+            [
+                ("Coordinator", coordinator, Principal::anonymous()),
+                ("Root", fixture.root_id, Principal::anonymous()),
+            ],
+            "terminal fresh Component provisioning",
+        );
+        panic!("fresh Component provisioning did not reach runtime active: {last_status:?}");
     }
 
     #[test]
@@ -1686,6 +2185,7 @@ mod tests {
         pic: PocketIc,
         coordinator: Principal,
         roots: [Principal; 2],
+        components: [ComponentBinding; 2],
     }
 
     #[cfg(test)]
@@ -1996,12 +2496,13 @@ mod tests {
         reset_prepaid_pool_assets(&pic, first.root_id);
         reset_prepaid_pool_assets(&pic, second.root_id);
         install_fixture_coordinator(&pic, coordinator, coordinator_wasm, &first);
-        activate_multi_root_registry(&pic, coordinator, [&first, &second]);
+        let components = activate_multi_root_registry(&pic, coordinator, [&first, &second]);
 
         MultiRootFundingJourneyFixture {
             pic,
             coordinator,
             roots: [first.root_id, second.root_id],
+            components,
         }
     }
 
@@ -2025,11 +2526,15 @@ mod tests {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "two-Root activation fixture is one ordered proof"
+    )]
     fn activate_multi_root_registry(
         pic: &PocketIc,
         coordinator: Principal,
         fixtures: [&BootstrappedRootFixture; 2],
-    ) {
+    ) -> [ComponentBinding; 2] {
         let CoordinatorStatusResponse::RegistryVersion(mut version) =
             coordinator_status(pic, coordinator, CoordinatorStatusRequest::RegistryVersion)
                 .expect("query multi-Root Registry genesis")
@@ -2089,6 +2594,7 @@ mod tests {
         .expect("activate the multi-Root Registry") else {
             panic!("Coordinator returned a differently correlated activation response");
         };
+        let mut components = Vec::with_capacity(2);
         for (index, (fixture, request)) in fixtures.into_iter().zip(sync_requests).enumerate() {
             let mut mirror_active = false;
             for _ in 0..32 {
@@ -2128,8 +2634,12 @@ mod tests {
             let component = provision_component(pic, fixture, [operation_byte; 32]);
             assert_eq!(component.allocation_sequence, 1);
             assert_eq!(component.phase, RootComponentAllocationPhase::Committed);
+            components.push(installed_component_binding(&component));
             activate_root(pic, fixture.root_id);
         }
+        components
+            .try_into()
+            .expect("two-Root fixture installs exactly two Components")
     }
 
     #[cfg(test)]
@@ -3177,6 +3687,572 @@ mod tests {
 
     #[test]
     #[expect(
+        clippy::too_many_lines,
+        reason = "one complete real-Fleet add/remove journey"
+    )]
+    fn fleet_admission_add_and_remove_converge_across_real_root_and_components() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = acquire_active_component_registry();
+        let pic = fixture.pic();
+        let added = Principal::self_authenticating([0xd1; 32]);
+
+        let CoordinatorStatusResponse::Registry(initial_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query initial Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        assert!(!initial_registry.admission.fleet_principals.contains(&added));
+
+        let mut added_principals = initial_registry.admission.fleet_principals.clone();
+        added_principals.push(added);
+        added_principals.sort_unstable();
+        let added_policy = compile_installed_fleet_admission_policy(
+            initial_registry.admission.fleet.clone(),
+            initial_registry.admission.generation + 1,
+            added_principals,
+            initial_registry.admission.rules.clone(),
+        )
+        .expect("compile added admission policy");
+        let add_operation_id = [0xd2; 32];
+        let (participant_catalog_digest, participant_count) =
+            admission_participant_catalog_authority(pic, &[fixture.root], &added_policy);
+        let add_request = FleetAdmissionMutationRequest {
+            authority: initial_registry.authority.binding.clone(),
+            expected_generation: initial_registry.admission.generation,
+            expected_policy_digest: initial_registry.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Add,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id: add_operation_id,
+            successor_policy_digest: added_policy.policy_digest,
+            participant_catalog_digest,
+            participant_count,
+        };
+        let CoordinatorCommandResponse::MutateAdmission(planned_add) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(add_request.clone()),
+        )
+        .expect("plan Fleet admission addition") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(planned_add.outcome, FleetAdmissionMutationOutcome::Planned);
+
+        let completed_add =
+            await_fleet_admission_convergence(pic, fixture.coordinator, add_operation_id);
+        assert_eq!(
+            completed_add.outcome,
+            FleetAdmissionMutationOutcome::Converged
+        );
+        assert_eq!(completed_add.generation, added_policy.generation);
+        assert_eq!(completed_add.policy_digest, added_policy.policy_digest);
+
+        for target in [fixture.issuer.canister_id, fixture.verifier.canister_id] {
+            let status = managed_admission_status(pic, target, fixture.root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, added_policy.generation);
+            assert_eq!(status.policy_digest, added_policy.policy_digest);
+            assert!(status.principals.entries.contains(&added));
+            assert!(status.prepared.is_none());
+        }
+
+        let CoordinatorCommandResponse::MutateAdmission(replayed_add) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(add_request),
+        )
+        .expect("replay completed Fleet admission addition") else {
+            panic!("Coordinator returned a differently correlated admission replay")
+        };
+        assert_eq!(
+            replayed_add.outcome,
+            FleetAdmissionMutationOutcome::Converged
+        );
+        assert_eq!(replayed_add.operation_id, add_operation_id);
+
+        let CoordinatorStatusResponse::Registry(added_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query added Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        assert_eq!(added_registry.admission, added_policy);
+
+        let mut removed_principals = added_registry.admission.fleet_principals.clone();
+        removed_principals.retain(|principal| *principal != added);
+        let removed_policy = compile_installed_fleet_admission_policy(
+            added_registry.admission.fleet.clone(),
+            added_registry.admission.generation + 1,
+            removed_principals,
+            added_registry.admission.rules.clone(),
+        )
+        .expect("compile removed admission policy");
+        let remove_operation_id = [0xd3; 32];
+        let (participant_catalog_digest, participant_count) =
+            admission_participant_catalog_authority(pic, &[fixture.root], &removed_policy);
+        let remove_request = FleetAdmissionMutationRequest {
+            authority: added_registry.authority.binding.clone(),
+            expected_generation: added_registry.admission.generation,
+            expected_policy_digest: added_registry.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Remove,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id: remove_operation_id,
+            successor_policy_digest: removed_policy.policy_digest,
+            participant_catalog_digest,
+            participant_count,
+        };
+        let CoordinatorCommandResponse::MutateAdmission(planned_remove) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(remove_request),
+        )
+        .expect("plan Fleet admission removal") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(
+            planned_remove.outcome,
+            FleetAdmissionMutationOutcome::Planned
+        );
+
+        let completed_remove =
+            await_fleet_admission_convergence(pic, fixture.coordinator, remove_operation_id);
+        assert_eq!(
+            completed_remove.outcome,
+            FleetAdmissionMutationOutcome::Converged
+        );
+        assert_eq!(completed_remove.generation, removed_policy.generation);
+        assert_eq!(completed_remove.policy_digest, removed_policy.policy_digest);
+
+        for target in [fixture.issuer.canister_id, fixture.verifier.canister_id] {
+            let status = managed_admission_status(pic, target, fixture.root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, removed_policy.generation);
+            assert_eq!(status.policy_digest, removed_policy.policy_digest);
+            assert!(!status.principals.entries.contains(&added));
+            assert!(status.prepared.is_none());
+        }
+
+        let CoordinatorStatusResponse::Registry(removed_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query removed Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        drop(fixture);
+        assert_eq!(removed_registry.admission, removed_policy);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "unavailability and post-convergence creation share one Fleet"
+    )]
+    fn unavailable_admission_participant_blocks_activation_until_exact_retry() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = acquire_active_component_registry();
+        let pic = fixture.pic();
+        let added = Principal::self_authenticating([0xd4; 32]);
+        let operation_id = [0xd5; 32];
+
+        let CoordinatorStatusResponse::Registry(initial_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query initial Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        let mut successor_principals = initial_registry.admission.fleet_principals.clone();
+        successor_principals.push(added);
+        successor_principals.sort_unstable();
+        let successor = compile_installed_fleet_admission_policy(
+            initial_registry.admission.fleet.clone(),
+            initial_registry.admission.generation + 1,
+            successor_principals,
+            initial_registry.admission.rules.clone(),
+        )
+        .expect("compile admission successor");
+        let (participant_catalog_digest, participant_count) =
+            admission_participant_catalog_authority(pic, &[fixture.root], &successor);
+        let request = FleetAdmissionMutationRequest {
+            authority: initial_registry.authority.binding.clone(),
+            expected_generation: initial_registry.admission.generation,
+            expected_policy_digest: initial_registry.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Add,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id,
+            successor_policy_digest: successor.policy_digest,
+            participant_catalog_digest,
+            participant_count,
+        };
+
+        pic.stop_canister(fixture.verifier.canister_id, Some(fixture.root))
+            .expect("stop one managed admission participant");
+        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(request),
+        )
+        .expect("plan admission mutation with unavailable participant") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
+
+        for _ in 0..16 {
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+        }
+        let CoordinatorStatusResponse::Operation(CoordinatorOperationStatusResponse::Admission(
+            blocked,
+        )) = coordinator_status(
+            pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::Operation(OperationStatusRequest { operation_id }),
+        )
+        .expect("query blocked admission operation")
+        else {
+            panic!("Coordinator returned a differently correlated admission operation")
+        };
+        assert!(matches!(
+            blocked.phase,
+            FleetAdmissionOperationPhase::Planned { .. }
+                | FleetAdmissionOperationPhase::Preparing { .. }
+        ));
+        let CoordinatorStatusResponse::Registry(blocked_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query blocked Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        assert_eq!(blocked_registry.admission, initial_registry.admission);
+
+        let reachable = managed_admission_status(pic, fixture.issuer.canister_id, fixture.root);
+        assert_eq!(reachable.generation, initial_registry.admission.generation);
+        assert_eq!(
+            reachable.policy_digest,
+            initial_registry.admission.policy_digest
+        );
+        match reachable.phase {
+            FleetAdmissionProjectionPhase::Open => assert!(reachable.prepared.is_none()),
+            FleetAdmissionProjectionPhase::Fenced => {
+                let prepared = reachable.prepared.expect("prepared successor while fenced");
+                assert_eq!(prepared.generation, successor.generation);
+                assert_eq!(prepared.policy_digest, successor.policy_digest);
+            }
+        }
+        let allocation_request = RootComponentAllocationRequest {
+            operation_id: [0xd6; 32],
+            component_spec: fixture.issuer.component_spec.clone(),
+        };
+        let rejected = root_command(
+            pic,
+            fixture.root,
+            RootCommandFragment::ProvisionComponent(allocation_request.clone()),
+        )
+        .expect_err("active admission transition must fence Component allocation");
+        assert_eq!(
+            rejected.code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+        );
+
+        pic.start_canister(fixture.verifier.canister_id, Some(fixture.root))
+            .expect("restart managed admission participant");
+        let completed = await_fleet_admission_convergence(pic, fixture.coordinator, operation_id);
+        assert_eq!(completed.outcome, FleetAdmissionMutationOutcome::Converged);
+        assert_eq!(completed.generation, successor.generation);
+        for target in [fixture.issuer.canister_id, fixture.verifier.canister_id] {
+            let status = managed_admission_status(pic, target, fixture.root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, successor.generation);
+            assert_eq!(status.policy_digest, successor.policy_digest);
+            assert!(status.principals.entries.contains(&added));
+        }
+        let new_component = provision_component_request(pic, fixture.root, allocation_request);
+        let new_binding = installed_component_binding(&new_component);
+        let new_status = managed_admission_status(pic, new_binding.canister_id, fixture.root);
+        drop(fixture);
+        assert_eq!(new_status.phase, FleetAdmissionProjectionPhase::Open);
+        assert_eq!(new_status.generation, successor.generation);
+        assert_eq!(new_status.policy_digest, successor.policy_digest);
+        assert!(new_status.principals.entries.contains(&added));
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the stale-catalog release and corrected retry form one recovery proof"
+    )]
+    fn fleet_admission_catalog_change_releases_before_effect_and_retries_exactly() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = acquire_active_component_registry();
+        let pic = fixture.pic();
+        let added = Principal::self_authenticating([0xe0; 32]);
+
+        let CoordinatorStatusResponse::Registry(initial_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query initial Fleet Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        let mut successor_principals = initial_registry.admission.fleet_principals.clone();
+        successor_principals.push(added);
+        successor_principals.sort_unstable();
+        let successor = compile_installed_fleet_admission_policy(
+            initial_registry.admission.fleet.clone(),
+            initial_registry.admission.generation + 1,
+            successor_principals,
+            initial_registry.admission.rules.clone(),
+        )
+        .expect("compile admission successor");
+        let stale_catalog =
+            admission_participant_catalog_authority(pic, &[fixture.root], &successor);
+
+        let new_component = provision_component_request(
+            pic,
+            fixture.root,
+            RootComponentAllocationRequest {
+                operation_id: [0xe1; 32],
+                component_spec: fixture.issuer.component_spec.clone(),
+            },
+        );
+        let new_binding = installed_component_binding(&new_component);
+        let new_status = managed_admission_status(pic, new_binding.canister_id, fixture.root);
+        assert_eq!(new_status.phase, FleetAdmissionProjectionPhase::Open);
+        assert_eq!(new_status.generation, initial_registry.admission.generation);
+
+        let stale_operation_id = [0xe2; 32];
+        let stale_request = FleetAdmissionMutationRequest {
+            authority: initial_registry.authority.binding.clone(),
+            expected_generation: initial_registry.admission.generation,
+            expected_policy_digest: initial_registry.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Add,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id: stale_operation_id,
+            successor_policy_digest: successor.policy_digest,
+            participant_catalog_digest: stale_catalog.0,
+            participant_count: stale_catalog.1,
+        };
+        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(stale_request.clone()),
+        )
+        .expect("retain mutation with pre-reservation catalog") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
+        let released =
+            await_fleet_admission_convergence(pic, fixture.coordinator, stale_operation_id);
+        assert_eq!(
+            released.outcome,
+            FleetAdmissionMutationOutcome::CatalogChanged
+        );
+        assert_eq!(released.generation, initial_registry.admission.generation);
+        assert_eq!(
+            released.policy_digest,
+            initial_registry.admission.policy_digest
+        );
+        let CoordinatorCommandResponse::MutateAdmission(replayed_release) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(stale_request),
+        )
+        .expect("replay released stale-catalog mutation") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(replayed_release, released);
+
+        let CoordinatorStatusResponse::Registry(unchanged_registry) =
+            coordinator_status(pic, fixture.coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query Registry after stale-catalog release")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        assert_eq!(unchanged_registry.admission, initial_registry.admission);
+        for target in [
+            fixture.issuer.canister_id,
+            fixture.verifier.canister_id,
+            new_binding.canister_id,
+        ] {
+            let status = managed_admission_status(pic, target, fixture.root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, initial_registry.admission.generation);
+            assert!(status.prepared.is_none());
+        }
+
+        let exact_catalog =
+            admission_participant_catalog_authority(pic, &[fixture.root], &successor);
+        assert_ne!(exact_catalog, stale_catalog);
+        let exact_operation_id = [0xe3; 32];
+        let exact_request = FleetAdmissionMutationRequest {
+            authority: initial_registry.authority.binding,
+            expected_generation: initial_registry.admission.generation,
+            expected_policy_digest: initial_registry.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Add,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id: exact_operation_id,
+            successor_policy_digest: successor.policy_digest,
+            participant_catalog_digest: exact_catalog.0,
+            participant_count: exact_catalog.1,
+        };
+        let CoordinatorCommandResponse::MutateAdmission(retry) = coordinator_command(
+            pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(exact_request),
+        )
+        .expect("retry mutation with exact reserved catalog") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(retry.outcome, FleetAdmissionMutationOutcome::Planned);
+        let converged =
+            await_fleet_admission_convergence(pic, fixture.coordinator, exact_operation_id);
+        assert_eq!(converged.outcome, FleetAdmissionMutationOutcome::Converged);
+        assert_eq!(converged.generation, successor.generation);
+        for target in [
+            fixture.issuer.canister_id,
+            fixture.verifier.canister_id,
+            new_binding.canister_id,
+        ] {
+            let status = managed_admission_status(pic, target, fixture.root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, successor.generation);
+            assert!(status.principals.entries.contains(&added));
+        }
+        drop(fixture);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "two-Root restart and add/remove journey is indivisible"
+    )]
+    fn fleet_admission_add_and_remove_converge_across_two_roots() {
+        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let fixture = setup_multi_root_funding_journey();
+        let added = Principal::self_authenticating([0xd9; 32]);
+        let CoordinatorStatusResponse::Registry(initial) = coordinator_status(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::Registry,
+        )
+        .expect("query initial two-Root Registry") else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        let mut added_principals = initial.admission.fleet_principals.clone();
+        added_principals.push(added);
+        added_principals.sort_unstable();
+        let added_policy = compile_installed_fleet_admission_policy(
+            initial.admission.fleet.clone(),
+            initial.admission.generation + 1,
+            added_principals,
+            initial.admission.rules.clone(),
+        )
+        .expect("compile two-Root admission addition");
+        let add_operation_id = [0xd7; 32];
+        let (participant_catalog_digest, participant_count) =
+            admission_participant_catalog_authority(&fixture.pic, &fixture.roots, &added_policy);
+        let add = FleetAdmissionMutationRequest {
+            authority: initial.authority.binding.clone(),
+            expected_generation: initial.admission.generation,
+            expected_policy_digest: initial.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Add,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id: add_operation_id,
+            successor_policy_digest: added_policy.policy_digest,
+            participant_catalog_digest,
+            participant_count,
+        };
+        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(add),
+        )
+        .expect("plan two-Root admission addition") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
+        let completed = await_fleet_admission_convergence_across_coordinator_restarts(
+            &fixture.pic,
+            fixture.coordinator,
+            &fixture.roots,
+            &fixture
+                .components
+                .iter()
+                .map(|component| component.canister_id)
+                .collect::<Vec<_>>(),
+            add_operation_id,
+        );
+        assert_eq!(completed.outcome, FleetAdmissionMutationOutcome::Converged);
+        for (root, component) in fixture.roots.into_iter().zip(&fixture.components) {
+            let status = managed_admission_status(&fixture.pic, component.canister_id, root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, added_policy.generation);
+            assert_eq!(status.policy_digest, added_policy.policy_digest);
+            assert!(status.principals.entries.contains(&added));
+        }
+
+        let CoordinatorStatusResponse::Registry(added_registry) = coordinator_status(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorStatusRequest::Registry,
+        )
+        .expect("query added two-Root Registry") else {
+            panic!("Coordinator returned a differently correlated Registry status")
+        };
+        let mut removed_principals = added_registry.admission.fleet_principals.clone();
+        removed_principals.retain(|principal| *principal != added);
+        let removed_policy = compile_installed_fleet_admission_policy(
+            added_registry.admission.fleet.clone(),
+            added_registry.admission.generation + 1,
+            removed_principals,
+            added_registry.admission.rules.clone(),
+        )
+        .expect("compile two-Root admission removal");
+        let remove_operation_id = [0xd8; 32];
+        let (participant_catalog_digest, participant_count) =
+            admission_participant_catalog_authority(&fixture.pic, &fixture.roots, &removed_policy);
+        let remove = FleetAdmissionMutationRequest {
+            authority: added_registry.authority.binding.clone(),
+            expected_generation: added_registry.admission.generation,
+            expected_policy_digest: added_registry.admission.policy_digest,
+            action: FleetAdmissionMutationAction::Remove,
+            selector: FleetAdmissionSelector::Fleet,
+            principal: added,
+            operation_id: remove_operation_id,
+            successor_policy_digest: removed_policy.policy_digest,
+            participant_catalog_digest,
+            participant_count,
+        };
+        let CoordinatorCommandResponse::MutateAdmission(planned) = coordinator_command(
+            &fixture.pic,
+            fixture.coordinator,
+            CoordinatorCommand::MutateAdmission(remove),
+        )
+        .expect("plan two-Root admission removal") else {
+            panic!("Coordinator returned a differently correlated admission response")
+        };
+        assert_eq!(planned.outcome, FleetAdmissionMutationOutcome::Planned);
+        let completed = await_fleet_admission_convergence(
+            &fixture.pic,
+            fixture.coordinator,
+            remove_operation_id,
+        );
+        assert_eq!(completed.outcome, FleetAdmissionMutationOutcome::Converged);
+        for (root, component) in fixture.roots.into_iter().zip(&fixture.components) {
+            let status = managed_admission_status(&fixture.pic, component.canister_id, root);
+            assert_eq!(status.phase, FleetAdmissionProjectionPhase::Open);
+            assert_eq!(status.generation, removed_policy.generation);
+            assert_eq!(status.policy_digest, removed_policy.policy_digest);
+            assert!(!status.principals.entries.contains(&added));
+        }
+    }
+
+    #[test]
+    #[expect(
         clippy::significant_drop_tightening,
         reason = "the pooled Fleet fixture lease is intentionally retained for the full test"
     )]
@@ -4027,6 +5103,16 @@ mod tests {
                 .app
                 .clone(),
             authority: fixture.init_args.authority.binding.authority.clone(),
+            admission: crate::pic::fleet_admission_policy(
+                fixture
+                    .init_args
+                    .authority
+                    .binding
+                    .authority
+                    .binding
+                    .fleet
+                    .clone(),
+            ),
             root_funding: Some(fixture.coordinator_root_funding.clone()),
             component_deployment_configuration: config
                 .model()
@@ -4039,6 +5125,110 @@ mod tests {
             encode_one(coordinator_args).expect("encode Coordinator init"),
             None,
         );
+    }
+
+    #[cfg(test)]
+    fn fixture_fresh_component_plan(
+        config: &canic_core::bootstrap::compiled::ConfigModel,
+        registry: &canic::dto::fleet_registry::FleetRegistry,
+    ) -> FleetComponentProvisioningPlan {
+        let configuration = config
+            .compile_component_deployment_configuration()
+            .expect("compile fixture Component deployment configuration");
+        let deployment = configuration
+            .deployment_topology
+            .get(&"issuer_cells".parse().expect("deployment ID"))
+            .expect("issuer deployment");
+        let root = registry
+            .fleet_subnet_roots
+            .first()
+            .expect("one registered Root");
+        let entries = deployment
+            .members
+            .iter()
+            .map(|member| ComponentGroupPlanEntry {
+                member_path: member.member_path.clone(),
+                component_spec: member.component_spec.clone(),
+                spec_hash: member.component_spec_hash,
+                purpose: member.purpose.clone(),
+                labels: member.labels.clone(),
+                limits: member.limits.clone(),
+            })
+            .collect();
+        FleetComponentProvisioningPlan {
+            fleet: registry.authority.binding.fleet.clone(),
+            fleet_registry:
+                canic_core::control_plane_support::ops::fleet_registry::FleetRegistryOps::version(
+                    &registry.authority,
+                    &configuration.component_topology,
+                    registry,
+                )
+                .expect("active Registry version"),
+            configuration_digest: configuration.digest().expect("configuration digest"),
+            operation: FleetComponentProvisioningOperation::FreshInstall,
+            directory_confirmation_roots: vec![root.fleet_subnet_root],
+            batches: vec![FleetSubnetRootProvisioningBatch {
+                root: FleetSubnetRootBinding {
+                    authority: registry.authority.clone(),
+                    placement_subnet: root.placement_subnet,
+                    fleet_subnet_root: root.fleet_subnet_root,
+                    component_admissions: root.component_admissions.clone(),
+                    component_topology_digest: root.component_topology_digest,
+                    limits: root.limits.clone(),
+                    funding: root.funding.clone(),
+                },
+                active_release_set: root.active_release_set,
+                placements: vec![ComponentGroupPlacementPlan {
+                    group_placement: ComponentGroupPlacementId {
+                        deployment: deployment.deployment.clone(),
+                        ordinal: 0,
+                    },
+                    component_group: deployment.component_group.clone(),
+                    entries,
+                }],
+            }],
+        }
+    }
+
+    #[cfg(test)]
+    fn begin_fixture_fresh_component_provisioning(
+        pic: &PocketIc,
+        coordinator: Principal,
+        coordinator_wasm: Vec<u8>,
+        fixture: &BootstrappedRootFixture,
+        operation_id: [u8; 32],
+    ) {
+        install_fixture_coordinator(pic, coordinator, coordinator_wasm, fixture);
+        let (joining_version, sync_request) = join_and_synchronize_root(pic, coordinator, fixture);
+        activate_registry_and_prepare_component_registry(
+            pic,
+            coordinator,
+            fixture,
+            joining_version,
+            sync_request,
+        );
+        let CoordinatorStatusResponse::Registry(registry) =
+            coordinator_status(pic, coordinator, CoordinatorStatusRequest::Registry)
+                .expect("query active Registry")
+        else {
+            panic!("Coordinator returned a differently correlated Registry status");
+        };
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let config = AppConfigSnapshot::load(&root_canister_config_path(&workspace_root))
+            .expect("load provisioning fixture config");
+        let plan = fixture_fresh_component_plan(config.model(), &registry);
+        let CoordinatorCommandResponse::OperationAccepted(receipt) = coordinator_command(
+            pic,
+            coordinator,
+            CoordinatorCommand::ProvisionComponents(FleetComponentProvisioningPrepareRequest {
+                operation_id,
+                plan,
+            }),
+        )
+        .expect("begin fresh Component provisioning") else {
+            panic!("Coordinator returned a differently correlated provisioning response");
+        };
+        assert_eq!(receipt.operation_id, operation_id);
     }
 
     fn assert_registry_and_root_runtime_activation(
@@ -4202,9 +5392,18 @@ mod tests {
             operation_id,
             component_spec: "issuer".parse().expect("issuer Component Spec"),
         };
+        provision_component_request(pic, fixture.root_id, request)
+    }
+
+    fn provision_component_request(
+        pic: &PocketIc,
+        root: Principal,
+        request: RootComponentAllocationRequest,
+    ) -> RootComponentAllocationResponse {
+        let operation_id = request.operation_id;
         let RootCommandResponseFragment::OperationAccepted(receipt) = root_command(
             pic,
-            fixture.root_id,
+            root,
             RootCommandFragment::ProvisionComponent(request.clone()),
         )
         .expect("submit Component provisioning") else {
@@ -4218,7 +5417,7 @@ mod tests {
                 RootOperationStatusResponse::ProvisionComponent(status),
             ) = root_status(
                 pic,
-                fixture.root_id,
+                root,
                 RootStatusRequestFragment::Operation(OperationStatusRequest { operation_id }),
             )
             .expect("query Component provisioning")
@@ -4229,12 +5428,10 @@ mod tests {
                 && status.allocation.phase == RootComponentAllocationPhase::Committed
                 && status.allocation.installation.is_some()
             {
-                let RootCommandResponseFragment::OperationAccepted(retried) = root_command(
-                    pic,
-                    fixture.root_id,
-                    RootCommandFragment::ProvisionComponent(request),
-                )
-                .expect("retry Component provisioning") else {
+                let RootCommandResponseFragment::OperationAccepted(retried) =
+                    root_command(pic, root, RootCommandFragment::ProvisionComponent(request))
+                        .expect("retry Component provisioning")
+                else {
                     panic!("Root returned a differently correlated provisioning response");
                 };
                 assert_eq!(retried, receipt);
@@ -4247,7 +5444,7 @@ mod tests {
 
         report_canister_diagnostics(
             pic,
-            fixture.root_id,
+            root,
             Principal::anonymous(),
             "autonomous Component provisioning",
         );
@@ -4925,6 +6122,10 @@ mod tests {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the governed inventory is one explicit ordered list of every serial case"
+    )]
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
         vec![
             (
@@ -4942,6 +6143,14 @@ mod tests {
             (
                 "uncertain mainnet refill replay",
                 uncertain_mainnet_refill_reuses_the_exact_paid_request,
+            ),
+            (
+                "fresh provisioning automatic pool readiness",
+                fresh_component_acceptance_drives_the_root_owned_pool_before_effects,
+            ),
+            (
+                "fresh provisioning terminal runtime activation",
+                fresh_component_provisioning_reaches_runtime_active_with_root_owned_capacity,
             ),
             (
                 "Coordinator attached-cycle grant",
@@ -5006,6 +6215,22 @@ mod tests {
             (
                 "active Component Registry attestations",
                 active_registry_issues_component_role_attestations,
+            ),
+            (
+                "Fleet admission add/remove convergence",
+                fleet_admission_add_and_remove_converge_across_real_root_and_components,
+            ),
+            (
+                "Fleet admission unavailable participant recovery",
+                unavailable_admission_participant_blocks_activation_until_exact_retry,
+            ),
+            (
+                "Fleet admission stale-catalog release",
+                fleet_admission_catalog_change_releases_before_effect_and_retries_exactly,
+            ),
+            (
+                "Fleet admission two-Root convergence",
+                fleet_admission_add_and_remove_converge_across_two_roots,
             ),
         ]
     }

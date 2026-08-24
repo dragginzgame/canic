@@ -74,6 +74,7 @@ fn journals_every_coordinator_effect_before_advancing() {
             .journal
             .component_deployment_configuration
             .component_topology,
+        installed.journal.admission.clone(),
     )
     .expect("compile Registry genesis");
     let manifest = FleetRegistryOps::manifest(
@@ -136,18 +137,20 @@ fn exact_retry_recovers_in_flight_without_advancing_again() {
 fn persisted_plan(root: &Path) -> PersistedFleetInstallPlan {
     let release_build_id =
         ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([6; 32]));
+    let fleet = FleetBinding {
+        fleet: FleetKey {
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+            fleet_id: FleetId::from_generated_bytes([5; 32]),
+        },
+        app: AppId::from("demo"),
+    };
     PersistedFleetInstallPlan {
         plan: FleetInstallPlan {
-            fleet: FleetBinding {
-                fleet: FleetKey {
-                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                    fleet_id: FleetId::from_generated_bytes([5; 32]),
-                },
-                app: AppId::from("demo"),
-            },
+            fleet: fleet.clone(),
             fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id,
             application_artifact_union_digest: [3; 32],
+            admission: crate::test_support::fleet_admission_policy(fleet),
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[90])),
                 placement_cost: crate::test_support::placement_cost(SubnetId::from_principal(

@@ -67,8 +67,8 @@ pub mod compiled {
             MetricsProfile, NAME_MAX_BYTES, RoleAttestationConfig, RoleDeclaration,
             RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
             ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
-            TopupPolicy, Whitelist, implicit_root_canister_config,
-            implicit_wasm_store_canister_config, validate_app_name, validate_canister_role_name,
+            TopupPolicy, implicit_root_canister_config, implicit_wasm_store_canister_config,
+            validate_app_name, validate_canister_role_name,
         },
         ids::{
             AppId, BuildNetwork, CanisterRole, ComponentDeploymentConfigurationDigest,

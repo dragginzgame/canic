@@ -33,15 +33,93 @@ fn verified_activation_accepts_only_the_exact_initial_service_successor() {
     )
     .expect("compile service successor");
     let exact_live = live_evidence(&topology, successor.clone());
+    let expected_operation_id = [21; 32];
+    let expected_plan_hash = [22; 32];
+    require_exact_or_service_successor_registry(
+        &topology,
+        &active,
+        &live_evidence(&topology, active.clone()),
+        expected_operation_id,
+        expected_plan_hash,
+        None,
+    )
+    .expect("accept the exact retained all-Active Registry without successor evidence");
+    let successor_evidence = ComponentProvisioningSuccessorEvidence {
+        operation_id: expected_operation_id,
+        plan_hash: expected_plan_hash,
+        source_registry: FleetRegistryOps::version(&active.authority, &topology, &active)
+            .expect("active Registry version"),
+        published_registry: Some(exact_live.version.clone()),
+        operation: FleetComponentProvisioningOperation::FreshInstall,
+        phase: FleetComponentProvisioningPhase::ConfirmingDirectories,
+    };
 
-    require_exact_or_service_successor_registry(&topology, &active, &exact_live)
-        .expect("accept exact service successor");
+    require_exact_or_service_successor_registry(
+        &topology,
+        &active,
+        &exact_live,
+        expected_operation_id,
+        expected_plan_hash,
+        Some(&successor_evidence),
+    )
+    .expect("accept exact service successor");
+
+    assert!(
+        require_exact_or_service_successor_registry(
+            &topology,
+            &active,
+            &exact_live,
+            expected_operation_id,
+            expected_plan_hash,
+            None,
+        )
+        .is_err(),
+        "a service successor without exact Coordinator provisioning evidence must fail closed"
+    );
+
+    let mut wrong_plan = successor_evidence.clone();
+    wrong_plan.plan_hash[0] ^= 1;
+    assert!(
+        require_exact_or_service_successor_registry(
+            &topology,
+            &active,
+            &exact_live,
+            expected_operation_id,
+            expected_plan_hash,
+            Some(&wrong_plan),
+        )
+        .is_err(),
+        "a service successor without the exact durable Component plan must fail closed"
+    );
+
+    let mut premature = successor_evidence.clone();
+    premature.phase = FleetComponentProvisioningPhase::ComponentsProvisioned;
+    assert!(
+        require_exact_or_service_successor_registry(
+            &topology,
+            &active,
+            &exact_live,
+            expected_operation_id,
+            expected_plan_hash,
+            Some(&premature),
+        )
+        .is_err(),
+        "a successor must not be accepted before the Coordinator publishes its services"
+    );
 
     let mut later = successor;
     later.revision += 1;
     let later_live = live_evidence(&topology, later);
     assert!(
-        require_exact_or_service_successor_registry(&topology, &active, &later_live).is_err(),
+        require_exact_or_service_successor_registry(
+            &topology,
+            &active,
+            &later_live,
+            expected_operation_id,
+            expected_plan_hash,
+            Some(&successor_evidence),
+        )
+        .is_err(),
         "a later canonical Registry must not masquerade as the one service successor"
     );
 }
@@ -72,9 +150,13 @@ maximum_instances = 1
 
 fn active_registry(topology: &ComponentTopology) -> FleetRegistry {
     let authority = authority();
-    let mut registry =
-        FleetRegistryOps::compile_genesis(&AppId::from("demo"), authority.clone(), topology)
-            .expect("genesis Registry");
+    let mut registry = FleetRegistryOps::compile_genesis(
+        &AppId::from("demo"),
+        authority.clone(),
+        topology,
+        crate::test_support::fleet_admission_policy(authority.binding.fleet.clone()),
+    )
+    .expect("genesis Registry");
     registry = FleetRegistryOps::compile_joining(&authority, topology, &registry, root(topology))
         .expect("Joining root");
     FleetRegistryOps::compile_active(&authority, topology, &registry).expect("active Registry")

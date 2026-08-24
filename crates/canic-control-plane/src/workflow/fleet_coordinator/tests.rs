@@ -4,10 +4,19 @@
 //! Does not own: PocketIC installation or host effect-journal coverage.
 
 use super::*;
+use crate::storage::stable::fleet_admission::{
+    FleetAdmissionAuthorityRecord, FleetAdmissionAuthorityStore,
+    FleetAdmissionCoordinatorRootPhaseRecord, FleetAdmissionCoordinatorRootProgressRecord,
+    FleetAdmissionMutationActionRecord, FleetAdmissionMutationOutcomeRecord,
+    FleetAdmissionMutationRequestRecord, FleetAdmissionMutationResponseRecord,
+    FleetAdmissionRetainedResultRecord,
+};
 use crate::storage::stable::fleet_coordinator::{
-    FleetComponentDirectoryConfirmationIntentRecord, FleetComponentDirectoryConfirmationRecord,
-    FleetComponentProvisioningStateRecord, FleetCoordinatorFundingStore,
-    FleetCoordinatorRegistryData, FleetCoordinatorRegistryStore,
+    FLEET_COORDINATOR_STATE_MAX_BYTES, FleetAdmissionPublicationActionRecord,
+    FleetAdmissionPublicationRecord, FleetComponentDirectoryConfirmationIntentRecord,
+    FleetComponentDirectoryConfirmationRecord, FleetComponentProvisioningStateRecord,
+    FleetCoordinatorFundingStore, FleetCoordinatorRegistryData, FleetCoordinatorRegistryStore,
+    FleetCoordinatorStateRecord,
 };
 use crate::view::fleet_coordinator::{
     FleetComponentDirectoryConfirmationCallView, FleetComponentDirectoryConfirmationDisposition,
@@ -24,6 +33,7 @@ use std::{
 
 use canic_core::{
     bootstrap::parse_config_model,
+    cdk::structures::storable::Storable,
     cdk::types::Cycles,
     control_plane_support::{
         config::ConfigModel,
@@ -56,6 +66,11 @@ use canic_core::{
             RootComponentPublicationEvidence, RootComponentPublicationRequest,
             RootProvisionedGroupMember, RootProvisionedGroupPlacement,
         },
+        fleet_admission::{
+            FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
+            FleetAdmissionMutationRequest, FleetAdmissionPrepareRootStage,
+            FleetAdmissionRootTransitionPhase,
+        },
         fleet_funding::{
             FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
             FleetFundingPolicyRotationFundingSource, FleetFundingPolicyRotationPlacementEvidence,
@@ -81,15 +96,26 @@ use canic_core::{
     },
     ids::{
         AppId, CanonicalNetworkId, ComponentBinding, ComponentGroupPlacementId,
-        ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetBinding,
-        FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
-        FleetSubnetRootBinding, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, ReleaseBuildId,
-        ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
+        ComponentInstanceId, ComponentSpecAdmission, CyclesFundingBudget, FleetAdmissionRule,
+        FleetAdmissionSelector, FleetBinding, FleetCoordinatorBinding, FleetFundingProfile,
+        FleetId, FleetKey, FleetRegistryAuthority, FleetSubnetRootBinding, FleetSubnetRootLimits,
+        FleetSubnetRootReleaseSet, ReleaseBuildId, ReleaseBuildNonce, ReleaseSetDigest, SubnetId,
     },
     shared_support::fleet_funding_policy::{
         coordinator_root_funding_policy_hash, fleet_funding_policy_rotation_operation_id,
         fleet_funding_policy_rotation_plan_digest, fleet_funding_policy_rotation_roots_digest,
         fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
+    },
+    shared_support::{
+        fleet_admission_authority::{
+            FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION, FleetAdmissionMutationActionModel,
+            FleetAdmissionMutationRequestModel, FleetAdmissionRootCatalogAuthorityModel,
+            MAX_FLEET_ADMISSION_PUBLICATIONS, fleet_admission_mutation_request_digest,
+        },
+        fleet_admission_policy::{
+            compile_installed_fleet_admission_policy, fleet_admission_participant_catalog_digest,
+            fleet_admission_root_receipt_digest_from_binding,
+        },
     },
 };
 
@@ -104,6 +130,332 @@ fn poll_ready<F: Future>(future: F) -> F::Output {
         Poll::Ready(output) => output,
         Poll::Pending => panic!("future unexpectedly awaited an external effect"),
     }
+}
+
+#[test]
+fn maximum_production_root_prepare_command_fits_update_envelope() {
+    let fleet = FleetBinding {
+        fleet: FleetKey {
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+            fleet_id: FleetId::from_generated_bytes([0xe1; 32]),
+        },
+        app: AppId::from("a".repeat(40)),
+    };
+    let principals = (0_u16..256)
+        .map(|index| {
+            let mut bytes = [0xa5; 29];
+            bytes[..2].copy_from_slice(&index.to_be_bytes());
+            Principal::from_slice(&bytes)
+        })
+        .collect::<Vec<_>>();
+    let rules = (0..32)
+        .map(|index| FleetAdmissionRule {
+            selector: FleetAdmissionSelector::ComponentSpec(
+                format!("r{index:039}")
+                    .parse()
+                    .expect("maximum Component Spec ID"),
+            ),
+            principals: principals[(index * 4)..(index * 4 + 4)].to_vec(),
+        })
+        .collect::<Vec<_>>();
+    let successor =
+        compile_installed_fleet_admission_policy(fleet.clone(), u64::MAX, principals, rules)
+            .expect("maximum successor policy");
+    let command = RemoteRootCommand::PrepareFleetAdmission(FleetAdmissionPrepareRootRequest {
+        authority: FleetCoordinatorBinding {
+            fleet,
+            coordinator_subnet: SubnetId::from_principal(principal(1)),
+            coordinator: principal(2),
+        },
+        operation_id: [0xe2; 32],
+        expected_generation: u64::MAX - 1,
+        expected_policy_digest: [0xe3; 32],
+        successor,
+        stage: FleetAdmissionPrepareRootStage::Reserve,
+    });
+
+    let bytes = candid::encode_one(command).expect("production Root command Candid");
+    eprintln!(
+        "maximum production Root prepare command bytes: {}",
+        bytes.len()
+    );
+    assert!(
+        bytes.len() <= canic_core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES,
+        "maximum production Root command must fit the frozen 16 KiB envelope"
+    );
+}
+
+#[test]
+fn admission_publications_extend_canonical_registry_history_and_replay_exactly() {
+    let config = scale_out_coordinator_config();
+    drive_terminal_fresh_install(&config);
+    let initial = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let added = principal(201);
+    let mut added_principals = initial.admission.fleet_principals.clone();
+    added_principals.push(added);
+    added_principals.sort_unstable();
+    let added_policy = compile_installed_fleet_admission_policy(
+        initial.admission.fleet.clone(),
+        initial.admission.generation + 1,
+        added_principals,
+        initial.admission.rules.clone(),
+    )
+    .expect("added policy");
+    let add = FleetAdmissionMutationRequestModel {
+        authority: initial.authority.binding.clone(),
+        expected_generation: initial.admission.generation,
+        expected_policy_digest: initial.admission.policy_digest,
+        action: FleetAdmissionMutationActionModel::Add,
+        selector: FleetAdmissionSelector::Fleet,
+        principal: added,
+        operation_id: [202; 32],
+        successor_policy_digest: added_policy.policy_digest,
+        participant_catalog_digest: [204; 32],
+        participant_count: 1,
+    };
+
+    let published = crate::ops::fleet_coordinator::FleetCoordinatorOps::publish_admission_policy(
+        add.clone(),
+        added_policy.clone(),
+    )
+    .expect("publish first admission generation");
+    assert_eq!(published.admission, added_policy);
+    assert_eq!(
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::publish_admission_policy(
+            add,
+            published.admission.clone(),
+        )
+        .expect("replay first admission publication"),
+        published
+    );
+
+    let mut removed_principals = published.admission.fleet_principals.clone();
+    removed_principals.retain(|principal| *principal != added);
+    let removed_policy = compile_installed_fleet_admission_policy(
+        published.admission.fleet.clone(),
+        published.admission.generation + 1,
+        removed_principals,
+        published.admission.rules.clone(),
+    )
+    .expect("removed policy");
+    let remove = FleetAdmissionMutationRequestModel {
+        authority: published.authority.binding.clone(),
+        expected_generation: published.admission.generation,
+        expected_policy_digest: published.admission.policy_digest,
+        action: FleetAdmissionMutationActionModel::Remove,
+        selector: FleetAdmissionSelector::Fleet,
+        principal: added,
+        operation_id: [203; 32],
+        successor_policy_digest: removed_policy.policy_digest,
+        participant_catalog_digest: [204; 32],
+        participant_count: 1,
+    };
+    let removed = crate::ops::fleet_coordinator::FleetCoordinatorOps::publish_admission_policy(
+        remove,
+        removed_policy.clone(),
+    )
+    .expect("publish second admission generation");
+    assert_eq!(removed.admission, removed_policy);
+    assert_eq!(removed.revision, initial.revision + 2);
+
+    let durable = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("Coordinator Registry state");
+    assert_eq!(durable.admission_publications.len(), 2);
+    assert_eq!(
+        FleetCoordinatorWorkflow::registry().expect("reconstructed Registry head"),
+        removed
+    );
+}
+
+#[test]
+fn maximum_admission_publication_history_fits_coordinator_registry_cell() {
+    FleetCoordinatorRegistryStore::import(FleetCoordinatorRegistryData::default());
+    let coordinator = principal(205);
+    FleetCoordinatorWorkflow::initialize(init_args(coordinator), principal(206), true, coordinator)
+        .expect("initialize Coordinator Registry capacity fixture");
+    let mut current = FleetCoordinatorRegistryStore::export()
+        .current
+        .expect("Coordinator Registry state");
+    let maximum_authority = FleetRegistryAuthority {
+        binding: FleetCoordinatorBinding {
+            fleet: FleetBinding {
+                fleet: FleetKey {
+                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                    fleet_id: FleetId::from_generated_bytes([u8::MAX; 32]),
+                },
+                app: AppId::from("a".repeat(40)),
+            },
+            coordinator_subnet: SubnetId::from_principal(principal(207)),
+            coordinator: principal(208),
+        },
+        epoch: u64::MAX,
+    };
+    let maximum_version = FleetRegistryVersion {
+        authority: maximum_authority,
+        revision: u64::MAX,
+        content_hash: [u8::MAX; 32],
+    };
+    let selector = FleetAdmissionSelector::ComponentSpec(
+        "a".repeat(40).parse().expect("maximum Component Spec ID"),
+    );
+    current.admission_publications = (0..MAX_FLEET_ADMISSION_PUBLICATIONS)
+        .map(|index| {
+            let operation = u32::try_from(index).expect("bounded publication index");
+            let mut operation_id = [u8::MAX; 32];
+            operation_id[..4].copy_from_slice(&operation.to_be_bytes());
+            FleetAdmissionPublicationRecord {
+                operation_id,
+                action: FleetAdmissionPublicationActionRecord::Remove,
+                selector: selector.clone(),
+                principal: principal(u8::MAX),
+                expected_generation: u64::MAX - 1,
+                expected_policy_digest: [u8::MAX; 32],
+                successor_generation: u64::MAX,
+                successor_policy_digest: [u8::MAX; 32],
+                previous_version: maximum_version.clone(),
+                version: maximum_version.clone(),
+            }
+        })
+        .collect();
+    let state = FleetCoordinatorStateRecord {
+        current: Some(current),
+    };
+    let encoded = state.to_bytes();
+
+    eprintln!(
+        "maximum admission publication history encoded bytes: {}",
+        encoded.len()
+    );
+    assert!(encoded.len() <= FLEET_COORDINATOR_STATE_MAX_BYTES as usize);
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "cross-domain terminal replay needs complete stable state"
+)]
+fn completed_admission_command_replays_before_cross_domain_collision_checks() {
+    let config = scale_out_coordinator_config();
+    drive_terminal_fresh_install(&config);
+    let initial = FleetCoordinatorWorkflow::registry().expect("active Registry");
+    let added = principal(204);
+    let mut added_principals = initial.admission.fleet_principals.clone();
+    added_principals.push(added);
+    added_principals.sort_unstable();
+    let added_policy = compile_installed_fleet_admission_policy(
+        initial.admission.fleet.clone(),
+        initial.admission.generation + 1,
+        added_principals,
+        initial.admission.rules.clone(),
+    )
+    .expect("added policy");
+    let mut request = FleetAdmissionMutationRequestModel {
+        authority: initial.authority.binding.clone(),
+        expected_generation: initial.admission.generation,
+        expected_policy_digest: initial.admission.policy_digest,
+        action: FleetAdmissionMutationActionModel::Add,
+        selector: FleetAdmissionSelector::Fleet,
+        principal: added,
+        operation_id: [205; 32],
+        successor_policy_digest: added_policy.policy_digest,
+        participant_catalog_digest: [204; 32],
+        participant_count: 1,
+    };
+    let published = crate::ops::fleet_coordinator::FleetCoordinatorOps::publish_admission_policy(
+        request.clone(),
+        added_policy.clone(),
+    )
+    .expect("publish admission generation");
+    let mut roots = published
+        .fleet_subnet_roots
+        .iter()
+        .map(|root| FleetAdmissionCoordinatorRootProgressRecord {
+            fleet_subnet_root: root.fleet_subnet_root,
+            placement_subnet: root.placement_subnet,
+            phase: FleetAdmissionCoordinatorRootPhaseRecord::Open,
+            participant_catalog_digest: Some([206; 32]),
+            participant_count: Some(1),
+            last_receipt_hash: None,
+        })
+        .collect::<Vec<_>>();
+    roots.sort_unstable_by(|left, right| {
+        left.fleet_subnet_root
+            .as_slice()
+            .cmp(right.fleet_subnet_root.as_slice())
+    });
+    let catalogs = roots
+        .iter()
+        .map(|root| FleetAdmissionRootCatalogAuthorityModel {
+            fleet_subnet_root: root.fleet_subnet_root,
+            participant_catalog_digest: root
+                .participant_catalog_digest
+                .expect("participant catalog digest"),
+            participant_count: root.participant_count.expect("participant count"),
+        })
+        .collect::<Vec<_>>();
+    request.participant_catalog_digest = fleet_admission_participant_catalog_digest(&catalogs);
+    request.participant_count = u32::try_from(catalogs.len()).expect("participant count");
+    for root in &mut roots {
+        root.last_receipt_hash = Some(fleet_admission_root_receipt_digest_from_binding(
+            request.operation_id,
+            FleetAdmissionRootTransitionPhase::Converged,
+            &request.authority,
+            root.placement_subnet,
+            root.fleet_subnet_root,
+            added_policy.generation,
+            added_policy.policy_digest,
+            root.participant_catalog_digest
+                .expect("participant catalog digest"),
+            root.participant_count.expect("participant count"),
+        ));
+    }
+    assert!(FleetAdmissionAuthorityStore::replace(
+        FleetAdmissionAuthorityRecord {
+            schema_version: FLEET_ADMISSION_AUTHORITY_SCHEMA_VERSION,
+            active_policy: added_policy.clone(),
+            current_transition: None,
+            last_result: Some(FleetAdmissionRetainedResultRecord {
+                request: FleetAdmissionMutationRequestRecord {
+                    authority: request.authority.clone(),
+                    expected_generation: request.expected_generation,
+                    expected_policy_digest: request.expected_policy_digest,
+                    action: FleetAdmissionMutationActionRecord::Add,
+                    selector: request.selector.clone(),
+                    principal: request.principal,
+                    operation_id: request.operation_id,
+                    successor_policy_digest: request.successor_policy_digest,
+                    participant_catalog_digest: request.participant_catalog_digest,
+                    participant_count: request.participant_count,
+                },
+                request_hash: fleet_admission_mutation_request_digest(&request),
+                response: FleetAdmissionMutationResponseRecord {
+                    outcome: FleetAdmissionMutationOutcomeRecord::Converged,
+                    operation_id: request.operation_id,
+                    generation: added_policy.generation,
+                    policy_digest: added_policy.policy_digest,
+                },
+                roots,
+            }),
+        }
+    ));
+
+    let replay = FleetCoordinatorWorkflow::mutate_admission(FleetAdmissionMutationRequest {
+        authority: request.authority,
+        expected_generation: request.expected_generation,
+        expected_policy_digest: request.expected_policy_digest,
+        action: FleetAdmissionMutationAction::Add,
+        selector: request.selector,
+        principal: request.principal,
+        operation_id: request.operation_id,
+        successor_policy_digest: request.successor_policy_digest,
+        participant_catalog_digest: request.participant_catalog_digest,
+        participant_count: request.participant_count,
+    })
+    .expect("replay completed admission command");
+    assert_eq!(replay.outcome, FleetAdmissionMutationOutcome::Converged);
+    assert_eq!(replay.generation, added_policy.generation);
+    assert_eq!(replay.policy_digest, added_policy.policy_digest);
 }
 
 #[test]
@@ -366,22 +718,24 @@ fn init_args_with_config(coordinator: Principal, config: &ConfigModel) -> FleetC
     let component_deployment_configuration = config
         .compile_component_deployment_configuration()
         .expect("Component deployment configuration");
+    let fleet = FleetBinding {
+        fleet: FleetKey {
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+            fleet_id: FleetId::from_generated_bytes([7; 32]),
+        },
+        app: AppId::from("demo"),
+    };
     FleetCoordinatorInitArgs {
         configured_app: AppId::from("demo"),
         authority: FleetRegistryAuthority {
             binding: FleetCoordinatorBinding {
-                fleet: FleetBinding {
-                    fleet: FleetKey {
-                        canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                        fleet_id: FleetId::from_generated_bytes([7; 32]),
-                    },
-                    app: AppId::from("demo"),
-                },
+                fleet: fleet.clone(),
                 coordinator_subnet: SubnetId::from_principal(principal(2)),
                 coordinator,
             },
             epoch: 1,
         },
+        admission: crate::test_support::fleet_admission_policy(fleet),
         root_funding: Some(crate::test_support::coordinator_root_funding_policy()),
         component_deployment_configuration,
     }
@@ -1094,6 +1448,56 @@ fn directory_confirmation_intent_preserves_service_publication_receipts() {
         FleetComponentProvisioningRootAcceptanceDisposition::Current(_)
     ));
     assert_eq!(FleetCoordinatorRegistryStore::export(), before_replay);
+}
+
+#[test]
+fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
+    let (config, plan_hash) = prepare_two_root_acceptance_plan();
+    let provisioned = drive_components_provisioned(&config, plan_hash);
+    let service_request = root_provision_advance_request(&provisioned);
+    let (published, _) = commit_initial_service_publication(
+        &service_request,
+        provisioned.fleet_registry,
+        provisioned.components_provisioned_at_ns,
+    );
+    let request = root_provision_advance_request(&published);
+    crate::ops::fleet_coordinator::FleetCoordinatorOps::advance_component_directory_confirmation(
+        &request, 161,
+    )
+    .expect("persist Directory confirmation intent");
+    let status_request = FleetComponentProvisioningStatusRequest {
+        operation_id: published.operation_id,
+        plan_hash,
+    };
+    let diagnostic_code = canic_core::diagnostics::codes::STATE_UNAVAILABLE
+        .raw_code()
+        .raw();
+    let failed = crate::ops::fleet_coordinator::FleetCoordinatorOps::
+        record_component_provisioning_root_failure(status_request, diagnostic_code, 162)
+        .expect("retain exact Root retry failure");
+    let failure = failed
+        .pending_root_failure
+        .expect("pending retry exposes its typed Root failure");
+    assert_eq!(
+        failure.fleet_subnet_root,
+        failed.publication_in_flight_root.unwrap()
+    );
+    assert_eq!(
+        failure.stage,
+        canic_core::dto::component_provisioning::FleetComponentProvisioningRetryStage::DirectoryConfirmation
+    );
+    assert_eq!(failure.diagnostic_code, diagnostic_code);
+    assert_eq!(failure.failed_at_ns, 162);
+
+    let durable = FleetCoordinatorRegistryStore::export();
+    FleetCoordinatorRegistryStore::import(durable);
+    let restored =
+        crate::ops::fleet_coordinator::FleetCoordinatorOps::component_provisioning_status_for_test(
+            &config,
+            status_request,
+        )
+        .expect("restore pending Root retry diagnostic");
+    assert_eq!(restored.pending_root_failure, Some(failure));
 }
 
 fn assert_service_publication_cursor(

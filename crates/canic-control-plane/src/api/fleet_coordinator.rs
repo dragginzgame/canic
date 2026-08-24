@@ -20,6 +20,10 @@ use canic_core::{
             FleetComponentProvisioningStatusRequest, FleetComponentProvisioningStatusResponse,
         },
         error::Error,
+        fleet_admission::{
+            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
+            FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
+        },
         fleet_funding::{
             FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
             FleetFundingPolicyRotationStageRootRequest, FleetRootFundingRequest,
@@ -126,6 +130,9 @@ impl FleetCoordinatorApi {
             CoordinatorCommand::JoinRoot(request) => {
                 Self::join_root(request).map(CoordinatorCommandResponse::JoinRoot)
             }
+            CoordinatorCommand::MutateAdmission(request) => {
+                Self::mutate_admission(request).map(CoordinatorCommandResponse::MutateAdmission)
+            }
             CoordinatorCommand::PrepareAuthoritySnapshot(request) => {
                 FleetCoordinatorWorkflow::require_root_funding_snapshot_resumable()
                     .map_err(Error::from)?;
@@ -175,6 +182,18 @@ impl FleetCoordinatorApi {
         request: FleetFundingPolicyRotationBeginRequest,
     ) -> Result<canic_core::dto::role::OperationReceipt, Error> {
         FleetCoordinatorWorkflow::begin_funding_policy_rotation(request).map_err(Into::into)
+    }
+
+    pub fn mutate_admission(
+        request: FleetAdmissionMutationRequest,
+    ) -> Result<FleetAdmissionMutationResponse, Error> {
+        FleetCoordinatorWorkflow::mutate_admission(request).map_err(Into::into)
+    }
+
+    pub fn admission_status(
+        request: FleetAdmissionStatusRequest,
+    ) -> Result<FleetAdmissionStatusResponse, Error> {
+        FleetCoordinatorWorkflow::admission_status(request).map_err(Into::into)
     }
 
     pub fn stage_funding_policy_rotation_root(

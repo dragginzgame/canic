@@ -143,8 +143,14 @@ fn authorities(
         planned_root(&topology, subnet(7), Some(1), &admissions, release_set),
         planned_root(&topology, subnet(8), None, &admissions, release_set),
     ];
-    let mut registry = FleetRegistryOps::compile_genesis(&fleet.app, authority.clone(), &topology)
-        .expect("genesis Registry");
+    let admission_policy = crate::test_support::fleet_admission_policy(fleet.clone());
+    let mut registry = FleetRegistryOps::compile_genesis(
+        &fleet.app,
+        authority.clone(),
+        &topology,
+        admission_policy.clone(),
+    )
+    .expect("genesis Registry");
     // Principal order deliberately opposes Subnet order.
     for (planned, canister) in roots
         .iter()
@@ -175,6 +181,7 @@ fn authorities(
             fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id: release_set.release_build_id,
             application_artifact_union_digest: [6; 32],
+            admission: admission_policy,
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 placement_cost: crate::test_support::placement_cost(subnet(1)),
@@ -210,6 +217,7 @@ fn planned_root(
             .expect("root topology")
             .digest()
             .expect("root topology digest"),
+        admission_projections: Vec::new(),
         initial_release_set: release_set,
         limits: limits(),
         funding: crate::test_support::fleet_subnet_root_funding_authority(),

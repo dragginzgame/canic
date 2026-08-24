@@ -15,7 +15,7 @@ Canic has three auth surfaces:
 
 1. Transport/topology predicates:
    - controllers
-   - whitelist principals
+   - Fleet-admitted principals
    - parent/root/child/same-canister checks
    - registry role checks
 2. Delegated-token endpoint auth:

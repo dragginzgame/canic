@@ -25,6 +25,8 @@ pub mod fleet_registry_mirror;
 #[cfg(feature = "root-control-plane")]
 pub mod fleet_subnet_root;
 #[cfg(feature = "root-control-plane")]
+pub mod root_admission;
+#[cfg(feature = "root-control-plane")]
 mod root_authority;
 #[cfg(feature = "root-control-plane")]
 pub mod root_funding;

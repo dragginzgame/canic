@@ -11,10 +11,13 @@ use canic_core::{
         fleet_registry::FleetRegistryVersion,
     },
     ids::{
-        AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
-        FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetId, FleetKey,
-        FleetRegistryAuthority, FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
-        SubnetId,
+        AppId, CanonicalNetworkId, CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding,
+        FleetCoordinatorBinding, FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetId,
+        FleetKey, FleetRegistryAuthority, FleetSubnetRootFundingAuthority,
+        FleetSubnetRootFundingPolicy, SubnetId,
+    },
+    shared_support::fleet_admission_policy::{
+        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
     shared_support::fleet_funding_policy::{
         fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
@@ -50,6 +53,13 @@ pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority 
         },
         icp_refill: None,
     }
+}
+
+pub fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
+    let template =
+        compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
+            .expect("test Fleet admission template");
+    bind_initial_fleet_admission_policy(fleet, &template).expect("test Fleet admission policy")
 }
 
 pub fn root_funding_request_fixture(operation_sequence: u64) -> FleetRootFundingRequest {

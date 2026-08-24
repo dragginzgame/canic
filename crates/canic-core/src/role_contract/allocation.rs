@@ -14,7 +14,7 @@ pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 29;
 pub const CANIC_CORE_MIN_ID: u8 = 30;
 pub const CANIC_CORE_MAX_ID: u8 = 99;
 pub const CANIC_CORE_LOWER_MAX_ID: u8 = 61;
-pub const CANIC_CORE_UPPER_MIN_ID: u8 = 64;
+pub const CANIC_CORE_UPPER_MIN_ID: u8 = 66;
 
 /// Canonical stable-memory IDs grouped by record owner.
 pub mod memory {
@@ -32,6 +32,8 @@ pub mod memory {
         pub const FLEET_COORDINATOR_REGISTRY_ID: u8 = 15;
         pub const FLEET_COORDINATOR_FUNDING_ID: u8 = 62;
         pub const ROOT_FUNDING_ID: u8 = 63;
+        pub const FLEET_COORDINATOR_ADMISSION_ID: u8 = 64;
+        pub const ROOT_ADMISSION_ID: u8 = 65;
 
         // Fleet Subnet Root state.
         pub const ROOT_WASM_STORE_STATE_ID: u8 = 16;
@@ -124,8 +126,8 @@ pub mod memory {
         pub const ASYNC_JOB_RECOVERY_ID: u8 = 60;
     }
 
-    pub mod runtime_whitelist {
-        pub const RUNTIME_WHITELIST_ID: u8 = 61;
+    pub mod fleet_admission_projection {
+        pub const FLEET_ADMISSION_PROJECTION_ID: u8 = 61;
     }
 }
 
@@ -139,9 +141,10 @@ use memory::{
         BLOB_STORAGE_PENDING_DELETIONS_ID, BLOB_STORAGE_ROOTS_ID,
     },
     control_plane::{
-        FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
-        ROOT_CANISTER_INVENTORY_ASSETS_ID, ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID,
-        ROOT_CANISTER_POOL_STATE_ID, ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
+        FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
+        FLEET_COORDINATOR_REGISTRY_ID, ROOT_ADMISSION_ID, ROOT_CANISTER_INVENTORY_ASSETS_ID,
+        ROOT_CANISTER_POOL_HANDOFF_RECEIPTS_ID, ROOT_CANISTER_POOL_STATE_ID,
+        ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
         ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_PROVISIONING_OPERATIONS_ID,
         ROOT_COMPONENT_PROVISIONING_PLACEMENTS_ID, ROOT_COMPONENT_PROVISIONING_STATE_ID,
         ROOT_COMPONENT_REGISTRY_ENTRIES_ID, ROOT_COMPONENT_REGISTRY_STATE_ID,
@@ -154,6 +157,7 @@ use memory::{
         CYCLES_TRACKER_ID,
     },
     fleet::{FLEET_ACTIVATION_ID, FLEET_STATE_ID},
+    fleet_admission_projection::FLEET_ADMISSION_PROJECTION_ID,
     intent::{
         INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
         INTENT_RECEIPT_BACKED_RECORDS_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -165,7 +169,6 @@ use memory::{
     },
     replay::REPLAY_RECEIPTS_ID,
     runtime::{RUNTIME_BINDINGS_ID, RUNTIME_CANISTER_CHILDREN_ID},
-    runtime_whitelist::RUNTIME_WHITELIST_ID,
     sharding::{SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENTS_ID, SHARDING_REGISTRY_ID},
 };
 
@@ -175,7 +178,10 @@ const TEMPLATE_CHUNK_REFS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_REFS
 const TEMPLATE_CHUNK_PAYLOADS_IDS: &[MemoryId] = &[MemoryId::new(TEMPLATE_CHUNK_PAYLOADS_ID)];
 const WASM_STORE_GC_STATE_IDS: &[MemoryId] = &[MemoryId::new(WASM_STORE_GC_STATE_ID)];
 const FLEET_COORDINATOR_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_REGISTRY_ID)];
+const FLEET_COORDINATOR_ADMISSION_IDS: &[MemoryId] =
+    &[MemoryId::new(FLEET_COORDINATOR_ADMISSION_ID)];
 const FLEET_COORDINATOR_FUNDING_IDS: &[MemoryId] = &[MemoryId::new(FLEET_COORDINATOR_FUNDING_ID)];
+const ROOT_ADMISSION_IDS: &[MemoryId] = &[MemoryId::new(ROOT_ADMISSION_ID)];
 const ROOT_FUNDING_IDS: &[MemoryId] = &[MemoryId::new(ROOT_FUNDING_ID)];
 const ROOT_WASM_STORE_STATE_IDS: &[MemoryId] = &[MemoryId::new(ROOT_WASM_STORE_STATE_ID)];
 const ROOT_FLEET_REGISTRY_MIRROR_IDS: &[MemoryId] = &[MemoryId::new(ROOT_FLEET_REGISTRY_MIRROR_ID)];
@@ -228,7 +234,8 @@ const CORE_PLACEMENT_ACKNOWLEDGEMENT_IDS: &[MemoryId] =
     &[MemoryId::new(PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID)];
 const CORE_AUTHORITY_RESTORE_FENCE_IDS: &[MemoryId] = &[MemoryId::new(AUTHORITY_RESTORE_FENCE_ID)];
 const CORE_ASYNC_JOB_RECOVERY_IDS: &[MemoryId] = &[MemoryId::new(ASYNC_JOB_RECOVERY_ID)];
-const CORE_RUNTIME_WHITELIST_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_WHITELIST_ID)];
+const CORE_FLEET_ADMISSION_PROJECTION_IDS: &[MemoryId] =
+    &[MemoryId::new(FLEET_ADMISSION_PROJECTION_ID)];
 const PLACEMENT_SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_SCALING_REGISTRY_ID)];
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
@@ -268,6 +275,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         WASM_STORE_GC_STATE_IDS,
     ),
     definition(
+        StateAllocationKey::FleetCoordinatorAdmission,
+        AllocationOwner::CanicControlPlane,
+        FLEET_COORDINATOR_ADMISSION_IDS,
+    ),
+    definition(
         StateAllocationKey::FleetCoordinatorFunding,
         AllocationOwner::CanicControlPlane,
         FLEET_COORDINATOR_FUNDING_IDS,
@@ -276,6 +288,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::FleetCoordinatorRegistry,
         AllocationOwner::CanicControlPlane,
         FLEET_COORDINATOR_REGISTRY_IDS,
+    ),
+    definition(
+        StateAllocationKey::RootAdmission,
+        AllocationOwner::CanicControlPlane,
+        ROOT_ADMISSION_IDS,
     ),
     definition(
         StateAllocationKey::RootFunding,
@@ -423,9 +440,9 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         CORE_ASYNC_JOB_RECOVERY_IDS,
     ),
     definition(
-        StateAllocationKey::CoreRuntimeWhitelist,
+        StateAllocationKey::CoreFleetAdmissionProjection,
         AllocationOwner::CanicCore,
-        CORE_RUNTIME_WHITELIST_IDS,
+        CORE_FLEET_ADMISSION_PROJECTION_IDS,
     ),
 ];
 
@@ -482,11 +499,23 @@ pub fn validate_allocation_definitions(
             let owner_matches = match definition.owner {
                 AllocationOwner::CanicControlPlane => {
                     (owner_min_id..=owner_max_id).contains(&id)
-                        || matches!(id, FLEET_COORDINATOR_FUNDING_ID | ROOT_FUNDING_ID)
+                        || matches!(
+                            id,
+                            FLEET_COORDINATOR_ADMISSION_ID
+                                | FLEET_COORDINATOR_FUNDING_ID
+                                | ROOT_ADMISSION_ID
+                                | ROOT_FUNDING_ID
+                        )
                 }
                 AllocationOwner::CanicCore => {
                     (owner_min_id..=owner_max_id).contains(&id)
-                        && !matches!(id, FLEET_COORDINATOR_FUNDING_ID | ROOT_FUNDING_ID)
+                        && !matches!(
+                            id,
+                            FLEET_COORDINATOR_ADMISSION_ID
+                                | FLEET_COORDINATOR_FUNDING_ID
+                                | ROOT_ADMISSION_ID
+                                | ROOT_FUNDING_ID
+                        )
                 }
             };
             if !owner_matches {

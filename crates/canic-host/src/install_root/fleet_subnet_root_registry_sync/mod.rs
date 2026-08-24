@@ -118,6 +118,7 @@ pub(super) fn synchronize_and_verify_fleet_subnet_roots(
         &fleet_install_plan.plan.fleet.app,
         authority.clone(),
         &component_topology,
+        fleet_install_plan.plan.admission.clone(),
     )?;
     let mut expected = Vec::with_capacity(fleet_install_plan.plan.fleet_subnet_roots.len());
 

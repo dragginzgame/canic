@@ -246,6 +246,7 @@ fn journals_exact_registry_join_sync_and_active_mirror_evidence() {
         &fixture.plan.plan.fleet.app,
         store_verified.journal.authority.clone(),
         &fixture.topology,
+        fixture.plan.plan.admission.clone(),
     )
     .expect("genesis");
     let genesis_version = FleetRegistryOps::version(
@@ -592,6 +593,7 @@ fn fixture(root: &Path) -> Fixture {
         component_group_placements: Vec::new(),
         component_admissions: vec![admission],
         component_topology_digest: topology_digest,
+        admission_projections: Vec::new(),
         initial_release_set: FleetSubnetRootReleaseSet {
             release_build_id,
             manifest_digest: ReleaseSetDigest::from_bytes([5; 32]),
@@ -617,18 +619,20 @@ fn fixture(root: &Path) -> Fixture {
             cycles: 2_000_000_000_000,
         },
     };
+    let fleet = FleetBinding {
+        fleet: FleetKey {
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+            fleet_id: FleetId::from_generated_bytes([4; 32]),
+        },
+        app: AppId::from("toko"),
+    };
     let plan = PersistedFleetInstallPlan {
         plan: FleetInstallPlan {
-            fleet: FleetBinding {
-                fleet: FleetKey {
-                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                    fleet_id: FleetId::from_generated_bytes([4; 32]),
-                },
-                app: AppId::from("toko"),
-            },
+            fleet: fleet.clone(),
             fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id,
             application_artifact_union_digest: [3; 32],
+            admission: crate::test_support::fleet_admission_policy(fleet),
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 placement_cost: crate::test_support::placement_cost(subnet(1)),

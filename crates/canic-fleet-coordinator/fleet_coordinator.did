@@ -227,6 +227,7 @@ type CoordinatorCommand = variant {
   ApplyFundingPolicyRotation : FleetFundingPolicyRotationApplyRequest;
   PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionRequest;
   ResumeAuthoritySnapshot : AuthoritySnapshotRequest;
+  MutateAdmission : FleetAdmissionMutationRequest;
   ProvisionComponents : FleetComponentProvisioningPrepareRequest;
   RemoveRoot : FleetSubnetRootDrainingReservationRequest;
   CompleteRootDeletion : FleetSubnetRootDeletionCompletionRequest;
@@ -241,6 +242,7 @@ type CoordinatorCommandResponse = variant {
   RequestRootFunding : FleetRootFundingResponse;
   PrepareRootDeletionExecution : FleetSubnetRootDeletionExecutionResponse;
   ResumeAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
+  MutateAdmission : FleetAdmissionMutationResponse;
   OperationAccepted : OperationReceipt;
   CompleteRootDeletion : FleetSubnetRootDeletionResponse;
   PrepareAuthoritySnapshot : AuthorityRestoreFenceStatusResponse;
@@ -272,6 +274,7 @@ type CoordinatorFundingWindowStatusResponse = record {
 };
 // Coordinator-owned durable operation detail selected by one operation ID.
 type CoordinatorOperationStatusResponse = variant {
+  Admission : FleetAdmissionOperationStatusResponse;
   FundingPolicyRotation : FleetFundingPolicyRotationStatusResponse;
   RootRemoval : CoordinatorRootRemovalOperationStatus;
   ComponentProvisioning : FleetComponentProvisioningStatusResponse;
@@ -305,6 +308,7 @@ type CoordinatorRootRemovalOperationStatus = record {
 // Closed Coordinator observation selector carried by its single status query.
 type CoordinatorStatusRequest = variant {
   RootAcknowledgements;
+  Admission : FleetAdmissionStatusRequest;
   Overview;
   Operation : OperationReceipt;
   RegistryManifest;
@@ -316,6 +320,7 @@ type CoordinatorStatusRequest = variant {
 // Closed response union for the Coordinator's single status query.
 type CoordinatorStatusResponse = variant {
   RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
+  Admission : FleetAdmissionStatusResponse;
   Overview : RoleOverviewResponse;
   Operation : CoordinatorOperationStatusResponse;
   RegistryManifest : FleetRegistryManifest;
@@ -345,6 +350,98 @@ type FlattenedComponentGroupDeploymentMember = record {
   component_spec : text;
   purpose : ComponentDeploymentPurpose;
   limits : ComponentDeploymentLimits;
+};
+// One closed Fleet-admission membership action.
+type FleetAdmissionMutationAction = variant { Add; Remove };
+// Public semantic outcome of one accepted request.
+type FleetAdmissionMutationOutcome = variant {
+  CatalogChanged;
+  AlreadyPresent;
+  Planned;
+  AlreadyAbsent;
+  Converged;
+};
+// One exact controller-authorized Fleet-admission mutation.
+type FleetAdmissionMutationRequest = record {
+  "principal" : principal;
+  action : FleetAdmissionMutationAction;
+  participant_catalog_digest : blob;
+  operation_id : blob;
+  expected_policy_digest : blob;
+  expected_generation : nat64;
+  successor_policy_digest : blob;
+  selector : FleetAdmissionSelector;
+  authority : FleetCoordinatorBinding;
+  participant_count : nat32;
+};
+// Exact accepted mutation result, including idempotent outcomes.
+type FleetAdmissionMutationResponse = record {
+  policy_digest : blob;
+  generation : nat64;
+  operation_id : blob;
+  outcome : FleetAdmissionMutationOutcome;
+};
+// Durable state of one current or retained Coordinator admission operation.
+type FleetAdmissionOperationPhase = variant {
+  Opening : record { successor : FleetAdmissionPolicyStatus };
+  Releasing : record { successor : FleetAdmissionPolicyStatus };
+  PerimeterFenced : record { successor : FleetAdmissionPolicyStatus };
+  Planned : record { successor : FleetAdmissionPolicyStatus };
+  Activating : record { successor : FleetAdmissionPolicyStatus };
+  Preparing : record { successor : FleetAdmissionPolicyStatus };
+  Completed : FleetAdmissionMutationResponse;
+};
+// Protected operation detail selected by exact operation identity.
+type FleetAdmissionOperationStatusResponse = record {
+  "principal" : principal;
+  action : FleetAdmissionMutationAction;
+  operation_id : blob;
+  selector : FleetAdmissionSelector;
+  phase : FleetAdmissionOperationPhase;
+};
+// One exact Coordinator-owned Fleet admission policy.
+type FleetAdmissionPolicy = record {
+  policy_digest : blob;
+  fleet : FleetBinding;
+  generation : nat64;
+  schema_version : nat16;
+  fleet_principals : vec principal;
+  rules : vec FleetAdmissionRule;
+};
+// Compact current or successor policy identity and bounded counts.
+type FleetAdmissionPolicyStatus = record {
+  policy_digest : blob;
+  generation : nat64;
+  fleet_principal_count : nat16;
+  narrower_rule_count : nat16;
+  narrower_principal_reference_count : nat16;
+};
+// One canonical narrower admission rule.
+type FleetAdmissionRule = record {
+  selector : FleetAdmissionSelector;
+  principals : vec principal;
+};
+// Exact policy scope selected by protected input or a controller mutation.
+type FleetAdmissionSelector = variant {
+  fleet;
+  component_instance : text;
+  fleet_subnet_root : principal;
+  component_spec : text;
+};
+// Protected selector and page requested from the current active policy.
+type FleetAdmissionStatusRequest = record {
+  page : PageRequest;
+  selector : FleetAdmissionSelector;
+};
+// Controller-only current policy, bounded membership page and replay state.
+type FleetAdmissionStatusResponse = record {
+  fleet : FleetBinding;
+  active : FleetAdmissionPolicyStatus;
+  last_result : opt FleetAdmissionOperationStatusResponse;
+  selector : FleetAdmissionSelector;
+  principals : Page;
+  current_operation : opt FleetAdmissionOperationStatusResponse;
+  maximum_page_size : nat16;
 };
 //
 // FleetBinding
@@ -395,6 +492,20 @@ type FleetComponentProvisioningPrepareRequest = record {
   plan : FleetComponentProvisioningPlan;
   operation_id : blob;
 };
+// Exact Coordinator step whose current Root call most recently failed.
+type FleetComponentProvisioningRetryStage = variant {
+  RootAcceptance;
+  RootProvisioning;
+  DirectoryConfirmation;
+  RuntimeActivation;
+};
+// Bounded typed diagnostic retained for the Root call that remains retryable.
+type FleetComponentProvisioningRootFailure = record {
+  stage : FleetComponentProvisioningRetryStage;
+  fleet_subnet_root : principal;
+  failed_at_ns : nat64;
+  diagnostic_code : nat16;
+};
 // Exact root-local cursor copied from passive Coordinator status before one advance.
 type FleetComponentProvisioningRootProgress = record {
   claimed_component_count : nat32;
@@ -416,6 +527,7 @@ type FleetComponentProvisioningStatusResponse = record {
   plan_hash : blob;
   current_activation : opt FleetComponentActivationRootProgress;
   group_placement_count : nat32;
+  pending_root_failure : opt FleetComponentProvisioningRootFailure;
   provisioning_in_flight_root : opt principal;
   service_topology_published_at_ns : opt nat64;
   planned_at_ns : nat64;
@@ -477,6 +589,7 @@ type FleetCoordinatorBinding = record {
 //
 type FleetCoordinatorInitArgs = record {
   root_funding : opt FleetCoordinatorRootFundingPolicy;
+  admission : FleetAdmissionPolicy;
   component_deployment_configuration : ComponentDeploymentConfiguration;
   authority : FleetRegistryAuthority;
   configured_app : text;
@@ -611,6 +724,7 @@ type FleetKey = record { fleet_id : text; canonical_network_id : text };
 type FleetRegistry = record {
   fleet_subnet_roots : vec FleetSubnetRootEntry;
   component_specs : vec FleetComponentSpecEntry;
+  admission : FleetAdmissionPolicy;
   authority : FleetRegistryAuthority;
   revision : nat64;
   services : vec FleetServiceBinding;
@@ -1099,6 +1213,8 @@ type FleetSubnetRootSnapshotAcknowledgementRequest = record {
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
+type Page = record { total : nat64; entries : vec principal };
+type PageRequest = record { offset : nat64; limit : nat64 };
 type Result = variant { Ok : CoordinatorCommandResponse; Err : Error };
 type Result_1 = variant { Ok : CoordinatorStatusResponse; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
@@ -1110,6 +1226,7 @@ type RoleCapability = variant {
   Index;
   Icrc21;
   DelegatedTokenIssuer;
+  FleetAdmissionProjection;
   RoleAttestationSigner;
   WasmStore;
   DelegatedTokenVerifier;

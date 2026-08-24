@@ -244,6 +244,7 @@ fn active_registry(config: &ConfigModel, maximum_group_placements: u32) -> Fleet
         &authority.binding.fleet.app,
         authority.clone(),
         &topology,
+        crate::test::support::fleet_admission_policy(authority.binding.fleet.clone()),
     )
     .expect("genesis");
     for root in [

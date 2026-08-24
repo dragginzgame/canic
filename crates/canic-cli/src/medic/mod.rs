@@ -6,6 +6,7 @@
 //! Boundary: reads local workspace/Fleet state and renders diagnostic-only
 //! medic reports.
 
+mod admission;
 mod auth;
 mod blob_storage;
 mod command;
@@ -29,6 +30,7 @@ use canic_host::{
     state_manifest::{StateManifestResolution, resolve_workspace_state_manifest},
 };
 
+use admission::check_fleet_admission;
 use auth::check_auth_renewal;
 use blob_storage::{check_blob_storage_billing, check_blob_storage_not_selected};
 use command::MedicOptions;
@@ -182,6 +184,7 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
 
     if let Some(state) = state.as_ref() {
         checks.extend(installed_fleet_checks(icp_root, state, environment));
+        checks.push(check_fleet_admission(options, context));
     }
 
     if let Some(canister) = &options.blob_storage {

@@ -2753,6 +2753,52 @@ impl ComponentRegistryOps {
         ensure_root_accepts_top_level_allocation(&current)
     }
 
+    /// Prove that no retained Component operation can still change admission participants.
+    pub(crate) fn require_admission_catalog_stable() -> Result<(), InternalError> {
+        for allocation in RootComponentRegistryStore::allocations() {
+            if allocation.operation_id == [0; 32]
+                || !matches!(
+                    allocation.progress,
+                    RootComponentAllocationProgressRecord::Committed { .. }
+                        | RootComponentAllocationProgressRecord::Removed { .. }
+                )
+            {
+                return Err(InternalError::conflict());
+            }
+        }
+        for draining in RootComponentRegistryStore::component_drainings() {
+            match RootComponentRegistryStore::partition(draining.component) {
+                Some(partition) => {
+                    validate_partition_record(&partition)?;
+                    validate_component_draining_record(&partition, &draining)?;
+                    return Err(InternalError::conflict());
+                }
+                None => validate_removed_component_authority(&draining)?,
+            }
+        }
+        for component in RootComponentRegistryStore::registry_components() {
+            for allocation in RootComponentRegistryStore::child_allocations(component) {
+                validate_child_allocation_record(&allocation)?;
+                if !matches!(
+                    allocation.progress,
+                    RootComponentChildAllocationProgressRecord::Committed { .. }
+                ) {
+                    return Err(InternalError::conflict());
+                }
+            }
+            for removal in RootComponentRegistryStore::subtree_removals(component) {
+                validate_subtree_removal_record(&removal)?;
+                if !matches!(
+                    removal.progress,
+                    RootComponentSubtreeRemovalProgressRecord::Completed(_)
+                ) {
+                    return Err(InternalError::conflict());
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn reserve_allocation(
         decision: TopLevelComponentAllocationDecision,
         operation_id: [u8; 32],

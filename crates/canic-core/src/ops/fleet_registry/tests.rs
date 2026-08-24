@@ -71,6 +71,15 @@ fn authority() -> FleetRegistryAuthority {
     }
 }
 
+fn test_compile_genesis(
+    configured_app: &AppId,
+    authority: FleetRegistryAuthority,
+    topology: &ComponentTopology,
+) -> Result<FleetRegistry, FleetRegistryOpsError> {
+    let admission = crate::test::support::fleet_admission_policy(authority.binding.fleet.clone());
+    validation::compile_genesis(configured_app, authority, topology, admission)
+}
+
 fn subnet(byte: u8) -> SubnetId {
     SubnetId::from_principal(principal(byte))
 }
@@ -146,9 +155,8 @@ fn root(
 
 fn active_registry(topology: &ComponentTopology) -> FleetRegistry {
     let authority = authority();
-    let mut joining =
-        validation::compile_genesis(&AppId::from("demo"), authority.clone(), topology)
-            .expect("valid genesis Registry");
+    let mut joining = test_compile_genesis(&AppId::from("demo"), authority.clone(), topology)
+        .expect("valid genesis Registry");
     joining.fleet_subnet_roots = vec![
         root(topology, 5, 6, &[("alpha", 1)]),
         root(topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
@@ -243,7 +251,7 @@ fn active_pool_service() -> FleetServiceBinding {
 #[test]
 fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
     let topology = topology();
-    let registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
 
     assert_eq!(registry.revision, 1);
@@ -262,6 +270,38 @@ fn genesis_is_revision_one_with_complete_specs_and_no_roots() {
     let bytes = candid::encode_one(&registry).expect("encode Fleet Registry Candid");
     let decoded: FleetRegistry = candid::decode_one(&bytes).expect("decode Fleet Registry Candid");
     assert_eq!(decoded, registry);
+}
+
+#[test]
+fn registry_identity_binds_the_exact_fleet_admission_policy() {
+    let topology = topology();
+    let authority = authority();
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+        .expect("valid genesis Registry");
+    let baseline = FleetRegistryOps::version(&authority, &topology, &registry)
+        .expect("baseline Registry version");
+    let template = crate::ops::fleet_admission_policy::compile_fleet_admission_policy_template(
+        vec![principal(2)],
+        Vec::new(),
+    )
+    .expect("changed admission template");
+    registry.admission = crate::ops::fleet_admission_policy::bind_initial_fleet_admission_policy(
+        authority.binding.fleet.clone(),
+        &template,
+    )
+    .expect("changed admission policy");
+    let changed = FleetRegistryOps::version(&authority, &topology, &registry)
+        .expect("changed Registry version");
+    assert_ne!(baseline.content_hash, changed.content_hash);
+
+    registry.admission.fleet = FleetBinding {
+        fleet: FleetKey {
+            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+            fleet_id: FleetId::from_generated_bytes([99; 32]),
+        },
+        app: AppId::from("demo"),
+    };
+    assert!(FleetRegistryOps::version(&authority, &topology, &registry).is_err());
 }
 
 #[test]
@@ -295,7 +335,7 @@ fn initial_services_publish_as_one_canonical_registry_revision() {
                 .expect("published version")
                 .content_hash,
         ),
-        "da1bad606b4725d7b9de0ca10e24ad219b93b60248971ed946bc52eb0f4eca8c"
+        "9291b687630774e76ffc2c833283a01143eb5580543aacfb5ec9171336dca057"
     );
 
     std::assert_matches!(
@@ -541,7 +581,7 @@ fn service_registry_rejects_cross_service_identity_reuse_and_noncanonical_order(
 #[test]
 fn canonical_registry_manifest_and_version_are_digest_stable() {
     let topology = topology();
-    let mut registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     registry.fleet_subnet_roots = vec![
         root(&topology, 5, 6, &[("alpha", 1)]),
@@ -563,7 +603,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
     assert_eq!(version.content_hash, manifest.content_hash);
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(manifest.content_hash),
-        "b345dea97047a6545e7f034d76ef1f8dd98698420f2ec2f6f3bfaf7aa73522c2"
+        "6bb56d86c2ae16aa110756d6ece02981e3411399a9227fd9ed84f2303662bb22"
     );
 
     let mut changed_policy = registry;
@@ -580,7 +620,7 @@ fn canonical_registry_manifest_and_version_are_digest_stable() {
 #[test]
 fn registry_rejects_spec_drift_and_noncanonical_roots() {
     let topology = topology();
-    let mut registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     registry.component_specs[0].maximum_fleet_instances += 1;
     std::assert_matches!(
@@ -588,7 +628,7 @@ fn registry_rejects_spec_drift_and_noncanonical_roots() {
         Err(FleetRegistryOpsError::FleetComponentSpecMismatch { .. })
     );
 
-    let mut registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     registry.fleet_subnet_roots = vec![
         root(&topology, 7, 8, &[("beta", 1)]),
@@ -599,9 +639,8 @@ fn registry_rejects_spec_drift_and_noncanonical_roots() {
         Err(FleetRegistryOpsError::NonCanonicalFleetSubnetRootOrder)
     );
 
-    let mut invalid_policy =
-        validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
-            .expect("valid genesis Registry");
+    let mut invalid_policy = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
+        .expect("valid genesis Registry");
     invalid_policy.fleet_subnet_roots = vec![root(&topology, 5, 6, &[("alpha", 1)])];
     invalid_policy.fleet_subnet_roots[0]
         .funding
@@ -618,13 +657,13 @@ fn registry_rejects_spec_drift_and_noncanonical_roots() {
 #[test]
 fn registry_allows_partial_joining_admissions_but_rejects_fleet_excess() {
     let topology = topology();
-    let mut partial = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut partial = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     partial.fleet_subnet_roots = vec![root(&topology, 5, 6, &[("alpha", 1)])];
     validation::validate(&partial.authority, &topology, &partial)
         .expect("a joining Registry need not yet admit every Component Spec");
 
-    let mut excessive = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut excessive = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     excessive.fleet_subnet_roots = vec![
         root(&topology, 5, 6, &[("alpha", 2)]),
@@ -644,9 +683,8 @@ fn registry_allows_partial_joining_admissions_but_rejects_fleet_excess() {
 fn activation_atomically_transitions_one_nonempty_all_joining_snapshot() {
     let topology = topology();
     let authority = authority();
-    let mut joining =
-        validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
-            .expect("valid genesis Registry");
+    let mut joining = test_compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+        .expect("valid genesis Registry");
     joining.fleet_subnet_roots = vec![
         root(&topology, 5, 6, &[("alpha", 1)]),
         root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
@@ -684,9 +722,8 @@ fn activation_atomically_transitions_one_nonempty_all_joining_snapshot() {
 fn draining_and_removal_transition_only_one_exact_root() {
     let topology = topology();
     let authority = authority();
-    let mut joining =
-        validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
-            .expect("valid genesis Registry");
+    let mut joining = test_compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+        .expect("valid genesis Registry");
     joining.fleet_subnet_roots = vec![
         root(&topology, 5, 6, &[("alpha", 1)]),
         root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
@@ -750,9 +787,8 @@ fn draining_and_removal_transition_only_one_exact_root() {
 fn directory_is_an_exact_root_sourced_mixed_lifecycle_projection() {
     let topology = topology();
     let authority = authority();
-    let mut joining =
-        validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
-            .expect("valid genesis Registry");
+    let mut joining = test_compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+        .expect("valid genesis Registry");
     joining.fleet_subnet_roots = vec![
         root(&topology, 5, 6, &[("alpha", 1)]),
         root(&topology, 7, 8, &[("alpha", 2), ("beta", 2)]),
@@ -864,7 +900,7 @@ fn assert_configured_service_projection(
 fn activation_rejects_empty_mixed_or_exhausted_registry_state() {
     let topology = topology();
     let authority = authority();
-    let empty = validation::compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
+    let empty = test_compile_genesis(&AppId::from("demo"), authority.clone(), &topology)
         .expect("valid genesis Registry");
     assert!(FleetRegistryOps::compile_active(&authority, &topology, &empty).is_err());
 
@@ -888,7 +924,7 @@ fn activation_rejects_empty_mixed_or_exhausted_registry_state() {
 #[test]
 fn joining_compile_is_canonical_exact_idempotent_and_monotonic() {
     let topology = topology();
-    let genesis = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let genesis = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     let later_subnet = root(&topology, 7, 8, &[("beta", 1)]);
     let first = compile_joining(
@@ -924,7 +960,7 @@ fn joining_compile_is_canonical_exact_idempotent_and_monotonic() {
 #[test]
 fn joining_compile_rejects_wrong_status_identity_conflicts_and_revision_exhaustion() {
     let topology = topology();
-    let genesis = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let genesis = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     let joining = root(&topology, 5, 6, &[("alpha", 1)]);
 
@@ -959,7 +995,7 @@ fn joining_compile_rejects_wrong_status_identity_conflicts_and_revision_exhausti
 #[test]
 fn registry_rejects_duplicate_root_principal_and_coordinator_collision() {
     let topology = topology();
-    let mut duplicate = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut duplicate = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     duplicate.fleet_subnet_roots = vec![
         root(&topology, 5, 8, &[("alpha", 1)]),
@@ -970,7 +1006,7 @@ fn registry_rejects_duplicate_root_principal_and_coordinator_collision() {
         Err(FleetRegistryOpsError::DuplicateFleetSubnetRoot { .. })
     );
 
-    let mut collision = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut collision = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     collision.fleet_subnet_roots = vec![root(&topology, 5, 3, &[("alpha", 1)])];
     std::assert_matches!(
@@ -985,15 +1021,15 @@ fn genesis_requires_epoch_one_and_registry_authorities_remain_positive() {
     let mut wrong_genesis = authority();
     wrong_genesis.epoch = 2;
     std::assert_matches!(
-        validation::compile_genesis(&AppId::from("demo"), wrong_genesis, &topology),
+        test_compile_genesis(&AppId::from("demo"), wrong_genesis, &topology),
         Err(FleetRegistryOpsError::GenesisAuthorityEpoch(2))
     );
     std::assert_matches!(
-        validation::compile_genesis(&AppId::from("other"), authority(), &topology),
+        test_compile_genesis(&AppId::from("other"), authority(), &topology),
         Err(FleetRegistryOpsError::GenesisAppMismatch { .. })
     );
 
-    let mut registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     registry.authority.epoch = 0;
     std::assert_matches!(
@@ -1005,7 +1041,7 @@ fn genesis_requires_epoch_one_and_registry_authorities_remain_positive() {
 #[test]
 fn registry_roots_share_one_active_release_build() {
     let topology = topology();
-    let mut registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     let first = root(&topology, 5, 6, &[("alpha", 1)]);
     let mut second = root(&topology, 7, 8, &[("beta", 1)]);
@@ -1021,7 +1057,7 @@ fn registry_roots_share_one_active_release_build() {
 #[test]
 fn registry_authority_must_match_the_protected_expected_authority() {
     let topology = topology();
-    let mut registry = validation::compile_genesis(&AppId::from("demo"), authority(), &topology)
+    let mut registry = test_compile_genesis(&AppId::from("demo"), authority(), &topology)
         .expect("valid genesis Registry");
     let expected_authority = registry.authority.clone();
     registry.authority.binding.coordinator = principal(4);

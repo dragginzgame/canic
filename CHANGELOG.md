@@ -8,43 +8,35 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.109.x] - Fleet-Wide Ingress Admission
+
+Detailed patch breakdown: [docs/changelog/0.109.md](docs/changelog/0.109.md)
+
+- `0.109.0` hard-cuts App-local whitelists to one Coordinator-owned Fleet
+  admission policy projected into every managed non-Root canister, adds
+  replay-safe live add/remove convergence with bounded CLI and Medic surfaces,
+  and exposes local Canic and composed-framework caller guards qualified
+  through IcyDB's real request-execution wrapper. Its go-live correction lets
+  the sole Root pool journal supply fresh Component capacity, accepts only the
+  exact Coordinator-proven initial Registry successor on host restart and
+  exposes bounded typed per-Root retry evidence. An immutable matching package
+  release and separately authorized downstream qualification must still close
+  every further Canic-owned adoption blocker before binding post-adoption
+  complexity remediation begins. 0.109 minor closeout and 0.110 promotion
+  remain blocked until the accepted simplification findings pass an immutable
+  superseding audit.
+
 ## [0.108.x] - Coordinator-Backed Root Funding
 
 Detailed patch breakdown: [docs/changelog/0.108.md](docs/changelog/0.108.md)
 
-- `0.108.2` reconciles the tagged 0.108.1 closeout evidence and clarifies that
-  CANIC-019 is the sole explicit same-release successor-generation path; caps
-  remain non-renewing through time, restart, window rollover, direct top-up,
-  policy reapplication and mutable configuration.
-- `0.108.1` adds the two-sided Coordinator/Root runtime grant journal, exact
-  registered-Root admission, reserve-aware attached-cycle calls,
-  accept-once/zero-accept replay, topology-scaled finite automatic authority,
-  a bounded 180T preview multi-Subnet staging profile, exact Fiduciary cost
-  acknowledgement and the sole recovery-first Root funding timer. It completes
-  protected manual and terminal automatic ICP refill with durable Ledger/CMC
-  replay and shared caps, explicit installed-Root recovery, protected funding
-  status/metrics, Medic and lifecycle/snapshot fences. It also adds explicit,
-  digest-bound funding-policy generation rotation with retained historical
-  usage, complete replay-bound checkpoints, mixed-state Root recovery and a
-  measured 32 MiB stable bound; real PocketIC journeys prove single- and
-  multi-Root Coordinator accounting, non-renewing caps, successor-generation
-  recovery, uncertain-call suppression, real Ledger/CMC replay, reserve-denial
-  ICP fallback and no-spend policy denials. It also reduces Fleet-input
-  operator funding authority to one Principal and derives the matching ledger
-  account plus live cycles balance through ICP CLI, excluding volatile observations
-  from the canonical plan digest and rechecking them before install effects.
-  Fresh-Fleet reconciliation now also accepts an exact terminal Root receipt
-  without requiring the Coordinator to witness intermediate counters,
-  normalizes a Root that advances before its post-acceptance observation and
-  logs bounded scheduled-retry diagnostics. Fleet creation is now cycle-only,
-  its maximum operator debit includes every per-create Cycles Ledger fee, and
-  `scaffold fleet-input` resolves selected Subnet IDs through validated
-  Registry evidence, retains an offline explicit-count fallback, explains
-  node-scaled formulas and emits exact funding TOML without weakening live
-  deployment admission.
-  Release qualification now runs cheap internal checks first, keeps all
-  internal PocketIC cases in one ordered process, persistently caches the
-  canonical Coordinator artifact and reuses only reset-complete baselines.
+- `0.108.2` aligns the published closeout evidence and records CANIC-019 as the
+  only same-release successor-generation path; automatic caps otherwise remain
+  non-renewing.
+- `0.108.1` enables replay-safe Coordinator-backed Root funding, emergency ICP
+  refill and explicit policy rotation under finite authority. It also hard-cuts
+  Fleet creation to fee-complete cycle funding under one observed operator
+  identity and adds topology-scaled planning, authoring and status tooling.
 - `0.108.0` establishes accepted replay/refund semantics, protected
   Coordinator/root funding policy and distinct fresh-install provisioning
   authority without yet enabling runtime grants.

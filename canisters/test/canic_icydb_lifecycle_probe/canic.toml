@@ -9,8 +9,7 @@ package = "../../audit/root_probe"
 [roles.test]
 kind = "canister"
 package = "."
-
-[app.whitelist]
+fleet_admission = true
 
 [auth.delegated_tokens]
 enabled = false

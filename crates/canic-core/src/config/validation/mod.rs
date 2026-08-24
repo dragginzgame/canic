@@ -180,6 +180,12 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
             )));
         }
 
+        if declaration.kind == RoleDeclarationKind::Root && declaration.fleet_admission {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "role declaration '{role}' cannot enable fleet_admission because Roots distribute admission but are not participants",
+            )));
+        }
+
         if declaration.package.trim().is_empty() {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "role declaration '{role}' package must not be empty",

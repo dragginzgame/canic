@@ -254,6 +254,7 @@ fn status(
         runtime_activated_root_count: 0,
         current_activation: None,
         activation_in_flight_root: None,
+        pending_root_failure: None,
         group_placement_count: 0,
         component_count: 0,
         planned_at_ns: 1,
@@ -270,12 +271,13 @@ fn install_plan(root: &Path) -> PersistedFleetInstallPlan {
     let fleet = fleet();
     PersistedFleetInstallPlan {
         plan: FleetInstallPlan {
-            fleet,
+            fleet: fleet.clone(),
             fresh_fleet_plan_digest: "ab".repeat(32),
             release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
                 [6; 32],
             )),
             application_artifact_union_digest: [9; 32],
+            admission: crate::test_support::fleet_admission_policy(fleet),
             coordinator: PlannedFleetCoordinator {
                 coordinator_subnet: subnet(1),
                 placement_cost: crate::test_support::placement_cost(subnet(1)),

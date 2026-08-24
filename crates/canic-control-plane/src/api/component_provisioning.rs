@@ -32,9 +32,12 @@ impl RootComponentProvisioningApi {
     pub async fn accept(
         request: RootComponentProvisioningAcceptanceRequest,
     ) -> Result<OperationReceipt, Error> {
-        component_provisioning::accept_and_schedule(IcOps::msg_caller(), request)
-            .await
-            .map_err(Into::into)
+        Box::pin(component_provisioning::accept_and_schedule(
+            IcOps::msg_caller(),
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn advance(

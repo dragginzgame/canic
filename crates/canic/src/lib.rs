@@ -21,6 +21,7 @@ pub mod api;
 mod build_support;
 pub mod diagnostics;
 pub mod dto;
+pub mod fleet_admission;
 pub mod ids;
 mod instructions;
 mod macros; // private implementation boundary

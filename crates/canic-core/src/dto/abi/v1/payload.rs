@@ -1,6 +1,9 @@
 use crate::{
     dto::{component_deployment::ProtectedComponentDeployment, prelude::*},
-    ids::{ComponentBinding, ComponentChildBinding, FleetSubnetRootBinding, ReleaseBuildId},
+    ids::{
+        ComponentBinding, ComponentChildBinding, FleetAdmissionProjection, FleetSubnetRootBinding,
+        ReleaseBuildId,
+    },
 };
 
 ///
@@ -31,6 +34,7 @@ pub struct CanisterInitPayload {
     pub release_build_id: ReleaseBuildId,
     pub authority: CanisterInitAuthority,
     pub component_deployment: Box<ProtectedComponentDeployment>,
+    pub admission: Option<FleetAdmissionProjection>,
 }
 
 #[cfg(test)]
@@ -108,6 +112,9 @@ mod tests {
                 root,
                 binding: binding.clone(),
             },
+            admission: Some(crate::test::support::fleet_admission_projection(
+                crate::ids::ManagedCanisterBinding::Component(binding.clone()),
+            )),
         };
 
         let bytes = candid::encode_one(&payload).expect("encode managed non-root init payload");
@@ -116,6 +123,7 @@ mod tests {
 
         assert_eq!(decoded.install_id, [11; 32]);
         assert_eq!(decoded.release_build_id, release_build_id);
+        assert_eq!(decoded.admission, payload.admission);
         assert_eq!(decoded.component_deployment, payload.component_deployment);
         assert_eq!(
             decoded.authority,

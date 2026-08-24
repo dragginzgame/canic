@@ -19,6 +19,11 @@ TIMER_STATUS="$ROOT/docs/design/0.104-ic-timers-consumer-hard-cut/status.md"
 TIMER_EVIDENCE="$ROOT/docs/audits/working/0.104-timer-ownership/README.md"
 TIMER_CHANGELOG="$ROOT/docs/changelog/0.104.md"
 TIMER_GUIDE="$ROOT/docs/features/runtime/native-timers.md"
+ADMISSION_DESIGN="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/0.109-design.md"
+ADMISSION_STATUS="$ROOT/docs/design/0.109-fleet-wide-ingress-admission/status.md"
+ESTATE_DESIGN="$ROOT/docs/design/0.110-fleet-subnet-canister-estates/0.110-design.md"
+ESTATE_STATUS="$ROOT/docs/design/0.110-fleet-subnet-canister-estates/status.md"
+COMPLEXITY_AUDIT="$ROOT/docs/audits/release-lines/0.109-post-implementation-complexity-audit.md"
 
 operator_docs=(
     "$ROOT/INSTALLING.md"
@@ -45,6 +50,11 @@ require_files "$GUARD_LABEL" \
     "$TIMER_EVIDENCE" \
     "$TIMER_CHANGELOG" \
     "$TIMER_GUIDE" \
+    "$ADMISSION_DESIGN" \
+    "$ADMISSION_STATUS" \
+    "$ESTATE_DESIGN" \
+    "$ESTATE_STATUS" \
+    "$COMPLEXITY_AUDIT" \
     "${operator_docs[@]}"
 
 for design_entry in "$ROOT"/docs/design/*; do
@@ -159,6 +169,35 @@ done
 require_texts "$STATUS" "$GUARD_LABEL" \
     "## Current Decision" \
     "## Next Action"
+require_texts "$COMPLEXITY_AUDIT" "$GUARD_LABEL" \
+    "closeout_verdict: fail" \
+    "CANIC-109-GOLIVE-001" \
+    "CANIC-109-GOLIVE-002" \
+    "CANIC-109-GOLIVE-003" \
+    "B9 remediation must not begin" \
+    "until B8 closes." \
+    "Until then, 0.110 is not authorized."
+require_texts "$ADMISSION_STATUS" "$GUARD_LABEL" \
+    "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
+    "| B8 | Release and downstream go-live support |" \
+    "| B9 | Post-adoption complexity contraction |" \
+    "CANIC-109-GOLIVE-001" \
+    "CANIC-109-GOLIVE-002" \
+    "CANIC-109-GOLIVE-003"
+require_texts "$ADMISSION_DESIGN" "$GUARD_LABEL" \
+    "| B8 | Release and downstream go-live support |" \
+    "| B9 | Post-adoption complexity contraction |" \
+    '`CANIC-109-GOLIVE-001` through `003`'
+require_texts "$ESTATE_STATUS" "$GUARD_LABEL" \
+    "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
+    "No 0.110 mutation is authorized."
+require_text "$ESTATE_DESIGN" \
+    "../../audits/release-lines/0.109-post-implementation-complexity-audit.md" \
+    "$GUARD_LABEL"
+require_texts "$STATUS" "$GUARD_LABEL" \
+    "binding post-implementation complexity audit" \
+    "B8 owns Canic release and downstream" \
+    "B9 owns"
 
 forbid_text "$STATUS" "## Historical Release Detail" "$GUARD_LABEL"
 forbid_texts "$STATUS" "$GUARD_LABEL" \

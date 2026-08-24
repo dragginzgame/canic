@@ -44,7 +44,7 @@ pub(super) enum BuiltinPredicate {
     CallerIsChild,
     CallerIsRoot,
     CallerIsSameCanister,
-    CallerIsWhitelisted,
+    CallerIsFleetAdmitted,
     Authenticated {
         required_scope: Option<AuthScopeArg>,
     },
@@ -571,7 +571,7 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
         ("caller", "is_child") => Some(BuiltinPredicate::CallerIsChild),
         ("caller", "is_root") => Some(BuiltinPredicate::CallerIsRoot),
         ("caller", "is_same_canister") => Some(BuiltinPredicate::CallerIsSameCanister),
-        ("caller", "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
+        ("caller", "is_fleet_admitted") => Some(BuiltinPredicate::CallerIsFleetAdmitted),
         ("env", "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
         ("env", "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,

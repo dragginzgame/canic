@@ -12,7 +12,10 @@ use crate::{
     role_contract::allocation::{
         CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_LOWER_MAX_ID,
         CANIC_CORE_MAX_ID, CANIC_CORE_MIN_ID, CANIC_CORE_UPPER_MIN_ID,
-        memory::control_plane::{FLEET_COORDINATOR_FUNDING_ID, ROOT_FUNDING_ID},
+        memory::control_plane::{
+            FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID, ROOT_ADMISSION_ID,
+            ROOT_FUNDING_ID,
+        },
     },
 };
 use ic_memory::{
@@ -117,12 +120,12 @@ pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
         )
         .expect("valid Canic core authority record"),
         MemoryManagerAuthorityRecord::new(
-            control_plane_funding_range(),
+            control_plane_infrastructure_range(),
             CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
             MemoryManagerRangeMode::Reserved,
             Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
         )
-        .expect("valid infrastructure funding authority record"),
+        .expect("valid infrastructure control-plane authority record"),
         MemoryManagerAuthorityRecord::new(
             canic_core_upper_range(),
             CANIC_CORE_MEMORY_AUTHORITY,
@@ -164,6 +167,27 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
                 "the Root funding key must use reserved id 63",
             );
         }
+        if stable_key == "canic.control_plane.fleet_admission.v1" {
+            return require_range(
+                id,
+                stable_key,
+                MemoryManagerIdRange::new(
+                    FLEET_COORDINATOR_ADMISSION_ID,
+                    FLEET_COORDINATOR_ADMISSION_ID,
+                )
+                .expect("valid Coordinator admission range"),
+                "the Fleet Coordinator admission key must use reserved id 64",
+            );
+        }
+        if stable_key == "canic.control_plane.root.admission.v1" {
+            return require_range(
+                id,
+                stable_key,
+                MemoryManagerIdRange::new(ROOT_ADMISSION_ID, ROOT_ADMISSION_ID)
+                    .expect("valid Root admission range"),
+                "the Root admission key must use reserved id 65",
+            );
+        }
         return require_range(
             id,
             stable_key,
@@ -186,7 +210,7 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
 fn validate_application_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryError> {
     if ic_memory::memory_manager_governance_range().contains(id)
         || canic_core_lower_range().contains(id)
-        || control_plane_funding_range().contains(id)
+        || control_plane_infrastructure_range().contains(id)
         || canic_core_upper_range().contains(id)
         || canic_control_plane_range().contains(id)
     {
@@ -223,7 +247,7 @@ fn require_core_range(id: u8, stable_key: &str) -> Result<(), MemoryRegistryErro
         Err(MemoryRegistryError::RangeAuthorityViolation {
             stable_key: stable_key.to_string(),
             id,
-            reason: "canic.core.* keys must use Canic core ids 30-61 or 64-99",
+            reason: "canic.core.* keys must use Canic core ids 30-61 or 66-99",
         })
     }
 }
@@ -233,9 +257,9 @@ fn canic_core_lower_range() -> MemoryManagerIdRange {
         .expect("valid lower Canic core range")
 }
 
-fn control_plane_funding_range() -> MemoryManagerIdRange {
-    MemoryManagerIdRange::new(FLEET_COORDINATOR_FUNDING_ID, ROOT_FUNDING_ID)
-        .expect("valid infrastructure funding range")
+fn control_plane_infrastructure_range() -> MemoryManagerIdRange {
+    MemoryManagerIdRange::new(FLEET_COORDINATOR_FUNDING_ID, ROOT_ADMISSION_ID)
+        .expect("valid infrastructure control-plane range")
 }
 
 fn canic_core_upper_range() -> MemoryManagerIdRange {
@@ -336,6 +360,13 @@ mod tests {
         .expect("dedicated Fleet Coordinator funding slot");
         validate("canic.control_plane.root.funding.v1", ROOT_FUNDING_ID)
             .expect("dedicated Root funding slot");
+        validate(
+            "canic.control_plane.fleet_admission.v1",
+            FLEET_COORDINATOR_ADMISSION_ID,
+        )
+        .expect("dedicated Fleet Coordinator admission slot");
+        validate("canic.control_plane.root.admission.v1", ROOT_ADMISSION_ID)
+            .expect("dedicated Root admission slot");
     }
 
     #[test]
@@ -356,6 +387,12 @@ mod tests {
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
         let err = validate("canic.core.future.v1", ROOT_FUNDING_ID)
             .expect_err("core key cannot claim the dedicated Root funding slot");
+        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
+        let err = validate("canic.core.future.v1", FLEET_COORDINATOR_ADMISSION_ID)
+            .expect_err("core key cannot claim the dedicated Coordinator admission slot");
+        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
+        let err = validate("canic.core.future.v1", ROOT_ADMISSION_ID)
+            .expect_err("core key cannot claim the dedicated Root admission slot");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
 
         let err = validate("canic.unknown.state.v1", CANIC_CORE_MAX_ID + 1)

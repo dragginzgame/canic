@@ -6,8 +6,7 @@
 
 use super::*;
 use crate::{
-    cdk::types::{Cycles, Principal},
-    domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
+    cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
     model::auth::application_authorization::MAX_VERIFIED_APPLICATION_SCOPES,
 };
 use std::{
@@ -349,6 +348,7 @@ fn complete_config_validation_rejects_unadmitted_role_declarations() {
             RoleDeclaration {
                 kind: RoleDeclarationKind::Canister,
                 package: "app".to_string(),
+                fleet_admission: false,
             },
         );
 
@@ -464,6 +464,7 @@ fn non_root_role_declaration_may_be_declared_only() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "crates/store".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -485,6 +486,40 @@ kind = "canister"
 }
 
 #[test]
+fn fleet_admission_role_enrollment_is_explicit_and_defaults_closed() {
+    let omitted = toml::from_str::<RoleDeclaration>(
+        r#"
+kind = "canister"
+package = "app"
+"#,
+    )
+    .expect("role declaration without enrollment should parse");
+    let enrolled = toml::from_str::<RoleDeclaration>(
+        r#"
+kind = "canister"
+package = "app"
+fleet_admission = true
+"#,
+    )
+    .expect("explicit Fleet admission role should parse");
+
+    assert!(!omitted.fleet_admission);
+    assert!(enrolled.fleet_admission);
+}
+
+#[test]
+fn root_role_cannot_enroll_as_a_fleet_admission_participant() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.roles
+        .get_mut(&CanisterRole::ROOT)
+        .expect("test Root declaration")
+        .fleet_admission = true;
+
+    cfg.validate()
+        .expect_err("Root distributes Fleet admission and cannot be a participant");
+}
+
+#[test]
 fn role_declaration_package_paths_must_not_be_empty() {
     let mut cfg = ConfigModel::test_default();
     cfg.roles.insert(
@@ -492,6 +527,7 @@ fn role_declaration_package_paths_must_not_be_empty() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: " ".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -508,6 +544,7 @@ fn topology_less_config_may_declare_only_non_root_roles() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "store".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -527,6 +564,7 @@ fn topology_less_config_may_declare_root_infrastructure() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Root,
             package: "root".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -550,6 +588,7 @@ fn component_spec_instance_ceilings_are_fleet_bounded() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "aux".to_string(),
+            fleet_admission: false,
         },
     );
     cfg.component_specs
@@ -598,6 +637,7 @@ fn provisioning_grant_graph_requires_existing_distinct_acyclic_specs() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "aux".to_string(),
+            fleet_admission: false,
         },
     );
     let mut aux = component_spec_config("aux", 1);
@@ -665,6 +705,7 @@ fn potential_descendant_roles_may_be_reused_across_component_specs() {
             RoleDeclaration {
                 kind: RoleDeclarationKind::Canister,
                 package: role.to_string(),
+                fleet_admission: false,
             },
         );
     }
@@ -711,6 +752,7 @@ fn a_component_role_may_also_be_a_potential_child_role() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "aux".to_string(),
+            fleet_admission: false,
         },
     );
     cfg.component_specs
@@ -758,6 +800,7 @@ fn attached_and_deployable_roles_follow_structural_ownership() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "user_hub".to_string(),
+            fleet_admission: false,
         },
     );
     cfg.roles.insert(
@@ -765,6 +808,7 @@ fn attached_and_deployable_roles_follow_structural_ownership() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "user_shard".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -797,6 +841,7 @@ fn app_cannot_declare_the_built_in_fleet_coordinator_role() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "coordinator".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -812,6 +857,7 @@ fn several_component_specs_may_define_distinct_components() {
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
             package: "aux".to_string(),
+            fleet_admission: false,
         },
     );
 
@@ -1016,28 +1062,21 @@ fn role_attestation_empty_min_epoch_role_key_is_invalid() {
 }
 
 #[test]
-fn invalid_whitelist_principal_is_rejected() {
-    let mut cfg = ConfigModel::test_default();
-    cfg.app.whitelist = Some(Whitelist {
-        principals: std::iter::once("not-a-principal".into()).collect(),
-    });
+fn removed_app_whitelist_config_is_rejected() {
+    let error = crate::bootstrap::parse_config_model(
+        r#"
+[app]
+name = "demo"
 
-    cfg.validate()
-        .expect_err("expected invalid principal to fail");
-}
+[app.whitelist]
+principals = ["aaaaa-aa"]
 
-#[test]
-fn runtime_whitelist_seed_capacity_is_rejected_by_config_validation() {
-    let mut cfg = ConfigModel::test_default();
-    cfg.app.whitelist = Some(Whitelist {
-        principals: (0..=crate::model::runtime_whitelist::MAX_RUNTIME_WHITELIST_PRINCIPALS)
-            .map(|index| {
-                let index = u16::try_from(index).expect("fixture index fits u16");
-                Principal::from_slice(&index.to_be_bytes()).to_text()
-            })
-            .collect(),
-    });
+[roles.root]
+kind = "root"
+package = "root"
+"#,
+    )
+    .expect_err("removed App whitelist authority must reject");
 
-    cfg.validate()
-        .expect_err("seed above runtime capacity must fail before build");
+    assert!(error.to_string().contains("whitelist"));
 }

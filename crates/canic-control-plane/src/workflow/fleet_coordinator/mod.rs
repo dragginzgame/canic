@@ -15,7 +15,10 @@ use crate::{
         },
         root::RootRemovalOperationStatus,
     },
-    ops::fleet_coordinator::FleetCoordinatorOps,
+    ops::{
+        fleet_admission::{FleetAdmissionCoordinatorStep, FleetAdmissionOps},
+        fleet_coordinator::FleetCoordinatorOps,
+    },
     view::fleet_coordinator::{
         FleetComponentDirectoryConfirmationCallView,
         FleetComponentDirectoryConfirmationDisposition,
@@ -45,6 +48,13 @@ use canic_core::{
             RootComponentProvisioningAcceptanceRequest, RootComponentProvisioningStatusResponse,
         },
         error::Error,
+        fleet_admission::{
+            FleetAdmissionActivateRootRequest, FleetAdmissionMutationOutcome,
+            FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
+            FleetAdmissionOpenRootRequest, FleetAdmissionOperationPhase,
+            FleetAdmissionPrepareRootRequest, FleetAdmissionRootReceipt,
+            FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
+        },
         fleet_funding::{
             FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
             FleetFundingPolicyRotationRootActivateRequest,
@@ -76,7 +86,10 @@ use std::time::Duration;
 #[derive(CandidType)]
 enum RemoteRootCommand {
     AcceptFunding(canic_core::dto::fleet_funding::FleetRootFundingAcceptanceRequest),
+    ActivateFleetAdmission(FleetAdmissionActivateRootRequest),
     ActivateFundingPolicyRotation(FleetFundingPolicyRotationRootActivateRequest),
+    OpenFleetAdmission(FleetAdmissionOpenRootRequest),
+    PrepareFleetAdmission(FleetAdmissionPrepareRootRequest),
     PrepareFundingPolicyRotation(FleetFundingPolicyRotationRootPrepareRequest),
     ProvisionComponents(RootComponentProvisioningAcceptanceRequest),
     RemoveRoot(RootRemovalRequest),
@@ -86,8 +99,11 @@ enum RemoteRootCommand {
 #[derive(CandidType, Deserialize)]
 enum RemoteRootCommandResponse {
     AcceptFunding(Box<FleetRootFundingAcceptanceReceipt>),
+    ActivateFleetAdmission(Box<FleetAdmissionRootReceipt>),
     ActivateFundingPolicyRotation(Box<FleetFundingPolicyRotationRootReceipt>),
+    OpenFleetAdmission(Box<FleetAdmissionRootReceipt>),
     OperationAccepted(Box<OperationReceipt>),
+    PrepareFleetAdmission(Box<FleetAdmissionRootReceipt>),
     PrepareFundingPolicyRotation(Box<FleetFundingPolicyRotationRootReceipt>),
     SynchronizeComponentDirectories(Box<RootComponentDirectorySynchronizationResponse>),
 }
@@ -136,7 +152,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn operation_status(
         operation_id: [u8; 32],
     ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
-        FleetCoordinatorOps::operation_status(operation_id)
+        Self::resolve_operation_status(operation_id)
     }
 
     pub(crate) fn operation_status_for_caller(
@@ -149,6 +165,16 @@ impl FleetCoordinatorWorkflow {
             caller,
             caller_is_controller,
         )?;
+        Self::resolve_operation_status(operation_id)
+    }
+
+    fn resolve_operation_status(
+        operation_id: [u8; 32],
+    ) -> Result<CoordinatorOperationStatusResponse, InternalError> {
+        let registry = FleetCoordinatorOps::registry()?;
+        if let Some(status) = FleetAdmissionOps::operation_status(&registry, operation_id)? {
+            return Ok(CoordinatorOperationStatusResponse::Admission(status));
+        }
         FleetCoordinatorOps::operation_status(operation_id)
     }
 
@@ -161,11 +187,56 @@ impl FleetCoordinatorWorkflow {
         if !caller_is_controller {
             return Err(InternalError::forbidden());
         }
+        let admission =
+            FleetAdmissionOps::compile_genesis(args.admission.clone(), &args.authority.binding)?;
         let record = FleetCoordinatorOps::compile_genesis(args, coordinator_canister)?;
         FleetCoordinatorOps::commit_genesis(record)?;
         let funding = FleetCoordinatorOps::compile_funding_genesis();
         FleetCoordinatorOps::commit_funding_genesis(funding)?;
+        FleetAdmissionOps::commit_genesis(admission)?;
         Ok(())
+    }
+
+    /// Plan or exactly replay one protected Fleet-admission mutation.
+    pub(crate) fn mutate_admission(
+        request: FleetAdmissionMutationRequest,
+    ) -> Result<FleetAdmissionMutationResponse, InternalError> {
+        let registry = FleetCoordinatorOps::registry()?;
+        let admission_replay =
+            FleetAdmissionOps::retains_operation_id(&registry, request.operation_id)?;
+        if !admission_replay {
+            if FleetCoordinatorOps::retains_operation_id(request.operation_id)? {
+                return Err(InternalError::conflict());
+            }
+            FleetCoordinatorOps::require_admission_transition_start_allowed()?;
+        }
+        let response = FleetAdmissionOps::mutate(&registry, request)?;
+        if response.outcome == FleetAdmissionMutationOutcome::Planned {
+            schedule_fleet_admission(response.operation_id, Duration::ZERO);
+        }
+        Ok(response)
+    }
+
+    /// Return one bounded protected policy page and current replay state.
+    pub(crate) fn admission_status(
+        request: FleetAdmissionStatusRequest,
+    ) -> Result<FleetAdmissionStatusResponse, InternalError> {
+        let registry = FleetCoordinatorOps::registry()?;
+        FleetAdmissionOps::status(&registry, request)
+    }
+
+    fn require_non_admission_operation_id(operation_id: [u8; 32]) -> Result<(), InternalError> {
+        let registry = FleetCoordinatorOps::registry()?;
+        if FleetAdmissionOps::retains_operation_id(&registry, operation_id)? {
+            Err(InternalError::conflict())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn require_admission_transition_idle() -> Result<(), InternalError> {
+        let registry = FleetCoordinatorOps::registry()?;
+        FleetAdmissionOps::require_transition_idle(&registry)
     }
 
     /// Decide and execute one exact registered-Root funding operation.
@@ -215,6 +286,8 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn begin_funding_policy_rotation(
         request: FleetFundingPolicyRotationBeginRequest,
     ) -> Result<OperationReceipt, InternalError> {
+        Self::require_admission_transition_idle()?;
+        Self::require_non_admission_operation_id(request.operation_id)?;
         FleetCoordinatorOps::begin_funding_policy_rotation(request, IcOps::now_nanos())
     }
 
@@ -227,6 +300,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn apply_funding_policy_rotation(
         request: FleetFundingPolicyRotationApplyRequest,
     ) -> Result<OperationReceipt, InternalError> {
+        Self::require_admission_transition_idle()?;
         let receipt =
             FleetCoordinatorOps::apply_funding_policy_rotation(request, IcOps::now_nanos())?;
         schedule_funding_policy_rotation(receipt.operation_id, Duration::ZERO);
@@ -251,6 +325,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn join_root(
         request: FleetSubnetRootJoinRequest,
     ) -> Result<FleetSubnetRootJoinResponse, InternalError> {
+        Self::require_admission_transition_idle()?;
         FleetCoordinatorOps::join_root(request)
     }
 
@@ -286,6 +361,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn prepare_component_provisioning(
         request: FleetComponentProvisioningPrepareRequest,
     ) -> Result<FleetComponentProvisioningStatusResponse, InternalError> {
+        Self::require_admission_transition_idle()?;
         FleetCoordinatorOps::prepare_component_provisioning(request, IcOps::now_nanos())
     }
 
@@ -293,6 +369,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn accept_component_provisioning(
         request: FleetComponentProvisioningPrepareRequest,
     ) -> Result<OperationReceipt, InternalError> {
+        Self::require_non_admission_operation_id(request.operation_id)?;
         let status = Self::prepare_component_provisioning(request)?;
         schedule_component_provisioning(status.operation_id, status.plan_hash, Duration::ZERO);
         Ok(OperationReceipt {
@@ -411,6 +488,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) fn prepare_root_draining_reservation(
         request: FleetSubnetRootDrainingReservationRequest,
     ) -> Result<FleetSubnetRootDrainingReservationResponse, InternalError> {
+        Self::require_admission_transition_idle()?;
         FleetCoordinatorOps::prepare_root_draining_reservation(request, IcOps::now_nanos())
     }
 
@@ -418,6 +496,7 @@ impl FleetCoordinatorWorkflow {
     pub(crate) async fn accept_root_removal(
         request: FleetSubnetRootDrainingReservationRequest,
     ) -> Result<OperationReceipt, InternalError> {
+        Self::require_non_admission_operation_id(request.operation_id)?;
         let reservation = Self::prepare_root_draining_reservation(request)?;
         let expected = OperationReceipt {
             operation_id: reservation.request.operation_id,
@@ -438,8 +517,11 @@ impl FleetCoordinatorWorkflow {
                 Ok(*receipt)
             }
             RemoteRootCommandResponse::AcceptFunding(_)
+            | RemoteRootCommandResponse::ActivateFleetAdmission(_)
             | RemoteRootCommandResponse::ActivateFundingPolicyRotation(_)
+            | RemoteRootCommandResponse::OpenFleetAdmission(_)
             | RemoteRootCommandResponse::OperationAccepted(_)
+            | RemoteRootCommandResponse::PrepareFleetAdmission(_)
             | RemoteRootCommandResponse::PrepareFundingPolicyRotation(_)
             | RemoteRootCommandResponse::SynchronizeComponentDirectories(_) => {
                 Err(InternalError::conflict())
@@ -509,6 +591,137 @@ impl FleetCoordinatorWorkflow {
 
     pub(crate) fn version() -> Result<FleetRegistryVersion, InternalError> {
         FleetCoordinatorOps::version()
+    }
+}
+
+fn schedule_fleet_admission(operation_id: [u8; 32], delay: Duration) {
+    TimerApi::defer_lifecycle_required(delay, "Fleet admission convergence", async move {
+        match advance_fleet_admission_once(operation_id).await {
+            Ok(true) => {}
+            Ok(false) => schedule_fleet_admission(operation_id, Duration::ZERO),
+            Err(_) => schedule_fleet_admission(operation_id, Duration::from_secs(1)),
+        }
+    });
+}
+
+async fn advance_fleet_admission_once(operation_id: [u8; 32]) -> Result<bool, InternalError> {
+    let registry = FleetCoordinatorOps::registry()?;
+    let step = match FleetAdmissionOps::next_step(&registry) {
+        Ok(step) => step,
+        Err(error) => {
+            let terminal = FleetAdmissionOps::operation_status(&registry, operation_id)?
+                .is_some_and(|status| {
+                    matches!(status.phase, FleetAdmissionOperationPhase::Completed(_))
+                });
+            return if terminal { Ok(true) } else { Err(error) };
+        }
+    };
+    match step {
+        FleetAdmissionCoordinatorStep::PrepareRoot {
+            fleet_subnet_root,
+            request,
+        } => {
+            if request.operation_id != operation_id {
+                return Err(InternalError::conflict());
+            }
+            let receipt = call_root_admission(
+                fleet_subnet_root,
+                RemoteRootCommand::PrepareFleetAdmission(request),
+                RootAdmissionResponsePhase::Prepare,
+            )
+            .await?;
+            FleetAdmissionOps::record_root_receipt(&registry, receipt)?;
+            Ok(false)
+        }
+        FleetAdmissionCoordinatorStep::PublishRegistry { request, successor } => {
+            let registry = FleetCoordinatorOps::publish_admission_policy(request, successor)?;
+            FleetAdmissionOps::record_registry_published(&registry)?;
+            Ok(false)
+        }
+        FleetAdmissionCoordinatorStep::ActivateRoot {
+            fleet_subnet_root,
+            request,
+        } => {
+            if request.operation_id != operation_id {
+                return Err(InternalError::conflict());
+            }
+            let receipt = call_root_admission(
+                fleet_subnet_root,
+                RemoteRootCommand::ActivateFleetAdmission(request),
+                RootAdmissionResponsePhase::Activate,
+            )
+            .await?;
+            FleetAdmissionOps::record_root_receipt(&registry, receipt)?;
+            Ok(false)
+        }
+        FleetAdmissionCoordinatorStep::OpenRoot {
+            fleet_subnet_root,
+            request,
+        } => {
+            if request.operation_id != operation_id {
+                return Err(InternalError::conflict());
+            }
+            let receipt = call_root_admission(
+                fleet_subnet_root,
+                RemoteRootCommand::OpenFleetAdmission(request),
+                RootAdmissionResponsePhase::Open,
+            )
+            .await?;
+            FleetAdmissionOps::record_root_receipt(&registry, receipt)?;
+            Ok(false)
+        }
+        FleetAdmissionCoordinatorStep::Complete => {
+            let response = FleetAdmissionOps::complete(&registry)?;
+            if response.operation_id != operation_id
+                || response.outcome != FleetAdmissionMutationOutcome::Converged
+            {
+                return Err(InternalError::conflict());
+            }
+            Ok(true)
+        }
+        FleetAdmissionCoordinatorStep::CompleteCatalogChanged => {
+            let response = FleetAdmissionOps::complete_catalog_changed(&registry)?;
+            if response.operation_id != operation_id
+                || response.outcome != FleetAdmissionMutationOutcome::CatalogChanged
+            {
+                return Err(InternalError::conflict());
+            }
+            Ok(true)
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum RootAdmissionResponsePhase {
+    Activate,
+    Open,
+    Prepare,
+}
+
+async fn call_root_admission(
+    fleet_subnet_root: Principal,
+    command: RemoteRootCommand,
+    expected: RootAdmissionResponsePhase,
+) -> Result<FleetAdmissionRootReceipt, InternalError> {
+    let result = CallOps::bounded_wait(fleet_subnet_root, protocol::CANIC_COMMAND)
+        .with_arg(command)?
+        .execute()
+        .await?;
+    let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
+    match (expected, response.map_err(InternalError::observed_public)?) {
+        (
+            RootAdmissionResponsePhase::Activate,
+            RemoteRootCommandResponse::ActivateFleetAdmission(receipt),
+        )
+        | (
+            RootAdmissionResponsePhase::Open,
+            RemoteRootCommandResponse::OpenFleetAdmission(receipt),
+        )
+        | (
+            RootAdmissionResponsePhase::Prepare,
+            RemoteRootCommandResponse::PrepareFleetAdmission(receipt),
+        ) => Ok(*receipt),
+        _ => Err(InternalError::conflict()),
     }
 }
 
@@ -606,7 +819,8 @@ async fn advance_coordinator_root_removal_once(
 ) -> Result<bool, InternalError> {
     let current = match FleetCoordinatorOps::operation_status(operation_id)? {
         CoordinatorOperationStatusResponse::RootRemoval(current) => current,
-        CoordinatorOperationStatusResponse::ComponentProvisioning(_)
+        CoordinatorOperationStatusResponse::Admission(_)
+        | CoordinatorOperationStatusResponse::ComponentProvisioning(_)
         | CoordinatorOperationStatusResponse::FundingPolicyRotation(_) => {
             return Err(InternalError::conflict());
         }
@@ -712,6 +926,25 @@ async fn advance_scheduled_component_provisioning(operation_id: [u8; 32], plan_h
         Ok(status) if status.phase == FleetComponentProvisioningPhase::RuntimesActivated => {}
         Ok(_) => schedule_component_provisioning(operation_id, plan_hash, Duration::ZERO),
         Err(error) => {
+            let diagnostic_code = error.public_error().code().raw();
+            if let Err(retention_error) =
+                FleetCoordinatorOps::record_component_provisioning_root_failure(
+                    FleetComponentProvisioningStatusRequest {
+                        operation_id,
+                        plan_hash,
+                    },
+                    diagnostic_code,
+                    IcOps::now_nanos(),
+                )
+            {
+                log!(
+                    Topic::Fleet,
+                    Error,
+                    "Fleet Component provisioning retry diagnostic retention failed: operation_id={} phase={:?} error={retention_error}",
+                    hex_bytes(operation_id),
+                    status.phase,
+                );
+            }
             log!(
                 Topic::Fleet,
                 Warn,
@@ -1072,8 +1305,11 @@ async fn advance_root_component_directories(
                     RootComponentDirectoryAdvanceResponse::Synchronization(*response),
                 ),
                 RemoteRootCommandResponse::AcceptFunding(_)
+                | RemoteRootCommandResponse::ActivateFleetAdmission(_)
                 | RemoteRootCommandResponse::ActivateFundingPolicyRotation(_)
+                | RemoteRootCommandResponse::OpenFleetAdmission(_)
                 | RemoteRootCommandResponse::OperationAccepted(_)
+                | RemoteRootCommandResponse::PrepareFleetAdmission(_)
                 | RemoteRootCommandResponse::PrepareFundingPolicyRotation(_) => {
                     Err(InternalError::conflict())
                 }

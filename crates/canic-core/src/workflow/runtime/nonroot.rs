@@ -25,11 +25,11 @@ use crate::{
     },
     workflow::{
         env::EnvWorkflow,
+        fleet_admission_projection::FleetAdmissionProjectionWorkflow,
         runtime::{
             RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
             rebuild_derived_storage_indexes,
         },
-        runtime_whitelist::RuntimeWhitelistWorkflow,
     },
 };
 
@@ -50,6 +50,7 @@ pub fn init_nonroot_canister(
         release_build_id,
         authority,
         component_deployment,
+        admission,
     } = payload;
     let fleet = match &authority {
         CanisterInitAuthority::Component { binding, .. } => binding.authority.binding.fleet.clone(),
@@ -90,7 +91,7 @@ pub fn init_nonroot_canister(
     .map_err(crate::ops::storage::StorageOpsError::from)?;
 
     // --- Phase 2: Payload registration ---
-    register_managed_nonroot_authority(&canister_role, authority)?;
+    register_managed_nonroot_authority(&canister_role, authority, admission)?;
 
     // Prepared managed Canisters do not start timers or application hooks.
     Ok(())
@@ -173,6 +174,7 @@ fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalE
 fn register_managed_nonroot_authority(
     canister_role: &CanisterRole,
     authority: CanisterInitAuthority,
+    admission: Option<crate::ids::FleetAdmissionProjection>,
 ) -> Result<(), InternalError> {
     match authority {
         CanisterInitAuthority::Component { root, binding } => {
@@ -183,6 +185,12 @@ fn register_managed_nonroot_authority(
         }
     }
 
+    if let Some(admission) = validate_fleet_admission_payload(
+        ConfigOps::role_uses_fleet_admission(canister_role)?,
+        admission,
+    )? {
+        FleetAdmissionProjectionWorkflow::initialize(admission)?;
+    }
     register_nonroot_runtime_contract(canister_role)
 }
 
@@ -190,9 +198,6 @@ fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(),
     let app_mode = ConfigOps::app_init_mode().map_err(|_err| InternalError::invariant())?;
     FleetStateOps::init_mode(app_mode);
     let canister_cfg = ConfigOps::current_canister()?;
-    if !FleetActivationRuntimeOps::is_standalone_local() && !canister_role.is_wasm_store() {
-        RuntimeWhitelistWorkflow::initialize_from_compiled_seed()?;
-    }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;
     Ok(())
@@ -284,7 +289,9 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
             &deployment,
             owning_component(&binding),
         )?;
-        RuntimeWhitelistWorkflow::restore()?;
+        if ConfigOps::role_uses_fleet_admission(&canister_role)? {
+            FleetAdmissionProjectionWorkflow::restore()?;
+        }
     }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;
@@ -296,5 +303,33 @@ const fn owning_component(binding: &ManagedCanisterBinding) -> &ComponentBinding
     match binding {
         ManagedCanisterBinding::Component(component) => component,
         ManagedCanisterBinding::ComponentChild(child) => &child.component,
+    }
+}
+
+fn validate_fleet_admission_payload(
+    enrolled: bool,
+    admission: Option<crate::ids::FleetAdmissionProjection>,
+) -> Result<Option<crate::ids::FleetAdmissionProjection>, InternalError> {
+    match (enrolled, admission) {
+        (true, Some(admission)) => Ok(Some(admission)),
+        (false, None) => Ok(None),
+        (true, None) | (false, Some(_)) => Err(InternalError::invariant()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_fleet_admission_payload;
+
+    #[test]
+    fn managed_init_projection_presence_must_match_explicit_role_enrollment() {
+        let projection = crate::test::support::fleet_admission_projection(
+            crate::test::support::managed_component_binding(),
+        );
+
+        assert!(validate_fleet_admission_payload(true, Some(projection.clone())).is_ok());
+        assert!(validate_fleet_admission_payload(false, None).is_ok());
+        assert!(validate_fleet_admission_payload(true, None).is_err());
+        assert!(validate_fleet_admission_payload(false, Some(projection)).is_err());
     }
 }

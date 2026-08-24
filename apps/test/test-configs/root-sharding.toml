@@ -18,8 +18,7 @@ package = "../user_shard"
 [roles.test]
 kind = "canister"
 package = "../test"
-
-[app.whitelist]
+fleet_admission = true
 
 [auth.delegated_tokens]
 enabled = true

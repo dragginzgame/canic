@@ -288,6 +288,8 @@ impl MedicCategory {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub(super) enum MedicSource {
+    #[serde(rename = "admission_status")]
+    AdmissionStatus,
     #[serde(rename = "command")]
     Command,
     #[serde(rename = "icp_cli")]
@@ -309,6 +311,7 @@ pub(super) enum MedicSource {
 impl MedicSource {
     pub(super) const fn label(self) -> &'static str {
         match self {
+            Self::AdmissionStatus => "admission_status",
             Self::Command => "command",
             Self::IcpCli => "icp_cli",
             Self::IcpConfig => "icp_config",

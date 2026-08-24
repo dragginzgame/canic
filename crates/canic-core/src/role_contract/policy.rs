@@ -124,6 +124,8 @@ pub fn derive_role_capabilities(
     if declaration.kind == RoleDeclarationKind::Root {
         capabilities.insert(RoleCapabilityKey::Root);
         capabilities.insert(RoleCapabilityKey::RootControlPlane);
+    } else if config.role_uses_fleet_admission(role) == Some(true) {
+        capabilities.insert(RoleCapabilityKey::FleetAdmissionProjection);
     }
 
     for component_spec in config.component_specs.values() {
@@ -245,15 +247,6 @@ fn collect_allocation_selections(
                 .or_default()
                 .insert(SelectionProvenance::BuiltInRole(role));
         }
-    }
-
-    // Every declared non-root role may use the managed runtime-whitelist
-    // surface. Built-in roles and declared Roots never receive its allocation.
-    if built_in.is_none() && !capabilities.contains(&RoleCapabilityKey::Root) {
-        selections
-            .entry(StateAllocationKey::CoreRuntimeWhitelist)
-            .or_default()
-            .insert(SelectionProvenance::Capability(RoleCapabilityKey::Runtime));
     }
 
     selections
